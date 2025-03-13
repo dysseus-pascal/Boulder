@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.ble
+package io.rebble.libpebblecommon.ble.pebble
 
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.shr

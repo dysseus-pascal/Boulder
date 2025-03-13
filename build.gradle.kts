@@ -94,6 +94,8 @@ kotlin {
             implementation(libs.coroutines)
             implementation(libs.serialization)
             implementation(libs.kermit)
+            implementation("com.juul.kable:kable-core:0.36.0")
+            implementation("io.github.skolson:kmp-io:0.1.5")
         }
 
         sourceSets["commonTest"].dependencies {

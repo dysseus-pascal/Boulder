@@ -1,8 +1,8 @@
-package io.rebble.libpebblecommon.ble.pebble
+package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
-import io.rebble.libpebblecommon.ble.transport.GattCharacteristic
-import io.rebble.libpebblecommon.ble.transport.GattDescriptor
-import io.rebble.libpebblecommon.ble.transport.GattService
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 
 object LEConstants {
     object UUIDs {
@@ -32,8 +32,8 @@ object LEConstants {
     val CHARACTERISTIC_SUBSCRIBE_VALUE = byteArrayOf(1, 0)
     val DEFAULT_MTU = 23
     val TARGET_MTU = 339
-    val MAX_RX_WINDOW: Byte = 25
-    val MAX_TX_WINDOW: Byte = 25
+    val MAX_RX_WINDOW: Int = 25
+    val MAX_TX_WINDOW: Int = 25
 
     // PPoGConnectionVersion.minSupportedVersion(), PPoGConnectionVersion.maxSupportedVersion(), ??? (magic numbers in stock app too)
     val SERVER_META_RESPONSE = byteArrayOf(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)

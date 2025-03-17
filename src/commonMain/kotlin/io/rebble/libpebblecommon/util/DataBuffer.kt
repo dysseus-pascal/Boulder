@@ -52,3 +52,5 @@ expect class DataBuffer {
      */
     val remaining: Int
 }
+
+fun DataBuffer.putBytes(bytes: ByteArray) = putBytes(bytes.asUByteArray())

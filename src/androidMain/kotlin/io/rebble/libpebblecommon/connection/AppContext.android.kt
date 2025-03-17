@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.ble.pebble
+package io.rebble.libpebblecommon.connection
 
 import android.app.Application
 

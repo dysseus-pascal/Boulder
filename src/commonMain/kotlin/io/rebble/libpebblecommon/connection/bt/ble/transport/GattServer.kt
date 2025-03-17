@@ -1,6 +1,8 @@
-package io.rebble.libpebblecommon.ble.transport
+package io.rebble.libpebblecommon.connection.bt.ble.transport
 
-import io.rebble.libpebblecommon.ble.pebble.AppContext
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 
 expect fun openGattServer(appContext: AppContext): GattServer?
@@ -9,19 +11,18 @@ expect class GattServer {
     suspend fun addServices(services: List<GattService>)
     suspend fun closeServer()
     val characteristicReadRequest: Flow<ServerCharacteristicReadRequest>
-    val characteristicWriteRequest: Flow<ServerCharacteristicWriteRequest>
-    val descriptorWriteRequest: Flow<ServerDescriptorWriteRequest>
     val connectionState: Flow<ServerConnectionstateChanged>
+    fun registerDevice(scannedPebbleDevice: ScannedPebbleDevice, sendChannel: SendChannel<ByteArray>)
+    fun unregisterDevice(scannedPebbleDevice: ScannedPebbleDevice)
+    suspend fun sendData(scannedPebbleDevice: ScannedPebbleDevice, serviceUuid: String,
+                         characteristicUuid: String, data: ByteArray): Boolean
 }
 
 data class ServerServiceAdded(val uuid: String)
 data class ServerConnectionstateChanged(val deviceId: String, val connectionState: Int)
 // Watch reading meta characteristic
 data class ServerCharacteristicReadRequest(val deviceId: String, val uuid: String, val respond: (ByteArray) -> Boolean)
-// Watch writing to data characteristic
-data class ServerCharacteristicWriteRequest(val deviceId: String, val uuid: String, val value: ByteArray)
-// Watch subscribed to data characteristic
-data class ServerDescriptorWriteRequest(val deviceId: String, val characteristicUuid: String, val descriptorUuid: String)
+data class NotificationSent(val deviceId: String, val status: Int)
 
 data class GattService(
     val uuid: String,

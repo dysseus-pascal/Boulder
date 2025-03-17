@@ -1,20 +1,20 @@
-package io.rebble.libpebblecommon.ble.transport
+package io.rebble.libpebblecommon.connection.bt
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.IntentFilter
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.ble.pebble.AppContext
-import io.rebble.libpebblecommon.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
 import io.rebble.libpebblecommon.util.asFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 
 actual fun isBonded(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
     val adapter = BluetoothAdapter.getDefaultAdapter()
-    val macAddress = scannedPebbleDevice.device.identifier.toString()
-    val device = adapter.getRemoteDevice(macAddress)
+    val macAddress = scannedPebbleDevice.identifier
+    val device = adapter.getRemoteDevice(scannedPebbleDevice.identifier)
     try {
         if (device.bondState == BluetoothDevice.BOND_BONDED) {
             return true
@@ -33,11 +33,13 @@ actual fun isBonded(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
 
 actual fun getBluetoothDevicePairEvents(context: AppContext, address: String): Flow<BluetoothDevicePairEvent> {
     return IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).asFlow(context.context)
-        .map {
+        .mapNotNull {
+            val device = it.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                ?: return@mapNotNull null
             BluetoothDevicePairEvent(
-                it.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)!!,
-                it.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE),
-                it.getIntExtra("android.bluetooth.device.extra.REASON", -1).takeIf { it != -1 }
+                address = device.address,
+                bondState = it.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE),
+                unbondReason = it.getIntExtra("android.bluetooth.device.extra.REASON", -1).takeIf { it != -1 }
             )
         }
         .filter {
@@ -48,7 +50,7 @@ actual fun getBluetoothDevicePairEvents(context: AppContext, address: String): F
 actual fun createBond(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
     Logger.d("createBond()")
     val adapter = BluetoothAdapter.getDefaultAdapter()
-    val macAddress = scannedPebbleDevice.device.identifier.toString()
+    val macAddress = scannedPebbleDevice.identifier
     val device = adapter.getRemoteDevice(macAddress)
     return try {
         device.createBond()

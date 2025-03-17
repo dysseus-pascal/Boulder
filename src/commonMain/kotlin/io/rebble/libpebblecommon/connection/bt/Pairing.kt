@@ -1,7 +1,7 @@
-package io.rebble.libpebblecommon.ble.transport
+package io.rebble.libpebblecommon.connection.bt
 
-import io.rebble.libpebblecommon.ble.pebble.AppContext
-import io.rebble.libpebblecommon.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
 import kotlinx.coroutines.flow.Flow
 
 expect fun isBonded(scannedPebbleDevice: ScannedPebbleDevice): Boolean

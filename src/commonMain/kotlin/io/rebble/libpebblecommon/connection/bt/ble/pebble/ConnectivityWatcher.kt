@@ -1,9 +1,9 @@
-package io.rebble.libpebblecommon.ble.pebble
+package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
-import io.rebble.libpebblecommon.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
-import io.rebble.libpebblecommon.ble.transport.ConnectedGattClient
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
+import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +15,7 @@ import kotlin.properties.Delegates
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
-class ConnectivityWatcher(val gattClient: ConnectedGattClient) {
+class ConnectivityWatcher(private val gattClient: ConnectedGattClient) {
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 
@@ -23,7 +23,7 @@ class ConnectivityWatcher(val gattClient: ConnectedGattClient) {
         // TODO scope this
         GlobalScope.async {
             gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
-                .collect {
+                ?.collect {
                     _status.value = ConnectivityStatus(it).also {
                         Logger.d("connectivity: $it")
                     }

@@ -1,15 +1,16 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
 import kotlinx.coroutines.flow.Flow
 
 //expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
 
-fun gattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
+fun gattConnector(transport: BleTransport, appContext: AppContext): GattConnector
 // = libpebbleGattConnector(scannedPebbleDevice, appContext)
- = kableGattConnector(scannedPebbleDevice)
+ = kableGattConnector(transport)
 
 interface GattConnector {
     suspend fun connect(): ConnectedGattClient?

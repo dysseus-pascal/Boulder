@@ -14,14 +14,8 @@ import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
-import io.rebble.libpebblecommon.connection.bt.ble.transport.NotificationSent
-import io.rebble.libpebblecommon.connection.bt.ble.transport.ServerCharacteristicReadRequest
-import io.rebble.libpebblecommon.connection.bt.ble.transport.ServerConnectionstateChanged
-import io.rebble.libpebblecommon.connection.bt.ble.transport.ServerServiceAdded
+import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,7 +109,7 @@ class GattServerCallback : BluetoothGattServerCallback() {
         offset: Int,
         value: ByteArray,
     ) {
-        Logger.d("onCharacteristicWriteRequest: ${device.address} / ${characteristic.uuid}: ${value.joinToString()}")
+//        Logger.d("onCharacteristicWriteRequest: ${device.address} / ${characteristic.uuid}: ${value.joinToString()}")
         val registeredDevice = registeredDevices[device.address]
         if (registeredDevice == null) {
             Logger.e("onCharacteristicWriteRequest couldn't find registered device: ${device.address}")
@@ -152,13 +146,13 @@ class GattServerCallback : BluetoothGattServerCallback() {
             return
         }
         registeredDevices[device.address] = registeredDevice.copy(notificationsEnabled = true)
-        Logger.d("/onDescriptorWriteRequest")
+//        Logger.d("/onDescriptorWriteRequest")
     }
 
     val notificationSent = MutableStateFlow<NotificationSent?>(null)
 
     override fun onNotificationSent(device: BluetoothDevice, status: Int) {
-        Logger.d("onNotificationSent: ${device.address}")
+//        Logger.d("onNotificationSent: ${device.address}")
         notificationSent.tryEmit(NotificationSent(device.address, status))
     }
 }
@@ -226,13 +220,13 @@ actual class GattServer(
     }
 
     actual fun registerDevice(
-        scannedPebbleDevice: ScannedPebbleDevice,
+        transport: BleTransport,
         sendChannel: SendChannel<ByteArray>
     ) {
-        Logger.d("registerDevice: $scannedPebbleDevice")
+        Logger.d("registerDevice: $transport")
         val adapter = BluetoothAdapter.getDefaultAdapter()
-        val bluetoothDevice = adapter.getRemoteDevice(scannedPebbleDevice.identifier)
-        callback.registeredDevices[scannedPebbleDevice.identifier] =
+        val bluetoothDevice = adapter.getRemoteDevice(transport.identifier.macAddress)
+        callback.registeredDevices[transport.identifier.macAddress] =
             RegisteredDevice(
                 dataChannel = sendChannel,
                 device = bluetoothDevice,
@@ -240,19 +234,19 @@ actual class GattServer(
             )
     }
 
-    actual fun unregisterDevice(scannedPebbleDevice: ScannedPebbleDevice) {
-        callback.registeredDevices.remove(scannedPebbleDevice.identifier)
+    actual fun unregisterDevice(transport: BleTransport) {
+        callback.registeredDevices.remove(transport.identifier.macAddress)
     }
 
     actual suspend fun sendData(
-        scannedPebbleDevice: ScannedPebbleDevice,
+        transport: BleTransport,
         serviceUuid: String,
         characteristicUuid: String,
         data: ByteArray,
     ): Boolean {
-        val registeredDevice = callback.registeredDevices[scannedPebbleDevice.identifier]
+        val registeredDevice = callback.registeredDevices[transport.identifier.macAddress]
         if (registeredDevice == null) {
-            Logger.e("sendData: couldn't find registered device: ${scannedPebbleDevice.identifier}")
+            Logger.e("sendData: couldn't find registered device: $transport")
             return false
         }
         val service = server.getService(UUID.fromString(serviceUuid))
@@ -281,7 +275,7 @@ actual class GattServer(
         }
         return try {
             val res = withTimeout(cbTimeout) {
-                callback.notificationSent.filterNotNull().first { it.deviceId.equals(scannedPebbleDevice.identifier, ignoreCase = true) }
+                callback.notificationSent.filterNotNull().first { transport.identifier.isEqualTo(it.deviceId) }
             }
             if (res.status != GATT_SUCCESS) {
                 Logger.e("characteristic notify error: ${res.status}")

@@ -2,24 +2,23 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 
-//enum class Transport {
-//    BtClassic,
-//    Ble,
-//    //...
-//}
-
 // mac address on android, uuid on ios etc
-expect class PebbleIdentifier {
+expect class PebbleBluetoothIdentifier {
     fun asString(): String
 }
 
 sealed class Transport {
-    class BtClassicTransport(val identifier: PebbleIdentifier)
-    class BleTransport(val identifier: PebbleIdentifier)
+    sealed class BluetoothTransport : Transport() {
+        abstract val identifier: PebbleBluetoothIdentifier
+
+        class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
+        class BleTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
+    }
     // e.g. emulator
-    class SocketTransport(val address: String)
+    class SocketTransport(val address: String) : Transport()
 }
 
+// <T : Transport> ?
 sealed interface PebbleDevice {
     val name: String
     val transport: Transport

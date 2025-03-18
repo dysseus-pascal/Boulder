@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableBleScanner
 import kotlinx.coroutines.flow.Flow
 
@@ -11,5 +11,5 @@ fun bleScanner(): BleScanner
 // = libpebbleBleScanner()
 
 interface BleScanner {
-    suspend fun scan(namePrefix: String): Flow<ScannedPebbleDevice>
+    suspend fun scan(namePrefix: String): Flow<BleDiscoveredPebbleDevice>
 }

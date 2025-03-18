@@ -3,6 +3,8 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.PebbleDevice
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.PROPERTY_WRITE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
@@ -16,7 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 
-class PebblePairing(val device: ConnectedGattClient, val context: AppContext, val scannedPebbleDevice: ScannedPebbleDevice) {
+class PebblePairing(val device: ConnectedGattClient, val context: AppContext, val pebbleDevice: PebbleDevice) {
 //    @Throws(IOException::class, SecurityException::class)
     suspend fun requestPairing(connectivityRecord: ConnectivityStatus) {
         Logger.d("Requesting pairing")
@@ -26,7 +28,9 @@ class PebblePairing(val device: ConnectedGattClient, val context: AppContext, va
         val pairingTriggerCharacteristic = pairingService.characteristics.firstOrNull { it.uuid.equals(PAIRING_TRIGGER_CHARACTERISTIC, ignoreCase = true) }
         check(pairingTriggerCharacteristic != null) { "Pairing trigger characteristic not found" }
 
-        val bondState = getBluetoothDevicePairEvents(context, scannedPebbleDevice.identifier)
+        val transport = pebbleDevice.transport
+        check(transport is Transport.BluetoothTransport)
+        val bondState = getBluetoothDevicePairEvents(context, transport)
         var needsExplicitBond = true
 
         // A writeable pairing trigger allows addr pinning
@@ -46,7 +50,7 @@ class PebblePairing(val device: ConnectedGattClient, val context: AppContext, va
 
         if (needsExplicitBond) {
             Logger.d("Explicit bond required")
-            if (!createBond(scannedPebbleDevice)) {
+            if (!createBond(transport)) {
                 Logger.e("Failed to request create bond")
                 return
             }

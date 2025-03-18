@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 
@@ -12,9 +12,9 @@ expect class GattServer {
     suspend fun closeServer()
     val characteristicReadRequest: Flow<ServerCharacteristicReadRequest>
     val connectionState: Flow<ServerConnectionstateChanged>
-    fun registerDevice(scannedPebbleDevice: ScannedPebbleDevice, sendChannel: SendChannel<ByteArray>)
-    fun unregisterDevice(scannedPebbleDevice: ScannedPebbleDevice)
-    suspend fun sendData(scannedPebbleDevice: ScannedPebbleDevice, serviceUuid: String,
+    fun registerDevice(transport: BleTransport, sendChannel: SendChannel<ByteArray>)
+    fun unregisterDevice(transport: BleTransport)
+    suspend fun sendData(transport: BleTransport, serviceUuid: String,
                          characteristicUuid: String, data: ByteArray): Boolean
 }
 

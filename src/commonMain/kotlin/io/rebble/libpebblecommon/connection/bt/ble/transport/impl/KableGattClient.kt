@@ -9,7 +9,9 @@ import com.juul.kable.Identifier
 import com.juul.kable.Peripheral
 import com.juul.kable.WriteType
 import com.juul.kable.toIdentifier
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
+import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
@@ -21,20 +23,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(scannedPebbleDevice: ScannedPebbleDevice): GattConnector =
-    KableGattConnector(scannedPebbleDevice)
+fun kableGattConnector(transport: BleTransport): GattConnector =
+    KableGattConnector(transport)
 
-expect fun peripheralFromIdentifier(identifier: Identifier): Peripheral
+expect fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peripheral
 
 class KableGattConnector(
-    val scannedPebbleDevice: ScannedPebbleDevice,
+    val transport: BleTransport,
 ) : GattConnector {
-    private val peripheral = peripheralFromIdentifier(scannedPebbleDevice.identifier.toIdentifier())
+    private val peripheral = peripheralFromIdentifier(transport.identifier)
 
     override suspend fun connect(): ConnectedGattClient? {
         try {
             val scope = peripheral.connect()
-            return KableConnectedGattClient(scannedPebbleDevice, scope, peripheral)
+            return KableConnectedGattClient(transport, scope, peripheral)
         } catch (e: Exception) {
             Logger.e("error connecting", e)
             return null
@@ -43,7 +45,7 @@ class KableGattConnector(
 }
 
 class KableConnectedGattClient(
-    val scannedPebbleDevice: ScannedPebbleDevice,
+    val transport: BleTransport,
     val scope: CoroutineScope,
     val peripheral: Peripheral,
 ) : ConnectedGattClient {
@@ -67,7 +69,7 @@ class KableConnectedGattClient(
     }
 
     override suspend fun isBonded(): Boolean {
-        return io.rebble.libpebblecommon.connection.bt.isBonded(scannedPebbleDevice)
+        return io.rebble.libpebblecommon.connection.bt.isBonded(transport)
     }
 
     fun GattWriteType.asKableWriteType() = when (this) {

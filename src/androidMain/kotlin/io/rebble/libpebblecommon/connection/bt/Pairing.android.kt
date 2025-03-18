@@ -5,16 +5,16 @@ import android.bluetooth.BluetoothDevice
 import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ScannedPebbleDevice
+import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport
 import io.rebble.libpebblecommon.util.asFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 
-actual fun isBonded(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
+actual fun isBonded(transport: BluetoothTransport): Boolean {
     val adapter = BluetoothAdapter.getDefaultAdapter()
-    val macAddress = scannedPebbleDevice.identifier
-    val device = adapter.getRemoteDevice(scannedPebbleDevice.identifier)
+    val macAddress = transport.identifier.macAddress
+    val device = adapter.getRemoteDevice(macAddress)
     try {
         if (device.bondState == BluetoothDevice.BOND_BONDED) {
             return true
@@ -31,7 +31,7 @@ actual fun isBonded(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
     return false
 }
 
-actual fun getBluetoothDevicePairEvents(context: AppContext, address: String): Flow<BluetoothDevicePairEvent> {
+actual fun getBluetoothDevicePairEvents(context: AppContext, transport: BluetoothTransport): Flow<BluetoothDevicePairEvent> {
     return IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).asFlow(context.context)
         .mapNotNull {
             val device = it.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
@@ -43,14 +43,14 @@ actual fun getBluetoothDevicePairEvents(context: AppContext, address: String): F
             )
         }
         .filter {
-            it.address == address
+            transport.identifier.isEqualTo(it.address)
         }
 }
 
-actual fun createBond(scannedPebbleDevice: ScannedPebbleDevice): Boolean {
+actual fun createBond(transport: BluetoothTransport): Boolean {
     Logger.d("createBond()")
     val adapter = BluetoothAdapter.getDefaultAdapter()
-    val macAddress = scannedPebbleDevice.identifier
+    val macAddress = transport.identifier.macAddress
     val device = adapter.getRemoteDevice(macAddress)
     return try {
         device.createBond()

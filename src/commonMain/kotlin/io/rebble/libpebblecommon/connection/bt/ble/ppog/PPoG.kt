@@ -75,7 +75,7 @@ class PPoG(
         var lastSentAck: PPoGPacket.Ack? = null
 
         while (true) {
-            Logger.v("select")
+//            Logger.v("select")
             select {
                 outboundPPBytes.onReceive { bytes ->
                     bytes.asList().chunked(maxDataBytes())

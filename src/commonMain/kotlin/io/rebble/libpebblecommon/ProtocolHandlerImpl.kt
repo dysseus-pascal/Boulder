@@ -9,7 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.selects.select
 import kotlin.coroutines.coroutineContext
-import kotlin.jvm.Volatile
+import kotlin.concurrent.Volatile
 
 /**
  * Default pebble protocol handler

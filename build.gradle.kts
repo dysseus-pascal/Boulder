@@ -36,7 +36,7 @@ android {
     namespace = "io.rebble.libpebblecommon"
     defaultConfig {
         minSdk = 21
-        targetSdk = compileSdk
+        lint.targetSdk = compileSdk
     }
 
     compileOptions {
@@ -50,20 +50,13 @@ android {
 }
 
 kotlin {
-    android {
+    androidTarget {
         publishLibraryVariants("release", "debug")
     }
 
     jvm()
 
-    iosX64("iosX64") { // Simulator
-        binaries {
-            framework {
-                baseName = "libpebblecommon"
-            }
-        }
-    }
-    iosArm64("ios") {
+    iosX64 {
         binaries {
             framework {
                 baseName = "libpebblecommon"
@@ -71,7 +64,15 @@ kotlin {
         }
     }
 
-    iosSimulatorArm64("iosSimulatorArm64") {
+    iosArm64 {
+        binaries {
+            framework {
+                baseName = "libpebblecommon"
+            }
+        }
+    }
+
+    iosSimulatorArm64 {
         binaries {
             framework {
                 baseName = "libpebblecommon"
@@ -88,7 +89,7 @@ kotlin {
                 optIn("kotlin.ExperimentalSerializationApi")
             }
         }
-        sourceSets["commonMain"].dependencies {
+        commonMain.dependencies {
             implementation(libs.uuid)
             implementation(libs.klock)
             implementation(libs.coroutines)
@@ -98,28 +99,20 @@ kotlin {
             implementation("io.github.skolson:kmp-io:0.1.5")
         }
 
-        sourceSets["commonTest"].dependencies {
+        commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
 
-        sourceSets["androidMain"].dependencies {
+        androidMain.dependencies {
         }
 
-        sourceSets["iosMain"].dependencies {
+        iosMain.dependencies {
         }
 
-        val iosX64Main by getting {
-            kotlin.srcDir("src/iosMain/kotlin")
+        jvmMain.dependencies {
         }
 
-        val iosSimulatorArm64Main by getting {
-            kotlin.srcDir("src/iosMain/kotlin")
-        }
-
-        sourceSets["jvmMain"].dependencies {
-        }
-
-        sourceSets["jvmTest"].dependencies {
+        jvmTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlin.test.junit)
             implementation(libs.ktor.websockets)
@@ -129,6 +122,7 @@ kotlin {
     }
 }
 
+/*
 if (Os.isFamily(Os.FAMILY_MAC)) {
     val iosSimulatorFatFramework by tasks.registering(PlatformFatFramework::class) {
         onlyIf {
@@ -183,7 +177,7 @@ if (Os.isFamily(Os.FAMILY_MAC)) {
         }
     }
 }
-
+*/
 /*project.afterEvaluate {
     tasks.withType(PublishToMavenRepository::class.java) {
         onlyIf {

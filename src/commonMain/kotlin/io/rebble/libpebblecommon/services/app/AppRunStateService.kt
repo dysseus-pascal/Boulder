@@ -1,40 +1,43 @@
 package io.rebble.libpebblecommon.services.app
 
-import com.benasher44.uuid.Uuid
-import io.rebble.libpebblecommon.ProtocolHandler
+import com.benasher44.uuid.uuidFrom
+import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.packets.AppRunStateMessage
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.services.ProtocolService
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
-class AppRunStateService(private val protocolHandler: ProtocolHandler) : ProtocolService {
-    val receivedMessages = Channel<AppRunStateMessage>(Channel.BUFFERED)
-
-    init {
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.APP_RUN_STATE, this::receive)
-    }
+@OptIn(ExperimentalUuidApi::class)
+class AppRunStateService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+    val _runningApp = MutableStateFlow<Uuid?>(null)
+    val runningApp: StateFlow<Uuid?> = _runningApp
 
     suspend fun send(packet: AppRunStateMessage) {
         protocolHandler.send(packet)
     }
 
-    fun receive(packet: PebblePacket) {
-        if (packet !is AppRunStateMessage) {
-            throw IllegalStateException("Received invalid packet type: $packet")
-        }
-
-        receivedMessages.trySend(packet)
-    }
-
     suspend fun startApp(uuid: Uuid) {
-        send(AppRunStateMessage.AppRunStateStart(uuid))
+        send(AppRunStateMessage.AppRunStateStart(uuidFrom(uuid.toString())))
     }
 
     suspend fun stopApp(uuid: Uuid) {
-        send(AppRunStateMessage.AppRunStateStop(uuid))
+        send(AppRunStateMessage.AppRunStateStop(uuidFrom(uuid.toString())))
     }
 
+    fun init(scope: CoroutineScope) {
+        scope.async {
+            protocolHandler.inboundMessages.collect { packet ->
+                when (packet) {
+                    is AppRunStateMessage.AppRunStateStart ->
+                        _runningApp.value = Uuid.parse(packet.uuid.toString())
+                    is AppRunStateMessage.AppRunStateStop ->
+                        _runningApp.value = null
+                }
+            }
+        }
+    }
 }

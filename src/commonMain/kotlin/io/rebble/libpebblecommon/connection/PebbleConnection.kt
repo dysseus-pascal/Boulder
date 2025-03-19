@@ -11,12 +11,14 @@ sealed class Transport {
     sealed class BluetoothTransport : Transport() {
         abstract val identifier: PebbleBluetoothIdentifier
 
-        class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
-        class BleTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
+        data class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
+        data class BleTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
     }
     // e.g. emulator
-    class SocketTransport(val address: String) : Transport()
+    data class SocketTransport(val address: String) : Transport()
 }
+
+interface ActiveDevice
 
 // <T : Transport> ?
 sealed interface PebbleDevice {
@@ -47,19 +49,21 @@ interface KnownPebbleDevice : PebbleDevice {
     suspend fun forget()
 }
 
-interface ConnectingPebbleDevice : KnownPebbleDevice
+interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice
 
-interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice {
+interface NegotiatingPebbleDevice : ConnectingPebbleDevice, ActiveDevice
+
+interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice {
     suspend fun updateFirmware()
 }
 
-interface ConnectedPebbleDevice : KnownPebbleDevice {
+interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     // for hackers?
     fun sendPPMessage(bytes: ByteArray)
     fun sendPPMessage(ppMessage: PebblePacket)
 
     // not for general use
     suspend fun sendNotification()
-    suspend fun sendPing()
+    suspend fun sendPing(cookie: UInt): UInt
     // ....
 }

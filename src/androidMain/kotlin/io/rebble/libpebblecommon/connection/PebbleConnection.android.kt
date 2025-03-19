@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import android.bluetooth.BluetoothDevice
 
-actual class PebbleBluetoothIdentifier(
+actual data class PebbleBluetoothIdentifier(
     val macAddress: String,
 ) {
     actual fun asString(): String = macAddress

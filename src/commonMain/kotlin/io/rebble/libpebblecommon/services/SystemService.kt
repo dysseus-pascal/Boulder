@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.services
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.ProtocolHandler
+import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.packets.*
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
@@ -10,25 +11,25 @@ import io.rebble.libpebblecommon.structmapper.SInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onEach
 
 /**
  * Singleton to handle sending notifications cleanly, as well as TODO: receiving/acting on action events
  */
-class SystemService(private val protocolHandler: ProtocolHandler) : ProtocolService {
-    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
-    public final var appVersionRequestHandler: (suspend () -> PhoneAppVersion.AppVersionResponse)? = null
+class SystemService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+//    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
+    private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
+    val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
 
     private var watchVersionCallback: CompletableDeferred<WatchVersion.WatchVersionResponse>? = null
     private var watchModelCallback: CompletableDeferred<UByteArray>? = null
     private var firmwareUpdateStartResponseCallback: CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>? = null
-
-    init {
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.PHONE_VERSION, this::receive)
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.WATCH_VERSION, this::receive)
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.FCT_REG, this::receive)
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.SYSTEM_MESSAGE, this::receive)
-    }
+    private var pongCallback: CompletableDeferred<PingPong.Pong>? = null
 
     /**
      * Send an AppMessage
@@ -57,6 +58,30 @@ class SystemService(private val protocolHandler: ProtocolHandler) : ProtocolServ
         return SInt(StructMapper()).also { it.fromBytes(DataBuffer(modelBytes)) }.get()
     }
 
+    suspend fun sendPhoneVersionResponse() {
+        // TODO put all this stuff in libpebble config
+        send(PhoneAppVersion.AppVersionResponse(
+            UInt.MAX_VALUE,
+            0u,
+            0u,
+            2u,
+            4u,
+            4u,
+            2u,
+            ProtocolCapsFlag.makeFlags(
+                buildList {
+                    add(ProtocolCapsFlag.SupportsAppRunStateProtocol)
+                    add(ProtocolCapsFlag.SupportsExtendedMusicProtocol)
+                    add(ProtocolCapsFlag.SupportsTwoWayDismissal)
+                    add(ProtocolCapsFlag.Supports8kAppMessage)
+//                    if (platformContext.osType == PhoneAppVersion.OSType.Android) {
+//                        add(ProtocolCapsFlag.SupportsAppDictation)
+//                    }
+                }
+            )
+        ))
+    }
+
     suspend fun firmwareUpdateStart(bytesAlreadyTransferred: UInt, bytesToSend: UInt): UByte {
         val callback = CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>()
         firmwareUpdateStartResponseCallback = callback
@@ -65,35 +90,49 @@ class SystemService(private val protocolHandler: ProtocolHandler) : ProtocolServ
         return response.response.get()
     }
 
-    suspend fun receive(packet: PebblePacket) {
-        if (packet !is SystemPacket) {
-            throw IllegalStateException("Received invalid packet type: $packet")
-        }
+    suspend fun sendPing(cookie: UInt): UInt {
+        val pong = CompletableDeferred<PingPong.Pong>()
+        pongCallback = pong
+        send(PingPong.Ping(cookie))
+        return pong.await().cookie.get()
+    }
 
-        when (packet) {
-            is WatchVersion.WatchVersionResponse -> {
-                watchVersionCallback?.complete(packet)
-                watchVersionCallback = null
-            }
-            is WatchFactoryData.WatchFactoryDataResponse -> {
-                watchModelCallback?.complete(packet.model.get())
-                watchModelCallback = null
-            }
-            is WatchFactoryData.WatchFactoryDataError -> {
-                watchModelCallback?.completeExceptionally(Exception("Failed to fetch watch model"))
-                watchModelCallback = null
-            }
-            is PhoneAppVersion.AppVersionRequest -> {
-                val res = appVersionRequestHandler?.invoke()
-                if (res != null) {
-                    send(res) // Cannot be low priority
+    fun init(scope: CoroutineScope) {
+        scope.async {
+            protocolHandler.inboundMessages.collect { packet ->
+                when (packet) {
+                    is WatchVersion.WatchVersionResponse -> {
+                        watchVersionCallback?.complete(packet)
+                        watchVersionCallback = null
+                    }
+
+                    is WatchFactoryData.WatchFactoryDataResponse -> {
+                        watchModelCallback?.complete(packet.model.get())
+                        watchModelCallback = null
+                    }
+
+                    is WatchFactoryData.WatchFactoryDataError -> {
+                        watchModelCallback?.completeExceptionally(Exception("Failed to fetch watch model"))
+                        watchModelCallback = null
+                    }
+
+                    is PhoneAppVersion.AppVersionRequest -> {
+                        _appVersionRequest.complete(packet)
+                    }
+
+                    is SystemMessage.FirmwareUpdateStartResponse -> {
+                        firmwareUpdateStartResponseCallback?.complete(packet)
+                        firmwareUpdateStartResponseCallback = null
+                    }
+
+                    is PingPong.Pong -> {
+                        pongCallback?.complete(packet)
+                        pongCallback = null
+                    }
+
+//                    else -> receivedMessages.trySend(packet)
                 }
             }
-            is SystemMessage.FirmwareUpdateStartResponse -> {
-                firmwareUpdateStartResponseCallback?.complete(packet)
-                firmwareUpdateStartResponseCallback = null
-            }
-            else -> receivedMessages.trySend(packet)
         }
     }
 

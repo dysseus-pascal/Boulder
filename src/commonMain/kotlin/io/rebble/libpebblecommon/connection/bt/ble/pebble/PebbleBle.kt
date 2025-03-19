@@ -1,15 +1,14 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.BleConfig
+import io.ktor.utils.io.ByteChannel
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
-import io.rebble.libpebblecommon.connection.PebbleConnector
 import io.rebble.libpebblecommon.connection.PebbleDevice
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.TransportConnector
+import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.GATT_SERVICES
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
@@ -25,25 +24,24 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlin.coroutines.coroutineContext
 
 class PebbleBle(
     val config: LibPebbleConfig,
-) : PebbleConnector {
+) : TransportConnector {
     var gattServer: GattServer? = null
 
-    suspend fun init() {
-        val scope = CoroutineScope(coroutineContext)
-        if (!config.bleConfig.roleReversal) {
-            gattServer = openGattServer(config.context)
-            gattServer?.addServices(GATT_SERVICES)
-            scope.async {
+    fun init() {
+        GlobalScope.async {
+            if (!config.bleConfig.roleReversal) {
+                gattServer = openGattServer(config.context)
+                gattServer?.addServices(GATT_SERVICES)
                 gattServer?.characteristicReadRequest?.collect {
                     Logger.d("sending meta response")
                     it.respond(SERVER_META_RESPONSE)
@@ -54,7 +52,7 @@ class PebbleBle(
 
     override suspend fun connect(
         pebbleDevice: PebbleDevice,
-        scope: CoroutineScope
+        scope: CoroutineScope,
     ): PebbleConnectionResult =
         withContext(Dispatchers.Main) {
             val transport = pebbleDevice.transport
@@ -64,7 +62,7 @@ class PebbleBle(
             val inboundPPoGBytesChannel = Channel<ByteArray>(capacity = 100)
             gattServer?.registerDevice(transport, inboundPPoGBytesChannel)
 
-            val inboundPPChannel = Channel<ByteArray>(capacity = 100)
+            val inboundPPChannel = ByteChannel()
             val outboundPPChannel = Channel<ByteArray>(capacity = 100)
 
             val ppog = PPoG(
@@ -86,12 +84,12 @@ class PebbleBle(
                 desiredRxWindow = MAX_RX_WINDOW,
             )
 
-            scope.async {
-                while (true) {
-                    val bytes = inboundPPChannel.receive()
-//                Logger.d("PP bytes: ${bytes.joinToString()}")
-                }
-            }
+//            scope.async {
+//                while (true) {
+//                    val bytes = inboundPPChannel.receive()
+////                Logger.d("PP bytes: ${bytes.joinToString()}")
+//                }
+//            }
 
             val device = connector.connect()
             if (device == null) {
@@ -150,8 +148,8 @@ class PebbleBle(
             // TODO update PPoG with new MTU whenever we get it
         }
 
-    suspend fun scan(): Flow<BleDiscoveredPebbleDevice> {
-        return bleScanner().scan(namePrefix = "Pebble")
+    suspend fun scan(watchManager: WatchManager): Flow<BleDiscoveredPebbleDevice> {
+        return bleScanner(watchManager).scan(namePrefix = "Pebble")
     }
 
     companion object {

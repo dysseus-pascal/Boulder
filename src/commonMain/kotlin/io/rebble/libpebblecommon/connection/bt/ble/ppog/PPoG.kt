@@ -1,11 +1,12 @@
 package io.rebble.libpebblecommon.connection.bt.ble.ppog
 
 import co.touchlab.kermit.Logger
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.writeByteArray
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.selects.select
 import kotlin.math.min
 
@@ -14,7 +15,7 @@ interface PPoGPacketSender {
 }
 
 class PPoG(
-    private val inboundPPBytes: SendChannel<ByteArray>,
+    private val inboundPPBytes: ByteWriteChannel,
     private val outboundPPBytes: ReceiveChannel<ByteArray>,
     private val inboundPacketData: ReceiveChannel<ByteArray>,
     private val pPoGPacketSender: PPoGPacketSender,
@@ -27,7 +28,11 @@ class PPoG(
     suspend fun run(scope: CoroutineScope) {
         scope.async {
             val params = initPPoG()
-            runConnection(params)
+            try {
+                runConnection(params)
+            } catch (e: Exception) {
+                Logger.e("error running PPoG", e)
+            }
         }
         // TODO error handling - make parent throw if async throws?
     }
@@ -85,11 +90,12 @@ class PPoG(
                                 attemptCount = 0
                             )
                         }
+                        // TODO retry/timeout
                         .forEach { if (!outboundDataQueue.trySend(it).isSuccess) throw IllegalStateException("Failed to add message to queue") }
                 }
                 inboundPacketData.onReceive { bytes ->
                     val packet = bytes.asPPoGPacket()
-                    Logger.d("received packet: $packet")
+                    Logger.v("received packet: $packet")
                     when (packet) {
                         is PPoGPacket.Ack -> {
                             // TODO remove resends of this packet from send queue (+ also remove up-to-them, which OG code didn't do?)
@@ -97,7 +103,7 @@ class PPoG(
                             // Remove from in-flight packets, up until (including) this packet
                             // TODO warn if we don't have that packet inflight?
                             while (true) {
-                                val inflightPacket = inflightPackets.firstOrNull() ?: break
+                                val inflightPacket = inflightPackets.removeFirstOrNull() ?: break
                                 if (inflightPacket.packet.sequence == packet.sequence) break
                             }
                         }
@@ -106,7 +112,8 @@ class PPoG(
                                 Logger.w("data out of sequence; resending last ack")
                                 lastSentAck?.let { sendPacketImmediately(it, params.pPoGversion) }
                             } else {
-                                inboundPPBytes.send(packet.data)
+                                inboundPPBytes.writeByteArray(packet.data)
+                                inboundPPBytes.flush()
                                 inboundSequence.increment()
                                 // TODO coalesced ACKing
                                 lastSentAck = PPoGPacket.Ack(sequence = packet.sequence)
@@ -121,7 +128,6 @@ class PPoG(
 
             // Drain send queue
             while (inflightPackets.size < params.txWindow && !outboundDataQueue.isEmpty) {
-                Logger.v("!outboundDataQueue.isEmpty")
                 // TODO resends (and increment packet's sent counter)
                 val packet = outboundDataQueue.receive()
                 sendPacketImmediately(packet.packet, params.pPoGversion)
@@ -133,7 +139,7 @@ class PPoG(
     private fun maxDataBytes() = mtu - DATA_HEADER_OVERHEAD_BYTES
 
     private suspend fun sendPacketImmediately(packet: PPoGPacket, version: PPoGVersion) {
-        Logger.d("sendPacketImmediately: $packet")
+        Logger.v("sendPacketImmediately: $packet")
         if (!pPoGPacketSender.sendPacket(packet.serialize(version))) {
             Logger.e("Couldn't send packet!")
             throw IllegalStateException("Couldn't send packet!")

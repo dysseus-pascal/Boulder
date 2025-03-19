@@ -3,9 +3,12 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.ByteChannel
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
+import io.rebble.libpebblecommon.connection.BleScanResult
 import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.PebbleDevice
+import io.rebble.libpebblecommon.connection.RealBleDiscoveredPebbleDevice
+import io.rebble.libpebblecommon.connection.RealPebbleDevice
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchManager
@@ -29,6 +32,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -83,13 +87,6 @@ class PebbleBle(
                 desiredTxWindow = MAX_TX_WINDOW,
                 desiredRxWindow = MAX_RX_WINDOW,
             )
-
-//            scope.async {
-//                while (true) {
-//                    val bytes = inboundPPChannel.receive()
-////                Logger.d("PP bytes: ${bytes.joinToString()}")
-//                }
-//            }
 
             val device = connector.connect()
             if (device == null) {
@@ -148,8 +145,8 @@ class PebbleBle(
             // TODO update PPoG with new MTU whenever we get it
         }
 
-    suspend fun scan(watchManager: WatchManager): Flow<BleDiscoveredPebbleDevice> {
-        return bleScanner(watchManager).scan(namePrefix = "Pebble")
+    suspend fun scan(prefix: String?): Flow<BleScanResult> {
+        return bleScanner().scan(namePrefix = prefix)
     }
 
     companion object {

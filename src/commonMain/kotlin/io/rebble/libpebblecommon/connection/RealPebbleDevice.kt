@@ -3,6 +3,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.packets.WatchVersion
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.SystemService
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-class RealPebbleDevice(
+data class RealPebbleDevice(
     override val name: String,
     override val transport: Transport,
     private val watchManager: WatchManager,
@@ -26,16 +27,13 @@ class RealPebbleDevice(
     }
 }
 
-class RealBleDiscoveredPebbleDevice(
-    pebbleDevice: PebbleDevice,
-    override val fwVersion: String,
-    override val recoveryVersion: String,
-    override val serialNo: String,
-    override val rssi: Int
+data class RealBleDiscoveredPebbleDevice(
+    val pebbleDevice: PebbleDevice,
+    override val pebbleScanRecord: PebbleLeScanRecord,
 ) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice
 
-class RealKnownPebbleDevice(
-    pebbleDevice: PebbleDevice,
+data class RealKnownPebbleDevice(
+    val pebbleDevice: PebbleDevice,
     override val isRunningRecoveryFw: Boolean,
 ) : PebbleDevice by pebbleDevice, KnownPebbleDevice {
     override suspend fun forget() {
@@ -43,17 +41,17 @@ class RealKnownPebbleDevice(
     }
 }
 
-class RealConnectingPebbleDevice(pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice
+data class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice
 
 data class NegotiationResult(
     val watchVersion: WatchVersion.WatchVersionResponse,
     val runningApp: Uuid?,
 )
 
-class RealNegotiatingPebbleDevice(
-    pebbleDevice: PebbleDevice,
-    pebbleProtocol: PebbleProtocolHandler,
-    scope: CoroutineScope,
+data class RealNegotiatingPebbleDevice(
+    val pebbleDevice: PebbleDevice,
+    val pebbleProtocol: PebbleProtocolHandler,
+    val scope: CoroutineScope,
 ) : PebbleDevice by pebbleDevice, NegotiatingPebbleDevice {
     val systemService = SystemService(pebbleProtocol).apply { init(scope) }
     val appRunStateService = AppRunStateService(pebbleProtocol).apply { init(scope) }
@@ -72,8 +70,8 @@ class RealNegotiatingPebbleDevice(
     }
 }
 
-class RealConnectedPebbleDevice(
-    pebbleDevice: KnownPebbleDevice,
+data class RealConnectedPebbleDevice(
+    val pebbleDevice: KnownPebbleDevice,
     // These were already created in a previous connection state so keep them running
     val appRunStateService: AppRunStateService,
     val systemService: SystemService,

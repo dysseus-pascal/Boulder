@@ -1,13 +1,9 @@
 package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.mapNotNull
 
 data class LibPebbleConfig(
     val context: AppContext,
@@ -18,11 +14,12 @@ data class BleConfig(
     val roleReversal: Boolean,
 )
 
-interface LibPebble {
-    val watches: Flow<List<PebbleDevice>>
+typealias PebbleDevices = Flow<List<PebbleDevice>>
 
-    suspend fun bleScan()
-    suspend fun classicScan()
+interface LibPebble : Scanning {
+    fun init()
+
+    val watches: PebbleDevices
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
@@ -31,45 +28,55 @@ interface LibPebble {
     // ....
 }
 
+fun PebbleDevices.forDevice(pebbleDevice: PebbleDevice): Flow<PebbleDevice> {
+    return mapNotNull { it.firstOrNull { it.transport == pebbleDevice.transport } }
+}
+
+interface Scanning {
+    suspend fun startBleScan()
+    suspend fun stopBleScan()
+    suspend fun startClassicScan()
+    suspend fun stopClassicScan()
+}
+
 // Impl
 
 class LibPebble3(
     private val config: LibPebbleConfig,
-) : LibPebble {
-    private val ble = PebbleBle(config)
-    private val pebbleConnector = PebbleConnector(ble)
-    private val watchManager = WatchManager(pebbleConnector)
-    private var bleScanJob: Job? = null
+    val ble: PebbleBle,
+    val watchManager: WatchManager,
+    val scanning: Scanning,
+) : LibPebble, Scanning by scanning {
 
-    fun init() {
+    override fun init() {
         ble.init()
         watchManager.init()
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
 
-    override suspend fun bleScan() {
-        bleScanJob?.cancel()
-        val scanResults = ble.scan(watchManager)
-        bleScanJob = GlobalScope.launch {
-            scanResults.collect {
-                watchManager.addScanResult(it)
-                bleScanJob?.cancel() // FIXME find a proper way to stop scan (especially when connecting)
-            }
-        }
-    }
-
-    override suspend fun classicScan() {
-        TODO("Not yet implemented")
-    }
-
     override suspend fun sendNotification() {
-        TODO("Not yet implemented")
+        scanning.stopClassicScan()
     }
 
     override suspend fun sendPing(cookie: UInt) {
+        forEachConnectedWatch { sendPing(cookie) }
+    }
+
+    private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {
         watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
-            it.sendPing(cookie)
+            it.block()
+        }
+    }
+
+    companion object {
+        fun create(config: LibPebbleConfig): LibPebble {
+            // All the singletons
+            val ble = PebbleBle(config)
+            val pebbleConnector = PebbleConnector(ble)
+            val watchManager = WatchManager(pebbleConnector)
+            val scanning = RealScanning(watchManager, ble)
+            return LibPebble3(config, ble, watchManager, scanning)
         }
     }
 }

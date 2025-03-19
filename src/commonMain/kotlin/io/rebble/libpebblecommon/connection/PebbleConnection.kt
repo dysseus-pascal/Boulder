@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.connection
 
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import kotlinx.coroutines.CoroutineScope
 
 // mac address on android, uuid on ios etc
 expect class PebbleBluetoothIdentifier {
@@ -31,12 +33,7 @@ sealed interface PebbleDevice {
 
 // We know a few more things about these, after a BLE scan but before connection
 interface BleDiscoveredPebbleDevice : PebbleDevice {
-    val fwVersion: String // TODO typed
-    val recoveryVersion: String // TODO typed
-    val serialNo: String
-    val rssi: Int
-    // model/color
-    // .... lots more
+    val pebbleScanRecord: PebbleLeScanRecord
 }
 
 // e.g. we have previously connected to it, and got all it's info (stored in the db)

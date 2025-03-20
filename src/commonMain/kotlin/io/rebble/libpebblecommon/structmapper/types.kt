@@ -1,12 +1,11 @@
 package io.rebble.libpebblecommon.structmapper
 
-import com.benasher44.uuid.Uuid
-import com.benasher44.uuid.bytes
-import com.benasher44.uuid.uuidOf
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.exceptions.PacketEncodeException
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 
 /**
@@ -212,14 +211,22 @@ class SBoolean(mapper: StructMapper, default: Boolean = false) :
         default
     )
 
-class SUUID(mapper: StructMapper, default: Uuid = Uuid(0, 0)) :
+@OptIn(ExperimentalUuidApi::class)
+class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
     StructElement<Uuid>(
-        { buf, el -> buf.putBytes(el.get().bytes.toUByteArray()) },
-        { buf, el -> el.set(uuidOf(buf.getBytes(2 * ULong.SIZE_BYTES).toByteArray())) },
+        { buf, el -> buf.putBytes(el.get().toByteArray().asUByteArray()) },
+        { buf, el -> el.set(Uuid.fromByteArray(buf.getBytes(2 * ULong.SIZE_BYTES).toByteArray())) },
         mapper,
         2 * ULong.SIZE_BYTES,
         default
     )
+{
+    @Deprecated("Deprecated in favour of new kotlin stdlib UUID")
+    constructor(mapper: StructMapper, default: com.benasher44.uuid.Uuid) : this(
+        mapper,
+        Uuid.fromLongs(default.mostSignificantBits, default.leastSignificantBits)
+    )
+}
 
 /**
  * Represents a string (UTF-8) in a struct, includes framing for length

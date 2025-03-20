@@ -41,7 +41,7 @@ data class RealKnownPebbleDevice(
     }
 }
 
-data class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice
+data class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice, ConnectingPebbleDevice
 
 data class NegotiationResult(
     val watchVersion: WatchVersion.WatchVersionResponse,

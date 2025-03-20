@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.ExperimentalUuidApi
 
 sealed class AppFetchIncomingPacket() : PebblePacket(ProtocolEndpoint.APP_FETCH) {
     /**
@@ -34,6 +35,7 @@ class AppFetchRequest : AppFetchIncomingPacket() {
     /**
      * UUID of the app to request
      */
+    @OptIn(ExperimentalUuidApi::class)
     val uuid = SUUID(m)
 
     /**

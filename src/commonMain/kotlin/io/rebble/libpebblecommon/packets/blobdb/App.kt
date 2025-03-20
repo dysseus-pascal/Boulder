@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.packets.blobdb
 
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.ExperimentalUuidApi
 
 /**
  * Data of the APP BlobDB Entry
@@ -10,6 +11,7 @@ class AppMetadata() : StructMappable() {
     /**
      * UUID of the app
      */
+    @OptIn(ExperimentalUuidApi::class)
     val uuid: SUUID = SUUID(m)
 
     /**

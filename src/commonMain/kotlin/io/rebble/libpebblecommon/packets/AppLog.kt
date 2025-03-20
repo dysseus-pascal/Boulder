@@ -4,12 +4,14 @@ import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
+import kotlin.uuid.ExperimentalUuidApi
 
 class AppLogShippingControlMessage(enable: Boolean) : PebblePacket(ProtocolEndpoint.APP_LOGS) {
     private val enable = SBoolean(m, enable)
 }
 
 class AppLogReceivedMessage() : PebblePacket(ProtocolEndpoint.APP_LOGS) {
+    @OptIn(ExperimentalUuidApi::class)
     val uuid = SUUID(m)
     val timestamp = SUInt(m)
     val level = SUByte(m)

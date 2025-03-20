@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.services.ProtocolService
+import kotlin.uuid.ExperimentalUuidApi
 
 /**
  * Singleton that handles receiving of timeline actions.
@@ -28,6 +29,7 @@ class TimelineService(private val protocolHandler: ProtocolHandler) : ProtocolSe
 
         val result = actionHandler?.invoke(packet) ?: return
 
+        @OptIn(ExperimentalUuidApi::class)
         val returnPacket = TimelineAction.ActionResponse().apply {
             itemID.set(packet.itemID.get())
             response.set(if (result.success) 0u else 1u)

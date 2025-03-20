@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.ExperimentalUuidApi
 
 
 sealed class IncomingVoicePacket() : PebblePacket(ProtocolEndpoint.VOICE_CONTROL) {
@@ -80,6 +81,7 @@ open class VoiceAttribute(id: UByte = 0u, content: StructMappable? = null) : Str
         }
     }
 
+    @OptIn(ExperimentalUuidApi::class)
     class AppUuid : StructMappable() {
         val uuid = SUUID(m)
     }

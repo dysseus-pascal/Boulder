@@ -1,15 +1,15 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
-import com.benasher44.uuid.uuid4
-import com.benasher44.uuid.uuidFrom
-import com.benasher44.uuid.uuidOf
 import com.soywiz.klock.DateTime
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import kotlin.random.Random
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
-private val notifsUUID = uuidFrom("B2CAE818-10F8-46DF-AD2B-98AD2254A3C1")
+@OptIn(ExperimentalUuidApi::class)
+private val notifsUUID = Uuid.parse("B2CAE818-10F8-46DF-AD2B-98AD2254A3C1")
 
 enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (probably fw >3)
     Generic(1u),
@@ -22,10 +22,11 @@ enum class NotificationSource(val id: UInt) { //TODO: There's likely more... (pr
 /**
  * Helper class to generate a BlobDB command that inserts a notification
  */
+@OptIn(ExperimentalUuidApi::class)
 open class PushNotification(subject: String, sender: String? = null, message: String? = null, source: NotificationSource = NotificationSource.Generic, backgroundColor: UByte? = null): BlobCommand.InsertCommand(Random.nextInt(0, UShort.MAX_VALUE.toInt()).toUShort(),
     BlobDatabase.Notification, ubyteArrayOf(), ubyteArrayOf()) {
     init {
-        val itemID = uuid4()
+        val itemID = Uuid.random()
 
         //TODO: Replies, open on phone, detect dismiss
         val attributes = mutableListOf(
@@ -54,9 +55,10 @@ open class PushNotification(subject: String, sender: String? = null, message: St
 
         val timestamp = DateTime.nowUnixLong() / 1000
 
+        @OptIn(ExperimentalUuidApi::class)
         val notification = TimelineItem(
             itemID,
-            uuidOf(ByteArray(2 * Long.SIZE_BYTES) { 0 }),
+            Uuid.NIL,
             timestamp.toUInt(),
             0u,
             TimelineItem.Type.Notification,

@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
-import com.benasher44.uuid.Uuid
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -8,7 +7,10 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalUuidApi::class)
 class TimelineItem(
     itemId: Uuid,
     parentId: Uuid, timestamp: UInt,
@@ -185,6 +187,7 @@ class TimelineItem(
     }
 }
 
+@OptIn(ExperimentalUuidApi::class)
 open class TimelineAction(message: Message) : PebblePacket(endpoint) {
     val command = SUByte(m, message.value)
 
@@ -194,7 +197,7 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
     }
 
     class InvokeAction(
-        itemID: Uuid = Uuid(0, 0),
+        itemID: Uuid = Uuid.NIL,
         actionID: UByte = 0u,
         attributes: List<Attribute> = listOf()
     ) : TimelineAction(
@@ -211,7 +214,7 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
     }
 
     class ActionResponse(
-        itemID: Uuid = Uuid(0, 0),
+        itemID: Uuid = Uuid.NIL,
         response: UByte = 0u,
         attributes: List<Attribute> = listOf()
     ) : TimelineAction(
@@ -265,6 +268,7 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     Icon(0x30u),
 }
 
+@OptIn(ExperimentalUuidApi::class)
 fun timelinePacketsRegister() {
     PacketRegistry.register(
         TimelineAction.endpoint,

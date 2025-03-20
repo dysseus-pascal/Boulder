@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
+import kotlin.uuid.ExperimentalUuidApi
 
 class AppReorderResult() :
     PebblePacket(ProtocolEndpoint.APP_REORDER) {
@@ -46,6 +47,7 @@ class AppReorderRequest(
 ) : AppReorderOutgoingPacket(AppReorderType.REORDER_APPS) {
     val appCount = SByte(m, appList.size.toByte())
 
+    @OptIn(ExperimentalUuidApi::class)
     val appList = SFixedList<SUUID>(
         mapper = m,
         count = appList.size,

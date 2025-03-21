@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
@@ -24,7 +25,7 @@ interface LibPebble : Scanning {
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
-    suspend fun sendNotification() // calls for every known watch
+    suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
     suspend fun sendPing(cookie: UInt)
     // ....
 }
@@ -55,8 +56,8 @@ class LibPebble3(
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
 
-    override suspend fun sendNotification() {
-        scanning.stopClassicScan()
+    override suspend fun sendNotification(notification: TimelineItem) {
+        forEachConnectedWatch { sendNotification(notification) }
     }
 
     override suspend fun sendPing(cookie: UInt) {

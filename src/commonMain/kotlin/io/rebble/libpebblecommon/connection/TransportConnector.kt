@@ -117,6 +117,8 @@ class PebbleConnector(
 
                 val connectedDevice = RealConnectedPebbleDevice(
                     pebbleDevice = knownDevice,
+                    pebbleProtocol = protocolHandler,
+                    scope = scope,
                     appRunStateService = negotiatingDevice.appRunStateService,
                     systemService = negotiatingDevice.systemService,
                 )

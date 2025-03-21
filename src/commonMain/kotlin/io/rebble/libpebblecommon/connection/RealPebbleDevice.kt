@@ -3,11 +3,14 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.packets.WatchVersion
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
@@ -72,10 +75,15 @@ class RealNegotiatingPebbleDevice(
 
 class RealConnectedPebbleDevice(
     val pebbleDevice: KnownPebbleDevice,
+    val pebbleProtocol: PebbleProtocolHandler,
+    val scope: CoroutineScope,
     // These were already created in a previous connection state so keep them running
     val appRunStateService: AppRunStateService,
     val systemService: SystemService,
 ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
+    val blobDBService = BlobDBService(pebbleProtocol)
+    val notificationBlobDB = NotificationBlobDB(blobDBService, name) //TODO: use identifier instead of name
+
     override fun sendPPMessage(bytes: ByteArray) {
         TODO("Not yet implemented")
     }
@@ -84,8 +92,9 @@ class RealConnectedPebbleDevice(
         TODO("Not yet implemented")
     }
 
-    override suspend fun sendNotification() {
-        TODO("Not yet implemented")
+    override suspend fun sendNotification(notification: TimelineItem) {
+        //TODO: Local db - this is a testing hack
+        notificationBlobDB.insert(notification)
     }
 
     override suspend fun sendPing(cookie: UInt): UInt {

@@ -5,6 +5,7 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.packets.WatchVersion
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -77,12 +78,18 @@ class RealConnectedPebbleDevice(
     val pebbleDevice: KnownPebbleDevice,
     val pebbleProtocol: PebbleProtocolHandler,
     val scope: CoroutineScope,
+    val database: Database,
     // These were already created in a previous connection state so keep them running
     val appRunStateService: AppRunStateService,
     val systemService: SystemService,
 ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
-    val blobDBService = BlobDBService(pebbleProtocol)
-    val notificationBlobDB = NotificationBlobDB(blobDBService, name) //TODO: use identifier instead of name
+    val blobDBService = BlobDBService(scope, pebbleProtocol)
+    val notificationBlobDB = NotificationBlobDB(
+        scope,
+        blobDBService,
+        database.blobDBDao(),
+        name, //TODO: use identifier instead of name
+    )
 
     override fun sendPPMessage(bytes: ByteArray) {
         TODO("Not yet implemented")
@@ -93,7 +100,6 @@ class RealConnectedPebbleDevice(
     }
 
     override suspend fun sendNotification(notification: TimelineItem) {
-        //TODO: Local db - this is a testing hack
         notificationBlobDB.insert(notification)
     }
 

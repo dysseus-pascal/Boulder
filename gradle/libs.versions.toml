@@ -1,17 +1,22 @@
 [versions]
 agp = "8.9.0"
-kotlin = "2.1.10"
+kotlin = "2.1.20"
 klock = "2.4.13"
 ktor = "1.6.7"
 coroutine = "1.8.0"
 uuid = "0.4.1"
 serialization = "1.5.0"
 kermit = "2.0.0-RC4"
+ksp = "2.1.20-1.0.31"
+room = "2.7.0-rc02"
+sqlite = "2.5.0-rc02"
 
 [plugins]
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room", version.ref = "room" }
 
 [libraries]
 uuid = { module = "com.benasher44:uuid", version.ref = "uuid" }
@@ -24,4 +29,6 @@ ktor-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
-
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }

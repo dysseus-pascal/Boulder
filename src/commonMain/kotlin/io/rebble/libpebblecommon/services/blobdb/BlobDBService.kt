@@ -16,10 +16,9 @@ import kotlinx.coroutines.async
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
  * @see BlobResponse
  */
-class BlobDBService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+class BlobDBService(scope: CoroutineScope, private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
     private val pending: MutableMap<UShort, CompletableDeferred<BlobResponse>> = mutableMapOf()
-
-    fun init(scope: CoroutineScope) {
+    init {
         scope.async {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {

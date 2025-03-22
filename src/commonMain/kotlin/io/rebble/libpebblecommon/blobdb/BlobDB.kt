@@ -1,11 +1,16 @@
 package io.rebble.libpebblecommon.blobdb
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.dao.BlobDBDao
+import io.rebble.libpebblecommon.database.entity.BlobDBItem
+import io.rebble.libpebblecommon.database.entity.BlobDBItemSyncStatus
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 import kotlin.random.Random
 import kotlin.uuid.ExperimentalUuidApi
@@ -13,15 +18,57 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 sealed class BlobDB(
+    watchScope: CoroutineScope,
     private val blobDBService: BlobDBService,
     private val watchDatabase: BlobCommand.BlobDatabase,
-    private val watchIdentifier: String
+    protected val blobDBDao: BlobDBDao,
+    protected val watchIdentifier: String
 ) {
     companion object {
         private val BLOBDB_RESPONSE_TIMEOUT = 5000L
     }
     private val logger = Logger.withTag("BlobDB-$watchIdentifier")
     private val random = Random.Default
+
+    init {
+        watchScope.async {
+            val pending = blobDBDao.getAllPendingFor(watchDatabase, watchIdentifier)
+            logger.d { "Processing ${pending.size} pending db changes" }
+            syncPhoneToWatch(pending)
+            blobDBDao.changesFor(watchDatabase, watchIdentifier).collect {
+                logger.d { "Responding to db change" }
+                syncPhoneToWatch(it)
+            }
+        }
+    }
+
+    /**
+     * Performs any pending synchronization operations stored in the phone database
+     */
+    suspend fun syncPhoneToWatch(items: List<BlobDBItem>) {
+        items.forEach { item ->
+            //TODO: Resilience?
+            when (item.syncStatus) {
+                BlobDBItemSyncStatus.PendingWrite -> {
+                    try {
+                        sendInsert(item.id, item.data.asUByteArray())
+                        blobDBDao.markSynced(item.id)
+                    } catch (e: Exception) {
+                        logger.e(e) { "Failed to insert item" }
+                    }
+                }
+                BlobDBItemSyncStatus.PendingDelete -> {
+                    try {
+                        sendDelete(item.id)
+                        blobDBDao.markSynced(item.id)
+                    } catch (e: Exception) {
+                        logger.e(e) { "Failed to delete item" }
+                    }
+                }
+                BlobDBItemSyncStatus.SyncedToWatch -> {/* No-op */}
+            }
+        }
+    }
 
     private fun generateToken(): UShort {
         return random.nextInt(0, UShort.MAX_VALUE.toInt()).toUShort()
@@ -42,8 +89,11 @@ sealed class BlobDB(
         }
     }
 
-    //CRUD operations
-    suspend fun insert(itemId: Uuid, value: UByteArray) {
+    /**
+     * Sends an insert command to the watch
+     * It's recommended to not use this directly
+     */
+    suspend fun sendInsert(itemId: Uuid, value: UByteArray) {
         val command = BlobCommand.InsertCommand(
             generateToken(),
             watchDatabase,
@@ -54,11 +104,15 @@ sealed class BlobDB(
         handleBlobDBResponse(result)
     }
 
-    suspend fun read(itemId: Uuid): UByteArray {
+    suspend fun sendRead(itemId: Uuid): UByteArray {
         TODO("Not yet implemented")
     }
 
-    suspend fun delete(itemId: Uuid) {
+    /**
+     * Sends a delete command to the watch
+     * It's recommended to not use this directly
+     */
+    suspend fun sendDelete(itemId: Uuid) {
         val command = BlobCommand.DeleteCommand(
             generateToken(),
             watchDatabase,
@@ -68,7 +122,11 @@ sealed class BlobDB(
         handleBlobDBResponse(result)
     }
 
-    suspend fun clear() {
+    /**
+     * Sends a clear command to the watch, clearing entire database
+     * It's recommended to not use this directly
+     */
+    suspend fun sendClear() {
         val command = BlobCommand.ClearCommand(
             generateToken(),
             watchDatabase

@@ -2,6 +2,8 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
+import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +48,7 @@ interface Scanning {
 class LibPebble3(
     private val config: LibPebbleConfig,
     val watchManager: WatchManager,
-    val scanning: Scanning,
+    val scanning: Scanning
 ) : LibPebble, Scanning by scanning {
 
     override fun init() {
@@ -73,6 +75,7 @@ class LibPebble3(
     companion object {
         fun create(config: LibPebbleConfig): LibPebble {
             // All the singletons
+            val database = getRoomDatabase(config.context)
             val watchManager = WatchManager(config)
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)

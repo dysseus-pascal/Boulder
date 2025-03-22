@@ -15,6 +15,8 @@ plugins {
     `maven-publish`
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.android.library)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 publishing {
@@ -28,6 +30,10 @@ publishing {
             }
         }
     }
+}
+
+room {
+    schemaDirectory("schema")
 }
 
 android {
@@ -87,6 +93,8 @@ kotlin {
                 optIn("kotlin.ExperimentalStdlibApi")
                 optIn("kotlin.RequiresOptIn")
                 optIn("kotlin.ExperimentalSerializationApi")
+                optIn("kotlin.uuid.ExperimentalUuidApi")
+                optIn("kotlinx.cinterop.ExperimentalForeignApi")
             }
         }
         commonMain.dependencies {
@@ -95,6 +103,8 @@ kotlin {
             implementation(libs.coroutines)
             implementation(libs.serialization)
             implementation(libs.kermit)
+            implementation(libs.room.runtime)
+            implementation(libs.sqlite.bundled)
             implementation("com.juul.kable:kable-core:0.36.0")
             implementation("io.github.skolson:kmp-io:0.1.5")
             implementation("io.ktor:ktor-io:3.1.1")
@@ -121,6 +131,15 @@ kotlin {
             implementation(libs.ktor.okhttp)
         }
     }
+}
+
+dependencies {
+    add("kspCommonMainMetadata", libs.room.compiler)
+    add("kspJvm", libs.room.compiler)
+    add("kspAndroid", libs.room.compiler)
+    add("kspIosX64", libs.room.compiler)
+    add("kspIosArm64", libs.room.compiler)
+    add("kspIosSimulatorArm64", libs.room.compiler)
 }
 
 /*

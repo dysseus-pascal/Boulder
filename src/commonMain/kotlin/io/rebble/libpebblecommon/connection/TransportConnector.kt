@@ -6,6 +6,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.peek
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.PacketPriority
+import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,7 @@ interface PebbleProtocolHandler {
 
 class PebbleConnector(
     private val transportConnector: TransportConnector,
+    private val database: Database,
     val pebbleDevice: PebbleDevice,
     val scope: CoroutineScope,
 ) {
@@ -119,6 +121,7 @@ class PebbleConnector(
                     pebbleDevice = knownDevice,
                     pebbleProtocol = protocolHandler,
                     scope = scope,
+                    database = database,
                     appRunStateService = negotiatingDevice.appRunStateService,
                     systemService = negotiatingDevice.systemService,
                 )

@@ -25,12 +25,16 @@ class RealPebbleDevice(
     override suspend fun disconnect() {
         watchManager.disconnectFrom(this)
     }
+
+    override fun toString(): String = "PebbleDevice: name=$name transport=$transport"
 }
 
 class RealBleDiscoveredPebbleDevice(
     val pebbleDevice: PebbleDevice,
     override val pebbleScanRecord: PebbleLeScanRecord,
-) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice
+) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice {
+    override fun toString(): String = "RealBleDiscoveredPebbleDevice: $pebbleDevice / pebbleScanRecord=$pebbleScanRecord"
+}
 
 class RealKnownPebbleDevice(
     val pebbleDevice: PebbleDevice,
@@ -39,9 +43,13 @@ class RealKnownPebbleDevice(
     override suspend fun forget() {
         TODO("Not yet implemented")
     }
+
+    override fun toString(): String = "KnownPebbleDevice: $pebbleDevice / isRunningRecoveryFw=$isRunningRecoveryFw"
 }
 
-class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice, ConnectingPebbleDevice
+class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice, ConnectingPebbleDevice {
+    override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
+}
 
 data class NegotiationResult(
     val watchVersion: WatchVersion.WatchVersionResponse,
@@ -68,6 +76,8 @@ class RealNegotiatingPebbleDevice(
         Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
         return NegotiationResult(watchVersionResponse, runningApp)
     }
+
+    override fun toString(): String = "NegotiatingPebbleDevice: $pebbleDevice"
 }
 
 class RealConnectedPebbleDevice(
@@ -91,4 +101,6 @@ class RealConnectedPebbleDevice(
     override suspend fun sendPing(cookie: UInt): UInt {
         return systemService.sendPing(cookie)
     }
+
+    override fun toString(): String = "ConnectedPebbleDevice: $pebbleDevice"
 }

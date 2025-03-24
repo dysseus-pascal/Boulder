@@ -8,10 +8,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class)
 class AppRunStateService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
     val _runningApp = MutableStateFlow<Uuid?>(null)
     val runningApp: StateFlow<Uuid?> = _runningApp

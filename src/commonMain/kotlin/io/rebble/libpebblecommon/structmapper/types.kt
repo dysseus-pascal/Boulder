@@ -4,7 +4,6 @@ import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.exceptions.PacketEncodeException
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 
@@ -211,7 +210,6 @@ class SBoolean(mapper: StructMapper, default: Boolean = false) :
         default
     )
 
-@OptIn(ExperimentalUuidApi::class)
 class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
     StructElement<Uuid>(
         { buf, el -> buf.putBytes(el.get().toByteArray().asUByteArray()) },

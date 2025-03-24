@@ -3,11 +3,8 @@ package io.rebble.libpebblecommon.database.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class)
 @Entity
 data class BlobDBItem(
     @PrimaryKey val id: Uuid,

@@ -7,10 +7,8 @@ import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalUuidApi::class)
 class TimelineItem(
     itemId: Uuid,
     parentId: Uuid, timestamp: UInt,
@@ -187,7 +185,6 @@ class TimelineItem(
     }
 }
 
-@OptIn(ExperimentalUuidApi::class)
 open class TimelineAction(message: Message) : PebblePacket(endpoint) {
     val command = SUByte(m, message.value)
 
@@ -268,7 +265,6 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     Icon(0x30u),
 }
 
-@OptIn(ExperimentalUuidApi::class)
 fun timelinePacketsRegister() {
     PacketRegistry.register(
         TimelineAction.endpoint,

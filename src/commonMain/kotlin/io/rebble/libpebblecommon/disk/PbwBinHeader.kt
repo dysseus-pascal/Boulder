@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.disk
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
-import kotlin.uuid.ExperimentalUuidApi
 
 class PbwBinHeader() : StructMappable() {
     /**
@@ -84,10 +83,8 @@ class PbwBinHeader() : StructMappable() {
     /**
      * UUID of the app
      */
-    @OptIn(ExperimentalUuidApi::class)
     val uuid: SUUID = SUUID(m)
 
-    @OptIn(ExperimentalUuidApi::class)
     fun toBlobDbApp(): AppMetadata {
         return AppMetadata().also {
             it.uuid.set(uuid.get())

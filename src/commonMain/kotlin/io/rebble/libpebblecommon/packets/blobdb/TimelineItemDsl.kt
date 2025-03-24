@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.packets.blobdb
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 class ActionBuilder internal constructor() {
@@ -120,7 +119,6 @@ class FlagsBuilder internal constructor() {
     }
 }
 
-@OptIn(ExperimentalUuidApi::class)
 class TimelineItemBuilder internal constructor(val itemID: Uuid) {
     var parentId: Uuid = Uuid.NIL
     var timestamp: UInt = 0u
@@ -162,14 +160,12 @@ class TimelineItemBuilder internal constructor(val itemID: Uuid) {
     )
 }
 
-@OptIn(ExperimentalUuidApi::class)
 fun buildTimelineItem(itemId: Uuid, block: TimelineItemBuilder.() -> Unit): TimelineItem {
     val builder = TimelineItemBuilder(itemId)
     builder.block()
     return builder.build()
 }
 
-@OptIn(ExperimentalUuidApi::class)
 fun buildNotificationItem(itemId: Uuid, block: TimelineItemBuilder.() -> Unit): TimelineItem {
     val builder = TimelineItemBuilder(itemId)
     builder.type = TimelineItem.Type.Notification

@@ -11,14 +11,16 @@ import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
  * @see BlobResponse
  */
-class BlobDBService(scope: CoroutineScope, private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+class BlobDBService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
     private val pending: MutableMap<UShort, CompletableDeferred<BlobResponse>> = mutableMapOf()
-    init {
+
+    fun init(scope: CoroutineScope) {
         scope.async {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {

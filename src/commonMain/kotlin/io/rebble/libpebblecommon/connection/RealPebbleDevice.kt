@@ -83,7 +83,7 @@ class RealConnectedPebbleDevice(
     val appRunStateService: AppRunStateService,
     val systemService: SystemService,
 ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
-    val blobDBService = BlobDBService(scope, pebbleProtocol)
+    val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
     val notificationBlobDB = NotificationBlobDB(
         scope,
         blobDBService,

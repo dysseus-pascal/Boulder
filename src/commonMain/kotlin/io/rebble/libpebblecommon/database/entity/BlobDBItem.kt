@@ -23,6 +23,9 @@ data class BlobDBItem(
         other as BlobDBItem
 
         if (id != other.id) return false
+        if (syncStatus != other.syncStatus) return false
+        if (watchIdentifier != other.watchIdentifier) return false
+        if (watchDatabase != other.watchDatabase) return false
         if (!data.contentEquals(other.data)) return false
 
         return true
@@ -30,6 +33,9 @@ data class BlobDBItem(
 
     override fun hashCode(): Int {
         var result = id.hashCode()
+        result = 31 * result + syncStatus.hashCode()
+        result = 31 * result + watchIdentifier.hashCode()
+        result = 31 * result + watchDatabase.hashCode()
         result = 31 * result + data.contentHashCode()
         return result
     }

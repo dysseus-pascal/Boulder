@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.protocolhelpers
 
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.packets.*
+import io.rebble.libpebblecommon.packets.blobdb.blobDB2PacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.blobDBPacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.timelinePacketsRegister
 
@@ -20,6 +21,7 @@ object PacketRegistry {
         timePacketsRegister()
         timelinePacketsRegister()
         blobDBPacketsRegister()
+        blobDB2PacketsRegister()
         appmessagePacketsRegister()
         appRunStatePacketsRegister()
         musicPacketsRegister()

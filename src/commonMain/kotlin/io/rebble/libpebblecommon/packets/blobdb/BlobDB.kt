@@ -30,7 +30,8 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
         Contacts(8u),
         AppConfigs(9u),
         HealthStats(10u),
-        AppGlance(11u)
+        AppGlance(11u),
+        Invalid(0xFFu)
     }
 
     val command = SUByte(m, message.value)

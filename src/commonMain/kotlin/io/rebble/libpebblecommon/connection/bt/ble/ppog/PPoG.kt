@@ -28,11 +28,7 @@ class PPoG(
     suspend fun run(scope: CoroutineScope) {
         scope.async {
             val params = initPPoG()
-            try {
-                runConnection(params)
-            } catch (e: Exception) {
-                Logger.e("error running PPoG", e)
-            }
+            runConnection(params)
         }
         // TODO error handling - make parent throw if async throws?
     }

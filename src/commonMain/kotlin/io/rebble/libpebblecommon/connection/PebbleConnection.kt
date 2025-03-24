@@ -2,22 +2,29 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import kotlinx.coroutines.CoroutineScope
+
+interface PebbleIdentifier {
+    val asString: String
+}
 
 // mac address on android, uuid on ios etc
-expect class PebbleBluetoothIdentifier {
-    fun asString(): String
+expect class PebbleBluetoothIdentifier : PebbleIdentifier
+
+data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
+    override val asString: String = address
 }
 
 sealed class Transport {
+    abstract val identifier: PebbleIdentifier
+
     sealed class BluetoothTransport : Transport() {
-        abstract val identifier: PebbleBluetoothIdentifier
+        abstract override val identifier: PebbleBluetoothIdentifier
 
         data class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
         data class BleTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
     }
     // e.g. emulator
-    data class SocketTransport(val address: String) : Transport()
+    data class SocketTransport(override val identifier: PebbleSocketIdentifier) : Transport()
 }
 
 interface ActiveDevice
@@ -27,7 +34,7 @@ sealed interface PebbleDevice {
     val name: String
     val transport: Transport
 
-    suspend fun connect() // TODO return anything here, or put e.g. connection errors in `watches` state?
+    suspend fun connect()
     suspend fun disconnect()
 }
 

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-data class RealPebbleDevice(
+class RealPebbleDevice(
     override val name: String,
     override val transport: Transport,
     private val watchManager: WatchManager,
@@ -23,16 +23,16 @@ data class RealPebbleDevice(
     }
 
     override suspend fun disconnect() {
-        TODO("Not yet implemented")
+        watchManager.disconnectFrom(this)
     }
 }
 
-data class RealBleDiscoveredPebbleDevice(
+class RealBleDiscoveredPebbleDevice(
     val pebbleDevice: PebbleDevice,
     override val pebbleScanRecord: PebbleLeScanRecord,
 ) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice
 
-data class RealKnownPebbleDevice(
+class RealKnownPebbleDevice(
     val pebbleDevice: PebbleDevice,
     override val isRunningRecoveryFw: Boolean,
 ) : PebbleDevice by pebbleDevice, KnownPebbleDevice {
@@ -41,17 +41,17 @@ data class RealKnownPebbleDevice(
     }
 }
 
-data class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice, ConnectingPebbleDevice
+class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) : PebbleDevice by pebbleDevice, ConnectingPebbleDevice
 
 data class NegotiationResult(
     val watchVersion: WatchVersion.WatchVersionResponse,
     val runningApp: Uuid?,
 )
 
-data class RealNegotiatingPebbleDevice(
+class RealNegotiatingPebbleDevice(
     val pebbleDevice: PebbleDevice,
     val pebbleProtocol: PebbleProtocolHandler,
-    val scope: CoroutineScope,
+    scope: CoroutineScope,
 ) : PebbleDevice by pebbleDevice, NegotiatingPebbleDevice {
     val systemService = SystemService(pebbleProtocol).apply { init(scope) }
     val appRunStateService = AppRunStateService(pebbleProtocol).apply { init(scope) }
@@ -70,7 +70,7 @@ data class RealNegotiatingPebbleDevice(
     }
 }
 
-data class RealConnectedPebbleDevice(
+class RealConnectedPebbleDevice(
     val pebbleDevice: KnownPebbleDevice,
     // These were already created in a previous connection state so keep them running
     val appRunStateService: AppRunStateService,

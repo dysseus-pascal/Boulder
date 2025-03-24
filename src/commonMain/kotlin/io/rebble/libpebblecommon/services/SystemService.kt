@@ -91,6 +91,7 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
     }
 
     suspend fun sendPing(cookie: UInt): UInt {
+        // TODO can just read the inbound messages directly in these
         val pong = CompletableDeferred<PingPong.Pong>()
         pongCallback = pong
         send(PingPong.Ping(cookie))

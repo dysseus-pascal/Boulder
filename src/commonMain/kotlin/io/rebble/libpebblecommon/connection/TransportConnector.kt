@@ -7,11 +7,18 @@ import io.ktor.utils.io.peek
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.io.IOException
 
 sealed class PebbleConnectionResult {
     class Success(
@@ -26,7 +33,9 @@ sealed class PebbleConnectionResult {
 }
 
 interface TransportConnector {
-    suspend fun connect(pebbleDevice: PebbleDevice, scope: CoroutineScope): PebbleConnectionResult
+    suspend fun connect(): PebbleConnectionResult
+    suspend fun disconnect()
+    val disconnected: Flow<Unit>
 }
 
 interface PebbleProtocolHandler {
@@ -35,78 +44,90 @@ interface PebbleProtocolHandler {
 }
 
 class PebbleConnector(
-    // TODO this handles selecting which transport to use
-    private val bleConnector: TransportConnector,
+    private val transportConnector: TransportConnector,
+    val pebbleDevice: PebbleDevice,
+    val scope: CoroutineScope,
 ) {
-    fun connect(pebbleDevice: PebbleDevice, scope: CoroutineScope, publishState: (PebbleDevice) -> Unit) {
+    private val _state = MutableStateFlow(pebbleDevice)
+    val state: StateFlow<PebbleDevice> = _state
+    val disconnected = transportConnector.disconnected
+
+    suspend fun connect() {
         val connectingDevice = RealConnectingPebbleDevice(pebbleDevice)
-        publishState(connectingDevice)
+        _state.value = connectingDevice
 
-        scope.async {
-
-            val result = bleConnector.connect(pebbleDevice, scope)
-            when (result) {
-                is PebbleConnectionResult.Failed -> {
-                    Logger.e("failed to connect: $result")
-                    publishState(pebbleDevice)
-                }
-
-                is PebbleConnectionResult.Success -> {
-                    Logger.d("PebbleConnector: $result")
-                    val inboundMessagesFlow = MutableSharedFlow<PebblePacket>()
-                    val protocolHandler = object : PebbleProtocolHandler {
-                        override val inboundMessages: SharedFlow<PebblePacket> = inboundMessagesFlow
-
-                        override suspend fun send(message: PebblePacket, priority: PacketPriority) {
-                            Logger.d("sending $message")
-                            result.outboundPPBytes.send(message.serialize().asByteArray())
-                        }
-                    }
-
-                    val negotiatingDevice =
-                        RealNegotiatingPebbleDevice(pebbleDevice, protocolHandler, scope)
-                    publishState(negotiatingDevice)
-
-                    scope.async {
-                        try {
-                            while (true) {
-                                val sizeBytes = result.inboundPPBytes.peek(2)
-                                val sizeArray = sizeBytes?.toByteArray()?.toUByteArray()
-                                    ?: throw IllegalStateException("couldn't read size")
-                                val payloadSize = sizeArray.getUShortAt(0, littleEndian = false)
-                                val packetSize = payloadSize + PP_HEADER_SIZE
-                                val packetBytes =
-                                    result.inboundPPBytes.readByteArray(packetSize.toInt())
-                                        .toUByteArray()
-                                try {
-                                    val packet = PebblePacket.deserialize(packetBytes)
-                                    Logger.d("packet: $packet")
-                                    inboundMessagesFlow.emit(packet)
-                                } catch (e: Exception) {
-                                    Logger.e("error decoding PP packet", e)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Logger.e("error decoding PP", e)
-                        }
-                    }
-
-                    val handshakeResult = negotiatingDevice.negotiate()
-                    Logger.d("handshakeResult = $handshakeResult")
-
-                    val knownDevice = RealKnownPebbleDevice(
-                        pebbleDevice = pebbleDevice,
-                        isRunningRecoveryFw = handshakeResult.watchVersion.running.isRecovery.get(),
-                    )
-
-                    val connectedDevice = RealConnectedPebbleDevice(
-                        pebbleDevice = knownDevice,
-                        appRunStateService = negotiatingDevice.appRunStateService,
-                        systemService = negotiatingDevice.systemService,
-                    )
-                    publishState(connectedDevice)
-                }
+        val result = transportConnector.connect()
+        when (result) {
+            is PebbleConnectionResult.Failed -> {
+                Logger.e("failed to connect: $result")
+                _state.value = pebbleDevice
             }
+
+            is PebbleConnectionResult.Success -> {
+                Logger.d("PebbleConnector: $result")
+                val inboundMessagesFlow = MutableSharedFlow<PebblePacket>()
+                val protocolHandler = object : PebbleProtocolHandler {
+                    override val inboundMessages: SharedFlow<PebblePacket> = inboundMessagesFlow
+
+                    override suspend fun send(message: PebblePacket, priority: PacketPriority) {
+                        Logger.d("sending $message")
+                        result.outboundPPBytes.send(message.serialize().asByteArray())
+                    }
+                }
+
+                val negotiatingDevice =
+                    RealNegotiatingPebbleDevice(pebbleDevice, protocolHandler, scope)
+                _state.value = negotiatingDevice
+
+                scope.launch {
+                    try {
+                        while (true) {
+                            val sizeBytes = result.inboundPPBytes.peek(2)
+                            val sizeArray = sizeBytes?.toByteArray()?.toUByteArray()
+                                ?: throw IOException("couldn't read size")
+                            val payloadSize = sizeArray.getUShortAt(0, littleEndian = false)
+                            val packetSize = payloadSize + PP_HEADER_SIZE
+                            val packetBytes =
+                                result.inboundPPBytes.readByteArray(packetSize.toInt())
+                                    .toUByteArray()
+                            val packet = try {
+                                PebblePacket.deserialize(packetBytes)
+                            } catch (e: Exception) {
+                                Logger.w("error deserializing packet: $packetBytes", e)
+                                null
+                            }
+
+                            Logger.d("packet: $packet")
+                            if (packet != null) {
+                                inboundMessagesFlow.emit(packet)
+                            }
+                        }
+                    } catch (e: IOException) {
+                        Logger.e("error decoding PP", e)
+                    }
+                }
+
+                val handshakeResult = negotiatingDevice.negotiate()
+                Logger.d("handshakeResult = $handshakeResult")
+
+                val knownDevice = RealKnownPebbleDevice(
+                    pebbleDevice = pebbleDevice,
+                    isRunningRecoveryFw = handshakeResult.watchVersion.running.isRecovery.get(),
+                )
+
+                val connectedDevice = RealConnectedPebbleDevice(
+                    pebbleDevice = knownDevice,
+                    appRunStateService = negotiatingDevice.appRunStateService,
+                    systemService = negotiatingDevice.systemService,
+                )
+                _state.value = connectedDevice
+            }
+        }
+    }
+
+    fun disconnect() {
+        scope.launch {
+            transportConnector.disconnect()
         }
     }
 

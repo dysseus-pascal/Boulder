@@ -5,6 +5,7 @@ import com.juul.kable.ManufacturerData
 import com.oldguy.common.getShortAt
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Companion.decodePebbleScanRecord
+import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -18,7 +19,7 @@ data class BleScanResult(
 
 class RealScanning(
     private val watchManager: WatchManager,
-    private val ble: PebbleBle,
+    private val bleScanner: BleScanner,
 ) : Scanning {
     private var bleScanJob: Job? = null
 
@@ -26,7 +27,7 @@ class RealScanning(
         // TODO add timeout
         Logger.d("startBleScan")
         bleScanJob?.cancel()
-        val scanResults = ble.scan("Pebble" /* TODO remove? */)
+        val scanResults = bleScanner.scan("Pebble" /* TODO remove? */)
         bleScanJob = GlobalScope.launch {
             scanResults.collect {
                 if (it.manufacturerData.code != PEBBLE_VENDOR_ID) {

@@ -7,6 +7,7 @@ import com.juul.kable.DiscoveredCharacteristic
 import com.juul.kable.DiscoveredService
 import com.juul.kable.Identifier
 import com.juul.kable.Peripheral
+import com.juul.kable.State
 import com.juul.kable.WriteType
 import com.juul.kable.toIdentifier
 import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
@@ -18,8 +19,12 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -41,6 +46,16 @@ class KableGattConnector(
             Logger.e("error connecting", e)
             return null
         }
+    }
+
+    override suspend fun disconnect() {
+        peripheral.disconnect()
+    }
+
+    override val disconnected: Flow<Unit> = peripheral.state.filter { it is State.Disconnected  }.map { }
+
+    override fun close() {
+        peripheral.close()
     }
 }
 
@@ -93,6 +108,10 @@ class KableConnectedGattClient(
     }
 
     override val services: List<GattService>? = mapServices()
+
+    override fun close() {
+        peripheral.close()
+    }
 
     private fun findCharacteristic(serviceUuid: String, characteristicUuid: String): DiscoveredCharacteristic? {
         return peripheral.services.value

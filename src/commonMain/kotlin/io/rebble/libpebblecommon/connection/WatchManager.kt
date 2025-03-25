@@ -7,27 +7,19 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
 class WatchManager(
@@ -40,6 +32,11 @@ class WatchManager(
     private val knownDevices = MutableStateFlow<Map<Transport, PebbleDevice>>(emptyMap())
     private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
     private val activeConnections = MutableStateFlow<Map<Transport, ActiveConnection>>(emptyMap())
+
+    // Putting this outside of [PebbleDevice] right now - it would be hard to keep it synced inside
+    // of there (e.g. from the connector generating new states), unless we refactor
+    private val devicesWithConnectGoal = MutableStateFlow<Set<Transport>>(emptySet())
+
     val watches: StateFlow<List<PebbleDevice>> = _watches
 
     fun init() {
@@ -48,30 +45,49 @@ class WatchManager(
             combine(
                 scanResults,
                 knownDevices,
-                activeConnectionStates
-            ) { scanResults, knownDevices, activeConnections ->
+                activeConnectionStates,
+                devicesWithConnectGoal,
+            ) { scan, known, active, connectGoal ->
                 // Known device takes priority over scan result for the same device
-                scanResults.toMutableMap().apply {
-                    putAll(knownDevices)
-                    putAll(activeConnections)
-                }.values.toList()
+                scan.toMutableMap().apply {
+                    putAll(known)
+                    putAll(active)
+                }.values.toList().also { allDevices ->
+                    allDevices.forEach { device ->
+                        val hasConnectGoal = device.transport in connectGoal
+                        val hasConnectionAttempt = active.containsKey(device.transport)
+                        if (hasConnectGoal && !hasConnectionAttempt) {
+                            connectTo(device)
+                        } else if (!hasConnectGoal && hasConnectionAttempt) {
+                            disconnectFrom(device)
+                        }
+                    }
+                }
             }.collect {
                 _watches.value = it
             }
         }
-
     }
 
     fun addScanResult(device: PebbleDevice) {
         Logger.d("addScanResult: $device")
-        scanResults.value = scanResults.value.toMutableMap().apply {
-            put(device.transport, device)
-        }
+        scanResults.value += device.transport to device
     }
 
-    fun connectTo(pebbleDevice: PebbleDevice) {
-        val existingDevice = knownDevices.value[pebbleDevice.transport]
-        if (existingDevice != null && existingDevice is ActiveDevice) {
+    fun requestConnection(pebbleDevice: PebbleDevice) {
+        Logger.d("requestConnection: $pebbleDevice")
+        devicesWithConnectGoal.value += pebbleDevice.transport
+    }
+
+    fun requestDisconnection(pebbleDevice: PebbleDevice) {
+        Logger.d("requestDisconnection: $pebbleDevice")
+        devicesWithConnectGoal.value -= pebbleDevice.transport
+    }
+
+    private fun connectTo(pebbleDevice: PebbleDevice) {
+        Logger.d("connectTo: $pebbleDevice")
+        val existingDevice = activeConnections.value[pebbleDevice.transport]
+        if (existingDevice != null) {
             Logger.d("Already connecting to $pebbleDevice")
             return
         }
@@ -88,18 +104,14 @@ class WatchManager(
         val coroutineContext =
             SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
         val connectionScope = CoroutineScope(coroutineContext)
-        connectionScope.launch {
-            val transportConnector = pebbleDevice.createConnector(connectionScope)
-            val pebbleConnector =
-                PebbleConnector(transportConnector, pebbleDevice, connectionScope)
-            try {
-                activeConnections.value = activeConnections.value.toMutableMap().apply {
-                    put(
-                        pebbleDevice.transport,
-                        ActiveConnection(pebbleDevice.transport, pebbleConnector),
-                    )
-                }
+        val transportConnector = pebbleDevice.createConnector(connectionScope)
+        val pebbleConnector =
+            PebbleConnector(transportConnector, pebbleDevice, connectionScope)
+        activeConnections.value +=
+            pebbleDevice.transport to ActiveConnection(pebbleDevice.transport, pebbleConnector)
 
+        connectionScope.launch {
+            try {
                 pebbleConnector.connect()
                 Logger.d("watchmanager connected; waiting for disconnect: ${pebbleDevice.transport}")
                 pebbleConnector.disconnected.first()
@@ -122,14 +134,13 @@ class WatchManager(
             Logger.w("cleanup: timed out waiting for disconnection from ${pebbleDevice.transport}")
         }
         Logger.d("${pebbleDevice.transport}: cleanup: removing active device")
-        activeConnections.value = activeConnections.value.toMutableMap().apply {
-            remove(pebbleDevice.transport)
-        }
+        activeConnections.value -= pebbleDevice.transport
         Logger.d("${pebbleDevice.transport}: cleanup: cancelling scope")
         scope.cancel()
     }
 
-    fun disconnectFrom(pebbleDevice: PebbleDevice) {
+    private fun disconnectFrom(pebbleDevice: PebbleDevice) {
+        Logger.d("disconnectFrom: $pebbleDevice")
         val activeConnection = activeConnections.value[pebbleDevice.transport]
         if (activeConnection == null) {
             Logger.d("disconnectFrom / not an active device")

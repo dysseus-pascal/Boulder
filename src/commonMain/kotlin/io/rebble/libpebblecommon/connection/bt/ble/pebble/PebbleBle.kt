@@ -27,6 +27,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -125,6 +126,9 @@ class PebbleBle(
 
     override suspend fun disconnect() {
         gattConnector.disconnect()
+        val transport = pebbleDevice.transport
+        check(transport is BleTransport)
+        gattServer?.unregisterDevice(transport)
     }
 
     override val disconnected = gattConnector.disconnected
@@ -135,7 +139,7 @@ class PebbleBle(
         var gattServer: GattServer? = null
 
         fun init(config: LibPebbleConfig) {
-            GlobalScope.async {
+            GlobalScope.launch {
                 if (!config.bleConfig.roleReversal) {
                     check(gattServer == null)
                     gattServer = openGattServer(config.context)

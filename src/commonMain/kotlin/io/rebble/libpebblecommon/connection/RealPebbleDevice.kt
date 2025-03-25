@@ -19,11 +19,11 @@ class RealPebbleDevice(
     private val watchManager: WatchManager,
 ) : PebbleDevice {
     override suspend fun connect() {
-        watchManager.connectTo(this)
+        watchManager.requestConnection(this)
     }
 
     override suspend fun disconnect() {
-        watchManager.disconnectFrom(this)
+        watchManager.requestDisconnection(this)
     }
 
     override fun toString(): String = "PebbleDevice: name=$name transport=$transport"

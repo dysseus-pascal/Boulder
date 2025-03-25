@@ -9,7 +9,9 @@ interface PebbleIdentifier {
 }
 
 // mac address on android, uuid on ios etc
-expect class PebbleBluetoothIdentifier : PebbleIdentifier
+expect class PebbleBluetoothIdentifier : PebbleIdentifier {
+    override val asString: String
+}
 
 data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
     override val asString: String = address

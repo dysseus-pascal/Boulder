@@ -76,7 +76,7 @@ class LibPebble3(
         fun create(config: LibPebbleConfig): LibPebble {
             // All the singletons
             val database = getRoomDatabase(config.context)
-            val watchManager = WatchManager(config)
+            val watchManager = WatchManager(config, database)
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             return LibPebble3(config, watchManager, scanning)

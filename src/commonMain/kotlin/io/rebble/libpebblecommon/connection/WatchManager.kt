@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
+import io.rebble.libpebblecommon.database.Database
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class WatchManager(
     private val config: LibPebbleConfig,
+    private val database: Database,
 ) {
     // Scan results - may or may not have extra scan record data
     private val scanResults = MutableStateFlow<Map<Transport, PebbleDevice>>(emptyMap())
@@ -91,7 +93,7 @@ class WatchManager(
         connectionScope.launch {
             val transportConnector = pebbleDevice.createConnector(connectionScope)
             val pebbleConnector =
-                PebbleConnector(transportConnector, pebbleDevice, connectionScope)
+                PebbleConnector(transportConnector, database, pebbleDevice, connectionScope)
             try {
                 activeConnections.value = activeConnections.value.toMutableMap().apply {
                     put(

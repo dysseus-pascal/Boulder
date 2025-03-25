@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalUuidApi::class)
+
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import android.bluetooth.BluetoothAdapter
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.withTimeout
 import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 private fun getService(appContext: AppContext): BluetoothManager? =
     appContext.context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -82,6 +86,9 @@ class GattServerCallback : BluetoothGattServerCallback() {
         val requestId: Int,
         val offset: Int,
         val characteristic: BluetoothGattCharacteristic,
+        // TODO Hack to make it emit again while using a StateFlow, because MutableSharedFlow is not
+        //  working for some reason
+        val uuidHack: Uuid = Uuid.random(),
     )
 
     override fun onCharacteristicReadRequest(

@@ -3,7 +3,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.blobdb.NotificationBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord

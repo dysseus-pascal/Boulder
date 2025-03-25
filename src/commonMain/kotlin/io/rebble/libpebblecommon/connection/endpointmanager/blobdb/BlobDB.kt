@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.blobdb
+package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.dao.BlobDBDao

@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.blobdb
+package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import com.soywiz.klock.Time
 import io.rebble.libpebblecommon.database.entity.BlobDBItem

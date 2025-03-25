@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.blobdb
+package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import io.rebble.libpebblecommon.database.dao.BlobDBDao
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand

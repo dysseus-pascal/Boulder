@@ -10,3 +10,7 @@ actual data class PebbleBluetoothIdentifier(
     fun isEqualTo(device: BluetoothDevice) = device.address.equals(macAddress, ignoreCase = true)
     fun isEqualTo(macAddress: String) = macAddress.equals(macAddress, ignoreCase = true)
 }
+
+actual fun String.asPebbleBluetoothIdentifier(): PebbleBluetoothIdentifier {
+    return PebbleBluetoothIdentifier(this)
+}

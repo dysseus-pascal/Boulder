@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
@@ -5,6 +7,7 @@ import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.ProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.packets.*
+import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.SInt
@@ -17,18 +20,21 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * Singleton to handle sending notifications cleanly, as well as TODO: receiving/acting on action events
  */
 class SystemService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
-//    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
+    //    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
     private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
     val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
 
-    private var watchVersionCallback: CompletableDeferred<WatchVersion.WatchVersionResponse>? = null
+    private var watchVersionCallback: CompletableDeferred<WatchVersionResponse>? = null
     private var watchModelCallback: CompletableDeferred<UByteArray>? = null
-    private var firmwareUpdateStartResponseCallback: CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>? = null
+    private var firmwareUpdateStartResponseCallback: CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>? =
+        null
     private var pongCallback: CompletableDeferred<PingPong.Pong>? = null
 
     /**
@@ -38,13 +44,16 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         protocolHandler.send(packet, priority)
     }
 
-    suspend fun requestWatchVersion(): WatchVersion.WatchVersionResponse {
-        val callback = CompletableDeferred<WatchVersion.WatchVersionResponse>()
+    suspend fun requestWatchVersion(): WatchInfo {
+        val callback = CompletableDeferred<WatchVersionResponse>()
         watchVersionCallback = callback
 
         send(WatchVersion.WatchVersionRequest())
 
-        return callback.await()
+        return callback.await().also {
+            val fwVersion = it.running.firmwareVersion()
+            Logger.d("fwVersion = $fwVersion")
+        }.watchInfo()
     }
 
     suspend fun requestWatchModel(): Int {
@@ -60,7 +69,8 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
 
     suspend fun sendPhoneVersionResponse() {
         // TODO put all this stuff in libpebble config
-        send(PhoneAppVersion.AppVersionResponse(
+        send(
+            PhoneAppVersion.AppVersionResponse(
             UInt.MAX_VALUE,
             0u,
             0u,
@@ -102,7 +112,7 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         scope.async {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {
-                    is WatchVersion.WatchVersionResponse -> {
+                    is WatchVersionResponse -> {
                         watchVersionCallback?.complete(packet)
                         watchVersionCallback = null
                     }
@@ -137,4 +147,84 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         }
     }
 
+}
+
+private val FIRMWARE_VERSION_REGEX = Regex("([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-(.*))?")
+
+data class FirmwareVersion(
+    val stringVersion: String,
+    val timestamp: Instant,
+    val major: Int,
+    val minor: Int,
+    val patch: Int,
+    val suffix: String?,
+    val gitHash: String,
+    val isRecovery: Boolean,
+//    val hardwarePlatform: ?
+//    val metadataVersion: ?
+)
+
+fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion {
+    val tag = versionTag.get()
+    val match = FIRMWARE_VERSION_REGEX.find(tag)
+    checkNotNull(match)
+    val major = match.groupValues.get(1).toInt()
+    val minor = match.groupValues.get(2).toInt()
+    val patch = match.groupValues.get(3).toInt()
+    val suffix = match.groupValues.get(4) // TODO empty or null-and-crash?
+
+    return FirmwareVersion(
+        stringVersion = tag,
+        timestamp = Instant.fromEpochSeconds(timestamp.get().toLong()),
+        major = major,
+        minor = minor,
+        patch = patch,
+        suffix = suffix,
+        gitHash = gitHash.get(),
+        isRecovery = isRecovery.get(),
+    )
+}
+
+data class WatchInfo(
+    val runningFwVersion: FirmwareVersion,
+    val recoveryFwVersion: FirmwareVersion,
+    val bootloaderTimestamp: Instant,
+    val board: String,
+    val serial: String,
+    val btAddress: String,
+    val resourceCrc: Long,
+    val resourceTimestamp: Instant,
+    val language: String,
+    val languageVersion: Int,
+    val capabilities: Set<ProtocolCapsFlag>,
+    val isUnfaithful: Boolean?,
+    val healthInsightsVersion: Int?,
+    val javascriptVersion: Int?,
+)
+
+fun WatchVersionResponse.watchInfo(): WatchInfo {
+    return WatchInfo(
+        runningFwVersion = running.firmwareVersion(),
+        recoveryFwVersion = recovery.firmwareVersion(),
+        bootloaderTimestamp = Instant.fromEpochSeconds(bootloaderTimestamp.get().toLong()),
+        board = board.get(),
+        serial = serial.get(),
+        btAddress = btAddress.get().toByteArray().toMacAddressString(),
+        resourceCrc = resourceCrc.get().toLong(),
+        resourceTimestamp = Instant.fromEpochSeconds(resourceTimestamp.get().toLong()),
+        language = language.get(),
+        languageVersion = languageVersion.get().toInt(),
+        capabilities = ProtocolCapsFlag.fromFlags(capabilities.get()),
+        isUnfaithful = isUnfaithful.get(),
+        healthInsightsVersion = healthInsightsVersion.get()?.toInt(),
+        javascriptVersion = javascriptVersion.get()?.toInt(),
+    )
+}
+
+fun ByteArray.toMacAddressString(): String {
+    require(size == 6) { "MAC address must be 6 bytes long" }
+    return joinToString(":") { byte ->
+        val intRepresentation = byte.toInt() and 0xFF
+        intRepresentation.toString(16).padStart(2, '0').uppercase()
+    }
 }

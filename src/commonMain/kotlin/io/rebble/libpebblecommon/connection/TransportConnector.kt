@@ -6,17 +6,24 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.peek
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.PacketPriority
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connected
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import kotlinx.coroutines.CompletableDeferred
+import io.rebble.libpebblecommon.services.SystemService
+import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.services.app.AppRunStateService
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.io.IOException
@@ -44,25 +51,41 @@ interface PebbleProtocolHandler {
     suspend fun send(message: PebblePacket, priority: PacketPriority = PacketPriority.NORMAL)
 }
 
+sealed class ConnectingPebbleState {
+    abstract val transport: Transport
+
+    data class Inactive(override val transport: Transport) : ConnectingPebbleState()
+    data class Connecting(override val transport: Transport) : ConnectingPebbleState()
+    data class Failed(override val transport: Transport) : ConnectingPebbleState()
+    data class Negotiating(override val transport: Transport) : ConnectingPebbleState()
+    data class Connected(
+        override val transport: Transport,
+        val pebbleProtocol: PebbleProtocolHandler,
+        val scope: CoroutineScope,
+        val watchInfo: WatchInfo,
+        val appRunStateService: AppRunStateService,
+        val systemService: SystemService,
+    ) : ConnectingPebbleState()
+}
+
 class PebbleConnector(
     private val transportConnector: TransportConnector,
     private val database: Database,
-    val pebbleDevice: PebbleDevice,
+    val transport: Transport,
     val scope: CoroutineScope,
 ) {
-    private val _state = MutableStateFlow(pebbleDevice)
-    val state: StateFlow<PebbleDevice> = _state
+    private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
+    val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     val disconnected = transportConnector.disconnected
 
     suspend fun connect() {
-        val connectingDevice = RealConnectingPebbleDevice(pebbleDevice)
-        _state.value = connectingDevice
+        _state.value = Connecting(transport)
 
         val result = transportConnector.connect()
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 Logger.e("failed to connect: $result")
-                _state.value = pebbleDevice
+                _state.value = Failed(transport)
             }
 
             is PebbleConnectionResult.Success -> {
@@ -77,9 +100,7 @@ class PebbleConnector(
                     }
                 }
 
-                val negotiatingDevice =
-                    RealNegotiatingPebbleDevice(pebbleDevice, protocolHandler, scope)
-                _state.value = negotiatingDevice
+                _state.value = Negotiating(transport)
 
                 scope.launch {
                     try {
@@ -109,23 +130,27 @@ class PebbleConnector(
                     }
                 }
 
-                val handshakeResult = negotiatingDevice.negotiate()
-                Logger.d("handshakeResult = $handshakeResult")
+                val systemService = SystemService(protocolHandler).apply { init(scope) }
+                val appRunStateService = AppRunStateService(protocolHandler).apply { init(scope) }
 
-                val knownDevice = RealKnownPebbleDevice(
-                    pebbleDevice = pebbleDevice,
-                    isRunningRecoveryFw = handshakeResult.watchVersion.running.isRecovery.get(),
-                )
+                Logger.d("RealNegotiatingPebbleDevice negotiate()")
+                val appVersionRequest = systemService.appVersionRequest.await()
+                Logger.d("RealNegotiatingPebbleDevice appVersionRequest = $appVersionRequest")
+                systemService.sendPhoneVersionResponse()
+                Logger.d("RealNegotiatingPebbleDevice sent watch version request")
+                val watchInfo = systemService.requestWatchVersion()
+                Logger.d("RealNegotiatingPebbleDevice watchVersionResponse = $watchInfo")
+                val runningApp = appRunStateService.runningApp.first()
+                Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
 
-                val connectedDevice = RealConnectedPebbleDevice(
-                    pebbleDevice = knownDevice,
+                _state.value = Connected(
+                    transport = transport,
                     pebbleProtocol = protocolHandler,
                     scope = scope,
-                    database = database,
-                    appRunStateService = negotiatingDevice.appRunStateService,
-                    systemService = negotiatingDevice.systemService,
+                    watchInfo = watchInfo,
+                    appRunStateService = appRunStateService,
+                    systemService = systemService,
                 )
-                _state.value = connectedDevice
             }
         }
     }

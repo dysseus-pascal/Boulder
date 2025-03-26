@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import com.juul.kable.ManufacturerData
 import com.oldguy.common.getShortAt
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Companion.decodePebbleScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.GlobalScope
@@ -15,6 +15,13 @@ data class BleScanResult(
     val transport: Transport,
     val rssi: Int,
     val manufacturerData: ManufacturerData,
+)
+
+data class PebbleScanResult(
+    val name: String,
+    val transport: Transport,
+    val rssi: Int,
+    val leScanRecord: PebbleLeScanRecord?,
 )
 
 class RealScanning(
@@ -34,13 +41,11 @@ class RealScanning(
                     return@collect
                 }
                 val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
-                val device = RealBleDiscoveredPebbleDevice(
-                    pebbleDevice = RealPebbleDevice(
-                        name = it.name,
-                        transport = it.transport,
-                        watchManager = watchManager,
-                    ),
-                    pebbleScanRecord = pebbleScanRecord,
+                val device = PebbleScanResult(
+                    name = it.name,
+                    transport = it.transport,
+                    rssi = it.rssi,
+                    leScanRecord = pebbleScanRecord,
                 )
                 watchManager.addScanResult(device)
             }

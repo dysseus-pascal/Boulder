@@ -10,6 +10,8 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 sealed class SystemPacket(endpoint: ProtocolEndpoint) : PebblePacket(endpoint)
 
@@ -260,6 +262,9 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
          */
         val resourceTimestamp = SUInt(m)
 
+        // TODO everything after this is only set after fw version x, but the buffer might be
+        //  present + <undefined> before that
+
         /**
          * Currently selected language on the watch
          */
@@ -287,6 +292,10 @@ open class WatchVersion(message: Message) : SystemPacket(endpoint) {
          * Note: currently always present when serialized, but optional when deserialized
          */
         val isUnfaithful = SOptional(m, SBoolean(StructMapper()), true)
+
+        val healthInsightsVersion = SOptional(m, SUShort(StructMapper()), true)
+
+        val javascriptVersion = SOptional(m, SUShort(StructMapper()), true)
     }
 
     companion object {
@@ -360,13 +369,13 @@ enum class ProtocolCapsFlag(val value: Int) {
             return bytes
         }
 
-        fun fromFlags(flags: UByteArray): List<ProtocolCapsFlag> {
+        fun fromFlags(flags: UByteArray): Set<ProtocolCapsFlag> {
             return values().filter {
                 val combinedPosition = it.value
                 val byteIndex: Int = combinedPosition / 8
                 val positionInsideByte: Int = combinedPosition % 8
                 ((1u shl positionInsideByte) and flags[byteIndex].toUInt()) != 0u
-            }
+            }.toSet()
         }
     }
 }
@@ -383,7 +392,6 @@ class WatchFirmwareVersion : StructMappable() {
     val hardwarePlatform = SUByte(m)
     val metadataVersion = SUByte(m)
 }
-
 
 open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     enum class Message(val value: UByte) {

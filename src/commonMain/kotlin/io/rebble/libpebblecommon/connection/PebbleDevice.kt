@@ -3,6 +3,8 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.WatchInfo
 
 interface PebbleIdentifier {
     val asString: String
@@ -12,6 +14,8 @@ interface PebbleIdentifier {
 expect class PebbleBluetoothIdentifier : PebbleIdentifier {
     override val asString: String
 }
+
+expect fun String.asPebbleBluetoothIdentifier(): PebbleBluetoothIdentifier
 
 data class PebbleSocketIdentifier(val address: String) : PebbleIdentifier {
     override val asString: String = address
@@ -23,9 +27,13 @@ sealed class Transport {
     sealed class BluetoothTransport : Transport() {
         abstract override val identifier: PebbleBluetoothIdentifier
 
-        data class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
-        data class BleTransport(override val identifier: PebbleBluetoothIdentifier) : BluetoothTransport()
+        data class BtClassicTransport(override val identifier: PebbleBluetoothIdentifier) :
+            BluetoothTransport()
+
+        data class BleTransport(override val identifier: PebbleBluetoothIdentifier) :
+            BluetoothTransport()
     }
+
     // e.g. emulator
     data class SocketTransport(override val identifier: PebbleSocketIdentifier) : Transport()
 }
@@ -36,22 +44,23 @@ interface ActiveDevice
 sealed interface PebbleDevice {
     val name: String
     val transport: Transport
+    val connectGoal: Boolean
 
     suspend fun connect()
     suspend fun disconnect()
 }
 
+interface DiscoveredPebbleDevice : PebbleDevice
+
 // We know a few more things about these, after a BLE scan but before connection
-interface BleDiscoveredPebbleDevice : PebbleDevice {
+interface BleDiscoveredPebbleDevice : DiscoveredPebbleDevice {
     val pebbleScanRecord: PebbleLeScanRecord
 }
 
 // e.g. we have previously connected to it, and got all it's info (stored in the db)
 interface KnownPebbleDevice : PebbleDevice {
-    val isRunningRecoveryFw: Boolean
-    // val connectionGoal: Goal // (e.g. connect, disconnect)
-//    val capabilities: PebbleCapabilities
-    // etc etc
+    val runningFwVersion: String
+    val serial: String
 
     suspend fun forget()
 }
@@ -65,6 +74,8 @@ interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice {
 }
 
 interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
+    val watchInfo: WatchInfo
+
     // for hackers?
     fun sendPPMessage(bytes: ByteArray)
     fun sendPPMessage(ppMessage: PebblePacket)

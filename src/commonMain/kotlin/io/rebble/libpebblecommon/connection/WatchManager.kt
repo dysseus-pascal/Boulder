@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
@@ -349,6 +350,7 @@ class WatchManager(
     ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
         val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
         val putBytesService = PutBytesService(pebbleProtocol).apply { init(scope) }
+        val appFetchService = AppFetchService(pebbleProtocol).apply { init(scope) }
 
         val notificationBlobDB = NotificationBlobDB(
             scope,

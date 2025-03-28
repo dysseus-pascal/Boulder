@@ -8,12 +8,14 @@ import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTran
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
+import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
@@ -346,12 +348,15 @@ class WatchManager(
         override val watchInfo: WatchInfo,
     ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
         val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
+        val putBytesService = PutBytesService(pebbleProtocol).apply { init(scope) }
+
         val notificationBlobDB = NotificationBlobDB(
             scope,
             blobDBService,
             database.blobDBDao(),
             name, //TODO: use identifier instead of name
         )
+        val putBytesSession = PutBytesSession(scope, putBytesService)
 
         override fun sendPPMessage(bytes: ByteArray) {
             TODO("Not yet implemented")

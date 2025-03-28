@@ -25,6 +25,9 @@ class PutBytesResponse : PebblePacket(ProtocolEndpoint.PUT_BYTES) {
      * Cookie to send to all other put bytes requests
      */
     val cookie = SUInt(m)
+
+    val isAck: Boolean
+        get() = result.get() == PutBytesResult.ACK.value
 }
 
 /**

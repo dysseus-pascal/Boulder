@@ -52,7 +52,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val crc32Calculator = Crc32Calculator()
         emit(SessionState.Sending(cookie, 0u))
         while (totalSent < size) {
-            val read = source.readAtMostTo(buffer, APP_PUT_CHUNK_SIZE)
+            val read = source.readAtMostTo(buffer)
             if (read == -1) break
             totalSent += read.toUInt()
             val toSend = buffer.copyOfRange(0, read).asUByteArray()

@@ -2,31 +2,25 @@ package io.rebble.libpebblecommon.connection.endpointmanager.putbytes
 
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.PutBytesAbort
-import io.rebble.libpebblecommon.packets.PutBytesAppInit
-import io.rebble.libpebblecommon.packets.PutBytesPut
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.util.Crc32Calculator
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.io.Buffer
 import kotlinx.io.Source
 
 class PutBytesSession(private val scope: CoroutineScope, private val putBytesService: PutBytesService) {
     companion object {
         const val APP_PUT_CHUNK_SIZE = 2000 // Can't be too large to avoid locking up comms, probably
     }
+    private val _currentSession = MutableStateFlow<CurrentSession?>(null)
+    val currentSession = _currentSession.asStateFlow()
     private val sessionMutex = Mutex()
+
+    data class CurrentSession(val cookie: UInt)
 
     sealed class SessionState {
         abstract val cookie: UInt
@@ -42,6 +36,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
             e.cookie?.let { putBytesService.send(PutBytesAbort(it)) }
             throw e
         } finally {
+            _currentSession.value = null
             sessionMutex.unlock()
         }
     }
@@ -73,6 +68,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val initResponse = putBytesService.initAppSession(appId, size, type)
         val cookie = initResponse.cookie.get()
         emit(SessionState.Open(cookie))
+        _currentSession.value = CurrentSession(cookie)
         val crc32 = transferData(cookie, size, source)
         val response = putBytesService.sendCommit(cookie, crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
@@ -87,6 +83,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val initResponse = putBytesService.initSession(size, type, bank, filename)
         val cookie = initResponse.cookie.get()
         emit(SessionState.Open(cookie))
+        _currentSession.value = CurrentSession(cookie)
         val crc32 = transferData(cookie, size, source)
         val response = putBytesService.sendCommit(cookie, crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }

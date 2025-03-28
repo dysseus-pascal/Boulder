@@ -8,10 +8,12 @@ import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTran
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
+import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
+import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.AppFetchService
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.files.Path
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -359,6 +362,8 @@ class WatchManager(
             name, //TODO: use identifier instead of name
         )
         val putBytesSession = PutBytesSession(scope, putBytesService)
+        val appFetchProvider = AppFetchProvider(PbwApp(getTestAppPath(config.context)), appFetchService, putBytesSession)
+            .apply { init(scope) }
 
         override fun sendPPMessage(bytes: ByteArray) {
             TODO("Not yet implemented")
@@ -376,9 +381,15 @@ class WatchManager(
             return systemService.sendPing(cookie)
         }
 
+        override suspend fun installApp(uuid: Uuid) {
+            appRunStateService.startApp(uuid)
+        }
+
         override fun toString(): String = "ConnectedPebbleDevice: $pebbleDevice"
     }
 }
+
+expect fun getTestAppPath(appContext: AppContext): Path
 
 fun StateFlow<Map<Transport, PebbleConnector>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
     return flatMapLatest { map ->

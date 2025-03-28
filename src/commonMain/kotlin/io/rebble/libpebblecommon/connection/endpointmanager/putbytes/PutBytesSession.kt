@@ -24,7 +24,7 @@ import kotlinx.io.Source
 
 class PutBytesSession(private val scope: CoroutineScope, private val putBytesService: PutBytesService) {
     companion object {
-        const val APP_PUT_CHUNK_SIZE = 3000 // Can't be too large to avoid locking up comms, probably
+        const val APP_PUT_CHUNK_SIZE = 2000 // Can't be too large to avoid locking up comms, probably
     }
     private val sessionMutex = Mutex()
 

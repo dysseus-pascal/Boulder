@@ -149,7 +149,7 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
 
 }
 
-private val FIRMWARE_VERSION_REGEX = Regex("([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-(.*))?")
+private val FIRMWARE_VERSION_REGEX = Regex("v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-(.*))?")
 
 data class FirmwareVersion(
     val stringVersion: String,
@@ -164,10 +164,13 @@ data class FirmwareVersion(
 //    val metadataVersion: ?
 )
 
-fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion {
+fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     val tag = versionTag.get()
     val match = FIRMWARE_VERSION_REGEX.find(tag)
-    checkNotNull(match)
+    if (match == null) {
+        Logger.w("Couldn't recode fw version: '$tag'")
+        return null
+    }
     val major = match.groupValues.get(1).toInt()
     val minor = match.groupValues.get(2).toInt()
     val patch = match.groupValues.get(3).toInt()
@@ -187,7 +190,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion {
 
 data class WatchInfo(
     val runningFwVersion: FirmwareVersion,
-    val recoveryFwVersion: FirmwareVersion,
+    val recoveryFwVersion: FirmwareVersion?,
     val bootloaderTimestamp: Instant,
     val board: String,
     val serial: String,
@@ -203,9 +206,12 @@ data class WatchInfo(
 )
 
 fun WatchVersionResponse.watchInfo(): WatchInfo {
+    val runningFwVersion = running.firmwareVersion()
+    checkNotNull(runningFwVersion)
+    val recoveryFwVersion = recovery.firmwareVersion()
     return WatchInfo(
-        runningFwVersion = running.firmwareVersion(),
-        recoveryFwVersion = recovery.firmwareVersion(),
+        runningFwVersion = runningFwVersion,
+        recoveryFwVersion = recoveryFwVersion,
         bootloaderTimestamp = Instant.fromEpochSeconds(bootloaderTimestamp.get().toLong()),
         board = board.get(),
         serial = serial.get(),

@@ -7,8 +7,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeout
 import kotlin.math.min
+import kotlin.time.Duration.Companion.seconds
 
 interface PPoGPacketSender {
     suspend fun sendPacket(packet: ByteArray): Boolean
@@ -26,7 +35,7 @@ class PPoG(
     private var mtu: Int = initialMtu
 
     suspend fun run(scope: CoroutineScope) {
-        scope.async {
+        scope.launch {
             val params = initPPoG()
             runConnection(params)
         }
@@ -38,8 +47,18 @@ class PPoG(
         Logger.d("initPPoG")
 
         // Wait for reset request from watch
-        val resetRequest = inboundPacketData.receive().asPPoGPacket()
-        if (resetRequest !is PPoGPacket.ResetRequest) throw IllegalStateException("expected ResetRequest got $resetRequest")
+        val resetRequest: PPoGPacket.ResetRequest
+        while (true) {
+            val packet = inboundPacketData.receive().asPPoGPacket()
+            if (packet !is PPoGPacket.ResetRequest) {
+                // Not expected, but can happen (i.e. don't crash out): if a watch reconnects
+                // really quickly then we can see stale packets come through.
+                Logger.w("unexpected packet $packet waiting for reset request")
+                continue
+            }
+            resetRequest = packet
+            break
+        }
         Logger.d("got $resetRequest")
 
         // Send reset complete
@@ -82,12 +101,19 @@ class PPoG(
                     bytes.asList().chunked(maxDataBytes())
                         .map { chunk ->
                             PacketToSend(
-                                packet = PPoGPacket.Data(sequence = outboundSequence.getThenIncrement(), data = chunk.toByteArray()),
+                                packet = PPoGPacket.Data(
+                                    sequence = outboundSequence.getThenIncrement(),
+                                    data = chunk.toByteArray()
+                                ),
                                 attemptCount = 0
                             )
                         }
                         // TODO retry/timeout
-                        .forEach { if (!outboundDataQueue.trySend(it).isSuccess) throw IllegalStateException("Failed to add message to queue") }
+                        .forEach {
+                            if (!outboundDataQueue.trySend(it).isSuccess) throw IllegalStateException(
+                                "Failed to add message to queue"
+                            )
+                        }
                 }
                 inboundPacketData.onReceive { bytes ->
                     val packet = bytes.asPPoGPacket()
@@ -103,6 +129,7 @@ class PPoG(
                                 if (inflightPacket.packet.sequence == packet.sequence) break
                             }
                         }
+
                         is PPoGPacket.Data -> {
                             if (packet.sequence != inboundSequence.get()) {
                                 Logger.w("data out of sequence; resending last ack")
@@ -116,6 +143,7 @@ class PPoG(
                                     .also { sendPacketImmediately(it, params.pPoGversion) }
                             }
                         }
+
                         is PPoGPacket.ResetComplete -> throw IllegalStateException("We don't handle resrtting PPoG - disconnect and reconnect")
                         is PPoGPacket.ResetRequest -> throw IllegalStateException("We don't handle resrtting PPoG - disconnect and reconnect")
                     }
@@ -142,7 +170,7 @@ class PPoG(
         }
     }
 
-    suspend fun updateMtu(mtu: Int) {
+    fun updateMtu(mtu: Int) {
         // TODO error out if smaller than previous?
         this.mtu = mtu
     }
@@ -150,6 +178,7 @@ class PPoG(
 
 private const val DATA_HEADER_OVERHEAD_BYTES = 1 + 3
 private const val MAX_SEQUENCE = 32
+private val RESET_REQUEST_TIMEOUT = 10.seconds
 
 private data class PPoGConnectionParams(
     val rxWindow: Int,

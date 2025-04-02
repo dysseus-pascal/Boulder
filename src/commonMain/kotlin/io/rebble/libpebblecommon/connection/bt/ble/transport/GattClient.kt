@@ -29,5 +29,6 @@ interface ConnectedGattClient : AutoCloseable {
     suspend fun subscribeToCharacteristic(serviceUuid: String, characteristicUuid: String): Flow<ByteArray>?
     suspend fun isBonded(): Boolean // TODO doesn't belong in here
     suspend fun writeCharacteristic(serviceUuid: String, characteristicUuid: String, value: ByteArray, writeType: GattWriteType): Boolean
+    suspend fun readCharacteristic(serviceUuid: String, characteristicUuid: String): ByteArray?
     val services: List<GattService>?
 }

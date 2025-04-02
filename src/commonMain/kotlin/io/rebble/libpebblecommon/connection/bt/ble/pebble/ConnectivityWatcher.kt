@@ -4,24 +4,28 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import kotlin.experimental.and
 import kotlin.properties.Delegates
 
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
-class ConnectivityWatcher(private val gattClient: ConnectedGattClient) {
+class ConnectivityWatcher(
+    private val gattClient: ConnectedGattClient,
+    private val scope: CoroutineScope,
+) {
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 
-    fun subscribe(): Boolean {
-        // TODO scope this
-        GlobalScope.async {
+    suspend fun subscribe(): Boolean {
+        scope.launch {
             gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
                 ?.collect {
                     _status.value = ConnectivityStatus(it).also {
@@ -29,6 +33,14 @@ class ConnectivityWatcher(private val gattClient: ConnectedGattClient) {
                     }
                 }
         }
+        // Asterix doesn't notify on subscription right now - so we need to do an explicit read
+        val connectivity =
+            gattClient.readCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
+        if (connectivity == null) {
+            Logger.d("connectivity == null")
+            return true
+        }
+        _status.value = ConnectivityStatus(connectivity)
         return true
     }
 }

@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.GATT_SERVI
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.SERVER_META_RESPONSE
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,10 +57,10 @@ class PebbleBle(
                 pPoGPacketSender = object : PPoGPacketSender {
                     override suspend fun sendPacket(packet: ByteArray): Boolean {
                         return gattServer?.sendData(
-                            transport,
-                            PPOGATT_DEVICE_SERVICE_UUID_SERVER,
-                            PPOGATT_DEVICE_CHARACTERISTIC_SERVER,
-                            packet
+                            transport = transport,
+                            serviceUuid = PPOGATT_DEVICE_SERVICE_UUID_SERVER,
+                            characteristicUuid = PPOGATT_DEVICE_CHARACTERISTIC_SERVER,
+                            data = packet
                         ) ?: false
                     }
                 },
@@ -81,10 +83,21 @@ class PebbleBle(
                 Logger.i("error setting up connection params")
             }
 
+            val mtuParam = Mtu(device, scope)
+            if (!mtuParam.subscribe()) {
+                Logger.w("failed to subscribe to mtu")
+            }
+            scope.launch {
+                mtuParam.mtu.collect { newMtu ->
+                    Logger.d("newMtu = $newMtu")
+                    ppog.updateMtu(newMtu)
+                }
+            }
+            mtuParam.update(TARGET_MTU)
+
             val connectivity = ConnectivityWatcher(device)
             if (!connectivity.subscribe()) {
                 Logger.d("failed to subscribe to connectivity")
-                // TODO disconnect
                 return@withContext PebbleConnectionResult.Failed("failed to subscribe to connectivity")
             }
             val connectionStatus = withTimeout(CONNECTIVITY_UPDATE_TIMEOUT) {

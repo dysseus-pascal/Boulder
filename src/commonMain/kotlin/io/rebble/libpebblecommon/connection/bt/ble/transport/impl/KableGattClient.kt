@@ -107,6 +107,18 @@ class KableConnectedGattClient(
         return true
     }
 
+    override suspend fun readCharacteristic(
+        serviceUuid: String,
+        characteristicUuid: String
+    ): ByteArray? {
+        val c = findCharacteristic(serviceUuid, characteristicUuid)
+        if (c == null) {
+            Logger.e("couldn't find characteristic: $characteristicUuid")
+            return null
+        }
+        return peripheral.read(c)
+    }
+
     override val services: List<GattService>? = mapServices()
 
     override fun close() {

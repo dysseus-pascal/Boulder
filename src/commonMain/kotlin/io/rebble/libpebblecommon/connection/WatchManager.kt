@@ -3,21 +3,22 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.AppFetchService
-import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -44,7 +45,6 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.io.files.Path
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private data class ScanResultWithGoal(
@@ -361,7 +361,13 @@ class WatchManager(
             scope,
             blobDBService,
             database.blobDBDao(),
-            name, //TODO: use identifier instead of name
+            pebbleDevice.transport.identifier.asString
+        )
+        val appBlobDB = AppBlobDB(
+            scope,
+            blobDBService,
+            database.blobDBDao(),
+            pebbleDevice.transport.identifier.asString
         )
         val putBytesSession = PutBytesSession(scope, putBytesService)
         val appFetchProvider = AppFetchProvider(PbwApp(getTestAppPath(config.context)), appFetchService, putBytesSession)
@@ -383,7 +389,15 @@ class WatchManager(
             return systemService.sendPing(cookie)
         }
 
-        override suspend fun installApp(uuid: Uuid) {
+        override suspend fun insertLockerEntry(entry: AppMetadata) {
+            appBlobDB.insert(entry)
+        }
+
+        override suspend fun deleteLockerEntry(uuid: Uuid) {
+            appBlobDB.delete(uuid)
+        }
+
+        override suspend fun launchApp(uuid: Uuid) {
             appRunStateService.startApp(uuid)
         }
 

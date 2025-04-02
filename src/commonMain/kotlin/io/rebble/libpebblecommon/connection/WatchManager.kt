@@ -402,6 +402,12 @@ class WatchManager(
             appBlobDB.delete(uuid)
         }
 
+        override suspend fun isLockerEntryNew(entry: AppMetadata): Boolean {
+            val existing = appBlobDB.get(entry.uuid.get())
+            val nw = entry.toBytes().asByteArray()
+            return existing?.contentEquals(nw) != true
+        }
+
         override suspend fun launchApp(uuid: Uuid) {
             appRunStateService.startApp(uuid)
         }

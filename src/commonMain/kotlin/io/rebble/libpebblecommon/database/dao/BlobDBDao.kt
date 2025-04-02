@@ -27,4 +27,7 @@ interface BlobDBDao {
 
     @Query("SELECT * FROM BlobDBItem WHERE watchDatabase = :watchDatabase AND syncStatus IN ('PendingWrite', 'PendingDelete') AND watchIdentifier = :watchIdentifier")
     suspend fun getAllPendingFor(watchDatabase: BlobCommand.BlobDatabase, watchIdentifier: String): List<BlobDBItem>
+
+    @Query("SELECT * FROM BlobDBItem WHERE id = :id")
+    suspend fun get(id: Uuid): BlobDBItem?
 }

@@ -118,19 +118,19 @@ class Locker(
         supportedEntries.forEach { (entry, platform) ->
             val versionSplit = entry.version.split(".")
             val sdkVersionSplit = platform.sdkVersion.split(".")
-            //TODO: Sync only if data has changed
-            watch.insertLockerEntry(
-                AppMetadata(
-                    uuid = entry.id,
-                    flags = platform.processInfoFlags.toUInt(),
-                    icon = 0u, //TODO
-                    appVersionMajor = versionSplit[0].toUByte(),
-                    appVersionMinor = versionSplit[1].toUByte(),
-                    sdkVersionMajor = sdkVersionSplit[0].toUByte(),
-                    sdkVersionMinor = sdkVersionSplit[1].toUByte(),
-                    appName = entry.title
-                )
+            val newData = AppMetadata(
+                uuid = entry.id,
+                flags = platform.processInfoFlags.toUInt(),
+                icon = 0u, //TODO
+                appVersionMajor = versionSplit[0].toUByte(),
+                appVersionMinor = versionSplit[1].toUByte(),
+                sdkVersionMajor = sdkVersionSplit[0].toUByte(),
+                sdkVersionMinor = sdkVersionSplit[1].toUByte(),
+                appName = entry.title
             )
+            if (watch.isLockerEntryNew(newData)) {
+                watch.insertLockerEntry(newData)
+            }
         }
     }
 

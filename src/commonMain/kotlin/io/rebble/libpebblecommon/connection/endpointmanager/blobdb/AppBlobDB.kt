@@ -27,4 +27,8 @@ class AppBlobDB(watchScope: CoroutineScope, blobDBService: BlobDBService, blobDB
     suspend fun delete(appId: Uuid) {
         blobDBDao.markPendingDelete(appId)
     }
+
+    suspend fun get(appId: Uuid): ByteArray? {
+        return blobDBDao.get(appId)?.data
+    }
 }

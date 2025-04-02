@@ -95,7 +95,7 @@ class PebbleBle(
             }
             mtuParam.update(TARGET_MTU)
 
-            val connectivity = ConnectivityWatcher(device)
+            val connectivity = ConnectivityWatcher(device, scope)
             if (!connectivity.subscribe()) {
                 Logger.d("failed to subscribe to connectivity")
                 return@withContext PebbleConnectionResult.Failed("failed to subscribe to connectivity")

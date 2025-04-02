@@ -4,12 +4,17 @@ package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.PacketPriority
-import io.rebble.libpebblecommon.ProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.packets.*
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.packets.PhoneAppVersion
+import io.rebble.libpebblecommon.packets.PingPong
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.packets.SystemMessage
+import io.rebble.libpebblecommon.packets.SystemPacket
+import io.rebble.libpebblecommon.packets.WatchFactoryData
+import io.rebble.libpebblecommon.packets.WatchFirmwareVersion
+import io.rebble.libpebblecommon.packets.WatchVersion
 import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.SInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
@@ -17,9 +22,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.onEach
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -191,6 +193,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
 data class WatchInfo(
     val runningFwVersion: FirmwareVersion,
     val recoveryFwVersion: FirmwareVersion?,
+    val platform: WatchHardwarePlatform?,
     val bootloaderTimestamp: Instant,
     val board: String,
     val serial: String,
@@ -212,6 +215,7 @@ fun WatchVersionResponse.watchInfo(): WatchInfo {
     return WatchInfo(
         runningFwVersion = runningFwVersion,
         recoveryFwVersion = recoveryFwVersion,
+        platform = WatchHardwarePlatform.fromProtocolNumber(running.hardwarePlatform.get()),
         bootloaderTimestamp = Instant.fromEpochSeconds(bootloaderTimestamp.get().toLong()),
         board = board.get(),
         serial = serial.get(),

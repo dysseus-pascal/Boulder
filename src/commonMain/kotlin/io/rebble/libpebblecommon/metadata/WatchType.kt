@@ -33,4 +33,10 @@ enum class WatchType(val codename: String) {
             availableAppVariants.contains(variant.codename)
         }
     }
+
+    companion object {
+        fun fromCodename(codename: String): WatchType? {
+            return entries.firstOrNull { it.codename == codename }
+        }
+    }
 }

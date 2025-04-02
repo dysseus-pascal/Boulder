@@ -1,12 +1,28 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
-import io.rebble.libpebblecommon.structmapper.*
+import io.rebble.libpebblecommon.structmapper.SFixedString
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.Uuid
 
 /**
  * Data of the APP BlobDB Entry
  */
-class AppMetadata() : StructMappable() {
+class AppMetadata(
+    uuid: Uuid = Uuid.NIL,
+    flags: UInt = 0u,
+    icon: UInt = 0u,
+    appVersionMajor: UByte = 0u,
+    appVersionMinor: UByte = 0u,
+    sdkVersionMajor: UByte = 0u,
+    sdkVersionMinor: UByte = 0u,
+    appFaceBgColor: UByte = 0u,
+    appFaceTemplateId: UByte = 0u,
+    appName: String = "Untitled",
+) : StructMappable() {
     /**
      * UUID of the app
      */

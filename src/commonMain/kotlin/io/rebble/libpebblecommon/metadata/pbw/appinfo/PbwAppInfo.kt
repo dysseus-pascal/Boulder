@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.metadata.pbw.appinfo
 
+import io.rebble.libpebblecommon.database.entity.LockerEntry
 import kotlinx.serialization.Serializable
+import kotlin.uuid.Uuid
 
 @Serializable
 data class PbwAppInfo(
@@ -17,4 +19,18 @@ data class PbwAppInfo(
     // If list of target platforms is not present, pbw is legacy applite app
     val targetPlatforms: List<String> = listOf("aplite"),
     val watchapp: Watchapp = Watchapp()
-)
+) {
+    fun toLockerEntry(): LockerEntry {
+        return LockerEntry(
+            id = Uuid.parse(uuid),
+            version = versionLabel,
+            title = longName.ifBlank { shortName },
+            type = if (watchapp.watchface) "watchface" else "watchapp",
+            developerName = companyName,
+            configurable = capabilities.any { it == "configurable" },
+            pbwVersionCode = versionCode.toString(),
+            pbwIconResourceId = 0,
+            sideloaded = true
+        )
+    }
+}

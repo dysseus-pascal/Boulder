@@ -1,10 +1,9 @@
 package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
-import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlin.uuid.Uuid
 
@@ -85,6 +84,8 @@ interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     // not for general use
     suspend fun sendNotification(notification: TimelineItem)
     suspend fun sendPing(cookie: UInt): UInt
-    suspend fun installApp(uuid: Uuid)
+    suspend fun insertLockerEntry(entry: AppMetadata)
+    suspend fun deleteLockerEntry(uuid: Uuid)
+    suspend fun launchApp(uuid: Uuid)
     // ....
 }

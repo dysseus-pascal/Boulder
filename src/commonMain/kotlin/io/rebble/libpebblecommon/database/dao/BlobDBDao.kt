@@ -16,8 +16,11 @@ interface BlobDBDao {
     @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     suspend fun insertOrReplace(blob: BlobDBItem)
 
-    @Query("UPDATE BlobDBItem SET syncStatus = 'SyncedToWatch' WHERE id = :id")
-    suspend fun markSynced(id: Uuid)
+    @Query("UPDATE BlobDBItem SET syncStatus = 'SyncedToWatch' WHERE id = :id AND watchIdentifier = :watchIdentifier")
+    suspend fun markSynced(id: Uuid, watchIdentifier: String)
+
+    @Query("UPDATE BlobDBItem SET syncStatus = 'PendingWrite' WHERE id = :id AND watchIdentifier = :watchIdentifier")
+    suspend fun markPendingWrite(id: Uuid, watchIdentifier: String)
 
     @Query("UPDATE BlobDBItem SET syncStatus = 'PendingDelete' WHERE id = :id")
     suspend fun markPendingDelete(id: Uuid)

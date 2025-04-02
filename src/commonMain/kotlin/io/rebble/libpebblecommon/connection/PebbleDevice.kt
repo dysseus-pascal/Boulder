@@ -87,6 +87,7 @@ interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     suspend fun insertLockerEntry(entry: AppMetadata)
     suspend fun deleteLockerEntry(uuid: Uuid)
     suspend fun isLockerEntryNew(entry: AppMetadata): Boolean
+    suspend fun offloadApp(uuid: Uuid)
     suspend fun launchApp(uuid: Uuid)
     // ....
 }

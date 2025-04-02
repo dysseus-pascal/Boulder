@@ -31,4 +31,8 @@ class AppBlobDB(watchScope: CoroutineScope, blobDBService: BlobDBService, blobDB
     suspend fun get(appId: Uuid): ByteArray? {
         return blobDBDao.get(appId)?.data
     }
+
+    suspend fun markForResync(appId: Uuid) {
+        blobDBDao.markPendingWrite(appId, watchIdentifier)
+    }
 }

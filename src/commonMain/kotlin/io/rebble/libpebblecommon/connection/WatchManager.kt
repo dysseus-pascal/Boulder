@@ -408,6 +408,10 @@ class WatchManager(
             return existing?.contentEquals(nw) != true
         }
 
+        override suspend fun offloadApp(uuid: Uuid) {
+            appBlobDB.markForResync(uuid)
+        }
+
         override suspend fun launchApp(uuid: Uuid) {
             appRunStateService.startApp(uuid)
         }

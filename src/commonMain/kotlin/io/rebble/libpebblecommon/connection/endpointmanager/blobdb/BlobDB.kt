@@ -49,7 +49,7 @@ sealed class BlobDB(
                 BlobDBItemSyncStatus.PendingWrite -> {
                     try {
                         sendInsert(item.id, item.data.asUByteArray())
-                        blobDBDao.markSynced(item.id)
+                        blobDBDao.markSynced(item.id, watchIdentifier)
                     } catch (e: Exception) {
                         logger.e(e) { "Failed to insert item" }
                     }
@@ -57,7 +57,7 @@ sealed class BlobDB(
                 BlobDBItemSyncStatus.PendingDelete -> {
                     try {
                         sendDelete(item.id)
-                        blobDBDao.markSynced(item.id)
+                        blobDBDao.markSynced(item.id, watchIdentifier)
                     } catch (e: Exception) {
                         logger.e(e) { "Failed to delete item" }
                     }

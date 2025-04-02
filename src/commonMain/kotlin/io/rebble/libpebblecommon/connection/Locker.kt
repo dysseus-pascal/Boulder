@@ -164,6 +164,12 @@ class Locker(
                 name = watchType.codename
             )
         }
+        // Offload app so we force reinstall
+        watchManager.watches.value
+            .filterIsInstance<ConnectedPebbleDevice>()
+            .forEach { watch ->
+                watch.offloadApp(uuid)
+            }
         lockerEntryDao.insertOrReplaceWithPlatforms(lockerEntry, platforms)
         val isSynced = scope.async { waitForLockerSyncIdle() }
         requestLockerResync()

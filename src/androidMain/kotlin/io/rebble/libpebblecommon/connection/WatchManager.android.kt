@@ -2,7 +2,9 @@ package io.rebble.libpebblecommon.connection
 
 import kotlinx.io.files.Path
 
-actual fun getTestAppPath(appContext: AppContext): Path {
+actual fun getTempAppPath(appContext: AppContext): Path {
     val cache = appContext.context.cacheDir
-    return Path(cache.absolutePath + "/test.pbw")
+    val file = cache.resolve("temp.pbw")
+    file.deleteOnExit()
+    return Path(file.absolutePath)
 }

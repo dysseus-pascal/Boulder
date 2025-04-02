@@ -1,10 +1,12 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.AppFetchRequest
+import io.rebble.libpebblecommon.packets.AppFetchResponseStatus
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.services.AppFetchService
 import kotlinx.coroutines.CoroutineScope
@@ -18,9 +20,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlin.math.roundToInt
 
 class AppFetchProvider(
-    private val testApp: PbwApp, //TODO: Fetch actual requested app from locker
+    private val pbwCache: LockerPBWCache,
     private val appFetchService: AppFetchService,
-    private val putBytesSession: PutBytesSession
+    private val putBytesSession: PutBytesSession,
+    private val watchType: WatchType,
 ) {
     companion object {
         private val logger = Logger.withTag(AppFetchProvider::class.simpleName!!)
@@ -31,23 +34,32 @@ class AppFetchProvider(
                 when (it) {
                     is AppFetchRequest -> {
                         val uuid = it.uuid.get()
+                        logger.d { "Got app fetch request for $uuid" }
                         val appId = it.appId.get()
-                        try {
-                            sendTestApp(appId)
+                        val app = try {
+                            PbwApp(pbwCache.getPBWFileForApp(uuid))
                         } catch (e: Exception) {
-                            logger.e(e) { "Failed to send test app" }
+                            logger.e(e) { "Failed to get app for uuid $uuid" }
+                            appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
+                            return@consumeEach
                         }
+                        sendApp(app, appId)
                     }
                 }
             }
         }
     }
 
-    private suspend fun sendTestApp(appId: UInt) {
-        val testWatchType = WatchType.APLITE
-        val manifest = testApp.getManifest(testWatchType)
-        val binary = testApp.getBinaryFor(testWatchType)
-        val resources = testApp.getResourcesFor(testWatchType)
+    private suspend fun sendApp(app: PbwApp, appId: UInt) {
+        val variant = watchType.getBestVariant(app.info.targetPlatforms) ?: run {
+            logger.e { "No compatible variant found for ${app.info.targetPlatforms}" }
+            appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
+            return
+        }
+        appFetchService.sendResponse(AppFetchResponseStatus.START)
+        val manifest = app.getManifest(variant)
+        val binary = app.getBinaryFor(variant)
+        val resources = app.getResourcesFor(variant)
         putBytesSession.currentSession.filter { it == null }.first()
         putBytesSession.beginAppSession(appId, manifest.application.size.toUInt(), ObjectType.APP_EXECUTABLE, binary)
             .flowOn(Dispatchers.IO)

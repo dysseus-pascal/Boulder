@@ -33,5 +33,5 @@ data class LockerEntryPlatform(
     val name: String
 ) {
     @get:Ignore
-    val watchType get() = WatchType.entries.first { it.codename == name }
+    val watchType get() = WatchType.entries.firstOrNull { it.codename == name } ?: error("Unknown watch type: $name")
 }

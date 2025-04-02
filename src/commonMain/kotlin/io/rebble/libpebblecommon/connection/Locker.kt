@@ -11,14 +11,25 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.math.sin
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class Locker(
@@ -26,41 +37,57 @@ class Locker(
     private val watchManager: WatchManager,
     private val database: Database,
     private val lockerPBWCache: LockerPBWCache,
+    private val scope: CoroutineScope
 ) {
     private val lockerEntryDao: LockerEntryDao = database.lockerEntryDao()
     private val lockerSyncStatusDao: LockerSyncStatusDao = database.lockerSyncStatusDao()
     companion object {
         private val logger = Logger.withTag(Locker::class.simpleName!!)
-        val appCompatibilityMatrix = mapOf(
-            WatchType.APLITE to listOf(WatchType.APLITE),
-            WatchType.BASALT to listOf(WatchType.BASALT, WatchType.APLITE),
-            WatchType.CHALK to listOf(WatchType.CHALK),
-            WatchType.DIORITE to listOf(WatchType.DIORITE, WatchType.APLITE),
-            WatchType.EMERY to listOf(
-                WatchType.EMERY,
-                WatchType.BASALT,
-                WatchType.DIORITE,
-                WatchType.APLITE
-            )
-        )
     }
 
-    fun init(scope: CoroutineScope) {
-        watchManager.watches.onEach { watches ->
-            val watchesToSync = watches
-                .filterIsInstance<ConnectedPebbleDevice>()
-                .filter {
-                    lockerSyncStatusDao.getForWatchIdentifier(
-                        it.transport.identifier.asString
-                    )?.lockerDirty != false // true or null
-                }
-            if (watchesToSync.isNotEmpty()) {
-                val lockerEntries = lockerEntryDao.getAllWithPlatforms()
+    private val lockerSyncQueue = Channel<List<ConnectedPebbleDevice>>(Channel.RENDEZVOUS)
+
+    sealed class LockerSyncState {
+        data object Idle : LockerSyncState()
+        data object Syncing : LockerSyncState()
+    }
+    private val lockerSyncStatus = MutableStateFlow<LockerSyncState>(LockerSyncState.Idle)
+
+    fun init() {
+        watchManager.watches.debounce(1.seconds).onEach { watches ->
+            requestLockerResync()
+        }.launchIn(scope)
+        scope.launch {
+            lockerSyncQueue.consumeEach { watches ->
+                syncLockerToWatches(watches)
+            }
+        }
+    }
+
+    private suspend fun requestLockerResync() {
+        logger.d { "Requesting locker resync" }
+        lockerSyncQueue.send(watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>())
+    }
+
+    private suspend fun syncLockerToWatches(watches: List<ConnectedPebbleDevice>) {
+        val watchesToSync = watches
+            .filter {
+                lockerSyncStatusDao.getForWatchIdentifier(
+                    it.transport.identifier.asString
+                )?.lockerDirty != false // true or null
+            }
+        if (watchesToSync.isNotEmpty()) {
+            lockerSyncStatus.value = LockerSyncState.Syncing
+            val lockerEntries = lockerEntryDao.getAllWithPlatforms()
+            try {
                 watchesToSync.forEach { watch ->
                     syncToConnectedWatch(watch, lockerEntries)
+                    lockerSyncStatusDao.markNotDirty(watch.transport.identifier.asString)
                 }
+            } finally {
+                lockerSyncStatus.value = LockerSyncState.Idle
             }
-        }.launchIn(scope)
+        }
     }
 
     private fun List<LockerEntryWithPlatforms>.filterSupportedEntries(watch: ConnectedPebbleDevice): List<Pair<LockerEntry, LockerEntryPlatform>> {
@@ -69,7 +96,7 @@ class Locker(
             return emptyList()
         }
         return mapNotNull {
-            val compatiblePlatforms = appCompatibilityMatrix[watchType]!!
+            val compatiblePlatforms = watchType.getCompatibleAppVariants()
             val compatiblePlatform = it.platforms.firstOrNull { plat -> plat.watchType == watchType }
                 ?: it.platforms.firstOrNull { plat -> compatiblePlatforms.contains(plat.watchType) }
             if (compatiblePlatform != null) {
@@ -107,6 +134,10 @@ class Locker(
         }
     }
 
+    private suspend fun waitForLockerSyncIdle() {
+        lockerSyncStatus.drop(1).filterIsInstance<LockerSyncState.Idle>().first()
+    }
+
     /**
      * Sideload an app to the watch.
      * This will insert the app into the locker database and optionally install it/launch it on the watch.
@@ -114,6 +145,7 @@ class Locker(
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
     suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean = true) {
+        logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val uuid = Uuid.parse(pbwApp.info.uuid)
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(uuid, it)
@@ -129,10 +161,13 @@ class Locker(
                 lockerEntryId = uuid,
                 sdkVersion = "${header.sdkVersionMajor.get()}.${header.sdkVersionMinor.get()}",
                 processInfoFlags = header.flags.get().toInt(),
-                name = header.appName.get()
+                name = watchType.codename
             )
         }
         lockerEntryDao.insertOrReplaceWithPlatforms(lockerEntry, platforms)
+        val isSynced = scope.async { waitForLockerSyncIdle() }
+        requestLockerResync()
+        isSynced.await()
         if (loadOnWatch) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
                 it.launchApp(uuid)

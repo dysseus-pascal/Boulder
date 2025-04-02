@@ -8,21 +8,18 @@ import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.okio.asKotlinxIoRawSource
-import kotlinx.io.okio.asOkioSource
 import kotlinx.io.readString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okio.FileSystem
 import okio.Path.Companion.toPath
 import okio.SYSTEM
-import okio.gzip
 import okio.openZip
-import okio.use
 
 object DiskUtil {
     private const val MANIFEST_FILENAME = "manifest.json"
+    private const val APPINFO_FILENAME = "appinfo.json"
     private val pbwJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -66,7 +63,7 @@ object DiskUtil {
      */
     fun requirePbwAppInfo(pbwPath: Path): PbwAppInfo {
         val source = try {
-            openZip(pbwPath).source(MANIFEST_FILENAME.toPath()).asKotlinxIoRawSource()
+            openZip(pbwPath).source(APPINFO_FILENAME.toPath()).asKotlinxIoRawSource()
         } catch (e: IOException) {
             throw IllegalStateException("Pbw does not contain manifest")
         }.buffered()

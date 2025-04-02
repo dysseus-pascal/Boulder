@@ -20,7 +20,7 @@ data class PbwAppInfo(
     val targetPlatforms: List<String> = listOf("aplite"),
     val watchapp: Watchapp = Watchapp()
 ) {
-    fun toLockerEntry(): LockerEntry {
+    fun toLockerEntry(pbwIconResourceId: Int = 0): LockerEntry {
         return LockerEntry(
             id = Uuid.parse(uuid),
             version = versionLabel,
@@ -29,7 +29,7 @@ data class PbwAppInfo(
             developerName = companyName,
             configurable = capabilities.any { it == "configurable" },
             pbwVersionCode = versionCode.toString(),
-            pbwIconResourceId = 0,
+            pbwIconResourceId = pbwIconResourceId,
             sideloaded = true
         )
     }

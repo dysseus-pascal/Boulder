@@ -1,13 +1,14 @@
 package io.rebble.libpebblecommon.database.entity
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import kotlin.uuid.Uuid
 
-@Entity
+@Entity(
+    primaryKeys = ["id", "watchIdentifier"],
+)
 data class BlobDBItem(
-    @PrimaryKey val id: Uuid,
+    val id: Uuid,
     val syncStatus: BlobDBItemSyncStatus,
     val watchIdentifier: String,
     val watchDatabase: BlobCommand.BlobDatabase,

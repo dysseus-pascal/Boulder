@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
@@ -11,5 +12,7 @@ actual fun getLockerPBWCacheDirectory(context: AppContext): Path {
     val cachesDirectory = fileManager.URLsForDirectory(NSCachesDirectory, inDomains = NSUserDomainMask).firstOrNull()
         as? NSURL
         ?: throw IllegalStateException("Unable to get caches directory")
-    return Path(cachesDirectory.path!!, "pbw")
+    val path = Path(cachesDirectory.path!!, "pbw")
+    SystemFileSystem.createDirectories(path, false)
+    return path
 }

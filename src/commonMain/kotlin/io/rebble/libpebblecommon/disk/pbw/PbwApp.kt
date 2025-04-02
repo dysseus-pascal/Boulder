@@ -5,7 +5,6 @@ import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwAppInfo
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwManifest
 import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.files.FileSystem
@@ -26,9 +25,7 @@ class PbwApp(private val path: Path) {
     }
     fun getBinaryHeaderFor(watchType: WatchType): PbwBinHeader {
         return getBinaryFor(watchType).use { source ->
-            PbwBinHeader().apply {
-                fromBytes(DataBuffer(source.readByteArray(PbwBinHeader.SIZE).asUByteArray()))
-            }
+            PbwBinHeader.parseFileHeader(source.readByteArray(PbwBinHeader.SIZE).asUByteArray())
         }
     }
     fun source(fileSystem: FileSystem = SystemFileSystem): RawSource {

@@ -13,6 +13,9 @@ interface BlobDBDao {
     @Insert
     suspend fun insert(blob: BlobDBItem)
 
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertOrReplace(blob: BlobDBItem)
+
     @Query("UPDATE BlobDBItem SET syncStatus = 'SyncedToWatch' WHERE id = :id")
     suspend fun markSynced(id: Uuid)
 

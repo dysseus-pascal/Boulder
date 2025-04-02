@@ -14,7 +14,6 @@ import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSes
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
-import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -55,6 +54,7 @@ private data class ScanResultWithGoal(
 class WatchManager(
     private val config: LibPebbleConfig,
     private val database: Database,
+    private val pbwCache: LockerPBWCache,
 ) {
     private val knownWatchDao = database.knownWatchDao()
 
@@ -353,6 +353,7 @@ class WatchManager(
         val systemService: SystemService,
         override val watchInfo: WatchInfo,
     ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
+        private val logger = Logger.withTag("CPD-${pebbleDevice.name}")
         val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
         val putBytesService = PutBytesService(pebbleProtocol).apply { init(scope) }
         val appFetchService = AppFetchService(pebbleProtocol).apply { init(scope) }
@@ -370,8 +371,12 @@ class WatchManager(
             pebbleDevice.transport.identifier.asString
         )
         val putBytesSession = PutBytesSession(scope, putBytesService)
-        val appFetchProvider = AppFetchProvider(PbwApp(getTestAppPath(config.context)), appFetchService, putBytesSession)
-            .apply { init(scope) }
+        val appFetchProvider = watchInfo.platform?.watchType?.let {
+            AppFetchProvider(pbwCache, appFetchService, putBytesSession, it)
+                .apply { init(scope) }
+        } ?: run {
+            logger.e { "App fetch provider cannot init, watchInfo.platform was null" }
+        }
 
         override fun sendPPMessage(bytes: ByteArray) {
             TODO("Not yet implemented")
@@ -390,7 +395,7 @@ class WatchManager(
         }
 
         override suspend fun insertLockerEntry(entry: AppMetadata) {
-            appBlobDB.insert(entry)
+            appBlobDB.insertOrReplace(entry)
         }
 
         override suspend fun deleteLockerEntry(uuid: Uuid) {
@@ -405,7 +410,7 @@ class WatchManager(
     }
 }
 
-expect fun getTestAppPath(appContext: AppContext): Path
+expect fun getTempAppPath(appContext: AppContext): Path
 
 fun StateFlow<Map<Transport, PebbleConnector>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
     return flatMapLatest { map ->

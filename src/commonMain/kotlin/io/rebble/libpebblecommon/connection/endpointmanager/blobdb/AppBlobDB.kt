@@ -17,8 +17,8 @@ class AppBlobDB(watchScope: CoroutineScope, blobDBService: BlobDBService, blobDB
     /**
      * Write an app entry to the watch by queuing it to be written to the BlobDB.
      */
-    suspend fun insert(app: AppMetadata) {
-        blobDBDao.insert(app.toBlobDBItem(watchIdentifier, WATCH_DB))
+    suspend fun insertOrReplace(app: AppMetadata) {
+        blobDBDao.insertOrReplace(app.toBlobDBItem(watchIdentifier, WATCH_DB))
     }
 
     /**

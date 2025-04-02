@@ -30,12 +30,11 @@ sealed class BlobDB(
 
     init {
         watchScope.async {
-            val pending = blobDBDao.getAllPendingFor(watchDatabase, watchIdentifier)
-            logger.d { "Processing ${pending.size} pending db changes" }
-            syncPhoneToWatch(pending)
             blobDBDao.changesFor(watchDatabase, watchIdentifier).collect {
-                logger.d { "Responding to db change" }
-                syncPhoneToWatch(it)
+                if (it.isNotEmpty()) {
+                    logger.d { "Responding to db change" }
+                    syncPhoneToWatch(it)
+                }
             }
         }
     }

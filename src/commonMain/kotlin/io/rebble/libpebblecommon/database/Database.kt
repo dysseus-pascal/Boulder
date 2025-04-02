@@ -26,6 +26,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
     ],
+    exportSchema = true,
 )
 @ConstructedBy(DatabaseConstructor::class)
 @TypeConverters(RoomTypeConverters::class)

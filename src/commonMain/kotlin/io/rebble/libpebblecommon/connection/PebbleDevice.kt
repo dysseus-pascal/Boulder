@@ -1,10 +1,13 @@
 package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
+import kotlinx.coroutines.flow.Flow
+import kotlinx.io.files.Path
 import kotlin.uuid.Uuid
 
 interface PebbleIdentifier {
@@ -76,6 +79,8 @@ interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice {
 
 interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     val watchInfo: WatchInfo
+
+    fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
 
     // for hackers?
     fun sendPPMessage(bytes: ByteArray)

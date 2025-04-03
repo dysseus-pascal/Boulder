@@ -8,10 +8,18 @@ import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
-import io.rebble.libpebblecommon.structmapper.*
+import io.rebble.libpebblecommon.structmapper.SBoolean
+import io.rebble.libpebblecommon.structmapper.SBytes
+import io.rebble.libpebblecommon.structmapper.SFixedString
+import io.rebble.libpebblecommon.structmapper.SOptional
+import io.rebble.libpebblecommon.structmapper.SShort
+import io.rebble.libpebblecommon.structmapper.SString
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.SUShort
+import io.rebble.libpebblecommon.structmapper.StructMappable
+import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.Endian
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 
 sealed class SystemPacket(endpoint: ProtocolEndpoint) : PebblePacket(endpoint)
 
@@ -432,6 +440,19 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     class MAPEnabled: SystemMessage(Message.MAPEnabled)
     class FirmwareUpdateStartResponse: SystemMessage(Message.FirmwareUpdateStartResponse) {
         val response = SUByte(m)
+    }
+
+    enum class FirmwareUpdateStartStatus(val value: UByte) {
+        Stopped(0x00u),
+        Started(0x01u),
+        Cancelled(0x02u);
+
+        companion object {
+            fun fromValue(value: UByte): FirmwareUpdateStartStatus {
+                return entries.firstOrNull { it.value == value }
+                    ?: error("Unknown firmware update start status value: $value")
+            }
+        }
     }
 }
 

@@ -79,7 +79,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
      *
      * Should be `flowOn(IO)`
      */
-    suspend fun beginSession(size: UInt, type: ObjectType, bank: UByte, filename: String, source: Source) = putBytesFlow {
+    fun beginSession(size: UInt, type: ObjectType, bank: UByte, filename: String, source: Source) = putBytesFlow {
         val initResponse = putBytesService.initSession(size, type, bank, filename)
         val cookie = initResponse.cookie.get()
         emit(SessionState.Open(cookie))

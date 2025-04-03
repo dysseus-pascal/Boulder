@@ -8,12 +8,14 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
+import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -42,6 +44,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.uuid.Uuid
@@ -377,6 +380,13 @@ class WatchManager(
         } ?: run {
             logger.e { "App fetch provider cannot init, watchInfo.platform was null" }
         }
+        val firmwareUpdate = FirmwareUpdate(
+            watchName = name,
+            watchFlow = watches.forDevice(this),
+            watchBoard = watchInfo.board,
+            systemService = systemService,
+            putBytesSession = putBytesSession,
+        )
 
         override fun sendPPMessage(bytes: ByteArray) {
             TODO("Not yet implemented")
@@ -384,6 +394,11 @@ class WatchManager(
 
         override fun sendPPMessage(ppMessage: PebblePacket) {
             TODO("Not yet implemented")
+        }
+
+        override fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {
+            require(SystemFileSystem.exists(path)) { "File does not exist: $path" }
+            return firmwareUpdate.beginFirmwareUpdate(PbzFirmware(path))
         }
 
         override suspend fun sendNotification(notification: TimelineItem) {

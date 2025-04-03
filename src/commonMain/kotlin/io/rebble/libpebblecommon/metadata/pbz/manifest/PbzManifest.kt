@@ -10,7 +10,7 @@ data class PbzManifest(
     val generatedAt: Long,
     val generatedBy: String? = null,
     val debug: Debug? = null,
-    val firmware: PbzFirmware,
+    val firmware: PbzManifestFirmware,
     val resources: SystemResources? = null,
     @SerialName("js_tooling")
     val jsTooling: JsTooling? = null,

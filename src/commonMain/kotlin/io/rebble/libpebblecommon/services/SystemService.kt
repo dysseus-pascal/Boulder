@@ -94,12 +94,16 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         ))
     }
 
-    suspend fun firmwareUpdateStart(bytesAlreadyTransferred: UInt, bytesToSend: UInt): UByte {
+    suspend fun sendFirmwareUpdateStart(bytesAlreadyTransferred: UInt, bytesToSend: UInt): SystemMessage.FirmwareUpdateStartStatus {
         val callback = CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>()
         firmwareUpdateStartResponseCallback = callback
         send(SystemMessage.FirmwareUpdateStart(bytesAlreadyTransferred, bytesToSend))
         val response = callback.await()
-        return response.response.get()
+        return SystemMessage.FirmwareUpdateStartStatus.fromValue(response.response.get())
+    }
+
+    suspend fun sendFirmwareUpdateComplete() {
+        send(SystemMessage.FirmwareUpdateComplete())
     }
 
     suspend fun sendPing(cookie: UInt): UInt {

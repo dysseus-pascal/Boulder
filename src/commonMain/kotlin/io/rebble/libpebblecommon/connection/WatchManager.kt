@@ -398,7 +398,8 @@ class WatchManager(
 
         override fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {
             require(SystemFileSystem.exists(path)) { "File does not exist: $path" }
-            return firmwareUpdate.beginFirmwareUpdate(PbzFirmware(path))
+            //TODO: Resumable firmware update
+            return firmwareUpdate.beginFirmwareUpdate(PbzFirmware(path), 0u)
         }
 
         override suspend fun sendNotification(notification: TimelineItem) {

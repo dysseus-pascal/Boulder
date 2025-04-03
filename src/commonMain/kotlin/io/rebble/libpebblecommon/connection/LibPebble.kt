@@ -18,6 +18,9 @@ data class LibPebbleConfig(
 
 data class BleConfig(
     val roleReversal: Boolean,
+    val pinAddress: Boolean,
+    val phoneRequestsPairing: Boolean,
+    val writeConnectivityTrigger: Boolean,
 )
 
 typealias PebbleDevices = Flow<List<PebbleDevice>>

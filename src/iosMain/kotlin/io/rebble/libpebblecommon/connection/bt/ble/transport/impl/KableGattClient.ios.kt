@@ -7,6 +7,6 @@ import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 actual fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peripheral =
     Peripheral(identifier.uuid) {
         logging {
-            level = Logging.Level.Data
+//            level = Logging.Level.Data
         }
     }

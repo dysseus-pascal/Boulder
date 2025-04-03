@@ -1,14 +1,22 @@
 package io.rebble.libpebblecommon.connection
 
-import android.bluetooth.BluetoothDevice
+import java.util.Locale
 
-actual data class PebbleBluetoothIdentifier(
+actual data class PebbleBluetoothIdentifier private constructor(
     val macAddress: String,
 ) : PebbleIdentifier {
     actual override val asString: String = macAddress
 
-    fun isEqualTo(device: BluetoothDevice) = device.address.equals(macAddress, ignoreCase = true)
-    fun isEqualTo(macAddress: String) = macAddress.equals(macAddress, ignoreCase = true)
+    init {
+        check(macAddress == macAddress.uppercase(Locale.US))
+    }
+
+    companion object {
+        // Force address to always be uppercase (so we can safely compare it)
+        operator fun invoke(macAddress: String): PebbleBluetoothIdentifier {
+            return PebbleBluetoothIdentifier(macAddress.uppercase(Locale.US))
+        }
+    }
 }
 
 actual fun String.asPebbleBluetoothIdentifier(): PebbleBluetoothIdentifier {

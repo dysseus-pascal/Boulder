@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTran
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlin.uuid.Uuid
 
 //expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
 
@@ -26,9 +27,9 @@ enum class GattWriteType {
 
 interface ConnectedGattClient : AutoCloseable {
     suspend fun discoverServices(): Boolean
-    suspend fun subscribeToCharacteristic(serviceUuid: String, characteristicUuid: String): Flow<ByteArray>?
+    suspend fun subscribeToCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid): Flow<ByteArray>?
     suspend fun isBonded(): Boolean // TODO doesn't belong in here
-    suspend fun writeCharacteristic(serviceUuid: String, characteristicUuid: String, value: ByteArray, writeType: GattWriteType): Boolean
-    suspend fun readCharacteristic(serviceUuid: String, characteristicUuid: String): ByteArray?
+    suspend fun writeCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid, value: ByteArray, writeType: GattWriteType): Boolean
+    suspend fun readCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid): ByteArray?
     val services: List<GattService>?
 }

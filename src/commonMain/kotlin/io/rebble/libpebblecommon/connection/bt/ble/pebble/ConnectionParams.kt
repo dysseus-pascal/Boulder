@@ -5,10 +5,12 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
-class ConnectionParams(private val gattClient: ConnectedGattClient) {
+class ConnectionParams(private val gattClient: ConnectedGattClient, private val scope: CoroutineScope) {
     suspend fun subscribeAndConfigure(): Boolean {
         // TODO scope this
         val sub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTION_PARAMETERS_CHARACTERISTIC)
@@ -16,7 +18,7 @@ class ConnectionParams(private val gattClient: ConnectedGattClient) {
             Logger.e("error subscribing to connection params")
             return false
         }
-        GlobalScope.async {
+        scope.launch {
             sub.collect {
                 Logger.d("connection params changed: ${it.joinToString()}")
             }

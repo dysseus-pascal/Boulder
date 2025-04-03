@@ -77,16 +77,19 @@ class PebbleBle(
             val services = device.discoverServices()
             Logger.d("services = $services")
 
-            val connectionParams = ConnectionParams(device)
+            val connectionParams = ConnectionParams(device, scope)
             if (!connectionParams.subscribeAndConfigure()) {
                 // this can happen on some older firmwares (PRF?)
                 Logger.i("error setting up connection params")
             }
+            Logger.d("done connectionParams")
 
             val mtuParam = Mtu(device, scope)
             if (!mtuParam.subscribe()) {
                 Logger.w("failed to subscribe to mtu")
             }
+            Logger.d("subscribed mtu")
+
             scope.launch {
                 mtuParam.mtu.collect { newMtu ->
                     Logger.d("newMtu = $newMtu")
@@ -94,12 +97,14 @@ class PebbleBle(
                 }
             }
             mtuParam.update(TARGET_MTU)
+            Logger.d("done mtu update")
 
             val connectivity = ConnectivityWatcher(device, scope)
             if (!connectivity.subscribe()) {
                 Logger.d("failed to subscribe to connectivity")
                 return@withContext PebbleConnectionResult.Failed("failed to subscribe to connectivity")
             }
+            Logger.d("subscribed connectivity d")
             val connectionStatus = withTimeout(CONNECTIVITY_UPDATE_TIMEOUT) {
                 connectivity.status.first()
             }
@@ -125,7 +130,13 @@ class PebbleBle(
             }
 
             if (needToPair) {
-                val pairing = PebblePairing(device, config.context, pebbleDevice)
+                val pairing = PebblePairing(
+                    device,
+                    config.context,
+                    pebbleDevice,
+                    connectivity.status,
+                    config.bleConfig,
+                )
                 pairing.requestPairing(connectionStatus)
             }
 

@@ -86,6 +86,7 @@ class WatchManager(
     val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
 
     fun init() {
+        Logger.d("watchmanager init()")
         GlobalScope.launch {
             val activeConnectionStates = activeConnections.flowOfAllDevices()
             combine(

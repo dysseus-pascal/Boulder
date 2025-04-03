@@ -28,7 +28,9 @@ class Mtu(private val gattClient: ConnectedGattClient, private val scope: Corout
                 _mtu.value = mtu
             }
         }
+        Logger.d("about to read mtu")
         val currentMtu = gattClient.readCharacteristic(PAIRING_SERVICE_UUID, MTU_CHARACTERISTIC)
+        Logger.d("read mtu: $currentMtu")
         if (currentMtu != null) {
             val mtu = currentMtu.toUShortLittleEndian().toInt()
             _mtu.value = mtu

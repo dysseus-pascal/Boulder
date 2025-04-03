@@ -18,18 +18,22 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.asPebbleBluetoothIdentifier
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.util.UUID
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlin.uuid.toJavaUuid
 
 private fun getService(appContext: AppContext): BluetoothManager? =
     appContext.context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -54,28 +58,29 @@ data class RegisteredDevice(
 )
 
 class GattServerCallback : BluetoothGattServerCallback() {
-    private val _connectionState = MutableStateFlow<ServerConnectionstateChanged?>(null)
-    val connectionState = _connectionState.asSharedFlow()
+    //    private val _connectionState = MutableStateFlow<ServerConnectionstateChanged?>(null)
+//    val connectionState = _connectionState.asSharedFlow()
     val registeredDevices: MutableMap<String, RegisteredDevice> = mutableMapOf()
     var server: BluetoothGattServer? = null
 
     override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
         Logger.d("onConnectionStateChange: ${device.address} = $newState")
-        _connectionState.tryEmit(
-            ServerConnectionstateChanged(
-                deviceId = device.address,
-                connectionState = newState,
-            )
-        )
+//        _connectionState.tryEmit(
+//            ServerConnectionstateChanged(
+//                deviceId = device.address,
+//                connectionState = newState,
+//            )
+//        )
     }
 
-    // TODO shouldn't really be a stateFlow, but I can't get SharedFlow to work. Just use a channel?
-    private val _serviceAdded = MutableStateFlow<ServerServiceAdded?>(null)
+    private val _serviceAdded = MutableSharedFlow<ServerServiceAdded?>()
     val serviceAdded = _serviceAdded.asSharedFlow()
 
     override fun onServiceAdded(status: Int, service: BluetoothGattService) {
         Logger.d("onServiceAdded: ${service.uuid}")
-        val res = _serviceAdded.tryEmit(ServerServiceAdded(service.uuid.toString()))
+        runBlocking {
+            _serviceAdded.emit(ServerServiceAdded(service.uuid.asUuid()))
+        }
     }
 
     private val _characteristicReadRequest = MutableStateFlow<RawCharacteristicReadRequest?>(null)
@@ -160,7 +165,12 @@ class GattServerCallback : BluetoothGattServerCallback() {
 
     override fun onNotificationSent(device: BluetoothDevice, status: Int) {
 //        Logger.d("onNotificationSent: ${device.address}")
-        notificationSent.tryEmit(NotificationSent(device.address, status))
+        notificationSent.tryEmit(
+            NotificationSent(
+                deviceId = device.address.asPebbleBluetoothIdentifier(),
+                status = status,
+            )
+        )
     }
 }
 
@@ -171,8 +181,8 @@ actual class GattServer(
 ) : BluetoothGattServerCallback() {
     actual val characteristicReadRequest = callback.characteristicReadRequest.filterNotNull().map {
         ServerCharacteristicReadRequest(
-            deviceId = it.device.address,
-            uuid = it.characteristic.uuid.toString(),
+            deviceId = it.device.address.asPebbleBluetoothIdentifier(),
+            uuid = it.characteristic.uuid.asUuid(),
             respond = { bytes ->
                 try {
                     server.sendResponse(
@@ -190,7 +200,7 @@ actual class GattServer(
         )
     }
 
-    actual val connectionState = callback.connectionState.filterNotNull()
+//    actual val connectionState = callback.connectionState.filterNotNull()
 
     actual suspend fun closeServer() {
         try {
@@ -216,11 +226,7 @@ actual class GattServer(
         try {
             callback.serviceAdded.onSubscription {
                 server.addService(service.asAndroidService())
-            }.first {
-                val equals = service.uuid.equals(it?.uuid, ignoreCase = true)
-                Logger.d("// first = '${it?.uuid}'/'${service.uuid}' : equals = $equals")
-                equals
-            }
+            }.first { service.uuid == it?.uuid }
         } catch (e: SecurityException) {
             Logger.d("error adding gatt service ${service.uuid}", e)
         }
@@ -247,8 +253,8 @@ actual class GattServer(
 
     actual suspend fun sendData(
         transport: BleTransport,
-        serviceUuid: String,
-        characteristicUuid: String,
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid,
         data: ByteArray,
     ): Boolean {
         val registeredDevice = callback.registeredDevices[transport.identifier.macAddress]
@@ -256,33 +262,44 @@ actual class GattServer(
             Logger.e("sendData: couldn't find registered device: $transport")
             return false
         }
-        val service = server.getService(UUID.fromString(serviceUuid))
+        val service = server.getService(serviceUuid.toJavaUuid())
         if (service == null) {
             Logger.e("sendData: couldn't find service")
             return false
         }
-        val characteristic = service.getCharacteristic(UUID.fromString(characteristicUuid))
+        val characteristic = service.getCharacteristic(characteristicUuid.toJavaUuid())
         if (characteristic == null) {
             Logger.e("sendData: couldn't find characteristic")
             return false
         }
         callback.notificationSent.value = null // TODO better way of doing this?
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val writeRes = server.notifyCharacteristicChanged(registeredDevice.device, characteristic, false, data)
+            val writeRes = server.notifyCharacteristicChanged(
+                registeredDevice.device,
+                characteristic,
+                false,
+                data
+            )
             if (writeRes != BluetoothStatusCodes.SUCCESS) {
                 Logger.e("couldn't notify data characteristic: $writeRes")
                 return false
             }
         } else {
             characteristic.value = data
-            if (!server.notifyCharacteristicChanged(registeredDevice.device, characteristic, false)) {
+            if (!server.notifyCharacteristicChanged(
+                    registeredDevice.device,
+                    characteristic,
+                    false
+                )
+            ) {
                 Logger.e("couldn't notify data characteristic")
                 return false
             }
         }
         return try {
             val res = withTimeout(cbTimeout) {
-                callback.notificationSent.filterNotNull().first { transport.identifier.isEqualTo(it.deviceId) }
+                callback.notificationSent.filterNotNull()
+                    .first { transport.identifier == it.deviceId }
             }
             if (res.status != GATT_SUCCESS) {
                 Logger.e("characteristic notify error: ${res.status}")
@@ -298,7 +315,7 @@ actual class GattServer(
 }
 
 private fun GattService.asAndroidService(): BluetoothGattService {
-    val service = BluetoothGattService(UUID.fromString(uuid), SERVICE_TYPE_PRIMARY)
+    val service = BluetoothGattService(uuid.toJavaUuid(), SERVICE_TYPE_PRIMARY)
     characteristics.forEach { c ->
         val characteristic = c.asBluetoothGattcharacteristic()
         service.addCharacteristic(characteristic)
@@ -307,17 +324,19 @@ private fun GattService.asAndroidService(): BluetoothGattService {
 }
 
 private fun GattCharacteristic.asBluetoothGattcharacteristic() = BluetoothGattCharacteristic(
-    /* uuid = */ UUID.fromString(uuid),
+    /* uuid = */ uuid.toJavaUuid(),
     /* properties = */ properties,
     /* permissions = */ permissions,
 ).apply {
     this@asBluetoothGattcharacteristic.descriptors.forEach { d ->
         val descriptor = BluetoothGattDescriptor(
-            /* uuid = */ UUID.fromString(d.uuid),
+            /* uuid = */ d.uuid.toJavaUuid(),
             /* permissions = */ d.permissions,
         )
         addDescriptor(descriptor)
     }
 }
 
-private fun List<Int>.or(): Int = reduceOrNull { a, b -> a or b } ?: 0
+//private fun List<Int>.or(): Int = reduceOrNull { a, b -> a or b } ?: 0
+
+private fun UUID.asUuid(): Uuid = Uuid.parse(toString())

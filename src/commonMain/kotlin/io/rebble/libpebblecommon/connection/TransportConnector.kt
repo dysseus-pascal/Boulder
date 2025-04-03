@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,7 +27,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.io.IOException
+import kotlin.time.Duration.Companion.seconds
 
 sealed class PebbleConnectionResult {
     class Success(
@@ -85,6 +88,7 @@ class PebbleConnector(
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 Logger.e("failed to connect: $result")
+                transportConnector.disconnect()
                 _state.value = Failed(transport)
             }
 
@@ -134,23 +138,31 @@ class PebbleConnector(
                 val appRunStateService = AppRunStateService(protocolHandler).apply { init(scope) }
 
                 Logger.d("RealNegotiatingPebbleDevice negotiate()")
-                val appVersionRequest = systemService.appVersionRequest.await()
-                Logger.d("RealNegotiatingPebbleDevice appVersionRequest = $appVersionRequest")
-                systemService.sendPhoneVersionResponse()
-                Logger.d("RealNegotiatingPebbleDevice sent watch version request")
-                val watchInfo = systemService.requestWatchVersion()
-                Logger.d("RealNegotiatingPebbleDevice watchVersionResponse = $watchInfo")
-                val runningApp = appRunStateService.runningApp.first()
-                Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
+                try {
+                    withTimeout(15.seconds) {
+                        val appVersionRequest = systemService.appVersionRequest.await()
+                        Logger.d("RealNegotiatingPebbleDevice appVersionRequest = $appVersionRequest")
+                        systemService.sendPhoneVersionResponse()
+                        Logger.d("RealNegotiatingPebbleDevice sent watch version request")
+                        val watchInfo = systemService.requestWatchVersion()
+                        Logger.d("RealNegotiatingPebbleDevice watchVersionResponse = $watchInfo")
+                        val runningApp = appRunStateService.runningApp.first()
+                        Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
 
-                _state.value = Connected(
-                    transport = transport,
-                    pebbleProtocol = protocolHandler,
-                    scope = scope,
-                    watchInfo = watchInfo,
-                    appRunStateService = appRunStateService,
-                    systemService = systemService,
-                )
+                        _state.value = Connected(
+                            transport = transport,
+                            pebbleProtocol = protocolHandler,
+                            scope = scope,
+                            watchInfo = watchInfo,
+                            appRunStateService = appRunStateService,
+                            systemService = systemService,
+                        )
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    Logger.w("negotiation timed out")
+                    transportConnector.disconnect()
+                    _state.value = Failed(transport)
+                }
             }
         }
     }

@@ -88,8 +88,13 @@ class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private v
             logger.d { "Firmware already sent, skipping firmware PutBytes" }
         }
         pbzFw.manifest.resources?.let { res ->
+            val resourcesOffset = if (offset < pbzFw.manifest.firmware.size.toUInt()) {
+                0u
+            } else {
+                offset - pbzFw.manifest.firmware.size.toUInt()
+            }
             try {
-                sendResources(pbzFw, (offset - pbzFw.manifest.firmware.size.toUInt())).collect {
+                sendResources(pbzFw, resourcesOffset).collect {
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for resources" }

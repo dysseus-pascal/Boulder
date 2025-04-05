@@ -98,8 +98,12 @@ class KableConnectedGattClient(
             Logger.e("couldn't find characteristic: $characteristicUuid")
             return false
         }
-        peripheral.write(c, value, writeType.asKableWriteType())
-        return true
+        return try {
+            peripheral.write(c, value, writeType.asKableWriteType())
+            true
+        } catch (e: com.juul.kable.GattStatusException) {
+            false
+        }
     }
 
     override suspend fun readCharacteristic(

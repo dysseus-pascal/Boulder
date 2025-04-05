@@ -176,7 +176,7 @@ class WatchManager(
             return
         }
         val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
-            Logger.e("watchmanager caught exception for ${pebbleDevice.transport}", throwable)
+            Logger.e("watchmanager caught exception for ${pebbleDevice.transport}: $throwable", throwable)
             // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
             //  bad FW version) by not attempting to endlessly reconnect.
             val connection = activeConnections.value[pebbleDevice.transport]

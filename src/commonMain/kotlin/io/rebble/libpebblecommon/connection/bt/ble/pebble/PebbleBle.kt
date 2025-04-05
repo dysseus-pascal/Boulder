@@ -45,16 +45,15 @@ class PebbleBle(
             check(transport is BleTransport)
 
             val inboundPPoGBytesChannel = Channel<ByteArray>(capacity = 100)
-            gattServer?.registerDevice(transport, inboundPPoGBytesChannel)
 
-            val inboundPPChannel = ByteChannel()
-            val outboundPPChannel = Channel<ByteArray>(capacity = 100)
-
-            val ppog = PPoG(
-                inboundPPBytes = inboundPPChannel,
-                outboundPPBytes = outboundPPChannel,
-                inboundPacketData = inboundPPoGBytesChannel,
-                pPoGPacketSender = object : PPoGPacketSender {
+            Logger.d("connect() roleReversal = ${config.bleConfig.roleReversal}")
+            val ppogPacketSender: PPoGPacketSender = if (config.bleConfig.roleReversal) {
+                PpogClient(inboundPPoGBytesChannel, scope)
+            } else {
+                val gs = gattServer
+                check(gs != null)
+                gs.registerDevice(transport, inboundPPoGBytesChannel)
+                object : PPoGPacketSender {
                     override suspend fun sendPacket(packet: ByteArray): Boolean {
                         return gattServer?.sendData(
                             transport = transport,
@@ -63,7 +62,17 @@ class PebbleBle(
                             data = packet
                         ) ?: false
                     }
-                },
+                }
+            }
+
+            val inboundPPChannel = ByteChannel()
+            val outboundPPChannel = Channel<ByteArray>(capacity = 100)
+
+            val ppog = PPoG(
+                inboundPPBytes = inboundPPChannel,
+                outboundPPBytes = outboundPPChannel,
+                inboundPacketData = inboundPPoGBytesChannel,
+                pPoGPacketSender = ppogPacketSender,
                 initialMtu = DEFAULT_MTU,
                 desiredTxWindow = MAX_TX_WINDOW,
                 desiredRxWindow = MAX_RX_WINDOW,
@@ -71,7 +80,7 @@ class PebbleBle(
 
             val device = gattConnector.connect()
             if (device == null) {
-                Logger.d("null device")
+                Logger.d("pebbleble: null device")
                 return@withContext PebbleConnectionResult.Failed("failed to connect")
             }
             val services = device.discoverServices()
@@ -138,6 +147,11 @@ class PebbleBle(
                     config.bleConfig,
                 )
                 pairing.requestPairing(connectionStatus)
+            }
+
+            if (ppogPacketSender is PpogClient) {
+                // TODO do this better if it works
+                ppogPacketSender.init(device)
             }
 
             ppog.run(scope)

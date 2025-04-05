@@ -54,18 +54,18 @@ class PebblePairing(
             val pairValue = makePairingTriggerValue(
                 noSecurityRequest = needsExplicitBond,
                 autoAcceptFuturePairing = false,
-                watchAsGattServer = false,
+                watchAsGattServer = bleConfig.roleReversal,
                 pinAddress = bleConfig.pinAddress,
             )
             val writeRes = device.writeCharacteristic(
                 PAIRING_SERVICE_UUID,
                 PAIRING_TRIGGER_CHARACTERISTIC,
                 pairValue,
-                GattWriteType.NoResponse
+                GattWriteType.WithResponse
             )
             if (!writeRes) {
                 Logger.e("Failed to write to pairing trigger")
-                return
+//                return
                 // TODO this fails with gatt error 1 (INVALID_HANDLE) and I'm not sure why.
                 //  OG pebble app didn't check for that result (and didn't log it ebcause of ppog spam)
                 //  Pairing seems to work anyway... (but does it pin the address?)
@@ -111,8 +111,8 @@ class PebblePairing(
             "makePairingTriggerValue " +
                     "pinAddress=$pinAddress " +
                     "noSecurityRequest=$noSecurityRequest " +
-                    "autoAcceptFuturePairing=$autoAcceptFuturePairing" +
-                    "watchAsGattServer=$watchAsGattServer"
+                    "autoAcceptFuturePairing=$autoAcceptFuturePairing " +
+                    "watchAsGattServer=$watchAsGattServer "
         )
         val value = BitSet(8)
         value[0] = pinAddress // pin address

@@ -96,6 +96,7 @@ class WatchManager(
             ) { scan, persisted, active ->
                 val allDevices: MutableMap<Transport, PebbleDevice> =
                     scan.mapValues { it.value.asPebbleDevice() }.toMutableMap()
+                Logger.v("combine: scan=$scan persisted=$persisted active=$active")
                 // Known device takes priority over scan result for the same device
                 allDevices.putAll(persisted)
                 // Update for active connection state
@@ -168,7 +169,7 @@ class WatchManager(
         setConnectGoal(pebbleDevice = pebbleDevice, connectGoal = false)
     }
 
-    private fun connectTo(pebbleDevice: PebbleDevice) {
+    private suspend fun connectTo(pebbleDevice: PebbleDevice) {
         Logger.d("connectTo: $pebbleDevice")
         val existingDevice = activeConnections.value[pebbleDevice.transport]
         if (existingDevice != null) {
@@ -191,6 +192,17 @@ class WatchManager(
             SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
         val connectionScope = CoroutineScope(coroutineContext)
         val transportConnector = pebbleDevice.createConnector(connectionScope)
+        if (transportConnector == null) {
+            // Probably because it couldn't create the device (ios throws on an unknown peristed
+            // uuid, so we'll need to scan for it using the name/serial?)...
+            // ...but TODO revit this oncwe have more error modes + are handling BT being disabled
+            if (pebbleDevice is KnownPebbleDevice) {
+                Logger.w("removing known device: ${pebbleDevice.transport}")
+                pebbleDevice.forget()
+            }
+            return
+        }
+
         val pebbleConnector =
             PebbleConnector(
                 transportConnector,
@@ -240,15 +252,19 @@ class WatchManager(
         activeConnection.disconnect()
     }
 
-    private fun PebbleDevice.createConnector(scope: CoroutineScope): TransportConnector {
+    private fun PebbleDevice.createConnector(scope: CoroutineScope): TransportConnector? {
         val pebbleTransport = transport
         return when (pebbleTransport) {
-            is BleTransport -> PebbleBle(
-                config = config,
-                pebbleDevice = this,
-                scope = scope,
-                gattConnector = gattConnector(pebbleTransport, config.context),
-            )
+            is BleTransport -> {
+                val connector = gattConnector(pebbleTransport, config.context)
+                if (connector == null) return null
+                PebbleBle(
+                    config = config,
+                    pebbleDevice = this,
+                    scope = scope,
+                    gattConnector = connector,
+                )
+            }
 
             else -> TODO("not implemented")
         }
@@ -330,7 +346,8 @@ class WatchManager(
         override val serial: String,
     ) : PebbleDevice by pebbleDevice, KnownPebbleDevice {
         override suspend fun forget() {
-            TODO("Not yet implemented")
+            Logger.d("forget() ${pebbleDevice.transport}")
+            knownWatchDao.remove(knownWatchItem())
         }
 
         override fun toString(): String =

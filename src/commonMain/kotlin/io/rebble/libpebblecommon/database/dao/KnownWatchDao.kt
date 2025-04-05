@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.database.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -15,4 +16,7 @@ interface KnownWatchDao {
 
     @Query("SELECT * FROM KnownWatchItem")
     fun knownWatches(): Flow<List<KnownWatchItem>>
+
+    @Delete
+    suspend fun remove(watch: KnownWatchItem)
 }

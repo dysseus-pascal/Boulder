@@ -23,15 +23,19 @@ import kotlinx.coroutines.flow.map
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(transport: BleTransport): GattConnector =
-    KableGattConnector(transport)
+fun kableGattConnector(transport: BleTransport): GattConnector? {
+    val peripheral = peripheralFromIdentifier(transport.identifier)
+    if (peripheral == null) return null
+    return KableGattConnector(transport, peripheral)
+}
 
-expect fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peripheral
+
+expect fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peripheral?
 
 class KableGattConnector(
-    val transport: BleTransport,
+    private val transport: BleTransport,
+    private val peripheral: Peripheral,
 ) : GattConnector {
-    private val peripheral = peripheralFromIdentifier(transport.identifier)
 
     override suspend fun connect(): ConnectedGattClient? {
         try {

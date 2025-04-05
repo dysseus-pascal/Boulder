@@ -10,7 +10,7 @@ import kotlin.uuid.Uuid
 
 //expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
 
-fun gattConnector(transport: BleTransport, appContext: AppContext): GattConnector
+fun gattConnector(transport: BleTransport, appContext: AppContext): GattConnector?
 // = libpebbleGattConnector(scannedPebbleDevice, appContext)
  = kableGattConnector(transport)
 

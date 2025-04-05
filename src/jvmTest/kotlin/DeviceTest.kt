@@ -77,7 +77,7 @@ class DeviceTests {
             source = NotificationSource.Email
         )
 
-        val protocolHandler = TestProtocolHandler { receivePacket(sendWS(it, true)!!) }
+        val protocolHandler = TestPebbleProtocolHandler { receivePacket(sendWS(it, true)!!) }
 
         val notificationService = NotificationService(BlobDBService(protocolHandler))
         val notificationResult = notificationService.send(notif)

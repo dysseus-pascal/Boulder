@@ -24,6 +24,7 @@ room = { id = "androidx.room", version.ref = "room" }
 uuid = { module = "com.benasher44:uuid", version.ref = "uuid" }
 klock = { module = "com.soywiz.korlibs.klock:klock", version.ref = "klock" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutine" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutine" }
 serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
 ktor-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }

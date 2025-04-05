@@ -1,30 +1,35 @@
 package io.rebble.libpebblecommon.services.notification
 
-import TestProtocolHandler
+import TestPebbleProtocolHandler
 import assertIs
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.packets.blobdb.NotificationSource
 import io.rebble.libpebblecommon.packets.blobdb.PushNotification
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import runBlockingWithTimeout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.seconds
 
 class NotificationServiceTest {
     @Test
-    fun `Forward notification success`() = runBlockingWithTimeout {
-        val protocolHandler = TestProtocolHandler { receivedPacket ->
+    fun `Forward notification success`() = runTest(timeout = 5.seconds) {
+        val protocolHandler = TestPebbleProtocolHandler { receivedPacket ->
             if (receivedPacket is BlobCommand) {
                 this.receivePacket(BlobResponse.Success().also {
                     it.token.set(receivedPacket.token.get())
                 })
             }
         }
-
-        val notificationService = NotificationService(BlobDBService((protocolHandler)))
+        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
+            init(backgroundScope)
+        })
+        // Hack: init() starts collecting asynchronously - we need to make that immediate, really
+        yield()
         val result = notificationService.send(TEST_NOTIFICATION)
-
         assertIs<BlobResponse.Success>(
             result,
             "Reply wasn't success from BlobDB when sending notif"
@@ -32,8 +37,8 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `Forward notification fail`() = runBlockingWithTimeout {
-        val protocolHandler = TestProtocolHandler { receivedPacket ->
+    fun `Forward notification fail`() = runTest(timeout = 5.seconds) {
+        val protocolHandler = TestPebbleProtocolHandler { receivedPacket ->
             if (receivedPacket is BlobCommand) {
                 this.receivePacket(BlobResponse.GeneralFailure().also {
                     it.token.set(receivedPacket.token.get())
@@ -41,7 +46,11 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService((protocolHandler)))
+        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
+            init(backgroundScope)
+        })
+        // Hack: init() starts collecting asynchronously - we need to make that immediate, really
+        yield()
         val result = notificationService.send(TEST_NOTIFICATION)
 
         assertIs<BlobResponse.GeneralFailure>(
@@ -51,9 +60,9 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `Resend notification`() = runBlockingWithTimeout {
+    fun `Resend notification`() = runTest(timeout = 5.seconds) {
         val receivedTokens = ArrayList<UShort>()
-        val protocolHandler = TestProtocolHandler { receivedPacket ->
+        val protocolHandler = TestPebbleProtocolHandler { receivedPacket ->
             if (receivedPacket is BlobCommand) {
                 val nextPacket = if (receivedTokens.size == 0) {
                     BlobResponse.TryLater()
@@ -70,7 +79,11 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService((protocolHandler)))
+        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
+            init(backgroundScope)
+        })
+        // Hack: init() starts collecting asynchronously - we need to make that immediate, really
+        yield()
         val result = notificationService.send(TEST_NOTIFICATION)
 
         assertIs<BlobResponse.Success>(

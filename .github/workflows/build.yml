@@ -23,3 +23,5 @@ jobs:
           key: build-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
       - name: Build
         run: ./gradlew build
+      - name: Test
+        run: ./gradlew check

@@ -2,6 +2,7 @@
 
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt.GATT_SUCCESS
@@ -133,6 +134,7 @@ class GattServerCallback : BluetoothGattServerCallback() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     override fun onDescriptorWriteRequest(
         device: BluetoothDevice,
         requestId: Int,
@@ -251,6 +253,7 @@ actual class GattServer(
         callback.registeredDevices.remove(transport.identifier.macAddress)
     }
 
+    @SuppressLint("MissingPermission")
     actual suspend fun sendData(
         transport: BleTransport,
         serviceUuid: Uuid,

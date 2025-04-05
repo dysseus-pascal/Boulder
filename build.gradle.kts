@@ -108,11 +108,8 @@ kotlin {
             implementation(libs.kotlinx.io.core)
             implementation(libs.kotlinx.io.okio)
             implementation(libs.okio)
-            implementation("com.juul.kable:kable-core") {
-                version {
-                    branch = "ios"
-                }
-            }
+            // Using our forked version (in a submodule) which has a fix for iOS reads not working
+            implementation("com.juul.kable:kable-core")
             implementation("io.github.skolson:kmp-io:0.1.5")
             implementation("io.ktor:ktor-io:3.1.1")
         }

@@ -1,0 +1,3 @@
+[submodule "kable"]
+	path = kable
+	url = git@github.com:coredevices/kable.git

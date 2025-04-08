@@ -19,16 +19,11 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
-import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
-import io.rebble.libpebblecommon.connection.bt.removeBond
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

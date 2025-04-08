@@ -58,6 +58,7 @@ class KableGattConnector(
 
     override suspend fun disconnect() {
         peripheral.disconnect()
+        peripheral.close()
     }
 
     override val disconnected: Deferred<Unit> = scope.async {

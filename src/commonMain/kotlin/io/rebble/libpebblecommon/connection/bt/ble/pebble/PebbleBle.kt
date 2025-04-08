@@ -21,6 +21,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
 import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
+import io.rebble.libpebblecommon.connection.bt.removeBond
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -129,8 +130,7 @@ class PebbleBle(
                 }
             } else {
                 if (device.isBonded()) {
-                    Logger.d("phone thinks it is paired, watch does not; unpairing on phone")
-                    // TODO removeBond()
+                    Logger.d("phone thinks it is paired, watch does not")
                     true
                 } else {
                     Logger.d("needs pairing")

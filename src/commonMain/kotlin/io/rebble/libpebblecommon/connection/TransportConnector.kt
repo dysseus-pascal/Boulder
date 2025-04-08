@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -46,7 +47,7 @@ sealed class PebbleConnectionResult {
 interface TransportConnector {
     suspend fun connect(): PebbleConnectionResult
     suspend fun disconnect()
-    val disconnected: Flow<Unit>
+    val disconnected: Deferred<Unit>
 }
 
 interface PebbleProtocolHandler {

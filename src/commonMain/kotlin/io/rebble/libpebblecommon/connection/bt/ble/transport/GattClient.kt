@@ -1,23 +1,23 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 //expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
 
-fun gattConnector(transport: BleTransport, appContext: AppContext): GattConnector?
+fun gattConnector(transport: BleTransport, appContext: AppContext, scope: CoroutineScope): GattConnector?
 // = libpebbleGattConnector(scannedPebbleDevice, appContext)
- = kableGattConnector(transport)
+ = kableGattConnector(transport, scope)
 
 interface GattConnector : AutoCloseable {
     suspend fun connect(): ConnectedGattClient?
     suspend fun disconnect()
-    val disconnected: Flow<Unit>
+    val disconnected: Deferred<Unit>
 }
 
 enum class GattWriteType {

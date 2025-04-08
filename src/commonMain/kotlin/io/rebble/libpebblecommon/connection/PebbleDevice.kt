@@ -42,7 +42,9 @@ sealed class Transport {
     data class SocketTransport(override val identifier: PebbleSocketIdentifier) : Transport()
 }
 
-interface ActiveDevice
+interface ActiveDevice {
+    suspend fun disconnect()
+}
 
 // <T : Transport> ?
 sealed interface PebbleDevice {
@@ -51,7 +53,6 @@ sealed interface PebbleDevice {
     val connectGoal: Boolean
 
     suspend fun connect()
-    suspend fun disconnect()
 }
 
 interface DiscoveredPebbleDevice : PebbleDevice

@@ -16,17 +16,23 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(transport: BleTransport): GattConnector? {
+fun kableGattConnector(transport: BleTransport, scope: CoroutineScope): GattConnector? {
     val peripheral = peripheralFromIdentifier(transport.identifier)
     if (peripheral == null) return null
-    return KableGattConnector(transport, peripheral)
+    return KableGattConnector(transport, peripheral, scope)
 }
 
 
@@ -35,9 +41,12 @@ expect fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peri
 class KableGattConnector(
     private val transport: BleTransport,
     private val peripheral: Peripheral,
+    private val scope: CoroutineScope,
 ) : GattConnector {
+//    private val _disconnected = CompletableDeferred<Unit>()
 
     override suspend fun connect(): ConnectedGattClient? {
+//        scope.
         try {
             val scope = peripheral.connect()
             return KableConnectedGattClient(transport, scope, peripheral)
@@ -51,7 +60,13 @@ class KableGattConnector(
         peripheral.disconnect()
     }
 
-    override val disconnected: Flow<Unit> = peripheral.state.filter { it is State.Disconnected  }.map { }
+    override val disconnected: Deferred<Unit> = scope.async {
+        peripheral.state.dropWhile {
+            // Skip initial disconnected state before we connect
+            it is State.Disconnected
+        }.first { it is State.Disconnected }
+    }
+
 
     override fun close() {
         peripheral.close()
@@ -128,7 +143,10 @@ class KableConnectedGattClient(
         peripheral.close()
     }
 
-    private fun findCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid): DiscoveredCharacteristic? {
+    private fun findCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid
+    ): DiscoveredCharacteristic? {
         return peripheral.services.value
             ?.firstOrNull { it.serviceUuid == serviceUuid }
             ?.characteristics

@@ -102,13 +102,13 @@ class WatchManager(
                 // Update for active connection state
                 active.forEach { activeDevice ->
                     val existingDevice = allDevices[activeDevice.key]
+                    val a = activeDevice.value
                     if (existingDevice == null) {
-                        // maybe can happen if we forget a know device, before disconnecting?
-                        // TODO force a disconnect in that case?
-                        Logger.w("${activeDevice.value} / existingDevice == null")
+                        Logger.w("$active / existingDevice == null")
+                        disconnectFrom(a.transport)
                         return@forEach
                     }
-                    val pebbleDevice = activeDevice.value.asPebbleDevice(existingDevice)
+                    val pebbleDevice = a.asPebbleDevice(existingDevice)
                     allDevices += activeDevice.key to pebbleDevice
 
                     // Persist if fully negotiated
@@ -127,7 +127,7 @@ class WatchManager(
                     if (device.connectGoal && !hasConnectionAttempt) {
                         connectTo(device)
                     } else if (!device.connectGoal && hasConnectionAttempt) {
-                        disconnectFrom(device)
+                        disconnectFrom(device.transport)
                     }
                 }
             }.collect {
@@ -142,31 +142,30 @@ class WatchManager(
         scanResults.value += scanResult.transport to ScanResultWithGoal(scanResult, existingGoal)
     }
 
-    private suspend fun setConnectGoal(pebbleDevice: PebbleDevice, connectGoal: Boolean) {
-        val knownDevice = persistedWatches.first()[pebbleDevice.transport]
+    private suspend fun setConnectGoal(transport: Transport, connectGoal: Boolean) {
+        val knownDevice = persistedWatches.first()[transport]
         if (knownDevice != null) {
             knownWatchDao.insertOrUpdate(
                 knownDevice.knownWatchItem().copy(connectGoal = connectGoal)
             )
-        } else {
-            val scanResult = scanResults.value[pebbleDevice.transport]
-            if (scanResult != null) {
-                scanResults.value += pebbleDevice.transport to ScanResultWithGoal(
-                    scanResult = scanResult.scanResult,
-                    connectGoal = connectGoal,
-                )
-            }
+        }
+        val scanResult = scanResults.value[transport]
+        if (scanResult != null) {
+            scanResults.value += transport to ScanResultWithGoal(
+                scanResult = scanResult.scanResult,
+                connectGoal = connectGoal,
+            )
         }
     }
 
     suspend fun requestConnection(pebbleDevice: PebbleDevice) {
         Logger.d("requestConnection: $pebbleDevice")
-        setConnectGoal(pebbleDevice = pebbleDevice, connectGoal = true)
+        setConnectGoal(transport = pebbleDevice.transport, connectGoal = true)
     }
 
     suspend fun requestDisconnection(pebbleDevice: PebbleDevice) {
         Logger.d("requestDisconnection: $pebbleDevice")
-        setConnectGoal(pebbleDevice = pebbleDevice, connectGoal = false)
+        setConnectGoal(transport = pebbleDevice.transport, connectGoal = false)
     }
 
     private suspend fun connectTo(pebbleDevice: PebbleDevice) {
@@ -177,7 +176,10 @@ class WatchManager(
             return
         }
         val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
-            Logger.e("watchmanager caught exception for ${pebbleDevice.transport}: $throwable", throwable)
+            Logger.e(
+                "watchmanager caught exception for ${pebbleDevice.transport}: $throwable",
+                throwable
+            )
             // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
             //  bad FW version) by not attempting to endlessly reconnect.
             val connection = activeConnections.value[pebbleDevice.transport]
@@ -212,11 +214,20 @@ class WatchManager(
             )
         activeConnections.value += pebbleDevice.transport to pebbleConnector
 
+        val disconnectDuringConnectionJob = connectionScope.launch {
+            pebbleConnector.disconnected.await()
+            Logger.d("got disconnection (before connection)")
+            pebbleConnector.cleanup()
+            // FIXME REMOVE
+//            requestDisconnection(pebbleDevice)
+        }
+
         connectionScope.launch {
             try {
                 pebbleConnector.connect()
+                disconnectDuringConnectionJob.cancel()
                 Logger.d("watchmanager connected; waiting for disconnect: ${pebbleDevice.transport}")
-                pebbleConnector.disconnected.first()
+                pebbleConnector.disconnected.await()
                 // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                 Logger.d("watchmanager got disconnection: ${pebbleDevice.transport}")
             } finally {
@@ -231,7 +242,7 @@ class WatchManager(
         try {
             withTimeout(DISCONNECT_TIMEOUT) {
                 Logger.d("${transport}: cleanup: waiting for disconnection")
-                disconnected.first()
+                disconnected.await()
             }
         } catch (e: TimeoutCancellationException) {
             Logger.w("cleanup: timed out waiting for disconnection from ${transport}")
@@ -242,9 +253,9 @@ class WatchManager(
         scope.cancel()
     }
 
-    private fun disconnectFrom(pebbleDevice: PebbleDevice) {
-        Logger.d("disconnectFrom: $pebbleDevice")
-        val activeConnection = activeConnections.value[pebbleDevice.transport]
+    private fun disconnectFrom(transport: Transport) {
+        Logger.d("disconnectFrom: $transport")
+        val activeConnection = activeConnections.value[transport]
         if (activeConnection == null) {
             Logger.d("disconnectFrom / not an active device")
             return
@@ -256,7 +267,7 @@ class WatchManager(
         val pebbleTransport = transport
         return when (pebbleTransport) {
             is BleTransport -> {
-                val connector = gattConnector(pebbleTransport, config.context)
+                val connector = gattConnector(pebbleTransport, config.context, scope)
                 if (connector == null) return null
                 PebbleBle(
                     config = config,
@@ -272,27 +283,39 @@ class WatchManager(
 
     private fun ConnectingPebbleState.asPebbleDevice(
         basePebbleDevice: PebbleDevice,
-    ): PebbleDevice = when (this) {
-        is ConnectingPebbleState.Inactive -> RealConnectingPebbleDevice(basePebbleDevice)
-        is ConnectingPebbleState.Connecting -> RealConnectingPebbleDevice(basePebbleDevice)
-        is ConnectingPebbleState.Negotiating -> RealNegotiatingPebbleDevice(basePebbleDevice)
-        is ConnectingPebbleState.Connected -> {
-            RealConnectedPebbleDevice(
-                pebbleDevice = RealKnownPebbleDevice(
-                    pebbleDevice = basePebbleDevice,
-                    runningFwVersion = watchInfo.runningFwVersion.stringVersion,
-                    serial = watchInfo.serial,
-                ),
-                pebbleProtocol = pebbleProtocol,
-                scope = scope,
-                database = database,
-                appRunStateService = appRunStateService,
-                systemService = systemService,
-                watchInfo = watchInfo,
+    ): PebbleDevice {
+        val activeDevice = RealActiveDevice(basePebbleDevice)
+        return when (this) {
+            is ConnectingPebbleState.Inactive,
+            is ConnectingPebbleState.Connecting -> RealConnectingPebbleDevice(
+                pebbleDevice = basePebbleDevice,
+                activeDevice = activeDevice,
             )
-        }
 
-        is ConnectingPebbleState.Failed -> basePebbleDevice
+            is ConnectingPebbleState.Negotiating -> RealNegotiatingPebbleDevice(
+                pebbleDevice = basePebbleDevice,
+                activeDevice = activeDevice,
+            )
+
+            is ConnectingPebbleState.Connected -> {
+                RealConnectedPebbleDevice(
+                    pebbleDevice = RealKnownPebbleDevice(
+                        pebbleDevice = basePebbleDevice,
+                        runningFwVersion = watchInfo.runningFwVersion.stringVersion,
+                        serial = watchInfo.serial,
+                    ),
+                    pebbleProtocol = pebbleProtocol,
+                    scope = scope,
+                    database = database,
+                    appRunStateService = appRunStateService,
+                    systemService = systemService,
+                    watchInfo = watchInfo,
+                    activeDevice = activeDevice,
+                )
+            }
+
+            is ConnectingPebbleState.Failed -> basePebbleDevice
+        }
     }
 
     companion object {
@@ -325,10 +348,6 @@ class WatchManager(
             requestConnection(this)
         }
 
-        override suspend fun disconnect() {
-            requestDisconnection(this)
-        }
-
         override fun toString(): String = "PebbleDevice: name=$name transport=$transport"
     }
 
@@ -347,6 +366,7 @@ class WatchManager(
     ) : PebbleDevice by pebbleDevice, KnownPebbleDevice {
         override suspend fun forget() {
             Logger.d("forget() ${pebbleDevice.transport}")
+            requestDisconnection(pebbleDevice)
             knownWatchDao.remove(knownWatchItem())
         }
 
@@ -354,13 +374,25 @@ class WatchManager(
             "KnownPebbleDevice: $pebbleDevice $serial / runningFwVersion=$runningFwVersion"
     }
 
-    private inner class RealConnectingPebbleDevice(val pebbleDevice: PebbleDevice) :
-        PebbleDevice by pebbleDevice, ConnectingPebbleDevice {
+    private inner class RealActiveDevice(private val pebbleDevice: PebbleDevice) : ActiveDevice {
+        override suspend fun disconnect() {
+            requestDisconnection(pebbleDevice)
+        }
+    }
+
+    private inner class RealConnectingPebbleDevice(
+        val pebbleDevice: PebbleDevice,
+        val activeDevice: ActiveDevice,
+    ) :
+        PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
         override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
     }
 
-    private inner class RealNegotiatingPebbleDevice(val pebbleDevice: PebbleDevice) :
-        PebbleDevice by pebbleDevice, ConnectingPebbleDevice {
+    private inner class RealNegotiatingPebbleDevice(
+        val pebbleDevice: PebbleDevice,
+        val activeDevice: ActiveDevice,
+    ) :
+        PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
         override fun toString(): String = "NegotiatingPebbleDevice: $pebbleDevice"
     }
 
@@ -373,7 +405,8 @@ class WatchManager(
         val appRunStateService: AppRunStateService,
         val systemService: SystemService,
         override val watchInfo: WatchInfo,
-    ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice {
+        val activeDevice: ActiveDevice,
+    ) : KnownPebbleDevice by pebbleDevice, ConnectedPebbleDevice, ActiveDevice by activeDevice {
         private val logger = Logger.withTag("CPD-${pebbleDevice.name}")
         val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
         val putBytesService = PutBytesService(pebbleProtocol).apply { init(scope) }

@@ -3,9 +3,12 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAction
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
+import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.io.files.Path
 import kotlin.uuid.Uuid
@@ -88,7 +91,7 @@ interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     fun sendPPMessage(ppMessage: PebblePacket)
 
     // not for general use
-    suspend fun sendNotification(notification: TimelineItem)
+    suspend fun sendNotification(notification: TimelineItem, actionHandlers: Map<UByte, CustomTimelineActionHandler> = emptyMap())
     suspend fun sendPing(cookie: UInt): UInt
     suspend fun insertLockerEntry(entry: AppMetadata)
     suspend fun deleteLockerEntry(uuid: Uuid)
@@ -97,3 +100,5 @@ interface ConnectedPebbleDevice : KnownPebbleDevice, ActiveDevice {
     suspend fun launchApp(uuid: Uuid)
     // ....
 }
+
+typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult

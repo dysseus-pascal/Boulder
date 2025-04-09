@@ -1,45 +1,44 @@
 package io.rebble.libpebblecommon.services.blobdb
 
-import io.rebble.libpebblecommon.ProtocolHandler
+import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAction
+import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.services.ProtocolService
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.map
+import kotlin.uuid.Uuid
 
 /**
  * Singleton that handles receiving of timeline actions.
- *
- * Consumer must set [actionHandler] that will then be called whenever user triggers timeline pin
- * action.
  */
-class TimelineService(private val protocolHandler: ProtocolHandler) : ProtocolService {
-    var actionHandler: (suspend (TimelineAction.InvokeAction) -> ActionResponse)? = null
-
-    init {
-        protocolHandler.registerReceiveCallback(ProtocolEndpoint.TIMELINE_ACTIONS, this::receive)
-    }
-
-
-    suspend fun receive(packet: PebblePacket) {
-        if (packet !is TimelineAction.InvokeAction) {
-            throw IllegalStateException("Received invalid packet type: $packet")
+class TimelineService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+    val actionInvocations = protocolHandler.inboundMessages
+        .filterIsInstance<TimelineAction.InvokeAction>()
+        .map {
+            val actionId = it.actionID.get()
+            val itemId = it.itemID.get()
+            val attributes = it.attributes.list
+            TimelineActionInvocation(itemId, actionId, attributes)
         }
 
-        val result = actionHandler?.invoke(packet) ?: return
-
-        val returnPacket = TimelineAction.ActionResponse().apply {
-            itemID.set(packet.itemID.get())
-            response.set(if (result.success) 0u else 1u)
-            numAttributes.set(result.attributes.size.toUByte())
-            attributes.list = result.attributes
+    inner class TimelineActionInvocation(val itemId: Uuid, val actionId: UByte, val attributes: List<TimelineItem.Attribute>) {
+        suspend fun respond(response: TimelineActionResult) {
+            val responsePacket = response.toPebblePacket()
+            responsePacket.itemID.set(itemId)
+            protocolHandler.send(responsePacket)
         }
-
-        protocolHandler.send(returnPacket)
     }
+}
 
-    class ActionResponse(
-        val success: Boolean,
-        val attributes: List<TimelineItem.Attribute> = emptyList()
+class TimelineActionResult(val success: Boolean, val icon: TimelineIcon, val title: String) {
+    fun toPebblePacket(): TimelineAction.ActionResponse = TimelineAction.ActionResponse(
+        Uuid.NIL,
+        if (success) 0u else 1u,
+        listOf(
+            TimelineAttributeFactory.largeIcon(icon),
+            TimelineAttributeFactory.subtitle(title)
+        )
     )
 }

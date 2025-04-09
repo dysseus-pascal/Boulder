@@ -12,6 +12,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.knownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
@@ -25,6 +27,7 @@ import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +61,7 @@ class WatchManager(
     private val config: LibPebbleConfig,
     private val database: Database,
     private val pbwCache: LockerPBWCache,
+    private val notifActionHandler: PlatformNotificationActionHandler
 ) {
     private val knownWatchDao = database.knownWatchDao()
 
@@ -411,6 +415,7 @@ class WatchManager(
         val blobDBService = BlobDBService(pebbleProtocol).apply { init(scope) }
         val putBytesService = PutBytesService(pebbleProtocol).apply { init(scope) }
         val appFetchService = AppFetchService(pebbleProtocol).apply { init(scope) }
+        val timelineService = TimelineService(pebbleProtocol)
 
         val notificationBlobDB = NotificationBlobDB(
             scope,
@@ -438,6 +443,12 @@ class WatchManager(
             systemService = systemService,
             putBytesSession = putBytesSession,
         )
+        val timelineActionManager = TimelineActionManager(
+            transport,
+            timelineService,
+            database,
+            notifActionHandler
+        ).apply { init(scope) }
 
         override fun sendPPMessage(bytes: ByteArray) {
             TODO("Not yet implemented")
@@ -453,8 +464,9 @@ class WatchManager(
             return firmwareUpdate.beginFirmwareUpdate(PbzFirmware(path), 0u)
         }
 
-        override suspend fun sendNotification(notification: TimelineItem) {
+        override suspend fun sendNotification(notification: TimelineItem, actionHandlers: Map<UByte, CustomTimelineActionHandler>) {
             notificationBlobDB.insert(notification)
+            timelineActionManager.setActionHandlers(notification.itemId.get(), actionHandlers)
         }
 
         override suspend fun sendPing(cookie: UInt): UInt {

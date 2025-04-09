@@ -4,18 +4,26 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
-import io.rebble.libpebblecommon.structmapper.*
+import io.rebble.libpebblecommon.structmapper.Mappable
+import io.rebble.libpebblecommon.structmapper.SBytes
+import io.rebble.libpebblecommon.structmapper.SFixedList
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.SUShort
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMappable
+import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 import kotlin.uuid.Uuid
 
 class TimelineItem(
-    itemId: Uuid,
-    parentId: Uuid, timestamp: UInt,
-    duration: UShort, type: Type,
-    flags: UShort, layout: Layout,
-    attributes: List<Attribute>,
-    actions: List<Action>
+    itemId: Uuid = Uuid.NIL,
+    parentId: Uuid = Uuid.NIL, timestamp: UInt = 0u,
+    duration: UShort = 0u, type: Type = Type.Notification,
+    flags: UShort = 0u, layout: Layout = Layout.GenericNotification,
+    attributes: List<Attribute> = emptyList(),
+    actions: List<Action> = emptyList()
 ) : StructMappable() {
     enum class Type(val value: UByte) {
         Notification(1u),
@@ -74,14 +82,19 @@ class TimelineItem(
     val dataLength = SUShort(m, endianness = Endian.Little)
     val attrCount = SUByte(m, attributes.size.toUByte())
     val actionCount = SUByte(m, actions.size.toUByte())
-    val attributes =
-        SFixedList(m, attrCount.get().toInt(), attributes) { Attribute(0u, ubyteArrayOf()) }
+    val attributes = SFixedList(m, attrCount.get().toInt(), attributes) {
+        Attribute(0u, ubyteArrayOf())
+    }.apply {
+        linkWithCount(attrCount)
+    }
     val actions = SFixedList(m, actionCount.get().toInt(), actions) {
         Action(
             0u,
             Action.Type.Empty,
             emptyList()
         )
+    }.apply {
+        linkWithCount(actionCount)
     }
 
     init {
@@ -101,7 +114,14 @@ class TimelineItem(
             OpenWatchapp(0x07u),
             Empty(0x08u),
             Remove(0x09u),
-            OpenPin(0x0au)
+            OpenPin(0x0au);
+
+            companion object {
+                fun fromValue(value: UByte): Type {
+                    return entries.firstOrNull { it.value == value }
+                        ?: error("Unknown action type: $value")
+                }
+            }
         }
 
         val actionID = SUByte(m, actionID)

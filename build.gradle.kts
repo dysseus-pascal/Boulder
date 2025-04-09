@@ -38,7 +38,7 @@ room {
 
 android {
     namespace = project.group.toString()
-    compileSdk = 33
+    compileSdk = 34
     namespace = "io.rebble.libpebblecommon"
     defaultConfig {
         minSdk = 21

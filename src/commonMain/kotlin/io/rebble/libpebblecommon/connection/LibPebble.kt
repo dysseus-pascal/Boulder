@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -89,7 +90,8 @@ class LibPebble3(
             // All the singletons
             val database = getRoomDatabase(config.context)
             val pbwCache = StaticLockerPBWCache(config.context)
-            val watchManager = WatchManager(config, database, pbwCache)
+            val notifActionHandler = PlatformNotificationActionHandler(config.context)
+            val watchManager = WatchManager(config, database, pbwCache, notifActionHandler)
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)

@@ -29,7 +29,7 @@ class AppBlobDB(watchScope: CoroutineScope, blobDBService: BlobDBService, blobDB
     }
 
     suspend fun get(appId: Uuid): ByteArray? {
-        return blobDBDao.get(appId)?.data
+        return blobDBDao.get(appId, watchIdentifier)?.data
     }
 
     suspend fun markForResync(appId: Uuid) {

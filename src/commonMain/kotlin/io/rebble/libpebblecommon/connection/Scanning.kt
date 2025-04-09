@@ -11,21 +11,19 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class BleScanResult(
-    val name: String,
     val transport: Transport,
     val rssi: Int,
     val manufacturerData: ManufacturerData,
 )
 
 data class PebbleScanResult(
-    val name: String,
     val transport: Transport,
     val rssi: Int,
     val leScanRecord: PebbleLeScanRecord?,
 )
 
 class RealScanning(
-    private val watchManager: WatchManager,
+    private val watchConnector: WatchConnector,
     private val bleScanner: BleScanner,
 ) : Scanning {
     private var bleScanJob: Job? = null
@@ -34,6 +32,7 @@ class RealScanning(
         // TODO add timeout
         Logger.d("startBleScan")
         bleScanJob?.cancel()
+        watchConnector.clearScanResults()
         val scanResults = bleScanner.scan("Pebble" /* TODO remove? */)
         bleScanJob = GlobalScope.launch {
             scanResults.collect {
@@ -42,12 +41,11 @@ class RealScanning(
                 }
                 val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
                 val device = PebbleScanResult(
-                    name = it.name,
                     transport = it.transport,
                     rssi = it.rssi,
                     leScanRecord = pebbleScanRecord,
                 )
-                watchManager.addScanResult(device)
+                watchConnector.addScanResult(device)
             }
         }
     }

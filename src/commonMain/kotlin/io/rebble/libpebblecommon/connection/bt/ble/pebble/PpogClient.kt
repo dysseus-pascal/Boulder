@@ -31,7 +31,7 @@ class PpogClient(
         Logger.d("PpogClient subscribed")
         scope.launch {
             flow.collect {
-                Logger.d("PpogClient inbound... ${it.joinToString()}")
+//                Logger.d("PpogClient inbound... ${it.joinToString()}")
                 inboundBytes.send(it)
             }
         }

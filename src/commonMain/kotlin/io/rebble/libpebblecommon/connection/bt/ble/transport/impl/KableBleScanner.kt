@@ -27,9 +27,9 @@ class KableBleScanner : BleScanner {
                 val name = it.name ?: return@mapNotNull null
                 val manufacturerData = it.manufacturerData ?: return@mapNotNull null
                 BleScanResult(
-                    name = name,
                     transport = BleTransport(
                         identifier = it.identifier.asPebbleBluetoothIdentifier(),
+                        name = name,
                     ),
                     rssi = it.rssi,
                     manufacturerData = manufacturerData

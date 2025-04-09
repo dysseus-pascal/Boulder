@@ -23,7 +23,7 @@ import kotlinx.coroutines.withTimeout
 class PebblePairing(
     val device: ConnectedGattClient,
     val context: AppContext,
-    val pebbleDevice: PebbleDevice,
+    val transport: Transport,
     val connectivity: Flow<ConnectivityStatus>,
     val bleConfig: BleConfig,
 ) {
@@ -39,7 +39,6 @@ class PebblePairing(
         }
         check(pairingTriggerCharacteristic != null) { "Pairing trigger characteristic not found" }
 
-        val transport = pebbleDevice.transport
         check(transport is Transport.BluetoothTransport)
         val bondState = getBluetoothDevicePairEvents(context, transport, connectivity)
         var needsExplicitBond = true
@@ -54,7 +53,7 @@ class PebblePairing(
             val pairValue = makePairingTriggerValue(
                 noSecurityRequest = needsExplicitBond,
                 autoAcceptFuturePairing = false,
-                watchAsGattServer = bleConfig.roleReversal,
+                watchAsGattServer = bleConfig.reversedPPoG,
                 pinAddress = bleConfig.pinAddress,
             )
             val writeRes = device.writeCharacteristic(

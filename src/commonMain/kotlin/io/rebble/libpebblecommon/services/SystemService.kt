@@ -4,6 +4,7 @@ package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.PacketPriority
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
@@ -28,7 +29,7 @@ import kotlin.time.Instant
 /**
  * Singleton to handle sending notifications cleanly, as well as TODO: receiving/acting on action events
  */
-class SystemService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+class SystemService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService, ConnectedPebble.Debug {
     //    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
     private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
     val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
@@ -106,7 +107,7 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         send(SystemMessage.FirmwareUpdateComplete())
     }
 
-    suspend fun sendPing(cookie: UInt): UInt {
+    override suspend fun sendPing(cookie: UInt): UInt {
         // TODO can just read the inbound messages directly in these
         val pong = CompletableDeferred<PingPong.Pong>()
         pongCallback = pong

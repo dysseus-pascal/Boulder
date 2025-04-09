@@ -11,11 +11,23 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
+import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -64,20 +76,22 @@ sealed class ConnectingPebbleState {
     data class Negotiating(override val transport: Transport) : ConnectingPebbleState()
     data class Connected(
         override val transport: Transport,
-        val pebbleProtocol: PebbleProtocolHandler,
-        val scope: CoroutineScope,
         val watchInfo: WatchInfo,
-        val appRunStateService: AppRunStateService,
-        val systemService: SystemService,
+        val services: ConnectedPebble.Services,
     ) : ConnectingPebbleState()
 }
 
 class PebbleConnector(
     private val transportConnector: TransportConnector,
-    private val database: Database,
     val transport: Transport,
     val scope: CoroutineScope,
+    private val negotiator: Negotiator,
+    private val pebbleProtocolRunner: PebbleProtocolRunner,
+    private val platformNotificationActionHandler: PlatformNotificationActionHandler,
+    private val database: Database,
+    private val pbwCache: LockerPBWCache,
 ) {
+    private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
     val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     val disconnected = transportConnector.disconnected
@@ -88,82 +102,92 @@ class PebbleConnector(
         val result = transportConnector.connect()
         when (result) {
             is PebbleConnectionResult.Failed -> {
-                Logger.e("failed to connect: $result")
+                logger.e("failed to connect: $result")
                 transportConnector.disconnect()
                 _state.value = Failed(transport)
             }
 
             is PebbleConnectionResult.Success -> {
-                Logger.d("PebbleConnector: $result")
+                logger.d("$result")
                 val inboundMessagesFlow = MutableSharedFlow<PebblePacket>()
                 val protocolHandler = object : PebbleProtocolHandler {
                     override val inboundMessages: SharedFlow<PebblePacket> = inboundMessagesFlow
 
                     override suspend fun send(message: PebblePacket, priority: PacketPriority) {
-                        Logger.d("sending $message")
+                        logger.d("sending $message")
                         result.outboundPPBytes.send(message.serialize().asByteArray())
                     }
                 }
 
                 _state.value = Negotiating(transport)
-
                 scope.launch {
-                    try {
-                        while (true) {
-                            val sizeBytes = result.inboundPPBytes.peek(2)
-                            val sizeArray = sizeBytes?.toByteArray()?.toUByteArray()
-                                ?: throw IOException("couldn't read size")
-                            val payloadSize = sizeArray.getUShortAt(0, littleEndian = false)
-                            val packetSize = payloadSize + PP_HEADER_SIZE
-                            val packetBytes =
-                                result.inboundPPBytes.readByteArray(packetSize.toInt())
-                                    .toUByteArray()
-                            val packet = try {
-                                PebblePacket.deserialize(packetBytes)
-                            } catch (e: Exception) {
-                                Logger.w("error deserializing packet: $packetBytes", e)
-                                null
-                            }
-
-                            Logger.d("packet: $packet")
-                            if (packet != null) {
-                                inboundMessagesFlow.emit(packet)
-                            }
-                        }
-                    } catch (e: IOException) {
-                        Logger.e("error decoding PP", e)
-                    }
+                    pebbleProtocolRunner.run(result.inboundPPBytes, inboundMessagesFlow)
                 }
 
                 val systemService = SystemService(protocolHandler).apply { init(scope) }
                 val appRunStateService = AppRunStateService(protocolHandler).apply { init(scope) }
 
-                Logger.d("RealNegotiatingPebbleDevice negotiate()")
-                try {
-                    withTimeout(15.seconds) {
-                        val appVersionRequest = systemService.appVersionRequest.await()
-                        Logger.d("RealNegotiatingPebbleDevice appVersionRequest = $appVersionRequest")
-                        systemService.sendPhoneVersionResponse()
-                        Logger.d("RealNegotiatingPebbleDevice sent watch version request")
-                        val watchInfo = systemService.requestWatchVersion()
-                        Logger.d("RealNegotiatingPebbleDevice watchVersionResponse = $watchInfo")
-                        val runningApp = appRunStateService.runningApp.first()
-                        Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
-
-                        _state.value = Connected(
-                            transport = transport,
-                            pebbleProtocol = protocolHandler,
-                            scope = scope,
-                            watchInfo = watchInfo,
-                            appRunStateService = appRunStateService,
-                            systemService = systemService,
-                        )
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    Logger.w("negotiation timed out")
+                val watchInfo = negotiator.negotiate(systemService, appRunStateService)
+                if (watchInfo == null) {
                     transportConnector.disconnect()
+                    // TODO PRF state
                     _state.value = Failed(transport)
+                    return
                 }
+
+                val blobDBService = BlobDBService(protocolHandler).apply { init(scope) }
+                val putBytesService = PutBytesService(protocolHandler).apply { init(scope) }
+                val appFetchService = AppFetchService(protocolHandler).apply { init(scope) }
+                val timelineService = TimelineService(protocolHandler)
+                val notificationBlobDB = NotificationBlobDB(
+                    watchScope = scope,
+                    blobDBService = blobDBService,
+                    blobDBDao = database.blobDBDao(),
+                    watchIdentifier = transport.identifier.asString,
+                )
+                val timelineActionManager = TimelineActionManager(
+                    watchTransport = transport,
+                    timelineService = timelineService,
+                    blobDBDao = database.blobDBDao(),
+                    notifActionHandler = platformNotificationActionHandler,
+                ).apply { init(scope) }
+                val notificationManager = NotificationManager(
+                    timelineActionManager = timelineActionManager,
+                    notificationBlobDB = notificationBlobDB,
+                )
+                val appBlobDB = AppBlobDB(
+                    watchScope = scope,
+                    blobDBService = blobDBService,
+                    blobDBDao = database.blobDBDao(),
+                    watchIdentifier = transport.identifier.asString,
+                )
+                val putBytesSession = PutBytesSession(scope, putBytesService)
+                // TODO bail out connecting if we don't know the platform. Not used yet
+                val appFetchProvider = watchInfo.platform?.watchType?.let {
+                    AppFetchProvider(pbwCache, appFetchService, putBytesSession, it)
+                        .apply { init(scope) }
+                } ?: run {
+                    logger.e { "App fetch provider cannot init, watchInfo.platform was null" }
+                }
+                val firmwareUpdate = FirmwareUpdate(
+                    watchName = transport.name,
+                    watchDisconnected = disconnected,
+                    watchBoard = watchInfo.board,
+                    systemService = systemService,
+                    putBytesSession = putBytesSession,
+                )
+
+                _state.value = Connected(
+                    transport = transport,
+                    watchInfo = watchInfo,
+                    services = ConnectedPebble.Services(
+                        debug = systemService,
+                        appRunState = appRunStateService,
+                        firmware = firmwareUpdate,
+                        locker = appBlobDB,
+                        notifications = notificationManager,
+                    )
+                )
             }
         }
     }
@@ -174,5 +198,24 @@ class PebbleConnector(
         }
     }
 
-    private val PP_HEADER_SIZE: UShort = 4u
+    class Factory(
+        private val platformNotificationActionHandler: PlatformNotificationActionHandler,
+        private val database: Database,
+        private val pbwCache: LockerPBWCache,
+    ) {
+        fun create(
+            transportConnector: TransportConnector,
+            transport: Transport,
+            scope: CoroutineScope,
+        ): PebbleConnector = PebbleConnector(
+            transportConnector = transportConnector,
+            transport = transport,
+            scope = scope,
+            negotiator = Negotiator(),
+            pebbleProtocolRunner = PebbleProtocolRunner(),
+            platformNotificationActionHandler = platformNotificationActionHandler,
+            database = database,
+            pbwCache = pbwCache,
+        )
+    }
 }

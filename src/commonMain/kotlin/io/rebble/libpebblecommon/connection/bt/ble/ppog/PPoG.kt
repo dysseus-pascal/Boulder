@@ -3,19 +3,13 @@ package io.rebble.libpebblecommon.connection.bt.ble.ppog
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeByteArray
+import io.rebble.libpebblecommon.connection.BleConfig
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
@@ -31,34 +25,68 @@ class PPoG(
     initialMtu: Int,
     private val desiredTxWindow: Int,
     private val desiredRxWindow: Int,
+    private val bleConfig: BleConfig,
 ) {
     private var mtu: Int = initialMtu
 
-    suspend fun run(scope: CoroutineScope) {
+    fun run(scope: CoroutineScope) {
         scope.launch {
-            val params = initPPoG()
+            val params = withTimeoutOrNull(12.seconds) {
+                initWaitingForResetRequest()
+            } ?: withTimeoutOrNull(5.seconds) {
+                initWithResetRequest()
+            } ?: throw IllegalStateException("Timed out initializing PPoG")
             runConnection(params)
         }
-        // TODO error handling - make parent throw if async throws?
+    }
+
+    private suspend inline fun <reified T : PPoGPacket> waitForPacket(): T {
+        // Wait for reset request from watch
+        while (true) {
+            val packet = inboundPacketData.receive().asPPoGPacket()
+            if (packet !is T) {
+                // Not expected, but can happen (i.e. don't crash out): if a watch reconnects
+                // really quickly then we can see stale packets come through.
+                Logger.w("unexpected packet $packet waiting for ${T::class}")
+                continue
+            }
+            return packet
+        }
+    }
+
+    private suspend fun initWithResetRequest(): PPoGConnectionParams? {
+        if (!bleConfig.reversedPPoG) return null
+
+        Logger.d("initWithResetRequest (iOS reversed PPoG fallback)")
+        // Reversed PPoG doesn't have a meta characteristic, so we have to assume.
+        val ppogVersion = PPoGVersion.ONE
+
+        // Send reset request
+        sendPacketImmediately(
+            packet = PPoGPacket.ResetRequest(
+                sequence = 0,
+                ppogVersion = ppogVersion,
+            ),
+            version = ppogVersion,
+        )
+
+        val resetComplete = waitForPacket<PPoGPacket.ResetComplete>()
+        Logger.d("got $resetComplete")
+
+        sendPacketImmediately(resetComplete, ppogVersion)
+
+        return PPoGConnectionParams(
+            rxWindow = resetComplete.rxWindow,
+            txWindow = resetComplete.txWindow,
+            pPoGversion = ppogVersion,
+        )
     }
 
     // Negotiate connection
-    private suspend fun initPPoG(): PPoGConnectionParams {
-        Logger.d("initPPoG")
+    private suspend fun initWaitingForResetRequest(): PPoGConnectionParams? {
+        Logger.d("initWaitingForResetRequest")
 
-        // Wait for reset request from watch
-        val resetRequest: PPoGPacket.ResetRequest
-        while (true) {
-            val packet = inboundPacketData.receive().asPPoGPacket()
-            if (packet !is PPoGPacket.ResetRequest) {
-                // Not expected, but can happen (i.e. don't crash out): if a watch reconnects
-                // really quickly then we can see stale packets come through.
-                Logger.w("unexpected packet $packet waiting for reset request")
-                continue
-            }
-            resetRequest = packet
-            break
-        }
+        val resetRequest = waitForPacket<PPoGPacket.ResetRequest>()
         Logger.d("got $resetRequest")
 
         // Send reset complete
@@ -66,14 +94,14 @@ class PPoG(
             packet = PPoGPacket.ResetComplete(
                 sequence = 0,
                 rxWindow = min(desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
-                txWindow = min(desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE)
+                txWindow = min(desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
             ),
             version = resetRequest.ppogVersion
         )
 
         // Wait for reset complete confirmation
         val resetComplete = inboundPacketData.receive().asPPoGPacket()
-        if (resetComplete !is PPoGPacket.ResetComplete) throw IllegalStateException("expected ResetComplete got $resetRequest")
+        if (resetComplete !is PPoGPacket.ResetComplete) throw IllegalStateException("expected ResetComplete got $resetComplete")
         Logger.d("got $resetComplete")
 
         return PPoGConnectionParams(
@@ -151,6 +179,7 @@ class PPoG(
             }
 
             // Drain send queue
+            // TODO do we have rx/tx windows the correct way around here?
             while (inflightPackets.size < params.txWindow && !outboundDataQueue.isEmpty) {
                 // TODO resends (and increment packet's sent counter)
                 val packet = outboundDataQueue.receive()

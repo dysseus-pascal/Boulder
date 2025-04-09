@@ -5,6 +5,7 @@ import io.ktor.utils.io.ByteChannel
 import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.PebbleDevice
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
@@ -31,19 +32,18 @@ import kotlinx.coroutines.withTimeout
 
 class PebbleBle(
     private val config: LibPebbleConfig,
-    private val pebbleDevice: PebbleDevice,
+    private val transport: BleTransport,
     private val scope: CoroutineScope,
     private val gattConnector: GattConnector,
 ) : TransportConnector {
+    private val logger = Logger.withTag("PebbleBle/${transport.identifier.asString}")
+
     override suspend fun connect(): PebbleConnectionResult =
         withContext(Dispatchers.Main) {
-            val transport = pebbleDevice.transport
-            check(transport is BleTransport)
-
             val inboundPPoGBytesChannel = Channel<ByteArray>(capacity = 100)
 
-            Logger.d("connect() roleReversal = ${config.bleConfig.roleReversal}")
-            val ppogPacketSender: PPoGPacketSender = if (config.bleConfig.roleReversal) {
+            logger.d("connect() reversedPPoG = ${config.bleConfig.reversedPPoG}")
+            val ppogPacketSender: PPoGPacketSender = if (config.bleConfig.reversedPPoG) {
                 PpogClient(inboundPPoGBytesChannel, scope)
             } else {
                 val gs = gattServer
@@ -72,63 +72,64 @@ class PebbleBle(
                 initialMtu = DEFAULT_MTU,
                 desiredTxWindow = MAX_TX_WINDOW,
                 desiredRxWindow = MAX_RX_WINDOW,
+                bleConfig = config.bleConfig,
             )
 
             val device = gattConnector.connect()
             if (device == null) {
-                Logger.d("pebbleble: null device")
+                logger.d("pebbleble: null device")
                 return@withContext PebbleConnectionResult.Failed("failed to connect")
             }
             val services = device.discoverServices()
-            Logger.d("services = $services")
+            logger.d("services = $services")
 
             val connectionParams = ConnectionParams(device, scope)
             if (!connectionParams.subscribeAndConfigure()) {
                 // this can happen on some older firmwares (PRF?)
-                Logger.i("error setting up connection params")
+                logger.i("error setting up connection params")
             }
-            Logger.d("done connectionParams")
+            logger.d("done connectionParams")
 
             val mtuParam = Mtu(device, scope)
             if (!mtuParam.subscribe()) {
-                Logger.w("failed to subscribe to mtu")
+                logger.w("failed to subscribe to mtu")
             }
-            Logger.d("subscribed mtu")
+            logger.d("subscribed mtu")
 
             scope.launch {
                 mtuParam.mtu.collect { newMtu ->
-                    Logger.d("newMtu = $newMtu")
+                    logger.d("newMtu = $newMtu")
                     ppog.updateMtu(newMtu)
                 }
             }
             mtuParam.update(TARGET_MTU)
-            Logger.d("done mtu update")
+            logger.d("done mtu update")
 
             val connectivity = ConnectivityWatcher(device, scope)
             if (!connectivity.subscribe()) {
-                Logger.d("failed to subscribe to connectivity")
+                logger.d("failed to subscribe to connectivity")
                 return@withContext PebbleConnectionResult.Failed("failed to subscribe to connectivity")
             }
-            Logger.d("subscribed connectivity d")
+            logger.d("subscribed connectivity d")
             val connectionStatus = withTimeout(CONNECTIVITY_UPDATE_TIMEOUT) {
                 connectivity.status.first()
             }
-            Logger.d("connectionStatus = $connectionStatus")
+            logger.d("connectionStatus = $connectionStatus")
 
             val needToPair = if (connectionStatus.paired) {
                 if (device.isBonded()) {
-                    Logger.d("already paired")
+                    logger.d("already paired")
                     false
                 } else {
-                    Logger.d("watch thinks it is paired, phone does not")
+                    logger.d("watch thinks it is paired, phone does not")
                     true
                 }
             } else {
                 if (device.isBonded()) {
-                    Logger.d("phone thinks it is paired, watch does not")
+                    logger.d("phone thinks it is paired, watch does not")
                     true
                 } else {
-                    Logger.d("needs pairing")
+                    logger.d("needs pairing")
                     true
                 }
             }
@@ -137,7 +138,7 @@ class PebbleBle(
                 val pairing = PebblePairing(
                     device,
                     config.context,
-                    pebbleDevice,
+                    transport,
                     connectivity.status,
                     config.bleConfig,
                 )
@@ -159,8 +160,6 @@ class PebbleBle(
 
     override suspend fun disconnect() {
         gattConnector.disconnect()
-        val transport = pebbleDevice.transport
-        check(transport is BleTransport)
         gattServer?.unregisterDevice(transport)
     }
 
@@ -173,7 +172,7 @@ class PebbleBle(
 
         fun init(config: LibPebbleConfig) {
             GlobalScope.launch {
-                if (!config.bleConfig.roleReversal) {
+                if (!config.bleConfig.reversedPPoG) {
                     check(gattServer == null)
                     gattServer = openGattServer(config.context)
                     gattServer?.addServices(GATT_SERVICES)

@@ -39,7 +39,9 @@ sealed class PPoGPacket {
 
     when (this) {
       is Data -> buffer.putBytes(data)
-      is ResetRequest -> throw IllegalStateException("Shouldn't be trying to serialize a ResetRequest")
+      is ResetRequest -> {
+        buffer.putByte(ppogVersion.version.toByte())
+      }
       is ResetComplete -> {
         if (ppogVersion.supportsWindowNegotiation) {
           buffer.putByte(rxWindow.toByte())

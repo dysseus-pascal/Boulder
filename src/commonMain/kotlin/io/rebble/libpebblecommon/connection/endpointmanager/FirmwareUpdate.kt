@@ -1,39 +1,39 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.PebbleDevice
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.SystemService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.buffered
+import kotlinx.io.files.Path
 
-sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) : Exception(message, cause) {
+sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
+    Exception(message, cause) {
     class SafetyCheckFailed(message: String) : FirmwareUpdateException(message)
-    class TransferFailed(message: String, cause: Throwable?, val bytesTransferred: UInt) : FirmwareUpdateException(message, cause)
+    class TransferFailed(message: String, cause: Throwable?, val bytesTransferred: UInt) :
+        FirmwareUpdateException(message, cause)
 }
 
-class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private val watchBoard: String, private val systemService: SystemService, private val putBytesSession: PutBytesSession) {
+class FirmwareUpdate(
+    watchName: String,
+    private val watchDisconnected: Deferred<Unit>,
+    private val watchBoard: String,
+    private val systemService: SystemService,
+    private val putBytesSession: PutBytesSession,
+) : ConnectedPebble.Firmware {
     private val logger = Logger.withTag("FWUpdate-${watchName}")
     private val scope = CoroutineScope(Dispatchers.Default)
-    private val watchConnectionState = watchFlow
-        .map {
-            return@map it is ConnectedPebbleDevice
-        }
 
     sealed class FirmwareUpdateStatus {
         data object WaitingToStart : FirmwareUpdateStatus()
@@ -46,22 +46,32 @@ class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private v
         when {
             manifest.firmware.type != "normal" && manifest.firmware.type != "recovery" ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware type: ${manifest.firmware.type}")
+
             manifest.firmware.crc <= 0L ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware CRC: ${manifest.firmware.crc}")
+
             manifest.firmware.size <= 0 ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware size: ${manifest.firmware.size}")
+
             manifest.resources != null && manifest.resources.size <= 0 ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources size: ${manifest.resources.size}")
+
             manifest.resources != null && manifest.resources.crc <= 0L ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources CRC: ${manifest.resources.crc}")
+
             !watchBoard.startsWith(pbzFw.manifest.firmware.hwRev.revision) ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${pbzFw.manifest.firmware.hwRev.revision} != $watchBoard")
         }
     }
 
-    private suspend fun FlowCollector<FirmwareUpdateStatus>.sendFirmwareParts(pbzFw: PbzFirmware, offset: UInt) {
+    private suspend fun FlowCollector<FirmwareUpdateStatus>.sendFirmwareParts(
+        pbzFw: PbzFirmware,
+        offset: UInt
+    ) {
         var totalSent = 0u
-        check(offset < (pbzFw.manifest.firmware.size+(pbzFw.manifest.resources?.size ?: 0)).toUInt()) {
+        check(
+            offset < (pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)).toUInt()
+        ) {
             "Resume offset greater than total transfer size"
         }
         if (offset < pbzFw.manifest.firmware.size.toUInt()) {
@@ -72,16 +82,22 @@ class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private v
                             logger.d { "PutBytes session opened for firmware" }
                             emit(FirmwareUpdateStatus.InProgress(0f))
                         }
+
                         is PutBytesSession.SessionState.Sending -> {
                             totalSent = it.totalSent
-                            val progress = (it.totalSent.toFloat() / pbzFw.manifest.firmware.size)/2.0f
+                            val progress =
+                                (it.totalSent.toFloat() / pbzFw.manifest.firmware.size) / 2.0f
                             logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
                             emit(FirmwareUpdateStatus.InProgress(progress))
                         }
                     }
                 }
             } catch (e: Exception) {
-                throw FirmwareUpdateException.TransferFailed("Failed to transfer firmware", e, totalSent)
+                throw FirmwareUpdateException.TransferFailed(
+                    "Failed to transfer firmware",
+                    e,
+                    totalSent
+                )
             }
             logger.d { "Completed firmware transfer" }
         } else {
@@ -100,22 +116,32 @@ class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private v
                             logger.d { "PutBytes session opened for resources" }
                             emit(FirmwareUpdateStatus.InProgress(0.5f))
                         }
+
                         is PutBytesSession.SessionState.Sending -> {
                             totalSent = pbzFw.manifest.firmware.size.toUInt() + it.totalSent
-                            val progress = 0.5f + ((it.totalSent.toFloat() / res.size.toFloat()) / 2.0f)
+                            val progress =
+                                0.5f + ((it.totalSent.toFloat() / res.size.toFloat()) / 2.0f)
                             logger.i { "Resources update progress: $progress (putbytes cookie: ${it.cookie})" }
                             emit(FirmwareUpdateStatus.InProgress(progress))
                         }
                     }
                 }
             } catch (e: Exception) {
-                throw FirmwareUpdateException.TransferFailed("Failed to transfer resources", e, totalSent)
+                throw FirmwareUpdateException.TransferFailed(
+                    "Failed to transfer resources",
+                    e,
+                    totalSent
+                )
             }
             logger.d { "Completed resources transfer" }
         } ?: logger.d { "No resources to send, resource PutBytes skipped" }
     }
 
-    fun beginFirmwareUpdate(pbzFw: PbzFirmware, offset: UInt) = flow {
+    override fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {
+        return beginFirmwareUpdate(PbzFirmware(path), 0u)
+    }
+
+    private fun beginFirmwareUpdate(pbzFw: PbzFirmware, offset: UInt) = flow {
         val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
         require(totalBytes > 0) { "Firmware size is 0" }
         performSafetyChecks(pbzFw)
@@ -127,14 +153,11 @@ class FirmwareUpdate(watchName: String, watchFlow: Flow<PebbleDevice>, private v
         sendFirmwareParts(pbzFw, offset)
         logger.d { "Firmware update completed, waiting for reboot" }
         emit(FirmwareUpdateStatus.WaitingForReboot)
-        val reboot = scope.async {
-            watchConnectionState.drop(1).onEach {
-                logger.d { "Connection state: $it" }
-            }.first { it }
-        }
         systemService.sendFirmwareUpdateComplete()
         withTimeout(60_000) {
-            reboot.await()
+            // TODO this needs to be managed outside of the connection scope (this code might never
+            //  be called because we cancel the scope when we disconnect).
+            watchDisconnected.await()
         }
     }
 

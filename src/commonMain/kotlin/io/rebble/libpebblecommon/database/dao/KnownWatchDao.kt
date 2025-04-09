@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import kotlinx.coroutines.flow.Flow
 
@@ -15,8 +16,12 @@ interface KnownWatchDao {
     suspend fun insertOrUpdate(watch: KnownWatchItem)
 
     @Query("SELECT * FROM KnownWatchItem")
-    fun knownWatches(): Flow<List<KnownWatchItem>>
+    suspend fun knownWatches(): List<KnownWatchItem>
 
-    @Delete
-    suspend fun remove(watch: KnownWatchItem)
+    @Query("DELETE FROM KnownWatchItem WHERE transportIdentifier = :transportIdentifier")
+    suspend fun remove(transportIdentifier: String)
+
+    suspend fun remove(transport: Transport) {
+        remove(transport.identifier.asString)
+    }
 }

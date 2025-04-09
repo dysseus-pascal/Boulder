@@ -1,9 +1,8 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.timeline
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.connection.Transport
-import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.dao.BlobDBDao
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -18,7 +17,7 @@ import kotlin.uuid.Uuid
 class TimelineActionManager(
     private val watchTransport: Transport,
     private val timelineService: TimelineService,
-    private val database: Database,
+    private val blobDBDao: BlobDBDao,
     private val notifActionHandler: PlatformNotificationActionHandler
 ) {
     companion object {
@@ -42,7 +41,7 @@ class TimelineActionManager(
         val itemId = invocation.itemId
         val actionId = invocation.actionId
         val attributes = invocation.attributes
-        val item = database.blobDBDao().get(itemId, watchTransport.identifier.asString) ?: run {
+        val item = blobDBDao.get(itemId, watchTransport.identifier.asString) ?: run {
             logger.w {
                 "Received action for item $itemId, but it doesn't exist in the database"
             }
@@ -86,3 +85,5 @@ class TimelineActionManager(
         actionHandlerOverrides[itemId] = actionHandlers
     }
 }
+
+typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult

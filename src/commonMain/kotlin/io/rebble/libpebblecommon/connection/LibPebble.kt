@@ -18,7 +18,7 @@ data class LibPebbleConfig(
 )
 
 data class BleConfig(
-    val roleReversal: Boolean,
+    val reversedPPoG: Boolean,
     val pinAddress: Boolean,
     val phoneRequestsPairing: Boolean,
     val writeConnectivityTrigger: Boolean,
@@ -91,7 +91,15 @@ class LibPebble3(
             val database = getRoomDatabase(config.context)
             val pbwCache = StaticLockerPBWCache(config.context)
             val notifActionHandler = PlatformNotificationActionHandler(config.context)
-            val watchManager = WatchManager(config, database, pbwCache, notifActionHandler)
+            val pebbleDeviceFactory = PebbleDeviceFactory()
+            val pebbleConnectorFactory =
+                PebbleConnector.Factory(notifActionHandler, database, pbwCache)
+            val watchManager = WatchManager(
+                config = config,
+                knownWatchDao = database.knownWatchDao(),
+                pebbleDeviceFactory = pebbleDeviceFactory,
+                pebbleConnectorFactory = pebbleConnectorFactory,
+            )
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)

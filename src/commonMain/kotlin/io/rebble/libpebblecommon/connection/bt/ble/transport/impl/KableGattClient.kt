@@ -43,10 +43,14 @@ class KableGattConnector(
     private val peripheral: Peripheral,
     private val scope: CoroutineScope,
 ) : GattConnector {
-//    private val _disconnected = CompletableDeferred<Unit>()
+    override val disconnected: Deferred<Unit> = scope.async {
+        peripheral.state.dropWhile {
+            // Skip initial disconnected state before we connect
+            it is State.Disconnected
+        }.first { it is State.Disconnected }
+    }
 
     override suspend fun connect(): ConnectedGattClient? {
-//        scope.
         try {
             val scope = peripheral.connect()
             return KableConnectedGattClient(transport, scope, peripheral)
@@ -60,14 +64,6 @@ class KableGattConnector(
         peripheral.disconnect()
         peripheral.close()
     }
-
-    override val disconnected: Deferred<Unit> = scope.async {
-        peripheral.state.dropWhile {
-            // Skip initial disconnected state before we connect
-            it is State.Disconnected
-        }.first { it is State.Disconnected }
-    }
-
 
     override fun close() {
         peripheral.close()

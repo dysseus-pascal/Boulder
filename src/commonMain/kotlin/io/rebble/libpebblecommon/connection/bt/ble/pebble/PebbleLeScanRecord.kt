@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
-import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
 import com.oldguy.common.io.Buffer
 import com.oldguy.common.io.ByteBuffer
@@ -16,7 +15,7 @@ data class PebbleLeScanRecord(
             val buffer = ByteBuffer(this, Buffer.ByteOrder.LittleEndian)
             return PebbleLeScanRecord(
                 payloadType = buffer.byte,
-                serialNumber = buffer.getBytes(12).decodeToString().also { Logger.d("serial: $it") },
+                serialNumber = buffer.getBytes(12).decodeToString(),
                 extendedInfo = buffer.decodeExtendedPebbleScanRecord(),
             )
         }

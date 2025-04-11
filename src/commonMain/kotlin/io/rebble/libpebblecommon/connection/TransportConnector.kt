@@ -3,13 +3,9 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import com.oldguy.common.getUShortAt
 import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.peek
-import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connected
-import io.rebble.libpebblecommon.connection.ConnectingPebbleState.ConnectedInPrf
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
@@ -35,21 +31,14 @@ import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
-import kotlinx.io.IOException
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
@@ -83,17 +72,21 @@ sealed class ConnectingPebbleState {
     data class Connecting(override val transport: Transport) : ConnectingPebbleState()
     data class Failed(override val transport: Transport) : ConnectingPebbleState()
     data class Negotiating(override val transport: Transport) : ConnectingPebbleState()
-    data class ConnectedInPrf(
-        override val transport: Transport,
-        val watchInfo: WatchInfo,
-        val firmware: ConnectedPebble.Firmware,
-    ) : ConnectingPebbleState()
+    sealed class Connected : ConnectingPebbleState() {
+        abstract val watchInfo: WatchInfo
 
-    data class Connected(
-        override val transport: Transport,
-        val watchInfo: WatchInfo,
-        val services: ConnectedPebble.Services,
-    ) : ConnectingPebbleState()
+        data class ConnectedInPrf(
+            override val transport: Transport,
+            override val watchInfo: WatchInfo,
+            val firmware: ConnectedPebble.Firmware,
+        ) : Connected()
+
+        data class ConnectedNotInPrf(
+            override val transport: Transport,
+            override val watchInfo: WatchInfo,
+            val services: ConnectedPebble.Services,
+        ) : Connected()
+    }
 }
 
 class PebbleConnector(
@@ -181,7 +174,7 @@ class PebbleConnector(
                     else -> false
                 }
                 if (recoveryMode) {
-                    _state.value = ConnectedInPrf(
+                    _state.value = Connected.ConnectedInPrf(
                         transport = transport,
                         watchInfo = watchInfo,
                         firmware = firmwareUpdate,
@@ -223,7 +216,7 @@ class PebbleConnector(
                 }
                 val messages = DebugPebbleProtocolSender(protocolHandler)
 
-                _state.value = Connected(
+                _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,
                     watchInfo = watchInfo,
                     services = ConnectedPebble.Services(

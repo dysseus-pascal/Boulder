@@ -50,7 +50,7 @@ interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
 }
 
-interface ConnectedPebbleDeviceInRecovery : PebbleDevice, ActiveDevice, ConnectedPebble.Firmware,
+interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice, ConnectedPebble.Firmware,
     ConnectedWatchInfo
 
 /**

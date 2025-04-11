@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
 
 class PebbleDeviceFactory {
@@ -16,24 +15,32 @@ class PebbleDeviceFactory {
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
         return when (state) {
-            is ConnectingPebbleState.Connected -> RealConnectedPebbleDevice(
-                knownDevice = RealKnownPebbleDevice(
+            is ConnectingPebbleState.Connected -> {
+                val knownDevice = RealKnownPebbleDevice(
                     runningFwVersion = state.watchInfo.runningFwVersion.stringVersion,
                     serial = state.watchInfo.serial,
                     pebbleDevice = pebbleDevice,
                     watchConnector = watchConnector,
-                ),
-                watchInfo = state.watchInfo,
-                activeDevice = RealActiveDevice(transport, watchConnector),
-                services = state.services,
-            )
+                )
+                val activeDevice = RealActiveDevice(transport, watchConnector)
+                when (state) {
+                    is ConnectingPebbleState.Connected.ConnectedInPrf ->
+                        RealConnectedPebbleDeviceInRecovery(
+                            knownDevice = knownDevice,
+                            watchInfo = state.watchInfo,
+                            activeDevice = activeDevice,
+                            firmware = state.firmware,
+                        )
 
-            is ConnectingPebbleState.ConnectedInPrf -> RealConnectedPebbleDeviceInRecovery(
-                pebbleDevice = pebbleDevice,
-                watchInfo = state.watchInfo,
-                activeDevice = RealActiveDevice(transport, watchConnector),
-                firmware = state.firmware,
-            )
+                    is ConnectingPebbleState.Connected.ConnectedNotInPrf ->
+                        RealConnectedPebbleDevice(
+                            knownDevice = knownDevice,
+                            watchInfo = state.watchInfo,
+                            activeDevice = activeDevice,
+                            services = state.services,
+                        )
+                }
+            }
 
             // TODO should have separate "KnownConnecting" (so we can show serial/etc in UI)
             is ConnectingPebbleState.Connecting -> RealConnectingPebbleDevice(
@@ -155,10 +162,10 @@ internal class RealConnectedPebbleDevice(
 
 internal class RealConnectedPebbleDeviceInRecovery(
     override val watchInfo: WatchInfo,
-    private val pebbleDevice: PebbleDevice,
+    private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     private val firmware: ConnectedPebble.Firmware,
 ) : ConnectedPebbleDeviceInRecovery,
-    PebbleDevice by pebbleDevice,
+    KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
     ConnectedPebble.Firmware by firmware

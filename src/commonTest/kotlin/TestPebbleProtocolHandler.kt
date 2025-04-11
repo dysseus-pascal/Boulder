@@ -16,4 +16,8 @@ class TestPebbleProtocolHandler(
     override suspend fun send(message: PebblePacket, priority: PacketPriority) {
         onPacket(message)
     }
+
+    override suspend fun send(message: ByteArray, priority: PacketPriority) {
+        TODO("Not yet implemented")
+    }
 }

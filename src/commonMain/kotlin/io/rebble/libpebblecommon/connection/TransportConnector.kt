@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
@@ -65,6 +66,7 @@ interface TransportConnector {
 interface PebbleProtocolHandler {
     val inboundMessages: SharedFlow<PebblePacket>
     suspend fun send(message: PebblePacket, priority: PacketPriority = PacketPriority.NORMAL)
+    suspend fun send(message: ByteArray, priority: PacketPriority = PacketPriority.NORMAL)
 }
 
 sealed class ConnectingPebbleState {
@@ -116,6 +118,11 @@ class PebbleConnector(
                     override suspend fun send(message: PebblePacket, priority: PacketPriority) {
                         logger.d("sending $message")
                         result.outboundPPBytes.send(message.serialize().asByteArray())
+                    }
+
+                    override suspend fun send(message: ByteArray, priority: PacketPriority) {
+                        logger.d("sending ${message.joinToString()}")
+                        result.outboundPPBytes.send(message)
                     }
                 }
 
@@ -176,6 +183,7 @@ class PebbleConnector(
                     systemService = systemService,
                     putBytesSession = putBytesSession,
                 )
+                val messages = DebugPebbleProtocolSender(protocolHandler)
 
                 _state.value = Connected(
                     transport = transport,
@@ -186,6 +194,7 @@ class PebbleConnector(
                         firmware = firmwareUpdate,
                         locker = appBlobDB,
                         notifications = notificationManager,
+                        messages = messages,
                     )
                 )
             }

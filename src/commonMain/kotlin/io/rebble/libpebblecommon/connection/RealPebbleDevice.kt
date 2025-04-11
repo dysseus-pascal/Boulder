@@ -49,12 +49,14 @@ class PebbleDeviceFactory {
                             pebbleScanRecord = leScanRecord,
                             rssi = scanResult.rssi,
                         )
+
                     knownWatchProperties != null -> RealKnownPebbleDevice(
                         runningFwVersion = knownWatchProperties.runningFwVersion,
                         serial = knownWatchProperties.serial,
                         pebbleDevice = pebbleDevice,
                         watchConnector = watchConnector,
                     )
+
                     else -> {
                         Logger.w("not sure how to create a device for $transport")
                         pebbleDevice
@@ -132,21 +134,14 @@ internal class RealConnectedPebbleDevice(
     private val activeDevice: ActiveDevice,
     private val services: ConnectedPebble.Services,
 ) : ConnectedPebbleDevice,
+    KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
     ConnectedPebble.Debug by services.debug,
     ConnectedPebble.AppRunState by services.appRunState,
     ConnectedPebble.Firmware by services.firmware,
     ConnectedPebble.Locker by services.locker,
     ConnectedPebble.Notifications by services.notifications,
-    KnownPebbleDevice by knownDevice {
-
-    override fun sendPPMessage(bytes: ByteArray) {
-        TODO("Not yet implemented")
-    }
-
-    override fun sendPPMessage(ppMessage: PebblePacket) {
-        TODO("Not yet implemented")
-    }
+    ConnectedPebble.Messages by services.messages {
 
     override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
 }

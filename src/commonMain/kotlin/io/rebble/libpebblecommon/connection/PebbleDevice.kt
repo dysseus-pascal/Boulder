@@ -69,8 +69,9 @@ object ConnectedPebble {
     }
 
     interface Messages {
-        fun sendPPMessage(bytes: ByteArray)
-        fun sendPPMessage(ppMessage: PebblePacket)
+        suspend fun sendPPMessage(bytes: ByteArray)
+        suspend fun sendPPMessage(ppMessage: PebblePacket)
+        val inboundMessages: Flow<PebblePacket>
     }
 
     interface Firmware {
@@ -94,6 +95,7 @@ object ConnectedPebble {
         val firmware: ConnectedPebble.Firmware,
         val locker: ConnectedPebble.Locker,
         val notifications: ConnectedPebble.Notifications,
+        val messages: Messages,
     )
 }
 

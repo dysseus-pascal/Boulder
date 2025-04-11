@@ -28,6 +28,13 @@ class PebbleDeviceFactory {
                 services = state.services,
             )
 
+            is ConnectingPebbleState.ConnectedInPrf -> RealConnectedPebbleDeviceInRecovery(
+                pebbleDevice = pebbleDevice,
+                watchInfo = state.watchInfo,
+                activeDevice = RealActiveDevice(transport, watchConnector),
+                firmware = state.firmware,
+            )
+
             // TODO should have separate "KnownConnecting" (so we can show serial/etc in UI)
             is ConnectingPebbleState.Connecting -> RealConnectingPebbleDevice(
                 pebbleDevice = pebbleDevice,
@@ -80,7 +87,7 @@ internal class RealPebbleDevice(
 }
 
 internal class RealBleDiscoveredPebbleDevice(
-    val pebbleDevice: PebbleDevice,
+    private val pebbleDevice: PebbleDevice,
     override val pebbleScanRecord: PebbleLeScanRecord,
     override val rssi: Int,
 ) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice {
@@ -113,16 +120,16 @@ internal class RealActiveDevice(
 }
 
 internal class RealConnectingPebbleDevice(
-    val pebbleDevice: PebbleDevice,
-    val activeDevice: ActiveDevice,
+    private val pebbleDevice: PebbleDevice,
+    private val activeDevice: ActiveDevice,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
     override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
 }
 
 internal class RealNegotiatingPebbleDevice(
-    val pebbleDevice: PebbleDevice,
-    val activeDevice: ActiveDevice,
+    private val pebbleDevice: PebbleDevice,
+    private val activeDevice: ActiveDevice,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
     override fun toString(): String = "NegotiatingPebbleDevice: $pebbleDevice"
@@ -145,3 +152,13 @@ internal class RealConnectedPebbleDevice(
 
     override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
 }
+
+internal class RealConnectedPebbleDeviceInRecovery(
+    override val watchInfo: WatchInfo,
+    private val pebbleDevice: PebbleDevice,
+    private val activeDevice: ActiveDevice,
+    private val firmware: ConnectedPebble.Firmware,
+) : ConnectedPebbleDeviceInRecovery,
+    PebbleDevice by pebbleDevice,
+    ActiveDevice by activeDevice,
+    ConnectedPebble.Firmware by firmware

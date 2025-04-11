@@ -169,7 +169,27 @@ data class FirmwareVersion(
     val isRecovery: Boolean,
 //    val hardwarePlatform: ?
 //    val metadataVersion: ?
-)
+) : Comparable<FirmwareVersion> {
+    private fun code(): Int = patch + (minor * 1_000) + (major * 1_000_000)
+
+    override fun compareTo(other: FirmwareVersion): Int {
+        val diff = code() - other.code()
+        return if (diff == 0) {
+            timestamp.compareTo(other.timestamp)
+        } else {
+            diff
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        val otherFw = other as? FirmwareVersion ?: return false
+        return code() == otherFw.code() && timestamp == other.timestamp
+    }
+
+    override fun hashCode(): Int {
+        return code() + timestamp.hashCode()
+    }
+}
 
 fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     val tag = versionTag.get()

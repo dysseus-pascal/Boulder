@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
@@ -7,6 +9,7 @@ import io.ktor.utils.io.peek
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connected
+import io.rebble.libpebblecommon.connection.ConnectingPebbleState.ConnectedInPrf
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
@@ -23,6 +26,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineAct
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -44,6 +48,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.IOException
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
     class Success(
@@ -76,6 +83,12 @@ sealed class ConnectingPebbleState {
     data class Connecting(override val transport: Transport) : ConnectingPebbleState()
     data class Failed(override val transport: Transport) : ConnectingPebbleState()
     data class Negotiating(override val transport: Transport) : ConnectingPebbleState()
+    data class ConnectedInPrf(
+        override val transport: Transport,
+        val watchInfo: WatchInfo,
+        val firmware: ConnectedPebble.Firmware,
+    ) : ConnectingPebbleState()
+
     data class Connected(
         override val transport: Transport,
         val watchInfo: WatchInfo,
@@ -136,14 +149,47 @@ class PebbleConnector(
 
                 val watchInfo = negotiator.negotiate(systemService, appRunStateService)
                 if (watchInfo == null) {
+                    logger.w("negotiation failed: disconnecting")
                     transportConnector.disconnect()
-                    // TODO PRF state
                     _state.value = Failed(transport)
                     return
                 }
 
-                val blobDBService = BlobDBService(protocolHandler).apply { init(scope) }
                 val putBytesService = PutBytesService(protocolHandler).apply { init(scope) }
+                val putBytesSession = PutBytesSession(scope, putBytesService)
+                val firmwareUpdate = FirmwareUpdate(
+                    watchName = transport.name,
+                    watchDisconnected = disconnected,
+                    watchBoard = watchInfo.board,
+                    systemService = systemService,
+                    putBytesSession = putBytesSession,
+                )
+
+                val recoveryMode = when {
+                    watchInfo.runningFwVersion.isRecovery -> true.also {
+                        logger.i("PRF running; going into recovery mode")
+                    }
+
+                    watchInfo.recoveryFwVersion == null -> true.also {
+                        logger.w("No recovery FW installed!!! going into recovery mode")
+                    }
+
+                    watchInfo.runningFwVersion < FW_3_0_0 -> true.also {
+                        logger.w("FW below v3.0 isn't supported; going into recovery mode")
+                    }
+
+                    else -> false
+                }
+                if (recoveryMode) {
+                    _state.value = ConnectedInPrf(
+                        transport = transport,
+                        watchInfo = watchInfo,
+                        firmware = firmwareUpdate,
+                    )
+                    return
+                }
+
+                val blobDBService = BlobDBService(protocolHandler).apply { init(scope) }
                 val appFetchService = AppFetchService(protocolHandler).apply { init(scope) }
                 val timelineService = TimelineService(protocolHandler)
                 val notificationBlobDB = NotificationBlobDB(
@@ -168,7 +214,6 @@ class PebbleConnector(
                     blobDBDao = database.blobDBDao(),
                     watchIdentifier = transport.identifier.asString,
                 )
-                val putBytesSession = PutBytesSession(scope, putBytesService)
                 // TODO bail out connecting if we don't know the platform. Not used yet
                 val appFetchProvider = watchInfo.platform?.watchType?.let {
                     AppFetchProvider(pbwCache, appFetchService, putBytesSession, it)
@@ -176,13 +221,6 @@ class PebbleConnector(
                 } ?: run {
                     logger.e { "App fetch provider cannot init, watchInfo.platform was null" }
                 }
-                val firmwareUpdate = FirmwareUpdate(
-                    watchName = transport.name,
-                    watchDisconnected = disconnected,
-                    watchBoard = watchInfo.board,
-                    systemService = systemService,
-                    putBytesSession = putBytesSession,
-                )
                 val messages = DebugPebbleProtocolSender(protocolHandler)
 
                 _state.value = Connected(
@@ -228,3 +266,14 @@ class PebbleConnector(
         )
     }
 }
+
+private val FW_3_0_0 = FirmwareVersion(
+    stringVersion = "v3.0.0",
+    timestamp = DISTANT_PAST,
+    major = 3,
+    minor = 0,
+    patch = 0,
+    suffix = null,
+    gitHash = "",
+    isRecovery = false,
+)

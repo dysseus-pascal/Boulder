@@ -46,9 +46,12 @@ interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice
 
 interface NegotiatingPebbleDevice : ConnectingPebbleDevice, ActiveDevice
 
-interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice {
-    suspend fun updateFirmware()
+interface ConnectedWatchInfo {
+    val watchInfo: WatchInfo
 }
+
+interface ConnectedPebbleDeviceInRecovery : PebbleDevice, ActiveDevice, ConnectedPebble.Firmware,
+    ConnectedWatchInfo
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -105,7 +108,5 @@ interface ConnectedPebbleDevice : KnownPebbleDevice,
     ConnectedPebble.Messages,
     ConnectedPebble.Firmware,
     ConnectedPebble.Locker,
-    ConnectedPebble.AppRunState {
-    val watchInfo: WatchInfo
-}
-
+    ConnectedPebble.AppRunState,
+    ConnectedWatchInfo

@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.IOException
 
 class PebbleProtocolRunner {
+    private val logger = Logger.withTag("PebbleProtocolRunner")
+
     suspend fun run(
         inboundPPBytes: ByteReadChannel,
         inboundMessagesFlow: MutableSharedFlow<PebblePacket>,
@@ -30,13 +32,13 @@ class PebbleProtocolRunner {
 //                                Logger.w("error deserializing packet: $packetBytes", e)
                     null
                 }
-                Logger.d("inbound pebble protocol packet: $packet")
+                logger.d("inbound pebble protocol packet: $packet")
                 if (packet != null) {
                     inboundMessagesFlow.emit(packet)
                 }
             }
         } catch (e: IOException) {
-            Logger.e("error decoding PP", e)
+            logger.e("error decoding PP", e)
         }
     }
 

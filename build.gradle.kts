@@ -112,6 +112,7 @@ kotlin {
             implementation("com.juul.kable:kable-core")
             implementation("io.github.skolson:kmp-io:0.1.5")
             implementation("io.ktor:ktor-io:3.1.1")
+            implementation(libs.kotlinx.datetime)
         }
 
         commonTest.dependencies {

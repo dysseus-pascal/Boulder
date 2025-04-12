@@ -10,6 +10,8 @@ import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
 class Negotiator() {
+    private val logger = Logger.withTag("Negotiator")
+
     suspend fun negotiate(
         systemService: SystemService,
         appRunStateService: AppRunStateService,
@@ -17,17 +19,18 @@ class Negotiator() {
         Logger.d("negotiate()")
         withTimeout(20.seconds) {
             val appVersionRequest = systemService.appVersionRequest.await()
-            Logger.d("RealNegotiatingPebbleDevice appVersionRequest = $appVersionRequest")
+            logger.d("appVersionRequest = $appVersionRequest")
             systemService.sendPhoneVersionResponse()
-            Logger.d("RealNegotiatingPebbleDevice sent watch version request")
+            logger.d("sent watch version request")
             val watchInfo = systemService.requestWatchVersion()
-            Logger.d("RealNegotiatingPebbleDevice watchVersionResponse = $watchInfo")
+            logger.d("watchVersionResponse = $watchInfo")
+            systemService.updateTime()
             val runningApp = appRunStateService.runningApp.first()
-            Logger.d("RealNegotiatingPebbleDevice runningApp = $runningApp")
+            logger.d("runningApp = $runningApp")
             watchInfo
         }
     } catch (e: TimeoutCancellationException) {
-        Logger.w("negotiation timed out")
+        logger.w("negotiation timed out")
         null
     }
 }

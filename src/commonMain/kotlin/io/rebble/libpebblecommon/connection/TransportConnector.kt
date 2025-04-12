@@ -226,6 +226,7 @@ class PebbleConnector(
                         locker = appBlobDB,
                         notifications = notificationManager,
                         messages = messages,
+                        time = systemService,
                     )
                 )
             }

@@ -1,15 +1,19 @@
 package io.rebble.libpebblecommon.connection
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.time.TimeChanged
+import io.rebble.libpebblecommon.time.createTimeChanged
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 
 data class LibPebbleConfig(
@@ -54,15 +58,21 @@ interface Scanning {
 
 class LibPebble3(
     private val config: LibPebbleConfig,
-    val watchManager: WatchManager,
-    val scanning: Scanning,
-    val locker: Locker,
+    private val watchManager: WatchManager,
+    private val scanning: Scanning,
+    private val locker: Locker,
+    private val timeChanged: TimeChanged,
 ) : LibPebble, Scanning by scanning {
+    private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
         PebbleBle.init(config)
         watchManager.init()
         locker.init()
+        timeChanged.registerForTimeChanges {
+            logger.d("Time changed")
+            GlobalScope.launch { forEachConnectedWatch { updateTime() } }
+        }
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
@@ -103,7 +113,8 @@ class LibPebble3(
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
-            return LibPebble3(config, watchManager, scanning, locker)
+            val timeChanged = createTimeChanged(config.context)
+            return LibPebble3(config, watchManager, scanning, locker, timeChanged)
         }
     }
 }

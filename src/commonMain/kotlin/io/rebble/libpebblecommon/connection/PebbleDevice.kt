@@ -50,7 +50,8 @@ interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
 }
 
-interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice, ConnectedPebble.Firmware,
+interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice,
+    ConnectedPebble.Firmware,
     ConnectedWatchInfo
 
 /**
@@ -92,6 +93,10 @@ object ConnectedPebble {
         suspend fun launchApp(uuid: Uuid)
     }
 
+    interface Time {
+        suspend fun updateTime()
+    }
+
     class Services(
         val debug: ConnectedPebble.Debug,
         val appRunState: ConnectedPebble.AppRunState,
@@ -99,6 +104,7 @@ object ConnectedPebble {
         val locker: ConnectedPebble.Locker,
         val notifications: ConnectedPebble.Notifications,
         val messages: Messages,
+        val time: Time,
     )
 }
 
@@ -109,4 +115,5 @@ interface ConnectedPebbleDevice : KnownPebbleDevice,
     ConnectedPebble.Firmware,
     ConnectedPebble.Locker,
     ConnectedPebble.AppRunState,
-    ConnectedWatchInfo
+    ConnectedWatchInfo,
+    ConnectedPebble.Time

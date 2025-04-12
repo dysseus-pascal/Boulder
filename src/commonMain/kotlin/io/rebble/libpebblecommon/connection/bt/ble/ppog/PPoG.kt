@@ -27,6 +27,7 @@ class PPoG(
     private val desiredRxWindow: Int,
     private val bleConfig: BleConfig,
 ) {
+    private val logger = Logger.withTag("PPoG")
     private var mtu: Int = initialMtu
 
     fun run(scope: CoroutineScope) {
@@ -47,7 +48,7 @@ class PPoG(
             if (packet !is T) {
                 // Not expected, but can happen (i.e. don't crash out): if a watch reconnects
                 // really quickly then we can see stale packets come through.
-                Logger.w("unexpected packet $packet waiting for ${T::class}")
+                logger.w("unexpected packet $packet waiting for ${T::class}")
                 continue
             }
             return packet
@@ -57,7 +58,7 @@ class PPoG(
     private suspend fun initWithResetRequest(): PPoGConnectionParams? {
         if (!bleConfig.reversedPPoG) return null
 
-        Logger.d("initWithResetRequest (iOS reversed PPoG fallback)")
+        logger.d("initWithResetRequest (iOS reversed PPoG fallback)")
         // Reversed PPoG doesn't have a meta characteristic, so we have to assume.
         val ppogVersion = PPoGVersion.ONE
 
@@ -71,7 +72,7 @@ class PPoG(
         )
 
         val resetComplete = waitForPacket<PPoGPacket.ResetComplete>()
-        Logger.d("got $resetComplete")
+        logger.d("got $resetComplete")
 
         sendPacketImmediately(resetComplete, ppogVersion)
 
@@ -84,10 +85,10 @@ class PPoG(
 
     // Negotiate connection
     private suspend fun initWaitingForResetRequest(): PPoGConnectionParams? {
-        Logger.d("initWaitingForResetRequest")
+        logger.d("initWaitingForResetRequest")
 
         val resetRequest = waitForPacket<PPoGPacket.ResetRequest>()
-        Logger.d("got $resetRequest")
+        logger.d("got $resetRequest")
 
         // Send reset complete
         sendPacketImmediately(
@@ -102,7 +103,7 @@ class PPoG(
         // Wait for reset complete confirmation
         val resetComplete = inboundPacketData.receive().asPPoGPacket()
         if (resetComplete !is PPoGPacket.ResetComplete) throw IllegalStateException("expected ResetComplete got $resetComplete")
-        Logger.d("got $resetComplete")
+        logger.d("got $resetComplete")
 
         return PPoGConnectionParams(
             rxWindow = resetComplete.rxWindow,
@@ -114,7 +115,7 @@ class PPoG(
     // No need for any locking - state is only accessed/mutated within this method (except for mtu
     // which can only increase).
     private suspend fun runConnection(params: PPoGConnectionParams) {
-        Logger.d("runConnection")
+        logger.d("runConnection")
 
         val outboundSequence = Sequence()
         val inboundSequence = Sequence()
@@ -123,7 +124,7 @@ class PPoG(
         var lastSentAck: PPoGPacket.Ack? = null
 
         while (true) {
-//            Logger.v("select")
+//            logger.v("select")
             select {
                 outboundPPBytes.onReceive { bytes ->
                     bytes.asList().chunked(maxDataBytes())
@@ -145,7 +146,7 @@ class PPoG(
                 }
                 inboundPacketData.onReceive { bytes ->
                     val packet = bytes.asPPoGPacket()
-                    Logger.v("received packet: $packet")
+                    logger.v("received packet: $packet")
                     when (packet) {
                         is PPoGPacket.Ack -> {
                             // TODO remove resends of this packet from send queue (+ also remove up-to-them, which OG code didn't do?)
@@ -160,7 +161,7 @@ class PPoG(
 
                         is PPoGPacket.Data -> {
                             if (packet.sequence != inboundSequence.get()) {
-                                Logger.w("data out of sequence; resending last ack")
+                                logger.w("data out of sequence; resending last ack")
                                 lastSentAck?.let { sendPacketImmediately(it, params.pPoGversion) }
                             } else {
                                 inboundPPBytes.writeByteArray(packet.data)
@@ -192,9 +193,9 @@ class PPoG(
     private fun maxDataBytes() = mtu - DATA_HEADER_OVERHEAD_BYTES
 
     private suspend fun sendPacketImmediately(packet: PPoGPacket, version: PPoGVersion) {
-        Logger.v("sendPacketImmediately: $packet")
+        logger.v("sendPacketImmediately: $packet")
         if (!pPoGPacketSender.sendPacket(packet.serialize(version))) {
-            Logger.e("Couldn't send packet!")
+            logger.e("Couldn't send packet!")
             throw IllegalStateException("Couldn't send packet!")
         }
     }

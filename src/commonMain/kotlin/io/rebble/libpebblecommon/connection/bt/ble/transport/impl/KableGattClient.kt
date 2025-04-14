@@ -30,13 +30,13 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 fun kableGattConnector(transport: BleTransport, scope: CoroutineScope): GattConnector? {
-    val peripheral = peripheralFromIdentifier(transport.identifier)
+    val peripheral = peripheralFromIdentifier(transport)
     if (peripheral == null) return null
     return KableGattConnector(transport, peripheral, scope)
 }
 
 
-expect fun peripheralFromIdentifier(identifier: PebbleBluetoothIdentifier): Peripheral?
+expect fun peripheralFromIdentifier(transport: BleTransport): Peripheral?
 
 class KableGattConnector(
     private val transport: BleTransport,

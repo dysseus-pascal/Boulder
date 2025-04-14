@@ -145,12 +145,21 @@ class WatchManager(
                 activeConnectionStates,
             ) { watches, active ->
                 // Update for active connection state
-                watches.values.map { device ->
+                watches.values.mapNotNull { device ->
                     val transport = device.transport
                     val connectionState = active[transport]
                     val hasConnectionAttempt = active.containsKey(device.transport)
+
+                    persistIfNeeded(device)
+                    // Removed forgotten device once it is disconnected
+                    if (!hasConnectionAttempt && device.forget) {
+                        logger.d("removing ${device.transport} from allWatches")
+                        allWatches.update { it.minus(device.transport) }
+                        return@mapNotNull null
+                    }
+
                     if (device.connectGoal && !hasConnectionAttempt) {
-                        connectTo(transport)
+                        connectTo(device)
                     } else if (!device.connectGoal && hasConnectionAttempt) {
                         disconnectFrom(device.transport)
                     }
@@ -168,12 +177,6 @@ class WatchManager(
                             clearScanResults()
                         }
                     }
-                    // Removed forgotten device once it is disconnected
-                    if (device.activeConnection == null && device.forget) {
-                        logger.d("removing ${device.transport} from allWatches")
-                        allWatches.update { it.minus(device.transport) }
-                    }
-                    persistIfNeeded(device)
                     pebbleDeviceFactory.create(
                         transport = transport,
                         state = connectionState,
@@ -239,68 +242,76 @@ class WatchManager(
         updateWatch(transport = transport) { it.copy(connectGoal = false) }
     }
 
-    private fun connectTo(transport: Transport) {
-        logger.d("connectTo: $transport")
-        updateWatch(transport = transport) { watch ->
-            if (watch.activeConnection != null) {
-                logger.w("Already connecting to $transport")
-                return@updateWatch null
-            }
+    private fun connectTo(device: Watch) {
+        val transport = device.transport
+        logger.d("connectTo: ${transport}")
+        if (device.activeConnection != null) {
+            logger.w("Already connecting to $transport")
+            return
+        }
 
-            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-                logger.e(
-                    "watchmanager caught exception for $transport: $throwable",
-                    throwable,
-                )
-                // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
-                //  bad FW version) by not attempting to endlessly reconnect.
-                val connection = allWatches.value[transport]?.activeConnection
-                connection?.let {
-                    GlobalScope.launch {
-                        connection.cleanup()
-                    }
-                }
-            }
-            val deviceIdString = transport.identifier.asString
-            val coroutineContext =
-                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
-            val connectionScope = CoroutineScope(coroutineContext)
-            val transportConnector = transport.createConnector(connectionScope)
-            if (transportConnector == null) {
-                // Probably because it couldn't create the device (ios throws on an unknown peristed
-                // uuid, so we'll need to scan for it using the name/serial?)...
-                // ...but TODO revit this once have more error modes + are handling BT being disabled
-                if (watch.knownWatchProps != null) {
-                    logger.w("removing known device: $transport")
-                    forget(watch.transport)
-                }
-                return@updateWatch null
-            }
-
-            val pebbleConnector = pebbleConnectorFactory.create(
-                transportConnector = transportConnector,
-                transport = transport,
-                scope = connectionScope,
+        val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+            logger.e(
+                "watchmanager caught exception for $transport: $throwable",
+                throwable,
             )
-            val disconnectDuringConnectionJob = connectionScope.launch {
+            // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
+            //  bad FW version) by not attempting to endlessly reconnect.
+            val connection = allWatches.value[transport]?.activeConnection
+            connection?.let {
+                GlobalScope.launch {
+                    connection.cleanup()
+                }
+            }
+        }
+        val deviceIdString = transport.identifier.asString
+        val coroutineContext =
+            SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
+        val connectionScope = CoroutineScope(coroutineContext)
+        logger.v("transport.createConnector")
+        val transportConnector = transport.createConnector(connectionScope)
+        if (transportConnector == null) {
+            // Probably because it couldn't create the device (ios throws on an unknown peristed
+            // uuid, so we'll need to scan for it using the name/serial?)...
+            // ...but TODO revit this once have more error modes + are handling BT being disabled
+            if (device.knownWatchProps != null) {
+                logger.w("removing known device: $transport")
+                forget(transport)
+            }
+            // hack force another connection
+            updateWatch(transport = device.transport) { watch ->
+                watch.copy()
+            }
+            connectionScope.cancel()
+            return
+        }
+
+        logger.v("creating pebbleConnector")
+        val pebbleConnector = pebbleConnectorFactory.create(
+            transportConnector = transportConnector,
+            transport = transport,
+            scope = connectionScope,
+        )
+        val disconnectDuringConnectionJob = connectionScope.launch {
+            pebbleConnector.disconnected.await()
+            logger.d("got disconnection (before connection)")
+            pebbleConnector.cleanup()
+        }
+
+        connectionScope.launch {
+            try {
+                pebbleConnector.connect()
+                disconnectDuringConnectionJob.cancel()
+                logger.d("watchmanager connected; waiting for disconnect: $transport")
                 pebbleConnector.disconnected.await()
-                logger.d("got disconnection (before connection)")
+                // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
+                logger.d("watchmanager got disconnection: $transport")
+            } finally {
                 pebbleConnector.cleanup()
             }
+        }
 
-            connectionScope.launch {
-                try {
-                    pebbleConnector.connect()
-                    disconnectDuringConnectionJob.cancel()
-                    logger.d("watchmanager connected; waiting for disconnect: $transport")
-                    pebbleConnector.disconnected.await()
-                    // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
-                    logger.d("watchmanager got disconnection: $transport")
-                } finally {
-                    pebbleConnector.cleanup()
-                }
-            }
-
+        updateWatch(transport = device.transport) { watch ->
             watch.copy(activeConnection = pebbleConnector)
         }
     }

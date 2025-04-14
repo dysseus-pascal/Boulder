@@ -50,11 +50,11 @@ data class RegisteredDevice(
     val notificationsEnabled: Boolean,
 )
 
-private fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
+fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
 
 private fun CBUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
-private fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
+fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
 
 private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).apply {
     if (length > 0u) {

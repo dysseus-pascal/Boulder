@@ -50,6 +50,8 @@ interface Scanning {
     suspend fun stopClassicScan()
 }
 
+expect fun LibPebble.initPlatform(config: LibPebbleConfig)
+
 // Impl
 
 class LibPebble3(
@@ -103,7 +105,9 @@ class LibPebble3(
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
-            return LibPebble3(config, watchManager, scanning, locker)
+            val libPebble = LibPebble3(config, watchManager, scanning, locker)
+            libPebble.initPlatform(config)
+            return libPebble
         }
     }
 }

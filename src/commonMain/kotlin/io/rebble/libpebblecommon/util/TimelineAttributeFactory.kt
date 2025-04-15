@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.util
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.structmapper.SFixedList
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlin.math.round
@@ -181,7 +180,7 @@ object TimelineAttributeFactory {
         return createTextAttribute(TimelineAttribute.ShortSubtitle, text)
     }
 
-    fun timestamp(timestamp: UInt): TimelineItem.Attribute {
+    fun lastUpdated(timestamp: UInt): TimelineItem.Attribute {
         return createUIntAttribute(TimelineAttribute.LastUpdated, timestamp / 1000u)
     }
 

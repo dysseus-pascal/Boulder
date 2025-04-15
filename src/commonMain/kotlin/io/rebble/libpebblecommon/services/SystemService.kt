@@ -241,7 +241,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
 data class WatchInfo(
     val runningFwVersion: FirmwareVersion,
     val recoveryFwVersion: FirmwareVersion?,
-    val platform: WatchHardwarePlatform?,
+    val platform: WatchHardwarePlatform,
     val bootloaderTimestamp: Instant,
     val board: String,
     val serial: String,

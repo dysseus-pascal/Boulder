@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.putbytes
 
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.PutBytesAbort
+import io.rebble.libpebblecommon.packets.PutBytesResponse
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.util.Crc32Calculator
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
     sealed class SessionState {
         abstract val cookie: UInt
         data class Open(override val cookie: UInt) : SessionState()
+        data class Finished(override val cookie: UInt) : SessionState()
         data class Sending(override val cookie: UInt, val totalSent: UInt) : SessionState()
     }
 
@@ -72,6 +74,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val crc32 = transferData(cookie, size, source)
         val response = putBytesService.sendCommit(cookie, crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
+        sendInstall(cookie)
     }
 
     /**
@@ -87,5 +90,12 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val crc32 = transferData(cookie, size, source)
         val response = putBytesService.sendCommit(cookie, crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
+        emit(SessionState.Finished(cookie))
+    }
+
+    suspend fun sendInstall(cookie: UInt) {
+        val installResponse = putBytesService.sendInstall(cookie)
+        // TODO this fired?
+//        check(installResponse.cookie.get() == cookie) { "Received response for wrong cookie" }
     }
 }

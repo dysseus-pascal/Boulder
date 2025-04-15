@@ -10,6 +10,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlin.reflect.KClass
 
 enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: WatchType, val revision: String) {
+    UNKNOWN(0u, WatchType.BASALT, "unknown"),
     PEBBLE_ONE_EV_1(1u, WatchType.APLITE, "ev1"),
     PEBBLE_ONE_EV_2(2u, WatchType.APLITE, "ev2"),
     PEBBLE_ONE_EV_2_3(3u, WatchType.APLITE, "ev2_3"),
@@ -19,29 +20,29 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     PEBBLE_SNOWY_EVT_2(7u, WatchType.BASALT, "snowy_evt2"),
     PEBBLE_SNOWY_DVT(8u, WatchType.BASALT, "snowy_dvt"),
     PEBBLE_BOBBY_SMILES(10u, WatchType.BASALT, "snowy_s3"),
-    PEBBLE_ONE_BIGBOARD_2(254u, WatchType.APLITE, "unk"),
-    PEBBLE_ONE_BIGBOARD(255u, WatchType.APLITE, "unk"),
-    PEBBLE_SNOWY_BIGBOARD(253u, WatchType.BASALT, "unk"),
+    PEBBLE_ONE_BIGBOARD_2(254u, WatchType.APLITE, "bb2"),
+    PEBBLE_ONE_BIGBOARD(255u, WatchType.APLITE, "bigboard"),
+    PEBBLE_SNOWY_BIGBOARD(253u, WatchType.BASALT, "snowy_bb2"),
     PEBBLE_SNOWY_BIGBOARD_2(252u, WatchType.BASALT, "unk"),
     PEBBLE_SPALDING_EVT(9u, WatchType.CHALK, "spalding_evt"),
     PEBBLE_SPALDING_PVT(11u, WatchType.CHALK, "spalding"),
-    PEBBLE_SPALDING_BIGBOARD(251u, WatchType.CHALK, "unk"),
+    PEBBLE_SPALDING_BIGBOARD(251u, WatchType.CHALK, "spalding_bb2"),
     PEBBLE_SILK_EVT(12u, WatchType.DIORITE, "silk_evt"),
     PEBBLE_SILK(14u, WatchType.DIORITE, "silk"),
-    PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "unk"),
-    PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "unk"),
+    PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "silk_bb"),
+    PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "silk_bb2"),
     PEBBLE_ROBERT_EVT(13u, WatchType.EMERY, "robert_evt"),
-    PEBBLE_ROBERT_BIGBOARD(249u, WatchType.EMERY, "unk"),
-    PEBBLE_ROBERT_BIGBOARD_2(247u, WatchType.EMERY, "unk");
+    PEBBLE_ROBERT_BIGBOARD(249u, WatchType.EMERY, "robert_bb"),
+    PEBBLE_ROBERT_BIGBOARD_2(247u, WatchType.EMERY, "robert_bb2");
 
     companion object {
-        fun fromProtocolNumber(number: UByte): WatchHardwarePlatform? {
-            return values().firstOrNull { it.protocolNumber == number }
+        fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
+            return values().firstOrNull { it.protocolNumber == number } ?: UNKNOWN
         }
 
-        fun fromHWRevision(revision: String): WatchHardwarePlatform? {
-            if (revision == "unk") return null
-            return values().firstOrNull() { it.revision == revision }
+        fun fromHWRevision(revision: String): WatchHardwarePlatform {
+            if (revision == "unk") return UNKNOWN
+            return values().firstOrNull() { it.revision == revision } ?: UNKNOWN
         }
     }
 }

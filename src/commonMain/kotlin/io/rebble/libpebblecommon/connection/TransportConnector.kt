@@ -153,7 +153,7 @@ class PebbleConnector(
                 val firmwareUpdate = FirmwareUpdate(
                     watchName = transport.name,
                     watchDisconnected = disconnected,
-                    watchBoard = watchInfo.board,
+                    watchPlatform = watchInfo.platform,
                     systemService = systemService,
                     putBytesSession = putBytesSession,
                 )
@@ -208,12 +208,13 @@ class PebbleConnector(
                     watchIdentifier = transport.identifier.asString,
                 )
                 // TODO bail out connecting if we don't know the platform. Not used yet
-                val appFetchProvider = watchInfo.platform?.watchType?.let {
-                    AppFetchProvider(pbwCache, appFetchService, putBytesSession, it)
-                        .apply { init(scope) }
-                } ?: run {
-                    logger.e { "App fetch provider cannot init, watchInfo.platform was null" }
-                }
+                val appFetchProvider =
+                    AppFetchProvider(
+                        pbwCache,
+                        appFetchService,
+                        putBytesSession,
+                        watchInfo.platform.watchType
+                    ).apply { init(scope) }
                 val messages = DebugPebbleProtocolSender(protocolHandler)
 
                 _state.value = Connected.ConnectedNotInPrf(

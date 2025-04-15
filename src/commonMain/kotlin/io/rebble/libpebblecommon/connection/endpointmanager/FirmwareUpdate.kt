@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.SystemService
@@ -28,7 +29,7 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
 class FirmwareUpdate(
     watchName: String,
     private val watchDisconnected: Deferred<Unit>,
-    private val watchBoard: String,
+    private val watchPlatform: WatchHardwarePlatform,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
 ) : ConnectedPebble.Firmware {
@@ -59,8 +60,8 @@ class FirmwareUpdate(
             manifest.resources != null && manifest.resources.crc <= 0L ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources CRC: ${manifest.resources.crc}")
 
-            !watchBoard.startsWith(pbzFw.manifest.firmware.hwRev.revision) ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${pbzFw.manifest.firmware.hwRev.revision} != $watchBoard")
+            watchPlatform != pbzFw.manifest.firmware.hwRev ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${pbzFw.manifest.firmware.hwRev} != $watchPlatform")
         }
     }
 
@@ -74,6 +75,7 @@ class FirmwareUpdate(
         ) {
             "Resume offset greater than total transfer size"
         }
+        var firmwareCookie: UInt? = null
         if (offset < pbzFw.manifest.firmware.size.toUInt()) {
             try {
                 sendFirmware(pbzFw, offset).collect {
@@ -90,6 +92,10 @@ class FirmwareUpdate(
                             logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
                             emit(FirmwareUpdateStatus.InProgress(progress))
                         }
+
+                        is PutBytesSession.SessionState.Finished -> {
+                            firmwareCookie = it.cookie
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -103,6 +109,7 @@ class FirmwareUpdate(
         } else {
             logger.d { "Firmware already sent, skipping firmware PutBytes" }
         }
+        var resourcesCookie: UInt? = null
         pbzFw.manifest.resources?.let { res ->
             val resourcesOffset = if (offset < pbzFw.manifest.firmware.size.toUInt()) {
                 0u
@@ -124,6 +131,10 @@ class FirmwareUpdate(
                             logger.i { "Resources update progress: $progress (putbytes cookie: ${it.cookie})" }
                             emit(FirmwareUpdateStatus.InProgress(progress))
                         }
+
+                        is PutBytesSession.SessionState.Finished -> {
+                            resourcesCookie = it.cookie
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -135,6 +146,9 @@ class FirmwareUpdate(
             }
             logger.d { "Completed resources transfer" }
         } ?: logger.d { "No resources to send, resource PutBytes skipped" }
+
+        firmwareCookie?.let { putBytesSession.sendInstall(it) }
+        resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
 
     override fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {

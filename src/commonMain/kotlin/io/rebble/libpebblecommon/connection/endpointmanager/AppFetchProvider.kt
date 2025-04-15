@@ -71,6 +71,8 @@ class AppFetchProvider(
                     is PutBytesSession.SessionState.Sending -> {
                         logger.d { "PutBytes progress: ${((it.totalSent.toFloat()/manifest.application.size)*100).roundToInt()}%" }
                     }
+
+                    is PutBytesSession.SessionState.Finished -> Unit
                 }
             }
         logger.d { "Binary sent" }
@@ -85,6 +87,8 @@ class AppFetchProvider(
                         is PutBytesSession.SessionState.Sending -> {
                             logger.d { "PutBytes progress: ${((it.totalSent.toFloat()/manifest.resources.size)*100).roundToInt()}%" }
                         }
+
+                        is PutBytesSession.SessionState.Finished -> Unit
                     }
                 }
             logger.d { "Resources sent" }

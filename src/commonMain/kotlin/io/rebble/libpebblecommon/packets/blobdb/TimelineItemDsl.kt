@@ -77,8 +77,8 @@ class AttributesListBuilder internal constructor() {
         attributes.add(TimelineAttributeFactory.primaryColor(block()))
     }
 
-    fun timestamp(block: () -> UInt) {
-        attributes.add(TimelineAttributeFactory.timestamp(block()))
+    fun lastUpdated(block: () -> UInt) {
+        attributes.add(TimelineAttributeFactory.lastUpdated(block()))
     }
 
     internal fun build(): List<Attribute> {

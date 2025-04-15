@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
+import kotlin.uuid.Uuid
 
 data class LibPebbleConfig(
     val context: AppContext,
@@ -38,6 +39,7 @@ interface LibPebble : Scanning {
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
     suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
+    suspend fun deleteNotification(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
     suspend fun sideloadApp(pbwPath: Path)
     // ....
@@ -53,6 +55,8 @@ interface Scanning {
     suspend fun startClassicScan()
     suspend fun stopClassicScan()
 }
+
+expect fun LibPebble.initPlatform(config: LibPebbleConfig)
 
 // Impl
 
@@ -79,6 +83,10 @@ class LibPebble3(
 
     override suspend fun sendNotification(notification: TimelineItem) {
         forEachConnectedWatch { sendNotification(notification) }
+    }
+
+    override suspend fun deleteNotification(itemId: Uuid) {
+        forEachConnectedWatch { deleteNotification(itemId) }
     }
 
     override suspend fun sendPing(cookie: UInt) {
@@ -114,7 +122,9 @@ class LibPebble3(
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
             val timeChanged = createTimeChanged(config.context)
-            return LibPebble3(config, watchManager, scanning, locker, timeChanged)
+            val libPebble = LibPebble3(config, watchManager, scanning, locker, timeChanged)
+            libPebble.initPlatform(config)
+            return libPebble
         }
     }
 }

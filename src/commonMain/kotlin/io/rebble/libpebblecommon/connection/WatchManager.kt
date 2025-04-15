@@ -29,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.files.Path
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
 internal data class KnownWatchProperties(
@@ -245,73 +244,79 @@ class WatchManager(
     private fun connectTo(device: Watch) {
         val transport = device.transport
         logger.d("connectTo: ${transport}")
+        // TODO I think there is a still a race here, where we can wind up connecting multiple
+        //  times to the same watch, because the Flow wasn't updated yet
         if (device.activeConnection != null) {
             logger.w("Already connecting to $transport")
             return
         }
+        updateWatch(transport = device.transport) { watch ->
+            val connectionExists = allWatches.value[transport]?.activeConnection != null
+            if (connectionExists) {
+                logger.e("Already connecting to $transport (this is a bug)")
+                return@updateWatch null
+            }
 
-        val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-            logger.e(
-                "watchmanager caught exception for $transport: $throwable",
-                throwable,
-            )
-            // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
-            //  bad FW version) by not attempting to endlessly reconnect.
-            val connection = allWatches.value[transport]?.activeConnection
-            connection?.let {
-                GlobalScope.launch {
-                    connection.cleanup()
+            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+                logger.e(
+                    "watchmanager caught exception for $transport: $throwable",
+                    throwable,
+                )
+                // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
+                //  bad FW version) by not attempting to endlessly reconnect.
+                val connection = allWatches.value[transport]?.activeConnection
+                connection?.let {
+                    GlobalScope.launch {
+                        connection.cleanup()
+                    }
                 }
             }
-        }
-        val deviceIdString = transport.identifier.asString
-        val coroutineContext =
-            SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
-        val connectionScope = CoroutineScope(coroutineContext)
-        logger.v("transport.createConnector")
-        val transportConnector = transport.createConnector(connectionScope)
-        if (transportConnector == null) {
-            // Probably because it couldn't create the device (ios throws on an unknown peristed
-            // uuid, so we'll need to scan for it using the name/serial?)...
-            // ...but TODO revit this once have more error modes + are handling BT being disabled
-            if (device.knownWatchProps != null) {
-                logger.w("removing known device: $transport")
-                forget(transport)
+            val deviceIdString = transport.identifier.asString
+            val coroutineContext =
+                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
+            val connectionScope = CoroutineScope(coroutineContext)
+            logger.v("transport.createConnector")
+            val transportConnector = transport.createConnector(connectionScope)
+            if (transportConnector == null) {
+                // Probably because it couldn't create the device (ios throws on an unknown peristed
+                // uuid, so we'll need to scan for it using the name/serial?)...
+                // ...but TODO revit this once have more error modes + are handling BT being disabled
+                if (device.knownWatchProps != null) {
+                    logger.w("removing known device: $transport")
+                    forget(transport)
+                }
+                // hack force another connection
+                updateWatch(transport = device.transport) { watch ->
+                    watch.copy()
+                }
+                connectionScope.cancel()
+                return@updateWatch null
             }
-            // hack force another connection
-            updateWatch(transport = device.transport) { watch ->
-                watch.copy()
-            }
-            connectionScope.cancel()
-            return
-        }
 
-        logger.v("creating pebbleConnector")
-        val pebbleConnector = pebbleConnectorFactory.create(
-            transportConnector = transportConnector,
-            transport = transport,
-            scope = connectionScope,
-        )
-        val disconnectDuringConnectionJob = connectionScope.launch {
-            pebbleConnector.disconnected.await()
-            logger.d("got disconnection (before connection)")
-            pebbleConnector.cleanup()
-        }
-
-        connectionScope.launch {
-            try {
-                pebbleConnector.connect()
-                disconnectDuringConnectionJob.cancel()
-                logger.d("watchmanager connected; waiting for disconnect: $transport")
+            logger.v("creating pebbleConnector")
+            val pebbleConnector = pebbleConnectorFactory.create(
+                transportConnector = transportConnector,
+                transport = transport,
+                scope = connectionScope,
+            )
+            val disconnectDuringConnectionJob = connectionScope.launch {
                 pebbleConnector.disconnected.await()
-                // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
-                logger.d("watchmanager got disconnection: $transport")
-            } finally {
+                logger.d("got disconnection (before connection)")
                 pebbleConnector.cleanup()
             }
-        }
 
-        updateWatch(transport = device.transport) { watch ->
+            connectionScope.launch {
+                try {
+                    pebbleConnector.connect()
+                    disconnectDuringConnectionJob.cancel()
+                    logger.d("watchmanager connected; waiting for disconnect: $transport")
+                    pebbleConnector.disconnected.await()
+                    // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
+                    logger.d("watchmanager got disconnection: $transport")
+                } finally {
+                    pebbleConnector.cleanup()
+                }
+            }
             watch.copy(activeConnection = pebbleConnector)
         }
     }

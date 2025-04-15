@@ -4,12 +4,9 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
-import io.rebble.libpebblecommon.packets.blobdb.TimelineAction
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
-import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
-import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.io.files.Path
 import kotlin.uuid.Uuid
@@ -62,6 +59,7 @@ object ConnectedPebble {
             notification: TimelineItem,
             actionHandlers: Map<UByte, CustomTimelineActionHandler> = emptyMap()
         )
+        suspend fun deleteNotification(itemId: Uuid)
     }
 
     interface Debug {

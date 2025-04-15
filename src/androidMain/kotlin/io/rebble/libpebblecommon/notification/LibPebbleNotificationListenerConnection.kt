@@ -85,6 +85,9 @@ object LibPebbleNotificationListenerConnection {
         notificationSendQueue.onEach {
             libPebble.sendNotification(it.toTimelineItem())
         }.launchIn(scope)
+        notificationDeleteQueue.onEach {
+            libPebble.deleteNotification(it)
+        }.launchIn(scope)
     }
 
     private fun bind(context: Context): Boolean {

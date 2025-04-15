@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.io.files.Path
+import kotlin.uuid.Uuid
 
 data class LibPebbleConfig(
     val context: AppContext,
@@ -34,6 +35,7 @@ interface LibPebble : Scanning {
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
     suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
+    suspend fun deleteNotification(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
     suspend fun sideloadApp(pbwPath: Path)
     // ....
@@ -71,6 +73,10 @@ class LibPebble3(
 
     override suspend fun sendNotification(notification: TimelineItem) {
         forEachConnectedWatch { sendNotification(notification) }
+    }
+
+    override suspend fun deleteNotification(itemId: Uuid) {
+        forEachConnectedWatch { deleteNotification(itemId) }
     }
 
     override suspend fun sendPing(cookie: UInt) {

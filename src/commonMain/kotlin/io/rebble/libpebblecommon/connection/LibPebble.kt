@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.time.createTimeChanged
@@ -55,8 +56,6 @@ interface Scanning {
     suspend fun startClassicScan()
     suspend fun stopClassicScan()
 }
-
-expect fun LibPebble.initPlatform(config: LibPebbleConfig)
 
 // Impl
 
@@ -123,7 +122,7 @@ class LibPebble3(
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
             val timeChanged = createTimeChanged(config.context)
             val libPebble = LibPebble3(config, watchManager, scanning, locker, timeChanged)
-            libPebble.initPlatform(config)
+            initPlatformNotificationListener(config.context, GlobalScope, libPebble)
             return libPebble
         }
     }

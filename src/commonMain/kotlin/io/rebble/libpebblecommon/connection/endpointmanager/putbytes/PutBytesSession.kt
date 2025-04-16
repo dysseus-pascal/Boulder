@@ -13,10 +13,15 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.io.Source
 
-class PutBytesSession(private val scope: CoroutineScope, private val putBytesService: PutBytesService) {
+class PutBytesSession(
+    private val scope: CoroutineScope,
+    private val putBytesService: PutBytesService
+) {
     companion object {
-        const val APP_PUT_CHUNK_SIZE = 2000 // Can't be too large to avoid locking up comms, probably
+        const val APP_PUT_CHUNK_SIZE =
+            2000 // Can't be too large to avoid locking up comms, probably
     }
+
     private val _currentSession = MutableStateFlow<CurrentSession?>(null)
     val currentSession = _currentSession.asStateFlow()
     private val sessionMutex = Mutex()
@@ -25,6 +30,7 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
 
     sealed class SessionState {
         abstract val cookie: UInt
+
         data class Open(override val cookie: UInt) : SessionState()
         data class Finished(override val cookie: UInt) : SessionState()
         data class Sending(override val cookie: UInt, val totalSent: UInt) : SessionState()
@@ -43,7 +49,11 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         }
     }
 
-    private suspend fun FlowCollector<SessionState>.transferData(cookie: UInt, size: UInt, source: Source): UInt {
+    private suspend fun FlowCollector<SessionState>.transferData(
+        cookie: UInt,
+        size: UInt,
+        source: Source
+    ): UInt {
         var totalSent = 0u
         val buffer = ByteArray(APP_PUT_CHUNK_SIZE)
         val crc32Calculator = Crc32Calculator()
@@ -66,23 +76,33 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
      *
      * Should be `flowOn(IO)`
      */
-    suspend fun beginAppSession(appId: UInt, size: UInt, type: ObjectType, source: Source) = putBytesFlow {
-        val initResponse = putBytesService.initAppSession(appId, size, type)
-        val cookie = initResponse.cookie.get()
-        emit(SessionState.Open(cookie))
-        _currentSession.value = CurrentSession(cookie)
-        val crc32 = transferData(cookie, size, source)
-        val response = putBytesService.sendCommit(cookie, crc32)
-        check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
-        sendInstall(cookie)
-    }
+    suspend fun beginAppSession(appId: UInt, size: UInt, type: ObjectType, source: Source) =
+        putBytesFlow {
+            val initResponse = putBytesService.initAppSession(appId, size, type)
+            val cookie = initResponse.cookie.get()
+            emit(SessionState.Open(cookie))
+            _currentSession.value = CurrentSession(cookie)
+            val crc32 = transferData(cookie, size, source)
+            val response = putBytesService.sendCommit(cookie, crc32)
+            check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
+            sendInstall(cookie)
+        }
 
     /**
      * Begin a session to send a file (usually firmware) to the watch.
      *
      * Should be `flowOn(IO)`
+     *
+     * @param sendInstall send an install command? You will want to do this unless it's a FW update.
      */
-    fun beginSession(size: UInt, type: ObjectType, bank: UByte, filename: String, source: Source) = putBytesFlow {
+    fun beginSession(
+        size: UInt,
+        type: ObjectType,
+        bank: UByte,
+        filename: String,
+        source: Source,
+        sendInstall: Boolean,
+    ) = putBytesFlow {
         val initResponse = putBytesService.initSession(size, type, bank, filename)
         val cookie = initResponse.cookie.get()
         emit(SessionState.Open(cookie))
@@ -90,6 +110,9 @@ class PutBytesSession(private val scope: CoroutineScope, private val putBytesSer
         val crc32 = transferData(cookie, size, source)
         val response = putBytesService.sendCommit(cookie, crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
+        if (sendInstall) {
+            sendInstall(cookie)
+        }
         emit(SessionState.Finished(cookie))
     }
 

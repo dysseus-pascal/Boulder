@@ -147,6 +147,8 @@ class FirmwareUpdate(
             logger.d { "Completed resources transfer" }
         } ?: logger.d { "No resources to send, resource PutBytes skipped" }
 
+        // Install both right at the end after all transfers are complete (i.e. don't install
+        // one without both having been successfully transferred).
         firmwareCookie?.let { putBytesSession.sendInstall(it) }
         resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
@@ -193,7 +195,8 @@ class FirmwareUpdate(
             },
             bank = 0u,
             filename = "",
-            source = source
+            source = source,
+            sendInstall = false,
         ).onCompletion { source.close() } // Can't do use block because of the flow
     }
 
@@ -213,7 +216,8 @@ class FirmwareUpdate(
             type = ObjectType.SYSTEM_RESOURCE,
             bank = 0u,
             filename = "",
-            source = source
+            source = source,
+            sendInstall = false,
         ).onCompletion { source.close() }
     }
 }

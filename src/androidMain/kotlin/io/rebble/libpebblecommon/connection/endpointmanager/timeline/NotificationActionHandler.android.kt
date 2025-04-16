@@ -38,15 +38,15 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         platformActions[itemId] = actionHandlers
     }
 
-    private fun makeFillIntent(action: TimelineItem.Action, notificationAction: LibPebbleNotificationAction): Intent? {
-        val responseText = action.attributes.list.firstOrNull {
+    private fun makeFillIntent(pebbleInvokeAttrs: List<TimelineItem.Attribute>, notificationAction: LibPebbleNotificationAction): Intent? {
+        val responseText = pebbleInvokeAttrs.firstOrNull {
             it.attributeId.get() == TimelineAttribute.Title.id
-        }?.content?.get()?.asByteArray()?.decodeToString() ?: run {
-            logger.e { "No response text found for action ID ${action.actionID.get()} while handling: $notificationAction" }
+        }?.content?.get()?.asByteArray()?.decodeToString()?.take(TimelineAttribute.Title.maxLength-1) ?: run {
+            logger.e { "No response text found for action while handling: $notificationAction" }
             return null
         }
         val replyInput = notificationAction.remoteInput?.remoteInput ?: run {
-            logger.e { "No reply input found for action ${action.actionID.get()} while handling: $notificationAction" }
+            logger.e { "No reply input found for action while handling: $notificationAction" }
             return null
         }
         val fillIntent = Intent()
@@ -60,8 +60,8 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         return fillIntent
     }
 
-    private suspend fun handleReply(pebbleAction: TimelineItem.Action, notificationAction: LibPebbleNotificationAction): TimelineActionResult {
-        val fillIntent = makeFillIntent(pebbleAction, notificationAction) ?: return errorResponse()
+    private suspend fun handleReply(pebbleInvokeAttrs: List<TimelineItem.Attribute>, notificationAction: LibPebbleNotificationAction): TimelineActionResult {
+        val fillIntent = makeFillIntent(pebbleInvokeAttrs, notificationAction) ?: return errorResponse()
         val resultCode = notificationAction.pendingIntent?.let { actionIntent(it, fillIntent) } ?: run {
             logger.e { "No pending intent found while handling: $notificationAction as Reply" }
             return errorResponse()
@@ -109,7 +109,7 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
             }
         logger.d { "Handling notification action on itemId $itemId: ${notificationAction.type}" }
         return when (notificationAction.type) {
-            LibPebbleNotificationAction.ActionType.Reply -> handleReply(action, notificationAction)
+            LibPebbleNotificationAction.ActionType.Reply -> handleReply(attributes, notificationAction)
             LibPebbleNotificationAction.ActionType.Dismiss -> handleDismiss(itemId)
             else -> handleGeneric(notificationAction)
         }

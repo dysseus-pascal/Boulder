@@ -132,6 +132,8 @@ class TimelineItem(
                 0u,
                 ubyteArrayOf()
             )
+        }.apply {
+            linkWithCount(attributeCount)
         }
 
         override fun toBytes(): UByteArray = m.toBytes()

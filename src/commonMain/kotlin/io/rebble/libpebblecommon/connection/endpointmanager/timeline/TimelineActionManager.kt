@@ -50,7 +50,7 @@ class TimelineActionManager(
         val pin = TimelineItem().apply { fromBytes(DataBuffer(item.data.asUByteArray())) }
         val action = pin.actions.list.firstOrNull { it.actionID.get() == actionId } ?: run {
             logger.w {
-                "Received action for item $itemId, but it doesn't exist in the pin"
+                "Received action for item $itemId, but it doesn't exist in the pin (action ID $actionId not in ${pin.actions.list.map { it.actionID.get() }})"
             }
             return
         }

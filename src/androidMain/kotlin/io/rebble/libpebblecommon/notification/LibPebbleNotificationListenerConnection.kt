@@ -9,12 +9,14 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 import kotlin.uuid.Uuid
@@ -32,6 +34,8 @@ object LibPebbleNotificationListenerConnection {
     val notificationDeleteQueue = _service
         .filterNotNull()
         .flatMapLatest { it.notificationHandler.notificationDeleteQueue.consumeAsFlow() }
+    val notificationListenerContext: Flow<Context> = _service.filterNotNull()
+        .map { it }
 
     suspend fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
         val service = getService()

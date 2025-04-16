@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.uuid.Uuid
@@ -114,17 +115,20 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         }
     }
 
-    private suspend fun actionIntent(intent: PendingIntent, fillIntent: Intent? = null) = suspendCancellableCoroutine { continuation ->
-        val callback = PendingIntent.OnFinished { pendingIntent, intent, resultCode, resultData, resultExtras ->
-            continuation.resume(resultCode)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val activityOptions = ActivityOptions.makeBasic().apply {
-                setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+    private suspend fun actionIntent(intent: PendingIntent, fillIntent: Intent? = null): Int {
+        val actionContext = LibPebbleNotificationListenerConnection.notificationListenerContext.first()
+        return suspendCancellableCoroutine { continuation ->
+            val callback = PendingIntent.OnFinished { pendingIntent, intent, resultCode, resultData, resultExtras ->
+                continuation.resume(resultCode)
             }
-            intent.send(appContext.context, 0, fillIntent, callback, null, null, activityOptions.toBundle())
-        } else {
-            intent.send(appContext.context, 0, fillIntent, callback, null)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val activityOptions = ActivityOptions.makeBasic().apply {
+                    setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                }
+                intent.send(actionContext, 0, fillIntent, callback, null, null, activityOptions.toBundle())
+            } else {
+                intent.send(actionContext, 0, fillIntent, callback, null)
+            }
         }
     }
 }

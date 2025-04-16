@@ -2,8 +2,7 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.service.notification.StatusBarNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.packets.blobdb.buildTimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.buildNotificationItem
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -52,9 +51,7 @@ data class LibPebbleNotification(
         }
     }
 
-    fun toTimelineItem() = buildTimelineItem(uuid) {
-        type = TimelineItem.Type.Notification
-        layout = TimelineItem.Layout.GenericNotification
+    fun toTimelineItem() = buildNotificationItem(uuid) {
         timestamp = this@LibPebbleNotification.timestamp.epochSeconds.toUInt()
 
         attributes {

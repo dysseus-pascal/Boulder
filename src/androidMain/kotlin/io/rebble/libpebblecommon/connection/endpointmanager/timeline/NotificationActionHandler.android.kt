@@ -81,8 +81,8 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         logger.d { "handleGeneric() actionIntent result code: $resultCode" }
         return TimelineActionResult(
             success = true,
-            icon = TimelineIcon.ResultSent,
-            title = "Replied"
+            icon = TimelineIcon.GenericConfirmation,
+            title = "Complete"
         )
     }
 

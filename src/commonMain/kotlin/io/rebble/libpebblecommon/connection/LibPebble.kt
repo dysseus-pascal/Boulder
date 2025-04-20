@@ -10,6 +10,8 @@ import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.time.createTimeChanged
+import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +34,7 @@ data class BleConfig(
 
 typealias PebbleDevices = Flow<List<PebbleDevice>>
 
-interface LibPebble : Scanning {
+interface LibPebble : Scanning, RequestSync {
     fun init()
 
     val watches: PebbleDevices
@@ -46,6 +48,10 @@ interface LibPebble : Scanning {
     // ....
 }
 
+interface WebServices {
+    suspend fun fetchLocker(): LockerModel?
+}
+
 fun PebbleDevices.forDevice(pebbleDevice: PebbleDevice): Flow<PebbleDevice> {
     return mapNotNull { it.firstOrNull { it.transport == pebbleDevice.transport } }
 }
@@ -57,6 +63,10 @@ interface Scanning {
     suspend fun stopClassicScan()
 }
 
+interface RequestSync {
+    fun requestLockerSync()
+}
+
 // Impl
 
 class LibPebble3(
@@ -65,7 +75,8 @@ class LibPebble3(
     private val scanning: Scanning,
     private val locker: Locker,
     private val timeChanged: TimeChanged,
-) : LibPebble, Scanning by scanning {
+    private val webSyncManager: WebSyncManager,
+) : LibPebble, Scanning by scanning, RequestSync by webSyncManager {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
@@ -103,7 +114,7 @@ class LibPebble3(
     }
 
     companion object {
-        fun create(config: LibPebbleConfig): LibPebble {
+        fun create(config: LibPebbleConfig, webServices: WebServices): LibPebble {
             // All the singletons
             val database = getRoomDatabase(config.context)
             val pbwCache = StaticLockerPBWCache(config.context)
@@ -120,8 +131,10 @@ class LibPebble3(
             val bleScanner = bleScanner()
             val scanning = RealScanning(watchManager, bleScanner)
             val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
+            val webSync = WebSyncManager(webServices, locker)
             val timeChanged = createTimeChanged(config.context)
-            val libPebble = LibPebble3(config, watchManager, scanning, locker, timeChanged)
+            val libPebble =
+                LibPebble3(config, watchManager, scanning, locker, timeChanged, webSync)
             initPlatformNotificationListener(config.context, GlobalScope, libPebble)
             return libPebble
         }

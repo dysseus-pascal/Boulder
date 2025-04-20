@@ -5,11 +5,13 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.dao.LockerEntryDao
 import io.rebble.libpebblecommon.database.dao.LockerSyncStatusDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
+import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -41,6 +43,7 @@ class Locker(
 ) {
     private val lockerEntryDao: LockerEntryDao = database.lockerEntryDao()
     private val lockerSyncStatusDao: LockerSyncStatusDao = database.lockerSyncStatusDao()
+
     companion object {
         private val logger = Logger.withTag(Locker::class.simpleName!!)
     }
@@ -51,6 +54,7 @@ class Locker(
         data object Idle : LockerSyncState()
         data object Syncing : LockerSyncState()
     }
+
     private val lockerSyncStatus = MutableStateFlow<LockerSyncState>(LockerSyncState.Idle)
 
     fun init() {
@@ -61,6 +65,22 @@ class Locker(
             lockerSyncQueue.consumeEach { watches ->
                 syncLockerToWatches(watches)
             }
+        }
+    }
+
+    suspend fun update(locker: LockerModel) {
+        logger.d("update: ${locker.applications.size}")
+        locker.applications.forEach { entry ->
+            val entity = entry.asEntity()
+            val platforms = entry.hardwarePlatforms.map { platform ->
+                LockerEntryPlatform(
+                    lockerEntryId = entity.id,
+                    sdkVersion = platform.sdkVersion,
+                    processInfoFlags = platform.pebbleProcessInfoFlags,
+                    name = platform.name,
+                )
+            }
+            lockerEntryDao.insertOrReplaceWithPlatforms(entity, platforms)
         }
     }
 
@@ -91,14 +111,15 @@ class Locker(
     }
 
     private fun List<LockerEntryWithPlatforms>.filterSupportedEntries(watch: ConnectedPebbleDevice): List<Pair<LockerEntry, LockerEntryPlatform>> {
-        val watchType = watch.watchInfo.platform?.watchType ?: run {
+        val watchType = watch.watchInfo.platform.watchType ?: run {
             logger.e { "Watch ${watch.name} is of unknown type, cannot sync locker" }
             return emptyList()
         }
         return mapNotNull {
             val compatiblePlatforms = watchType.getCompatibleAppVariants()
-            val compatiblePlatform = it.platforms.firstOrNull { plat -> plat.watchType == watchType }
-                ?: it.platforms.firstOrNull { plat -> compatiblePlatforms.contains(plat.watchType) }
+            val compatiblePlatform =
+                it.platforms.firstOrNull { plat -> plat.watchType == watchType }
+                    ?: it.platforms.firstOrNull { plat -> compatiblePlatforms.contains(plat.watchType) }
             if (compatiblePlatform != null) {
                 it.entry to compatiblePlatform
             } else {
@@ -108,7 +129,10 @@ class Locker(
         }
     }
 
-    private suspend fun syncToConnectedWatch(watch: ConnectedPebbleDevice, entries: List<LockerEntryWithPlatforms>) {
+    private suspend fun syncToConnectedWatch(
+        watch: ConnectedPebbleDevice,
+        entries: List<LockerEntryWithPlatforms>
+    ) {
         logger.i { "${watch.name} Beginning locker sync to watch" }
         val supportedEntries = entries.filterSupportedEntries(watch)
         if (supportedEntries.isEmpty()) {
@@ -182,9 +206,30 @@ class Locker(
     }
 }
 
+fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry = LockerEntry(
+    id = Uuid.parse(uuid),
+    version = version ?: "", // FIXME
+    title = title,
+    type = type,
+    developerName = developer.name,
+    configurable = isConfigurable,
+    pbwVersionCode = pbw?.releaseId ?: "", // FIXME
+    pbwIconResourceId = pbw?.iconResourceId ?: 0, // FIXME
+    sideloaded = false,
+    appstoreData = LockerEntryAppstoreData(
+        hearts = hearts,
+        developerId = developer.id,
+        timelineEnabled = isTimelineEnabled,
+        removeLink = links.remove,
+        shareLink = links.share,
+        pbwLink = pbw?.file ?: "", // FIXME
+        userToken = userToken,
+    ),
+)
+
 expect fun getLockerPBWCacheDirectory(context: AppContext): Path
 
-class StaticLockerPBWCache(context: AppContext): LockerPBWCache(context) {
+class StaticLockerPBWCache(context: AppContext) : LockerPBWCache(context) {
     override suspend fun handleCacheMiss(appId: Uuid): Path? = null
 }
 

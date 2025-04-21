@@ -2,27 +2,25 @@ package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
-import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
-import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
-import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
-import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
-import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
+import org.koin.core.Koin
 import kotlin.uuid.Uuid
 
 data class LibPebbleConfig(
     val context: AppContext,
     val bleConfig: BleConfig,
+    val webServices: WebServices,
 )
 
 data class BleConfig(
@@ -75,7 +73,7 @@ class LibPebble3(
     private val scanning: Scanning,
     private val locker: Locker,
     private val timeChanged: TimeChanged,
-    private val webSyncManager: WebSyncManager,
+    private val webSyncManager: RequestSync,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager {
     private val logger = Logger.withTag("LibPebble3")
 
@@ -114,27 +112,11 @@ class LibPebble3(
     }
 
     companion object {
-        fun create(config: LibPebbleConfig, webServices: WebServices): LibPebble {
-            // All the singletons
-            val database = getRoomDatabase(config.context)
-            val pbwCache = StaticLockerPBWCache(config.context)
-            val notifActionHandler = PlatformNotificationActionHandler(config.context)
-            val pebbleDeviceFactory = PebbleDeviceFactory()
-            val pebbleConnectorFactory =
-                PebbleConnector.Factory(notifActionHandler, database, pbwCache)
-            val watchManager = WatchManager(
-                config = config,
-                knownWatchDao = database.knownWatchDao(),
-                pebbleDeviceFactory = pebbleDeviceFactory,
-                pebbleConnectorFactory = pebbleConnectorFactory,
-            )
-            val bleScanner = bleScanner()
-            val scanning = RealScanning(watchManager, bleScanner)
-            val locker = Locker(config, watchManager, database, pbwCache, GlobalScope)
-            val webSync = WebSyncManager(webServices, locker)
-            val timeChanged = createTimeChanged(config.context)
-            val libPebble =
-                LibPebble3(config, watchManager, scanning, locker, timeChanged, webSync)
+        private lateinit var koin: Koin
+
+        fun create(config: LibPebbleConfig): LibPebble {
+            koin = initKoin(config)
+            val libPebble = koin.get<LibPebble>()
             initPlatformNotificationListener(config.context, GlobalScope, libPebble)
             return libPebble
         }

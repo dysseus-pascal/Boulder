@@ -1,13 +1,13 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
-import io.rebble.libpebblecommon.connection.bt.ble.transport.gattConnector
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
 import io.rebble.libpebblecommon.database.entity.type
+import io.rebble.libpebblecommon.di.ConnectionScope
+import io.rebble.libpebblecommon.di.ConnectionScopeFactory
+import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
@@ -72,7 +72,7 @@ private data class Watch(
     /** Always populated if we have previously connected to this watch */
     val knownWatchProps: KnownWatchProperties?,
     /** Populated if there is an active connection */
-    val activeConnection: PebbleConnector?,
+    val activeConnection: ConnectionScope?,
     /**
      * What is currently persisted for this watch? Only used to check whether we need to persist
      * changes.
@@ -93,10 +93,10 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
 )
 
 class WatchManager(
-    private val config: LibPebbleConfig,
     private val knownWatchDao: KnownWatchDao,
     private val pebbleDeviceFactory: PebbleDeviceFactory,
-    private val pebbleConnectorFactory: PebbleConnector.Factory,
+    private val createPlatformIdentifier: CreatePlatformIdentifier,
+    private val connectionScopeFactory: ConnectionScopeFactory,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -271,13 +271,8 @@ class WatchManager(
                     }
                 }
             }
-            val deviceIdString = transport.identifier.asString
-            val coroutineContext =
-                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
-            val connectionScope = CoroutineScope(coroutineContext)
-            logger.v("transport.createConnector")
-            val transportConnector = transport.createConnector(connectionScope)
-            if (transportConnector == null) {
+            val platformIdentifier = createPlatformIdentifier.identifier(transport)
+            if (platformIdentifier == null) {
                 // Probably because it couldn't create the device (ios throws on an unknown peristed
                 // uuid, so we'll need to scan for it using the name/serial?)...
                 // ...but TODO revit this once have more error modes + are handling BT being disabled
@@ -289,20 +284,21 @@ class WatchManager(
                 updateWatch(transport = device.transport) { watch ->
                     watch.copy()
                 }
-                connectionScope.cancel()
                 return@updateWatch null
             }
 
-            logger.v("creating pebbleConnector")
-            val pebbleConnector = pebbleConnectorFactory.create(
-                transportConnector = transportConnector,
-                transport = transport,
-                scope = connectionScope,
-            )
+            val deviceIdString = transport.identifier.asString
+            val coroutineContext =
+                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
+            val connectionScope = CoroutineScope(coroutineContext)
+            logger.v("transport.createConnector")
+            val connectionKoinScope = connectionScopeFactory.createScope(ConnectionScopeProperties(transport, connectionScope, platformIdentifier))
+            val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
+
             val disconnectDuringConnectionJob = connectionScope.launch {
                 pebbleConnector.disconnected.await()
                 logger.d("got disconnection (before connection)")
-                pebbleConnector.cleanup()
+                connectionKoinScope.cleanup()
             }
 
             connectionScope.launch {
@@ -314,20 +310,20 @@ class WatchManager(
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                     logger.d("watchmanager got disconnection: $transport")
                 } finally {
-                    pebbleConnector.cleanup()
+                    connectionKoinScope.cleanup()
                 }
             }
-            watch.copy(activeConnection = pebbleConnector)
+            watch.copy(activeConnection = connectionKoinScope)
         }
     }
 
-    private suspend fun PebbleConnector.cleanup() {
+    private suspend fun ConnectionScope.cleanup() {
         logger.d("${transport}: cleanup")
-        disconnect()
+        pebbleConnector.disconnect()
         try {
             withTimeout(DISCONNECT_TIMEOUT) {
                 logger.d("${transport}: cleanup: waiting for disconnection")
-                disconnected.await()
+                pebbleConnector.disconnected.await()
             }
         } catch (e: TimeoutCancellationException) {
             logger.w("cleanup: timed out waiting for disconnection from ${transport}")
@@ -335,7 +331,7 @@ class WatchManager(
         logger.d("${transport}: cleanup: removing active device")
         updateWatch(transport) { it.copy(activeConnection = null) }
         logger.d("${transport}: cleanup: cancelling scope")
-        scope.cancel()
+        close()
     }
 
     private fun disconnectFrom(transport: Transport) {
@@ -345,7 +341,7 @@ class WatchManager(
             Logger.d("disconnectFrom / not an active device")
             return
         }
-        activeConnection.disconnect()
+        activeConnection.pebbleConnector.disconnect()
     }
 
     private fun Watch.isOnlyScanResult() =
@@ -365,22 +361,6 @@ class WatchManager(
         updateWatch(transport) { it.copy(forget = true) }
     }
 
-    private fun Transport.createConnector(scope: CoroutineScope): TransportConnector? {
-        return when (this) {
-            is BleTransport -> {
-                val connector = gattConnector(this, config.context, scope) ?: return null
-                PebbleBle(
-                    config = config,
-                    transport = this,
-                    scope = scope,
-                    gattConnector = connector,
-                )
-            }
-
-            else -> TODO("not implemented")
-        }
-    }
-
     companion object {
         private val DISCONNECT_TIMEOUT = 3.seconds
     }
@@ -390,7 +370,7 @@ expect fun getTempAppPath(appContext: AppContext): Path
 
 private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
     return flatMapLatest { map ->
-        val listOfInnerFlows = map.values.mapNotNull { it.activeConnection?.state }
+        val listOfInnerFlows = map.values.mapNotNull { it.activeConnection?.pebbleConnector?.state }
         if (listOfInnerFlows.isEmpty()) {
             flowOf(emptyMap())
         } else {

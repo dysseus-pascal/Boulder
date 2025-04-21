@@ -13,6 +13,7 @@ sqlite = "2.5.0-rc02"
 okio = "3.10.2"
 kotlinx-io = "0.7.0"
 kotlinx-datetime = "0.6.1"
+koin = "4.1.0-Beta6"
 
 [plugins]
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
@@ -40,3 +41,4 @@ sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sql
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.ref = "kotlinx-io" }
+koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }

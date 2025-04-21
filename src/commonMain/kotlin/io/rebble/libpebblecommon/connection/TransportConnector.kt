@@ -91,8 +91,8 @@ sealed class ConnectingPebbleState {
 
 class PebbleConnector(
     private val transportConnector: TransportConnector,
-    val transport: Transport,
-    val scope: CoroutineScope,
+    private val transport: Transport,
+    private val scope: CoroutineScope,
     private val negotiator: Negotiator,
     private val pebbleProtocolRunner: PebbleProtocolRunner,
     private val platformNotificationActionHandler: PlatformNotificationActionHandler,
@@ -238,27 +238,6 @@ class PebbleConnector(
         scope.launch {
             transportConnector.disconnect()
         }
-    }
-
-    class Factory(
-        private val platformNotificationActionHandler: PlatformNotificationActionHandler,
-        private val database: Database,
-        private val pbwCache: LockerPBWCache,
-    ) {
-        fun create(
-            transportConnector: TransportConnector,
-            transport: Transport,
-            scope: CoroutineScope,
-        ): PebbleConnector = PebbleConnector(
-            transportConnector = transportConnector,
-            transport = transport,
-            scope = scope,
-            negotiator = Negotiator(),
-            pebbleProtocolRunner = PebbleProtocolRunner(),
-            platformNotificationActionHandler = platformNotificationActionHandler,
-            database = database,
-            pbwCache = pbwCache,
-        )
     }
 }
 

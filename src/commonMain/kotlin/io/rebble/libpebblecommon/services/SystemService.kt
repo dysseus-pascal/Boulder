@@ -22,6 +22,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
@@ -32,7 +33,10 @@ import kotlin.time.Instant
 /**
  * Singleton to handle sending notifications cleanly, as well as TODO: receiving/acting on action events
  */
-class SystemService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService,
+class SystemService(
+    private val protocolHandler: PebbleProtocolHandler,
+    private val scope: CoroutineScope,
+) : ProtocolService,
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
 
@@ -122,8 +126,8 @@ class SystemService(private val protocolHandler: PebbleProtocolHandler) : Protoc
         return pong.await().cookie.get()
     }
 
-    fun init(scope: CoroutineScope) {
-        scope.async {
+    fun init() {
+        scope.launch {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {
                     is WatchVersionResponse -> {

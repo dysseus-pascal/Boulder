@@ -18,14 +18,15 @@ class TimelineActionManager(
     private val watchTransport: Transport,
     private val timelineService: TimelineService,
     private val blobDBDao: BlobDBDao,
-    private val notifActionHandler: PlatformNotificationActionHandler
+    private val notifActionHandler: PlatformNotificationActionHandler,
+    private val scope: CoroutineScope,
 ) {
     companion object {
         private val logger = Logger.withTag(TimelineActionManager::class.simpleName!!)
     }
     private val actionHandlerOverrides = mutableMapOf<Uuid, Map<UByte, CustomTimelineActionHandler>>()
 
-    fun init(scope: CoroutineScope) {
+    fun init() {
         timelineService.actionInvocations.onEach {
             handleAction(it)
         }.launchIn(scope)

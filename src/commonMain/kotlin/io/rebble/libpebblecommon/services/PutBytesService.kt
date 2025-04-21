@@ -1,23 +1,26 @@
 package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.ProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.metadata.pbw.manifest.PbwBlob
-import io.rebble.libpebblecommon.packets.*
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
+import io.rebble.libpebblecommon.packets.ObjectType
+import io.rebble.libpebblecommon.packets.PutBytesAbort
+import io.rebble.libpebblecommon.packets.PutBytesAppInit
+import io.rebble.libpebblecommon.packets.PutBytesCommit
+import io.rebble.libpebblecommon.packets.PutBytesInit
+import io.rebble.libpebblecommon.packets.PutBytesInstall
+import io.rebble.libpebblecommon.packets.PutBytesOutgoingPacket
+import io.rebble.libpebblecommon.packets.PutBytesPut
+import io.rebble.libpebblecommon.packets.PutBytesResponse
 import io.rebble.libpebblecommon.util.Crc32Calculator
-import io.rebble.libpebblecommon.util.DataBuffer
-import io.rebble.libpebblecommon.util.getPutBytesMaximumDataSize
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlin.math.log
 
-class PutBytesService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+class PutBytesService(
+    private val protocolHandler: PebbleProtocolHandler,
+    private val scope: CoroutineScope,
+) : ProtocolService {
     val receivedMessages = Channel<PutBytesResponse>(Channel.RENDEZVOUS)
     val progressUpdates = Channel<PutBytesProgress>(Channel.BUFFERED)
 
@@ -30,8 +33,8 @@ class PutBytesService(private val protocolHandler: PebbleProtocolHandler) : Prot
         val cookie: UInt
     )
 
-    fun init(scope: CoroutineScope) {
-        scope.async {
+    fun init() {
+        scope.launch {
             protocolHandler.inboundMessages.collect {
                 if (it is PutBytesResponse) {
                     receivedMessages.trySend(it)
@@ -50,9 +53,15 @@ class PutBytesService(private val protocolHandler: PebbleProtocolHandler) : Prot
 
     var lastCookie: UInt? = null
 
-    class PutBytesException(val cookie: UInt?, message: String, cause: Throwable? = null) : Error(message, cause)
+    class PutBytesException(val cookie: UInt?, message: String, cause: Throwable? = null) :
+        Error(message, cause)
 
-    suspend fun initSession(size: UInt, type: ObjectType, bank: UByte, filename: String): PutBytesResponse {
+    suspend fun initSession(
+        size: UInt,
+        type: ObjectType,
+        bank: UByte,
+        filename: String
+    ): PutBytesResponse {
         send(PutBytesInit(size, type, bank, filename))
         return awaitAck()
     }
@@ -101,7 +110,10 @@ class PutBytesService(private val protocolHandler: PebbleProtocolHandler) : Prot
         val response = getResponse()
 
         if (!response.isAck) {
-            throw PutBytesException(lastCookie, "Watch responded with NACK (${response.result.get()}). Aborting transfer")
+            throw PutBytesException(
+                lastCookie,
+                "Watch responded with NACK (${response.result.get()}). Aborting transfer"
+            )
         }
 
         return response

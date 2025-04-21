@@ -11,9 +11,11 @@ import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Negotiator
 import io.rebble.libpebblecommon.connection.PebbleConnector
 import io.rebble.libpebblecommon.connection.PebbleDeviceFactory
+import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolRunner
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.PlatformIdentifier
+import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
@@ -35,9 +37,23 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
+import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.PutBytesService
+import io.rebble.libpebblecommon.services.SystemService
+import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineScope
@@ -93,6 +109,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::PlatformNotificationActionHandler)
                 singleOf(::PebbleDeviceFactory)
                 single { get<Database>().knownWatchDao() }
+                single { get<Database>().blobDBDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -145,7 +162,30 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::Mtu)
                     scopedOf(::ConnectivityWatcher)
                     scopedOf(::PebblePairing)
+                    scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
 
+                    // Services
+                    scopedOf(::SystemService)
+                    scopedOf(::AppRunStateService)
+                    scopedOf(::PutBytesService)
+                    scopedOf(::BlobDBService)
+                    scopedOf(::AppFetchService)
+                    scopedOf(::TimelineService)
+
+                    // Endpoint Managers
+                    scopedOf(::PutBytesSession)
+                    scoped { FirmwareUpdate(get(), get<TransportConnector>().disconnected, get(), get()) }
+                    scopedOf(::NotificationBlobDB)
+                    scopedOf(::TimelineActionManager)
+                    scopedOf(::NotificationManager)
+                    scopedOf(::AppBlobDB)
+                    scopedOf(::AppFetchProvider)
+                    scopedOf(::DebugPebbleProtocolSender)
+
+                    // TODO we ccoouulllddd scope this further to inject more things that we still
+                    //  pass in as args
+                    //  - transport connected = has connected gatt client
+                    //  - fully connected = has WatchInfo (more useful)
                 }
             }
         )

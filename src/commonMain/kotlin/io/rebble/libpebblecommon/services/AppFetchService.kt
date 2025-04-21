@@ -8,12 +8,16 @@ import io.rebble.libpebblecommon.packets.AppFetchResponseStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 
-class AppFetchService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
+class AppFetchService(
+    private val protocolHandler: PebbleProtocolHandler,
+    private val scope: CoroutineScope,
+) : ProtocolService {
     val receivedMessages = Channel<AppFetchIncomingPacket>(Channel.BUFFERED)
 
-    fun init(scope: CoroutineScope) {
-        scope.async {
+    fun init() {
+        scope.launch {
             protocolHandler.inboundMessages.collect {
                 if (it is AppFetchIncomingPacket) {
                     receivedMessages.trySend(it)

@@ -9,11 +9,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
-class AppRunStateService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService,
+class AppRunStateService(
+    private val protocolHandler: PebbleProtocolHandler,
+    private val scope: CoroutineScope,
+) : ProtocolService,
     ConnectedPebble.AppRunState {
-    val _runningApp = MutableStateFlow<Uuid?>(null)
+    private val _runningApp = MutableStateFlow<Uuid?>(null)
     val runningApp: StateFlow<Uuid?> = _runningApp
 
     override suspend fun launchApp(uuid: Uuid) {
@@ -24,8 +28,8 @@ class AppRunStateService(private val protocolHandler: PebbleProtocolHandler) : P
         protocolHandler.send(AppRunStateMessage.AppRunStateStop(uuidFrom(uuid.toString())))
     }
 
-    fun init(scope: CoroutineScope) {
-        scope.async {
+    fun init() {
+        scope.launch {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {
                     is AppRunStateMessage.AppRunStateStart ->

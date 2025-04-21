@@ -12,24 +12,24 @@ import io.rebble.libpebblecommon.services.AppFetchService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 class AppFetchProvider(
     private val pbwCache: LockerPBWCache,
     private val appFetchService: AppFetchService,
     private val putBytesSession: PutBytesSession,
-    private val watchType: WatchType,
+    private val scope: CoroutineScope,
 ) {
     companion object {
         private val logger = Logger.withTag(AppFetchProvider::class.simpleName!!)
     }
-    fun init(scope: CoroutineScope) {
-        scope.async {
+    fun init(watchType: WatchType) {
+        scope.launch {
             appFetchService.receivedMessages.consumeEach {
                 when (it) {
                     is AppFetchRequest -> {
@@ -43,14 +43,14 @@ class AppFetchProvider(
                             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
                             return@consumeEach
                         }
-                        sendApp(app, appId)
+                        sendApp(app, appId, watchType)
                     }
                 }
             }
         }
     }
 
-    private suspend fun sendApp(app: PbwApp, appId: UInt) {
+    private suspend fun sendApp(app: PbwApp, appId: UInt, watchType: WatchType) {
         val variant = watchType.getBestVariant(app.info.targetPlatforms) ?: run {
             logger.e { "No compatible variant found for ${app.info.targetPlatforms}" }
             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)

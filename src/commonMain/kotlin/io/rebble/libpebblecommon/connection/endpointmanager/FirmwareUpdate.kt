@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -27,19 +28,22 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
 }
 
 class FirmwareUpdate(
-    watchName: String,
+    transport: Transport,
     private val watchDisconnected: Deferred<Unit>,
-    private val watchPlatform: WatchHardwarePlatform,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
 ) : ConnectedPebble.Firmware {
-    private val logger = Logger.withTag("FWUpdate-${watchName}")
-    private val scope = CoroutineScope(Dispatchers.Default)
+    private val logger = Logger.withTag("FWUpdate-${transport.name}")
+    private lateinit var watchPlatform: WatchHardwarePlatform
 
     sealed class FirmwareUpdateStatus {
         data object WaitingToStart : FirmwareUpdateStatus()
         data class InProgress(val progress: Float) : FirmwareUpdateStatus()
         data object WaitingForReboot : FirmwareUpdateStatus()
+    }
+
+    fun setPlatform(watchPlatform: WatchHardwarePlatform) {
+        this.watchPlatform = watchPlatform
     }
 
     private fun performSafetyChecks(pbzFw: PbzFirmware) {

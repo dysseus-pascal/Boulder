@@ -24,8 +24,8 @@ class NotificationServiceTest {
                 })
             }
         }
-        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
-            init(backgroundScope)
+        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
+            init()
         })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()
@@ -46,8 +46,8 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
-            init(backgroundScope)
+        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
+            init()
         })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()
@@ -79,8 +79,8 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService((protocolHandler)).apply {
-            init(backgroundScope)
+        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
+            init()
         })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()

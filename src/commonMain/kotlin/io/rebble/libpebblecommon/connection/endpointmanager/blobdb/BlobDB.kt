@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDBDao
 import io.rebble.libpebblecommon.database.entity.BlobDBItem
 import io.rebble.libpebblecommon.database.entity.BlobDBItemSyncStatus
@@ -20,8 +21,10 @@ sealed class BlobDB(
     private val blobDBService: BlobDBService,
     private val watchDatabase: BlobCommand.BlobDatabase,
     protected val blobDBDao: BlobDBDao,
-    protected val watchIdentifier: String
+    protected val transport: Transport,
 ) {
+    protected val watchIdentifier: String = transport.identifier.asString
+
     companion object {
         private val BLOBDB_RESPONSE_TIMEOUT = 5000L
     }

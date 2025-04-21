@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.packets.blobdb.PushNotification
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.notification.NotificationService
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Ignore
@@ -79,7 +80,7 @@ class DeviceTests {
 
         val protocolHandler = TestPebbleProtocolHandler { receivePacket(sendWS(it, true)!!) }
 
-        val notificationService = NotificationService(BlobDBService(protocolHandler))
+        val notificationService = NotificationService(BlobDBService(protocolHandler, GlobalScope))
         val notificationResult = notificationService.send(notif)
 
         assertTrue(

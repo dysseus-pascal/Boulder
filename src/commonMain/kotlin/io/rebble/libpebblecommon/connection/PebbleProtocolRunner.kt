@@ -17,24 +17,25 @@ class PebbleProtocolStreams(
     // within a single PPoG packet (we could make this [Byte] (or use source/sink) if that
     // works OK (for all knowns LE watches)).
     val outboundPPBytes: Channel<ByteArray> = Channel(capacity = 100),
+    val inboundMessagesFlow: MutableSharedFlow<PebblePacket> = MutableSharedFlow(),
 )
 
-class PebbleProtocolRunner {
-    private val logger = Logger.withTag("PebbleProtocolRunner")
+class PebbleProtocolRunner(
+    private val pebbleProtocolStreams: PebbleProtocolStreams,
+    private val transport: Transport,
+) {
+    private val logger = Logger.withTag("PebbleProtocolRunner-$transport")
 
-    suspend fun run(
-        inboundPPBytes: ByteReadChannel,
-        inboundMessagesFlow: MutableSharedFlow<PebblePacket>,
-    ) {
+    suspend fun run() {
         try {
             while (true) {
-                val sizeBytes = inboundPPBytes.peek(2)
+                val sizeBytes = pebbleProtocolStreams.inboundPPBytes.peek(2)
                 val sizeArray = sizeBytes?.toByteArray()?.toUByteArray()
                     ?: throw IOException("couldn't read size")
                 val payloadSize = sizeArray.getUShortAt(0, littleEndian = false)
                 val packetSize = payloadSize + PP_HEADER_SIZE
                 val packetBytes =
-                    inboundPPBytes.readByteArray(packetSize.toInt())
+                    pebbleProtocolStreams.inboundPPBytes.readByteArray(packetSize.toInt())
                         .toUByteArray()
                 val packet = try {
                     PebblePacket.deserialize(packetBytes)
@@ -44,7 +45,7 @@ class PebbleProtocolRunner {
                 }
                 logger.d("inbound pebble protocol packet: $packet")
                 if (packet != null) {
-                    inboundMessagesFlow.emit(packet)
+                    pebbleProtocolStreams.inboundMessagesFlow.emit(packet)
                 }
             }
         } catch (e: IOException) {

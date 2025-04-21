@@ -1,12 +1,11 @@
 package io.rebble.libpebblecommon.connection.bt.ble.ppog
 
 import co.touchlab.kermit.Logger
-import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.connection.BleConfig
+import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
@@ -17,18 +16,16 @@ interface PPoGPacketSender {
     suspend fun sendPacket(packet: ByteArray): Boolean
 }
 
+class PPoGStream(val inboundPPoGBytesChannel: Channel<ByteArray> = Channel(capacity = 100))
+
 class PPoG(
-    private val inboundPPBytes: ByteWriteChannel,
-    private val outboundPPBytes: ReceiveChannel<ByteArray>,
-    private val inboundPacketData: ReceiveChannel<ByteArray>,
+    private val pebbleProtocolStreams: PebbleProtocolStreams,
+    private val pPoGStream: PPoGStream,
     private val pPoGPacketSender: PPoGPacketSender,
-    initialMtu: Int,
-    private val desiredTxWindow: Int,
-    private val desiredRxWindow: Int,
     private val bleConfig: BleConfig,
 ) {
     private val logger = Logger.withTag("PPoG")
-    private var mtu: Int = initialMtu
+    private var mtu: Int = bleConfig.initialMtu
 
     fun run(scope: CoroutineScope) {
         scope.launch {
@@ -44,7 +41,7 @@ class PPoG(
     private suspend inline fun <reified T : PPoGPacket> waitForPacket(): T {
         // Wait for reset request from watch
         while (true) {
-            val packet = inboundPacketData.receive().asPPoGPacket()
+            val packet = pPoGStream.inboundPPoGBytesChannel.receive().asPPoGPacket()
             if (packet !is T) {
                 // Not expected, but can happen (i.e. don't crash out): if a watch reconnects
                 // really quickly then we can see stale packets come through.
@@ -84,7 +81,7 @@ class PPoG(
     }
 
     // Negotiate connection
-    private suspend fun initWaitingForResetRequest(): PPoGConnectionParams? {
+    private suspend fun initWaitingForResetRequest(): PPoGConnectionParams {
         logger.d("initWaitingForResetRequest")
 
         val resetRequest = waitForPacket<PPoGPacket.ResetRequest>()
@@ -94,14 +91,14 @@ class PPoG(
         sendPacketImmediately(
             packet = PPoGPacket.ResetComplete(
                 sequence = 0,
-                rxWindow = min(desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
-                txWindow = min(desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
+                rxWindow = min(bleConfig.desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
+                txWindow = min(bleConfig.desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
             ),
             version = resetRequest.ppogVersion
         )
 
         // Wait for reset complete confirmation
-        val resetComplete = inboundPacketData.receive().asPPoGPacket()
+        val resetComplete = pPoGStream.inboundPPoGBytesChannel.receive().asPPoGPacket()
         if (resetComplete !is PPoGPacket.ResetComplete) throw IllegalStateException("expected ResetComplete got $resetComplete")
         logger.d("got $resetComplete")
 
@@ -126,7 +123,7 @@ class PPoG(
         while (true) {
 //            logger.v("select")
             select {
-                outboundPPBytes.onReceive { bytes ->
+                pebbleProtocolStreams.outboundPPBytes.onReceive { bytes ->
                     bytes.asList().chunked(maxDataBytes())
                         .map { chunk ->
                             PacketToSend(
@@ -144,7 +141,7 @@ class PPoG(
                             )
                         }
                 }
-                inboundPacketData.onReceive { bytes ->
+                pPoGStream.inboundPPoGBytesChannel.onReceive { bytes ->
                     val packet = bytes.asPPoGPacket()
                     logger.v("received packet: $packet")
                     when (packet) {
@@ -164,8 +161,8 @@ class PPoG(
                                 logger.w("data out of sequence; resending last ack")
                                 lastSentAck?.let { sendPacketImmediately(it, params.pPoGversion) }
                             } else {
-                                inboundPPBytes.writeByteArray(packet.data)
-                                inboundPPBytes.flush()
+                                pebbleProtocolStreams.inboundPPBytes.writeByteArray(packet.data)
+                                pebbleProtocolStreams.inboundPPBytes.flush()
                                 inboundSequence.increment()
                                 // TODO coalesced ACKing
                                 lastSentAck = PPoGPacket.Ack(sequence = packet.sequence)

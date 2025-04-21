@@ -1,30 +1,22 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
-import io.ktor.utils.io.ByteChannel
 import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
-import io.rebble.libpebblecommon.connection.PebbleDevice
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.GATT_SERVICES
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.SERVER_META_RESPONSE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
+import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
 import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,45 +27,24 @@ class PebbleBle(
     private val transport: BleTransport,
     private val scope: CoroutineScope,
     private val gattConnector: GattConnector,
+    private val ppog: PPoG,
+    private val ppogPacketSender: PPoGPacketSender,
+    private val pPoGStream: PPoGStream,
+    private val connectionParams: ConnectionParams,
+    private val mtuParam: Mtu,
+    private val connectivity: ConnectivityWatcher,
+    private val pairing: PebblePairing,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${transport.identifier.asString}")
 
     override suspend fun connect(): PebbleConnectionResult =
         withContext(Dispatchers.Main) {
-            val inboundPPoGBytesChannel = Channel<ByteArray>(capacity = 100)
-
             logger.d("connect() reversedPPoG = ${config.bleConfig.reversedPPoG}")
-            val ppogPacketSender: PPoGPacketSender = if (config.bleConfig.reversedPPoG) {
-                PpogClient(inboundPPoGBytesChannel, scope)
-            } else {
+            if (!config.bleConfig.reversedPPoG) {
                 val gs = gattServer
                 check(gs != null)
-                gs.registerDevice(transport, inboundPPoGBytesChannel)
-                object : PPoGPacketSender {
-                    override suspend fun sendPacket(packet: ByteArray): Boolean {
-                        return gattServer?.sendData(
-                            transport = transport,
-                            serviceUuid = PPOGATT_DEVICE_SERVICE_UUID_SERVER,
-                            characteristicUuid = PPOGATT_DEVICE_CHARACTERISTIC_SERVER,
-                            data = packet
-                        ) ?: false
-                    }
-                }
+                gs.registerDevice(transport, pPoGStream.inboundPPoGBytesChannel)
             }
-
-            val inboundPPChannel = ByteChannel()
-            val outboundPPChannel = Channel<ByteArray>(capacity = 100)
-
-            val ppog = PPoG(
-                inboundPPBytes = inboundPPChannel,
-                outboundPPBytes = outboundPPChannel,
-                inboundPacketData = inboundPPoGBytesChannel,
-                pPoGPacketSender = ppogPacketSender,
-                initialMtu = DEFAULT_MTU,
-                desiredTxWindow = MAX_TX_WINDOW,
-                desiredRxWindow = MAX_RX_WINDOW,
-                bleConfig = config.bleConfig,
-            )
 
             val device = gattConnector.connect()
             if (device == null) {
@@ -83,15 +54,13 @@ class PebbleBle(
             val services = device.discoverServices()
             logger.d("services = $services")
 
-            val connectionParams = ConnectionParams(device, scope)
-            if (!connectionParams.subscribeAndConfigure()) {
+            if (!connectionParams.subscribeAndConfigure(device)) {
                 // this can happen on some older firmwares (PRF?)
                 logger.i("error setting up connection params")
             }
             logger.d("done connectionParams")
 
-            val mtuParam = Mtu(device, scope)
-            if (!mtuParam.subscribe()) {
+            if (!mtuParam.subscribe(device)) {
                 logger.w("failed to subscribe to mtu")
             }
             logger.d("subscribed mtu")
@@ -102,11 +71,10 @@ class PebbleBle(
                     ppog.updateMtu(newMtu)
                 }
             }
-            mtuParam.update(TARGET_MTU)
+            mtuParam.update(device, TARGET_MTU)
             logger.d("done mtu update")
 
-            val connectivity = ConnectivityWatcher(device, scope)
-            if (!connectivity.subscribe()) {
+            if (!connectivity.subscribe(device)) {
                 logger.d("failed to subscribe to connectivity")
                 return@withContext PebbleConnectionResult.Failed("failed to subscribe to connectivity")
             }
@@ -135,27 +103,17 @@ class PebbleBle(
             }
 
             if (needToPair) {
-                val pairing = PebblePairing(
-                    device,
-                    config.context,
-                    transport,
-                    connectivity.status,
-                    config.bleConfig,
-                )
-                pairing.requestPairing(connectionStatus)
+                pairing.requestPairing(device, connectionStatus, connectivity.status)
             }
 
             if (ppogPacketSender is PpogClient) {
                 // TODO do this better if it works
+                // FIXME
                 ppogPacketSender.init(device)
             }
 
             ppog.run(scope)
-            return@withContext PebbleConnectionResult.Success(
-                inboundPPBytes = inboundPPChannel,
-                outboundPPBytes = outboundPPChannel,
-            )
-            // TODO update PPoG with new MTU whenever we get it
+            return@withContext PebbleConnectionResult.Success
         }
 
     override suspend fun disconnect() {

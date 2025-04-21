@@ -1,6 +1,9 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
@@ -28,6 +31,9 @@ data class BleConfig(
     val pinAddress: Boolean,
     val phoneRequestsPairing: Boolean,
     val writeConnectivityTrigger: Boolean,
+    val initialMtu: Int = DEFAULT_MTU,
+    val desiredTxWindow: Int = MAX_TX_WINDOW,
+    val desiredRxWindow: Int = MAX_RX_WINDOW,
 )
 
 typealias PebbleDevices = Flow<List<PebbleDevice>>

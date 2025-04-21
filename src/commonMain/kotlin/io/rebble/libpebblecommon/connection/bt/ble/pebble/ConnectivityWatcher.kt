@@ -17,14 +17,11 @@ import kotlin.properties.Delegates
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
-class ConnectivityWatcher(
-    private val gattClient: ConnectedGattClient,
-    private val scope: CoroutineScope,
-) {
+class ConnectivityWatcher(private val scope: CoroutineScope) {
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 
-    suspend fun subscribe(): Boolean {
+    suspend fun subscribe(gattClient: ConnectedGattClient): Boolean {
         scope.launch {
             gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
                 ?.collect {

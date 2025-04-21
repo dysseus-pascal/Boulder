@@ -42,13 +42,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
-    class Success(
-        val inboundPPBytes: ByteReadChannel,
-        // Using ByteArray here because I'm not 100% sure how the watch handles multiple PP messages
-        // within a single PPoG packet (we could make this [Byte] (or use source/sink) if that
-        // works OK (for all knowns LE watches)).
-        val outboundPPBytes: Channel<ByteArray>,
-    ) : PebbleConnectionResult()
+    data object Success : PebbleConnectionResult()
 
     class Failed(reason: String) : PebbleConnectionResult()
 }
@@ -98,6 +92,7 @@ class PebbleConnector(
     private val platformNotificationActionHandler: PlatformNotificationActionHandler,
     private val database: Database,
     private val pbwCache: LockerPBWCache,
+    private val pebbleProtocolStreams: PebbleProtocolStreams,
 ) {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -123,18 +118,18 @@ class PebbleConnector(
 
                     override suspend fun send(message: PebblePacket, priority: PacketPriority) {
                         logger.d("sending $message")
-                        result.outboundPPBytes.send(message.serialize().asByteArray())
+                        pebbleProtocolStreams.outboundPPBytes.send(message.serialize().asByteArray())
                     }
 
                     override suspend fun send(message: ByteArray, priority: PacketPriority) {
                         logger.d("sending ${message.joinToString()}")
-                        result.outboundPPBytes.send(message)
+                        pebbleProtocolStreams.outboundPPBytes.send(message)
                     }
                 }
 
                 _state.value = Negotiating(transport)
                 scope.launch {
-                    pebbleProtocolRunner.run(result.inboundPPBytes, inboundMessagesFlow)
+                    pebbleProtocolRunner.run(pebbleProtocolStreams.inboundPPBytes, inboundMessagesFlow)
                 }
 
                 val systemService = SystemService(protocolHandler).apply { init(scope) }

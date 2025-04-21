@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOG
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_WRITE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_CLIENT
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
+import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
 import kotlinx.coroutines.CoroutineScope
@@ -12,7 +13,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 class PpogClient(
-    private val inboundBytes: Channel<ByteArray>,
+    private val pPoGStream: PPoGStream,
     private val scope: CoroutineScope,
 ) : PPoGPacketSender {
     private lateinit var gattClient: ConnectedGattClient
@@ -32,7 +33,7 @@ class PpogClient(
         scope.launch {
             flow.collect {
 //                Logger.d("PpogClient inbound... ${it.joinToString()}")
-                inboundBytes.send(it)
+                pPoGStream.inboundPPoGBytesChannel.send(it)
             }
         }
     }

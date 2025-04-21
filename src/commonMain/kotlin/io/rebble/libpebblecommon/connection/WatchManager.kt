@@ -102,6 +102,7 @@ class WatchManager(
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
     private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
     val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
+    private val activeConnections = mutableSetOf<Transport>()
 
     private suspend fun loadKnownWatchesFromDb() {
         allWatches.value = knownWatchDao.knownWatches().associate {
@@ -251,7 +252,8 @@ class WatchManager(
             return
         }
         updateWatch(transport = device.transport) { watch ->
-            val connectionExists = allWatches.value[transport]?.activeConnection != null
+//            val connectionExists = allWatches.value[transport]?.activeConnection != null
+            val connectionExists = activeConnections.contains(transport)
             if (connectionExists) {
                 logger.e("Already connecting to $transport (this is a bug)")
                 return@updateWatch null
@@ -287,6 +289,7 @@ class WatchManager(
                 return@updateWatch null
             }
 
+            activeConnections.add(transport)
             val deviceIdString = transport.identifier.asString
             val coroutineContext =
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
@@ -329,9 +332,13 @@ class WatchManager(
             logger.w("cleanup: timed out waiting for disconnection from ${transport}")
         }
         logger.d("${transport}: cleanup: removing active device")
-        updateWatch(transport) { it.copy(activeConnection = null) }
         logger.d("${transport}: cleanup: cancelling scope")
         close()
+        // FIXME OK so I think the bug here is that the state machine fires earlier than this
+        //  cleanup has finished, so it is trying to reconnect before we have finished with this...
+        //  ... trying with the updateWatch at the end...
+        activeConnections.remove(transport)
+        updateWatch(transport) { it.copy(activeConnection = null) }
     }
 
     private fun disconnectFrom(transport: Transport) {

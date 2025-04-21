@@ -10,8 +10,8 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-class ConnectionParams(private val gattClient: ConnectedGattClient, private val scope: CoroutineScope) {
-    suspend fun subscribeAndConfigure(): Boolean {
+class ConnectionParams(private val scope: CoroutineScope) {
+    suspend fun subscribeAndConfigure(gattClient: ConnectedGattClient): Boolean {
         // TODO scope this
         val sub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTION_PARAMETERS_CHARACTERISTIC)
         if (sub == null) {

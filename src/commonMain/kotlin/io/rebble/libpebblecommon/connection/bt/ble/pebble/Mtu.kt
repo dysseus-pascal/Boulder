@@ -15,11 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class Mtu(private val gattClient: ConnectedGattClient, private val scope: CoroutineScope) {
+class Mtu(private val scope: CoroutineScope) {
     private val _mtu = MutableStateFlow(DEFAULT_MTU)
     val mtu: StateFlow<Int> = _mtu.asStateFlow()
 
-    suspend fun subscribe(): Boolean {
+    suspend fun subscribe(gattClient: ConnectedGattClient): Boolean {
         val flow = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, MTU_CHARACTERISTIC)
             ?: return false
         scope.launch {
@@ -38,7 +38,7 @@ class Mtu(private val gattClient: ConnectedGattClient, private val scope: Corout
         return true
     }
 
-    suspend fun update(mtu: Int) {
+    suspend fun update(gattClient: ConnectedGattClient, mtu: Int) {
         val buffer = ByteBuffer(ByteArray(2), order = LittleEndian)
         buffer.ushort = mtu.toUShort()
         buffer.flip()

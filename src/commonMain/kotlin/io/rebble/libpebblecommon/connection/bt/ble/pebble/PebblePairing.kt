@@ -21,14 +21,16 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 
 class PebblePairing(
-    val device: ConnectedGattClient,
     val context: AppContext,
     val transport: Transport,
-    val connectivity: Flow<ConnectivityStatus>,
     val bleConfig: BleConfig,
 ) {
     //    @Throws(IOException::class, SecurityException::class)
-    suspend fun requestPairing(connectivityRecord: ConnectivityStatus) {
+    suspend fun requestPairing(
+        device: ConnectedGattClient,
+        connectivityRecord: ConnectivityStatus,
+        connectivity: Flow<ConnectivityStatus>,
+    ) {
         Logger.d("Requesting pairing")
         Logger.d("Requesting pairing/services = ${device.services}")
         val pairingService =

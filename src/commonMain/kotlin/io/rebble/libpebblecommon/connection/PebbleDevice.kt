@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
-import io.rebble.libpebblecommon.js.PebbleJsDevice
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -120,7 +119,6 @@ object ConnectedPebble {
 }
 
 interface ConnectedPebbleDevice : KnownPebbleDevice,
-    PebbleJsDevice,
     ActiveDevice, ConnectedPebble.Notifications,
     ConnectedPebble.Debug,
     ConnectedPebble.Messages,

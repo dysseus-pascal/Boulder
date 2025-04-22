@@ -7,7 +7,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.io.files.Path
 
-abstract class JsRunner(val appInfo: PbwAppInfo, val lockerEntry: LockerEntry, val jsPath: Path, val device: PebbleJsDevice) {
+abstract class JsRunner(
+    val appInfo: PbwAppInfo,
+    val lockerEntry: LockerEntry,
+    val jsPath: Path,
+    val device: PebbleJSDevice
+) {
     abstract suspend fun start()
     abstract suspend fun stop()
     abstract fun loadUrl(url: String)

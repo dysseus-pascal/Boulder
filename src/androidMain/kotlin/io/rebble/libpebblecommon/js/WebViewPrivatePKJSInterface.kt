@@ -16,7 +16,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 
-class WebViewPrivatePKJSInterface(private val jsRunner: WebViewJsRunner, private val scope: CoroutineScope, private val outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>): PrivatePKJSInterface {
+class WebViewPrivatePKJSInterface(
+    private val jsRunner: WebViewJsRunner,
+    private val device: PebbleJSDevice,
+    private val scope: CoroutineScope,
+    private val outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>
+): PrivatePKJSInterface {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)
@@ -117,7 +122,7 @@ class WebViewPrivatePKJSInterface(private val jsRunner: WebViewJsRunner, private
 
     @JavascriptInterface
     fun getActivePebbleWatchInfo(): String {
-        val info = jsRunner.device.watchInfo
+        val info = device.watchInfo
         return Json.encodeToString(ActivePebbleWatchInfo.fromWatchInfo(info))
     }
 }

@@ -45,6 +45,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
+import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
@@ -129,6 +130,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::PebbleDeviceFactory)
                 single { get<Database>().knownWatchDao() }
                 single { get<Database>().blobDBDao() }
+                single { get<Database>().lockerEntryDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -204,6 +206,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::AppBlobDB)
                     scopedOf(::AppFetchProvider)
                     scopedOf(::DebugPebbleProtocolSender)
+                    scopedOf(::PKJSLifecycleManager)
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

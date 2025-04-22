@@ -1,5 +1,8 @@
 package io.rebble.libpebblecommon.js
 
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.ConnectedWatchInfo
+import io.rebble.libpebblecommon.services.WatchInfo
 import java.security.MessageDigest
 import java.util.Locale
 import kotlin.uuid.Uuid
@@ -23,8 +26,8 @@ object JsTokenUtil {
         return md5Digest(unhashed)
     }
 
-    suspend fun getWatchToken(uuid: Uuid, developerId: String?, device: PebbleJsDevice): String {
-        val serial = device.watchInfo.serial
+    suspend fun getWatchToken(uuid: Uuid, developerId: String?, watchInfo: WatchInfo): String {
+        val serial = watchInfo.serial
         return generateToken(uuid, developerId, serial)
     }
 

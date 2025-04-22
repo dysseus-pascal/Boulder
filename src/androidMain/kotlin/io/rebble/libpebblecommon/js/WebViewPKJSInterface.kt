@@ -10,14 +10,14 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlin.uuid.Uuid
 
-class WebViewPKJSInterface(private val jsRunner: JsRunner, private val context: Context): PKJSInterface {
+class WebViewPKJSInterface(private val jsRunner: JsRunner, private val device: PebbleJSDevice, private val context: Context): PKJSInterface {
     companion object {
         private val logger = Logger.withTag(WebViewPKJSInterface::class.simpleName!!)
     }
     @JavascriptInterface
     override fun showSimpleNotificationOnPebble(title: String, notificationText: String) {
         runBlocking {
-            jsRunner.device.sendNotification(
+            device.sendNotification(
                 buildNotificationItem(Uuid.random()) {
                     timestamp = Clock.System.now().epochSeconds.toUInt()
                     attributes {
@@ -43,7 +43,7 @@ class WebViewPKJSInterface(private val jsRunner: JsRunner, private val context: 
             JsTokenUtil.getWatchToken(
                 uuid = Uuid.parse(jsRunner.appInfo.uuid),
                 developerId = jsRunner.lockerEntry.appstoreData?.developerId,
-                device = jsRunner.device
+                watchInfo = device.watchInfo
             )
         }
     }

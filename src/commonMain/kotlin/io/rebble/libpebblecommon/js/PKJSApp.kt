@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -31,7 +32,13 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlin.uuid.Uuid
 
-class PKJSApp(private val appContext: AppContext, private val jsPath: Path, val appInfo: PbwAppInfo, val lockerEntry: LockerEntry) {
+class PKJSApp(
+    private val appContext: AppContext,
+    private val device: PebbleJSDevice,
+    private val jsPath: Path,
+    val appInfo: PbwAppInfo,
+    val lockerEntry: LockerEntry
+) {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
     }
@@ -39,7 +46,7 @@ class PKJSApp(private val appContext: AppContext, private val jsPath: Path, val 
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
 
-    private fun launchIncomingAppMessageHandler(device: PebbleJsDevice, scope: CoroutineScope) {
+    private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {
             if (it.uuid != uuid) {
                 logger.v { "Ignoring app message for different app: ${it.uuid} != $uuid" }
@@ -54,7 +61,7 @@ class PKJSApp(private val appContext: AppContext, private val jsPath: Path, val 
         }.launchIn(scope)
     }
 
-    private fun launchOutgoingAppMessageHandler(device: PebbleJsDevice, scope: CoroutineScope) {
+    private fun launchOutgoingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         jsRunner?.outgoingAppMessages?.onEach { (tIDDeferred, data) ->
             logger.d { "Sending app message: $data" }
             val tID = device.transactionSequence.next()
@@ -77,7 +84,7 @@ class PKJSApp(private val appContext: AppContext, private val jsPath: Path, val 
         }?.launchIn(scope) ?: error("JsRunner not initialized")
     }
 
-    suspend fun start(device: PebbleJsDevice, connectionScope: CoroutineScope) {
+    suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
         jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath)

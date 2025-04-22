@@ -36,7 +36,7 @@ import kotlinx.serialization.json.Json
 
 class WebViewJsRunner(
     val context: Context,
-    device: PebbleJsDevice,
+    device: PebbleJSDevice,
     val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
@@ -52,8 +52,8 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private val initializedLock = Object()
-    private val publicJsInterface = WebViewPKJSInterface(this, context)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, scope, _outgoingAppMessages)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages)
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface)

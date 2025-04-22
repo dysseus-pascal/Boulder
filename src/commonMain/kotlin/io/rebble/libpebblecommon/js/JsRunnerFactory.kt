@@ -9,7 +9,7 @@ import kotlinx.io.files.Path
 expect fun createJsRunner(
     appContext: AppContext,
     scope: CoroutineScope,
-    device: PebbleJsDevice,
+    device: PebbleJSDevice,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path

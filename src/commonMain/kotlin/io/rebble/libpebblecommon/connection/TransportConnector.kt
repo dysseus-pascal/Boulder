@@ -10,9 +10,11 @@ import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
+import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
@@ -80,6 +82,7 @@ class PebbleConnector(
     private val timelineActionManager: TimelineActionManager,
     private val appBlobDB: AppBlobDB,
     private val notificationManager: NotificationManager,
+    private val pkjsLifecycleManager: PKJSLifecycleManager,
     private val appFetchProvider: AppFetchProvider,
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
 ) {
@@ -149,6 +152,7 @@ class PebbleConnector(
                 timelineActionManager.init()
                 appFetchProvider.init(watchInfo.platform.watchType)
                 appMessageService.init()
+                pkjsLifecycleManager.init(transport, watchInfo)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

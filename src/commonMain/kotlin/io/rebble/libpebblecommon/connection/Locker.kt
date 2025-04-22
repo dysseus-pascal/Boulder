@@ -295,6 +295,7 @@ abstract class LockerPBWCache(context: AppContext) {
         return when {
             SystemFileSystem.exists(pkjsPath) -> pkjsPath
             SystemFileSystem.exists(appPath) -> {
+                SystemFileSystem.createDirectories(pkjsCacheDir, false)
                 val pbwApp = PbwApp(pathForApp(appId))
                 pbwApp.getPKJSFile().use { source ->
                     SystemFileSystem.sink(pkjsPath).use { sink ->

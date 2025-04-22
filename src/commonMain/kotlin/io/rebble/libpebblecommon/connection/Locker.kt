@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -40,7 +41,7 @@ class Locker(
     private val database: Database,
     private val lockerPBWCache: LockerPBWCache,
     private val scope: CoroutineScope
-) {
+) : LockerApi {
     private val lockerEntryDao: LockerEntryDao = database.lockerEntryDao()
     private val lockerSyncStatusDao: LockerSyncStatusDao = database.lockerSyncStatusDao()
 
@@ -67,6 +68,12 @@ class Locker(
             }
         }
     }
+
+    override suspend fun sideloadApp(pbwPath: Path) {
+        sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
+    }
+
+    override fun getLocker(): Flow<List<LockerEntry>> = lockerEntryDao.getAll()
 
     suspend fun update(locker: LockerModel) {
         logger.d("update: ${locker.applications.size}")
@@ -168,7 +175,7 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean = true) {
+    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean) {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val uuid = Uuid.parse(pbwApp.info.uuid)
         pbwApp.source().buffered().use {

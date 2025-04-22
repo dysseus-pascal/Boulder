@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MT
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
+import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
@@ -34,11 +35,12 @@ data class BleConfig(
     val initialMtu: Int = DEFAULT_MTU,
     val desiredTxWindow: Int = MAX_TX_WINDOW,
     val desiredRxWindow: Int = MAX_RX_WINDOW,
+    val useNativeMtu: Boolean,
 )
 
 typealias PebbleDevices = Flow<List<PebbleDevice>>
 
-interface LibPebble : Scanning, RequestSync {
+interface LibPebble : Scanning, RequestSync, LockerApi {
     fun init()
 
     val watches: PebbleDevices
@@ -48,7 +50,6 @@ interface LibPebble : Scanning, RequestSync {
     suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
     suspend fun deleteNotification(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
-    suspend fun sideloadApp(pbwPath: Path)
     // ....
 }
 
@@ -71,6 +72,11 @@ interface RequestSync {
     fun requestLockerSync()
 }
 
+interface LockerApi {
+    suspend fun sideloadApp(pbwPath: Path)
+    fun getLocker(): Flow<List<LockerEntry>>
+}
+
 // Impl
 
 class LibPebble3(
@@ -80,7 +86,7 @@ class LibPebble3(
     private val locker: Locker,
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
-) : LibPebble, Scanning by scanning, RequestSync by webSyncManager {
+) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
@@ -105,10 +111,6 @@ class LibPebble3(
 
     override suspend fun sendPing(cookie: UInt) {
         forEachConnectedWatch { sendPing(cookie) }
-    }
-
-    override suspend fun sideloadApp(pbwPath: Path) {
-        locker.sideloadApp(PbwApp(pbwPath))
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {

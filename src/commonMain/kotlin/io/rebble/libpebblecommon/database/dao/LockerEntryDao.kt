@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
+import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
@@ -30,6 +31,9 @@ abstract class LockerEntryDao {
     @Query("SELECT * FROM LockerEntry")
     @Transaction
     abstract suspend fun getAllWithPlatforms(): List<LockerEntryWithPlatforms>
+
+    @Query("SELECT * FROM LockerEntry")
+    abstract fun getAll(): Flow<List<LockerEntry>>
 
     @Query("SELECT * FROM LockerEntry WHERE id = :id")
     abstract suspend fun get(id: Uuid): LockerEntry?

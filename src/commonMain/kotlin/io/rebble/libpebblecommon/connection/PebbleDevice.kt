@@ -66,6 +66,13 @@ object ConnectedPebble {
         suspend fun deleteNotification(itemId: Uuid)
     }
 
+    interface AppMessages {
+        val inboundAppMessages: Flow<AppMessageData>
+        val transactionSequence: Iterator<Byte>
+        suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult
+        suspend fun sendAppMessageResult(appMessageResult: AppMessageResult)
+    }
+
     interface Debug {
         suspend fun sendPing(cookie: UInt): UInt
     }
@@ -103,6 +110,7 @@ object ConnectedPebble {
         val notifications: ConnectedPebble.Notifications,
         val messages: Messages,
         val time: Time,
+        val appMessages: AppMessages
     )
 }
 
@@ -114,4 +122,5 @@ interface ConnectedPebbleDevice : KnownPebbleDevice,
     ConnectedPebble.Locker,
     ConnectedPebble.AppRunState,
     ConnectedWatchInfo,
-    ConnectedPebble.Time
+    ConnectedPebble.Time,
+    ConnectedPebble.AppMessages

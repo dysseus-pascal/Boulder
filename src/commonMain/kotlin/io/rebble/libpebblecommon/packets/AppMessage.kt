@@ -3,7 +3,17 @@ package io.rebble.libpebblecommon.packets
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
-import io.rebble.libpebblecommon.structmapper.*
+import io.rebble.libpebblecommon.structmapper.SByte
+import io.rebble.libpebblecommon.structmapper.SBytes
+import io.rebble.libpebblecommon.structmapper.SFixedList
+import io.rebble.libpebblecommon.structmapper.SInt
+import io.rebble.libpebblecommon.structmapper.SShort
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.SUShort
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMappable
+import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 import kotlin.uuid.Uuid
@@ -18,7 +28,7 @@ class AppMessageTuple() : StructMappable() {
 
         companion object {
             fun fromValue(value: UByte): Type {
-                return values().firstOrNull { it.value == value } ?: error("Unknown type: $value")
+                return entries.firstOrNull { it.value == value } ?: error("Unknown type: $value")
             }
         }
     }
@@ -30,6 +40,15 @@ class AppMessageTuple() : StructMappable() {
 
     init {
         data.linkWithSize(dataLength)
+    }
+
+    fun getTypedData(): Any {
+        return when (Type.fromValue(type.get())) {
+            Type.ByteArray -> dataAsBytes
+            Type.CString -> dataAsString
+            Type.UInt -> dataAsUnsignedNumber
+            Type.Int -> dataAsSignedNumber
+        }
     }
 
     val dataAsBytes: UByteArray

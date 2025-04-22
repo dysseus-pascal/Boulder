@@ -1,8 +1,108 @@
 package io.rebble.libpebblecommon.services.appmessage
 
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppIconMessage
+import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppTitleMessage
+import io.rebble.libpebblecommon.packets.AppMessage
+import io.rebble.libpebblecommon.packets.AppMessageTuple
 import io.rebble.libpebblecommon.services.ProtocolService
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlin.uuid.Uuid
 
-class AppMessageService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService {
-     // sorry for the merge conflict
+class AppMessageService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService, ConnectedPebble.AppMessages {
+    private val receivedMessages = Channel<AppMessageData>(Channel.BUFFERED)
+    override val inboundAppMessages: Flow<AppMessageData> = receivedMessages.consumeAsFlow()
+    override val transactionSequence: Iterator<Byte> = AppMessageTransactionSequence().iterator()
+    private var appMessageCallback: CompletableDeferred<AppMessage>? = null
+
+    fun init(scope: CoroutineScope) {
+        protocolHandler.inboundMessages.onEach {
+            if (it is AppMessage.AppMessagePush) {
+                receivedMessages.trySend(it.appMessageData())
+            }
+        }.launchIn(scope)
+    }
+
+    /**
+     * Send an AppMessage
+     */
+    override suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult {
+        val callback = CompletableDeferred<AppMessage>()
+        appMessageCallback = callback
+        val appMessage = AppMessage.AppMessagePush(
+            transactionId = appMessageData.transactionId.toUByte(),
+            uuid = appMessageData.uuid,
+            tuples = appMessageData.data.toAppMessageTuples()
+        )
+        protocolHandler.send(appMessage)
+        return when (val result = appMessageCallback?.await()) {
+            is AppMessage.AppMessageACK -> result.appMessageResult()
+            is AppMessage.AppMessageNACK -> result.appMessageResult()
+            else -> throw IllegalStateException("Unexpected result: $result")
+        }
+    }
+
+    override suspend fun sendAppMessageResult(appMessageResult: AppMessageResult) {
+        val appMessage = when (appMessageResult) {
+            is AppMessageResult.ACK -> AppMessage.AppMessageACK(appMessageResult.transactionId.toUByte())
+            is AppMessageResult.NACK -> AppMessage.AppMessageNACK(appMessageResult.transactionId.toUByte())
+        }
+        protocolHandler.send(appMessage)
+    }
+
+    suspend fun send(packet: AppCustomizationSetStockAppIconMessage) {
+        protocolHandler.send(packet)
+    }
+
+    suspend fun send(packet: AppCustomizationSetStockAppTitleMessage) {
+        protocolHandler.send(packet)
+    }
 }
+
+private fun Map<Int, Any>.toAppMessageTuples(): List<AppMessageTuple> {
+    return map { (key, value) ->
+        val k = key.toUInt()
+        when (value) {
+            is String -> AppMessageTuple.createString(k, value)
+            is UByteArray -> AppMessageTuple.createUByteArray(k, value)
+            is ByteArray -> AppMessageTuple.createUByteArray(k, value.asUByteArray())
+            is Int -> AppMessageTuple.createInt(k, value)
+            is UInt -> AppMessageTuple.createUInt(k, value)
+            is Short -> AppMessageTuple.createShort(k, value)
+            is UShort -> AppMessageTuple.createUShort(k, value)
+            is Byte -> AppMessageTuple.createByte(k, value)
+            is UByte -> AppMessageTuple.createUByte(k, value)
+            is Boolean -> AppMessageTuple.createShort(k, if (value) 1 else 0)
+            else -> throw IllegalArgumentException("Unsupported type: ${value::class.simpleName}")
+        }
+    }
+}
+
+data class AppMessageData(
+    val transactionId: Byte,
+    val uuid: Uuid,
+    val data: Map<Int, Any>
+)
+
+sealed class AppMessageResult(val transactionId: Byte) {
+    class ACK(transactionId: Byte) : AppMessageResult(transactionId)
+    class NACK(transactionId: Byte) : AppMessageResult(transactionId)
+}
+
+private fun AppMessage.AppMessagePush.appMessageData(): AppMessageData {
+    return AppMessageData(
+        transactionId = transactionId.get().toByte(),
+        uuid = uuid.get(),
+        data = dictionary.list.associate { it.key.get().toInt() to it.getTypedData() }
+    )
+}
+
+private fun AppMessage.AppMessageACK.appMessageResult() = AppMessageResult.ACK(transactionId.get().toByte())
+private fun AppMessage.AppMessageNACK.appMessageResult() = AppMessageResult.NACK(transactionId.get().toByte())

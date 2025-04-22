@@ -51,3 +51,7 @@ private fun peripheralFromUuid(uuid: Uuid): Peripheral? = try {
     Logger.d("ios peripheral not found: $uuid")
     null
 }
+
+actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+    throw IllegalStateException("not supported")
+}

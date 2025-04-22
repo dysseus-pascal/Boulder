@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.oldguy.common.getUShortAt
 import com.oldguy.common.io.Buffer.ByteOrder.LittleEndian
 import com.oldguy.common.io.ByteBuffer
+import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.MTU_CHARACTERISTIC
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
@@ -14,8 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okio.ArrayIndexOutOfBoundsException
 
-class Mtu(private val scope: CoroutineScope) {
+class Mtu(private val scope: CoroutineScope, private val bleConfig: BleConfig) {
     private val _mtu = MutableStateFlow(DEFAULT_MTU)
     val mtu: StateFlow<Int> = _mtu.asStateFlow()
 
@@ -24,21 +26,27 @@ class Mtu(private val scope: CoroutineScope) {
             ?: return false
         scope.launch {
             flow.collect { mtuBytes ->
-                val mtu = mtuBytes.toUShortLittleEndian().toInt()
-                _mtu.value = mtu
+                mtuBytes.toUShortLittleEndian()?.toInt()?.let {
+                    _mtu.value = it
+                }
             }
         }
         Logger.d("about to read mtu")
         val currentMtu = gattClient.readCharacteristic(PAIRING_SERVICE_UUID, MTU_CHARACTERISTIC)
-        Logger.d("read mtu: $currentMtu")
+        Logger.d("read mtu: ${currentMtu?.joinToString()}")
         if (currentMtu != null) {
-            val mtu = currentMtu.toUShortLittleEndian().toInt()
-            _mtu.value = mtu
+            currentMtu.toUShortLittleEndian()?.toInt()?.let {
+                _mtu.value = it
+            }
         }
         return true
     }
 
     suspend fun update(gattClient: ConnectedGattClient, mtu: Int) {
+        if (bleConfig.useNativeMtu) {
+            _mtu.value = gattClient.requestMtu(mtu)
+            return
+        }
         val buffer = ByteBuffer(ByteArray(2), order = LittleEndian)
         buffer.ushort = mtu.toUShort()
         buffer.flip()
@@ -53,4 +61,9 @@ class Mtu(private val scope: CoroutineScope) {
     }
 }
 
-fun ByteArray.toUShortLittleEndian(): UShort = toUByteArray().getUShortAt(0, littleEndian = true)
+fun ByteArray.toUShortLittleEndian(): UShort? = try {
+    toUByteArray().getUShortAt(0, littleEndian = true)
+} catch (e: ArrayIndexOutOfBoundsException) {
+    Logger.w("toUShortLittleEndian", e)
+    null
+}

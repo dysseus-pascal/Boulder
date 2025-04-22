@@ -7,3 +7,6 @@ import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTran
 actual fun peripheralFromIdentifier(transport: BleTransport): Peripheral? {
     TODO("Not yet implemented")
 }
+
+actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+}

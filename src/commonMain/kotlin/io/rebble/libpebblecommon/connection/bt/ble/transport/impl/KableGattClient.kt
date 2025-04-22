@@ -70,6 +70,8 @@ class KableGattConnector(
     }
 }
 
+expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
+
 class KableConnectedGattClient(
     val transport: BleTransport,
     val scope: CoroutineScope,
@@ -135,6 +137,10 @@ class KableConnectedGattClient(
     }
 
     override val services: List<GattService>? = mapServices()
+
+    override suspend fun requestMtu(mtu: Int): Int {
+        return peripheral.requestMtuNative(mtu)
+    }
 
     override fun close() {
         peripheral.close()

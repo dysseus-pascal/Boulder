@@ -32,4 +32,5 @@ interface ConnectedGattClient : AutoCloseable {
     suspend fun writeCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid, value: ByteArray, writeType: GattWriteType): Boolean
     suspend fun readCharacteristic(serviceUuid: Uuid, characteristicUuid: Uuid): ByteArray?
     val services: List<GattService>?
+    suspend fun requestMtu(mtu: Int): Int
 }

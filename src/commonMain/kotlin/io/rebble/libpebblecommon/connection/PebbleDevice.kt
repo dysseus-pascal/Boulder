@@ -7,7 +7,10 @@ import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.services.appmessage.AppMessageData
+import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.files.Path
 import kotlin.uuid.Uuid
 
@@ -96,6 +99,7 @@ object ConnectedPebble {
 
     interface AppRunState {
         suspend fun launchApp(uuid: Uuid)
+        val runningApp: StateFlow<Uuid?>
     }
 
     interface Time {

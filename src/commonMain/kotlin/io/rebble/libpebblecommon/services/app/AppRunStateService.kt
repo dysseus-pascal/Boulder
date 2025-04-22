@@ -16,7 +16,7 @@ class AppRunStateService(
 ) : ProtocolService,
     ConnectedPebble.AppRunState {
     private val _runningApp = MutableStateFlow<Uuid?>(null)
-    val runningApp: StateFlow<Uuid?> = _runningApp
+    override val runningApp: StateFlow<Uuid?> = _runningApp
 
     override suspend fun launchApp(uuid: Uuid) {
         protocolHandler.send(AppRunStateMessage.AppRunStateStart(uuid))

@@ -148,7 +148,7 @@ class PebbleConnector(
                 appFetchService.init()
                 timelineActionManager.init()
                 appFetchProvider.init(watchInfo.platform.watchType)
-                appMessageService.init(scope)
+                appMessageService.init()
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

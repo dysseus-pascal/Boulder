@@ -56,6 +56,7 @@ import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
@@ -192,6 +193,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::BlobDBService)
                     scopedOf(::AppFetchService)
                     scopedOf(::TimelineService)
+                    scopedOf(::AppMessageService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)

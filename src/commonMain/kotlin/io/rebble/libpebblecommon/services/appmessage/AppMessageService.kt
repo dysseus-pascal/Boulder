@@ -16,13 +16,16 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlin.uuid.Uuid
 
-class AppMessageService(private val protocolHandler: PebbleProtocolHandler) : ProtocolService, ConnectedPebble.AppMessages {
+class AppMessageService(
+    private val protocolHandler: PebbleProtocolHandler,
+    private val scope: CoroutineScope
+) : ProtocolService, ConnectedPebble.AppMessages {
     private val receivedMessages = Channel<AppMessageData>(Channel.BUFFERED)
     override val inboundAppMessages: Flow<AppMessageData> = receivedMessages.consumeAsFlow()
     override val transactionSequence: Iterator<Byte> = AppMessageTransactionSequence().iterator()
     private var appMessageCallback: CompletableDeferred<AppMessage>? = null
 
-    fun init(scope: CoroutineScope) {
+    fun init() {
         protocolHandler.inboundMessages.onEach {
             if (it is AppMessage.AppMessagePush) {
                 receivedMessages.trySend(it.appMessageData())

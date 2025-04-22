@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +76,7 @@ class PebbleConnector(
     private val firmwareUpdate: FirmwareUpdate,
     private val blobDBService: BlobDBService,
     private val appFetchService: AppFetchService,
+    private val appMessageService: AppMessageService,
     private val timelineActionManager: TimelineActionManager,
     private val appBlobDB: AppBlobDB,
     private val notificationManager: NotificationManager,
@@ -146,6 +148,7 @@ class PebbleConnector(
                 appFetchService.init()
                 timelineActionManager.init()
                 appFetchProvider.init(watchInfo.platform.watchType)
+                appMessageService.init(scope)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,
@@ -158,6 +161,7 @@ class PebbleConnector(
                         notifications = notificationManager,
                         messages = debugPebbleProtocolSender,
                         time = systemService,
+                        appMessages = appMessageService,
                     )
                 )
             }

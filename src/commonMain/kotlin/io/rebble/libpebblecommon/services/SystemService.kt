@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.services
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
@@ -52,13 +53,17 @@ class SystemService(
 
         protocolHandler.send(WatchVersion.WatchVersionRequest())
 
-        return callback.await().also {
-            val fwVersion = it.running.firmwareVersion()
-            logger.d("fwVersion = $fwVersion")
-        }.watchInfo()
+        val watchVersion = callback.await()
+        val fwVersion = watchVersion.running.firmwareVersion()
+        logger.d("fwVersion = $fwVersion")
+
+        // A little hacky, I wish this was just included in the watch version response
+        val color = requestWatchColor()
+        logger.d("watchVersion = $watchVersion")
+        return watchVersion.watchInfo(color)
     }
 
-    suspend fun requestWatchModel(): Int {
+    suspend fun requestWatchColor(): WatchColor {
         val callback = CompletableDeferred<UByteArray>()
         watchModelCallback = callback
 
@@ -66,7 +71,8 @@ class SystemService(
 
         val modelBytes = callback.await()
 
-        return SInt(StructMapper()).also { it.fromBytes(DataBuffer(modelBytes)) }.get()
+        val color = SInt(StructMapper()).also { it.fromBytes(DataBuffer(modelBytes)) }.get()
+        return WatchColor.fromProtocolNumber(color)
     }
 
     suspend fun sendPhoneVersionResponse() {
@@ -254,9 +260,10 @@ data class WatchInfo(
     val isUnfaithful: Boolean?,
     val healthInsightsVersion: Int?,
     val javascriptVersion: Int?,
+    val color: WatchColor,
 )
 
-fun WatchVersionResponse.watchInfo(): WatchInfo {
+fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
     val runningFwVersion = running.firmwareVersion()
     checkNotNull(runningFwVersion)
     val recoveryFwVersion = recovery.firmwareVersion()
@@ -276,6 +283,7 @@ fun WatchVersionResponse.watchInfo(): WatchInfo {
         isUnfaithful = isUnfaithful.get(),
         healthInsightsVersion = healthInsightsVersion.get()?.toInt(),
         javascriptVersion = javascriptVersion.get()?.toInt(),
+        color = color
     )
 }
 

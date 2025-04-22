@@ -261,9 +261,14 @@ class StaticLockerPBWCache(
 
 abstract class LockerPBWCache(context: AppContext) {
     private val cacheDir = getLockerPBWCacheDirectory(context)
+    private val pkjsCacheDir = Path(getLockerPBWCacheDirectory(context), "pkjs")
 
     protected fun pathForApp(appId: Uuid): Path {
         return Path(cacheDir, "$appId.pbw")
+    }
+
+    protected fun pkjsPathForApp(appId: Uuid): Path {
+        return Path(pkjsCacheDir, "$appId.js")
     }
 
     protected abstract suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path?
@@ -281,6 +286,24 @@ abstract class LockerPBWCache(context: AppContext) {
         val targetPath = pathForApp(appId)
         SystemFileSystem.sink(targetPath).use { sink ->
             source.transferTo(sink)
+        }
+    }
+
+    fun getPKJSFileForApp(appId: Uuid): Path {
+        val pkjsPath = pkjsPathForApp(appId)
+        val appPath = pathForApp(appId)
+        return when {
+            SystemFileSystem.exists(pkjsPath) -> pkjsPath
+            SystemFileSystem.exists(appPath) -> {
+                val pbwApp = PbwApp(pathForApp(appId))
+                pbwApp.getPKJSFile().use { source ->
+                    SystemFileSystem.sink(pkjsPath).use { sink ->
+                        source.transferTo(sink)
+                    }
+                }
+                pkjsPath
+            }
+            else -> error("Failed to find PBW file for app $appId while extracting JS")
         }
     }
 }

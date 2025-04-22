@@ -50,6 +50,10 @@ object DiskUtil {
         return pbwJson.decodeFromString(source.readString())
     }
 
+    fun pkjsFileExists(pbwPath: Path): Boolean {
+        return openZip(pbwPath).exists("pebble-js-app.js".toPath())
+    }
+
     /**
      * @throws IllegalStateException if pbw does not contain manifest with that watch type
      */
@@ -79,5 +83,14 @@ object DiskUtil {
         } catch (e: IOException) {
             throw IllegalStateException("Pbw does not contain binary blob $blobName for watch type $watchType")
         }
+    }
+
+    fun requirePbwPKJSFile(pbwPath: Path): Source {
+        val source = try {
+            openZip(pbwPath).source("pebble-js-app.js".toPath()).asKotlinxIoRawSource()
+        } catch (e: IOException) {
+            throw IllegalStateException("Pbw does not contain JS file")
+        }.buffered()
+        return source
     }
 }

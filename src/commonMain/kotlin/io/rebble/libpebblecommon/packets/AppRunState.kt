@@ -1,11 +1,11 @@
 package io.rebble.libpebblecommon.packets
 
-import com.benasher44.uuid.Uuid
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUUID
+import kotlin.uuid.Uuid
 
 
 sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
@@ -22,7 +22,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
     }
 
     class AppRunStateStart(
-        uuid: Uuid = Uuid(0L, 0L)
+        uuid: Uuid = Uuid.NIL
     ) :
         AppRunStateMessage(Message.AppRunStateStart) {
         val uuid = SUUID(m, uuid)
@@ -48,7 +48,7 @@ sealed class AppRunStateMessage(message: Message) : PebblePacket(endpoint) {
     }
 
     class AppRunStateStop(
-        uuid: Uuid = Uuid(0L, 0L)
+        uuid: Uuid = Uuid.NIL
     ) :
         AppRunStateMessage(Message.AppRunStateStop) {
         val uuid = SUUID(m, uuid)

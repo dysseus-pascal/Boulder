@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
+import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -20,8 +21,10 @@ import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -52,10 +55,12 @@ class PKJSApp(
                 logger.v { "Ignoring app message for different app: ${it.uuid} != $uuid" }
                 return@onEach
             }
-            logger.d("Received app message: ${it::class.simpleName} ${it.transactionId}")
             withTimeout(1000) {
                 device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
             }
+            val dataString = it.data.toJSData(appInfo.appKeys)
+            logger.d("Received app message: ${it.transactionId} $dataString")
+            jsRunner?.signalNewAppMessageData(dataString)
         }.catch {
             logger.e(it) { "Error receiving app message" }
         }.launchIn(scope)
@@ -98,6 +103,39 @@ class PKJSApp(
         runningScope?.cancel()
         jsRunner = null
     }
+}
+
+fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
+    val data = this.mapKeys {
+        val id = it.key
+        appKeys.entries.firstOrNull { it.value == id }?.key ?: id
+    }
+    return buildJsonObject {
+        for ((key, value) in data) {
+            when (value) {
+                is String -> put(key.toString(), value)
+                is Number -> put(key.toString(), value)
+                is UByteArray -> {
+                    val array = buildJsonArray {
+                        for (byte in value) {
+                            add(byte.toInt())
+                        }
+                    }
+                    put(key.toString(), array)
+                }
+                is ByteArray -> {
+                    val array = buildJsonArray {
+                        for (byte in value) {
+                            add(byte.toInt())
+                        }
+                    }
+                    put(key.toString(), array)
+                }
+                is Boolean -> put(key.toString(), value)
+                else -> error("Invalid JSON value, unsupported type ${value::class.simpleName}")
+            }
+        }
+    }.toString()
 }
 
 private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: Byte): AppMessageData {

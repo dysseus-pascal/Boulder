@@ -125,4 +125,10 @@ class WebViewPrivatePKJSInterface(
         val info = device.watchInfo
         return Json.encodeToString(ActivePebbleWatchInfo.fromWatchInfo(info))
     }
+
+    @JavascriptInterface
+    fun privateFnConfirmReadySignal(success: Boolean) {
+        logger.v { "privateFnConfirmReadySignal($success)" }
+        //TODO: signalShowConfiguration() if needed
+    }
 }

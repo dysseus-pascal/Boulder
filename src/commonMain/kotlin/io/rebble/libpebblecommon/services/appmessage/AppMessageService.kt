@@ -87,11 +87,12 @@ private fun Map<Int, Any>.toAppMessageTuples(): List<AppMessageTuple> {
         }
     }
 }
+typealias AppMessageDictionary = Map<Int, Any>
 
 data class AppMessageData(
     val transactionId: Byte,
     val uuid: Uuid,
-    val data: Map<Int, Any>
+    val data: AppMessageDictionary
 )
 
 sealed class AppMessageResult(val transactionId: Byte) {

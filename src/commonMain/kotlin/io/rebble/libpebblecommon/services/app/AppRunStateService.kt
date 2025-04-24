@@ -5,9 +5,13 @@ import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.AppRunStateMessage
 import io.rebble.libpebblecommon.services.ProtocolService
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlin.uuid.Uuid
 
 class AppRunStateService(
@@ -26,17 +30,22 @@ class AppRunStateService(
         protocolHandler.send(AppRunStateMessage.AppRunStateStop(uuid))
     }
 
-    fun init() {
-        scope.launch {
-            protocolHandler.inboundMessages.collect { packet ->
-                when (packet) {
-                    is AppRunStateMessage.AppRunStateStart ->
-                        _runningApp.value = packet.uuid.get()
+    // Ideally only called right after negotiation, further updates will be sent unprompted via flow
+    suspend fun refreshAppRunState(): Uuid? {
+        val result = scope.async { runningApp.drop(1).first() }
+        protocolHandler.send(AppRunStateMessage.AppRunStateRequest())
+        return result.await()
+    }
 
-                    is AppRunStateMessage.AppRunStateStop ->
-                        _runningApp.value = null
-                }
+    fun init() {
+        protocolHandler.inboundMessages.onEach { packet ->
+            when (packet) {
+                is AppRunStateMessage.AppRunStateStart ->
+                    _runningApp.value = packet.uuid.get()
+
+                is AppRunStateMessage.AppRunStateStop ->
+                    _runningApp.value = null
             }
-        }
+        }.launchIn(scope)
     }
 }

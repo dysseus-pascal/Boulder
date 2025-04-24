@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.packets
 
 import assertIs
-import com.benasher44.uuid.uuidFrom
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,7 +11,7 @@ internal class AppRunStateMessageTest {
     @Test
     fun serializeDeserializeStartMessage() {
         val originalMessage = AppRunStateMessage.AppRunStateStart(
-            uuidFrom("30880933-cead-49f6-ba94-3a6f8cd3218a")
+            Uuid.parse("30880933-cead-49f6-ba94-3a6f8cd3218a")
         )
 
         val bytes = originalMessage.serialize()
@@ -25,7 +24,7 @@ internal class AppRunStateMessageTest {
     @Test
     fun serializeDeserializeStopMessage() {
         val originalMessage = AppRunStateMessage.AppRunStateStop(
-            uuidFrom("30880933-cead-49f6-ba94-3a6f8cd3218a")
+            Uuid.parse("30880933-cead-49f6-ba94-3a6f8cd3218a")
         )
 
         val bytes = originalMessage.serialize()

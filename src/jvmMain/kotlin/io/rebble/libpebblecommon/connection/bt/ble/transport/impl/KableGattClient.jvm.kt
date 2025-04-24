@@ -9,4 +9,5 @@ actual fun peripheralFromIdentifier(transport: BleTransport): Peripheral? {
 }
 
 actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
+    return mtu
 }

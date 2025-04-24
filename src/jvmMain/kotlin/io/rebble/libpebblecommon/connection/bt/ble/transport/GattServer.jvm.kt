@@ -11,7 +11,7 @@ actual fun openGattServer(appContext: AppContext): GattServer? {
 }
 
 actual class GattServer {
-    actual suspend fun addServices(services: List<GattService>) {
+    actual suspend fun addServices() {
     }
 
     actual suspend fun closeServer() {

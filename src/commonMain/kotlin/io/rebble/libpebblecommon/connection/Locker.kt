@@ -307,6 +307,13 @@ abstract class LockerPBWCache(context: AppContext) {
             else -> error("Failed to find PBW file for app $appId while extracting JS")
         }
     }
+
+    fun clearPKJSFileForApp(appId: Uuid) {
+        val pkjsPath = pkjsPathForApp(appId)
+        if (SystemFileSystem.exists(pkjsPath)) {
+            SystemFileSystem.delete(pkjsPath)
+        }
+    }
 }
 
 private val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")

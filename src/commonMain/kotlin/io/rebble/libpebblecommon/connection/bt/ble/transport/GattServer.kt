@@ -10,7 +10,7 @@ import kotlin.uuid.Uuid
 expect fun openGattServer(appContext: AppContext): GattServer?
 
 expect class GattServer {
-    suspend fun addServices(services: List<GattService>)
+    suspend fun addServices()
     suspend fun closeServer()
     val characteristicReadRequest: Flow<ServerCharacteristicReadRequest>
 //    val connectionState: Flow<ServerConnectionstateChanged>

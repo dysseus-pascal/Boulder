@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.io.IOException
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -77,6 +78,8 @@ class KableConnectedGattClient(
     val scope: CoroutineScope,
     val peripheral: Peripheral,
 ) : ConnectedGattClient {
+    private val logger = Logger.withTag("KableConnectedGattClient-${transport.identifier.asString}")
+
     override suspend fun discoverServices(): Boolean {
         // Kable already discovered upon connect
         return true
@@ -90,7 +93,7 @@ class KableConnectedGattClient(
     ): Flow<ByteArray>? {
         val c = findCharacteristic(serviceUuid, characteristicUuid)
         if (c == null) {
-            Logger.e("couldn't find characteristic: $characteristicUuid")
+            logger.e("couldn't find characteristic: $characteristicUuid")
             return null
         }
         return peripheral.observe(c)
@@ -113,13 +116,17 @@ class KableConnectedGattClient(
     ): Boolean {
         val c = findCharacteristic(serviceUuid, characteristicUuid)
         if (c == null) {
-            Logger.e("couldn't find characteristic: $characteristicUuid")
+            logger.e("couldn't find characteristic: $characteristicUuid")
             return false
         }
         return try {
             peripheral.write(c, value, writeType.asKableWriteType())
             true
         } catch (e: com.juul.kable.GattStatusException) {
+            logger.v("error writing characteristic", e)
+            false
+        } catch (e: IOException) {
+            logger.v("error writing characteristic", e)
             false
         }
     }
@@ -130,7 +137,7 @@ class KableConnectedGattClient(
     ): ByteArray? {
         val c = findCharacteristic(serviceUuid, characteristicUuid)
         if (c == null) {
-            Logger.e("couldn't find characteristic: $characteristicUuid")
+            logger.e("couldn't find characteristic: $characteristicUuid")
             return null
         }
         return peripheral.read(c)

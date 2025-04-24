@@ -17,9 +17,13 @@ import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.asPebbleBluetoothIdentifier
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CHARACTERISTIC_CONFIGURATION_DESCRIPTOR
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE_SERVICE_UUID
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -217,18 +221,52 @@ actual class GattServer(
         }
     }
 
-    actual suspend fun addServices(services: List<GattService>) {
-        Logger.d("addServices: $services")
-        services.forEach { addService(it) }
+    actual suspend fun addServices() {
+        Logger.d("addServices")
+        addService(
+            PPOGATT_DEVICE_SERVICE_UUID_SERVER, listOf(
+                BluetoothGattCharacteristic(
+                    META_CHARACTERISTIC_SERVER.toJavaUuid(),
+                    BluetoothGattCharacteristic.PROPERTY_READ,
+                    BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
+                ),
+                BluetoothGattCharacteristic(
+                    PPOGATT_DEVICE_CHARACTERISTIC_SERVER.toJavaUuid(),
+                    BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                    BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED,
+                ).apply {
+                    addDescriptor(
+                        BluetoothGattDescriptor(
+                            CHARACTERISTIC_CONFIGURATION_DESCRIPTOR.toJavaUuid(),
+                            BluetoothGattDescriptor.PERMISSION_WRITE,
+                        )
+                    )
+                },
+            )
+        )
+        addService(
+            FAKE_SERVICE_UUID, listOf(
+                BluetoothGattCharacteristic(
+                    FAKE_SERVICE_UUID.toJavaUuid(),
+                    BluetoothGattCharacteristic.PROPERTY_READ,
+                    BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
+                ),
+            )
+        )
         Logger.d("/addServices")
     }
 
-    private suspend fun addService(service: GattService) {
-        Logger.d("addService: ${service.uuid}")
+    private suspend fun addService(
+        serviceUuid: Uuid,
+        characteristics: List<BluetoothGattCharacteristic>,
+    ) {
+        Logger.d("addService: $serviceUuid")
+        val service = BluetoothGattService(serviceUuid.toJavaUuid(), SERVICE_TYPE_PRIMARY)
+        characteristics.forEach { service.addCharacteristic(it) }
         try {
             callback.serviceAdded.onSubscription {
-                server.addService(service.asAndroidService())
-            }.first { service.uuid == it?.uuid }
+                server.addService(service)
+            }.first { service.uuid.asUuid() == serviceUuid }
         } catch (e: SecurityException) {
             Logger.d("error adding gatt service ${service.uuid}", e)
         }
@@ -316,30 +354,5 @@ actual class GattServer(
         }
     }
 }
-
-private fun GattService.asAndroidService(): BluetoothGattService {
-    val service = BluetoothGattService(uuid.toJavaUuid(), SERVICE_TYPE_PRIMARY)
-    characteristics.forEach { c ->
-        val characteristic = c.asBluetoothGattcharacteristic()
-        service.addCharacteristic(characteristic)
-    }
-    return service
-}
-
-private fun GattCharacteristic.asBluetoothGattcharacteristic() = BluetoothGattCharacteristic(
-    /* uuid = */ uuid.toJavaUuid(),
-    /* properties = */ properties,
-    /* permissions = */ permissions,
-).apply {
-    this@asBluetoothGattcharacteristic.descriptors.forEach { d ->
-        val descriptor = BluetoothGattDescriptor(
-            /* uuid = */ d.uuid.toJavaUuid(),
-            /* permissions = */ d.permissions,
-        )
-        addDescriptor(descriptor)
-    }
-}
-
-//private fun List<Int>.or(): Int = reduceOrNull { a, b -> a or b } ?: 0
 
 private fun UUID.asUuid(): Uuid = Uuid.parse(toString())

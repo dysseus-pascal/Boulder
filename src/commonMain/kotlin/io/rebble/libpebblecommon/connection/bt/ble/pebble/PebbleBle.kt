@@ -5,8 +5,6 @@ import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.GATT_SERVICES
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.SERVER_META_RESPONSE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
@@ -133,7 +131,7 @@ class PebbleBle(
                 if (!config.bleConfig.reversedPPoG) {
                     check(gattServer == null)
                     gattServer = openGattServer(config.context)
-                    gattServer?.addServices(GATT_SERVICES)
+                    gattServer?.addServices()
                     gattServer?.characteristicReadRequest?.collect {
                         Logger.d("sending meta response")
                         it.respond(SERVER_META_RESPONSE)
@@ -143,3 +141,5 @@ class PebbleBle(
         }
     }
 }
+
+expect val SERVER_META_RESPONSE: ByteArray

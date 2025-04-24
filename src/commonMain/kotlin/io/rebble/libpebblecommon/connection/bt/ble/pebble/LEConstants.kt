@@ -1,8 +1,5 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import kotlin.uuid.Uuid
 
 object LEConstants {
@@ -38,57 +35,8 @@ object LEConstants {
     val MAX_RX_WINDOW: Int = 25
     val MAX_TX_WINDOW: Int = 25
 
-    // PPoGConnectionVersion.minSupportedVersion(), PPoGConnectionVersion.maxSupportedVersion(), ??? (magic numbers in stock app too)
-    val SERVER_META_RESPONSE = byteArrayOf(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
-
-    const val PROPERTY_READ = 0x02
-    const val PROPERTY_NOTIFY = 0x10
-    const val PROPERTY_WRITE_NO_RESPONSE = 0x04
     const val PROPERTY_WRITE = 0x08
-
-    const val PERMISSION_READ = 0x01
-    const val PERMISSION_WRITE = 0x10
-    const val PERMISSION_READ_ENCRYPTED = 0x02
-    const val PERMISSION_WRITE_ENCRYPTED = 0x20
 
     const val BOND_NONE = 10
     const val BOND_BONDED = 12 // TODO ios compatible?
-
-    val PPOG_META_CHARACTERISTIC = GattCharacteristic(
-        uuid = UUIDs.META_CHARACTERISTIC_SERVER,
-        properties = PROPERTY_READ,
-        permissions = PERMISSION_READ_ENCRYPTED,
-        descriptors = emptyList(),
-    )
-
-    val PPOG_DATA_CHARACTERISTIC = GattCharacteristic(
-        uuid = UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER,
-        properties = PROPERTY_WRITE_NO_RESPONSE or PROPERTY_NOTIFY,
-        permissions = PERMISSION_WRITE_ENCRYPTED,
-        descriptors = listOf(
-            GattDescriptor(
-                uuid = UUIDs.CHARACTERISTIC_CONFIGURATION_DESCRIPTOR,
-                permissions = PERMISSION_WRITE,
-            )
-        ),
-    )
-
-    val PPOG_SERVICE = GattService(
-        uuid = UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER,
-        characteristics = listOf(PPOG_META_CHARACTERISTIC, PPOG_DATA_CHARACTERISTIC),
-    )
-
-    val FAKE_CHARACTERISTIC = GattCharacteristic(
-        uuid = UUIDs.FAKE_SERVICE_UUID,
-        properties = PROPERTY_READ,
-        permissions = PERMISSION_READ_ENCRYPTED,
-        descriptors = emptyList(),
-    )
-
-    val FAKE_SERVICE = GattService(
-        uuid = UUIDs.FAKE_SERVICE_UUID,
-        characteristics = listOf(FAKE_CHARACTERISTIC),
-    )
-
-    val GATT_SERVICES = listOf(PPOG_SERVICE, FAKE_SERVICE)
 }

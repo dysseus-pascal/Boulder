@@ -33,7 +33,7 @@ abstract class LockerEntryDao {
     abstract suspend fun getAllWithPlatforms(): List<LockerEntryWithPlatforms>
 
     @Query("SELECT * FROM LockerEntry")
-    abstract fun getAll(): Flow<List<LockerEntry>>
+    abstract fun getAllWithPlatformsFlow(): Flow<List<LockerEntryWithPlatforms>>
 
     @Query("SELECT * FROM LockerEntry WHERE id = :id")
     abstract suspend fun get(id: Uuid): LockerEntry?

@@ -70,7 +70,8 @@ class Locker(
         sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
     }
 
-    override fun getLocker(): Flow<List<LockerEntry>> = lockerEntryDao.getAll()
+    override fun getLocker(): Flow<List<LockerEntryWithPlatforms>> =
+        lockerEntryDao.getAllWithPlatformsFlow()
 
     suspend fun update(locker: LockerModel) {
         logger.d("update: ${locker.applications.size}")
@@ -82,6 +83,9 @@ class Locker(
                     sdkVersion = platform.sdkVersion,
                     processInfoFlags = platform.pebbleProcessInfoFlags,
                     name = platform.name,
+                    screenshotImageUrl = platform.images.screenshot,
+                    listImageUrl = platform.images.list,
+                    iconImageUrl = platform.images.icon,
                 )
             }
             lockerEntryDao.insertOrReplaceWithPlatforms(entity, platforms)
@@ -182,7 +186,7 @@ class Locker(
                 lockerEntryId = uuid,
                 sdkVersion = "${header.sdkVersionMajor.get()}.${header.sdkVersionMinor.get()}",
                 processInfoFlags = header.flags.get().toInt(),
-                name = watchType.codename
+                name = watchType.codename,
             )
         }
         // Offload app so we force reinstall

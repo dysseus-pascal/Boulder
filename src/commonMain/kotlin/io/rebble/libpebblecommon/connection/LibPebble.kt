@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WIN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
@@ -50,6 +51,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi {
     suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
     suspend fun deleteNotification(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
+    suspend fun launchApp(uuid: Uuid)
     // ....
 }
 
@@ -74,7 +76,7 @@ interface RequestSync {
 
 interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path)
-    fun getLocker(): Flow<List<LockerEntry>>
+    fun getLocker(): Flow<List<LockerEntryWithPlatforms>>
 }
 
 // Impl
@@ -111,6 +113,10 @@ class LibPebble3(
 
     override suspend fun sendPing(cookie: UInt) {
         forEachConnectedWatch { sendPing(cookie) }
+    }
+
+    override suspend fun launchApp(uuid: Uuid) {
+        forEachConnectedWatch { launchApp(uuid) }
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {

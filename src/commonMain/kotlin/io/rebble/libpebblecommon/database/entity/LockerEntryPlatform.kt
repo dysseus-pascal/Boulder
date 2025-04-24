@@ -30,7 +30,10 @@ data class LockerEntryPlatform(
     val lockerEntryId: Uuid,
     val sdkVersion: String,
     val processInfoFlags: Int,
-    val name: String
+    val name: String,
+    val screenshotImageUrl: String? = null,
+    val listImageUrl: String? = null,
+    val iconImageUrl: String? = null,
 ) {
     @get:Ignore
     val watchType get() = WatchType.entries.firstOrNull { it.codename == name } ?: error("Unknown watch type: $name")

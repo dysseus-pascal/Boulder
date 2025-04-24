@@ -45,6 +45,8 @@ class AppFetchProvider(
                             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
                             return@consumeEach
                         }
+                        // Remove PKJS cached file, so we get an updated version if there is one
+                        pbwCache.clearPKJSFileForApp(uuid)
                         sendApp(app, appId, watchType)
                     }
                 }

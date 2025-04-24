@@ -18,7 +18,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterIsInstance
@@ -26,12 +25,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import kotlin.math.sin
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -147,18 +144,11 @@ class Locker(
             return
         }
         supportedEntries.forEach { (entry, platform) ->
-            val versionSplit = entry.version.split(".")
-            val sdkVersionSplit = platform.sdkVersion.split(".")
-            val newData = AppMetadata(
-                uuid = entry.id,
-                flags = platform.processInfoFlags.toUInt(),
-                icon = 0u, //TODO
-                appVersionMajor = versionSplit[0].toUByte(),
-                appVersionMinor = versionSplit[1].toUByte(),
-                sdkVersionMajor = sdkVersionSplit[0].toUByte(),
-                sdkVersionMinor = sdkVersionSplit[1].toUByte(),
-                appName = entry.title
-            )
+            val newData = entry.asMetaData(platform)
+            if (newData == null) {
+                logger.w("Couldn't transform app: $entry")
+                return@forEach
+            }
             if (watch.isLockerEntryNew(newData)) {
                 watch.insertLockerEntry(newData)
             }
@@ -264,4 +254,25 @@ abstract class LockerPBWCache(context: AppContext) {
             source.transferTo(sink)
         }
     }
+}
+
+private val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")
+
+fun LockerEntry.asMetaData(platform: LockerEntryPlatform): AppMetadata? {
+    val appVersionMatch = APP_VERSION_REGEX.find(version)
+    val appVersionMajor = appVersionMatch?.groupValues?.getOrNull(1) ?: return null
+    val appVersionMinor = appVersionMatch.groupValues.getOrNull(2) ?: return null
+    val sdkVersionMatch = APP_VERSION_REGEX.find(platform.sdkVersion)
+    val sdkVersionMajor = sdkVersionMatch?.groupValues?.getOrNull(1) ?: return null
+    val sdkVersionMinor = sdkVersionMatch.groupValues.getOrNull(2) ?: return null
+    return AppMetadata(
+        uuid = id,
+        flags = platform.processInfoFlags.toUInt(),
+        icon = 0u, //TODO
+        appVersionMajor = appVersionMajor.toUByte(),
+        appVersionMinor = appVersionMinor.toUByte(),
+        sdkVersionMajor = sdkVersionMajor.toUByte(),
+        sdkVersionMinor = sdkVersionMinor.toUByte(),
+        appName = title
+    )
 }

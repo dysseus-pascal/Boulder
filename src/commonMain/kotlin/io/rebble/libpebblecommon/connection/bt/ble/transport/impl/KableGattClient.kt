@@ -149,6 +149,10 @@ class KableConnectedGattClient(
         return peripheral.requestMtuNative(mtu)
     }
 
+    override suspend fun getMtu(): Int {
+        return peripheral.maximumWriteValueLengthForType(WriteType.WithoutResponse) + MTU_OVERHEAD
+    }
+
     override fun close() {
         peripheral.close()
     }
@@ -161,6 +165,12 @@ class KableConnectedGattClient(
             ?.firstOrNull { it.serviceUuid == serviceUuid }
             ?.characteristics
             ?.firstOrNull { it.characteristicUuid == characteristicUuid }
+    }
+
+    companion object {
+        /** Kable is nice and computes what is useable by us - but we already do that elsewhere, so
+         * put the overhead back in */
+        private const val MTU_OVERHEAD = 3
     }
 }
 

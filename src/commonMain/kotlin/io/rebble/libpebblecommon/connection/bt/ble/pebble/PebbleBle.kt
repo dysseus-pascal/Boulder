@@ -58,11 +58,6 @@ class PebbleBle(
             }
             logger.d("done connectionParams")
 
-            if (!mtuParam.subscribe(device)) {
-                logger.w("failed to subscribe to mtu")
-            }
-            logger.d("subscribed mtu")
-
             scope.launch {
                 mtuParam.mtu.collect { newMtu ->
                     logger.d("newMtu = $newMtu")

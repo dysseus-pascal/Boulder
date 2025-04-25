@@ -133,7 +133,7 @@ kotlin {
             implementation(libs.kotlin.test.junit)
             implementation(libs.ktor.websockets)
             implementation(libs.ktor.cio)
-            implementation(libs.ktor.okhttp)
+            implementation(libs.ktor.client.okhttp)
         }
     }
 }

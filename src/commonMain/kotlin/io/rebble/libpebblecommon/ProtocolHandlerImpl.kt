@@ -23,9 +23,7 @@ class ProtocolHandlerImpl() : ProtocolHandler {
     @Volatile
     private var idlePacketLoop: Job? = null
 
-    companion object {
-        const val TAG = "ProtocolHandlerImpl"
-    }
+    private val logger = Logger.withTag("ProtocolHandlerImpl")
 
     init {
         startIdlePacketLoop()
@@ -141,19 +139,19 @@ class ProtocolHandlerImpl() : ProtocolHandler {
             when (packet) {
                 //TODO move this to separate service (PingPong service?)
                 is PingPong.Ping -> send(PingPong.Pong(packet.cookie.get()))
-                is PingPong.Pong -> Logger.d(tag = TAG) { "Pong! ${packet.cookie.get()}" }
+                is PingPong.Pong -> logger.d { "Pong! ${packet.cookie.get()}" }
             }
 
             val receiveCallback = receiveRegistry[packet.endpoint]
             if (receiveCallback == null) {
                 //TODO better logging
-                Logger.w(tag = TAG) { "${packet.endpoint} does not have receive callback" }
+                logger.w { "${packet.endpoint} does not have receive callback" }
             } else {
                 receiveCallback.invoke(packet)
             }
 
         } catch (e: PacketDecodeException) {
-            Logger.w(throwable = e, tag = TAG) { "Failed to decode a packet" }
+            logger.w { "Failed to decode a packet" }
             return false
         }
         return true

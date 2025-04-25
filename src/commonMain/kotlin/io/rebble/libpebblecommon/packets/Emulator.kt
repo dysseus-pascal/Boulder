@@ -41,6 +41,8 @@ open class QemuPacket(protocol: Protocol) {
     }
 
     companion object {
+        private val logger = Logger.withTag("Emulator")
+
         fun deserialize(packet: UByteArray): QemuPacket {
             val buf = DataBuffer(packet)
             val meta = StructMapper()
@@ -51,7 +53,7 @@ open class QemuPacket(protocol: Protocol) {
             return when (protocol.get()) {
                 Protocol.SPP.value -> QemuSPP().also { it.m.fromBytes(buf) }
                 else -> {
-                    Logger.w(tag = "Emulator") { "QEMU packet left generic" }
+                    logger.w { "QEMU packet left generic" }
                     QemuPacket(Protocol.Invalid).also { it.m.fromBytes(buf) }
                 }
             }

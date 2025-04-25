@@ -5,12 +5,10 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.launch
 
-class ConnectionParams(private val scope: CoroutineScope) {
+class ConnectionParams(private val scope: ConnectionCoroutineScope) {
     suspend fun subscribeAndConfigure(gattClient: ConnectedGattClient): Boolean {
         // TODO scope this
         val sub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTION_PARAMETERS_CHARACTERISTIC)

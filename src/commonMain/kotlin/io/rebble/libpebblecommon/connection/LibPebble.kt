@@ -5,15 +5,13 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MT
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
-import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
-import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
@@ -88,16 +86,17 @@ class LibPebble3(
     private val locker: Locker,
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
-        PebbleBle.init(config)
+        PebbleBle.init(config, libPebbleCoroutineScope)
         watchManager.init()
         locker.init()
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
-            GlobalScope.launch { forEachConnectedWatch { updateTime() } }
+            libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
         }
     }
 
@@ -131,7 +130,8 @@ class LibPebble3(
         fun create(config: LibPebbleConfig): LibPebble {
             koin = initKoin(config)
             val libPebble = koin.get<LibPebble>()
-            initPlatformNotificationListener(config.context, GlobalScope, libPebble)
+            val libPebbleScope = koin.get<LibPebbleCoroutineScope>()
+            initPlatformNotificationListener(config.context, libPebbleScope, libPebble)
             return libPebble
         }
     }

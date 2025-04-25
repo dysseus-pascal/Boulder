@@ -2,9 +2,9 @@ package io.rebble.libpebblecommon.services.app
 
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.AppRunStateMessage
 import io.rebble.libpebblecommon.services.ProtocolService
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -12,7 +12,7 @@ import kotlin.uuid.Uuid
 
 class AppRunStateService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : ProtocolService,
     ConnectedPebble.AppRunState {
     private val _runningApp = MutableStateFlow<Uuid?>(null)

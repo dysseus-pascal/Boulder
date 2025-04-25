@@ -12,9 +12,9 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
 import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
-import kotlinx.coroutines.CoroutineScope
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,7 +23,7 @@ import kotlinx.coroutines.withTimeout
 class PebbleBle(
     private val config: LibPebbleConfig,
     private val transport: BleTransport,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
     private val gattConnector: GattConnector,
     private val ppog: PPoG,
     private val ppogPacketSender: PPoGPacketSender,
@@ -32,6 +32,7 @@ class PebbleBle(
     private val mtuParam: Mtu,
     private val connectivity: ConnectivityWatcher,
     private val pairing: PebblePairing,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${transport.identifier.asString}")
 
@@ -105,7 +106,7 @@ class PebbleBle(
                 ppogPacketSender.init(device)
             }
 
-            ppog.run(scope)
+            ppog.run()
             return@withContext PebbleConnectionResult.Success
         }
 
@@ -121,8 +122,8 @@ class PebbleBle(
 
         var gattServer: GattServer? = null
 
-        fun init(config: LibPebbleConfig) {
-            GlobalScope.launch {
+        fun init(config: LibPebbleConfig, libPebbleCoroutineScope: LibPebbleCoroutineScope) {
+            libPebbleCoroutineScope.launch {
                 if (!config.bleConfig.reversedPPoG) {
                     check(gattServer == null)
                     gattServer = openGattServer(config.context)

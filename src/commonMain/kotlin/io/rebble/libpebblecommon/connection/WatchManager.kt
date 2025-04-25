@@ -5,18 +5,17 @@ import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
 import io.rebble.libpebblecommon.database.entity.type
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.ConnectionScope
 import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +96,7 @@ class WatchManager(
     private val pebbleDeviceFactory: PebbleDeviceFactory,
     private val createPlatformIdentifier: CreatePlatformIdentifier,
     private val connectionScopeFactory: ConnectionScopeFactory,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -137,7 +137,7 @@ class WatchManager(
     @OptIn(DelicateCoroutinesApi::class)
     fun init() {
         logger.d("watchmanager init()")
-        GlobalScope.launch {
+        libPebbleCoroutineScope.launch {
             loadKnownWatchesFromDb()
             val activeConnectionStates = allWatches.flowOfAllDevices()
             combine(
@@ -268,7 +268,7 @@ class WatchManager(
                 //  bad FW version) by not attempting to endlessly reconnect.
                 val connection = allWatches.value[transport]?.activeConnection
                 connection?.let {
-                    GlobalScope.launch {
+                    libPebbleCoroutineScope.launch {
                         connection.cleanup()
                     }
                 }
@@ -293,7 +293,7 @@ class WatchManager(
             val deviceIdString = transport.identifier.asString
             val coroutineContext =
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
-            val connectionScope = CoroutineScope(coroutineContext)
+            val connectionScope = ConnectionCoroutineScope(coroutineContext)
             logger.v("transport.createConnector")
             val connectionKoinScope = connectionScopeFactory.createScope(ConnectionScopeProperties(transport, connectionScope, platformIdentifier))
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector

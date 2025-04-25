@@ -6,7 +6,7 @@ import com.oldguy.common.getShortAt
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Companion.decodePebbleScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
-import kotlinx.coroutines.GlobalScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -25,6 +25,7 @@ data class PebbleScanResult(
 class RealScanning(
     private val watchConnector: WatchConnector,
     private val bleScanner: BleScanner,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : Scanning {
     private var bleScanJob: Job? = null
 
@@ -34,7 +35,7 @@ class RealScanning(
         bleScanJob?.cancel()
         watchConnector.clearScanResults()
         val scanResults = bleScanner.scan("Pebble" /* TODO remove? */)
-        bleScanJob = GlobalScope.launch {
+        bleScanJob = libPebbleCoroutineScope.launch {
             scanResults.collect {
                 if (it.manufacturerData.code != PEBBLE_VENDOR_ID) {
                     return@collect

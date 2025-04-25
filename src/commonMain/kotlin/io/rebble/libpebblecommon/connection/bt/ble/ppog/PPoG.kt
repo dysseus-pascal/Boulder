@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -23,11 +24,12 @@ class PPoG(
     private val pPoGStream: PPoGStream,
     private val pPoGPacketSender: PPoGPacketSender,
     private val bleConfig: BleConfig,
+    private val scope: ConnectionCoroutineScope,
 ) {
     private val logger = Logger.withTag("PPoG")
     private var mtu: Int = bleConfig.initialMtu
 
-    fun run(scope: CoroutineScope) {
+    fun run() {
         scope.launch {
             val params = withTimeoutOrNull(12.seconds) {
                 initWaitingForResetRequest()

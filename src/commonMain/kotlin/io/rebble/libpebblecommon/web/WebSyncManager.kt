@@ -4,7 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.WebServices
-import kotlinx.coroutines.GlobalScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -14,11 +14,12 @@ import kotlinx.coroutines.launch
 class WebSyncManager(
     private val webServices: WebServices,
     private val locker: Locker,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : RequestSync {
     private val logger = Logger.withTag("WebSyncManager")
 
     override fun requestLockerSync() {
-        GlobalScope.launch {
+        libPebbleCoroutineScope.launch {
             // TODO probably don't want the logic in this class
             val response = webServices.fetchLocker()
             if (response == null) {

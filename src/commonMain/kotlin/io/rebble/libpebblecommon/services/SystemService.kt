@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.services
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.PingPong
@@ -17,7 +18,6 @@ import io.rebble.libpebblecommon.structmapper.SInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -31,7 +31,7 @@ import kotlin.time.Instant
  */
 class SystemService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : ProtocolService,
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")

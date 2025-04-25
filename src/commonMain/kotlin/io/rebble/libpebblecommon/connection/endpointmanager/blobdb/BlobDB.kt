@@ -5,19 +5,19 @@ import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDBDao
 import io.rebble.libpebblecommon.database.entity.BlobDBItem
 import io.rebble.libpebblecommon.database.entity.BlobDBItemSyncStatus
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 import kotlin.random.Random
 import kotlin.uuid.Uuid
 
 sealed class BlobDB(
-    watchScope: CoroutineScope,
+    watchScope: ConnectionCoroutineScope,
     private val blobDBService: BlobDBService,
     private val watchDatabase: BlobCommand.BlobDatabase,
     protected val blobDBDao: BlobDBDao,

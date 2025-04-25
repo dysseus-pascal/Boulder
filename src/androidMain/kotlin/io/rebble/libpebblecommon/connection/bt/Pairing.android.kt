@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection.bt
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.IntentFilter
+import android.os.Build
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 
 actual fun isBonded(transport: BluetoothTransport): Boolean {
+    @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
     val device = adapter.getRemoteDevice(transport.identifier.macAddress)
     try {
@@ -28,7 +30,6 @@ actual fun isBonded(transport: BluetoothTransport): Boolean {
     } catch (e: SecurityException) {
         Logger.e("error checking bond state")
     }
-    // TODO null or something?
     return false
 }
 
@@ -39,8 +40,12 @@ actual fun getBluetoothDevicePairEvents(
 ): Flow<BluetoothDevicePairEvent> {
     return IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).asFlow(context.context)
         .mapNotNull {
-            val device = it.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                ?: return@mapNotNull null
+            val device: BluetoothDevice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                it.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                it.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+            } ?: return@mapNotNull null
             BluetoothDevicePairEvent(
                 device = device.address.asPebbleBluetoothIdentifier(),
                 bondState = it.getIntExtra(
@@ -58,6 +63,7 @@ actual fun getBluetoothDevicePairEvents(
 
 actual fun createBond(transport: BluetoothTransport): Boolean {
     Logger.d("createBond()")
+    @Suppress("DEPRECATION")
     val adapter = BluetoothAdapter.getDefaultAdapter()
     val macAddress = transport.identifier.macAddress
     val device = adapter.getRemoteDevice(macAddress)

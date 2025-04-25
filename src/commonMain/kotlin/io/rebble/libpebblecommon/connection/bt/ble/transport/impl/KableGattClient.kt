@@ -13,7 +13,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
-import kotlinx.coroutines.CoroutineScope
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(transport: BleTransport, scope: CoroutineScope): GattConnector? {
+fun kableGattConnector(transport: BleTransport, scope: ConnectionCoroutineScope): GattConnector? {
     val peripheral = peripheralFromIdentifier(transport)
     if (peripheral == null) return null
     return KableGattConnector(transport, peripheral, scope)
@@ -34,7 +34,7 @@ expect fun peripheralFromIdentifier(transport: BleTransport): Peripheral?
 class KableGattConnector(
     private val transport: BleTransport,
     private val peripheral: Peripheral,
-    private val scope: CoroutineScope,
+    scope: ConnectionCoroutineScope,
 ) : GattConnector {
     override val disconnected: Deferred<Unit> = scope.async {
         peripheral.state.dropWhile {
@@ -45,8 +45,8 @@ class KableGattConnector(
 
     override suspend fun connect(): ConnectedGattClient? {
         try {
-            val scope = peripheral.connect()
-            return KableConnectedGattClient(transport, scope, peripheral)
+            val kableScope = peripheral.connect()
+            return KableConnectedGattClient(transport, peripheral)
         } catch (e: Exception) {
             Logger.e("error connecting", e)
             return null
@@ -67,7 +67,6 @@ expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
 
 class KableConnectedGattClient(
     val transport: BleTransport,
-    val scope: CoroutineScope,
     val peripheral: Peripheral,
 ) : ConnectedGattClient {
     private val logger = Logger.withTag("KableConnectedGattClient-${transport.identifier.asString}")

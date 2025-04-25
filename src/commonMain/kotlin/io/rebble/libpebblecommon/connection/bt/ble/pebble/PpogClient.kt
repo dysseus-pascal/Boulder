@@ -8,13 +8,12 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.launch
 
 class PpogClient(
     private val pPoGStream: PPoGStream,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : PPoGPacketSender {
     private lateinit var gattClient: ConnectedGattClient
 

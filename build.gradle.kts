@@ -56,6 +56,16 @@ android {
 }
 
 kotlin {
+    targets.configureEach {
+        compilations.configureEach {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    freeCompilerArgs.add("-Xexpect-actual-classes")
+                }
+            }
+        }
+    }
+
     androidTarget {
         publishLibraryVariants("release", "debug")
     }
@@ -94,6 +104,11 @@ kotlin {
                 optIn("kotlin.uuid.ExperimentalUuidApi")
                 optIn("kotlinx.cinterop.ExperimentalForeignApi")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlinx.coroutines.FlowPreview")
+                optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
+                optIn("kotlinx.serialization.ExperimentalSerializationApi")
+                optIn("kotlinx.serialization.ExperimentalSerializationApi")
+                optIn("kotlinx.cinterop.BetaInteropApi")
             }
         }
         commonMain.dependencies {

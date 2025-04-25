@@ -7,7 +7,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlin.reflect.KClass
 
 enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: WatchType, val revision: String) {
     UNKNOWN(0u, WatchType.BASALT, "unknown"),
@@ -38,12 +37,12 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
 
     companion object {
         fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
-            return values().firstOrNull { it.protocolNumber == number } ?: UNKNOWN
+            return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN
         }
 
         fun fromHWRevision(revision: String): WatchHardwarePlatform {
             if (revision == "unk") return UNKNOWN
-            return values().firstOrNull() { it.revision == revision } ?: UNKNOWN
+            return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN
         }
     }
 }

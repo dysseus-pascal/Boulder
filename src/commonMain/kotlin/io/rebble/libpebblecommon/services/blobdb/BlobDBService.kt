@@ -1,17 +1,12 @@
 package io.rebble.libpebblecommon.services.blobdb
 
 import io.rebble.libpebblecommon.PacketPriority
-import io.rebble.libpebblecommon.ProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
-import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -20,7 +15,7 @@ import kotlinx.coroutines.launch
  */
 class BlobDBService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
     private val pending: MutableMap<UShort, CompletableDeferred<BlobResponse>> = mutableMapOf()
 

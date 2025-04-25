@@ -274,6 +274,7 @@ actual class GattServer(
         sendChannel: SendChannel<ByteArray>
     ) {
         Logger.d("registerDevice: $transport")
+        @Suppress("DEPRECATION")
         val adapter = BluetoothAdapter.getDefaultAdapter()
         val bluetoothDevice = adapter.getRemoteDevice(transport.identifier.macAddress)
         callback.registeredDevices[transport.identifier.macAddress] =
@@ -323,7 +324,9 @@ actual class GattServer(
                 return false
             }
         } else {
+            @Suppress("DEPRECATION")
             characteristic.value = data
+            @Suppress("DEPRECATION")
             if (!server.notifyCharacteristicChanged(
                     registeredDevice.device,
                     characteristic,

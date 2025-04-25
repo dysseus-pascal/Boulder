@@ -13,11 +13,11 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.web.LockerModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
@@ -39,11 +39,10 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class Locker(
-    private val config: LibPebbleConfig,
     private val watchManager: WatchManager,
-    private val database: Database,
+    database: Database,
     private val lockerPBWCache: LockerPBWCache,
-    private val scope: CoroutineScope
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : LockerApi {
     private val lockerEntryDao: LockerEntryDao = database.lockerEntryDao()
     private val lockerSyncStatusDao: LockerSyncStatusDao = database.lockerSyncStatusDao()
@@ -64,8 +63,8 @@ class Locker(
     fun init() {
         watchManager.watches.debounce(1.seconds).onEach { watches ->
             requestLockerResync()
-        }.launchIn(scope)
-        scope.launch {
+        }.launchIn(libPebbleCoroutineScope)
+        libPebbleCoroutineScope.launch {
             lockerSyncQueue.consumeEach { watches ->
                 syncLockerToWatches(watches)
             }
@@ -204,7 +203,7 @@ class Locker(
                 watch.offloadApp(uuid)
             }
         lockerEntryDao.insertOrReplaceWithPlatforms(lockerEntry, platforms)
-        val isSynced = scope.async { waitForLockerSyncIdle() }
+        val isSynced = libPebbleCoroutineScope.async { waitForLockerSyncIdle() }
         requestLockerResync()
         isSynced.await()
         if (loadOnWatch) {

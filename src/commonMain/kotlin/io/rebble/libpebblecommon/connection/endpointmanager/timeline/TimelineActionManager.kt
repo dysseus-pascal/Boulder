@@ -3,13 +3,13 @@ package io.rebble.libpebblecommon.connection.endpointmanager.timeline
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDBDao
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.util.DataBuffer
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlin.uuid.Uuid
@@ -19,7 +19,7 @@ class TimelineActionManager(
     private val timelineService: TimelineService,
     private val blobDBDao: BlobDBDao,
     private val notifActionHandler: PlatformNotificationActionHandler,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) {
     companion object {
         private val logger = Logger.withTag(TimelineActionManager::class.simpleName!!)

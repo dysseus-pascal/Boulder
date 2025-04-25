@@ -3,13 +3,13 @@ package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDBDao
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import kotlinx.coroutines.CoroutineScope
 import kotlin.uuid.Uuid
 
-class AppBlobDB(watchScope: CoroutineScope, blobDBService: BlobDBService, blobDBDao: BlobDBDao, transport: Transport)
+class AppBlobDB(watchScope: ConnectionCoroutineScope, blobDBService: BlobDBService, blobDBDao: BlobDBDao, transport: Transport)
     : BlobDB(watchScope, blobDBService, WATCH_DB, blobDBDao, transport), ConnectedPebble.Locker
 {
     companion object {

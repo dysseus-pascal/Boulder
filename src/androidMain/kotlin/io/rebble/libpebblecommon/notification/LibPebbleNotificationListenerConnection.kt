@@ -7,8 +7,8 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -83,7 +83,7 @@ object LibPebbleNotificationListenerConnection {
         }
     }
 
-    fun init(context: Context, scope: CoroutineScope, libPebble: LibPebble) {
+    fun init(context: Context, scope: LibPebbleCoroutineScope, libPebble: LibPebble) {
         check(bind(context)) { "Failed to bind to LibPebbleNotificationListener" }
         logger.d { "LibPebbleNotificationListener bound" }
         notificationSendQueue.onEach {

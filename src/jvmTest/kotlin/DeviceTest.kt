@@ -3,6 +3,7 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.ws
 import io.ktor.http.*
 import io.ktor.websocket.Frame
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.packets.PingPong
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
@@ -11,7 +12,6 @@ import io.rebble.libpebblecommon.packets.blobdb.PushNotification
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.notification.NotificationService
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Ignore
@@ -78,8 +78,9 @@ class DeviceTests {
         )
 
         val protocolHandler = TestPebbleProtocolHandler { receivePacket(sendWS(it, true)!!) }
+        val scope = ConnectionCoroutineScope(coroutineContext)
 
-        val notificationService = NotificationService(BlobDBService(protocolHandler, GlobalScope))
+        val notificationService = NotificationService(BlobDBService(protocolHandler, scope))
         val notificationResult = notificationService.send(notif)
 
         assertTrue(

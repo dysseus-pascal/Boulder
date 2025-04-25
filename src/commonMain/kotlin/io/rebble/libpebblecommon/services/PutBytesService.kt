@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.PutBytesAbort
 import io.rebble.libpebblecommon.packets.PutBytesAppInit
@@ -12,14 +13,13 @@ import io.rebble.libpebblecommon.packets.PutBytesOutgoingPacket
 import io.rebble.libpebblecommon.packets.PutBytesPut
 import io.rebble.libpebblecommon.packets.PutBytesResponse
 import io.rebble.libpebblecommon.util.Crc32Calculator
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 class PutBytesService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
     val receivedMessages = Channel<PutBytesResponse>(Channel.RENDEZVOUS)
     val progressUpdates = Channel<PutBytesProgress>(Channel.BUFFERED)

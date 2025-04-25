@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
@@ -19,7 +20,6 @@ import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +66,7 @@ sealed class ConnectingPebbleState {
 class PebbleConnector(
     private val transportConnector: TransportConnector,
     private val transport: Transport,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
     private val negotiator: Negotiator,
     private val pebbleProtocolRunner: PebbleProtocolRunner,
     private val systemService: SystemService,

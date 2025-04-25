@@ -2,10 +2,8 @@ package io.rebble.libpebblecommon.connection.endpointmanager.putbytes
 
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.PutBytesAbort
-import io.rebble.libpebblecommon.packets.PutBytesResponse
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.util.Crc32Calculator
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +12,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.io.Source
 
 class PutBytesSession(
-    private val scope: CoroutineScope,
     private val putBytesService: PutBytesService
 ) {
     companion object {

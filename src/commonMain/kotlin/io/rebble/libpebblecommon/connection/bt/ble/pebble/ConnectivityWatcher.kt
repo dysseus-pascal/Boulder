@@ -4,18 +4,17 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
-import kotlinx.coroutines.CoroutineScope
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.experimental.and
-import kotlin.properties.Delegates
 
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
-class ConnectivityWatcher(private val scope: CoroutineScope) {
+class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 

@@ -4,13 +4,13 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.AppFetchRequest
 import io.rebble.libpebblecommon.packets.AppFetchResponseStatus
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.services.AppFetchService
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.channels.consumeEach
@@ -24,7 +24,7 @@ class AppFetchProvider(
     private val pbwCache: LockerPBWCache,
     private val appFetchService: AppFetchService,
     private val putBytesSession: PutBytesSession,
-    private val scope: CoroutineScope,
+    private val scope: ConnectionCoroutineScope,
     private val locker: Locker,
 ) {
     companion object {

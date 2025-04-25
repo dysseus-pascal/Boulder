@@ -57,8 +57,9 @@ import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.web.WebSyncManager
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
 import org.koin.core.Koin
 import org.koin.core.module.dsl.scopedOf
@@ -67,17 +68,18 @@ import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
+import kotlin.coroutines.CoroutineContext
 
 data class ConnectionScopeProperties(
     val transport: Transport,
-    val scope: CoroutineScope,
+    val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
 )
 
 class ConnectionScope(
     private val koinScope: Scope,
     val transport: Transport,
-    private val coroutineScope: CoroutineScope,
+    private val coroutineScope: ConnectionCoroutineScope,
 ) {
     val pebbleConnector: PebbleConnector = koinScope.get()
 
@@ -95,8 +97,20 @@ class ConnectionScopeFactory(private val koin: Koin) {
     }
 }
 
+/**
+ * Essentially, GlobalScope for libpebble. Use this everywhere that would otherwise use GlobalScope.
+ */
+class LibPebbleCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+
+/**
+ * Per-connection coroutine scope, torn down when the connection ends.
+ */
+class ConnectionCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+
+@OptIn(DelicateCoroutinesApi::class)
 fun initKoin(config: LibPebbleConfig): Koin {
     val koin = koinApplication().koin
+    val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
     koin.loadModules(
         listOf(
             module {
@@ -114,7 +128,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
-                single { GlobalScope } bind CoroutineScope::class // TODO remove this
+                single { libPebbleScope }
                 singleOf(::Locker)
                 singleOf(::WebSyncManager) bind RequestSync::class
                 single { createTimeChanged(get()) }

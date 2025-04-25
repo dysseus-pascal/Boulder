@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.rebble.libpebblecommon.services
 
 import org.junit.Assert.assertEquals
@@ -7,7 +5,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.days
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class SystemServiceTest {

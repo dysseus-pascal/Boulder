@@ -3,6 +3,15 @@ A port/rewrite of [libpebble2](https://github.com/pebble/libpebble2/) to Kotlin 
 
 ![Build](https://github.com/crc-32/libpebblecommon/workflows/Build/badge.svg)
 
+# Guidelines
+
+- We share a version catalog with CoreApp to avoid duplicating definitions. This means a few extra library entries which are not used in libpebble (so they can share the version definition).
+- Use `optIn` in `build.gradle.kts` rather than individual source files.
+
+Connection:
+- Services are scoped to the connection. Their main job is to translate raw pebble protocol messages to something readable by the rest of the app.
+- Endpoint managers are also scoped to the connection, and manage complex state around services.
+
 # Copyright and Licensing
 
 Copyright 2025 Core Devices LLC

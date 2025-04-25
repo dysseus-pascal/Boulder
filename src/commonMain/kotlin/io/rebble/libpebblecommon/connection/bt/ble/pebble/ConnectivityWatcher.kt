@@ -5,8 +5,6 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONN
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -42,15 +40,14 @@ class ConnectivityWatcher(private val scope: CoroutineScope) {
     }
 }
 
-@ExperimentalUnsignedTypes
 class ConnectivityStatus(characteristicValue: ByteArray) {
-    var connected by Delegates.notNull<Boolean>()
-    var paired by Delegates.notNull<Boolean>()
-    var encrypted by Delegates.notNull<Boolean>()
-    var hasBondedGateway by Delegates.notNull<Boolean>()
-    var supportsPinningWithoutSlaveSecurity by Delegates.notNull<Boolean>()
-    var hasRemoteAttemptedToUseStalePairing by Delegates.notNull<Boolean>()
-    var pairingErrorCode: PairingErrorCode
+    val connected: Boolean
+    val paired: Boolean
+    val encrypted: Boolean
+    val hasBondedGateway: Boolean
+    val supportsPinningWithoutSlaveSecurity: Boolean
+    val hasRemoteAttemptedToUseStalePairing: Boolean
+    val pairingErrorCode: PairingErrorCode
 
     init {
         val flags = characteristicValue[0]

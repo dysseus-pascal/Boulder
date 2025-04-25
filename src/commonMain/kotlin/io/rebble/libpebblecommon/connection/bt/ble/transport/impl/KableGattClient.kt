@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package io.rebble.libpebblecommon.connection.bt.ble.transport.impl
 
 import co.touchlab.kermit.Logger
@@ -8,7 +6,6 @@ import com.juul.kable.DiscoveredService
 import com.juul.kable.Peripheral
 import com.juul.kable.State
 import com.juul.kable.WriteType
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
@@ -16,18 +13,13 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.io.IOException
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 fun kableGattConnector(transport: BleTransport, scope: CoroutineScope): GattConnector? {
@@ -174,7 +166,6 @@ class KableConnectedGattClient(
     }
 }
 
-@OptIn(ExperimentalUuidApi::class)
 private fun DiscoveredService.asGattService(): GattService = GattService(
     uuid = serviceUuid,
     characteristics = characteristics.map { c ->

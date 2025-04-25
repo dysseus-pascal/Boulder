@@ -6,12 +6,10 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbl
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class BasicNotificationProcessor: NotificationProcessor {
-    @OptIn(ExperimentalTime::class)
     override fun processNotification(sbn: StatusBarNotification): NotificationResult {
         //TODO: Implement a more sophisticated notification processor
         val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn)

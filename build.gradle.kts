@@ -91,10 +91,9 @@ kotlin {
             languageSettings {
                 optIn("kotlin.ExperimentalUnsignedTypes")
                 optIn("kotlin.ExperimentalStdlibApi")
-                optIn("kotlin.RequiresOptIn")
-                optIn("kotlin.ExperimentalSerializationApi")
                 optIn("kotlin.uuid.ExperimentalUuidApi")
                 optIn("kotlinx.cinterop.ExperimentalForeignApi")
+                optIn("kotlin.time.ExperimentalTime")
             }
         }
         commonMain.dependencies {

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
@@ -27,7 +25,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
@@ -174,7 +171,6 @@ class PebbleConnector(
     }
 }
 
-@OptIn(ExperimentalTime::class)
 private val FW_3_0_0 = FirmwareVersion(
     stringVersion = "v3.0.0",
     timestamp = DISTANT_PAST,

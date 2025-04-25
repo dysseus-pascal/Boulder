@@ -3,11 +3,9 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.service.notification.StatusBarNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.buildNotificationItem
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-@OptIn(ExperimentalTime::class)
 data class LibPebbleNotification(
     val packageName: String,
     val uuid: Uuid,

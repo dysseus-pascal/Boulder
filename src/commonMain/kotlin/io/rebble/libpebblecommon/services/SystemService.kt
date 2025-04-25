@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
@@ -21,13 +19,11 @@ import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

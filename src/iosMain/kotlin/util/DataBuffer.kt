@@ -1,8 +1,28 @@
 package io.rebble.libpebblecommon.util
 
-import kotlinx.cinterop.*
-import platform.Foundation.*
-@OptIn(ExperimentalForeignApi::class)
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.IntVar
+import kotlinx.cinterop.ShortVar
+import kotlinx.cinterop.UByteVar
+import kotlinx.cinterop.UIntVar
+import kotlinx.cinterop.ULongVar
+import kotlinx.cinterop.UShortVar
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.value
+import platform.Foundation.NSData
+import platform.Foundation.NSMakeRange
+import platform.Foundation.NSMutableData
+import platform.Foundation.appendBytes
+import platform.Foundation.create
+import platform.Foundation.dataWithCapacity
+import platform.Foundation.getBytes
+import platform.Foundation.setData
+
 actual class DataBuffer {
     private val actualBuf: NSMutableData
     private var littleEndian = false

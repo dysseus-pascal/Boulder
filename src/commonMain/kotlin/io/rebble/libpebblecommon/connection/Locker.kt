@@ -1,6 +1,11 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.dao.LockerEntryDao
 import io.rebble.libpebblecommon.database.dao.LockerSyncStatusDao
@@ -25,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -72,6 +78,8 @@ class Locker(
 
     override fun getLocker(): Flow<List<LockerEntryWithPlatforms>> =
         lockerEntryDao.getAllWithPlatformsFlow()
+
+    suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.get(uuid)
 
     suspend fun update(locker: LockerModel) {
         logger.d("update: ${locker.applications.size}")
@@ -230,8 +238,26 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry = LockerEn
 
 expect fun getLockerPBWCacheDirectory(context: AppContext): Path
 
-class StaticLockerPBWCache(context: AppContext) : LockerPBWCache(context) {
-    override suspend fun handleCacheMiss(appId: Uuid): Path? = null
+class StaticLockerPBWCache(
+    context: AppContext,
+    private val httpClient: HttpClient,
+) :
+    LockerPBWCache(context) {
+    override suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path? {
+        val pbwPath = pathForApp(appId)
+        val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
+        return withTimeoutOrNull(5.seconds) {
+            val response = httpClient.get(pbwUrl)
+            if (!response.status.isSuccess()) {
+                Logger.i("http call failed: $response")
+                return@withTimeoutOrNull null
+            }
+            SystemFileSystem.sink(pbwPath).use { sink ->
+                response.bodyAsChannel().readRemaining().transferTo(sink)
+            }
+            pbwPath
+        }
+    }
 }
 
 abstract class LockerPBWCache(context: AppContext) {
@@ -241,14 +267,14 @@ abstract class LockerPBWCache(context: AppContext) {
         return Path(cacheDir, "$appId.pbw")
     }
 
-    protected abstract suspend fun handleCacheMiss(appId: Uuid): Path?
+    protected abstract suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path?
 
-    suspend fun getPBWFileForApp(appId: Uuid): Path {
+    suspend fun getPBWFileForApp(appId: Uuid, locker: Locker): Path {
         val pbwPath = pathForApp(appId)
         return if (SystemFileSystem.exists(pbwPath)) {
             pbwPath
         } else {
-            handleCacheMiss(appId) ?: error("Failed to find PBW file for app $appId")
+            handleCacheMiss(appId, locker) ?: error("Failed to find PBW file for app $appId")
         }
     }
 

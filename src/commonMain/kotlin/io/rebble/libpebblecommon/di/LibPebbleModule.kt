@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
+import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -120,6 +121,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::LibPebble3) bind LibPebble::class
                 single { ConnectionScopeFactory(koin) }
                 singleOf(::CreatePlatformIdentifier)
+                single { HttpClient() }
 
                 scope<ConnectionScope> {
                     // Params

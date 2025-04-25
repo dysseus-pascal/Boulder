@@ -111,7 +111,7 @@ kotlin {
             // Using our forked version (in a submodule) which has a fix for iOS reads not working
             implementation("com.juul.kable:kable-core")
             implementation("io.github.skolson:kmp-io:0.1.5")
-            implementation("io.ktor:ktor-io:3.1.1")
+            implementation(libs.ktor.client.core)
             implementation(libs.kotlinx.datetime)
             implementation(libs.koin.core)
         }

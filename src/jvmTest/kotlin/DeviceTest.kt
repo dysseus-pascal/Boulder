@@ -1,7 +1,8 @@
 import io.ktor.client.*
-import io.ktor.client.features.websocket.*
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.plugins.websocket.ws
 import io.ktor.http.*
-import io.ktor.http.cio.websocket.*
+import io.ktor.websocket.Frame
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.packets.PingPong
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
@@ -16,8 +17,6 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import kotlin.text.String
-import kotlin.text.toCharArray
 
 @Ignore("This tests requires manual run.")
 class DeviceTests {

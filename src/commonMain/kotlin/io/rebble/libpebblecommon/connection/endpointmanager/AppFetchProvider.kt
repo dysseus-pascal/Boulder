@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
@@ -24,6 +25,7 @@ class AppFetchProvider(
     private val appFetchService: AppFetchService,
     private val putBytesSession: PutBytesSession,
     private val scope: CoroutineScope,
+    private val locker: Locker,
 ) {
     companion object {
         private val logger = Logger.withTag(AppFetchProvider::class.simpleName!!)
@@ -37,7 +39,7 @@ class AppFetchProvider(
                         logger.d { "Got app fetch request for $uuid" }
                         val appId = it.appId.get()
                         val app = try {
-                            PbwApp(pbwCache.getPBWFileForApp(uuid))
+                            PbwApp(pbwCache.getPBWFileForApp(uuid, locker))
                         } catch (e: Exception) {
                             logger.e(e) { "Failed to get app for uuid $uuid" }
                             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)

@@ -39,7 +39,7 @@ data class BleConfig(
     val useNativeMtu: Boolean,
 )
 
-typealias PebbleDevices = Flow<List<PebbleDevice>>
+typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
 interface LibPebble : Scanning, RequestSync, LockerApi {
     fun init()

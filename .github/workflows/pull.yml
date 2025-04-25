@@ -24,6 +24,6 @@ jobs:
             ~/.konan/dependencies
           key: build-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew linkDebugFrameworkIosArm64 assembleDebug
       - name: Test
-        run: ./gradlew check
+        run: ./gradlew testDebugUnitTest jvmTest iosSimulatorArm64Test lintDebug

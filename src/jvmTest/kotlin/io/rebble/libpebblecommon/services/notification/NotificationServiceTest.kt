@@ -2,12 +2,13 @@ package io.rebble.libpebblecommon.services.notification
 
 import TestPebbleProtocolHandler
 import assertIs
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.packets.blobdb.NotificationSource
 import io.rebble.libpebblecommon.packets.blobdb.PushNotification
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlin.test.Test
@@ -24,9 +25,10 @@ class NotificationServiceTest {
                 })
             }
         }
-        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
-            init()
-        })
+        val notificationService =
+            NotificationService(BlobDBService(protocolHandler, connectionScope()).apply {
+                init()
+            })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()
         val result = notificationService.send(TEST_NOTIFICATION)
@@ -46,9 +48,10 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
-            init()
-        })
+        val notificationService =
+            NotificationService(BlobDBService(protocolHandler, connectionScope()).apply {
+                init()
+            })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()
         val result = notificationService.send(TEST_NOTIFICATION)
@@ -79,9 +82,10 @@ class NotificationServiceTest {
             }
         }
 
-        val notificationService = NotificationService(BlobDBService(protocolHandler, backgroundScope).apply {
-            init()
-        })
+        val notificationService =
+            NotificationService(BlobDBService(protocolHandler, connectionScope()).apply {
+                init()
+            })
         // Hack: init() starts collecting asynchronously - we need to make that immediate, really
         yield()
         val result = notificationService.send(TEST_NOTIFICATION)
@@ -109,3 +113,6 @@ private val TEST_NOTIFICATION = PushNotification(
     backgroundColor = 0b11110011u,
     source = NotificationSource.Email
 )
+
+private fun TestScope.connectionScope(): ConnectionCoroutineScope =
+    ConnectionCoroutineScope(backgroundScope.coroutineContext)

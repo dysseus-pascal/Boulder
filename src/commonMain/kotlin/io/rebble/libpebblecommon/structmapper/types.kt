@@ -218,13 +218,6 @@ class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
         2 * ULong.SIZE_BYTES,
         default
     )
-{
-    @Deprecated("Deprecated in favour of new kotlin stdlib UUID")
-    constructor(mapper: StructMapper, default: com.benasher44.uuid.Uuid) : this(
-        mapper,
-        Uuid.fromLongs(default.mostSignificantBits, default.leastSignificantBits)
-    )
-}
 
 /**
  * Represents a string (UTF-8) in a struct, includes framing for length

@@ -98,7 +98,6 @@ kotlin {
             }
         }
         commonMain.dependencies {
-            implementation(libs.uuid)
             implementation(libs.klock)
             implementation(libs.coroutines)
             implementation(libs.serialization)

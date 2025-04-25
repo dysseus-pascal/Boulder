@@ -1,12 +1,12 @@
 package io.rebble.libpebblecommon.packets
 
-import com.benasher44.uuid.Uuid
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.Uuid
 
 
 class AppMessageTuple() : StructMappable() {
@@ -206,7 +206,7 @@ sealed class AppMessage(message: Message, transactionId: UByte) : PebblePacket(e
 
     class AppMessagePush(
         transactionId: UByte = 0u,
-        uuid: Uuid = Uuid(0L, 0L),
+        uuid: Uuid = Uuid.NIL,
         tuples: List<AppMessageTuple> = emptyList()
     ) :
         AppMessage(Message.AppMessagePush, transactionId) {

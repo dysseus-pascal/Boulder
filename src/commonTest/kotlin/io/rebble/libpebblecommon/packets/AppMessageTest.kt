@@ -2,18 +2,17 @@ package io.rebble.libpebblecommon.packets
 
 import assertIs
 import assertUByteArrayEquals
-import com.benasher44.uuid.Uuid
-import com.benasher44.uuid.uuidFrom
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.uuid.Uuid
 
 internal class AppMessageTest {
     @Test
     fun serializeDeserializePushMessage() {
         val testPushMessage = AppMessage.AppMessagePush(
             5u,
-            uuidFrom("30880933-cead-49f6-ba94-3a6f8cd3218a"),
+            Uuid.parse("30880933-cead-49f6-ba94-3a6f8cd3218a"),
             listOf(
                 AppMessageTuple.createUByteArray(77u, ubyteArrayOf(1u, 170u, 245u)),
                 AppMessageTuple.createString(6710u, "Hello World"),
@@ -78,7 +77,7 @@ internal class AppMessageTest {
     fun appMessageShortShouldBeLittleEndian() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createShort(0u, -50),
             )
@@ -105,7 +104,7 @@ internal class AppMessageTest {
     fun appMessageUShortShouldBeLittleEndian() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createUShort(0u, 4876u),
             )
@@ -132,7 +131,7 @@ internal class AppMessageTest {
     fun appMessageIntShouldBeLittleEndian() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createInt(0u, -90000),
             )
@@ -159,7 +158,7 @@ internal class AppMessageTest {
     fun appMessageUIntShouldBeLittleEndian() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createUInt(0u, 900000u),
             )
@@ -186,7 +185,7 @@ internal class AppMessageTest {
     fun appMessageStringShouldBeBigEndianAndTerminatedWithZero() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createString(0u, "Hello"),
             )
@@ -218,7 +217,7 @@ internal class AppMessageTest {
     fun appMessageBytesShouldBeBigEndian() {
         val testPushMessage = AppMessage.AppMessagePush(
             0u,
-            Uuid(0L, 0L),
+            Uuid.NIL,
             listOf(
                 AppMessageTuple.createUByteArray(0u, ubyteArrayOf(1u, 2u, 3u)),
             )

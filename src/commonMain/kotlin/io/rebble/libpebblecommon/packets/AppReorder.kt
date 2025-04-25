@@ -1,10 +1,10 @@
 package io.rebble.libpebblecommon.packets
 
-import com.benasher44.uuid.Uuid
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.*
+import kotlin.uuid.Uuid
 
 class AppReorderResult() :
     PebblePacket(ProtocolEndpoint.APP_REORDER) {

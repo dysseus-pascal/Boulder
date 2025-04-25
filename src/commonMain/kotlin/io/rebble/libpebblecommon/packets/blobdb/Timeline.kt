@@ -19,9 +19,12 @@ import kotlin.uuid.Uuid
 
 class TimelineItem(
     itemId: Uuid = Uuid.NIL,
-    parentId: Uuid = Uuid.NIL, timestamp: UInt = 0u,
-    duration: UShort = 0u, type: Type = Type.Notification,
-    flags: UShort = 0u, layout: Layout = Layout.GenericNotification,
+    parentId: Uuid = Uuid.NIL,
+    timestampSecs: UInt = 0u,
+    duration: UShort = 0u,
+    type: Type = Type.Notification,
+    flags: UShort = 0u,
+    layout: Layout = Layout.GenericNotification,
     attributes: List<Attribute> = emptyList(),
     actions: List<Action> = emptyList()
 ) : StructMappable() {
@@ -61,7 +64,7 @@ class TimelineItem(
     /**
      * Timeline pin timestamp in unix time
      */
-    val timestamp = SUInt(m, timestamp, endianness = Endian.Little)
+    val timestampSecs = SUInt(m, timestampSecs, endianness = Endian.Little)
 
     /**
      * Duration of the pin in minutes

@@ -1,7 +1,6 @@
 [versions]
 agp = "8.9.2"
 kotlin = "2.1.20"
-klock = "2.4.13"
 ktor = "3.0.3"
 coroutine = "1.10.1"
 serialization = "1.5.0"
@@ -22,7 +21,6 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room = { id = "androidx.room", version.ref = "room" }
 
 [libraries]
-klock = { module = "com.soywiz.korlibs.klock:klock", version.ref = "klock" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutine" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutine" }
 serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

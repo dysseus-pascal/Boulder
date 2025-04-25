@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
-import com.soywiz.klock.DateTime
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
+import kotlinx.datetime.Clock
 import kotlin.random.Random
 import kotlin.uuid.Uuid
 
@@ -48,12 +48,12 @@ open class PushNotification(subject: String, sender: String? = null, message: St
             )
         )
 
-        val timestamp = DateTime.nowUnixLong() / 1000
+        val timestampSecs = Clock.System.now().epochSeconds
 
         val notification = TimelineItem(
             itemID,
             Uuid.NIL,
-            timestamp.toUInt(),
+            timestampSecs.toUInt(),
             0u,
             TimelineItem.Type.Notification,
             0u,

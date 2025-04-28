@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppsDb
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.js.PebbleJSDevice
@@ -85,6 +86,7 @@ class PebbleConnector(
     private val pkjsLifecycleManager: PKJSLifecycleManager,
     private val appFetchProvider: AppFetchProvider,
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
+    private val notificationAppsDb: NotificationAppsDb,
 ) {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))

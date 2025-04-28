@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
@@ -33,6 +34,7 @@ import kotlin.time.Instant
 class SystemService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
+    private val phoneCapabilities: PhoneCapabilities,
 ) : ProtocolService,
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
@@ -86,17 +88,7 @@ class SystemService(
                 4u,
                 4u,
                 2u,
-                ProtocolCapsFlag.makeFlags(
-                    buildList {
-                        add(ProtocolCapsFlag.SupportsAppRunStateProtocol)
-                        add(ProtocolCapsFlag.SupportsExtendedMusicProtocol)
-                        add(ProtocolCapsFlag.SupportsTwoWayDismissal)
-                        add(ProtocolCapsFlag.Supports8kAppMessage)
-//                    if (platformContext.osType == PhoneAppVersion.OSType.Android) {
-//                        add(ProtocolCapsFlag.SupportsAppDictation)
-//                    }
-                    }
-                )
+                ProtocolCapsFlag.makeFlags(phoneCapabilities.capabilities.toList())
             ))
     }
 

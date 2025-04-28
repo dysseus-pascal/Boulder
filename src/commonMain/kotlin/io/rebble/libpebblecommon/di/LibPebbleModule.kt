@@ -41,18 +41,20 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
+import io.rebble.libpebblecommon.connection.createCompanionDeviceManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppsDb
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
-import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
@@ -67,6 +69,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
 import org.koin.core.Koin
+import org.koin.core.module.Module
 import org.koin.core.module.dsl.scopedOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.scope.Scope
@@ -74,6 +77,7 @@ import org.koin.dsl.bind
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.Clock
 
 data class ConnectionScopeProperties(
     val transport: Transport,
@@ -112,6 +116,15 @@ class LibPebbleCoroutineScope(override val coroutineContext: CoroutineContext) :
  */
 class ConnectionCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
 
+/**
+ * Lazy/provider for when we need to get out of a circular dependency.
+ */
+class HackyProvider<T>(val getter: () -> T) {
+    fun get(): T = getter()
+}
+
+expect val platformModule: Module
+
 @OptIn(DelicateCoroutinesApi::class)
 fun initKoin(config: LibPebbleConfig): Koin {
     val koin = koinApplication().koin
@@ -119,6 +132,8 @@ fun initKoin(config: LibPebbleConfig): Koin {
     koin.loadModules(
         listOf(
             module {
+                includes(platformModule)
+
                 factory { config }
                 factory { config.context }
                 factory { config.webServices }
@@ -126,11 +141,11 @@ fun initKoin(config: LibPebbleConfig): Koin {
 
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
-                singleOf(::PlatformNotificationActionHandler)
                 singleOf(::PebbleDeviceFactory)
                 single { get<Database>().knownWatchDao() }
                 single { get<Database>().blobDBDao() }
                 single { get<Database>().lockerEntryDao() }
+                single { get<Database>().notificationAppDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -142,8 +157,12 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 single { ConnectionScopeFactory(koin) }
                 singleOf(::CreatePlatformIdentifier)
                 singleOf(::GattServerManager)
+                singleOf(::NotificationApi)
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 single { HttpClient() }
+                single { createCompanionDeviceManager(get()) }
+                factory { HackyProvider { get<Scanning>() } }
+                factory<Clock> { Clock.System }
 
                 scope<ConnectionScope> {
                     // Params
@@ -207,6 +226,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::AppFetchProvider)
                     scopedOf(::DebugPebbleProtocolSender)
                     scopedOf(::PKJSLifecycleManager)
+                    scopedOf(::NotificationAppsDb)
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

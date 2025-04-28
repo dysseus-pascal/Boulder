@@ -356,12 +356,15 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsHealthInsights(6),
     SupportsAppDictation(7),
     SupportsSendTextApp(8),
+    SupportsNotificationFiltering(9),
     SupportsUnreadCoreDump(10),
     SupportsWeatherApp(11),
     SupportsRemindersApp(12),
     SupportsWorkoutApp(13),
+    SupportsSmoothFwInstallProgress(14),
+    JavascriptBytecodeVersionAppended(16),
     SupportsFwUpdateAcrossDisconnection(21),
-    SupportsSmoothFwInstallProgress(14);
+    ;
 
     companion object {
         fun makeFlags(flags: List<ProtocolCapsFlag>): UByteArray {

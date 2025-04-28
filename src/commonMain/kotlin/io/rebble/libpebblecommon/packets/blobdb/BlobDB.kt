@@ -31,7 +31,11 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
         AppConfigs(9u),
         HealthStats(10u),
         AppGlance(11u),
-        Invalid(0xFFu)
+        Invalid(0xFFu),
+        ;
+        companion object {
+            fun from(id: UByte): BlobDatabase = entries.firstOrNull { it.id == id } ?: Invalid
+        }
     }
 
     val command = SUByte(m, message.value)

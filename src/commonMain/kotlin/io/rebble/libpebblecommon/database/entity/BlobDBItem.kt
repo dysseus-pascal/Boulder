@@ -8,7 +8,7 @@ import kotlin.uuid.Uuid
     primaryKeys = ["id", "watchIdentifier"],
 )
 data class BlobDBItem(
-    val id: Uuid,
+    val id: String,
     val syncStatus: BlobDBItemSyncStatus,
     val watchIdentifier: String,
     val watchDatabase: BlobCommand.BlobDatabase,

@@ -10,11 +10,11 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.ConnectionScope
 import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
+import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -58,7 +58,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
 
 interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
-    fun requestConnection(transport: Transport)
+    suspend fun requestConnection(transport: Transport)
     fun requestDisconnection(transport: Transport)
     fun clearScanResults()
     fun forget(transport: Transport)
@@ -99,6 +99,8 @@ class WatchManager(
     private val connectionScopeFactory: ConnectionScopeFactory,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
+    private val companionDevice: CompanionDevice,
+    private val scanning: HackyProvider<Scanning>,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -238,8 +240,12 @@ class WatchManager(
         }
     }
 
-    override fun requestConnection(transport: Transport) {
+    override suspend fun requestConnection(transport: Transport) {
         logger.d("requestConnection: $transport")
+        companionDevice.registerDevice(transport)
+        val scanning = scanning.get()
+        scanning.stopBleScan()
+        scanning.stopClassicScan()
         updateWatch(transport = transport) { it.copy(connectGoal = true) }
     }
 

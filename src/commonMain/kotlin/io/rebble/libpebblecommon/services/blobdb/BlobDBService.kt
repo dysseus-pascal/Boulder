@@ -1,13 +1,30 @@
 package io.rebble.libpebblecommon.services.blobdb
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppItem
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
+import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command
+import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.ProtocolService
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.util.Endian
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
@@ -18,6 +35,9 @@ class BlobDBService(
     private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
     private val pending: MutableMap<UShort, CompletableDeferred<BlobResponse>> = mutableMapOf()
+    private val logger = Logger.withTag("BlobDBService")
+    private val _writes = MutableSharedFlow<DbWrite>()
+    val writes = _writes.asSharedFlow()
 
     fun init() {
         scope.launch {
@@ -26,9 +46,108 @@ class BlobDBService(
                     is BlobResponse -> {
                         pending.remove(packet.token.get())?.complete(packet)
                     }
+
+                    is BlobDB2Command.Write -> {
+                        logger.d("Write: db=${packet.database} key=${packet.key} value=${packet.value}")
+                        _writes.emit(
+                            DbWrite(
+                                token = packet.token.get(),
+                                database = BlobCommand.BlobDatabase.from(packet.database.get()),
+                                timestamp = packet.timestamp.get(),
+                                key = packet.key.get(),
+                                value = packet.value.get(),
+                                WriteType.Write,
+                            )
+                        )
+                    }
+
+                    is BlobDB2Command.WriteBack -> {
+                        logger.d("WriteBack: db=${packet.database} key=${packet.key} value=${packet.value}")
+                        _writes.emit(
+                            DbWrite(
+                                token = packet.token.get(),
+                                database = BlobCommand.BlobDatabase.from(packet.database.get()),
+                                timestamp = packet.timestamp.get(),
+                                key = packet.key.get(),
+                                value = packet.value.get(),
+                                WriteType.WriteBack,
+                            )
+                        )
+                    }
                 }
             }
         }
+        scope.launch {
+//            insertGmail()
+        }
+    }
+
+    private suspend fun syncDirtyDbs() {
+        val resp = send(BlobDB2Command.DirtyDatabase())
+        val dirty = resp as? BlobDB2Response.DirtyDatabaseResponse
+        logger.d("DirtyDatabase: ${dirty?.databaseIds}")
+        if (dirty == null) return
+        dirty.databaseIds.list.forEach {
+            val db = BlobCommand.BlobDatabase.from(it.get())
+            if (db == BlobCommand.BlobDatabase.Invalid) return@forEach
+            startSync(db)
+        }
+//            clearDb(BlobCommand.BlobDatabase.CannedResponses)
+    }
+
+    private suspend fun insertGmail() {
+        val token = 0
+        val item = NotificationAppItem(
+            attributes = listOf(
+                TimelineItem.Attribute(
+                    attributeId = TimelineAttribute.AppName.id,
+                    content = "Gmail".encodeToByteArray().toUByteArray(),
+                ),
+                TimelineItem.Attribute(
+                    attributeId = TimelineAttribute.MuteDayOfWeek.id,
+                    content = ubyteArrayOf(0u),
+                ),
+                TimelineItem.Attribute(
+                    attributeId = TimelineAttribute.LastUpdated.id,
+                    content = Clock.System.now().epochSeconds.toUInt().let {
+                        SUInt(StructMapper(), it, endianness = Endian.Big).toBytes()
+                    },
+                ),
+            )
+        )
+        val packageName = "com.google.Gmail"
+        val res = send(
+            BlobCommand.InsertCommand(
+                token = token.toUShort(),
+                database = BlobCommand.BlobDatabase.CannedResponses,
+                key = packageName.encodeToByteArray().toUByteArray(),
+                value = item.toBytes(),
+            )
+        )
+        logger.d("insert gmail res=$res")
+    }
+
+    private suspend fun clearDb(db: BlobCommand.BlobDatabase) {
+        logger.d("clearDb: $db")
+        val token = 0
+        val tokenUShort = token.toUShort()
+        val res = send(BlobCommand.ClearCommand(tokenUShort, db))
+        logger.d("clearDb res=$res")
+    }
+
+    private suspend fun startSync(db: BlobCommand.BlobDatabase) {
+        logger.d("startSync for $db")
+        val token = 0
+        val tokenUShort = token.toUShort()
+        val startRes = send(BlobDB2Command.StartSync(token = tokenUShort, database = db))
+        logger.d("startRes = $startRes")
+        val startSyncRes = startRes as? BlobDB2Response.StartSyncResponse
+        logger.d("...StartSync res = ${startSyncRes?.status}")
+        protocolHandler.inboundMessages.filterIsInstance<BlobDB2Command.SyncDone>()
+            .filter { it.token.get() == tokenUShort }
+            .first()
+        val doneRes = sendResponse(BlobDB2Response.SyncDoneResponse(token = tokenUShort))
+        logger.d("doneRes=$doneRes")
     }
 
     /**
@@ -50,4 +169,32 @@ class BlobDBService(
 
         return result.await()
     }
+
+    suspend fun send(packet: BlobDB2Command): BlobDB2Response {
+        logger.d("send BlobDB2Command $packet")
+        return protocolHandler.inboundMessages.onSubscription {
+            logger.d("send BlobDB2Command $packet ... onsubscription")
+            protocolHandler.send(packet)
+        }.filterIsInstance(BlobDB2Response::class)
+            .filter { it.token == packet.token }
+            .first()
+    }
+
+    suspend fun sendResponse(response: BlobDB2Response) {
+        protocolHandler.send(response)
+    }
+}
+
+data class DbWrite(
+    val token: UShort,
+    val database: BlobCommand.BlobDatabase,
+    val timestamp: UInt,
+    val key: UByteArray,
+    val value: UByteArray,
+    val writeType: WriteType,
+)
+
+enum class WriteType {
+    Write,
+    WriteBack,
 }

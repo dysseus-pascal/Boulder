@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.util.Endian
 
 sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endpoint) {
     companion object {
@@ -63,7 +64,7 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
         val key = SBytes(m, key.size, key).apply {
             linkWithSize(keySize)
         }
-        val valueSize = SUByte(m, value.size.toUByte())
+        val valueSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
         val value = SBytes(m, value.size, value).apply {
             linkWithSize(valueSize)
         }
@@ -85,7 +86,7 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
         val key = SBytes(m, key.size, key).apply {
             linkWithSize(keySize)
         }
-        val valueSize = SUByte(m, value.size.toUByte())
+        val valueSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
         val value = SBytes(m, value.size, value).apply {
             linkWithSize(valueSize)
         }

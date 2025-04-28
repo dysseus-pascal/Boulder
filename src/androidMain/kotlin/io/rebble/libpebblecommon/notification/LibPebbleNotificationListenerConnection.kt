@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
+import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -7,8 +8,11 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
+import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -21,9 +25,15 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 import kotlin.uuid.Uuid
 
-object LibPebbleNotificationListenerConnection {
-    const val ACTION_BIND_LOCAL = "io.rebble.libpebblecommon.notification.LibPebbleNotificationListener.BIND_LOCAL"
-    private val logger = Logger.withTag(LibPebbleNotificationListenerConnection::class.simpleName!!)
+class AndroidPebbleNotificationListenerConnection(
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val context: Application,
+) : NotificationListenerConnection {
+    companion object {
+        const val ACTION_BIND_LOCAL =
+            "io.rebble.libpebblecommon.notification.LibPebbleNotificationListener.BIND_LOCAL"
+    }
+    private val logger = Logger.withTag("AndroidPebbleNotificationListenerConnection")
 
     private val _service = MutableStateFlow<LibPebbleNotificationListener?>(null)
     private var isBound = false
@@ -83,15 +93,15 @@ object LibPebbleNotificationListenerConnection {
         }
     }
 
-    fun init(context: Context, scope: LibPebbleCoroutineScope, libPebble: LibPebble) {
+    override fun init(libPebble: LibPebble) {
         check(bind(context)) { "Failed to bind to LibPebbleNotificationListener" }
         logger.d { "LibPebbleNotificationListener bound" }
         notificationSendQueue.onEach {
             libPebble.sendNotification(it.toTimelineItem())
-        }.launchIn(scope)
+        }.launchIn(libPebbleCoroutineScope)
         notificationDeleteQueue.onEach {
             libPebble.deleteNotification(it)
-        }.launchIn(scope)
+        }.launchIn(libPebbleCoroutineScope)
     }
 
     private fun bind(context: Context): Boolean {

@@ -5,12 +5,16 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
+import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
-import io.rebble.libpebblecommon.notification.initPlatformNotificationListener
+import io.rebble.libpebblecommon.notification.NotificationApi
+import io.rebble.libpebblecommon.notification.NotificationAppWithIcon
+import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
@@ -39,9 +43,11 @@ data class BleConfig(
     val useNativeMtu: Boolean,
 )
 
+data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
+
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
-interface LibPebble : Scanning, RequestSync, LockerApi {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps {
     fun init()
 
     val watches: PebbleDevices
@@ -79,10 +85,15 @@ interface LockerApi {
     fun getLocker(): Flow<List<LockerEntryWithPlatforms>>
 }
 
+interface NotificationApps {
+    val notificationApps: Flow<List<NotificationAppWithIcon>>
+    fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
+    fun syncAppsFromOS()
+}
+
 // Impl
 
 class LibPebble3(
-    private val config: LibPebbleConfig,
     private val watchManager: WatchManager,
     private val scanning: Scanning,
     private val locker: Locker,
@@ -91,7 +102,10 @@ class LibPebble3(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val gattServerManager: GattServerManager,
     private val bluetoothStateProvider: BluetoothStateProvider,
-) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker {
+    private val notificationListenerConnection: NotificationListenerConnection,
+    private val notificationApi: NotificationApi,
+) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
+    NotificationApps by notificationApi {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
@@ -99,6 +113,7 @@ class LibPebble3(
         gattServerManager.init()
         watchManager.init()
         locker.init()
+        notificationListenerConnection.init(this)
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
@@ -135,8 +150,6 @@ class LibPebble3(
         fun create(config: LibPebbleConfig): LibPebble {
             koin = initKoin(config)
             val libPebble = koin.get<LibPebble>()
-            val libPebbleScope = koin.get<LibPebbleCoroutineScope>()
-            initPlatformNotificationListener(config.context, libPebbleScope, libPebble)
             return libPebble
         }
     }

@@ -6,7 +6,6 @@ import androidx.room.Query
 import io.rebble.libpebblecommon.database.entity.BlobDBItem
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import kotlinx.coroutines.flow.Flow
-import kotlin.uuid.Uuid
 
 @Dao
 interface BlobDBDao {
@@ -17,13 +16,13 @@ interface BlobDBDao {
     suspend fun insertOrReplace(blob: BlobDBItem)
 
     @Query("UPDATE BlobDBItem SET syncStatus = 'SyncedToWatch' WHERE id = :id AND watchIdentifier = :watchIdentifier")
-    suspend fun markSynced(id: Uuid, watchIdentifier: String)
+    suspend fun markSynced(id: String, watchIdentifier: String)
 
     @Query("UPDATE BlobDBItem SET syncStatus = 'PendingWrite' WHERE id = :id AND watchIdentifier = :watchIdentifier")
-    suspend fun markPendingWrite(id: Uuid, watchIdentifier: String)
+    suspend fun markPendingWrite(id: String, watchIdentifier: String)
 
     @Query("UPDATE BlobDBItem SET syncStatus = 'PendingDelete' WHERE id = :id")
-    suspend fun markPendingDelete(id: Uuid)
+    suspend fun markPendingDelete(id: String)
 
     @Query("SELECT * FROM BlobDBItem WHERE watchDatabase = :watchDatabase AND watchIdentifier = :watchIdentifier")
     fun changesFor(watchDatabase: BlobCommand.BlobDatabase, watchIdentifier: String): Flow<List<BlobDBItem>>
@@ -32,5 +31,5 @@ interface BlobDBDao {
     suspend fun getAllPendingFor(watchDatabase: BlobCommand.BlobDatabase, watchIdentifier: String): List<BlobDBItem>
 
     @Query("SELECT * FROM BlobDBItem WHERE id = :id AND watchIdentifier = :watchIdentifier")
-    suspend fun get(id: Uuid, watchIdentifier: String): BlobDBItem?
+    suspend fun get(id: String, watchIdentifier: String): BlobDBItem?
 }

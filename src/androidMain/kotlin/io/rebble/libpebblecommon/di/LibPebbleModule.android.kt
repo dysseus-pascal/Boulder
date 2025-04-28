@@ -1,0 +1,42 @@
+package io.rebble.libpebblecommon.di
+
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.PhoneCapabilities
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
+import io.rebble.libpebblecommon.notification.NotificationAppsSync
+import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.singleOf
+import org.koin.dsl.bind
+import org.koin.dsl.module
+
+actual val platformModule: Module = module {
+    single {
+        PhoneCapabilities(
+            setOf(
+                ProtocolCapsFlag.SupportsAppRunStateProtocol,
+                //ProtocolCapsFlag.SupportsInfiniteLogDump,
+                ProtocolCapsFlag.SupportsExtendedMusicProtocol,
+                ProtocolCapsFlag.SupportsTwoWayDismissal,
+                //ProtocolCapsFlag.SupportsLocalization
+                ProtocolCapsFlag.Supports8kAppMessage,
+//                ProtocolCapsFlag.SupportsHealthInsights,
+//                ProtocolCapsFlag.SupportsAppDictation,
+//                ProtocolCapsFlag.SupportsUnreadCoreDump,
+//                ProtocolCapsFlag.SupportsWeatherApp,
+//                ProtocolCapsFlag.SupportsRemindersApp,
+//                ProtocolCapsFlag.SupportsWorkoutApp,
+//                ProtocolCapsFlag.SupportsSmoothFwInstallProgress,
+//                ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection,
+            )
+        )
+    }
+    singleOf(::AndroidPebbleNotificationListenerConnection) bind NotificationListenerConnection::class
+    singleOf(::AndroidNotificationActionHandler) bind PlatformNotificationActionHandler::class
+    singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
+    single { get<AppContext>().context }
+}

@@ -282,12 +282,19 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     ForegroundColor(0x1Bu),
     PrimaryColor(0x1Cu),
     SecondaryColor(0x1Du),
+    AppName(30u),
     DisplayRecurring(0x1Fu),
     ShortSubtitle(0x24u),
     Timestamp(0x25u),
     DisplayTime(0x26u),
+    MuteDayOfWeek(40u),
     SubtitleTemplateString(0x2Fu, 150),
     Icon(0x30u),
+    ;
+
+    companion object {
+        fun fromByte(value: UByte): TimelineAttribute? = entries.firstOrNull { it.id == value }
+    }
 }
 
 fun timelinePacketsRegister() {

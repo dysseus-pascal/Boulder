@@ -7,9 +7,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction
-import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -19,7 +18,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.uuid.Uuid
 
-actual class PlatformNotificationActionHandler actual constructor(private val appContext: AppContext) {
+class AndroidNotificationActionHandler(
+    private val notificationListenerConnection: AndroidPebbleNotificationListenerConnection,
+) : PlatformNotificationActionHandler {
     companion object {
         private val logger = Logger.withTag(PlatformNotificationActionHandler::class.simpleName!!)
 
@@ -31,6 +32,7 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
             )
         }
     }
+
     private val platformActions = mutableMapOf<Uuid, Map<UByte, LibPebbleNotificationAction>>()
 
     //TODO: Set from e.g. notification service
@@ -38,10 +40,14 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         platformActions[itemId] = actionHandlers
     }
 
-    private fun makeFillIntent(pebbleInvokeAttrs: List<TimelineItem.Attribute>, notificationAction: LibPebbleNotificationAction): Intent? {
+    private fun makeFillIntent(
+        pebbleInvokeAttrs: List<TimelineItem.Attribute>,
+        notificationAction: LibPebbleNotificationAction
+    ): Intent? {
         val responseText = pebbleInvokeAttrs.firstOrNull {
             it.attributeId.get() == TimelineAttribute.Title.id
-        }?.content?.get()?.asByteArray()?.decodeToString()?.take(TimelineAttribute.Title.maxLength-1) ?: run {
+        }?.content?.get()?.asByteArray()?.decodeToString()
+            ?.take(TimelineAttribute.Title.maxLength - 1) ?: run {
             logger.e { "No response text found for action while handling: $notificationAction" }
             return null
         }
@@ -60,12 +66,17 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         return fillIntent
     }
 
-    private suspend fun handleReply(pebbleInvokeAttrs: List<TimelineItem.Attribute>, notificationAction: LibPebbleNotificationAction): TimelineActionResult {
-        val fillIntent = makeFillIntent(pebbleInvokeAttrs, notificationAction) ?: return errorResponse()
-        val resultCode = notificationAction.pendingIntent?.let { actionIntent(it, fillIntent) } ?: run {
-            logger.e { "No pending intent found while handling: $notificationAction as Reply" }
-            return errorResponse()
-        }
+    private suspend fun handleReply(
+        pebbleInvokeAttrs: List<TimelineItem.Attribute>,
+        notificationAction: LibPebbleNotificationAction
+    ): TimelineActionResult {
+        val fillIntent =
+            makeFillIntent(pebbleInvokeAttrs, notificationAction) ?: return errorResponse()
+        val resultCode =
+            notificationAction.pendingIntent?.let { actionIntent(it, fillIntent) } ?: run {
+                logger.e { "No pending intent found while handling: $notificationAction as Reply" }
+                return errorResponse()
+            }
         logger.d { "handleReply() actionIntent result code: $resultCode" }
         return TimelineActionResult(
             success = true,
@@ -88,7 +99,7 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
     }
 
     private suspend fun handleDismiss(itemId: Uuid): TimelineActionResult {
-        LibPebbleNotificationListenerConnection.dismissNotification(itemId)
+        notificationListenerConnection.dismissNotification(itemId)
         return TimelineActionResult(
             success = true,
             icon = TimelineIcon.ResultDismissed,
@@ -96,36 +107,51 @@ actual class PlatformNotificationActionHandler actual constructor(private val ap
         )
     }
 
-    actual suspend operator fun invoke(
+    override suspend operator fun invoke(
         itemId: Uuid,
         action: TimelineItem.Action,
         attributes: List<TimelineItem.Attribute>
     ): TimelineActionResult {
         val actionId = action.actionID.get()
-        val notificationAction = LibPebbleNotificationListenerConnection.getNotificationAction(itemId, actionId)
-            ?: run {
-                logger.e { "No notification found for action ID $actionId while handling: $itemId" }
-                return errorResponse()
-            }
+        val notificationAction =
+            notificationListenerConnection.getNotificationAction(itemId, actionId)
+                ?: run {
+                    logger.e { "No notification found for action ID $actionId while handling: $itemId" }
+                    return errorResponse()
+                }
         logger.d { "Handling notification action on itemId $itemId: ${notificationAction.type}" }
         return when (notificationAction.type) {
-            LibPebbleNotificationAction.ActionType.Reply -> handleReply(attributes, notificationAction)
+            LibPebbleNotificationAction.ActionType.Reply -> handleReply(
+                attributes,
+                notificationAction
+            )
+
             LibPebbleNotificationAction.ActionType.Dismiss -> handleDismiss(itemId)
             else -> handleGeneric(notificationAction)
         }
     }
 
     private suspend fun actionIntent(intent: PendingIntent, fillIntent: Intent? = null): Int {
-        val actionContext = LibPebbleNotificationListenerConnection.notificationListenerContext.first()
+        val actionContext =
+            notificationListenerConnection.notificationListenerContext.first()
         return suspendCancellableCoroutine { continuation ->
-            val callback = PendingIntent.OnFinished { pendingIntent, intent, resultCode, resultData, resultExtras ->
-                continuation.resume(resultCode)
-            }
+            val callback =
+                PendingIntent.OnFinished { pendingIntent, intent, resultCode, resultData, resultExtras ->
+                    continuation.resume(resultCode)
+                }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val activityOptions = ActivityOptions.makeBasic().apply {
                     setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
                 }
-                intent.send(actionContext, 0, fillIntent, callback, null, null, activityOptions.toBundle())
+                intent.send(
+                    actionContext,
+                    0,
+                    fillIntent,
+                    callback,
+                    null,
+                    null,
+                    activityOptions.toBundle()
+                )
             } else {
                 intent.send(actionContext, 0, fillIntent, callback, null)
             }

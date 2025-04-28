@@ -7,6 +7,8 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlin.uuid.Uuid
 
 class AppBlobDB(watchScope: ConnectionCoroutineScope, blobDBService: BlobDBService, blobDBDao: BlobDBDao, transport: Transport)
@@ -27,20 +29,24 @@ class AppBlobDB(watchScope: ConnectionCoroutineScope, blobDBService: BlobDBServi
      * Delete an app from the watch by marking it as pending deletion in the BlobDB.
      */
     override suspend fun deleteLockerEntry(uuid: Uuid) {
-        blobDBDao.markPendingDelete(uuid)
+        blobDBDao.markPendingDelete(uuid.toString())
     }
 
     suspend fun get(appId: Uuid): ByteArray? {
-        return blobDBDao.get(appId, watchIdentifier)?.data
+        return blobDBDao.get(appId.toString(), watchIdentifier)?.data
     }
 
     override suspend fun offloadApp(uuid: Uuid) {
-        blobDBDao.markPendingWrite(uuid, watchIdentifier)
+        blobDBDao.markPendingWrite(uuid.toString(), watchIdentifier)
     }
 
     override suspend fun isLockerEntryNew(entry: AppMetadata): Boolean {
-        val existing = blobDBDao.get(entry.uuid.get(), watchIdentifier)?.data
+        val existing = blobDBDao.get(entry.uuid.get().toString(), watchIdentifier)?.data
         val nw = entry.toBytes().asByteArray()
         return existing?.contentEquals(nw) != true
+    }
+
+    override fun idAsBytes(id: String): UByteArray {
+        return SUUID(StructMapper(), Uuid.parse(id)).toBytes()
     }
 }

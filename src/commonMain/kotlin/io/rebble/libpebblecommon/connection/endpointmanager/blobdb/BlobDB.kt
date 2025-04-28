@@ -7,11 +7,16 @@ import io.rebble.libpebblecommon.database.entity.BlobDBItem
 import io.rebble.libpebblecommon.database.entity.BlobDBItemSyncStatus
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
+import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
+import io.rebble.libpebblecommon.services.blobdb.WriteType
+import io.rebble.libpebblecommon.structmapper.SString
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
-import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.random.Random
 import kotlin.uuid.Uuid
@@ -32,7 +37,7 @@ sealed class BlobDB(
     private val random = Random.Default
 
     init {
-        watchScope.async {
+        watchScope.launch {
             blobDBDao.changesFor(watchDatabase, watchIdentifier).collect {
                 if (it.isNotEmpty()) {
                     logger.d { "Responding to db change" }
@@ -40,18 +45,33 @@ sealed class BlobDB(
                 }
             }
         }
+        watchScope.launch {
+            blobDBService.writes.filter { it.database == watchDatabase }.collect {
+                val result = handleWrite(it)
+                val response = when (it.writeType) {
+                    WriteType.Write -> BlobDB2Response.WriteResponse(it.token, result)
+                    WriteType.WriteBack -> BlobDB2Response.WriteBackResponse(it.token, result)
+                }
+                blobDBService.sendResponse(response)
+            }
+        }
     }
+
+    open suspend fun handleWrite(write: DbWrite): BlobResponse.BlobStatus =
+        BlobResponse.BlobStatus.NotSupported
+
+    abstract fun idAsBytes(id: String): UByteArray
 
     /**
      * Performs any pending synchronization operations stored in the phone database
      */
-    suspend fun syncPhoneToWatch(items: List<BlobDBItem>) {
+    private suspend fun syncPhoneToWatch(items: List<BlobDBItem>) {
         items.forEach { item ->
             //TODO: Resilience?
             when (item.syncStatus) {
                 BlobDBItemSyncStatus.PendingWrite -> {
                     try {
-                        sendInsert(item.id, item.data.asUByteArray())
+                        sendInsert(idAsBytes(item.id), item.data.asUByteArray())
                         blobDBDao.markSynced(item.id, watchIdentifier)
                     } catch (e: Exception) {
                         logger.e(e) { "Failed to insert item" }
@@ -59,7 +79,7 @@ sealed class BlobDB(
                 }
                 BlobDBItemSyncStatus.PendingDelete -> {
                     try {
-                        sendDelete(item.id)
+                        sendDelete(idAsBytes(item.id))
                         blobDBDao.markSynced(item.id, watchIdentifier)
                     } catch (e: Exception) {
                         logger.e(e) { "Failed to delete item" }
@@ -93,30 +113,26 @@ sealed class BlobDB(
      * Sends an insert command to the watch
      * It's recommended to not use this directly
      */
-    suspend fun sendInsert(itemId: Uuid, value: UByteArray) {
+    suspend fun sendInsert(itemId: UByteArray, value: UByteArray) {
         val command = BlobCommand.InsertCommand(
             generateToken(),
             watchDatabase,
-            SUUID(StructMapper(), itemId).toBytes(),
+            itemId,
             value
         )
         val result = sendWithTimeout(command)
         handleBlobDBResponse(result)
     }
 
-    suspend fun sendRead(itemId: Uuid): UByteArray {
-        TODO("Not yet implemented")
-    }
-
     /**
      * Sends a delete command to the watch
      * It's recommended to not use this directly
      */
-    suspend fun sendDelete(itemId: Uuid) {
+    suspend fun sendDelete(itemId: UByteArray) {
         val command = BlobCommand.DeleteCommand(
             generateToken(),
             watchDatabase,
-            SUUID(StructMapper(), itemId).toBytes()
+            itemId,
         )
         val result = sendWithTimeout(command)
         handleBlobDBResponse(result)

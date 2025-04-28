@@ -15,6 +15,8 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
     alias(libs.plugins.kotlinx.atomicfu)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
 }
 
 publishing {
@@ -124,6 +126,7 @@ kotlin {
             implementation(libs.ktor.client.core)
             implementation(libs.kotlinx.datetime)
             implementation(libs.koin.core)
+            implementation(compose.ui)
         }
 
         commonTest.dependencies {

@@ -11,7 +11,7 @@ fun TimelineItem.toBlobDBItem(
     database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.Pin,
     status: BlobDBItemSyncStatus = BlobDBItemSyncStatus.PendingWrite
 ) = BlobDBItem(
-    id = itemId.get(),
+    id = itemId.get().toString(),
     syncStatus = status,
     watchIdentifier = watch,
     watchDatabase = database,
@@ -23,7 +23,7 @@ fun AppMetadata.toBlobDBItem(
     database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.App,
     status: BlobDBItemSyncStatus = BlobDBItemSyncStatus.PendingWrite
 ) = BlobDBItem(
-    id = uuid.get(),
+    id = uuid.get().toString(),
     syncStatus = status,
     watchIdentifier = watch,
     watchDatabase = database,

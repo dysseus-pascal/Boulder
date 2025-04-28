@@ -6,6 +6,8 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlin.uuid.Uuid
 
 class NotificationBlobDB(watchScope: ConnectionCoroutineScope, blobDBService: BlobDBService, blobDBDao: BlobDBDao, transport: Transport)
@@ -26,6 +28,10 @@ class NotificationBlobDB(watchScope: ConnectionCoroutineScope, blobDBService: Bl
      * Delete a notification from the watch by marking it as pending deletion in the BlobDB.
      */
     suspend fun delete(notificationId: Uuid) {
-        blobDBDao.markPendingDelete(notificationId)
+        blobDBDao.markPendingDelete(notificationId.toString())
+    }
+
+    override fun idAsBytes(id: String): UByteArray {
+        return SUUID(StructMapper(), Uuid.parse(id)).toBytes()
     }
 }

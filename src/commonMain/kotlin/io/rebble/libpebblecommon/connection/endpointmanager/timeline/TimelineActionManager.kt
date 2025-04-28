@@ -42,7 +42,7 @@ class TimelineActionManager(
         val itemId = invocation.itemId
         val actionId = invocation.actionId
         val attributes = invocation.attributes
-        val item = blobDBDao.get(itemId, watchTransport.identifier.asString) ?: run {
+        val item = blobDBDao.get(itemId.toString(), watchTransport.identifier.asString) ?: run {
             logger.w {
                 "Received action for item $itemId, but it doesn't exist in the database"
             }

@@ -37,12 +37,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlin {
-        jvmToolchain(11)
+        jvmToolchain(17)
     }
 }
 
@@ -103,6 +103,12 @@ kotlin {
                 optIn("kotlinx.cinterop.BetaInteropApi")
             }
         }
+        commonMain {
+            kotlin {
+                // Include ksp-generated common code (from our :blobdgen processor)
+                srcDir("build/generated/ksp/metadata/commonMain/kotlin")
+            }
+        }
         commonMain.dependencies {
             implementation(libs.coroutines)
             implementation(libs.serialization)
@@ -119,6 +125,7 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.koin.core)
             implementation(compose.ui)
+            implementation(project(":blobannotations"))
         }
 
         commonTest.dependencies {
@@ -145,9 +152,18 @@ kotlin {
     }
 }
 
+// Otherwise it doesn't trigger our blobdbgen processor when compiling code
+// https://github.com/google/ksp/issues/567
+tasks.withType<org.jetbrains.kotlin.gradle.dsl.KotlinCompile<*>>().all {
+    if (name != "kspCommonMainKotlinMetadata") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+}
+
 dependencies {
 //    add("kspCommonMainMetadata", libs.room.compiler)
 //    add("kspJvm", libs.room.compiler)
+    add("kspCommonMainMetadata", project(":blobdbgen"))
     add("kspAndroid", libs.room.compiler)
     add("kspIosX64", libs.room.compiler)
     add("kspIosArm64", libs.room.compiler)

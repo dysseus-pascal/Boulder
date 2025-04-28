@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
@@ -15,12 +16,14 @@ actual fun createJsRunner(
     device: PebbleJSDevice,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
-    jsPath: Path
+    jsPath: Path,
+    libPebble: LibPebble,
 ): JsRunner = WebViewJsRunner(
     appContext.context,
     device,
     scope,
     appInfo,
     lockerEntry,
-    jsPath
+    jsPath,
+    libPebble,
 )

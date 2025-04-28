@@ -1,5 +1,8 @@
 package io.rebble.libpebblecommon.disk.pbw
 
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.disk.PbwBinHeader
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.pkjsFileExists
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwAppInfo
@@ -13,6 +16,7 @@ import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
+import kotlin.uuid.Uuid
 
 class PbwApp(private val path: Path) {
     val info by lazy { requirePbwAppInfo(path) }
@@ -37,4 +41,36 @@ class PbwApp(private val path: Path) {
     fun source(fileSystem: FileSystem = SystemFileSystem): RawSource {
         return fileSystem.source(path)
     }
+}
+
+fun PbwApp.toLockerEntry(): LockerEntry {
+    val uuid = Uuid.parse(info.uuid)
+    val platforms = info.targetPlatforms.mapNotNull {
+        val watchType = WatchType.fromCodename(it) ?: run {
+            Logger.w { "Unknown watch type in pbw while processing sideload request: $it" }
+            return@mapNotNull null
+        }
+        val header = getBinaryHeaderFor(watchType)
+        LockerEntryPlatform(
+            lockerEntryId = uuid,
+            sdkVersion = "${header.sdkVersionMajor.get()}.${header.sdkVersionMinor.get()}",
+            processInfoFlags = header.flags.get().toInt(),
+            name = watchType.codename,
+            pbwIconResourceId = header.icon.get().toInt(),
+        )
+    }
+    return LockerEntry(
+        id = uuid,
+        version = info.versionLabel,
+        title = info.longName.ifBlank { info.shortName },
+        type = if (info.watchapp.watchface) "watchface" else "watchapp",
+        developerName = info.companyName,
+        configurable = info.capabilities.any { it == "configurable" },
+        pbwVersionCode = info.versionCode.toString(),
+        sideloaded = true,
+        platforms = platforms,
+        appstoreData = TODO(),
+//        recordHashcode = TODO(),
+//        deleted = TODO(),
+    )
 }

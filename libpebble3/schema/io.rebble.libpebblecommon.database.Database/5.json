@@ -2,51 +2,8 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "86886077c695b6f4215f8ba08a0e49b9",
+    "identityHash": "5d17e8e45c5b243fa034e4d81356849f",
     "entities": [
-      {
-        "tableName": "BlobDBItem",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `syncStatus` TEXT NOT NULL, `watchIdentifier` TEXT NOT NULL, `watchDatabase` TEXT NOT NULL, `data` BLOB NOT NULL, PRIMARY KEY(`id`, `watchIdentifier`))",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "syncStatus",
-            "columnName": "syncStatus",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "watchIdentifier",
-            "columnName": "watchIdentifier",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "watchDatabase",
-            "columnName": "watchDatabase",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "data",
-            "columnName": "data",
-            "affinity": "BLOB",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "id",
-            "watchIdentifier"
-          ]
-        }
-      },
       {
         "tableName": "KnownWatchItem",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transportIdentifier` TEXT NOT NULL, `transportType` TEXT NOT NULL, `name` TEXT NOT NULL, `runningFwVersion` TEXT NOT NULL, `serial` TEXT NOT NULL, `connectGoal` INTEGER NOT NULL, PRIMARY KEY(`transportIdentifier`))",
@@ -97,7 +54,7 @@
       },
       {
         "tableName": "LockerEntry",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `version` TEXT NOT NULL, `title` TEXT NOT NULL, `type` TEXT NOT NULL, `developerName` TEXT NOT NULL, `configurable` INTEGER NOT NULL, `pbwVersionCode` TEXT NOT NULL, `pbwIconResourceId` INTEGER NOT NULL, `sideloaded` INTEGER NOT NULL, `hearts` INTEGER, `developerId` TEXT, `timelineEnabled` INTEGER, `removeLink` TEXT, `shareLink` TEXT, `pbwLink` TEXT, `userToken` TEXT, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `version` TEXT NOT NULL, `title` TEXT NOT NULL, `type` TEXT NOT NULL, `developerName` TEXT NOT NULL, `configurable` INTEGER NOT NULL, `pbwVersionCode` TEXT NOT NULL, `sideloaded` INTEGER NOT NULL, `platforms` TEXT NOT NULL, `recordHashcode` INTEGER NOT NULL, `hearts` INTEGER, `developerId` TEXT, `timelineEnabled` INTEGER, `removeLink` TEXT, `shareLink` TEXT, `pbwLink` TEXT, `userToken` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -142,14 +99,20 @@
             "notNull": true
           },
           {
-            "fieldPath": "pbwIconResourceId",
-            "columnName": "pbwIconResourceId",
+            "fieldPath": "sideloaded",
+            "columnName": "sideloaded",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "sideloaded",
-            "columnName": "sideloaded",
+            "fieldPath": "platforms",
+            "columnName": "platforms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordHashcode",
+            "columnName": "recordHashcode",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -197,162 +160,53 @@
         }
       },
       {
-        "tableName": "LockerEntryPlatform",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `lockerEntryId` TEXT NOT NULL, `sdkVersion` TEXT NOT NULL, `processInfoFlags` INTEGER NOT NULL, `name` TEXT NOT NULL, `screenshotImageUrl` TEXT, `listImageUrl` TEXT, `iconImageUrl` TEXT, FOREIGN KEY(`lockerEntryId`) REFERENCES `LockerEntry`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
+        "tableName": "LockerEntrySyncRecord",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`parentId` TEXT NOT NULL, `pebbleSyncHashcode` INTEGER NOT NULL, `transport` TEXT NOT NULL, PRIMARY KEY(`parentId`, `transport`), FOREIGN KEY(`parentId`) REFERENCES `LockerEntry`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
-            "fieldPath": "id",
-            "columnName": "id",
+            "fieldPath": "parentId",
+            "columnName": "parentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pebbleSyncHashcode",
+            "columnName": "pebbleSyncHashcode",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "lockerEntryId",
-            "columnName": "lockerEntryId",
+            "fieldPath": "transport",
+            "columnName": "transport",
             "affinity": "TEXT",
             "notNull": true
-          },
-          {
-            "fieldPath": "sdkVersion",
-            "columnName": "sdkVersion",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "processInfoFlags",
-            "columnName": "processInfoFlags",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "name",
-            "columnName": "name",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "screenshotImageUrl",
-            "columnName": "screenshotImageUrl",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "listImageUrl",
-            "columnName": "listImageUrl",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "iconImageUrl",
-            "columnName": "iconImageUrl",
-            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
-            "id"
+            "parentId",
+            "transport"
           ]
         },
-        "indices": [
-          {
-            "name": "index_LockerEntryPlatform_lockerEntryId",
-            "unique": false,
-            "columnNames": [
-              "lockerEntryId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_LockerEntryPlatform_lockerEntryId` ON `${TABLE_NAME}` (`lockerEntryId`)"
-          }
-        ],
         "foreignKeys": [
           {
             "table": "LockerEntry",
             "onDelete": "CASCADE",
             "onUpdate": "CASCADE",
             "columns": [
-              "lockerEntryId"
+              "parentId"
             ],
             "referencedColumns": [
               "id"
             ]
           }
         ]
-      },
-      {
-        "tableName": "LockerSyncStatus",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`watchIdentifier` TEXT NOT NULL, `lockerDirty` INTEGER NOT NULL, PRIMARY KEY(`watchIdentifier`))",
-        "fields": [
-          {
-            "fieldPath": "watchIdentifier",
-            "columnName": "watchIdentifier",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "lockerDirty",
-            "columnName": "lockerDirty",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "watchIdentifier"
-          ]
-        }
-      },
-      {
-        "tableName": "NotificationAppEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, PRIMARY KEY(`packageName`))",
-        "fields": [
-          {
-            "fieldPath": "packageName",
-            "columnName": "packageName",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "name",
-            "columnName": "name",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "muteState",
-            "columnName": "muteState",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "channelGroups",
-            "columnName": "channelGroups",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "stateUpdated",
-            "columnName": "stateUpdated",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "lastNotified",
-            "columnName": "lastNotified",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "packageName"
-          ]
-        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '86886077c695b6f4215f8ba08a0e49b9')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5d17e8e45c5b243fa034e4d81356849f')"
     ]
   }
 }

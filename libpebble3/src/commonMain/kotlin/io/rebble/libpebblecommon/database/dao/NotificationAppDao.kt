@@ -1,64 +1,64 @@
 package io.rebble.libpebblecommon.database.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import io.rebble.libpebblecommon.database.entity.LockerEntry
-import io.rebble.libpebblecommon.database.entity.LockerSyncStatus
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.asNotificationAppItem
+import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
-import kotlin.time.Instant
+import kotlinx.datetime.Clock
 
 @Dao
-interface NotificationAppDao {
-    @Query("SELECT * FROM NotificationAppEntity")
-    suspend fun allApps(): List<NotificationAppEntity>
+interface NotificationAppRealDao : NotificationAppItemDao {
+    @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
+    suspend fun allApps(): List<NotificationAppItem>
 
-    @Query("SELECT * FROM NotificationAppEntity ORDER BY name ASC")
-    fun allAppsFlow(): Flow<List<NotificationAppEntity>>
-
-    @Query("SELECT * FROM NotificationAppEntity WHERE packageName=:packageName")
-    suspend fun getApp(packageName: String): NotificationAppEntity?
-
-    @Query("UPDATE NotificationAppEntity SET muteState=:muteState WHERE packageName=:packageName")
-    suspend fun updateAppMuteState(packageName: String, muteState: MuteState)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrReplace(item: NotificationAppEntity)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertOrIgnore(item: NotificationAppEntity)
-
-    @Delete
-    suspend fun delete(item: NotificationAppEntity)
+    @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
+    fun allAppsFlow(): Flow<List<NotificationAppItem>>
 
     @Transaction
-    suspend fun updateFromWatch(
-        packageName: String,
-        appName: String,
-        mutedState: MuteState,
-        lastUpdated: Instant
-    ) {
-        val app = getApp(packageName)
-        if (app == null) {
-            insertOrReplace(
-                NotificationAppEntity(
-                    packageName = packageName,
-                    name = appName,
-                    muteState = mutedState,
-                    channelGroups = emptyList(),
-                    stateUpdated = lastUpdated,
-                    lastNotified = lastUpdated,
-                )
-            )
+    suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppMuteState: no record to update!")
             return
         }
-        if (lastUpdated > app.stateUpdated) {
-            insertOrReplace(app.copy(muteState = mutedState))
+        insertOrReplace(existing.copy(
+            muteState = muteState,
+            stateUpdated = Clock.System.now().asMillisecond(),
+        ))
+    }
+
+    @Transaction
+    override suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus {
+        val writeItem = write.asNotificationAppItem()
+        if (writeItem == null) {
+            logger.e { "Couldn't decode app notification item from write: $write" }
+            return BlobResponse.BlobStatus.InvalidData
         }
+        val existingItem = getEntry(writeItem.packageName)
+        logger.d { "existingItem=$existingItem writeItem=$writeItem" }
+        if (existingItem == null || writeItem.stateUpdated.instant > existingItem.stateUpdated.instant) {
+            insertOrReplace(writeItem)
+            markSyncedToWatch(
+                NotificationAppItemSyncEntity(
+                    recordId = writeItem.packageName,
+                    transport = transport,
+                    watchSynchHashcode = writeItem.recordHashCode(),
+                )
+            )
+        }
+        return BlobResponse.BlobStatus.Success
+    }
+
+    companion object {
+        private val logger = Logger.withTag("NotificationAppRealDao")
     }
 }

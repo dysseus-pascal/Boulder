@@ -85,19 +85,6 @@ class PbwBinHeader() : StructMappable() {
      */
     val uuid: SUUID = SUUID(m)
 
-    fun toBlobDbApp(): AppMetadata {
-        return AppMetadata().also {
-            it.uuid.set(uuid.get())
-            it.flags.set(flags.get())
-            it.icon.set(icon.get())
-            it.appVersionMajor.set(appVersionMajor.get())
-            it.appVersionMinor.set(appVersionMinor.get())
-            it.sdkVersionMajor.set(sdkVersionMajor.get())
-            it.sdkVersionMinor.set(sdkVersionMinor.get())
-            it.appName.set(appName.get())
-        }
-    }
-
     companion object {
         const val SIZE: Int = 8 + 2 + 2 + 2 + 2 + 4 + 4 + 32 + 32 + 4 + 4 + 4 + 4 + 16
 

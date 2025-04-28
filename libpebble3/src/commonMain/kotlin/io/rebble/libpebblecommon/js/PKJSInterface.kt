@@ -1,18 +1,23 @@
 package io.rebble.libpebblecommon.js
 
-import io.rebble.libpebblecommon.packets.blobdb.buildNotificationItem
+import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlin.uuid.Uuid
 
-abstract class PKJSInterface(protected val jsRunner: JsRunner, protected val device: PebbleJSDevice) {
+abstract class PKJSInterface(protected val jsRunner: JsRunner, protected val device: PebbleJSDevice, private val libPebble: LibPebble) {
     open fun showSimpleNotificationOnPebble(title: String, notificationText: String) {
         runBlocking {
-            device.sendNotification(
-                buildNotificationItem(Uuid.random()) {
-                    timestamp = Clock.System.now().epochSeconds.toUInt()
+            libPebble.sendNotification(
+                buildTimelineNotification(
+                    timestamp = Clock.System.now(),
+                    parentId = Uuid.parse(jsRunner.appInfo.uuid),
+                ) {
+                    layout = TimelineItem.Layout.GenericNotification
                     attributes {
                         title { title }
                         body { notificationText }

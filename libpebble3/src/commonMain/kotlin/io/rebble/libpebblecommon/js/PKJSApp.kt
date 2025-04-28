@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -40,7 +41,8 @@ class PKJSApp(
     private val device: PebbleJSDevice,
     private val jsPath: Path,
     val appInfo: PbwAppInfo,
-    val lockerEntry: LockerEntry
+    val lockerEntry: LockerEntry,
+    private val libPebble: LibPebble,
 ) {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
@@ -92,7 +94,7 @@ class PKJSApp(
     suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
-        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath)
+        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble)
         launchIncomingAppMessageHandler(device, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")

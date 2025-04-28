@@ -1,5 +1,8 @@
 package io.rebble.libpebblecommon.di
 
+import android.app.Application
+import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
+import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
@@ -40,7 +43,10 @@ actual val platformModule: Module = module {
     singleOf(::AndroidPebbleNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::AndroidNotificationActionHandler) bind PlatformNotificationActionHandler::class
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
+    singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     single { get<AppContext>().context }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get()) }
     singleOf(::BasicNotificationProcessor)
+    single { get<Application>().contentResolver }
+    single { PlatformConfig(syncNotificationApps = false) }
 }

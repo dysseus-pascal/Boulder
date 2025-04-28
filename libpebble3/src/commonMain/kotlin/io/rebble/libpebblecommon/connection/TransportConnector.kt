@@ -9,10 +9,8 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
-import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppsDb
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.AppFetchService
@@ -75,7 +73,7 @@ fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
 }
 
 interface PebbleConnector {
-    suspend fun connect()
+    suspend fun connect(previouslyConnected: Boolean)
     fun disconnect()
     val disconnected: Deferred<Unit>
     val state: StateFlow<ConnectingPebbleState>
@@ -96,12 +94,10 @@ class RealPebbleConnector(
     private val appFetchService: AppFetchService,
     private val appMessageService: AppMessageService,
     private val timelineActionManager: TimelineActionManager,
-    private val appBlobDB: AppBlobDB,
-    private val notificationManager: NotificationManager,
+    private val blobDB: BlobDB,
     private val pkjsLifecycleManager: PKJSLifecycleManager,
     private val appFetchProvider: AppFetchProvider,
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
-    private val notificationAppsDb: NotificationAppsDb,
     private val logDumpService: LogDumpService,
     private val getBytesService: GetBytesService,
 ) : PebbleConnector {
@@ -110,7 +106,7 @@ class RealPebbleConnector(
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     override val disconnected = transportConnector.disconnected
 
-    override suspend fun connect() {
+    override suspend fun connect(previouslyConnected: Boolean) {
         _state.value = Connecting(transport)
 
         val result = transportConnector.connect()
@@ -173,6 +169,7 @@ class RealPebbleConnector(
                 }
 
                 blobDBService.init()
+                blobDB.init(watchInfo.platform.watchType, watchInfo.isUnfaithful, previouslyConnected)
                 appFetchService.init()
                 timelineActionManager.init()
                 appFetchProvider.init(watchInfo.platform.watchType)
@@ -186,8 +183,6 @@ class RealPebbleConnector(
                         debug = systemService,
                         appRunState = appRunStateService,
                         firmware = firmwareUpdate,
-                        locker = appBlobDB,
-                        notifications = notificationManager,
                         messages = debugPebbleProtocolSender,
                         time = systemService,
                         appMessages = appMessageService,

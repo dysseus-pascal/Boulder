@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
-import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -67,14 +66,6 @@ interface ConnectedPebbleDeviceInRecovery :
  * "Endpoint Managers". For now, "Services" are OK.
  */
 object ConnectedPebble {
-    interface Notifications {
-        suspend fun sendNotification(
-            notification: TimelineItem,
-            actionHandlers: Map<UByte, CustomTimelineActionHandler> = emptyMap()
-        )
-        suspend fun deleteNotification(itemId: Uuid)
-    }
-
     interface AppMessages {
         val inboundAppMessages: Flow<AppMessageData>
         val transactionSequence: Iterator<Byte>
@@ -101,13 +92,6 @@ object ConnectedPebble {
         fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
     }
 
-    interface Locker {
-        suspend fun insertLockerEntry(entry: AppMetadata)
-        suspend fun deleteLockerEntry(uuid: Uuid)
-        suspend fun isLockerEntryNew(entry: AppMetadata): Boolean
-        suspend fun offloadApp(uuid: Uuid)
-    }
-
     interface AppRunState {
         suspend fun launchApp(uuid: Uuid)
         val runningApp: StateFlow<Uuid?>
@@ -125,8 +109,6 @@ object ConnectedPebble {
         val debug: ConnectedPebble.Debug,
         val appRunState: ConnectedPebble.AppRunState,
         val firmware: ConnectedPebble.Firmware,
-        val locker: ConnectedPebble.Locker,
-        val notifications: ConnectedPebble.Notifications,
         val messages: Messages,
         val time: Time,
         val appMessages: AppMessages,
@@ -144,11 +126,9 @@ object ConnectedPebble {
 interface ConnectedPebbleDevice :
     KnownPebbleDevice,
     ActiveDevice,
-    ConnectedPebble.Notifications,
     ConnectedPebble.Debug,
     ConnectedPebble.Messages,
     ConnectedPebble.Firmware,
-    ConnectedPebble.Locker,
     ConnectedPebble.AppRunState,
     ConnectedWatchInfo,
     ConnectedPebble.Time,

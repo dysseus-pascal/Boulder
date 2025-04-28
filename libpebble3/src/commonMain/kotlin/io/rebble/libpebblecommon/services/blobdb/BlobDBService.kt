@@ -1,20 +1,15 @@
 package io.rebble.libpebblecommon.services.blobdb
 
 import co.touchlab.kermit.Logger
+import coredev.BlobDatabase
 import io.rebble.libpebblecommon.PacketPriority
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppItem
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
-import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.ProtocolService
-import io.rebble.libpebblecommon.structmapper.SUInt
-import io.rebble.libpebblecommon.structmapper.StructMapper
-import io.rebble.libpebblecommon.util.Endian
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -23,7 +18,6 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 /**
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
@@ -51,7 +45,7 @@ class BlobDBService(
                         _writes.emit(
                             DbWrite(
                                 token = packet.token.get(),
-                                database = BlobCommand.BlobDatabase.from(packet.database.get()),
+                                database = BlobDatabase.from(packet.database.get()),
                                 timestamp = packet.timestamp.get(),
                                 key = packet.key.get(),
                                 value = packet.value.get(),
@@ -65,7 +59,7 @@ class BlobDBService(
                         _writes.emit(
                             DbWrite(
                                 token = packet.token.get(),
-                                database = BlobCommand.BlobDatabase.from(packet.database.get()),
+                                database = BlobDatabase.from(packet.database.get()),
                                 timestamp = packet.timestamp.get(),
                                 key = packet.key.get(),
                                 value = packet.value.get(),
@@ -88,8 +82,8 @@ class BlobDBService(
         logger.d("DirtyDatabase: ${dirty?.databaseIds}")
         if (dirty == null) return
         dirty.databaseIds.list.forEach {
-            val db = BlobCommand.BlobDatabase.from(it.get())
-            if (db == BlobCommand.BlobDatabase.Invalid) return@forEach
+            val db = BlobDatabase.from(it.get())
+            if (db == BlobDatabase.Invalid) return@forEach
             startSync(db)
         }
 //            clearDb(BlobCommand.BlobDatabase.CannedResponses)
@@ -126,15 +120,7 @@ class BlobDBService(
 //        logger.d("insert $name res=$res")
 //    }
 
-    private suspend fun clearDb(db: BlobCommand.BlobDatabase) {
-        logger.d("clearDb: $db")
-        val token = 0
-        val tokenUShort = token.toUShort()
-        val res = send(BlobCommand.ClearCommand(tokenUShort, db))
-        logger.d("clearDb res=$res")
-    }
-
-    private suspend fun startSync(db: BlobCommand.BlobDatabase) {
+    private suspend fun startSync(db: BlobDatabase) {
         logger.d("startSync for $db")
         val token = 0
         val tokenUShort = token.toUShort()
@@ -186,7 +172,7 @@ class BlobDBService(
 
 data class DbWrite(
     val token: UShort,
-    val database: BlobCommand.BlobDatabase,
+    val database: BlobDatabase,
     val timestamp: UInt,
     val key: UByteArray,
     val value: UByteArray,

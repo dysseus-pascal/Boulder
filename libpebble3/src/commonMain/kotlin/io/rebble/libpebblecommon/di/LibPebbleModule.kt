@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
+import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -48,12 +49,13 @@ import io.rebble.libpebblecommon.connection.createCompanionDeviceManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
-import io.rebble.libpebblecommon.connection.endpointmanager.NotificationManager
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppsDb
-import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationBlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
@@ -116,6 +118,10 @@ class RealConnectionScope(
     }
 }
 
+data class PlatformConfig(
+    val syncNotificationApps: Boolean,
+)
+
 interface ConnectionScopeFactory {
     fun createScope(props: ConnectionScopeProperties): ConnectionScope
 }
@@ -167,9 +173,12 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)
                 single { get<Database>().knownWatchDao() }
-                single { get<Database>().blobDBDao() }
                 single { get<Database>().lockerEntryDao() }
                 single { get<Database>().notificationAppDao() }
+                single { get<Database>().timelineNotificationDao() }
+                single { get<Database>().timelinePinDao() }
+                single { get<Database>().timelineReminderDao() }
+                single { get<Database>().calendarDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -183,10 +192,14 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::GattServerManager)
                 singleOf(::NotificationApi) bind NotificationApps::class
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
+                singleOf(::RealTimeProvider) bind TimeProvider::class
                 single { HttpClient() }
                 single { createCompanionDeviceManager(get()) }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
+                singleOf(::BlobDbDaos)
+                singleOf(::ActionOverrides)
+                singleOf(::PhoneCalendarSyncer)
 
                 scope<ConnectionScope> {
                     // Params
@@ -246,14 +259,11 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
                     scoped { FirmwareUpdate(get(), get<TransportConnector>().disconnected, get(), get()) }
-                    scopedOf(::NotificationBlobDB)
                     scopedOf(::TimelineActionManager)
-                    scopedOf(::NotificationManager)
-                    scopedOf(::AppBlobDB)
                     scopedOf(::AppFetchProvider)
                     scopedOf(::DebugPebbleProtocolSender)
                     scopedOf(::PKJSLifecycleManager)
-                    scopedOf(::NotificationAppsDb)
+                    scopedOf(::BlobDB)
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

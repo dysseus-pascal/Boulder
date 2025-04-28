@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 class TimelineItem(
@@ -169,6 +170,7 @@ class TimelineItem(
         }
     }
 
+    @Serializable
     enum class Flag(val value: Int) {
         /**
          * ???

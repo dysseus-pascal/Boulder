@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction
@@ -138,10 +139,10 @@ class AndroidNotificationActionHandler(
 
     override suspend operator fun invoke(
         itemId: Uuid,
-        action: TimelineItem.Action,
+        action: BaseAction,
         attributes: List<TimelineItem.Attribute>
     ): TimelineActionResult {
-        val actionId = action.actionID.get()
+        val actionId = action.actionID
         val notificationAction =
             notificationListenerConnection.getNotificationAction(itemId, actionId)
                 ?: run {

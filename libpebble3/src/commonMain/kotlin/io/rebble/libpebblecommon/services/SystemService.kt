@@ -254,7 +254,7 @@ data class WatchInfo(
     val language: String,
     val languageVersion: Int,
     val capabilities: Set<ProtocolCapsFlag>,
-    val isUnfaithful: Boolean?,
+    val isUnfaithful: Boolean,
     val healthInsightsVersion: Int?,
     val javascriptVersion: Int?,
     val color: WatchColor,
@@ -277,7 +277,7 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
         language = language.get(),
         languageVersion = languageVersion.get().toInt(),
         capabilities = ProtocolCapsFlag.fromFlags(capabilities.get()),
-        isUnfaithful = isUnfaithful.get(),
+        isUnfaithful = isUnfaithful.get() ?: true,
         healthInsightsVersion = healthInsightsVersion.get()?.toInt(),
         javascriptVersion = javascriptVersion.get()?.toInt(),
         color = color

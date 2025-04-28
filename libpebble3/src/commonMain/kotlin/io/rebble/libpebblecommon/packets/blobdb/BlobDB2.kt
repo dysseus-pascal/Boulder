@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
+import coredev.BlobDatabase
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.DirtyDatabase
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.StartSync
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.SyncDone
@@ -20,6 +21,7 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
     companion object {
         val endpoint = ProtocolEndpoint.BLOBDB_V2
     }
+
     enum class Message(val value: UByte) {
         DirtyDatabase(0x06u), // Phone -> Watch
         StartSync(0x07u), // Phone -> Watch
@@ -43,7 +45,7 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
      */
     class StartSync(
         token: UShort = 0u,
-        database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.Invalid
+        database: BlobDatabase = BlobDatabase.Invalid
     ) : BlobDB2Command(StartSync, token) {
         val database = SUByte(m, database.id)
     }
@@ -53,13 +55,13 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
      */
     class Write(
         token: UShort = 0u,
-        database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.Invalid,
+        database: BlobDatabase = BlobDatabase.Invalid,
         timestamp: UInt = 0u,
         key: UByteArray = ubyteArrayOf(),
         value: UByteArray = ubyteArrayOf()
     ) : BlobDB2Command(Write, token) {
         val database = SUByte(m, database.id)
-        val timestamp = SUInt(m, timestamp)
+        val timestamp = SUInt(m, timestamp, endianness = Endian.Little)
         val keySize = SUByte(m, key.size.toUByte())
         val key = SBytes(m, key.size, key).apply {
             linkWithSize(keySize)
@@ -75,13 +77,13 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
      */
     class WriteBack(
         token: UShort = 0u,
-        database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.Invalid,
+        database: BlobDatabase = BlobDatabase.Invalid,
         timestamp: UInt = 0u,
         key: UByteArray = ubyteArrayOf(),
         value: UByteArray = ubyteArrayOf()
     ) : BlobDB2Command(WriteBack, token) {
         val database = SUByte(m, database.id)
-        val timestamp = SUInt(m, timestamp)
+        val timestamp = SUInt(m, timestamp, endianness = Endian.Little)
         val keySize = SUByte(m, key.size.toUByte())
         val key = SBytes(m, key.size, key).apply {
             linkWithSize(keySize)
@@ -97,7 +99,7 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
      */
     class SyncDone(
         token: UShort = 0u,
-        database: BlobCommand.BlobDatabase = BlobCommand.BlobDatabase.Invalid
+        database: BlobDatabase = BlobDatabase.Invalid
     ) : BlobDB2Command(SyncDone, token) {
         val database = SUByte(m, database.id)
     }
@@ -130,7 +132,7 @@ sealed class BlobDB2Response(
     class DirtyDatabaseResponse(
         token: UShort = 0u,
         status: BlobResponse.BlobStatus = BlobResponse.BlobStatus.GeneralFailure,
-        dirtyDatabases: Set<BlobCommand.BlobDatabase> = emptySet()
+        dirtyDatabases: Set<BlobDatabase> = emptySet()
     ) : BlobDB2Response(Message.DirtyDatabaseResponse, token, status) {
         val databaseIdCount = SUByte(m, dirtyDatabases.size.toUByte())
         val databaseIds = SFixedList(
@@ -145,6 +147,7 @@ sealed class BlobDB2Response(
             linkWithCount(databaseIdCount)
         }
     }
+
     class StartSyncResponse(
         token: UShort = 0u,
         status: BlobResponse.BlobStatus = BlobResponse.BlobStatus.GeneralFailure

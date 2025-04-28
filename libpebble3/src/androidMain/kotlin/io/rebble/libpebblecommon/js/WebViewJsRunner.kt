@@ -23,6 +23,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +39,8 @@ class WebViewJsRunner(
     val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
-    jsPath: Path
+    jsPath: Path,
+    libPebble: LibPebble,
 ): JsRunner(appInfo, lockerEntry, jsPath, device) {
 
     companion object {
@@ -50,7 +52,7 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private val initializedLock = Object()
-    private val publicJsInterface = WebViewPKJSInterface(this, device, context)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages)
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),

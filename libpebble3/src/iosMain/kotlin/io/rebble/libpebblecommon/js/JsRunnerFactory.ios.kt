@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JavascriptCoreJsRunner
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
@@ -13,11 +14,13 @@ actual fun createJsRunner(
     device: PebbleJSDevice,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
-    jsPath: Path
+    jsPath: Path,
+    libPebble: LibPebble,
 ): JsRunner = JavascriptCoreJsRunner(
     appInfo,
     lockerEntry,
     jsPath,
     device,
-    scope
+    scope,
+    libPebble,
 )

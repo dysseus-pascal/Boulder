@@ -1,11 +1,14 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.service.notification.StatusBarNotification
+import io.rebble.libpebblecommon.SystemAppIDs.NOTIFICATIONS_APP_UUID
 import io.rebble.libpebblecommon.database.entity.ChannelItem
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.packets.blobdb.buildNotificationItem
-import kotlin.time.Instant
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import kotlinx.datetime.Instant
 import kotlin.uuid.Uuid
 
 data class LibPebbleNotification(
@@ -28,7 +31,7 @@ data class LibPebbleNotification(
     companion object {
         fun actionsFromStatusBarNotification(
             sbn: StatusBarNotification,
-            app: NotificationAppEntity,
+            app: NotificationAppItem,
             channel: ChannelItem?,
         ): List<LibPebbleNotificationAction> {
             val dismissAction = LibPebbleNotificationAction.dismissActionFromNotification(
@@ -60,9 +63,13 @@ data class LibPebbleNotification(
         }
     }
 
-    fun toTimelineItem() = buildNotificationItem(uuid) {
-        timestamp = this@LibPebbleNotification.timestamp.epochSeconds.toUInt()
+    fun toTimelineNotification(): TimelineNotification = buildTimelineNotification(
+        timestamp = timestamp,
+        parentId = NOTIFICATIONS_APP_UUID,
+    ) {
+        itemID = uuid
 
+        layout = TimelineItem.Layout.GenericNotification
         attributes {
             title?.let {
                 title { it }
@@ -73,10 +80,8 @@ data class LibPebbleNotification(
             tinyIcon { icon }
         }
         actions {
-            actions.forEachIndexed { i, action ->
-                action {
-                    actionID = i.toUByte()
-                    type = action.type.toProtocolType()
+            actions.forEach { action ->
+                action(action.type.toProtocolType()) {
                     attributes {
                         title { action.title }
                         action.remoteInput?.suggestedResponses?.let {

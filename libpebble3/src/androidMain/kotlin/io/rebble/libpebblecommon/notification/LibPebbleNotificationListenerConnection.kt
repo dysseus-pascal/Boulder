@@ -9,8 +9,6 @@ import android.os.IBinder
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
-import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
@@ -105,7 +103,7 @@ class AndroidPebbleNotificationListenerConnection(
         }
         logger.d { "LibPebbleNotificationListener bound" }
         notificationSendQueue.onEach {
-            libPebble.sendNotification(it.toTimelineItem())
+            libPebble.sendNotification(it.toTimelineNotification())
         }.launchIn(libPebbleCoroutineScope)
         notificationDeleteQueue.onEach {
             libPebble.deleteNotification(it)

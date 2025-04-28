@@ -66,7 +66,7 @@ class WatchManagerTest {
             _disconnected.complete(Unit)
         }
 
-        override suspend fun connect() {
+        override suspend fun connect(previouslyConnected: Boolean) {
             activeConnections++
             if (activeConnections > 1) {
                 exceededMax = true

@@ -2,19 +2,23 @@ package io.rebble.libpebblecommon.connection
 
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
-import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.flow.Flow
@@ -59,7 +63,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps {
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
-    suspend fun sendNotification(notification: TimelineItem) // calls for every known watch
+    suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
     suspend fun deleteNotification(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
     suspend fun launchApp(uuid: Uuid)
@@ -87,11 +91,11 @@ interface RequestSync {
 
 interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path)
-    fun getLocker(): Flow<List<LockerEntryWithPlatforms>>
+    fun getLocker(): Flow<List<LockerEntry>>
 }
 
 interface NotificationApps {
-    val notificationApps: Flow<List<NotificationAppEntity>>
+    val notificationApps: Flow<List<NotificationAppItem>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
     fun updateNotificationChannelMuteState(
         packageName: String,
@@ -118,6 +122,9 @@ class LibPebble3(
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val notificationListenerConnection: NotificationListenerConnection,
     private val notificationApi: NotificationApps,
+    private val timelineNotificationsDao: TimelineNotificationDao,
+    private val actionOverrides: ActionOverrides,
+    private val phoneCalendarSyncer: PhoneCalendarSyncer,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi {
     private val logger = Logger.withTag("LibPebble3")
@@ -126,7 +133,7 @@ class LibPebble3(
         bluetoothStateProvider.init()
         gattServerManager.init()
         watchManager.init()
-        locker.init()
+        phoneCalendarSyncer.init()
         notificationListenerConnection.init(this)
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
@@ -136,12 +143,14 @@ class LibPebble3(
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
 
-    override suspend fun sendNotification(notification: TimelineItem) {
-        forEachConnectedWatch { sendNotification(notification) }
+    override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
+        timelineNotificationsDao.insertOrReplace(notification)
+        actionHandlers?.let { actionOverrides.setActionHandlers(notification.itemId, actionHandlers) }
     }
 
     override suspend fun deleteNotification(itemId: Uuid) {
-        forEachConnectedWatch { deleteNotification(itemId) }
+        timelineNotificationsDao.markForDeletion(itemId)
+        actionOverrides.setActionHandlers(itemId, emptyMap())
     }
 
     override suspend fun sendPing(cookie: UInt) {

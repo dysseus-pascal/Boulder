@@ -6,7 +6,7 @@ import android.app.PendingIntent
 import android.app.RemoteInput
 import android.os.Build
 import io.rebble.libpebblecommon.database.entity.ChannelItem
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 
 data class ActionRemoteInput(
@@ -107,7 +107,7 @@ data class LibPebbleNotificationAction(
             )
         }
 
-        fun muteActionFrom(app: NotificationAppEntity): LibPebbleNotificationAction? {
+        fun muteActionFrom(app: NotificationAppItem): LibPebbleNotificationAction? {
             return LibPebbleNotificationAction(
                 packageName = app.packageName,
                 title = "Mute ${app.name}",
@@ -119,7 +119,7 @@ data class LibPebbleNotificationAction(
         }
 
         fun muteChannelActionFrom(
-            app: NotificationAppEntity,
+            app: NotificationAppItem,
             channel: ChannelItem?,
         ): LibPebbleNotificationAction? {
             if (channel == null) return null

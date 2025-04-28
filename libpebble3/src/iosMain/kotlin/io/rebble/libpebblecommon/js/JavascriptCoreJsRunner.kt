@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.js.JsRunner
 import io.rebble.libpebblecommon.js.PebbleJSDevice
@@ -22,6 +23,7 @@ class JavascriptCoreJsRunner(
     jsPath: Path,
     device: PebbleJSDevice,
     private val scope: CoroutineScope,
+    private val libPebble: LibPebble,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device) {
     private var jsContext: JSContext? = null
@@ -31,7 +33,7 @@ class JavascriptCoreJsRunner(
     private fun initInterfaces(jsContext: JSContext) {
         val instances = listOf(
             XMLHTTPRequestManager(scope, jsContext),
-            JSCPKJSInterface(this, device),
+            JSCPKJSInterface(this, device, libPebble),
             JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages)
         )
         instances.forEach { it.register(jsContext) }

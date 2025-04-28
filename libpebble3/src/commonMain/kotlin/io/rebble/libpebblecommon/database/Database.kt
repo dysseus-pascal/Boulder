@@ -6,17 +6,25 @@ import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.database.dao.BlobDBDao
+import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
-import io.rebble.libpebblecommon.database.dao.LockerEntryDao
-import io.rebble.libpebblecommon.database.dao.LockerSyncStatusDao
-import io.rebble.libpebblecommon.database.dao.NotificationAppDao
-import io.rebble.libpebblecommon.database.entity.BlobDBItem
+import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
+import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
-import io.rebble.libpebblecommon.database.entity.LockerEntry
-import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
-import io.rebble.libpebblecommon.database.entity.LockerSyncStatus
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
+import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
+import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
+import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
+import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
+import io.rebble.libpebblecommon.database.entity.TimelinePinSyncEntity
+import io.rebble.libpebblecommon.database.entity.TimelineReminderEntity
+import io.rebble.libpebblecommon.database.entity.TimelineReminderSyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
@@ -24,14 +32,20 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
 
 @androidx.room.Database(
     entities = [
-        BlobDBItem::class,
         KnownWatchItem::class,
-        LockerEntry::class,
-        LockerEntryPlatform::class,
-        LockerSyncStatus::class,
-        NotificationAppEntity::class,
+        LockerEntryEntity::class,
+        LockerEntrySyncEntity::class,
+        TimelineNotificationEntity::class,
+        TimelineNotificationSyncEntity::class,
+        TimelinePinEntity::class,
+        TimelinePinSyncEntity::class,
+        TimelineReminderEntity::class,
+        TimelineReminderSyncEntity::class,
+        NotificationAppItemEntity::class,
+        NotificationAppItemSyncEntity::class,
+        CalendarEntity::class,
     ],
-    version = 6,
+    version = 10, // TODO commit 7
     autoMigrations = [
     ],
     exportSchema = true,
@@ -39,11 +53,13 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
 @ConstructedBy(DatabaseConstructor::class)
 @TypeConverters(RoomTypeConverters::class)
 abstract class Database : RoomDatabase() {
-    abstract fun blobDBDao(): BlobDBDao
     abstract fun knownWatchDao(): KnownWatchDao
-    abstract fun lockerEntryDao(): LockerEntryDao
-    abstract fun lockerSyncStatusDao(): LockerSyncStatusDao
-    abstract fun notificationAppDao(): NotificationAppDao
+    abstract fun lockerEntryDao(): LockerEntryRealDao
+    abstract fun notificationAppDao(): NotificationAppRealDao
+    abstract fun timelineNotificationDao(): TimelineNotificationDao
+    abstract fun timelinePinDao(): TimelinePinRealDao
+    abstract fun calendarDao(): CalendarDao
+    abstract fun timelineReminderDao(): TimelineReminderRealDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
@@ -54,9 +70,9 @@ expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
 fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
         //.addMigrations()
-        .fallbackToDestructiveMigrationOnDowngrade(true)
-        // V6 required a full re-create.
-        .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4, 5)
+        .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+        // V7 required a full re-create.
+        .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()

@@ -3,10 +3,10 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.os.Build
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.database.dao.NotificationAppDao
+import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -14,7 +14,7 @@ import kotlin.uuid.Uuid
 
 class NotificationHandler(
     private val notificationProcessors: Set<NotificationProcessor>,
-    private val notificationAppDao: NotificationAppDao,
+    private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) {
     companion object {
@@ -42,7 +42,7 @@ class NotificationHandler(
         }
     }
 
-    private fun NotificationAppEntity.getChannelFor(sbn: StatusBarNotification): ChannelItem? {
+    private fun NotificationAppItem.getChannelFor(sbn: StatusBarNotification): ChannelItem? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         val channelId = sbn.notification.channelId ?: return null
         return channelGroups.flatMap { it.channels }.find { it.id == channelId }
@@ -53,7 +53,7 @@ class NotificationHandler(
             verboseLog { "Ignoring ongoing notification from ${sbn.packageName}" }
             return null
         }
-        val appEntry = notificationAppDao.getApp(sbn.packageName)
+        val appEntry = notificationAppDao.getEntry(sbn.packageName)
         if (appEntry == null) {
             verboseLog { "Ignoring system app notification from ${sbn.packageName}" }
             return null

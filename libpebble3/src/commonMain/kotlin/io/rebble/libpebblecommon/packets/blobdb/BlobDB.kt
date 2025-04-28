@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
+import coredev.BlobDatabase
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
@@ -16,26 +17,6 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
         Insert(0x01u),
         Delete(0x04u),
         Clear(0x05u)
-    }
-
-    enum class BlobDatabase(val id: UByte) {
-        Test(0u),
-        Pin(1u),
-        App(2u),
-        Reminder(3u),
-        Notification(4u),
-        Weather(5u),
-        CannedResponses(6u),
-        HealthParams(7u),
-        Contacts(8u),
-        AppConfigs(9u),
-        HealthStats(10u),
-        AppGlance(11u),
-        Invalid(0xFFu),
-        ;
-        companion object {
-            fun from(id: UByte): BlobDatabase = entries.firstOrNull { it.id == id } ?: Invalid
-        }
     }
 
     val command = SUByte(m, message.value)

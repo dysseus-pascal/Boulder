@@ -1,92 +1,192 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import co.touchlab.kermit.Logger
+import coredev.BlobDatabase
+import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.Transport
-import io.rebble.libpebblecommon.database.dao.BlobDBDao
-import io.rebble.libpebblecommon.database.entity.BlobDBItem
-import io.rebble.libpebblecommon.database.entity.BlobDBItemSyncStatus
+import io.rebble.libpebblecommon.database.dao.BlobDbDao
+import io.rebble.libpebblecommon.database.dao.BlobDbRecord
+import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
+import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.PlatformConfig
+import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
-import io.rebble.libpebblecommon.structmapper.SString
-import io.rebble.libpebblecommon.structmapper.SUUID
-import io.rebble.libpebblecommon.structmapper.StructMapper
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlin.random.Random
-import kotlin.uuid.Uuid
+import kotlin.time.Duration.Companion.seconds
 
-sealed class BlobDB(
-    watchScope: ConnectionCoroutineScope,
+data class BlobDbDaos(
+    private val lockerEntryDao: LockerEntryRealDao,
+    private val notificationsDao: TimelineNotificationDao,
+    private val timelinePinDao: TimelinePinRealDao,
+    private val timelineReminderDao: TimelineReminderRealDao,
+    private val notificationAppRealDao: NotificationAppRealDao,
+    private val libPebbleConfig: LibPebbleConfig,
+    private val platformConfig: PlatformConfig,
+) {
+    fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
+        add(lockerEntryDao)
+        add(notificationsDao)
+        add(timelinePinDao)
+        add(timelineReminderDao)
+        if (platformConfig.syncNotificationApps) {
+            add(notificationAppRealDao)
+        }
+        // because typing
+    } as Set<BlobDbDao<BlobDbRecord>>
+}
+
+interface TimeProvider {
+    fun now(): Instant
+}
+
+class RealTimeProvider : TimeProvider {
+    override fun now(): Instant = Clock.System.now()
+}
+
+class BlobDB(
+    private val watchScope: ConnectionCoroutineScope,
     private val blobDBService: BlobDBService,
-    private val watchDatabase: BlobCommand.BlobDatabase,
-    protected val blobDBDao: BlobDBDao,
-    protected val transport: Transport,
+    private val transport: Transport,
+    private val blobDatabases: BlobDbDaos,
+    private val timeProvider: TimeProvider,
 ) {
     protected val watchIdentifier: String = transport.identifier.asString
 
     companion object {
         private val BLOBDB_RESPONSE_TIMEOUT = 5000L
     }
-    private val logger = Logger.withTag("BlobDB-$watchIdentifier")
-    private val random = Random.Default
 
-    init {
+    private val logger = Logger.withTag("BlobDB-$watchIdentifier")
+    private val random = Random
+
+    fun init(watchType: WatchType, unfaithful: Boolean, previouslyConnected: Boolean) {
         watchScope.launch {
-            blobDBDao.changesFor(watchDatabase, watchIdentifier).collect {
-                if (it.isNotEmpty()) {
-                    logger.d { "Responding to db change" }
-                    syncPhoneToWatch(it)
+            if (unfaithful || !previouslyConnected) {
+                logger.d("unfaithful: wiping DBs on watch")
+                // Clear all DBs on watch (whether we have local DBs for them or not)
+                BlobDatabase.entries.forEach { db ->
+                    blobDBService.send(
+                        BlobCommand.ClearCommand(
+                            token = generateToken(),
+                            database = db,
+                        )
+                    )
+                }
+                // Mark all of our local DBs not synched
+                blobDatabases.get().forEach { db ->
+                    db.markAllDeletedFromWatch(transport.identifier.asString)
                 }
             }
-        }
-        watchScope.launch {
-            blobDBService.writes.filter { it.database == watchDatabase }.collect {
-                val result = handleWrite(it)
-                val response = when (it.writeType) {
-                    WriteType.Write -> BlobDB2Response.WriteResponse(it.token, result)
-                    WriteType.WriteBack -> BlobDB2Response.WriteBackResponse(it.token, result)
+
+            blobDatabases.get().forEach { db ->
+                watchScope.launch {
+                    db.dirtyRecordsForWatchInsert(
+                        transport = transport.identifier.asString,
+                        timestampMs = timeProvider.now().toEpochMilliseconds(),
+                    )
+                        // Don't continually emit while we are updating the db
+                        .conflate()
+                        .collect { dirty ->
+                            dirty.forEach { item ->
+                                handleInsert(db, item, watchType)
+                            }
+                            // debounce
+                            delay(1.seconds)
+                        }
+                }
+                watchScope.launch {
+                    db.dirtyRecordsForWatchDelete(
+                        transport = transport.identifier.asString,
+                        timestampMs = timeProvider.now().toEpochMilliseconds(),
+                    )
+                        // Don't continually emit while we are updating the db
+                        .conflate()
+                        .collect { dirty ->
+                            dirty.forEach { item ->
+                                handleDelete(db, item)
+                            }
+                            // debounce
+                            delay(1.seconds)
+                        }
+                }
+            }
+            blobDBService.writes.collect { message ->
+                val dao = blobDatabases.get().find { it.databaseId() == message.database }
+                val result = dao?.handleWrite(
+                    write = message,
+                    transport = transport.identifier.asString,
+                ) ?: BlobResponse.BlobStatus.Success
+                val response = when (message.writeType) {
+                    WriteType.Write -> BlobDB2Response.WriteResponse(message.token, result)
+                    WriteType.WriteBack -> BlobDB2Response.WriteBackResponse(message.token, result)
                 }
                 blobDBService.sendResponse(response)
             }
         }
     }
 
-    open suspend fun handleWrite(write: DbWrite): BlobResponse.BlobStatus =
-        BlobResponse.BlobStatus.NotSupported
+    private suspend fun handleInsert(
+        db: BlobDbDao<BlobDbRecord>,
+        item: BlobDbRecord,
+        watchType: WatchType
+    ) {
+        logger.d("insert: $item")
+        val value = item.record.value(watchType)
+        if (value == null) {
+            logger.d("no value for $item for $watchType")
+            return
+        }
+        val result = blobDBService.send(
+            BlobCommand.InsertCommand(
+                token = generateToken(),
+                database = db.databaseId(),
+                key = item.record.key(),
+                value = value,
+            )
+        )
+        logger.d("insert: result = ${result.responseValue}")
+        if (result.responseValue == BlobResponse.BlobStatus.Success) {
+            db.markSyncedToWatch(
+                transport = transport.identifier.asString,
+                item = item,
+                hashcode = item.recordHashcode,
+            )
+        }
+    }
 
-    abstract fun idAsBytes(id: String): UByteArray
-
-    /**
-     * Performs any pending synchronization operations stored in the phone database
-     */
-    private suspend fun syncPhoneToWatch(items: List<BlobDBItem>) {
-        items.forEach { item ->
-            //TODO: Resilience?
-            when (item.syncStatus) {
-                BlobDBItemSyncStatus.PendingWrite -> {
-                    try {
-                        sendInsert(idAsBytes(item.id), item.data.asUByteArray())
-                        blobDBDao.markSynced(item.id, watchIdentifier)
-                    } catch (e: Exception) {
-                        logger.e(e) { "Failed to insert item" }
-                    }
-                }
-                BlobDBItemSyncStatus.PendingDelete -> {
-                    try {
-                        sendDelete(idAsBytes(item.id))
-                        blobDBDao.markSynced(item.id, watchIdentifier)
-                    } catch (e: Exception) {
-                        logger.e(e) { "Failed to delete item" }
-                    }
-                }
-                BlobDBItemSyncStatus.SyncedToWatch -> {/* No-op */}
-            }
+    private suspend fun handleDelete(
+        db: BlobDbDao<BlobDbRecord>,
+        item: BlobDbRecord,
+    ) {
+        logger.d("delete: $item")
+        val result = blobDBService.send(
+            BlobCommand.DeleteCommand(
+                token = generateToken(),
+                database = db.databaseId(),
+                key = item.record.key(),
+            )
+        )
+        logger.d("delete: result = ${result.responseValue}")
+        if (result.responseValue == BlobResponse.BlobStatus.Success) {
+            db.markDeletedFromWatch(
+                transport = transport.identifier.asString,
+                item = item,
+                hashcode = item.recordHashcode,
+            )
         }
     }
 
@@ -94,60 +194,8 @@ sealed class BlobDB(
         return random.nextInt(0, UShort.MAX_VALUE.toInt()).toUShort()
     }
 
-    private suspend fun sendWithTimeout(command: BlobCommand) = withTimeout(BLOBDB_RESPONSE_TIMEOUT) {
-        blobDBService.send(command)
-    }
-
-    //TODO: Error handling, backoff, etc
-    private fun handleBlobDBResponse(response: BlobResponse) = when (response.responseValue) {
-        BlobResponse.BlobStatus.Success -> {
-            logger.d { "BlobDB operation successful" }
+    private suspend fun sendWithTimeout(command: BlobCommand) =
+        withTimeout(BLOBDB_RESPONSE_TIMEOUT) {
+            blobDBService.send(command)
         }
-        else -> {
-            //TODO: BlobDBException where fatal
-            error("BlobDB operation failed: ${response.responseValue}")
-        }
-    }
-
-    /**
-     * Sends an insert command to the watch
-     * It's recommended to not use this directly
-     */
-    suspend fun sendInsert(itemId: UByteArray, value: UByteArray) {
-        val command = BlobCommand.InsertCommand(
-            generateToken(),
-            watchDatabase,
-            itemId,
-            value
-        )
-        val result = sendWithTimeout(command)
-        handleBlobDBResponse(result)
-    }
-
-    /**
-     * Sends a delete command to the watch
-     * It's recommended to not use this directly
-     */
-    suspend fun sendDelete(itemId: UByteArray) {
-        val command = BlobCommand.DeleteCommand(
-            generateToken(),
-            watchDatabase,
-            itemId,
-        )
-        val result = sendWithTimeout(command)
-        handleBlobDBResponse(result)
-    }
-
-    /**
-     * Sends a clear command to the watch, clearing entire database
-     * It's recommended to not use this directly
-     */
-    suspend fun sendClear() {
-        val command = BlobCommand.ClearCommand(
-            generateToken(),
-            watchDatabase
-        )
-        val result = sendWithTimeout(command)
-        handleBlobDBResponse(result)
-    }
 }

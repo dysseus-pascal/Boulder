@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -12,7 +11,6 @@ import android.os.Build
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 

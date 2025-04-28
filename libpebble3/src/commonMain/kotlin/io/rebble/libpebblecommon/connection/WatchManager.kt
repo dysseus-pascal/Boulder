@@ -353,7 +353,7 @@ class WatchManager(
 
             connectionScope.launch {
                 try {
-                    pebbleConnector.connect()
+                    pebbleConnector.connect(device.knownWatchProps != null)
 //                    disconnectDuringConnectionJob.cancel()
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $transport")
                     pebbleConnector.disconnected.await()

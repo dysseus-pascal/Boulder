@@ -3,15 +3,9 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.ws
 import io.ktor.http.*
 import io.ktor.websocket.Frame
-import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
 import io.rebble.libpebblecommon.packets.PingPong
-import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
-import io.rebble.libpebblecommon.packets.blobdb.NotificationSource
-import io.rebble.libpebblecommon.packets.blobdb.PushNotification
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
-import io.rebble.libpebblecommon.services.blobdb.BlobDBService
-import io.rebble.libpebblecommon.services.notification.NotificationService
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Ignore
@@ -65,28 +59,6 @@ class DeviceTests {
             }
         }
         return ret
-    }
-
-    @Test
-    fun sendNotification() = runBlocking {
-        val notif = PushNotification(
-            sender = "Test Notif",
-            subject = "This is a test notification!",
-            message = "This is the notification body",
-            backgroundColor = 0b11110011u,
-            source = NotificationSource.Email
-        )
-
-        val protocolHandler = TestPebbleProtocolHandler { receivePacket(sendWS(it, true)!!) }
-        val scope = ConnectionCoroutineScope(coroutineContext)
-
-        val notificationService = NotificationService(BlobDBService(protocolHandler, scope))
-        val notificationResult = notificationService.send(notif)
-
-        assertTrue(
-            notificationResult is BlobResponse.Success,
-            "Reply wasn't success from BlobDB when sending notif"
-        )
     }
 
     @Test

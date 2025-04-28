@@ -1,13 +1,30 @@
 package io.rebble.libpebblecommon.database.entity
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import co.touchlab.kermit.Logger
+import com.oldguy.common.getUIntAt
+import coredev.BlobDatabase
+import coredev.GenerateRoomEntity
+import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.dao.BlobDbItem
+import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
+import io.rebble.libpebblecommon.structmapper.SFixedList
+import io.rebble.libpebblecommon.structmapper.SFixedString
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.StructMappable
+import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.util.DataBuffer
+import io.rebble.libpebblecommon.util.Endian
+import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
-import kotlin.time.Instant
 
-@Entity
-data class NotificationAppEntity(
-    @PrimaryKey
+@GenerateRoomEntity(primaryKey = "packageName", databaseId = BlobDatabase.CannedResponses)
+data class NotificationAppItem(
     val packageName: String,
     val name: String,
     val muteState: MuteState,
@@ -15,14 +32,33 @@ data class NotificationAppEntity(
     /**
      * Last time [muteState] was changed. Used to resolve conflicts with watch on iOS.
      */
-    val stateUpdated: Instant,
-    val lastNotified: Instant,
-)
+    val stateUpdated: MillisecondInstant,
+    val lastNotified: MillisecondInstant,
+) : BlobDbItem {
+    override fun key(): UByteArray = SFixedString(StructMapper(), packageName.length, packageName).toBytes()
 
-fun NotificationAppEntity.everNotified(): Boolean = lastNotified > Instant.DISTANT_PAST
+    override fun value(platform: WatchType): UByteArray? {
+        val m = StructMapper()
+        val entity = NotificationAppBlobItem(
+            attributes = listOf(
+                Attribute(TimelineAttribute.AppName.id, SFixedString(m, name.length, name).toBytes()),
+                Attribute(TimelineAttribute.MuteDayOfWeek.id, SUByte(m, muteState.value).toBytes()),
+                Attribute(
+                    TimelineAttribute.LastUpdated.id,
+                    SUInt(m, stateUpdated.instant.epochSeconds.toUInt(), endianness = Endian.Little).toBytes()
+                ),
+            )
+        )
+        return entity.toBytes()
+    }
+
+    override fun recordHashCode(): Int = hashCode()
+}
+
+fun NotificationAppItem.everNotified(): Boolean = lastNotified.instant > Instant.DISTANT_PAST
 
 @Serializable
-enum class MuteState(private val value: UByte) {
+enum class MuteState(val value: UByte) {
     Always(127u),
     Weekends(65u),
     Weekdays(62u),
@@ -47,3 +83,70 @@ data class ChannelItem(
     val name: String,
     val muteState: MuteState,
 )
+
+class NotificationAppBlobItem(
+    flags: UInt = 0u,
+    attributes: List<Attribute> = emptyList(),
+    actions: List<TimelineItem.Action> = emptyList()
+) : StructMappable() {
+    val flags = SUInt(m, flags, endianness = Endian.Little)
+    val attrCount = SUByte(m, attributes.size.toUByte())
+    val actionCount = SUByte(m, actions.size.toUByte())
+    val attributes = SFixedList(m, attrCount.get().toInt(), attributes) {
+        Attribute(0u, ubyteArrayOf())
+    }.apply {
+        linkWithCount(attrCount)
+    }
+    val actions = SFixedList(m, actionCount.get().toInt(), actions) {
+        TimelineItem.Action(
+            0u,
+            TimelineItem.Action.Type.Empty,
+            emptyList()
+        )
+    }.apply {
+        linkWithCount(actionCount)
+    }
+}
+
+private val logger = Logger.withTag("NotificationAppItem")
+
+fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
+    try {
+        val packageName = key.asByteArray().decodeToString()
+        val item = NotificationAppBlobItem().apply { fromBytes(DataBuffer(value)) }
+        val appName = item.attributes.get(TimelineAttribute.AppName)?.asByteArray()?.decodeToString()
+        if (appName == null) {
+            logger.e("appName is null")
+            return null
+        }
+        val mutedState = item.attributes.get(TimelineAttribute.MuteDayOfWeek)?.let {
+            MuteState.fromValue(it[0])
+        }
+        if (mutedState == null) {
+            logger.e("mutedState is null")
+            return null
+        }
+        val lastUpdated = timestamp.let { Instant.fromEpochSeconds(it.toLong()) }
+//        val lastUpdated = item.attributes.get(TimelineAttribute.LastUpdated)
+//            ?.getUIntAt(0, littleEndian = true)?.let { Instant.fromEpochSeconds(it.toLong()) }
+//        if (lastUpdated == null) {
+//            logger.e("lastUpdated is null")
+//            return null
+//        }
+        return NotificationAppItem(
+            packageName = packageName,
+            muteState = mutedState,
+            stateUpdated = lastUpdated.asMillisecond(),
+            name = appName,
+            channelGroups = emptyList(),
+            lastNotified = lastUpdated.asMillisecond(),
+        )
+    } catch (e: Exception) {
+        logger.d("decoding app record ${e.message}", e)
+        return null
+    }
+
+}
+
+private fun SFixedList<Attribute>.get(attribute: TimelineAttribute): UByteArray? =
+    list.find { it.attributeId.get() == attribute.id }?.content?.get()

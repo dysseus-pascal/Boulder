@@ -2,10 +2,11 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Transport
-import io.rebble.libpebblecommon.database.dao.LockerEntryDao
+import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
@@ -22,12 +23,12 @@ import kotlinx.coroutines.flow.onEach
 class PKJSLifecycleManager(
     private val appContext: AppContext,
     private val lockerPBWCache: LockerPBWCache,
-    private val lockerEntryDao: LockerEntryDao,
+    private val lockerEntryDao: LockerEntryRealDao,
     private val appRunStateService: AppRunStateService,
-    private val notificationManager: NotificationManager,
     private val appMessagesService: AppMessageService,
     private val locker: Locker,
-    private val scope: ConnectionCoroutineScope
+    private val scope: ConnectionCoroutineScope,
+    private val libPebble: LibPebble,
 ) {
     companion object {
         private val logger = Logger.withTag(PKJSLifecycleManager::class.simpleName!!)
@@ -53,7 +54,8 @@ class PKJSLifecycleManager(
                 device,
                 jsPath,
                 pbw.info,
-                lockerEntry
+                lockerEntry,
+                libPebble,
             ).apply {
                 start(scope)
             }
@@ -67,13 +69,12 @@ class PKJSLifecycleManager(
         this.device = PebbleJSDevice(
             transport,
             watchInfo,
-            notificationManager,
             appMessagesService
         )
         appRunStateService.runningApp.onEach {
             handleAppStop()
             if (it != null) {
-                val lockerEntry = lockerEntryDao.get(it)
+                val lockerEntry = lockerEntryDao.getEntry(it)
                 lockerEntry?.let { handleNewRunningApp(lockerEntry, scope) }
             }
         }.onCompletion {

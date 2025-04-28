@@ -161,8 +161,6 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Debug by services.debug,
     ConnectedPebble.AppRunState by services.appRunState,
     ConnectedPebble.Firmware by services.firmware,
-    ConnectedPebble.Locker by services.locker,
-    ConnectedPebble.Notifications by services.notifications,
     ConnectedPebble.Messages by services.messages,
     ConnectedPebble.Time by services.time,
     ConnectedPebble.AppMessages by services.appMessages,

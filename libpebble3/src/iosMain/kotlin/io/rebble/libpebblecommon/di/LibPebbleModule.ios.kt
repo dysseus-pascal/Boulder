@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.di
 
+import io.rebble.libpebblecommon.calendar.IosSystemCalendar
+import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
@@ -35,4 +37,6 @@ actual val platformModule: Module = module {
     singleOf(::IosNotificationActionHandler) bind PlatformNotificationActionHandler::class
     singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
+    singleOf(::IosSystemCalendar) bind SystemCalendar::class
+    single { PlatformConfig(syncNotificationApps = true) }
 }

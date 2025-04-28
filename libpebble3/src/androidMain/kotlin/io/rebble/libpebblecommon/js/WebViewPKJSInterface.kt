@@ -4,12 +4,14 @@ import android.content.Context
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.LibPebble
 
 class WebViewPKJSInterface(
     jsRunner: JsRunner,
     device: PebbleJSDevice,
-    private val context: Context
-): PKJSInterface(jsRunner, device) {
+    private val context: Context,
+    libPebble: LibPebble,
+): PKJSInterface(jsRunner, device, libPebble) {
     companion object {
         private val logger = Logger.withTag(WebViewPKJSInterface::class.simpleName!!)
     }

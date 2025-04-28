@@ -1,13 +1,12 @@
 package io.rebble.libpebblecommon.notification
 
 import androidx.compose.ui.graphics.ImageBitmap
-import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
-import io.rebble.libpebblecommon.database.dao.NotificationAppDao
+import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -25,11 +24,11 @@ interface NotificationAppsSync {
 
 class NotificationApi(
     private val notificationAppsSync: NotificationAppsSync,
-    private val notificationAppDao: NotificationAppDao,
+    private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
 ) : NotificationApps {
-    override val notificationApps: Flow<List<NotificationAppEntity>> =
+    override val notificationApps: Flow<List<NotificationAppItem>> =
         notificationAppDao.allAppsFlow()
 
     override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
@@ -44,7 +43,7 @@ class NotificationApi(
         muteState: MuteState,
     ) {
         libPebbleCoroutineScope.launch {
-            val appEntry = notificationAppDao.getApp(packageName) ?: return@launch
+            val appEntry = notificationAppDao.getEntry(packageName) ?: return@launch
             notificationAppDao.insertOrReplace(appEntry.copy(channelGroups = appEntry.channelGroups.map { g ->
                 g.copy(channels = g.channels.map { c ->
                     if (c.id == channelId) {

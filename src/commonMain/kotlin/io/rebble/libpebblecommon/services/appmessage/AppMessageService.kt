@@ -2,13 +2,13 @@ package io.rebble.libpebblecommon.services.appmessage
 
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppIconMessage
 import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppTitleMessage
 import io.rebble.libpebblecommon.packets.AppMessage
 import io.rebble.libpebblecommon.packets.AppMessageTuple
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -18,7 +18,7 @@ import kotlin.uuid.Uuid
 
 class AppMessageService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: CoroutineScope
+    private val scope: ConnectionCoroutineScope
 ) : ProtocolService, ConnectedPebble.AppMessages {
     private val receivedMessages = Channel<AppMessageData>(Channel.BUFFERED)
     override val inboundAppMessages: Flow<AppMessageData> = receivedMessages.consumeAsFlow()

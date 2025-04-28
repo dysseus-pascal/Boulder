@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.js
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import co.touchlab.kermit.Logger
-import com.benasher44.uuid.Uuid
 import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import kotlinx.coroutines.CompletableDeferred
@@ -12,9 +11,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 class WebViewPrivatePKJSInterface(
     private val jsRunner: WebViewJsRunner,
@@ -55,7 +54,7 @@ class WebViewPrivatePKJSInterface(
 
     @JavascriptInterface
     override fun getTimelineTokenAsync(): String {
-        val uuid = Uuid.fromString(jsRunner.appInfo.uuid)
+        val uuid = Uuid.parse(jsRunner.appInfo.uuid)
         //TODO: Get token from locker or sandbox token if app is sideloaded
         jsRunner.scope.launch {
             jsRunner.signalTimelineTokenFail(uuid.toString())

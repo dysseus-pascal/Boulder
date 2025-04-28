@@ -2,10 +2,12 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.LockerEntryDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.js.PebbleJSDevice
@@ -24,7 +26,8 @@ class PKJSLifecycleManager(
     private val appRunStateService: AppRunStateService,
     private val notificationManager: NotificationManager,
     private val appMessagesService: AppMessageService,
-    private val scope: CoroutineScope
+    private val locker: Locker,
+    private val scope: ConnectionCoroutineScope
 ) {
     companion object {
         private val logger = Logger.withTag(PKJSLifecycleManager::class.simpleName!!)
@@ -38,7 +41,7 @@ class PKJSLifecycleManager(
 
     private suspend fun handleNewRunningApp(lockerEntry: LockerEntry, scope: CoroutineScope) {
         try {
-            val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id))
+            val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, locker))
             if (!pbw.hasPKJS) {
                 logger.v { "App ${lockerEntry.id} does not have PKJS" }
                 return

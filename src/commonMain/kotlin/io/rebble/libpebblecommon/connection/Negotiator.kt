@@ -25,7 +25,9 @@ class Negotiator() {
             val watchInfo = systemService.requestWatchVersion()
             logger.d("watchVersionResponse = $watchInfo")
             systemService.updateTime()
-            appRunStateService.refreshAppRunState()
+            if (!watchInfo.runningFwVersion.isRecovery) {
+                appRunStateService.refreshAppRunState()
+            }
             val runningApp = appRunStateService.runningApp.first()
             logger.d("runningApp = $runningApp")
             watchInfo

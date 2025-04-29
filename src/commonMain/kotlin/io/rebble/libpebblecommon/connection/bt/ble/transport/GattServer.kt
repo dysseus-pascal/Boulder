@@ -57,18 +57,16 @@ class GattServerManager(
         transport: BleTransport,
         sendChannel: SendChannel<ByteArray>
     ): Boolean {
-        serverMutex.withLock {
-            if (gattServer == null && bluetoothStateProvider.state.value == BluetoothState.Enabled) {
-                logger.w("Trying to open gatt server to register device. This should only happen after bluetooth permission was just granted on android, during first use")
-                openIfNeeded()
-            }
-            val gs = gattServer
-            if (gs != null) {
-                gs.registerDevice(transport, sendChannel)
-                return true
-            } else {
-                return false
-            }
+        if (gattServer == null && bluetoothStateProvider.state.value == BluetoothState.Enabled) {
+            logger.w("Trying to open gatt server to register device. This should only happen after bluetooth permission was just granted on android, during first use")
+            openIfNeeded()
+        }
+        val gs = gattServer
+        if (gs != null) {
+            gs.registerDevice(transport, sendChannel)
+            return true
+        } else {
+            return false
         }
     }
 

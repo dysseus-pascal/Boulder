@@ -109,6 +109,7 @@ class PebbleBle(
         }
 
     override suspend fun disconnect() {
+        ppog.close()
         gattConnector.disconnect()
         gattServerManager.unregisterDevice(transport)
     }

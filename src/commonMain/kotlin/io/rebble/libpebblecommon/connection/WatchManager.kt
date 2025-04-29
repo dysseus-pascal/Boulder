@@ -265,11 +265,16 @@ class WatchManager(
                 return@updateWatch null
             }
 
+            var caughtException = false
             val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
                 logger.e(
                     "watchmanager caught exception for $transport: $throwable",
                     throwable,
                 )
+                if (caughtException) {
+                    return@CoroutineExceptionHandler
+                }
+                caughtException = true
                 // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
                 //  bad FW version) by not attempting to endlessly reconnect.
                 val connection = allWatches.value[transport]?.activeConnection

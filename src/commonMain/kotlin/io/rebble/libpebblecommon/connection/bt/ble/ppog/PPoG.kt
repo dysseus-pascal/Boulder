@@ -40,6 +40,13 @@ class PPoG(
         }
     }
 
+    suspend fun close() {
+        logger.d("close")
+        // This really for iOS, where the "connection" will stay alive when the app "disconnects",
+        // but we need to egt the watch's PPoG state machine into a "need to reconnect" state.
+        sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+    }
+
     private suspend inline fun <reified T : PPoGPacket> waitForPacket(): T {
         // Wait for reset request from watch
         while (true) {

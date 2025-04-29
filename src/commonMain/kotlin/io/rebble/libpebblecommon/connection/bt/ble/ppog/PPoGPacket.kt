@@ -30,7 +30,8 @@ sealed class PPoGPacket {
     val size = when (this) {
       is Data -> 1 + data.size
       is ResetComplete -> 1 + (if (ppogVersion.supportsWindowNegotiation) 2 else 0)
-      else -> 1
+      is ResetRequest -> 1 + 1
+      is Ack -> 1
     }
     val buffer = DataBuffer(size)
 

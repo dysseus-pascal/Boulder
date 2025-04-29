@@ -10,10 +10,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
-import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer
-import io.rebble.libpebblecommon.connection.bt.ble.transport.openGattServer
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -32,7 +30,7 @@ class PebbleBle(
     private val mtuParam: Mtu,
     private val connectivity: ConnectivityWatcher,
     private val pairing: PebblePairing,
-    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val gattServerManager: GattServerManager,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${transport.identifier.asString}")
 
@@ -40,9 +38,9 @@ class PebbleBle(
         withContext(Dispatchers.Main) {
             logger.d("connect() reversedPPoG = ${config.bleConfig.reversedPPoG}")
             if (!config.bleConfig.reversedPPoG) {
-                val gs = gattServer
-                check(gs != null)
-                gs.registerDevice(transport, pPoGStream.inboundPPoGBytesChannel)
+                if (!gattServerManager.registerDevice(transport, pPoGStream.inboundPPoGBytesChannel)) {
+                    return@withContext PebbleConnectionResult.Failed("failed to register with gatt server")
+                }
             }
 
             val device = gattConnector.connect()
@@ -112,29 +110,13 @@ class PebbleBle(
 
     override suspend fun disconnect() {
         gattConnector.disconnect()
-        gattServer?.unregisterDevice(transport)
+        gattServerManager.unregisterDevice(transport)
     }
 
     override val disconnected = gattConnector.disconnected
 
     companion object {
         private val CONNECTIVITY_UPDATE_TIMEOUT = 10000L
-
-        var gattServer: GattServer? = null
-
-        fun init(config: LibPebbleConfig, libPebbleCoroutineScope: LibPebbleCoroutineScope) {
-            libPebbleCoroutineScope.launch {
-                if (!config.bleConfig.reversedPPoG) {
-                    check(gattServer == null)
-                    gattServer = openGattServer(config.context)
-                    gattServer?.addServices()
-                    gattServer?.characteristicReadRequest?.collect {
-                        Logger.d("sending meta response")
-                        it.respond(SERVER_META_RESPONSE)
-                    }
-                }
-            }
-        }
     }
 }
 

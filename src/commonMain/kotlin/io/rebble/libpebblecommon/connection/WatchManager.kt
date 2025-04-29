@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
@@ -97,6 +98,7 @@ class WatchManager(
     private val createPlatformIdentifier: CreatePlatformIdentifier,
     private val connectionScopeFactory: ConnectionScopeFactory,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val bluetoothStateProvider: BluetoothStateProvider,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -134,7 +136,6 @@ class WatchManager(
         }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun init() {
         logger.d("watchmanager init()")
         libPebbleCoroutineScope.launch {
@@ -143,12 +144,14 @@ class WatchManager(
             combine(
                 allWatches,
                 activeConnectionStates,
-            ) { watches, active ->
+                bluetoothStateProvider.state,
+            ) { watches, active, btstate ->
                 // Update for active connection state
                 watches.values.mapNotNull { device ->
                     val transport = device.transport
                     val connectionState = active[transport]
-                    val hasConnectionAttempt = active.containsKey(device.transport)
+                    val hasConnectionAttempt =
+                        active.containsKey(device.transport) || activeConnections.contains(device.transport)
 
                     persistIfNeeded(device)
                     // Removed forgotten device once it is disconnected
@@ -158,8 +161,11 @@ class WatchManager(
                         return@mapNotNull null
                     }
 
-                    if (device.connectGoal && !hasConnectionAttempt) {
+                    if (device.connectGoal && !hasConnectionAttempt && btstate.enabled()) {
                         connectTo(device)
+                    } else if (hasConnectionAttempt && !btstate.enabled()) {
+                        disconnectFrom(device.transport)
+                        device.activeConnection?.cleanup()
                     } else if (!device.connectGoal && hasConnectionAttempt) {
                         disconnectFrom(device.transport)
                     }
@@ -295,7 +301,13 @@ class WatchManager(
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
             val connectionScope = ConnectionCoroutineScope(coroutineContext)
             logger.v("transport.createConnector")
-            val connectionKoinScope = connectionScopeFactory.createScope(ConnectionScopeProperties(transport, connectionScope, platformIdentifier))
+            val connectionKoinScope = connectionScopeFactory.createScope(
+                ConnectionScopeProperties(
+                    transport,
+                    connectionScope,
+                    platformIdentifier
+                )
+            )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
 
             val disconnectDuringConnectionJob = connectionScope.launch {

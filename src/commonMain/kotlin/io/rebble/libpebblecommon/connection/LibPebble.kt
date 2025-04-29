@@ -1,10 +1,12 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.database.entity.LockerEntryWithPlatforms
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -87,11 +89,14 @@ class LibPebble3(
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val gattServerManager: GattServerManager,
+    private val bluetoothStateProvider: BluetoothStateProvider,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {
-        PebbleBle.init(config, libPebbleCoroutineScope)
+        bluetoothStateProvider.init()
+        gattServerManager.init()
         watchManager.init()
         locker.init()
         timeChanged.registerForTimeChanges {

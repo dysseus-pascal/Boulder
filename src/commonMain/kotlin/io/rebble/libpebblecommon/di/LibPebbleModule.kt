@@ -25,6 +25,8 @@ import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
 import io.rebble.libpebblecommon.connection.WatchManager
+import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.RealBluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.Mtu
@@ -36,6 +38,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
@@ -135,6 +138,8 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::LibPebble3) bind LibPebble::class
                 single { ConnectionScopeFactory(koin) }
                 singleOf(::CreatePlatformIdentifier)
+                singleOf(::GattServerManager)
+                singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 single { HttpClient() }
 
                 scope<ConnectionScope> {

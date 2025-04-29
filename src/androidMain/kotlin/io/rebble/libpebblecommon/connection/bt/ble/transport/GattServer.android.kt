@@ -60,13 +60,14 @@ data class RegisteredDevice(
 )
 
 class GattServerCallback : BluetoothGattServerCallback() {
+    private val logger = Logger.withTag("GattServerCallback")
     //    private val _connectionState = MutableStateFlow<ServerConnectionstateChanged?>(null)
 //    val connectionState = _connectionState.asSharedFlow()
     val registeredDevices: MutableMap<String, RegisteredDevice> = mutableMapOf()
     var server: BluetoothGattServer? = null
 
     override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
-        Logger.d("onConnectionStateChange: ${device.address} = $newState")
+        logger.d("onConnectionStateChange: ${device.address} = $newState")
 //        _connectionState.tryEmit(
 //            ServerConnectionstateChanged(
 //                deviceId = device.address,
@@ -79,7 +80,7 @@ class GattServerCallback : BluetoothGattServerCallback() {
     val serviceAdded = _serviceAdded.asSharedFlow()
 
     override fun onServiceAdded(status: Int, service: BluetoothGattService) {
-        Logger.d("onServiceAdded: ${service.uuid}")
+        logger.d("onServiceAdded: ${service.uuid}")
         runBlocking {
             _serviceAdded.emit(ServerServiceAdded(service.uuid.asUuid()))
         }
@@ -104,7 +105,7 @@ class GattServerCallback : BluetoothGattServerCallback() {
         offset: Int,
         characteristic: BluetoothGattCharacteristic,
     ) {
-        Logger.d("onCharacteristicReadRequest: ${characteristic.uuid}")
+        logger.d("onCharacteristicReadRequest: ${characteristic.uuid}")
         _characteristicReadRequest.tryEmit(
             RawCharacteristicReadRequest(device, requestId, offset, characteristic)
         )
@@ -126,12 +127,12 @@ class GattServerCallback : BluetoothGattServerCallback() {
 //        Logger.d("onCharacteristicWriteRequest: ${device.address} / ${characteristic.uuid}: ${value.joinToString()}")
         val registeredDevice = registeredDevices[device.address]
         if (registeredDevice == null) {
-            Logger.e("onCharacteristicWriteRequest couldn't find registered device: ${device.address}")
+            logger.e("onCharacteristicWriteRequest couldn't find registered device: ${device.address}")
             return
         }
         val result = registeredDevice.dataChannel.trySend(value)
         if (result.isFailure) {
-            Logger.e("onCharacteristicWriteRequest error writing to channel: $result")
+            logger.e("onCharacteristicWriteRequest error writing to channel: $result")
         }
     }
 
@@ -145,29 +146,29 @@ class GattServerCallback : BluetoothGattServerCallback() {
         offset: Int,
         value: ByteArray?,
     ) {
-        Logger.d("onDescriptorWriteRequest: ${device.address} / ${descriptor.characteristic.uuid}")
+        logger.d("onDescriptorWriteRequest: ${device.address} / ${descriptor.characteristic.uuid}")
         val registeredDevice = registeredDevices[device.address]
         if (registeredDevice == null) {
-            Logger.e("onDescriptorWriteRequest device not registered!")
+            logger.e("onDescriptorWriteRequest device not registered!")
             return
         }
         val gattServer = server
         if (gattServer == null) {
-            Logger.e("onDescriptorWriteRequest no server!!")
+            logger.e("onDescriptorWriteRequest no server!!")
             return
         }
         if (!gattServer.sendResponse(device, requestId, GATT_SUCCESS, offset, value)) {
-            Logger.e("onDescriptorWriteRequest failed to respond")
+            logger.e("onDescriptorWriteRequest failed to respond")
             return
         }
         registeredDevices[device.address] = registeredDevice.copy(notificationsEnabled = true)
-//        Logger.d("/onDescriptorWriteRequest")
+//        logger.d("/onDescriptorWriteRequest")
     }
 
     val notificationSent = MutableStateFlow<NotificationSent?>(null)
 
     override fun onNotificationSent(device: BluetoothDevice, status: Int) {
-//        Logger.d("onNotificationSent: ${device.address}")
+//        logger.d("onNotificationSent: ${device.address}")
         notificationSent.tryEmit(
             NotificationSent(
                 deviceId = device.address.asPebbleBluetoothIdentifier(),
@@ -182,6 +183,8 @@ actual class GattServer(
     val callback: GattServerCallback,
     val cbTimeout: Long = 8000,
 ) : BluetoothGattServerCallback() {
+    private val logger = Logger.withTag("GattServer")
+
     actual val characteristicReadRequest = callback.characteristicReadRequest.filterNotNull().map {
         ServerCharacteristicReadRequest(
             deviceId = it.device.address.asPebbleBluetoothIdentifier(),
@@ -196,7 +199,7 @@ actual class GattServer(
                         bytes
                     )
                 } catch (e: SecurityException) {
-                    Logger.d("error sending read response", e)
+                    logger.d("error sending read response", e)
                     false
                 }
             },
@@ -209,17 +212,17 @@ actual class GattServer(
         try {
             server.clearServices()
         } catch (e: SecurityException) {
-            Logger.d("error clearing gatt services", e)
+            logger.d("error clearing gatt services", e)
         }
         try {
             server.close()
         } catch (e: SecurityException) {
-            Logger.d("error closing gatt server", e)
+            logger.d("error closing gatt server", e)
         }
     }
 
     actual suspend fun addServices() {
-        Logger.d("addServices")
+        logger.d("addServices")
         addService(
             PPOGATT_DEVICE_SERVICE_UUID_SERVER, listOf(
                 BluetoothGattCharacteristic(
@@ -250,14 +253,14 @@ actual class GattServer(
                 ),
             )
         )
-        Logger.d("/addServices")
+        logger.d("/addServices")
     }
 
     private suspend fun addService(
         serviceUuid: Uuid,
         characteristics: List<BluetoothGattCharacteristic>,
     ) {
-        Logger.d("addService: $serviceUuid")
+        logger.d("addService: $serviceUuid")
         val service = BluetoothGattService(serviceUuid.toJavaUuid(), SERVICE_TYPE_PRIMARY)
         characteristics.forEach { service.addCharacteristic(it) }
         try {
@@ -265,7 +268,7 @@ actual class GattServer(
                 server.addService(service)
             }.first { service.uuid.asUuid() == serviceUuid }
         } catch (e: SecurityException) {
-            Logger.d("error adding gatt service ${service.uuid}", e)
+            logger.d("error adding gatt service ${service.uuid}", e)
         }
     }
 
@@ -273,7 +276,7 @@ actual class GattServer(
         transport: BleTransport,
         sendChannel: SendChannel<ByteArray>
     ) {
-        Logger.d("registerDevice: $transport")
+        logger.d("registerDevice: $transport")
         @Suppress("DEPRECATION")
         val adapter = BluetoothAdapter.getDefaultAdapter()
         val bluetoothDevice = adapter.getRemoteDevice(transport.identifier.macAddress)
@@ -298,17 +301,17 @@ actual class GattServer(
     ): Boolean {
         val registeredDevice = callback.registeredDevices[transport.identifier.macAddress]
         if (registeredDevice == null) {
-            Logger.e("sendData: couldn't find registered device: $transport")
+            logger.e("sendData: couldn't find registered device: $transport")
             return false
         }
         val service = server.getService(serviceUuid.toJavaUuid())
         if (service == null) {
-            Logger.e("sendData: couldn't find service")
+            logger.e("sendData: couldn't find service")
             return false
         }
         val characteristic = service.getCharacteristic(characteristicUuid.toJavaUuid())
         if (characteristic == null) {
-            Logger.e("sendData: couldn't find characteristic")
+            logger.e("sendData: couldn't find characteristic")
             return false
         }
         callback.notificationSent.value = null // TODO better way of doing this?
@@ -320,7 +323,7 @@ actual class GattServer(
                 data
             )
             if (writeRes != BluetoothStatusCodes.SUCCESS) {
-                Logger.e("couldn't notify data characteristic: $writeRes")
+                logger.e("couldn't notify data characteristic: $writeRes")
                 return false
             }
         } else {
@@ -333,7 +336,7 @@ actual class GattServer(
                     false
                 )
             ) {
-                Logger.e("couldn't notify data characteristic")
+                logger.e("couldn't notify data characteristic")
                 return false
             }
         }
@@ -343,13 +346,13 @@ actual class GattServer(
                     .first { transport.identifier == it.deviceId }
             }
             if (res.status != GATT_SUCCESS) {
-                Logger.e("characteristic notify error: ${res.status}")
+                logger.e("characteristic notify error: ${res.status}")
                 false
             } else {
                 true
             }
         } catch (e: TimeoutCancellationException) {
-            Logger.e("characteristic notify timed out")
+            logger.e("characteristic notify timed out")
             false
         }
     }

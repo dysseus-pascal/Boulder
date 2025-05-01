@@ -29,8 +29,18 @@ class AppMessageService(
 
     fun init() {
         protocolHandler.inboundMessages.onEach {
-            if (it is AppMessage.AppMessagePush) {
-                receivedMessages.trySend(it.appMessageData())
+            when (it) {
+                is AppMessage.AppMessageACK -> {
+                    appMessageCallback?.complete(it)
+                    appMessageCallback = null
+                }
+                is AppMessage.AppMessageNACK -> {
+                    appMessageCallback?.complete(it)
+                    appMessageCallback = null
+                }
+                is AppMessage.AppMessagePush -> {
+                    receivedMessages.trySend(it.appMessageData())
+                }
             }
         }.launchIn(scope)
     }

@@ -141,7 +141,7 @@ const _global = typeof window !== 'undefined' ? window : globalThis;
     }
     global.signalAppMessageAck = (data) => {
         const payload = data ? JSON.parse(data) : {};
-        dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_ACK, { ack: payload });
+        dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_ACK, { payload });
 
         if (payload.transactionId !== undefined) {
             removeAppMessageCallbacksForTransactionId(payload.transactionId);
@@ -149,7 +149,7 @@ const _global = typeof window !== 'undefined' ? window : globalThis;
     }
     global.signalAppMessageNack = (data) => {
         const payload = data ? JSON.parse(data) : {};
-        dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_NACK, { nack: payload });
+        dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_NACK, { payload });
 
         if (payload.transactionId !== undefined) {
             removeAppMessageCallbacksForTransactionId(payload.transactionId);

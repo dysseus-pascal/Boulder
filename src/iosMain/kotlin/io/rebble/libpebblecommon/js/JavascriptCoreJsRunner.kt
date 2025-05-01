@@ -12,6 +12,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSBundle
+import platform.Foundation.NSURL
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 
@@ -44,11 +45,10 @@ class JavascriptCoreJsRunner(
         val js = SystemFileSystem.source(Path(path)).buffered().use {
             it.readString()
         }
-        jsContext?.evaluateScript(js)
+        jsContext?.evaluateScript(js, NSURL.fileURLWithPath(path))
     }
 
-    private fun exceptionHandler(context: JSContext?, _exception: JSValue?) {
-        val exception = jsContext?.exception()
+    private fun exceptionHandler(context: JSContext?, exception: JSValue?) {
         val decoded: Any? = when {
             exception == null -> null
             exception.isObject() -> exception.toDictionary()?.let { JSError.fromDictionary(it) }
@@ -96,7 +96,7 @@ class JavascriptCoreJsRunner(
     override suspend fun loadAppJs(jsUrl: String) {
         SystemFileSystem.source(Path(jsUrl)).buffered().use {
             val js = it.readString()
-            jsContext?.evaluateScript(js)
+            jsContext?.evaluateScript(js, NSURL.fileURLWithPath(jsUrl))
         }
         signalReady()
     }
@@ -127,6 +127,6 @@ class JavascriptCoreJsRunner(
     }
 
     override suspend fun signalReady() {
-        jsContext?.evaluateScript("signalReady()")
+        jsContext?.globalObject?.invokeMethod("signalReady", null)
     }
 }

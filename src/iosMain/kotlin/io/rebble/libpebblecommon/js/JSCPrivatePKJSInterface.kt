@@ -19,13 +19,8 @@ class JSCPrivatePKJSInterface(
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
-    override fun startupScriptHasLoaded(data: String?) {
-        logger.d { "Startup script has loaded" }
-    }
-
     override fun register(jsContext: JSContext) {
         jsContext["_Pebble"] = mapOf(
-            "startupScriptHasLoaded" to this::startupScriptHasLoaded,
             "sendAppMessageString" to this::sendAppMessageString,
             "privateLog" to this::privateLog,
             "logInterceptedSend" to this::logInterceptedSend,

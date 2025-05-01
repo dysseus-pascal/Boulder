@@ -45,8 +45,6 @@ abstract class PrivatePKJSInterface(
         return uuid.toString()
     }
 
-    abstract fun startupScriptHasLoaded(data: String?)
-
     open fun signalAppScriptLoadedByBootstrap() {
         logger.v { "signalAppScriptLoadedByBootstrap" }
         scope.launch {

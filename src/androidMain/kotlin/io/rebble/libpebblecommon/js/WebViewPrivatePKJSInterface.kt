@@ -21,7 +21,7 @@ class WebViewPrivatePKJSInterface(
     }
 
     @JavascriptInterface
-    override fun startupScriptHasLoaded(data: String?) {
+    fun startupScriptHasLoaded(data: String?) {
         logger.v { "Startup script has loaded: $data" }
         if (data == null) {
             logger.e { "Startup script has loaded, but data is null" }

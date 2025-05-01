@@ -163,7 +163,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     .flattenEntries()
                     .toMap()
                     .mapKeys { it.key.lowercase() }
-                val body = when (responseType) {
+                val body: Any? = when (responseType) {
                     "arraybuffer" -> response.bodyAsBytes().toList()
                     "text", "", "json", null -> response.bodyAsText() // JSON is handled by JS side
                     else -> {
@@ -172,8 +172,9 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     }
                 }
                 val status = response.status.value
+                val statusText = response.status.description
                 val instance = getJsInstance()
-                instance?.invokeMethod("_onResponseComplete", listOf(responseHeaders, status, body, response.headers["Content-Type"]))
+                instance?.invokeMethod("_onResponseComplete", listOf(responseHeaders, status, statusText, body))
                     ?: {
                         logger.e { "XHR instance $id not found" }
                     }

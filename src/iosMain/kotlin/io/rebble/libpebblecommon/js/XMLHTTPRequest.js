@@ -76,9 +76,10 @@ class XMLHttpRequest {
         _XMLHTTPRequestManager.abort(this._instanceID);
     }
 
-    _onResponseComplete(responseHeaders, status, body) {
+    _onResponseComplete(responseHeaders, status, statusText, body) {
         this.responseHeaders = responseHeaders;
         this.status = status;
+        this.statusText = statusText;
         switch (this.responseType) {
             case "arraybuffer":
                 this.responseText = null;
@@ -117,6 +118,35 @@ class XMLHttpRequest {
             for (const listener of listeners) {
                 listener(event);
             }
+        }
+        switch (type) {
+            case "load":
+                this.onload && this.onload(event);
+                break;
+            case "loadend":
+                this.onloadend && this.onloadend(event);
+                break;
+            case "loadstart":
+                this.onloadstart && this.onloadstart(event);
+                break;
+            case "error":
+                this.onerror && this.onerror(event);
+                break;
+            case "abort":
+                this.onabort && this.onabort(event);
+                break;
+            case "progress":
+                this.onprogress && this.onprogress(event);
+                break;
+            case "readystatechange":
+                this.onreadystatechange && this.onreadystatechange(event);
+                break;
+            case "timeout":
+                this.ontimeout && this.ontimeout(event);
+                break;
+            default:
+                console.warn("XHR - Unknown event type:", type);
+                break;
         }
     }
 }

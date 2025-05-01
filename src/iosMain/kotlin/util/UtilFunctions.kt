@@ -13,7 +13,6 @@ import platform.Foundation.create
 import platform.posix.memcpy
 import platform.posix.size_t
 
-actual fun runBlocking(block: suspend () -> Unit) = kotlinx.coroutines.runBlocking{block()}
 internal fun isPlatformBigEndian(): Boolean {
     memScoped {
         val i = alloc<IntVar>()

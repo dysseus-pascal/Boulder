@@ -1,7 +1,5 @@
 package io.rebble.libpebblecommon.util
 
-expect fun runBlocking(block: suspend () -> Unit)
-
 object KUtil {
     fun byteArrayAsUByteArray(arr: ByteArray): UByteArray = arr.asUByteArray()
     fun uByteArrayAsByteArray(arr: UByteArray): ByteArray = arr.asByteArray()

@@ -1,3 +1,5 @@
+/* This is used in both iOS and Android, so make sure any changes are compatible with both */
+const _global = typeof window !== 'undefined' ? window : globalThis;
 ((global) => {
     const PebbleEventTypes = {
         READY: 'ready',
@@ -84,7 +86,7 @@
     const appMessageNackCallbacks = new Map();
 
     const dispatchPebbleEvent = (type, detail = {}) => {
-        const event = new CustomEvent(type, { detail, bubbles: true, cancelable: true });
+        const event = {type: type, bubbles: false, cancelable: false};
         Object.assign(event, detail);
         if ('payload' in detail) event.data = detail.payload;
         if ('response' in detail) event.data = detail.response;
@@ -168,39 +170,15 @@
         dispatchPebbleEvent(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, { payload });
     };
     global.loadScript = (url) => {
-        const head = document.getElementsByTagName("head")[0];
-        const script = document.createElement("script");
-        script.type = "text/javascript";
-        script.src = url;
-        script.onreadystatechange = signalLoaded;
-        script.onload = signalLoaded;
-
-        head.appendChild(script);
-    }
-
-    const setupXHRInterceptor = () => {
-        if (!XMLHttpRequest.prototype.hasOwnProperty('originalSend')) {
-            XMLHttpRequest.prototype.originalSend = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.originalOpen = XMLHttpRequest.prototype.open;
-
-            XMLHttpRequest.prototype.send = function(body) {
-                const xhr = this;
-                _Pebble.logInterceptedSend();
-                if (xhr.timeout === 0 && xhr.pebbleAsync) {
-                    xhr.timeout = DEFAULT_TIMEOUT;
-                }
-                xhr.originalSend(body);
-            }
-            XMLHttpRequest.prototype.open = function(method, url, async = true, user, password) {
-                this.pebbleAsync = async;
-                if (arguments.length > 4) {
-                    this.originalOpen(method, url, async, user, password);
-                } else if (arguments.length > 3) {
-                    this.originalOpen(method, url, async, user);
-                } else {
-                    this.originalOpen(method, url, async);
-                }
-            }
+        if (document) { // Only used on webviews
+            const head = document.getElementsByTagName("head")[0];
+            const script = document.createElement("script");
+            script.type = "text/javascript";
+            script.src = url;
+            script.onreadystatechange = signalLoaded;
+            script.onload = signalLoaded;
+    
+            head.appendChild(script);
         }
     }
 
@@ -284,7 +262,6 @@
             //TODO
         }
     }
-    setupXHRInterceptor();
     global.Pebble.addEventListener = PebbleAPI.addEventListener;
     global.Pebble.removeEventListener = PebbleAPI.removeEventListener;
     global.Pebble.sendAppMessage = PebbleAPI.sendAppMessage;
@@ -299,5 +276,4 @@
     global.Pebble.openURL = PebbleAPI.openURL;
 
     console.log("Pebble JS Bridge initialized.");
-
-})(window);
+})(_global);

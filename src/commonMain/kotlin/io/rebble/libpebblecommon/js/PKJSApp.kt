@@ -62,7 +62,7 @@ class PKJSApp(
             logger.d("Received app message: ${it.transactionId} $dataString")
             jsRunner?.signalNewAppMessageData(dataString)
         }.catch {
-            logger.e(it) { "Error receiving app message" }
+            logger.e(it) { "Error receiving app message: ${it.message}" }
         }.launchIn(scope)
     }
 

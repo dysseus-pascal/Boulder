@@ -19,4 +19,5 @@ actual fun createJsRunner(
     lockerEntry,
     jsPath,
     device,
+    scope
 )

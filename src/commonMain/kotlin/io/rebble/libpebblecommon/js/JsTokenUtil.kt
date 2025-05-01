@@ -1,26 +1,23 @@
 package io.rebble.libpebblecommon.js
 
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.ConnectedWatchInfo
+import io.ktor.utils.io.core.toByteArray
 import io.rebble.libpebblecommon.services.WatchInfo
-import java.security.MessageDigest
-import java.util.Locale
+import okio.Buffer
 import kotlin.uuid.Uuid
 
 object JsTokenUtil {
     private const val ACCOUNT_TOKEN_SALT = "MMIxeUT[G9/U#(7V67O^EuADSw,{\$C;B}`>|-  lrQCs|t|k=P_!*LETm,RKc,BG*'"
 
     private fun md5Digest(input: String): String {
-        val digest = MessageDigest.getInstance("md5")
-        digest.update(input.toByteArray())
-        val bytes = digest.digest()
-        return bytes.joinToString(separator = "") { String.format("%02X", it) }.lowercase(Locale.US)
+        val data = Buffer()
+        data.write(input.toByteArray())
+        return data.md5().hex().lowercase()
     }
 
     private suspend fun generateToken(uuid: Uuid, developerId: String?, seed: String): String {
         val unhashed = buildString {
             append(seed)
-            append(developerId ?: uuid.toString().uppercase(Locale.US))
+            append(developerId ?: uuid.toString().uppercase())
             append(ACCOUNT_TOKEN_SALT)
         }
         return md5Digest(unhashed)

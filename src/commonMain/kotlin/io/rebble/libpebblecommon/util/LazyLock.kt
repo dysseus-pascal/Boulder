@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.util
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 
 /**
  * Lock specific functions until related async function is complete

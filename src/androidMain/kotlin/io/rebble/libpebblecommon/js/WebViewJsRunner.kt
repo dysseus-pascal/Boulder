@@ -29,8 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 
@@ -246,16 +244,8 @@ class WebViewJsRunner(
         }
     }
 
-    suspend fun loadAppJs(params: String?) {
+    override suspend fun loadAppJs(jsUrl: String) {
         webView?.let { webView ->
-            if (params == null) {
-                logger.e { "No params passed to loadAppJs" }
-                return
-            }
-
-            val paramsDecoded = Uri.decode(params)
-            val paramsJson = Json.decodeFromString<Map<String, String>>(paramsDecoded)
-            val jsUrl = paramsJson["loadUrl"]
             if (jsUrl.isNullOrBlank() || !jsUrl.endsWith(".js")) {
                 logger.e { "loadUrl passed to loadAppJs empty or invalid" }
                 return
@@ -267,21 +257,21 @@ class WebViewJsRunner(
         } ?: error("WebView not initialized")
     }
 
-    suspend fun signalTimelineToken(callId: String, token: String) {
+    override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalTimelineTokenSuccess('${Uri.encode(tokenJson)}')")
         }
     }
 
-    suspend fun signalTimelineTokenFail(callId: String) {
+    override suspend fun signalTimelineTokenFail(callId: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to null, "callId" to callId))
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalTimelineTokenFailure('${Uri.encode(tokenJson)}')")
         }
     }
 
-    suspend fun signalReady() {
+    override suspend fun signalReady() {
         val readyDeviceIds = listOf(device.transport.identifier.asString)
         val readyJson = Json.encodeToString(readyDeviceIds)
         withContext(Dispatchers.Main) {

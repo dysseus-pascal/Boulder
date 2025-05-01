@@ -58,7 +58,7 @@ class PKJSLifecycleManager(
                 start(scope)
             }
         } catch (e: Exception) {
-            logger.e(e) { "Failed to init PKJS for app ${lockerEntry.id}" }
+            logger.e(e) { "Failed to init PKJS for app ${lockerEntry.id}: ${e.message}" }
             return
         }
     }

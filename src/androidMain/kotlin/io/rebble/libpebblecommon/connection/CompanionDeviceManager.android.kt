@@ -10,6 +10,7 @@ import android.companion.CompanionDeviceManager
 import android.content.IntentSender
 import android.os.Build
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -20,9 +21,10 @@ actual fun createCompanionDeviceManager(appContext: AppContext): CompanionDevice
 }
 
 class AndroidCompanionDevice(
-    private val context: AppContext,
+    private val appContext: AppContext,
 ) : CompanionDevice {
     private val logger = Logger.withTag("AndroidCompanionDevice")
+    private val context = appContext.context
 
     override suspend fun registerDevice(transport: Transport) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -31,12 +33,13 @@ class AndroidCompanionDevice(
         if (transport !is Transport.BluetoothTransport) {
             return
         }
-        val service = context.context.getSystemService(CompanionDeviceManager::class.java)
+        val service = context.getSystemService(CompanionDeviceManager::class.java)
 
         @Suppress("DEPRECATION")
         val existingBoundDevices = service.associations
         val macAddress = transport.identifier.macAddress
         if (existingBoundDevices.contains(macAddress)) {
+            service.requestNotificationAccessIfRequired()
             return
         }
 
@@ -61,7 +64,7 @@ class AndroidCompanionDevice(
         val callback = object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) {
                 logger.d("onAssociationPending")
-                context.context.startIntentSender(intentSender, null, 0, 0, 0)
+                context.startIntentSender(intentSender, null, 0, 0, 0)
             }
 
             override fun onAssociationCreated(associationInfo: AssociationInfo) {
@@ -78,6 +81,16 @@ class AndroidCompanionDevice(
         service.associate(associationRequest, callback, null)
         withTimeoutOrNull(30.seconds) {
             result.await()
+            service.requestNotificationAccessIfRequired()
         }
+    }
+
+    private fun CompanionDeviceManager.requestNotificationAccessIfRequired() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // TODO handle
+        val component = LibPebbleNotificationListener.componentName(context)
+        if (hasNotificationAccess(component)) {
+            return
+        }
+        requestNotificationAccess(component)
     }
 }

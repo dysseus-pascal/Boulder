@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -56,6 +57,9 @@ class AndroidPebbleNotificationListenerConnection(
         val service = getService()
         service.cancelNotification(itemId)
     }
+
+    suspend fun getChannelsForApp(packageName: String): List<ChannelGroup> =
+        getService().getChannelsForApp(packageName)
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {

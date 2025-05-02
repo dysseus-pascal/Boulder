@@ -1,15 +1,18 @@
 package io.rebble.libpebblecommon.notification
 
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.Process
-import android.os.UserHandle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import androidx.annotation.RequiresApi
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.entity.ChannelGroup
+import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcessor
@@ -22,6 +25,7 @@ class LibPebbleNotificationListener : NotificationListenerService() {
 
     companion object {
         private val logger = Logger.withTag(LibPebbleNotificationListener::class.simpleName!!)
+        fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
     }
 
     private val binder = LocalBinder()
@@ -47,57 +51,59 @@ class LibPebbleNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         logger.d { "onListenerConnected()" }
         notificationHandler.setActiveNotifications(getActiveNotifications().toList())
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getChannelsFor("com.google.android.apps.dynamite", Process.myUserHandle())
-            getChannelsFor("com.whatsapp", Process.myUserHandle())
-            getChannelsFor("com.google.android.apps.messaging", Process.myUserHandle())
-        }
     }
 
     override fun onListenerDisconnected() {
         logger.d { "onListenerDisconnected()" }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun getChannelsFor(pkg: String, user: UserHandle) {
+    private data class MutableGroup(
+        val id: String?,
+        val name: String?,
+        val channels: MutableList<ChannelItem>,
+    )
+
+    fun getChannelsForApp(packageName: String): List<ChannelGroup> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
         try {
-            val groupsForApp = getNotificationChannelGroups(pkg, user)
-            logger.d("groupsForApp ($pkg) = $groupsForApp")
-            groupsForApp.forEach { group ->
-                logger.d("group ($pkg): id=${group.id} channels=${group.channels} name=${group.name}")
+            val user = Process.myUserHandle()
+            val groups = getNotificationChannelGroups(packageName, user)
+                .map { MutableGroup(it.id, it.name.toString(), mutableListOf()) }
+                .associateBy { it.id }.toMutableMap()
+            val channels = getNotificationChannels(packageName, user)
+            channels.forEach { channel ->
+                val channelItem = ChannelItem(
+                    id = channel.id,
+                    name = channel.name.toString(),
+                    muteState = MuteState.Never,
+                )
+                val group = groups[channel.group]
+                if (group == null) {
+                    // Some channels don't have groups - but we want them all to have groups.
+                    groups[channel.group] = MutableGroup(
+                        id = channel.group,
+                        name = null,
+                        channels = mutableListOf(channelItem),
+                    )
+                } else {
+                    group.channels += channelItem
+                }
             }
-            val channelsForApp = getNotificationChannels(pkg, user)
-            channelsForApp.forEach { channel ->
-                logger.d("channel ($pkg): id=${channel.id} name=${channel.name} group=${channel.group} description=${channel.description}")
+            return groups.values.map {
+                ChannelGroup(
+                    id = it.id ?: "Unknown",
+                    name = it.name,
+                    channels = it.channels.toList(),
+                )
             }
-            val icon = applicationContext.packageManager.getApplicationIcon(pkg)
-            logger.d("$pkg icon=$icon")
         } catch (e: Exception) {
             logger.w("getChannelsFor", e)
-        }
-        try {
-            val app = applicationContext.packageManager.getApplicationInfo(
-                pkg,
-                0,
-            )
-            val name = applicationContext.packageManager.getApplicationLabel(app)
-            logger.d("$pkg app label=$name")
-        } catch (e: Exception) {
-            logger.w("getting name", e)
+            return emptyList()
         }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         logger.d { "onNotificationPosted(${sbn.packageName})" }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = sbn.notification.channelId
-            logger.d("onNotificationPosted channelId = $channelId")
-            getChannelsFor(sbn.packageName, sbn.user)
-
-            // FIXME testing
-            getChannelsFor("com.google.android.apps.dynamite", Process.myUserHandle())
-            getChannelsFor("com.google.android.apps.dynamite", sbn.user)
-        }
         notificationHandler.handleNotificationPosted(sbn)
     }
 

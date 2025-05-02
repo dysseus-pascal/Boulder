@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
+import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
@@ -12,7 +13,6 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.notification.NotificationApi
-import io.rebble.libpebblecommon.notification.NotificationAppWithIcon
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -86,9 +86,11 @@ interface LockerApi {
 }
 
 interface NotificationApps {
-    val notificationApps: Flow<List<NotificationAppWithIcon>>
+    val notificationApps: Flow<List<NotificationAppEntity>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
     fun syncAppsFromOS()
+    /** Will only return a value on Android */
+    suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
 
 // Impl

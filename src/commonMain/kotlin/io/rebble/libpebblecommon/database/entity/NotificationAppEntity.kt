@@ -37,7 +37,7 @@ enum class MuteState(private val value: UByte) {
 @Serializable
 data class ChannelGroup(
     val id: String,
-    val name: String,
+    val name: String?,
     val channels: List<ChannelItem>,
 )
 

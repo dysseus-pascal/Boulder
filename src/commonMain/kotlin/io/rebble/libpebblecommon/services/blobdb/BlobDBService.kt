@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 /**
  * Singleton to handle sending BlobDB commands cleanly, by allowing registered callbacks to be triggered when the sending packet receives a BlobResponse
@@ -78,7 +77,8 @@ class BlobDBService(
             }
         }
         scope.launch {
-//            insertGmail()
+//            insertApp("com.google.Dynamite", "Chat")
+//            insertApp("com.google.Gmail", "Gmail")
         }
     }
 
@@ -95,37 +95,36 @@ class BlobDBService(
 //            clearDb(BlobCommand.BlobDatabase.CannedResponses)
     }
 
-    private suspend fun insertGmail() {
-        val token = 0
-        val item = NotificationAppItem(
-            attributes = listOf(
-                TimelineItem.Attribute(
-                    attributeId = TimelineAttribute.AppName.id,
-                    content = "Gmail".encodeToByteArray().toUByteArray(),
-                ),
-                TimelineItem.Attribute(
-                    attributeId = TimelineAttribute.MuteDayOfWeek.id,
-                    content = ubyteArrayOf(0u),
-                ),
-                TimelineItem.Attribute(
-                    attributeId = TimelineAttribute.LastUpdated.id,
-                    content = Clock.System.now().epochSeconds.toUInt().let {
-                        SUInt(StructMapper(), it, endianness = Endian.Big).toBytes()
-                    },
-                ),
-            )
-        )
-        val packageName = "com.google.Gmail"
-        val res = send(
-            BlobCommand.InsertCommand(
-                token = token.toUShort(),
-                database = BlobCommand.BlobDatabase.CannedResponses,
-                key = packageName.encodeToByteArray().toUByteArray(),
-                value = item.toBytes(),
-            )
-        )
-        logger.d("insert gmail res=$res")
-    }
+//    private suspend fun insertApp(packageName: String, name: String) {
+//        val token = 0
+//        val item = NotificationAppItem(
+//            attributes = listOf(
+//                TimelineItem.Attribute(
+//                    attributeId = TimelineAttribute.AppName.id,
+//                    content = name.encodeToByteArray().toUByteArray(),
+//                ),
+//                TimelineItem.Attribute(
+//                    attributeId = TimelineAttribute.MuteDayOfWeek.id,
+//                    content = ubyteArrayOf(0u),
+//                ),
+//                TimelineItem.Attribute(
+//                    attributeId = TimelineAttribute.LastUpdated.id,
+//                    content = Clock.System.now().epochSeconds.toUInt().let {
+//                        SUInt(StructMapper(), it, endianness = Endian.Big).toBytes()
+//                    },
+//                ),
+//            )
+//        )
+//        val res = send(
+//            BlobCommand.InsertCommand(
+//                token = token.toUShort(),
+//                database = BlobCommand.BlobDatabase.CannedResponses,
+//                key = packageName.encodeToByteArray().toUByteArray(),
+//                value = item.toBytes(),
+//            )
+//        )
+//        logger.d("insert $name res=$res")
+//    }
 
     private suspend fun clearDb(db: BlobCommand.BlobDatabase) {
         logger.d("clearDb: $db")

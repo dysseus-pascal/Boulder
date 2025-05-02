@@ -1,7 +1,5 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.BitmapDrawable
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.NotificationAppDao
@@ -21,31 +19,41 @@ class AndroidNotificationAppsSync(
 ) : NotificationAppsSync {
     private val logger = Logger.withTag("NotificationAppsSync")
 
-    override suspend fun syncAppsFromOS() {
+    override suspend fun syncAppsFromOS() = withContext(Dispatchers.IO) {
         logger.d("syncAppsFromOS")
         val pm = context.context.packageManager
-        val existingApps = notificationAppDao.allApps().associateBy { it.packageName }.toMutableMap()
-        val osApps = withContext(Dispatchers.IO) { pm.getInstalledApplications(0) }
+        val existingApps =
+            notificationAppDao.allApps().associateBy { it.packageName }.toMutableMap()
+        val osApps = pm.getInstalledApplications(0)
         osApps.onEach { osApp ->
-            if (existingApps.remove(osApp.packageName) == null) {
+            val existing = existingApps.remove(osApp.packageName)
+            val channels = notificationListenerConnection.getChannelsForApp(osApp.packageName)
+            val name = pm.getApplicationLabel(osApp).toString()
+            if (existing == null) {
                 logger.d("adding ${osApp.packageName}")
-                notificationAppDao.insertOrIgnore(NotificationAppEntity(
-                    packageName = osApp.packageName,
-                    name = pm.getApplicationLabel(osApp).toString(),
-                    muteState = MuteState.Never,
-                    channelGroups = emptyList(),
-                    stateUpdated = clock.now(),
-                    lastNotified = Instant.DISTANT_PAST,
-                ))
+                notificationAppDao.insertOrIgnore(
+                    NotificationAppEntity(
+                        packageName = osApp.packageName,
+                        name = name,
+                        muteState = MuteState.Never,
+                        channelGroups = channels,
+                        stateUpdated = clock.now(),
+                        lastNotified = Instant.DISTANT_PAST,
+                    )
+                )
+            } else if (existing.name != name || existing.channelGroups != channels) {
+                notificationAppDao.insertOrReplace(
+                    existing.copy(
+                        name = name,
+                        channelGroups = channels,
+                    )
+                )
             }
         }
         existingApps.values.forEach { app ->
             logger.d("deleting $app")
             notificationAppDao.delete(app)
         }
-
-        // TODO sync channels from notificationListenerConnection
-
         logger.d("/syncAppsFromOS")
     }
 }

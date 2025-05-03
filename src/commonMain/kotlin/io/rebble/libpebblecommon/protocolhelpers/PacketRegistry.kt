@@ -1,10 +1,24 @@
 package io.rebble.libpebblecommon.protocolhelpers
 
 import io.rebble.libpebblecommon.exceptions.PacketDecodeException
-import io.rebble.libpebblecommon.packets.*
+import io.rebble.libpebblecommon.packets.appFetchIncomingPacketsRegister
+import io.rebble.libpebblecommon.packets.appLogPacketsRegister
+import io.rebble.libpebblecommon.packets.appReorderIncomingRegister
+import io.rebble.libpebblecommon.packets.appRunStatePacketsRegister
+import io.rebble.libpebblecommon.packets.appmessagePacketsRegister
+import io.rebble.libpebblecommon.packets.audioStreamPacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.blobDB2PacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.blobDBPacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.timelinePacketsRegister
+import io.rebble.libpebblecommon.packets.dataLoggingPacketsRegister
+import io.rebble.libpebblecommon.packets.logDumpPacketsRegister
+import io.rebble.libpebblecommon.packets.musicPacketsRegister
+import io.rebble.libpebblecommon.packets.phoneControlPacketsRegister
+import io.rebble.libpebblecommon.packets.putBytesIncomingPacketsRegister
+import io.rebble.libpebblecommon.packets.screenshotPacketsRegister
+import io.rebble.libpebblecommon.packets.systemPacketsRegister
+import io.rebble.libpebblecommon.packets.timePacketsRegister
+import io.rebble.libpebblecommon.packets.voicePacketsRegister
 
 /**
  * Singleton to track endpoint / type discriminators for deserialization
@@ -34,6 +48,7 @@ object PacketRegistry {
         logDumpPacketsRegister()
         voicePacketsRegister()
         audioStreamPacketsRegister()
+        dataLoggingPacketsRegister()
     }
 
     /**

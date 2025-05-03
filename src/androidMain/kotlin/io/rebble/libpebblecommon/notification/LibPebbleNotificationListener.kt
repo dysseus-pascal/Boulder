@@ -15,27 +15,28 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
-import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcessor
+import org.koin.core.component.KoinComponent
 import kotlin.uuid.Uuid
 
-class LibPebbleNotificationListener : NotificationListenerService() {
-    val notificationHandler = NotificationHandler(
-        setOf(BasicNotificationProcessor())
-    )
-
+class LibPebbleNotificationListener : NotificationListenerService(), KoinComponent {
     companion object {
         private val logger = Logger.withTag(LibPebbleNotificationListener::class.simpleName!!)
         fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
     }
 
     private val binder = LocalBinder()
+    private var notificationHandler: NotificationHandler? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): LibPebbleNotificationListener = this@LibPebbleNotificationListener
     }
 
+    fun setNotificationHandler(handler: NotificationHandler) {
+        notificationHandler = handler
+    }
+
     fun cancelNotification(itemId: Uuid) {
-        val sbn = notificationHandler.getNotification(itemId) ?: return
+        val sbn = notificationHandler?.getNotification(itemId) ?: return
         cancelNotification(sbn.key)
     }
 
@@ -50,7 +51,7 @@ class LibPebbleNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         logger.d { "onListenerConnected()" }
-        notificationHandler.setActiveNotifications(getActiveNotifications().toList())
+        notificationHandler?.setActiveNotifications(getActiveNotifications().toList())
     }
 
     override fun onListenerDisconnected() {
@@ -91,7 +92,7 @@ class LibPebbleNotificationListener : NotificationListenerService() {
             }
             return groups.values.map {
                 ChannelGroup(
-                    id = it.id ?: "Unknown",
+                    id = it.id ?: "default",
                     name = it.name,
                     channels = it.channels.toList(),
                 )
@@ -104,7 +105,7 @@ class LibPebbleNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         logger.d { "onNotificationPosted(${sbn.packageName})" }
-        notificationHandler.handleNotificationPosted(sbn)
+        notificationHandler?.handleNotificationPosted(sbn)
     }
 
     override fun onNotificationRemoved(
@@ -113,6 +114,6 @@ class LibPebbleNotificationListener : NotificationListenerService() {
         reason: Int
     ) {
         logger.d { "onNotificationRemoved(${sbn.packageName})" }
-        notificationHandler.handleNotificationRemoved(sbn)
+        notificationHandler?.handleNotificationRemoved(sbn)
     }
 }

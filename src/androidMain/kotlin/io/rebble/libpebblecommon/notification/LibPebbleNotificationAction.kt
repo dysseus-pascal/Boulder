@@ -5,6 +5,8 @@ import android.app.Notification.Action
 import android.app.PendingIntent
 import android.app.RemoteInput
 import android.os.Build
+import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 
 data class ActionRemoteInput(
@@ -18,13 +20,17 @@ data class LibPebbleNotificationAction(
     val semanticAction: SemanticAction,
     val pendingIntent: PendingIntent?,
     val remoteInput: ActionRemoteInput?,
-    val type: ActionType
+    val type: ActionType,
+    val channelId: String? = null,
 ) {
     enum class ActionType {
         Generic,
         OpenOnPhone,
         Dismiss,
-        Reply;
+        Reply,
+        MuteApp,
+        MuteChannel,
+        ;
 
         fun toProtocolType(): TimelineItem.Action.Type {
             return when (this) {
@@ -32,11 +38,17 @@ data class LibPebbleNotificationAction(
                 OpenOnPhone -> TimelineItem.Action.Type.Generic
                 Dismiss -> TimelineItem.Action.Type.Generic
                 Reply -> TimelineItem.Action.Type.Response
+                MuteApp -> TimelineItem.Action.Type.Generic
+                MuteChannel -> TimelineItem.Action.Type.Generic
             }
         }
     }
+
     companion object {
-        fun fromNotificationAction(packageName: String, action: Action): LibPebbleNotificationAction? {
+        fun fromNotificationAction(
+            packageName: String,
+            action: Action
+        ): LibPebbleNotificationAction? {
             val semanticAction = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 SemanticAction.fromId(action.semanticAction)
             } else {
@@ -66,7 +78,10 @@ data class LibPebbleNotificationAction(
             )
         }
 
-        fun contentActionFromNotification(packageName: String, notification: Notification): LibPebbleNotificationAction? {
+        fun contentActionFromNotification(
+            packageName: String,
+            notification: Notification
+        ): LibPebbleNotificationAction? {
             val pendingIntent = notification.contentIntent ?: return null
             return LibPebbleNotificationAction(
                 packageName = packageName,
@@ -78,7 +93,10 @@ data class LibPebbleNotificationAction(
             )
         }
 
-        fun dismissActionFromNotification(packageName: String, notification: Notification): LibPebbleNotificationAction? {
+        fun dismissActionFromNotification(
+            packageName: String,
+            notification: Notification
+        ): LibPebbleNotificationAction? {
             return LibPebbleNotificationAction(
                 packageName = packageName,
                 title = "Dismiss",
@@ -86,6 +104,33 @@ data class LibPebbleNotificationAction(
                 pendingIntent = null,
                 type = ActionType.Dismiss,
                 remoteInput = null,
+            )
+        }
+
+        fun muteActionFrom(app: NotificationAppEntity): LibPebbleNotificationAction? {
+            return LibPebbleNotificationAction(
+                packageName = app.packageName,
+                title = "Mute ${app.name}",
+                semanticAction = SemanticAction.Mute,
+                pendingIntent = null,
+                type = ActionType.MuteApp,
+                remoteInput = null,
+            )
+        }
+
+        fun muteChannelActionFrom(
+            app: NotificationAppEntity,
+            channel: ChannelItem?,
+        ): LibPebbleNotificationAction? {
+            if (channel == null) return null
+            return LibPebbleNotificationAction(
+                packageName = app.packageName,
+                title = "Mute ${channel.name}",
+                semanticAction = SemanticAction.Mute,
+                pendingIntent = null,
+                type = ActionType.MuteChannel,
+                remoteInput = null,
+                channelId = channel.id,
             )
         }
     }

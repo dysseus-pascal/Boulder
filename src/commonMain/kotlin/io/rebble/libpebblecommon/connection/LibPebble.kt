@@ -12,7 +12,6 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
-import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -88,7 +87,14 @@ interface LockerApi {
 interface NotificationApps {
     val notificationApps: Flow<List<NotificationAppEntity>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
+    fun updateNotificationChannelMuteState(
+        packageName: String,
+        channelId: String,
+        muteState: MuteState,
+    )
+
     fun syncAppsFromOS()
+
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
@@ -105,7 +111,7 @@ class LibPebble3(
     private val gattServerManager: GattServerManager,
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val notificationListenerConnection: NotificationListenerConnection,
-    private val notificationApi: NotificationApi,
+    private val notificationApi: NotificationApps,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi {
     private val logger = Logger.withTag("LibPebble3")

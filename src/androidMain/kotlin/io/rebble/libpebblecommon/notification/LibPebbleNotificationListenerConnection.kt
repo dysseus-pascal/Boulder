@@ -23,12 +23,14 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.uuid.Uuid
 
 class AndroidPebbleNotificationListenerConnection(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val context: Application,
+    private val notificationHandler: NotificationHandler,
 ) : NotificationListenerConnection {
     companion object {
         const val ACTION_BIND_LOCAL =
@@ -41,16 +43,15 @@ class AndroidPebbleNotificationListenerConnection(
     private var bindingDied = false
     val notificationSendQueue = _service
         .filterNotNull()
-        .flatMapLatest { it.notificationHandler.notificationSendQueue.consumeAsFlow() }
+        .flatMapLatest { notificationHandler.notificationSendQueue.consumeAsFlow() }
     val notificationDeleteQueue = _service
         .filterNotNull()
-        .flatMapLatest { it.notificationHandler.notificationDeleteQueue.consumeAsFlow() }
+        .flatMapLatest { notificationHandler.notificationDeleteQueue.consumeAsFlow() }
     val notificationListenerContext: Flow<Context> = _service.filterNotNull()
         .map { it }
 
-    suspend fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
-        val service = getService()
-        return service.notificationHandler.getNotificationAction(itemId, actionId)
+    fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
+        return notificationHandler.getNotificationAction(itemId, actionId)
     }
 
     suspend fun dismissNotification(itemId: Uuid) {
@@ -99,6 +100,9 @@ class AndroidPebbleNotificationListenerConnection(
 
     override fun init(libPebble: LibPebble) {
         check(bind(context)) { "Failed to bind to LibPebbleNotificationListener" }
+        libPebbleCoroutineScope.launch {
+            getService().setNotificationHandler(notificationHandler)
+        }
         logger.d { "LibPebbleNotificationListener bound" }
         notificationSendQueue.onEach {
             libPebble.sendNotification(it.toTimelineItem())

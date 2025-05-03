@@ -7,6 +7,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
@@ -20,6 +22,7 @@ import kotlin.uuid.Uuid
 
 class AndroidNotificationActionHandler(
     private val notificationListenerConnection: AndroidPebbleNotificationListenerConnection,
+    private val notificationApps: NotificationApps,
 ) : PlatformNotificationActionHandler {
     companion object {
         private val logger = Logger.withTag(PlatformNotificationActionHandler::class.simpleName!!)
@@ -107,6 +110,32 @@ class AndroidNotificationActionHandler(
         )
     }
 
+    private fun handleMuteApp(action: LibPebbleNotificationAction): TimelineActionResult {
+        notificationApps.updateNotificationAppMuteState(
+            packageName = action.packageName,
+            muteState = MuteState.Always,
+        )
+        return TimelineActionResult(
+            success = true,
+            icon = TimelineIcon.ResultMute,
+            title = "Muted"
+        )
+    }
+
+    private fun handleMuteChannel(action: LibPebbleNotificationAction): TimelineActionResult {
+        val channelId = action.channelId ?: return errorResponse()
+        notificationApps.updateNotificationChannelMuteState(
+            packageName = action.packageName,
+            channelId = channelId,
+            muteState = MuteState.Always,
+        )
+        return TimelineActionResult(
+            success = true,
+            icon = TimelineIcon.ResultMute,
+            title = "Muted"
+        )
+    }
+
     override suspend operator fun invoke(
         itemId: Uuid,
         action: TimelineItem.Action,
@@ -127,6 +156,11 @@ class AndroidNotificationActionHandler(
             )
 
             LibPebbleNotificationAction.ActionType.Dismiss -> handleDismiss(itemId)
+            LibPebbleNotificationAction.ActionType.MuteApp -> handleMuteApp(notificationAction)
+            LibPebbleNotificationAction.ActionType.MuteChannel -> handleMuteChannel(
+                notificationAction
+            )
+
             else -> handleGeneric(notificationAction)
         }
     }

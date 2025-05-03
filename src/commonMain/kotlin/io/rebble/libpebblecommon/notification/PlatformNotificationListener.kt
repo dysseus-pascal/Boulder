@@ -38,6 +38,25 @@ class NotificationApi(
         }
     }
 
+    override fun updateNotificationChannelMuteState(
+        packageName: String,
+        channelId: String,
+        muteState: MuteState,
+    ) {
+        libPebbleCoroutineScope.launch {
+            val appEntry = notificationAppDao.getApp(packageName) ?: return@launch
+            notificationAppDao.insertOrReplace(appEntry.copy(channelGroups = appEntry.channelGroups.map { g ->
+                g.copy(channels = g.channels.map { c ->
+                    if (c.id == channelId) {
+                        c.copy(muteState = muteState)
+                    } else {
+                        c
+                    }
+                })
+            }))
+        }
+    }
+
     override fun syncAppsFromOS() {
         libPebbleCoroutineScope.launch {
             notificationAppsSync.syncAppsFromOS()

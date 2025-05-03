@@ -26,6 +26,8 @@ class AndroidNotificationAppsSync(
             notificationAppDao.allApps().associateBy { it.packageName }.toMutableMap()
         val osApps = pm.getInstalledApplications(0)
         osApps.onEach { osApp ->
+            // null = this is a system app
+            pm.getLaunchIntentForPackage(osApp.packageName) ?: return@onEach
             val existing = existingApps.remove(osApp.packageName)
             val channels = notificationListenerConnection.getChannelsForApp(osApp.packageName)
             val name = pm.getApplicationLabel(osApp).toString()
@@ -42,12 +44,13 @@ class AndroidNotificationAppsSync(
                     )
                 )
             } else if (existing.name != name || existing.channelGroups != channels) {
-                notificationAppDao.insertOrReplace(
-                    existing.copy(
-                        name = name,
-                        channelGroups = channels,
-                    )
-                )
+                // TODO will over-write channel mute state, until more logic
+//                notificationAppDao.insertOrReplace(
+//                    existing.copy(
+//                        name = name,
+//                        channelGroups = channels,
+//                    )
+//                )
             }
         }
         existingApps.values.forEach { app ->

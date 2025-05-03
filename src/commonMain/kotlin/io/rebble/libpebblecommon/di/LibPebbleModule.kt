@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Negotiator
+import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleConnector
 import io.rebble.libpebblecommon.connection.PebbleDeviceFactory
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
@@ -157,7 +158,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 single { ConnectionScopeFactory(koin) }
                 singleOf(::CreatePlatformIdentifier)
                 singleOf(::GattServerManager)
-                singleOf(::NotificationApi)
+                singleOf(::NotificationApi) bind NotificationApps::class
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 single { HttpClient() }
                 single { createCompanionDeviceManager(get()) }

@@ -1,24 +1,31 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
+import android.os.Build
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.dao.NotificationAppDao
+import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
-class NotificationHandler(private val notificationProcessors: Set<NotificationProcessor>) {
+class NotificationHandler(
+    private val notificationProcessors: Set<NotificationProcessor>,
+    private val notificationAppDao: NotificationAppDao,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+) {
     companion object {
         private val logger = Logger.withTag(NotificationHandler::class.simpleName!!)
     }
+
     //TODO: Datastore
     private val verboseLogging: Boolean = true
     private val inflightNotifications = mutableMapOf<String, LibPebbleNotification>()
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
     val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
-
-    private fun StatusBarNotification.isSystemApp(): Boolean {
-        //TODO: Check if the app is a system app
-        return false
-    }
 
     fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
         val notification = getNotification(itemId)
@@ -29,73 +36,94 @@ class NotificationHandler(private val notificationProcessors: Set<NotificationPr
         return inflightNotifications.values.firstOrNull { it.uuid == itemId }
     }
 
-    private fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
-        when {
-            sbn.isOngoing -> {
-                if (verboseLogging) {
-                    logger.v { "Ignoring ongoing notification from ${sbn.packageName}" }
-                }
-            }
-            sbn.isSystemApp() -> {
-                if (verboseLogging) {
-                    logger.v { "Ignoring system app notification from ${sbn.packageName}" }
-                }
-            }
-            else -> {
-                logger.d { "Processing notification from ${sbn.packageName}" }
-                for (processor in notificationProcessors) {
-                    try {
-                        when (val result = processor.processNotification(sbn)) {
-                            is NotificationResult.Processed -> {
-                                if (verboseLogging) {
-                                    logger.v { "Notification from ${sbn.packageName} processed by ${processor::class.simpleName}" }
-                                }
-                                return result.notification
-                            }
-                            is NotificationResult.Ignored -> {
-                                if (verboseLogging) {
-                                    logger.v { "Ignoring notification from ${sbn.packageName}" }
-                                }
-                                break
-                            }
-                            is NotificationResult.NotProcessed -> { /* Continue */ }
+    private fun verboseLog(message: () -> String) {
+        if (verboseLogging) {
+            logger.v { message() }
+        }
+    }
+
+    private fun NotificationAppEntity.getChannelFor(sbn: StatusBarNotification): ChannelItem? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        val channelId = sbn.notification.channelId ?: return null
+        return channelGroups.flatMap { it.channels }.find { it.id == channelId }
+    }
+
+    private suspend fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
+        if (sbn.isOngoing) {
+            verboseLog { "Ignoring ongoing notification from ${sbn.packageName}" }
+            return null
+        }
+        val appEntry = notificationAppDao.getApp(sbn.packageName)
+        if (appEntry == null) {
+            verboseLog { "Ignoring system app notification from ${sbn.packageName}" }
+            return null
+        }
+        if (appEntry.muteState == MuteState.Always) {
+            verboseLog { "Ignoring muted app notification from ${sbn.packageName}" }
+            return null
+        }
+        val channel = appEntry.getChannelFor(sbn)
+        if (channel != null && channel.muteState == MuteState.Always) {
+            verboseLog { "Ignoring muted app channel (${channel.name}) from ${sbn.packageName}" }
+            return null
+        }
+        logger.d { "Processing notification from ${sbn.packageName}" }
+        for (processor in notificationProcessors) {
+            try {
+                when (val result = processor.processNotification(sbn, appEntry, channel)) {
+                    is NotificationResult.Processed -> {
+                        if (verboseLogging) {
+                            logger.v { "Notification from ${sbn.packageName} processed by ${processor::class.simpleName}" }
                         }
-                    } catch (e: Exception) {
-                        logger.e(e) { "Error processing notification from ${sbn.packageName}" }
+                        return result.notification
+                    }
+
+                    is NotificationResult.Ignored -> {
+                        if (verboseLogging) {
+                            logger.v { "Ignoring notification from ${sbn.packageName}" }
+                        }
+                        break
+                    }
+
+                    is NotificationResult.NotProcessed -> { /* Continue */
                     }
                 }
+            } catch (e: Exception) {
+                logger.e(e) { "Error processing notification from ${sbn.packageName}" }
             }
         }
         return null
     }
 
-    fun setActiveNotifications(notifications: List<StatusBarNotification>) {
-        val newNotifs = notifications.mapNotNull { sbn ->
-            if (inflightNotifications.any { it.key == sbn.key }) {
-                return@mapNotNull null
+    fun setActiveNotifications(notifications: List<StatusBarNotification>) =
+        libPebbleCoroutineScope.launch {
+
+            val newNotifs = notifications.mapNotNull { sbn ->
+                if (inflightNotifications.any { it.key == sbn.key }) {
+                    return@mapNotNull null
+                }
+                val notification = processNotification(sbn) ?: return@mapNotNull null
+                // Check if the notification is already in the list
+                if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
+                    return@mapNotNull null
+                }
+                notification
             }
-            val notification = processNotification(sbn) ?: return@mapNotNull null
-            // Check if the notification is already in the list
-            if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
-                return@mapNotNull null
+            newNotifs.forEach {
+                sendNotification(it)
             }
-            notification
         }
-        newNotifs.forEach {
-            sendNotification(it)
-        }
-    }
 
     private fun sendNotification(notification: LibPebbleNotification) {
         inflightNotifications[notification.key] = notification
         notificationSendQueue.trySend(notification)
     }
 
-    fun handleNotificationPosted(sbn: StatusBarNotification) {
-        val notification = processNotification(sbn) ?: return
+    fun handleNotificationPosted(sbn: StatusBarNotification) = libPebbleCoroutineScope.launch {
+        val notification = processNotification(sbn) ?: return@launch
         if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
             logger.d { "Notification ${sbn.key} already in inflight" }
-            return
+            return@launch
         }
         sendNotification(notification)
     }

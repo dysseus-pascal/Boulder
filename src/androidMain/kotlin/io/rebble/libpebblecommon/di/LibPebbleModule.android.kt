@@ -6,8 +6,10 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNoti
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcessor
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
@@ -39,4 +41,6 @@ actual val platformModule: Module = module {
     singleOf(::AndroidNotificationActionHandler) bind PlatformNotificationActionHandler::class
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
     single { get<AppContext>().context }
+    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get()) }
+    singleOf(::BasicNotificationProcessor)
 }

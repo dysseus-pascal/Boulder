@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.service.notification.StatusBarNotification
+import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.NotificationAppEntity
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.buildNotificationItem
 import kotlin.time.Instant
@@ -25,7 +27,9 @@ data class LibPebbleNotification(
 
     companion object {
         fun actionsFromStatusBarNotification(
-            sbn: StatusBarNotification
+            sbn: StatusBarNotification,
+            app: NotificationAppEntity,
+            channel: ChannelItem?,
         ): List<LibPebbleNotificationAction> {
             val dismissAction = LibPebbleNotificationAction.dismissActionFromNotification(
                 packageName = sbn.packageName,
@@ -35,6 +39,11 @@ data class LibPebbleNotification(
                 packageName = sbn.packageName,
                 notification = sbn.notification
             )
+            val muteAction = LibPebbleNotificationAction.muteActionFrom(app)
+            val muteChannelAction = LibPebbleNotificationAction.muteChannelActionFrom(
+                app = app,
+                channel = channel,
+            )
             val actions = sbn.notification.actions?.mapNotNull {
                 LibPebbleNotificationAction.fromNotificationAction(
                     packageName = sbn.packageName,
@@ -43,6 +52,8 @@ data class LibPebbleNotification(
             } ?: emptyList()
             return buildList {
                 dismissAction?.let { add(it) }
+                muteAction?.let { add(it) }
+                muteChannelAction?.let { add(it) }
                 contentAction?.let { add(it) }
                 addAll(actions)
             }

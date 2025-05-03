@@ -15,8 +15,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.AppBlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.NotificationAppsDb
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
@@ -75,6 +75,7 @@ class PebbleConnector(
     private val pebbleProtocolRunner: PebbleProtocolRunner,
     private val systemService: SystemService,
     private val appRunStateService: AppRunStateService,
+    private val dataLoggingService: DataLoggingService,
     private val putBytesService: PutBytesService,
     private val firmwareUpdate: FirmwareUpdate,
     private val blobDBService: BlobDBService,
@@ -113,6 +114,7 @@ class PebbleConnector(
 
                 systemService.init()
                 appRunStateService.init()
+                dataLoggingService.init()
 
                 val watchInfo = negotiator.negotiate(systemService, appRunStateService)
                 if (watchInfo == null) {
@@ -124,6 +126,7 @@ class PebbleConnector(
 
                 putBytesService.init()
                 firmwareUpdate.setPlatform(watchInfo.platform)
+                dataLoggingService.acceptSessions = true
 
                 val recoveryMode = when {
                     watchInfo.runningFwVersion.isRecovery -> true.also {

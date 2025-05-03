@@ -56,6 +56,7 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
@@ -215,6 +216,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::AppFetchService)
                     scopedOf(::TimelineService)
                     scopedOf(::AppMessageService)
+                    scopedOf(::DataLoggingService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)

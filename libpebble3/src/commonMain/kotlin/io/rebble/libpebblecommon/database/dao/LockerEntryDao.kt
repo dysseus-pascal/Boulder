@@ -28,9 +28,9 @@ abstract class LockerEntryDao {
         insertOrReplacePlatforms(platforms)
     }
 
-    @Query("SELECT * FROM LockerEntry")
+    @Query("SELECT * FROM LockerEntry LIMIT :limit")
     @Transaction
-    abstract suspend fun getAllWithPlatforms(): List<LockerEntryWithPlatforms>
+    abstract suspend fun getAllWithPlatforms(limit: Int): List<LockerEntryWithPlatforms>
 
     @Query("SELECT * FROM LockerEntry")
     @Transaction

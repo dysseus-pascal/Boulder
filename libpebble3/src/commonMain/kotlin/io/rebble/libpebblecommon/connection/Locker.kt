@@ -49,6 +49,7 @@ class Locker(
 
     companion object {
         private val logger = Logger.withTag(Locker::class.simpleName!!)
+        private const val LOCKER_SYNC_LIMIT = 50
     }
 
     private val lockerSyncQueue = Channel<List<ConnectedPebbleDevice>>(Channel.RENDEZVOUS)
@@ -113,7 +114,7 @@ class Locker(
             }
         if (watchesToSync.isNotEmpty()) {
             lockerSyncStatus.value = LockerSyncState.Syncing
-            val lockerEntries = lockerEntryDao.getAllWithPlatforms()
+            val lockerEntries = lockerEntryDao.getAllWithPlatforms(LOCKER_SYNC_LIMIT)
             try {
                 watchesToSync.forEach { watch ->
                     syncToConnectedWatch(watch, lockerEntries)

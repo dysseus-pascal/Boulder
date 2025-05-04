@@ -7,6 +7,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = "libpebblecommon"
+rootProject.name = "libpebbleroot"
 
+include(":libpebble3")
 includeBuild("kable")

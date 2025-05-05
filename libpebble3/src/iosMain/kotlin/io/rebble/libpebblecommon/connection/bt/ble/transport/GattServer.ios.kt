@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import platform.CoreBluetooth.CBATTErrorRequestNotSupported
 import platform.CoreBluetooth.CBATTErrorSuccess
 import platform.CoreBluetooth.CBATTRequest
 import platform.CoreBluetooth.CBAttributePermissionsReadable
@@ -218,11 +219,13 @@ actual class GattServer(
             val device = registeredDevices[identifier]
             if (device == null) {
                 logger.w("write request for unknown device: $identifier")
+                peripheralManager.respondToRequest(request, CBATTErrorRequestNotSupported)
                 return@forEach
             }
             val value = request.value
             if (value == null) {
                 logger.w("write request with null value: $identifier")
+                peripheralManager.respondToRequest(request, CBATTErrorRequestNotSupported)
                 return@forEach
             }
             device.dataChannel.trySend(value.toByteArray())

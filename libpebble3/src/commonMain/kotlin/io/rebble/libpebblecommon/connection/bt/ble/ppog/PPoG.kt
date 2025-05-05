@@ -112,8 +112,8 @@ class PPoG(
         logger.d("got $resetComplete")
 
         return PPoGConnectionParams(
-            rxWindow = resetComplete.rxWindow,
-            txWindow = resetComplete.txWindow,
+            rxWindow = resetComplete.txWindow,
+            txWindow = resetComplete.rxWindow,
             pPoGversion = resetRequest.ppogVersion,
         )
     }

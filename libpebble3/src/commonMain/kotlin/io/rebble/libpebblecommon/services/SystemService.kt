@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.PingPong
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.packets.ResetMessage
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.packets.TimeMessage
 import io.rebble.libpebblecommon.packets.WatchFactoryData
@@ -118,6 +119,10 @@ class SystemService(
         pongCallback = pong
         protocolHandler.send(PingPong.Ping(cookie))
         return pong.await().cookie.get()
+    }
+
+    override suspend fun resetIntoPrf() {
+        protocolHandler.send(ResetMessage.ResetIntoPrf)
     }
 
     fun init() {

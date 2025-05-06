@@ -78,6 +78,7 @@ object ConnectedPebble {
 
     interface Debug {
         suspend fun sendPing(cookie: UInt): UInt
+        suspend fun resetIntoPrf()
     }
 
     interface Messages {

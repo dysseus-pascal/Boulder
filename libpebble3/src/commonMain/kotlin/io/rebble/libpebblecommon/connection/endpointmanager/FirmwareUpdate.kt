@@ -9,9 +9,8 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.SystemService
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
@@ -103,11 +102,16 @@ class FirmwareUpdate(
                     }
                 }
             } catch (e: Exception) {
-                throw FirmwareUpdateException.TransferFailed(
-                    "Failed to transfer firmware",
-                    e,
-                    totalSent
-                )
+                if (e is CancellationException) {
+                    logger.d { "Firmware transfer cancelled" }
+                    throw e
+                } else {
+                    throw FirmwareUpdateException.TransferFailed(
+                        "Failed to transfer firmware",
+                        e,
+                        totalSent
+                    )
+                }
             }
             logger.d { "Completed firmware transfer" }
         } else {

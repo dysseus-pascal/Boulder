@@ -1,12 +1,14 @@
 package io.rebble.libpebblecommon.connection.bt.ble.ppog
 
+import androidx.compose.ui.util.fastForEachReversed
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
@@ -43,7 +45,7 @@ class PPoG(
     suspend fun close() {
         logger.d("close")
         // This really for iOS, where the "connection" will stay alive when the app "disconnects",
-        // but we need to egt the watch's PPoG state machine into a "need to reconnect" state.
+        // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
         sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
     }
 
@@ -125,13 +127,55 @@ class PPoG(
 
         val outboundSequence = Sequence()
         val inboundSequence = Sequence()
-        val outboundDataQueue = Channel<PacketToSend>(Channel.UNLIMITED)
+        val outboundDataQueue = ArrayDeque<PacketToSend>()
         val inflightPackets = ArrayDeque<PacketToSend>()
+        val onTimeout = Channel<Unit>()
+        var timeoutJob: Job? = null
         var lastSentAck: PPoGPacket.Ack? = null
+        var lastReceivedAck: PPoGPacket.Ack? = null
+
+        fun cancelTimeout() {
+            timeoutJob?.cancel()
+            timeoutJob = null
+        }
+
+        fun rescheduleTimeout() {
+            cancelTimeout()
+            timeoutJob = scope.launch {
+                delay(RESET_REQUEST_TIMEOUT)
+                logger.w("Packet timeout")
+                onTimeout.send(Unit)
+                timeoutJob = null
+            }
+        }
+
+        fun resendInflightPackets() {
+            inflightPackets.fastForEachReversed { packet ->
+                val resendPacket = packet.copy(attemptCount = packet.attemptCount + 1)
+                if (resendPacket.attemptCount > MAX_NUM_RETRIES) {
+                    logger.w("Exceeded max retries")
+                    throw IllegalStateException("Exceeded max retries")
+                }
+                outboundDataQueue.addFirst(resendPacket)
+            }
+            inflightPackets.clear()
+        }
+
+        fun removeResendsUpTo(sequence: Int) {
+            while (true) {
+                val sendPacket = outboundDataQueue.firstOrNull()
+                if (sendPacket == null || sendPacket.attemptCount == 0 || sendPacket.packet.sequence > sequence) {
+                    break
+                }
+                outboundDataQueue.removeFirst()
+            }
+        }
 
         while (true) {
-//            logger.v("select")
             select {
+                onTimeout.onReceive {
+                    resendInflightPackets()
+                }
                 pebbleProtocolStreams.outboundPPBytes.onReceive { bytes ->
                     bytes.asList().chunked(maxDataBytes())
                         .map { chunk ->
@@ -140,14 +184,11 @@ class PPoG(
                                     sequence = outboundSequence.getThenIncrement(),
                                     data = chunk.toByteArray()
                                 ),
-                                attemptCount = 0
+                                attemptCount = 0,
                             )
                         }
-                        // TODO retry/timeout
                         .forEach {
-                            if (!outboundDataQueue.trySend(it).isSuccess) throw IllegalStateException(
-                                "Failed to add message to queue"
-                            )
+                            outboundDataQueue.addLast(it)
                         }
                 }
                 pPoGStream.inboundPPoGBytesChannel.onReceive { bytes ->
@@ -155,6 +196,11 @@ class PPoG(
                     logger.v("received packet: $packet")
                     when (packet) {
                         is PPoGPacket.Ack -> {
+                            removeResendsUpTo(packet.sequence)
+                            if (packet == lastReceivedAck) {
+                                logger.w("Received duplicate ACK; resending inflight packets")
+                                resendInflightPackets()
+                            }
                             // TODO remove resends of this packet from send queue (+ also remove up-to-them, which OG code didn't do?)
 
                             // Remove from in-flight packets, up until (including) this packet
@@ -163,6 +209,10 @@ class PPoG(
                                 val inflightPacket = inflightPackets.removeFirstOrNull() ?: break
                                 if (inflightPacket.packet.sequence == packet.sequence) break
                             }
+                            if (inflightPackets.isEmpty()) {
+                                cancelTimeout()
+                            }
+                            lastReceivedAck = packet
                         }
 
                         is PPoGPacket.Data -> {
@@ -179,18 +229,17 @@ class PPoG(
                             }
                         }
 
-                        is PPoGPacket.ResetComplete -> throw IllegalStateException("We don't handle resrtting PPoG - disconnect and reconnect")
-                        is PPoGPacket.ResetRequest -> throw IllegalStateException("We don't handle resrtting PPoG - disconnect and reconnect")
+                        is PPoGPacket.ResetComplete -> throw IllegalStateException("We don't handle resetting PPoG - disconnect and reconnect")
+                        is PPoGPacket.ResetRequest -> throw IllegalStateException("We don't handle resetting PPoG - disconnect and reconnect")
                     }
                 }
             }
 
             // Drain send queue
-            // TODO do we have rx/tx windows the correct way around here?
-            while (inflightPackets.size < params.txWindow && !outboundDataQueue.isEmpty) {
-                // TODO resends (and increment packet's sent counter)
-                val packet = outboundDataQueue.receive()
+            while (inflightPackets.size < params.txWindow && !outboundDataQueue.isEmpty()) {
+                val packet = outboundDataQueue.removeFirst()
                 sendPacketImmediately(packet.packet, params.pPoGversion)
+                rescheduleTimeout()
                 inflightPackets.add(packet)
             }
         }
@@ -207,13 +256,14 @@ class PPoG(
     }
 
     fun updateMtu(mtu: Int) {
-        // TODO error out if smaller than previous?
+        if (mtu < this.mtu) throw IllegalStateException("Can't reduce MTU")
         this.mtu = mtu
     }
 }
 
 private const val DATA_HEADER_OVERHEAD_BYTES = 1 + 3
 private const val MAX_SEQUENCE = 32
+private const val MAX_NUM_RETRIES = 2
 private val RESET_REQUEST_TIMEOUT = 10.seconds
 
 private data class PPoGConnectionParams(
@@ -224,7 +274,7 @@ private data class PPoGConnectionParams(
 
 private data class PacketToSend(
     val packet: PPoGPacket.Data,
-    val attemptCount: Int
+    val attemptCount: Int,
 )
 
 private class Sequence {

@@ -107,6 +107,7 @@ class WatchManager(
     private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
     val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
     private val activeConnections = mutableSetOf<Transport>()
+    private var connectionNum = 0
 
     private suspend fun loadKnownWatchesFromDb() {
         allWatches.value = knownWatchDao.knownWatches().associate {
@@ -308,8 +309,9 @@ class WatchManager(
 
             activeConnections.add(transport)
             val deviceIdString = transport.identifier.asString
+            val thisConnectionNum = connectionNum++
             val coroutineContext =
-                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString")
+                SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString-$thisConnectionNum")
             val connectionScope = ConnectionCoroutineScope(coroutineContext)
             logger.v("transport.createConnector")
             val connectionKoinScope = connectionScopeFactory.createScope(

@@ -30,6 +30,7 @@ class PPoG(
 ) {
     private val logger = Logger.withTag("PPoG")
     private var mtu: Int = bleConfig.initialMtu
+    private var closed = false
 
     fun run() {
         scope.launch {
@@ -47,6 +48,7 @@ class PPoG(
         // This really for iOS, where the "connection" will stay alive when the app "disconnects",
         // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
         sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+        closed = true
     }
 
     private suspend inline fun <reified T : PPoGPacket> waitForPacket(): T {
@@ -172,6 +174,7 @@ class PPoG(
         }
 
         while (true) {
+            if (closed) return
             select {
                 onTimeout.onReceive {
                     resendInflightPackets()
@@ -237,6 +240,7 @@ class PPoG(
 
             // Drain send queue
             while (inflightPackets.size < params.txWindow && !outboundDataQueue.isEmpty()) {
+                if (closed) return
                 val packet = outboundDataQueue.removeFirst()
                 sendPacketImmediately(packet.packet, params.pPoGversion)
                 rescheduleTimeout()

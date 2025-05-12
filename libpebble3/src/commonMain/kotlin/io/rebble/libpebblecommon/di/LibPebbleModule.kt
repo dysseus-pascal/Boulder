@@ -81,6 +81,7 @@ import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 data class ConnectionScopeProperties(
     val transport: Transport,
@@ -92,10 +93,12 @@ class ConnectionScope(
     private val koinScope: Scope,
     val transport: Transport,
     private val coroutineScope: ConnectionCoroutineScope,
+    private val uuid: Uuid,
 ) {
     val pebbleConnector: PebbleConnector = koinScope.get()
 
     fun close() {
+        Logger.d("close ConnectionScope: $koinScope / $uuid")
         coroutineScope.cancel()
         koinScope.close()
     }
@@ -103,9 +106,10 @@ class ConnectionScope(
 
 class ConnectionScopeFactory(private val koin: Koin) {
     fun createScope(props: ConnectionScopeProperties): ConnectionScope {
-        val scope = koin.createScope<ConnectionScope>(props.transport.identifier.asString, props)
-        Logger.d("scope: $scope")
-        return ConnectionScope(scope, props.transport, props.scope)
+        val uuid = Uuid.random()
+        val scope = koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
+        Logger.d("scope: $scope / $uuid")
+        return ConnectionScope(scope, props.transport, props.scope, uuid)
     }
 }
 

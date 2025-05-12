@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Instant
+import kotlinx.datetime.format
+import kotlinx.datetime.format.DateTimeComponents
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
@@ -32,31 +35,26 @@ class LogDumpService(
         logger.d { "gatherLogs" }
         return withTimeoutOrNull(LOG_DUMP_TIMEOUT) {
             val tempLogFile = getTempFilePath(appContext, "logs-${transport.identifier.asString}")
-            var writtenLogs = false
             SystemFileSystem.sink(tempLogFile).use { sink ->
                 sink.asByteWriteChannel().use {
+                    writeLine("# Device logs:")
                     for (generation in 0..<NUM_GENERATIONS_LEGACY) {
-                        writtenLogs = writtenLogs || requestLogGeneration(generation, this)
+                        requestLogGeneration(generation, this)
                     }
                 }
             }
-
-            logger.d { "gatherLogs done: writtenLogs=$writtenLogs" }
-            if (writtenLogs) {
-                tempLogFile
-            } else {
-                null
-            }
+            logger.d { "gatherLogs done" }
+            tempLogFile
         }
     }
 
     private suspend fun requestLogGeneration(
         generation: Int,
         writeChannel: ByteWriteChannel,
-    ): Boolean {
+    ) {
         logger.d { "requestLogGeneration: $generation" }
+        writeChannel.writeLine("=== Generation: $generation ===")
         val cookie = randomCookie()
-        var written = false
         protocolHandler.inboundMessages
             .onSubscription {
                 protocolHandler.send(
@@ -75,17 +73,40 @@ class LogDumpService(
                 }
             }.collect {
                 if (it is LogDump.LogLine) {
-                    written = true
-                    writeChannel.writeString(it.messageText.get())
-//                    logger.d { "LogLine: ${it.messageText}" }
+                    val level = LogLevel.fromCode(it.level.get()).str
+                    val instant = Instant.fromEpochSeconds(it.timestamp.get().toLong())
+                    val timestamp = instant.format(DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET)
+                    val filename = it.filename.get()
+                    val lineNumber = it.line.get()
+                    val message = it.messageText.get()
+                    val logString = "$level $timestamp $filename:$lineNumber> $message"
+                    writeChannel.writeLine(logString)
                 }
             }
-        logger.d { "finished generation $generation written = $written" }
-        return written
+        logger.d { "finished generation $generation" }
     }
 
     companion object {
         private val LOG_DUMP_TIMEOUT = 30.seconds
         private val NUM_GENERATIONS_LEGACY = 4
+    }
+}
+
+suspend fun ByteWriteChannel.writeLine(line: String) {
+    writeString("$line\n")
+}
+
+enum class LogLevel(val code: UByte, val str: String) {
+    Always(0u, "*"),
+    Error(1u, "E"),
+    Warning(50u, "W"),
+    Info(100u, "I"),
+    Debug(200u, "D"),
+    Verbose(255u, "V"),
+    Unknown(254u, "?"),
+    ;
+
+    companion object {
+        fun fromCode(code: UByte): LogLevel = entries.firstOrNull { it.code == code } ?: Unknown
     }
 }

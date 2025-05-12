@@ -50,9 +50,12 @@ interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
 }
 
-interface ConnectedPebbleDeviceInRecovery : KnownPebbleDevice, ActiveDevice,
+interface ConnectedPebbleDeviceInRecovery :
+    KnownPebbleDevice,
+    ActiveDevice,
     ConnectedPebble.Firmware,
-    ConnectedWatchInfo
+    ConnectedWatchInfo,
+    ConnectedPebble.Logs
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -79,6 +82,10 @@ object ConnectedPebble {
     interface Debug {
         suspend fun sendPing(cookie: UInt): UInt
         suspend fun resetIntoPrf()
+    }
+
+    interface Logs {
+        suspend fun gatherLogs(): Path?
     }
 
     interface Messages {
@@ -115,12 +122,20 @@ object ConnectedPebble {
         val notifications: ConnectedPebble.Notifications,
         val messages: Messages,
         val time: Time,
-        val appMessages: AppMessages
+        val appMessages: AppMessages,
+        val logs: Logs,
+    )
+
+    class PrfServices(
+        val firmware: ConnectedPebble.Firmware,
+        val logs: Logs,
     )
 }
 
-interface ConnectedPebbleDevice : KnownPebbleDevice,
-    ActiveDevice, ConnectedPebble.Notifications,
+interface ConnectedPebbleDevice :
+    KnownPebbleDevice,
+    ActiveDevice,
+    ConnectedPebble.Notifications,
     ConnectedPebble.Debug,
     ConnectedPebble.Messages,
     ConnectedPebble.Firmware,
@@ -128,4 +143,5 @@ interface ConnectedPebbleDevice : KnownPebbleDevice,
     ConnectedPebble.AppRunState,
     ConnectedWatchInfo,
     ConnectedPebble.Time,
-    ConnectedPebble.AppMessages
+    ConnectedPebble.AppMessages,
+    ConnectedPebble.Logs

@@ -398,8 +398,6 @@ class WatchManager(
     }
 }
 
-expect fun getTempAppPath(appContext: AppContext): Path
-
 private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
     return flatMapLatest { map ->
         val listOfInnerFlows = map.values.mapNotNull { it.activeConnection?.pebbleConnector?.state }

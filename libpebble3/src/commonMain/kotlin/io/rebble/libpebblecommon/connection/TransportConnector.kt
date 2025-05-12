@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -56,7 +57,7 @@ sealed class ConnectingPebbleState {
         data class ConnectedInPrf(
             override val transport: Transport,
             override val watchInfo: WatchInfo,
-            val firmware: ConnectedPebble.Firmware,
+            val services: ConnectedPebble.PrfServices,
         ) : Connected()
 
         data class ConnectedNotInPrf(
@@ -88,6 +89,7 @@ class PebbleConnector(
     private val appFetchProvider: AppFetchProvider,
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val notificationAppsDb: NotificationAppsDb,
+    private val logDumpService: LogDumpService,
 ) {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -147,7 +149,10 @@ class PebbleConnector(
                     _state.value = Connected.ConnectedInPrf(
                         transport = transport,
                         watchInfo = watchInfo,
-                        firmware = firmwareUpdate,
+                        services = ConnectedPebble.PrfServices(
+                            firmware = firmwareUpdate,
+                            logs = logDumpService,
+                        ),
                     )
                     return
                 }
@@ -171,6 +176,7 @@ class PebbleConnector(
                         messages = debugPebbleProtocolSender,
                         time = systemService,
                         appMessages = appMessageService,
+                        logs = logDumpService,
                     )
                 )
             }

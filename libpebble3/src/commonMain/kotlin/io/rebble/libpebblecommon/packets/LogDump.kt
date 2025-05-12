@@ -24,7 +24,7 @@ open class LogDump(val message: Message): PebblePacket(ProtocolEndpoint.LOG_DUMP
         val cookie = SUInt(m, cookie)
     }
 
-    open class ReceivedLogDumpMessage(message: Message): LogDump(message) {
+    sealed class ReceivedLogDumpMessage(message: Message): LogDump(message) {
         val cookie = SUInt(m)
     }
 

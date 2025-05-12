@@ -1,14 +1,18 @@
-package io.rebble.libpebblecommon.connection
+package io.rebble.libpebblecommon.util
 
+import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.io.files.Path
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 
-actual fun getTempAppPath(appContext: AppContext): Path {
+actual fun getTempFilePath(
+    appContext: AppContext,
+    name: String
+): Path {
     val fm = NSFileManager.defaultManager
     val nsUrl = fm.URLsForDirectory(NSCachesDirectory, NSUserDomainMask).first()!! as NSURL
-    val path = Path(nsUrl.path!!, "temp.pbw")
+    val path = Path(nsUrl.path!!, name)
     return path
 }

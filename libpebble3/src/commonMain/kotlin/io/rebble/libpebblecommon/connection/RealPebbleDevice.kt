@@ -29,7 +29,7 @@ class PebbleDeviceFactory {
                             knownDevice = knownDevice,
                             watchInfo = state.watchInfo,
                             activeDevice = activeDevice,
-                            firmware = state.firmware,
+                            services = state.services,
                         )
 
                     is ConnectingPebbleState.Connected.ConnectedNotInPrf ->
@@ -157,7 +157,9 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Notifications by services.notifications,
     ConnectedPebble.Messages by services.messages,
     ConnectedPebble.Time by services.time,
-    ConnectedPebble.AppMessages by services.appMessages {
+    ConnectedPebble.AppMessages by services.appMessages,
+    ConnectedPebble.Logs by services.logs
+{
 
     override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
 }
@@ -166,8 +168,9 @@ internal class RealConnectedPebbleDeviceInRecovery(
     override val watchInfo: WatchInfo,
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
-    private val firmware: ConnectedPebble.Firmware,
+    private val services: ConnectedPebble.PrfServices,
 ) : ConnectedPebbleDeviceInRecovery,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
-    ConnectedPebble.Firmware by firmware
+    ConnectedPebble.Firmware by services.firmware,
+    ConnectedPebble.Logs by services.logs

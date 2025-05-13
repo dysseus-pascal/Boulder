@@ -29,6 +29,11 @@ data class LibPebbleConfig(
     val context: AppContext,
     val bleConfig: BleConfig,
     val webServices: WebServices,
+    val watchConfig: WatchConfig,
+)
+
+data class WatchConfig(
+    val multipleConnectedWatchesSupported: Boolean,
 )
 
 data class BleConfig(

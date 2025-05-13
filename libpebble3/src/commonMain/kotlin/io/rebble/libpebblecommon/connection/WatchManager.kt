@@ -101,6 +101,7 @@ class WatchManager(
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val companionDevice: CompanionDevice,
     private val scanning: HackyProvider<Scanning>,
+    private val watchConfig: WatchConfig,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -165,7 +166,13 @@ class WatchManager(
                     }
 
                     if (device.connectGoal && !hasConnectionAttempt && btstate.enabled()) {
-                        connectTo(device)
+                        if (watchConfig.multipleConnectedWatchesSupported) {
+                            connectTo(device)
+                        } else {
+                            if (active.isEmpty() && activeConnections.isEmpty()) {
+                                connectTo(device)
+                            }
+                        }
                     } else if (hasConnectionAttempt && !btstate.enabled()) {
                         disconnectFrom(device.transport)
                         device.activeConnection?.cleanup()
@@ -247,7 +254,19 @@ class WatchManager(
         val scanning = scanning.get()
         scanning.stopBleScan()
         scanning.stopClassicScan()
-        updateWatch(transport = transport) { it.copy(connectGoal = true) }
+        allWatches.update { watches ->
+            watches.mapValues { entry ->
+                if (entry.key == transport) {
+                    entry.value.copy(connectGoal = true)
+                } else {
+                    if (watchConfig.multipleConnectedWatchesSupported) {
+                        entry.value
+                    } else {
+                        entry.value.copy(connectGoal = false)
+                    }
+                }
+            }
+        }
     }
 
     override fun requestDisconnection(transport: Transport) {
@@ -257,7 +276,7 @@ class WatchManager(
 
     private fun connectTo(device: Watch) {
         val transport = device.transport
-        logger.d("connectTo: ${transport}")
+        logger.d("connectTo: $transport")
         // TODO I think there is a still a race here, where we can wind up connecting multiple
         //  times to the same watch, because the Flow wasn't updated yet
         if (device.activeConnection != null) {
@@ -400,7 +419,8 @@ class WatchManager(
 
 private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
     return flatMapLatest { map ->
-        val listOfInnerFlows = map.values.mapNotNull { it.activeConnection?.pebbleConnector?.state }
+        val listOfInnerFlows =
+            map.values.mapNotNull { it.activeConnection?.pebbleConnector?.state }
         if (listOfInnerFlows.isEmpty()) {
             flowOf(emptyMap())
         } else {

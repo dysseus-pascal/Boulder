@@ -145,6 +145,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 factory { config.context }
                 factory { config.webServices }
                 factory { config.bleConfig }
+                factory { config.watchConfig }
 
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class

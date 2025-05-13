@@ -69,8 +69,8 @@ interface WebServices {
     suspend fun fetchLocker(): LockerModel?
 }
 
-fun PebbleDevices.forDevice(pebbleDevice: PebbleDevice): Flow<PebbleDevice> {
-    return mapNotNull { it.firstOrNull { it.transport == pebbleDevice.transport } }
+fun PebbleDevices.forDevice(transport: Transport): Flow<PebbleDevice> {
+    return mapNotNull { it.firstOrNull { it.transport == transport } }
 }
 
 interface Scanning {

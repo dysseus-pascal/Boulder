@@ -15,15 +15,20 @@ import kotlin.experimental.and
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
  */
 class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
+    private val logger = Logger.withTag("ConnectivityWatcher")
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 
     suspend fun subscribe(gattClient: ConnectedGattClient): Boolean {
+        val connectivitySub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
+        if (connectivitySub == null) {
+            logger.e("connectivitySub is null")
+            return false
+        }
         scope.launch {
-            gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
-                ?.collect {
+            connectivitySub.collect {
                     _status.value = ConnectivityStatus(it).also {
-                        Logger.d("connectivity: $it")
+                        logger.d("connectivity: $it")
                     }
                 }
         }
@@ -31,7 +36,7 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
         val connectivity =
             gattClient.readCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
         if (connectivity == null) {
-            Logger.d("connectivity == null")
+            logger.d("connectivity == null")
             return true
         }
         _status.value = ConnectivityStatus(connectivity)

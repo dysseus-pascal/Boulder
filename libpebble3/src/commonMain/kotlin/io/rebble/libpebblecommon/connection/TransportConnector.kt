@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
@@ -97,6 +98,7 @@ class RealPebbleConnector(
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val notificationAppsDb: NotificationAppsDb,
     private val logDumpService: LogDumpService,
+    private val getBytesService: GetBytesService,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -159,6 +161,7 @@ class RealPebbleConnector(
                         services = ConnectedPebble.PrfServices(
                             firmware = firmwareUpdate,
                             logs = logDumpService,
+                            coreDump = getBytesService,
                         ),
                     )
                     return
@@ -184,6 +187,7 @@ class RealPebbleConnector(
                         time = systemService,
                         appMessages = appMessageService,
                         logs = logDumpService,
+                        coreDump = getBytesService,
                     )
                 )
             }

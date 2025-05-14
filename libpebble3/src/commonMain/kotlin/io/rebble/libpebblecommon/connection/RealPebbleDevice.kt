@@ -158,8 +158,8 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Messages by services.messages,
     ConnectedPebble.Time by services.time,
     ConnectedPebble.AppMessages by services.appMessages,
-    ConnectedPebble.Logs by services.logs
-{
+    ConnectedPebble.Logs by services.logs,
+    ConnectedPebble.CoreDump by services.coreDump {
 
     override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
 }
@@ -173,4 +173,5 @@ internal class RealConnectedPebbleDeviceInRecovery(
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
     ConnectedPebble.Firmware by services.firmware,
-    ConnectedPebble.Logs by services.logs
+    ConnectedPebble.Logs by services.logs,
+    ConnectedPebble.CoreDump by services.coreDump

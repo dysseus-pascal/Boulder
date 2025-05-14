@@ -55,7 +55,8 @@ interface ConnectedPebbleDeviceInRecovery :
     ActiveDevice,
     ConnectedPebble.Firmware,
     ConnectedWatchInfo,
-    ConnectedPebble.Logs
+    ConnectedPebble.Logs,
+    ConnectedPebble.CoreDump
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -114,6 +115,10 @@ object ConnectedPebble {
         suspend fun updateTime()
     }
 
+    interface CoreDump {
+        suspend fun getCoreDump(unread: Boolean): Path?
+    }
+
     class Services(
         val debug: ConnectedPebble.Debug,
         val appRunState: ConnectedPebble.AppRunState,
@@ -124,11 +129,13 @@ object ConnectedPebble {
         val time: Time,
         val appMessages: AppMessages,
         val logs: Logs,
+        val coreDump: CoreDump,
     )
 
     class PrfServices(
         val firmware: ConnectedPebble.Firmware,
         val logs: Logs,
+        val coreDump: CoreDump,
     )
 }
 
@@ -144,4 +151,5 @@ interface ConnectedPebbleDevice :
     ConnectedWatchInfo,
     ConnectedPebble.Time,
     ConnectedPebble.AppMessages,
-    ConnectedPebble.Logs
+    ConnectedPebble.Logs,
+    ConnectedPebble.CoreDump

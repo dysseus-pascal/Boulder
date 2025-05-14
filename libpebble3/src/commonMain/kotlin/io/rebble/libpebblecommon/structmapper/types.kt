@@ -291,7 +291,8 @@ class SBytes(
     mapper: StructMapper,
     length: Int = -1,
     default: UByteArray = ubyteArrayOf(),
-    endianness: Endian = Endian.Unspecified
+    endianness: Endian = Endian.Unspecified,
+    allRemainingBytes: Boolean = false,
 ) :
     StructElement<UByteArray>(
         { buf, el ->
@@ -306,7 +307,11 @@ class SBytes(
             }
         },
         { buf, el ->
-            val value = buf.getBytes(el.size)
+            val numBytes = when {
+                allRemainingBytes -> buf.remaining
+                else -> el.size
+            }
+            val value = buf.getBytes(numBytes)
             el.set(if (el.endianness == Endian.Little) value.reversedArray() else value)
         },
         mapper, length, default, endianness

@@ -116,8 +116,8 @@ class PPoG(
         logger.d("got $resetComplete")
 
         return PPoGConnectionParams(
-            rxWindow = resetComplete.txWindow,
-            txWindow = resetComplete.rxWindow,
+            rxWindow = min(min(resetComplete.txWindow, bleConfig.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE),
+            txWindow = min(min(resetComplete.rxWindow, bleConfig.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE),
             pPoGversion = resetRequest.ppogVersion,
         )
     }
@@ -125,7 +125,7 @@ class PPoG(
     // No need for any locking - state is only accessed/mutated within this method (except for mtu
     // which can only increase).
     private suspend fun runConnection(params: PPoGConnectionParams) {
-        logger.d("runConnection")
+        logger.d("runConnection: $params")
 
         val outboundSequence = Sequence()
         val inboundSequence = Sequence()

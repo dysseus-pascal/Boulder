@@ -45,6 +45,7 @@ data class BleConfig(
     val desiredTxWindow: Int = MAX_TX_WINDOW,
     val desiredRxWindow: Int = MAX_RX_WINDOW,
     val useNativeMtu: Boolean,
+    val sendPpogResetOnDisconnection: Boolean,
 )
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)

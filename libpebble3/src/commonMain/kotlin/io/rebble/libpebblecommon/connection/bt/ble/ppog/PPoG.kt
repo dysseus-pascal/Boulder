@@ -44,11 +44,14 @@ class PPoG(
     }
 
     suspend fun close() {
-        logger.d("close")
-        // This really for iOS, where the "connection" will stay alive when the app "disconnects",
-        // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
-        sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+        if (closed) return
         closed = true
+        logger.d("close")
+        if (bleConfig.sendPpogResetOnDisconnection) {
+            // This really for iOS, where the "connection" will stay alive when the app "disconnects",
+            // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
+            sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+        }
     }
 
     private suspend inline fun <reified T : PPoGPacket> waitForPacket(): T {

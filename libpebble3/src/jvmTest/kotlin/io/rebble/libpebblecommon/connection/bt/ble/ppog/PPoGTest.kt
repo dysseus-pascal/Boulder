@@ -37,6 +37,7 @@ class PPoGTest {
         desiredTxWindow = 20,
         desiredRxWindow = 19,
         useNativeMtu = false,
+        sendPpogResetOnDisconnection = false,
     )
     private lateinit var ppog: PPoG
     private var mtu = bleConfig.initialMtu

@@ -5,10 +5,16 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.peripheralFrom
 
 sealed class PlatformIdentifier {
     class BlePlatformIdentifier(val peripheral: Peripheral) : PlatformIdentifier()
+    class SocketPlatformIdentifier(val addr: String) : PlatformIdentifier()
 }
 
-class CreatePlatformIdentifier {
-    fun identifier(transport: Transport): PlatformIdentifier? = when (transport) {
+
+interface CreatePlatformIdentifier {
+    fun identifier(transport: Transport): PlatformIdentifier?
+}
+
+class RealCreatePlatformIdentifier : CreatePlatformIdentifier {
+    override fun identifier(transport: Transport): PlatformIdentifier? = when (transport) {
         is Transport.BluetoothTransport.BleTransport -> peripheralFromIdentifier(transport)?.let {
             PlatformIdentifier.BlePlatformIdentifier(
                 it

@@ -68,7 +68,14 @@ sealed class ConnectingPebbleState {
     }
 }
 
-class PebbleConnector(
+interface PebbleConnector {
+    suspend fun connect()
+    fun disconnect()
+    val disconnected: Deferred<Unit>
+    val state: StateFlow<ConnectingPebbleState>
+}
+
+class RealPebbleConnector(
     private val transportConnector: TransportConnector,
     private val transport: Transport,
     private val scope: ConnectionCoroutineScope,
@@ -90,13 +97,13 @@ class PebbleConnector(
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val notificationAppsDb: NotificationAppsDb,
     private val logDumpService: LogDumpService,
-) {
+) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
-    val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
-    val disconnected = transportConnector.disconnected
+    override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
+    override val disconnected = transportConnector.disconnected
 
-    suspend fun connect() {
+    override suspend fun connect() {
         _state.value = Connecting(transport)
 
         val result = transportConnector.connect()
@@ -183,7 +190,7 @@ class PebbleConnector(
         }
     }
 
-    fun disconnect() {
+    override fun disconnect() {
         scope.launch {
             transportConnector.disconnect()
         }

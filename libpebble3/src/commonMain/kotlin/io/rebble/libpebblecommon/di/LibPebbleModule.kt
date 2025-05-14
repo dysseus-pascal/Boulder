@@ -17,6 +17,8 @@ import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolRunner
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.PlatformIdentifier
+import io.rebble.libpebblecommon.connection.RealCreatePlatformIdentifier
+import io.rebble.libpebblecommon.connection.RealPebbleConnector
 import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
@@ -89,27 +91,37 @@ data class ConnectionScopeProperties(
     val platformIdentifier: PlatformIdentifier,
 )
 
-class ConnectionScope(
+interface ConnectionScope {
+    val transport: Transport
+    val pebbleConnector: PebbleConnector
+    fun close()
+}
+
+class RealConnectionScope(
     private val koinScope: Scope,
-    val transport: Transport,
+    override val transport: Transport,
     private val coroutineScope: ConnectionCoroutineScope,
     private val uuid: Uuid,
-) {
-    val pebbleConnector: PebbleConnector = koinScope.get()
+) : ConnectionScope {
+    override val pebbleConnector: PebbleConnector = koinScope.get()
 
-    fun close() {
+    override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
         coroutineScope.cancel()
         koinScope.close()
     }
 }
 
-class ConnectionScopeFactory(private val koin: Koin) {
-    fun createScope(props: ConnectionScopeProperties): ConnectionScope {
+interface ConnectionScopeFactory {
+    fun createScope(props: ConnectionScopeProperties): ConnectionScope
+}
+
+class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
+    override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
         val scope = koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
         Logger.d("scope: $scope / $uuid")
-        return ConnectionScope(scope, props.transport, props.scope, uuid)
+        return RealConnectionScope(scope, props.transport, props.scope, uuid)
     }
 }
 
@@ -162,8 +174,8 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::WebSyncManager) bind RequestSync::class
                 single { createTimeChanged(get()) }
                 singleOf(::LibPebble3) bind LibPebble::class
-                single { ConnectionScopeFactory(koin) }
-                singleOf(::CreatePlatformIdentifier)
+                single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
+                singleOf(::RealCreatePlatformIdentifier) bind CreatePlatformIdentifier::class
                 singleOf(::GattServerManager)
                 singleOf(::NotificationApi) bind NotificationApps::class
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
@@ -195,7 +207,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                             else -> TODO("not implemented")
                         }
                     }
-                    scopedOf(::PebbleConnector)
+                    scopedOf(::RealPebbleConnector) bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
                     scopedOf(::Negotiator)
                     scoped { PebbleProtocolStreams() }

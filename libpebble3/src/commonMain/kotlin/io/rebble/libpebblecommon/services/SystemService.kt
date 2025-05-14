@@ -221,7 +221,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     val tag = versionTag.get()
     val match = FIRMWARE_VERSION_REGEX.find(tag)
     if (match == null) {
-        Logger.w("Couldn't recode fw version: '$tag'")
+        Logger.w("Couldn't decode fw version: '$tag'")
         return null
     }
     val major = match.groupValues.get(1).toInt()

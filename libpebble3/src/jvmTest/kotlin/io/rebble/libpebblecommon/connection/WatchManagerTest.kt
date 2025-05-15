@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import com.juul.kable.Peripheral
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -13,14 +12,17 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import org.junit.Assert.assertFalse
 import org.junit.Test
-import org.koin.core.Koin
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class WatchManagerTest {
@@ -43,7 +45,8 @@ class WatchManagerTest {
     }
     class TestConnectionScope(
         override val transport: Transport,
-        override val pebbleConnector: PebbleConnector
+        override val pebbleConnector: PebbleConnector,
+        override val closed: AtomicBoolean = AtomicBoolean(false),
     ) : ConnectionScope {
         override fun close() {
         }
@@ -51,9 +54,12 @@ class WatchManagerTest {
     private val transport = Transport.SocketTransport(PebbleSocketIdentifier("addr"), "name")
 
     private var activeConnections = 0
+    private var connectSuccess = false
+    private var exceededMax = false
 
     inner class TestPebbleConnector :  PebbleConnector {
         private val _disconnected = CompletableDeferred<Unit>()
+        private val _state = MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(transport))
 
         fun onDisconnection() {
             activeConnections--
@@ -63,16 +69,32 @@ class WatchManagerTest {
         override suspend fun connect() {
             activeConnections++
             if (activeConnections > 1) {
+                exceededMax = true
                 throw IllegalStateException("too many active connections!")
+            }
+            _state.value = ConnectingPebbleState.Connecting(transport)
+            delay(1.milliseconds)
+            _state.value = ConnectingPebbleState.Negotiating(transport)
+            delay(1.milliseconds)
+            if (connectSuccess) {
+                _state.value = ConnectingPebbleState.Connected.ConnectedNotInPrf(
+                    transport = transport,
+                    watchInfo = TODO(),
+                    services = TODO(),
+                )
+            } else {
+                _state.value = ConnectingPebbleState.Failed(transport)
+                onDisconnection()
             }
         }
 
         override fun disconnect() {
+            _state.value = ConnectingPebbleState.Inactive(transport)
+            onDisconnection()
         }
 
         override val disconnected: Deferred<Unit> = _disconnected
-        override val state: StateFlow<ConnectingPebbleState>
-            get() = MutableStateFlow(ConnectingPebbleState.Connecting(transport))
+        override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     }
     private val connectionScopeFactory = object : ConnectionScopeFactory {
         override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
@@ -119,14 +141,31 @@ class WatchManagerTest {
         )
     }
 
+//    @Test
+//    fun happyCase() = runTest(timeout = 5.seconds) {
+//        val watchManager = create(backgroundScope)
+//        val scanResult = PebbleScanResult(transport, 0, null)
+//        watchManager.init()
+//        yield()
+//        watchManager.addScanResult(scanResult)
+//        watchManager.requestConnection(transport)
+//        watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
+//        watchManager.watches.first { it.any { it is ConnectedPebbleDevice } }
+//        assertFalse(exceededMax)
+//    }
+
     @Test
-    fun happyCase() = runTest(timeout = 5.seconds) {
+    fun repeatConnections() = runTest(timeout = 5.seconds) {
         val watchManager = create(backgroundScope)
         val scanResult = PebbleScanResult(transport, 0, null)
         watchManager.init()
         yield()
         watchManager.addScanResult(scanResult)
         watchManager.requestConnection(transport)
-        watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
+        for (i in 1..20) {
+            watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
+            watchManager.watches.first { it.any { it !is ActiveDevice } }
+        }
+        assertFalse(exceededMax)
     }
 }

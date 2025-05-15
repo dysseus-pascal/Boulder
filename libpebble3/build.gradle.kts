@@ -92,6 +92,7 @@ kotlin {
             languageSettings {
                 optIn("kotlin.ExperimentalUnsignedTypes")
                 optIn("kotlin.ExperimentalStdlibApi")
+                optIn("kotlin.concurrent.atomics.ExperimentalAtomicApi")
                 optIn("kotlin.uuid.ExperimentalUuidApi")
                 optIn("kotlinx.cinterop.ExperimentalForeignApi")
                 optIn("kotlin.time.ExperimentalTime")

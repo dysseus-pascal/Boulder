@@ -82,6 +82,7 @@ import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -96,6 +97,7 @@ interface ConnectionScope {
     val transport: Transport
     val pebbleConnector: PebbleConnector
     fun close()
+    val closed: AtomicBoolean
 }
 
 class RealConnectionScope(
@@ -103,6 +105,7 @@ class RealConnectionScope(
     override val transport: Transport,
     private val coroutineScope: ConnectionCoroutineScope,
     private val uuid: Uuid,
+    override val closed: AtomicBoolean = AtomicBoolean(false),
 ) : ConnectionScope {
     override val pebbleConnector: PebbleConnector = koinScope.get()
 

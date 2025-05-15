@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.io.files.Path
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
@@ -277,7 +277,7 @@ class WatchManager(
 
     private fun connectTo(device: Watch) {
         val transport = device.transport
-        logger.d("connectTo: $transport")
+        logger.d("connectTo: $transport (activeConnections=$activeConnections)")
         // TODO I think there is a still a race here, where we can wind up connecting multiple
         //  times to the same watch, because the Flow wasn't updated yet
         if (device.activeConnection != null) {
@@ -343,17 +343,18 @@ class WatchManager(
             )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
 
-            val disconnectDuringConnectionJob = connectionScope.launch {
-                pebbleConnector.disconnected.await()
-                logger.d("got disconnection (before connection)")
-                connectionKoinScope.cleanup()
-            }
+//            // TODO why do we need this?
+//            val disconnectDuringConnectionJob = connectionScope.launch {
+//                pebbleConnector.disconnected.await()
+//                logger.d("got disconnection (before connection)")
+//                connectionKoinScope.cleanup()
+//            }
 
             connectionScope.launch {
                 try {
                     pebbleConnector.connect()
-                    disconnectDuringConnectionJob.cancel()
-                    logger.d("watchmanager connected; waiting for disconnect: $transport")
+//                    disconnectDuringConnectionJob.cancel()
+                    logger.d("watchmanager connected (or failed..); waiting for disconnect: $transport")
                     pebbleConnector.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                     logger.d("watchmanager got disconnection: $transport")
@@ -366,24 +367,30 @@ class WatchManager(
     }
 
     private suspend fun ConnectionScope.cleanup() {
-        logger.d("${transport}: cleanup")
-        pebbleConnector.disconnect()
-        try {
-            withTimeout(DISCONNECT_TIMEOUT) {
-                logger.d("${transport}: cleanup: waiting for disconnection")
-                pebbleConnector.disconnected.await()
+        // Always run in the global scope, so that no cleanup work dies when we kill the connection
+        // scope.
+        libPebbleCoroutineScope.async {
+            if (!closed.compareAndSet(expectedValue = false, newValue = true)) {
+                logger.w("${transport}: already done cleanup")
+                return@async
             }
-        } catch (e: TimeoutCancellationException) {
-            logger.w("cleanup: timed out waiting for disconnection from ${transport}")
-        }
-        logger.d("${transport}: cleanup: removing active device")
-        logger.d("${transport}: cleanup: cancelling scope")
-        close()
-        // FIXME OK so I think the bug here is that the state machine fires earlier than this
-        //  cleanup has finished, so it is trying to reconnect before we have finished with this...
-        //  ... trying with the updateWatch at the end...
-        activeConnections.remove(transport)
-        updateWatch(transport) { it.copy(activeConnection = null) }
+            logger.d("${transport}: cleanup")
+            pebbleConnector.disconnect()
+            try {
+                // TODO can this break when BT gets disabled? we call this, it times out, ...
+                withTimeout(DISCONNECT_TIMEOUT) {
+                    logger.d("${transport}: cleanup: waiting for disconnection")
+                    pebbleConnector.disconnected.await()
+                }
+            } catch (e: TimeoutCancellationException) {
+                logger.w("cleanup: timed out waiting for disconnection from ${transport}")
+            }
+            logger.d("${transport}: cleanup: removing active device")
+            logger.d("${transport}: cleanup: cancelling scope")
+            close()
+            activeConnections.remove(transport)
+            updateWatch(transport) { it.copy(activeConnection = null) }
+        }.await()
     }
 
     private fun disconnectFrom(transport: Transport) {

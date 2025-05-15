@@ -42,6 +42,8 @@ interface KnownPebbleDevice : PebbleDevice {
     suspend fun forget()
 }
 
+interface DisconnectingPebbleDevice : PebbleDevice
+
 interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice
 
 interface NegotiatingPebbleDevice : ConnectingPebbleDevice, ActiveDevice

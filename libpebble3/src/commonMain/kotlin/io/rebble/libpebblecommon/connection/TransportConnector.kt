@@ -69,6 +69,11 @@ sealed class ConnectingPebbleState {
     }
 }
 
+fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
+    is Connected.ConnectedInPrf, is Connected.ConnectedNotInPrf, is Connecting, is Negotiating -> true
+    is Failed, is Inactive, null -> false
+}
+
 interface PebbleConnector {
     suspend fun connect()
     fun disconnect()

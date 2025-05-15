@@ -12,8 +12,12 @@ class PebbleDeviceFactory {
         watchConnector: WatchConnector,
         scanResult: PebbleScanResult?,
         knownWatchProperties: KnownWatchProperties?,
+        connectGoal: Boolean,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
+        if (!connectGoal && state.isActive()) {
+            return RealDisconnectingPebbleDevice(pebbleDevice)
+        }
         return when (state) {
             is ConnectingPebbleState.Connected -> {
                 val knownDevice = RealKnownPebbleDevice(
@@ -125,6 +129,10 @@ internal class RealActiveDevice(
         watchConnector.requestDisconnection(transport)
     }
 }
+
+internal class RealDisconnectingPebbleDevice(
+    private val pebbleDevice: PebbleDevice,
+) : DisconnectingPebbleDevice, PebbleDevice by pebbleDevice
 
 internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,

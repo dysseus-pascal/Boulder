@@ -199,6 +199,7 @@ class WatchManager(
                         watchConnector = this@WatchManager,
                         scanResult = device.scanResult,
                         knownWatchProperties = device.knownWatchProps,
+                        connectGoal = device.connectGoal,
                     )
                 }
             }.collect {

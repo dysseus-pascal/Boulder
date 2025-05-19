@@ -66,7 +66,7 @@ class RealScanning(
 
     companion object {
         val PEBBLE_VENDOR_ID = byteArrayOf(0x54, 0x01).getShortAt(0).toInt()
-        val CORE_VENDOR_ID = byteArrayOf(0x0E, 0xEA.toByte()).getShortAt(0).toInt()
+        val CORE_VENDOR_ID = byteArrayOf(0xEA.toByte(), 0x0E).getShortAt(0).toInt()
         val VENDOR_IDS = listOf(PEBBLE_VENDOR_ID, CORE_VENDOR_ID)
     }
 }

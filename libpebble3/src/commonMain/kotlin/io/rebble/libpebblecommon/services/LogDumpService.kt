@@ -87,7 +87,7 @@ class LogDumpService(
     }
 
     companion object {
-        private val LOG_DUMP_TIMEOUT = 30.seconds
+        private val LOG_DUMP_TIMEOUT = 90.seconds
         private val NUM_GENERATIONS_LEGACY = 4
     }
 }

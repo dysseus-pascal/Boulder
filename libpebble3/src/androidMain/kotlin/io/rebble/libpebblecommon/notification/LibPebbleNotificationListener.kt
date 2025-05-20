@@ -51,7 +51,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
 
     override fun onListenerConnected() {
         logger.d { "onListenerConnected()" }
-        notificationHandler?.setActiveNotifications(getActiveNotifications().toList())
+        try {
+            notificationHandler?.setActiveNotifications(getActiveNotifications().toList())
+        } catch (e: SecurityException) {
+            logger.e("error getting active notifications", e)
+        }
     }
 
     override fun onListenerDisconnected() {

@@ -150,6 +150,7 @@ class WatchManager(
                 activeConnectionStates,
                 bluetoothStateProvider.state,
             ) { watches, active, btstate ->
+                logger.v { "combine: watches=$watches / active=$active / btstate=$btstate / activeConnections=$activeConnections" }
                 // Update for active connection state
                 watches.values.mapNotNull { device ->
                     val transport = device.transport

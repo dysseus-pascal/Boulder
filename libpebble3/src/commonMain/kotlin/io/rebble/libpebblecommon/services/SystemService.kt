@@ -182,7 +182,7 @@ class SystemService(
 
 }
 
-private val FIRMWARE_VERSION_REGEX = Regex("v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-(.*))?")
+private val FIRMWARE_VERSION_REGEX = Regex("v?([0-9]+)\\.([0-9]+)(?:\\.([0-9]+))?(?:-(.*))?")
 
 data class FirmwareVersion(
     val stringVersion: String,
@@ -226,7 +226,7 @@ fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     }
     val major = match.groupValues.get(1).toInt()
     val minor = match.groupValues.get(2).toInt()
-    val patch = match.groupValues.get(3).toInt()
+    val patch = match.groupValues.get(3).toIntOrNull() ?: 0
     val suffix = match.groupValues.get(4) // TODO empty or null-and-crash?
 
     return FirmwareVersion(

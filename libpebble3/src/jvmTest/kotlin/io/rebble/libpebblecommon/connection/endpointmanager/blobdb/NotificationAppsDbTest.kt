@@ -117,7 +117,7 @@ class NotificationAppsDbTest {
         val write = DbWrite(
             token = 1.toUShort(),
             database = BlobDatabase.CannedResponses,
-            timestamp = 2.toUInt(),
+            timestamp = TIMESTAMP.epochSeconds.toUInt(),
             key = KEY,
             value = value,
             writeType = WriteType.Write,
@@ -143,7 +143,7 @@ class NotificationAppsDbTest {
         val write = DbWrite(
             token = 1.toUShort(),
             database = BlobDatabase.CannedResponses,
-            timestamp = 2.toUInt(),
+            timestamp = TIMESTAMP.epochSeconds.toUInt(),
             key = KEY,
             value = encoded,
             writeType = WriteType.Write,

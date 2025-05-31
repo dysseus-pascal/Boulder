@@ -22,8 +22,8 @@ import kotlin.uuid.Uuid
 @GenerateRoomEntity(
     primaryKey = "itemId",
     databaseId = BlobDatabase.Notification,
-    windowBeforeSecs = 5 * 60,
-    windowAfterSecs = 5 * 60,
+    onlyInsertAfter = true,
+    windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
 )
 data class TimelineNotification(
     override val itemId: Uuid,
@@ -37,8 +37,8 @@ data class TimelineNotification(
 @GenerateRoomEntity(
     primaryKey = "itemId",
     databaseId = BlobDatabase.Pin,
-    windowBeforeSecs = 3 * 60 * 60 * 24,
-    windowAfterSecs = 1 * 60 * 60 * 24,
+    windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
+    windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
 )
 data class TimelinePin(
     override val itemId: Uuid,
@@ -52,8 +52,8 @@ data class TimelinePin(
 @GenerateRoomEntity(
     primaryKey = "itemId",
     databaseId = BlobDatabase.Reminder,
-    windowBeforeSecs = 3 * 60 * 60 * 24,
-    windowAfterSecs = 1 * 60 * 60 * 24,
+    windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
+    windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
 )
 data class TimelineReminder(
     override val itemId: Uuid,

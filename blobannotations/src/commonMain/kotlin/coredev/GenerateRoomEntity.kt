@@ -5,10 +5,12 @@ package coredev
 annotation class GenerateRoomEntity(
     val primaryKey: String,
     val databaseId: BlobDatabase,
-    /** Assuming there is a timestamp field, how long before timestamp we should sync to watch */
+    /** Assuming there is a [timestamp] field, how long before timestamp we should sync to watch */
     val windowBeforeSecs: Long = -1,
-    /** Assuming there is a timestamp field, how long after timestamp we should sync to watch */
+    /** Assuming there is a [timestamp] field, how long after timestamp we should sync to watch */
     val windowAfterSecs: Long = -1,
+    /** Only process inserts for records with [timestamp] after :insertOnlyAfterMs */
+    val onlyInsertAfter: Boolean = false,
 )
 
 // TODO move somewhere better

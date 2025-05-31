@@ -7,10 +7,11 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Duration
 
 interface BlobDbDao<T : BlobDbRecord> {
     // Compiler will choke on these methods unless they are overridden in each Dao
-    fun dirtyRecordsForWatchInsert(transport: String, timestampMs: Long): Flow<List<T>>
+    fun dirtyRecordsForWatchInsert(transport: String, timestampMs: Long, insertOnlyAfterMs: Long = -1): Flow<List<T>>
     fun dirtyRecordsForWatchDelete(transport: String, timestampMs: Long): Flow<List<T>>
     suspend fun markSyncedToWatch(
         transport: String,

@@ -45,7 +45,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationAppItemSyncEntity::class,
         CalendarEntity::class,
     ],
-    version = 10, // TODO commit 7
+    version = 10,
     autoMigrations = [
     ],
     exportSchema = true,

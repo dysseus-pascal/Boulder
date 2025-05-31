@@ -177,6 +177,12 @@ class BlobDbEntityProcessor(
                 syncSelectClause.append("AND :timestampMs = :timestampMs\n")
             }
 
+            val onlyInsertAfterClause = if (annotation.onlyInsertAfter) {
+                "AND timestamp > :insertOnlyAfterMs\n"
+            } else {
+                // Because room fails to compile if we don't use the :timestampMs variable in the query
+                "AND :insertOnlyAfterMs = :insertOnlyAfterMs\n"
+            }
             val flowOfListOfBlobDbRecord =
                 ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(listTypeOfBlobDbRecord)
             daoBuilder.addFunction(
@@ -184,6 +190,7 @@ class BlobDbEntityProcessor(
                     .addModifiers(KModifier.OVERRIDE, KModifier.ABSTRACT)
                     .addParameter("transport", STRING)
                     .addParameter("timestampMs", LONG)
+                    .addParameter("insertOnlyAfterMs", LONG)
                     .addAnnotation(
                         AnnotationSpec.builder(ClassName("androidx.room", "Query"))
                             .addMember(
@@ -193,6 +200,7 @@ class BlobDbEntityProcessor(
                             FROM $entityClassName e
                             WHERE 
                                 ($syncSelectClause)
+                                $onlyInsertAfterClause
                                 AND
                                 NOT EXISTS (
                                     SELECT 1

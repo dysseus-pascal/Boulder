@@ -21,11 +21,15 @@ import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 data class BlobDbDaos(
@@ -57,6 +61,7 @@ class RealTimeProvider : TimeProvider {
     override fun now(): Instant = Clock.System.now()
 }
 
+
 class BlobDB(
     private val watchScope: ConnectionCoroutineScope,
     private val blobDBService: BlobDBService,
@@ -67,11 +72,53 @@ class BlobDB(
     protected val watchIdentifier: String = transport.identifier.asString
 
     companion object {
-        private val BLOBDB_RESPONSE_TIMEOUT = 5000L
+        private val BLOBDB_RESPONSE_TIMEOUT = 5.seconds
+        private val QUERY_REFRESH_PERIOD = 1.hours
     }
 
     private val logger = Logger.withTag("BlobDB-$watchIdentifier")
     private val random = Random
+
+    /**
+     * Run [query] continually, updating the query timestamp (so that it does not become stale).
+     */
+    private fun dynamicQuery(
+        dao: BlobDbDao<BlobDbRecord>,
+        insert: Boolean,
+        collector: suspend (items: List<BlobDbRecord>) -> Unit,
+    ) {
+        val initialTimestamp = timeProvider.now()
+        watchScope.launch {
+            val tickerFlow = flow {
+                while (true) {
+                    emit(Unit)
+                    delay(QUERY_REFRESH_PERIOD)
+                }
+            }
+            tickerFlow
+                .flatMapLatest {
+                    if (insert) {
+                        dao.dirtyRecordsForWatchInsert(
+                            transport = transport.identifier.asString,
+                            timestampMs = timeProvider.now().toEpochMilliseconds(),
+                            insertOnlyAfterMs = initialTimestamp.toEpochMilliseconds(),
+                        )
+                    } else {
+                        dao.dirtyRecordsForWatchDelete(
+                            transport = transport.identifier.asString,
+                            timestampMs = timeProvider.now().toEpochMilliseconds(),
+                        )
+                    }
+                }
+                .conflate()
+                .distinctUntilChanged()
+                .collect { items ->
+                    collector(items)
+                    // debounce
+                    delay(1.seconds)
+                }
+        }
+    }
 
     fun init(watchType: WatchType, unfaithful: Boolean, previouslyConnected: Boolean) {
         watchScope.launch {
@@ -79,7 +126,7 @@ class BlobDB(
                 logger.d("unfaithful: wiping DBs on watch")
                 // Clear all DBs on watch (whether we have local DBs for them or not)
                 BlobDatabase.entries.forEach { db ->
-                    blobDBService.send(
+                    sendWithTimeout(
                         BlobCommand.ClearCommand(
                             token = generateToken(),
                             database = db,
@@ -93,37 +140,18 @@ class BlobDB(
             }
 
             blobDatabases.get().forEach { db ->
-                watchScope.launch {
-                    db.dirtyRecordsForWatchInsert(
-                        transport = transport.identifier.asString,
-                        timestampMs = timeProvider.now().toEpochMilliseconds(),
-                    )
-                        // Don't continually emit while we are updating the db
-                        .conflate()
-                        .collect { dirty ->
-                            dirty.forEach { item ->
-                                handleInsert(db, item, watchType)
-                            }
-                            // debounce
-                            delay(1.seconds)
-                        }
+                dynamicQuery(dao = db, insert = true) { dirty ->
+                    dirty.forEach { item ->
+                        handleInsert(db, item, watchType)
+                    }
                 }
-                watchScope.launch {
-                    db.dirtyRecordsForWatchDelete(
-                        transport = transport.identifier.asString,
-                        timestampMs = timeProvider.now().toEpochMilliseconds(),
-                    )
-                        // Don't continually emit while we are updating the db
-                        .conflate()
-                        .collect { dirty ->
-                            dirty.forEach { item ->
-                                handleDelete(db, item)
-                            }
-                            // debounce
-                            delay(1.seconds)
-                        }
+                dynamicQuery(dao = db, insert = false) { dirty ->
+                    dirty.forEach { item ->
+                        handleDelete(db, item)
+                    }
                 }
             }
+
             blobDBService.writes.collect { message ->
                 val dao = blobDatabases.get().find { it.databaseId() == message.database }
                 val result = dao?.handleWrite(
@@ -150,7 +178,7 @@ class BlobDB(
             logger.d("no value for $item for $watchType")
             return
         }
-        val result = blobDBService.send(
+        val result = sendWithTimeout(
             BlobCommand.InsertCommand(
                 token = generateToken(),
                 database = db.databaseId(),
@@ -173,7 +201,7 @@ class BlobDB(
         item: BlobDbRecord,
     ) {
         logger.d("delete: $item")
-        val result = blobDBService.send(
+        val result = sendWithTimeout(
             BlobCommand.DeleteCommand(
                 token = generateToken(),
                 database = db.databaseId(),

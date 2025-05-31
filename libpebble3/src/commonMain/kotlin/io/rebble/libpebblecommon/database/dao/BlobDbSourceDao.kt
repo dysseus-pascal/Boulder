@@ -30,6 +30,9 @@ interface BlobDbDao<T : BlobDbRecord> {
     suspend fun insertOrReplaceAll(items: List<T>)
     suspend fun markAllDeletedFromWatch(transport: String)
     suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus = BlobResponse.BlobStatus.Success
+    // TODO decide how to handle records which are synced to watches which haven't been connected
+    //  for a while (so that we aren't storing them forever if the watch is never connected again).
+    suspend fun deleteStaleRecords(timestampMs: Long)
 }
 
 interface BlobDbRecord {

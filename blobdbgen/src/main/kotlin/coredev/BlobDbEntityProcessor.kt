@@ -166,11 +166,11 @@ class BlobDbEntityProcessor(
             syncSelectClause.append("e.deleted = 0\n")
             if (annotation.windowBeforeSecs > -1) {
                 val ms = annotation.windowBeforeSecs * 1000
-                syncSelectClause.append("AND :timestampMs >= (timestamp - $ms)\n")
+                syncSelectClause.append("AND :timestampMs >= (e.timestamp - $ms)\n")
             }
             if (annotation.windowAfterSecs > -1) {
                 val ms = annotation.windowAfterSecs * 1000
-                syncSelectClause.append("AND :timestampMs <= (timestamp + $ms)\n")
+                syncSelectClause.append("AND :timestampMs <= (e.timestamp + $ms)\n")
             }
             if (annotation.windowBeforeSecs == -1L && annotation.windowAfterSecs == -1L) {
                 // Because room fails to compile if we don't use the :timestampMs variable in the query
@@ -178,7 +178,7 @@ class BlobDbEntityProcessor(
             }
 
             val onlyInsertAfterClause = if (annotation.onlyInsertAfter) {
-                "AND timestamp > :insertOnlyAfterMs\n"
+                "AND e.timestamp > :insertOnlyAfterMs\n"
             } else {
                 // Because room fails to compile if we don't use the :timestampMs variable in the query
                 "AND :insertOnlyAfterMs = :insertOnlyAfterMs\n"
@@ -244,6 +244,43 @@ class BlobDbEntityProcessor(
                     .returns(flowOfListOfBlobDbRecord)
                     .build()
             )
+
+            val purgeSelectClause = if (annotation.windowAfterSecs > -1) {
+                val ms = annotation.windowAfterSecs * 1000
+                "OR :timestampMs > (e.timestamp + $ms)\n"
+            } else {
+                // Because room fails to compile if we don't use the :timestampMs variable in the query
+                "OR :timestampMs != :timestampMs\n"
+            }
+            daoBuilder.addFunction(
+                FunSpec.builder("deleteStaleRecords")
+                    .addModifiers(KModifier.OVERRIDE, KModifier.ABSTRACT, KModifier.SUSPEND)
+                    .addParameter("timestampMs", LONG)
+                    .addAnnotation(
+                        AnnotationSpec.builder(ClassName("androidx.room", "Query"))
+                            .addMember(
+                                "value = %S",
+                                """
+                            DELETE
+                            FROM $entityClassName as e
+                            WHERE 
+                                (
+                                    e.deleted = 1
+                                    $purgeSelectClause
+                                )
+                                AND
+                                NOT EXISTS (
+                                    SELECT 1
+                                    FROM $syncEntityClassName s
+                                    WHERE s.recordId = e.$primaryKey
+                                )
+                            """.trimIndent()
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+
             daoBuilder.addFunction(
                 FunSpec.builder("markSyncedToWatch")
                     .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND)

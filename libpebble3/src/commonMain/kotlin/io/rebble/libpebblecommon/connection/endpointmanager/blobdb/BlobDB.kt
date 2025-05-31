@@ -140,6 +140,7 @@ class BlobDB(
             }
 
             blobDatabases.get().forEach { db ->
+                db.deleteStaleRecords(timeProvider.now().toEpochMilliseconds())
                 dynamicQuery(dao = db, insert = true) { dirty ->
                     dirty.forEach { item ->
                         handleInsert(db, item, watchType)

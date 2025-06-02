@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
-import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData

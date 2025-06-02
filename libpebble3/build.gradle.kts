@@ -32,7 +32,7 @@ android {
     compileSdk = 34
     namespace = "io.rebble.libpebblecommon"
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
         lint.targetSdk = compileSdk
     }
 

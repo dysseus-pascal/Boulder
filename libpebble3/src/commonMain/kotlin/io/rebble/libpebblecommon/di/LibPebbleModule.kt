@@ -54,6 +54,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
@@ -64,6 +65,7 @@ import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
+import io.rebble.libpebblecommon.services.PhoneControlService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
@@ -255,6 +257,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::DataLoggingService)
                     scopedOf(::LogDumpService)
                     scopedOf(::GetBytesService)
+                    scopedOf(::PhoneControlService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
@@ -264,6 +267,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::DebugPebbleProtocolSender)
                     scopedOf(::PKJSLifecycleManager)
                     scopedOf(::BlobDB)
+                    scopedOf(::PhoneControlManager)
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

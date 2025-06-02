@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
+import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
@@ -22,6 +23,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -56,7 +58,7 @@ data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement {
     fun init()
 
     val watches: PebbleDevices
@@ -109,6 +111,10 @@ interface NotificationApps {
     suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
 
+interface CallManagement {
+    val currentCall: MutableStateFlow<Call?>
+}
+
 // Impl
 
 class LibPebble3(
@@ -124,7 +130,7 @@ class LibPebble3(
     private val notificationApi: NotificationApps,
     private val timelineNotificationsDao: TimelineNotificationDao,
     private val actionOverrides: ActionOverrides,
-    private val phoneCalendarSyncer: PhoneCalendarSyncer,
+    private val phoneCalendarSyncer: PhoneCalendarSyncer
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi {
     private val logger = Logger.withTag("LibPebble3")
@@ -142,6 +148,7 @@ class LibPebble3(
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
+    override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
 
     override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
         timelineNotificationsDao.insertOrReplace(notification)

@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolS
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.AppFetchService
@@ -100,6 +101,7 @@ class RealPebbleConnector(
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val logDumpService: LogDumpService,
     private val getBytesService: GetBytesService,
+    private val phoneControl: PhoneControlManager
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -175,6 +177,7 @@ class RealPebbleConnector(
                 appFetchProvider.init(watchInfo.platform.watchType)
                 appMessageService.init()
                 pkjsLifecycleManager.init(transport, watchInfo)
+                phoneControl.init()
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,
@@ -187,7 +190,7 @@ class RealPebbleConnector(
                         time = systemService,
                         appMessages = appMessageService,
                         logs = logDumpService,
-                        coreDump = getBytesService,
+                        coreDump = getBytesService
                     )
                 )
             }

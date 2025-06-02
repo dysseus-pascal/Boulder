@@ -44,7 +44,7 @@ class LibPebbleInCallService: InCallService(), KoinComponent {
             logger.w { "Multiple calls detected" }
         }
         calls.filter { it != call }.forEach {
-            call.unregisterCallback(callCallback)
+            it.unregisterCallback(callCallback)
         }
         logger.d { "New call in state: ${call.state}" }
         call.registerCallback(callCallback)

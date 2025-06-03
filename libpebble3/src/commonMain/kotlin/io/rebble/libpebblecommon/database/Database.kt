@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
@@ -45,8 +46,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationAppItemSyncEntity::class,
         CalendarEntity::class,
     ],
-    version = 10,
+    version = 11,
     autoMigrations = [
+        AutoMigration(from = 10, to = 11)
     ],
     exportSchema = true,
 )

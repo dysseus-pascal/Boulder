@@ -43,6 +43,7 @@ data class LibPebbleConfig(
 
 data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean,
+    val lockerSyncLimit: Int = 25,
 )
 
 data class BleConfig(
@@ -102,6 +103,7 @@ interface RequestSync {
 interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path)
     fun getLocker(): Flow<List<LockerWrapper>>
+    fun setAppOrder(id: Uuid, order: Int)
 }
 
 interface NotificationApps {

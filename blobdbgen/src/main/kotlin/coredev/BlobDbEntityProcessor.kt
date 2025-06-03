@@ -24,6 +24,7 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.LONG
+import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.STRING
@@ -108,6 +109,16 @@ class BlobDbEntityProcessor(
                     KModifier.OVERRIDE,
                 )
             )
+            addField(
+                entityBuilder, entityConstructorBuilder,
+                "sync", BOOLEAN, annotations = listOf(
+                    AnnotationSpec.builder(ClassName("androidx.room", "ColumnInfo"))
+                        .addMember("defaultValue = %S", "1")
+                        .build(),
+                )
+            ) {
+                defaultValue("%L", true)
+            }
             entityBuilder.primaryConstructor(entityConstructorBuilder.build())
             logger.warn("creating $entityClassName")
 
@@ -164,6 +175,7 @@ class BlobDbEntityProcessor(
 
             val syncSelectClause = StringBuilder()
             syncSelectClause.append("e.deleted = 0\n")
+            syncSelectClause.append("AND e.sync = 1\n")
             if (annotation.windowBeforeSecs > -1) {
                 val ms = annotation.windowBeforeSecs * 1000
                 syncSelectClause.append("AND :timestampMs >= (e.timestamp - $ms)\n")
@@ -446,6 +458,7 @@ private fun addField(
     type: TypeName,
     annotations: List<AnnotationSpec> = emptyList(),
     modifiers: List<KModifier> = emptyList(),
+    block: ParameterSpec.Builder.() -> Unit = {},
 ) {
     entityBuilder.addProperty(
         PropertySpec.builder(name, type)
@@ -455,5 +468,9 @@ private fun addField(
                 addModifiers(modifiers)
             }
             .build())
-    constructorBuilder.addParameter(name, type)
+    constructorBuilder.addParameter(
+        ParameterSpec.builder(name = name, type = type)
+            .apply { block() }
+            .build()
+    )
 }

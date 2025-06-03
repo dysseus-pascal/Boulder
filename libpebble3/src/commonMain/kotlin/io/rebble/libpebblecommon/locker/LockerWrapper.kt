@@ -35,6 +35,7 @@ sealed class LockerWrapper {
         override val properties: AppProperties,
         val sideloaded: Boolean,
         val configurable: Boolean,
+        val sync: Boolean,
     ) : LockerWrapper()
 
     data class SystemApp(

@@ -9,17 +9,20 @@ import io.ktor.utils.io.readRemaining
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
+import io.rebble.libpebblecommon.connection.WatchConfig
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.Source
 import kotlinx.io.buffered
@@ -32,12 +35,13 @@ class Locker(
     private val watchManager: WatchManager,
     database: Database,
     private val lockerPBWCache: LockerPBWCache,
+    private val config: WatchConfig,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
     companion object {
         private val logger = Logger.withTag(Locker::class.simpleName!!)
-        private const val LOCKER_SYNC_LIMIT = 50
     }
 
     override suspend fun sideloadApp(pbwPath: Path) {
@@ -84,9 +88,16 @@ class Locker(
                     ),
                     sideloaded = app.sideloaded,
                     configurable = app.configurable,
+                    sync = app.orderIndex < config.lockerSyncLimit,
                 )
             }
         }
+
+    override fun setAppOrder(id: Uuid, order: Int) {
+        libPebbleCoroutineScope.launch {
+            lockerEntryDao.setOrder(id, order, config.lockerSyncLimit)
+        }
+    }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
@@ -94,7 +105,7 @@ class Locker(
         logger.d("update: ${locker.applications.size}")
         // TODO delete deleted entries, don't insert unchanged entries, etc
         val toInsert = locker.applications.map { it.asEntity() }
-        lockerEntryDao.insertOrReplace(toInsert)
+        lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.lockerSyncLimit)
     }
 
     /**
@@ -110,7 +121,7 @@ class Locker(
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, it)
         }
 
-        lockerEntryDao.insertOrReplace(lockerEntry)
+        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.lockerSyncLimit)
         if (loadOnWatch) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
                 it.launchApp(lockerEntry.id)

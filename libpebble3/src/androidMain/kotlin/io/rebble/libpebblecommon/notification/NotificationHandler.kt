@@ -3,6 +3,8 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.os.Build
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -16,6 +18,7 @@ class NotificationHandler(
     private val notificationProcessors: Set<NotificationProcessor>,
     private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val timeProvider: TimeProvider,
 ) {
     companion object {
         private val logger = Logger.withTag(NotificationHandler::class.simpleName!!)
@@ -58,6 +61,7 @@ class NotificationHandler(
             verboseLog { "Ignoring system app notification from ${sbn.packageName}" }
             return null
         }
+        notificationAppDao.insertOrReplace(appEntry.copy(lastNotified = timeProvider.now().asMillisecond()))
         if (appEntry.muteState == MuteState.Always) {
             verboseLog { "Ignoring muted app notification from ${sbn.packageName}" }
             return null

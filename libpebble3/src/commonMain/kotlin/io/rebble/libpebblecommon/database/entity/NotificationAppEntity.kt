@@ -55,7 +55,7 @@ data class NotificationAppItem(
     override fun recordHashCode(): Int = hashCode()
 }
 
-fun NotificationAppItem.everNotified(): Boolean = lastNotified.instant > Instant.DISTANT_PAST
+fun NotificationAppItem.everNotified(): Boolean = lastNotified.instant.epochSeconds > Instant.DISTANT_PAST.epochSeconds
 
 @Serializable
 enum class MuteState(val value: UByte) {

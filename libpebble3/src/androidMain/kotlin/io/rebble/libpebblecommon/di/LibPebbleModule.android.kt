@@ -45,7 +45,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     single { get<AppContext>().context }
-    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get()) }
+    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }

@@ -1,11 +1,11 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.Locker
-import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.locker.Locker
+import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.AppFetchRequest
 import io.rebble.libpebblecommon.packets.AppFetchResponseStatus

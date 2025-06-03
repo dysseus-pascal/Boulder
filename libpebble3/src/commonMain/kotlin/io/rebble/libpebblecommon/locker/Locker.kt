@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.connection
+package io.rebble.libpebblecommon.locker
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
@@ -6,14 +6,20 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.LockerApi
+import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
+import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.Source
 import kotlinx.io.buffered
@@ -38,7 +44,49 @@ class Locker(
         sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
     }
 
-    override fun getLocker(): Flow<List<LockerEntry>> = lockerEntryDao.getAllFlow()
+    override fun getLocker(): Flow<List<LockerWrapper>> = lockerEntryDao.getAllFlow()
+        .map { entries ->
+            SystemApps.entries.map { systemApp ->
+                LockerWrapper.SystemApp(
+                    properties = AppProperties(
+                        id = systemApp.uuid,
+                        type = systemApp.type,
+                        title = systemApp.displayName,
+                        developerName = "Pebble",
+                        platforms = systemApp.compatiblePlatforms.map {
+                            AppPlatform(
+                                watchType = it,
+                                screenshotImageUrl = null,
+                                listImageUrl = null,
+                                iconImageUrl = null,
+                            )
+                        },
+                    ),
+                    systemApp = systemApp,
+                )
+            } + entries.mapNotNull apps@{ app ->
+                val type = AppType.fromString(app.type) ?: return@apps null
+                LockerWrapper.NormalApp(
+                    properties = AppProperties(
+                        id = app.id,
+                        type = type,
+                        title = app.title,
+                        developerName = app.developerName,
+                        platforms = app.platforms.mapNotNull platforms@{
+                            val platform = WatchType.fromCodename(it.name) ?: return@platforms null
+                            AppPlatform(
+                                watchType = platform,
+                                screenshotImageUrl = it.screenshotImageUrl,
+                                listImageUrl = it.listImageUrl,
+                                iconImageUrl = it.iconImageUrl,
+                            )
+                        },
+                    ),
+                    sideloaded = app.sideloaded,
+                    configurable = app.configurable,
+                )
+            }
+        }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
@@ -177,6 +225,7 @@ abstract class LockerPBWCache(context: AppContext) {
                 }
                 pkjsPath
             }
+
             else -> error("Failed to find PBW file for app $appId while extracting JS")
         }
     }

@@ -1,5 +1,6 @@
-package io.rebble.libpebblecommon.connection
+package io.rebble.libpebblecommon.locker
 
+import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.io.files.Path
 
 actual fun getLockerPBWCacheDirectory(context: AppContext): Path {

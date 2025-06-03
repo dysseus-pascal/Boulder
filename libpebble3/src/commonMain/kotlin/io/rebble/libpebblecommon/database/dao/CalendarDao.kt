@@ -28,12 +28,12 @@ interface CalendarDao {
 //
     @Delete
     suspend fun delete(calendar: CalendarEntity)
-//
-//    @Query("UPDATE CalendarEntity SET enabled = :enabled WHERE id = :calendarId")
-//    suspend fun setEnabled(calendarId: Long, enabled: Boolean)
-//
-//    @Query("SELECT * FROM CalendarEntity")
-//    fun getFlow(): Flow<List<CalendarEntity>>
+
+    @Query("UPDATE CalendarEntity SET enabled = :enabled WHERE id = :calendarId")
+    suspend fun setEnabled(calendarId: Int, enabled: Boolean)
+
+    @Query("SELECT * FROM CalendarEntity")
+    fun getFlow(): Flow<List<CalendarEntity>>
 //
 //    @Query("SELECT * FROM CalendarEntity WHERE id = :calendarId")
 //    suspend fun get(calendarId: Long): CalendarEntity?

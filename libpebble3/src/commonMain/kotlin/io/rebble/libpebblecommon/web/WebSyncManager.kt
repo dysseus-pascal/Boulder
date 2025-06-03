@@ -1,10 +1,10 @@
 package io.rebble.libpebblecommon.web
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.Locker
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.locker.Locker
 import kotlinx.coroutines.launch
 
 /**

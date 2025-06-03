@@ -3,8 +3,6 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.connection.Locker
-import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
@@ -12,6 +10,8 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.js.PebbleJSDevice
+import io.rebble.libpebblecommon.locker.Locker
+import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService

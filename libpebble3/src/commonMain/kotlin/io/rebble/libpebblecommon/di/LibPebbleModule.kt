@@ -8,8 +8,6 @@ import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.LibPebbleConfig
-import io.rebble.libpebblecommon.connection.Locker
-import io.rebble.libpebblecommon.connection.LockerPBWCache
 import io.rebble.libpebblecommon.connection.Negotiator
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleConnector
@@ -24,7 +22,6 @@ import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
-import io.rebble.libpebblecommon.connection.StaticLockerPBWCache
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
@@ -60,6 +57,9 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverr
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.locker.Locker
+import io.rebble.libpebblecommon.locker.LockerPBWCache
+import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService

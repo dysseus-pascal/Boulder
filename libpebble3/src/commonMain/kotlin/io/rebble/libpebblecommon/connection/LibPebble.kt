@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WIN
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -18,6 +19,8 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
+import io.rebble.libpebblecommon.locker.Locker
+import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.time.TimeChanged
@@ -58,7 +61,7 @@ data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar {
     fun init()
 
     val watches: PebbleDevices
@@ -74,6 +77,11 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
+}
+
+interface Calendar {
+    fun calendars(): Flow<List<CalendarEntity>>
+    fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
 }
 
 fun PebbleDevices.forDevice(transport: Transport): Flow<PebbleDevice> {
@@ -93,7 +101,7 @@ interface RequestSync {
 
 interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path)
-    fun getLocker(): Flow<List<LockerEntry>>
+    fun getLocker(): Flow<List<LockerWrapper>>
 }
 
 interface NotificationApps {
@@ -130,9 +138,9 @@ class LibPebble3(
     private val notificationApi: NotificationApps,
     private val timelineNotificationsDao: TimelineNotificationDao,
     private val actionOverrides: ActionOverrides,
-    private val phoneCalendarSyncer: PhoneCalendarSyncer
+    private val phoneCalendarSyncer: PhoneCalendarSyncer,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
-    NotificationApps by notificationApi {
+    NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
     private val logger = Logger.withTag("LibPebble3")
 
     override fun init() {

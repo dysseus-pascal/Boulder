@@ -1,15 +1,19 @@
 package io.rebble.libpebblecommon.calendar
 
-import androidx.annotation.VisibleForTesting
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.CALENDAR_APP_UUID
+import io.rebble.libpebblecommon.connection.Calendar
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.days
@@ -24,20 +28,29 @@ class PhoneCalendarSyncer(
     private val systemCalendar: SystemCalendar,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timelineReminderDao: TimelineReminderRealDao,
-) {
+) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
+    private val syncTrigger = MutableSharedFlow<Unit>()
 
     fun init() {
         libPebbleCoroutineScope.launch {
-            syncDeviceCalendarsToDb()
-            systemCalendar.registerForCalendarChanges().debounce(5.seconds).collect {
+            requestSync()
+            syncTrigger.conflate().collect {
                 syncDeviceCalendarsToDb()
+            }
+        }
+        libPebbleCoroutineScope.launch {
+            systemCalendar.registerForCalendarChanges().debounce(5.seconds).collect {
+                requestSync()
             }
         }
     }
 
-    @VisibleForTesting
-    suspend fun syncDeviceCalendarsToDb() {
+    private suspend fun requestSync() {
+        syncTrigger.emit(Unit)
+    }
+
+    private suspend fun syncDeviceCalendarsToDb() {
         logger.d("syncDeviceCalendarsToDb")
         val existingCalendars = calendarDao.getAll()
         val calendars = systemCalendar.getCalendars()
@@ -141,6 +154,15 @@ class PhoneCalendarSyncer(
                 er.content.timestamp.instant == t
             }
         }.map { event.toTimelineReminder(it, pinId) }
+    }
+
+    override fun calendars(): Flow<List<CalendarEntity>> = calendarDao.getFlow()
+
+    override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
+        libPebbleCoroutineScope.launch {
+            calendarDao.setEnabled(calendarId, enabled)
+            requestSync()
+        }
     }
 }
 

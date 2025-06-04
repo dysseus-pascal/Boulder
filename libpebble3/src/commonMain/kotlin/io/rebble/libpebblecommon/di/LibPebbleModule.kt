@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.di
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
+import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.BleConfig
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -202,6 +203,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::BlobDbDaos)
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)
+                singleOf(::MissedCallSyncer)
 
                 scope<ConnectionScope> {
                     // Params

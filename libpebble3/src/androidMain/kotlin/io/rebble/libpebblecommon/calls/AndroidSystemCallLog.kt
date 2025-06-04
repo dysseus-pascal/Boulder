@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls
 
-import android.content.Context
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
@@ -11,56 +10,43 @@ import android.provider.CallLog
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.calls.BlockedReason
 import io.rebble.libpebblecommon.calls.MissedCall
-import kotlinx.datetime.Clock
+import io.rebble.libpebblecommon.calls.SystemCallLog
+import io.rebble.libpebblecommon.connection.AppContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.datetime.Instant
+import kotlin.time.Duration.Companion.seconds
 
-class CallLogListener(private val context: Context): AutoCloseable {
+class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
+    private val scope = CoroutineScope(Dispatchers.Default)
     companion object {
-        private val logger = Logger.withTag(CallLogListener::class.simpleName!!)
+        private val logger = Logger.withTag(AndroidSystemCallLog::class.simpleName!!)
     }
     private val handler = Handler(Looper.getMainLooper())
-    private val observer = object : ContentObserver(handler) {
-        override fun onChange(selfChange: Boolean, uri: Uri?) {
-            if (selfChange) return
-            if (uri != CallLog.Calls.CONTENT_URI) return
 
-            updateMissedCalls()
-        }
-    }
-
-    private fun getLastSyncTime(): Instant {
-        val prefs = context.getSharedPreferences("call_log_prefs", Context.MODE_PRIVATE)
-        val lastSyncTime = Instant.fromEpochMilliseconds(prefs.getLong("last_sync_time", 0L))
-        return lastSyncTime
-    }
-
-    private fun setLastSyncTime(time: Instant) {
-        val prefs = context.getSharedPreferences("call_log_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putLong("last_sync_time", time.toEpochMilliseconds()).apply()
-    }
-
-    private fun updateMissedCalls() {
-        val lastSyncTime = getLastSyncTime()
+    override suspend fun getMissedCalls(start: Instant): List<MissedCall> {
         val missedCalls = mutableListOf<MissedCall>()
-        setLastSyncTime(Clock.System.now())
-        context.contentResolver.query(
+        context.context.contentResolver.query(
             CallLog.Calls.CONTENT_URI,
             buildList {
                 add(CallLog.Calls.NUMBER)
                 add(CallLog.Calls.CACHED_NAME)
                 add(CallLog.Calls.DATE)
+                add(CallLog.Calls.DURATION)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     add(CallLog.Calls.BLOCK_REASON)
                 }
             }.toTypedArray(),
             "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls.DATE} > ?",
-            arrayOf(CallLog.Calls.MISSED_TYPE.toString(), lastSyncTime.toEpochMilliseconds().toString()),
+            arrayOf(CallLog.Calls.MISSED_TYPE.toString(), start.toEpochMilliseconds().toString()),
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
             val numberIdx = cursor.getColumnIndex(CallLog.Calls.NUMBER)
             if (numberIdx == -1) {
                 logger.e { "Call log cursor does not contain number column." }
-                return
+                return emptyList()
             }
             val nameIdx = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME)
             if (nameIdx == -1) {
@@ -69,7 +55,12 @@ class CallLogListener(private val context: Context): AutoCloseable {
             val dateIdx = cursor.getColumnIndex(CallLog.Calls.DATE)
             if (dateIdx == -1) {
                 logger.e { "Call log cursor does not contain date column." }
-                return
+                return emptyList()
+            }
+            val durationIdx = cursor.getColumnIndex(CallLog.Calls.DURATION)
+            if (durationIdx == -1) {
+                logger.e { "Call log cursor does not contain duration column." }
+                return emptyList()
             }
             val blockReasonIdx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 cursor.getColumnIndex(CallLog.Calls.BLOCK_REASON)
@@ -84,6 +75,7 @@ class CallLogListener(private val context: Context): AutoCloseable {
                 val callerNumber = cursor.getString(numberIdx) ?: "Unknown"
                 val callerName = cursor.getString(nameIdx) ?: null
                 val timestamp = Instant.fromEpochMilliseconds(cursor.getLong(dateIdx))
+                val duration = cursor.getLong(durationIdx).seconds
                 val blockReason = if (blockReasonIdx != null) {
                     when (cursor.getInt(blockReasonIdx)) {
                         CallLog.Calls.BLOCK_REASON_NOT_BLOCKED -> BlockedReason.NotBlocked
@@ -96,34 +88,39 @@ class CallLogListener(private val context: Context): AutoCloseable {
                     BlockedReason.NotBlocked
                 }
 
-                missedCalls.add(MissedCall(callerNumber, callerName, blockReason, timestamp))
+                if (blockReason != BlockedReason.CallScreening) {
+                    missedCalls.add(MissedCall(callerNumber, callerName, blockReason, timestamp, duration))
+                } else {
+                    logger.d { "Ignoring a missed call due to call screening." }
+                }
             }
         }
-        if (missedCalls.isNotEmpty()) {
-            logger.d { "Detected ${missedCalls.size} missed calls since last sync." }
-            //TODO: push to watches
-        } else {
-            logger.d { "No new missed calls detected since last sync." }
-        }
+        return missedCalls
     }
 
-    fun init() {
-        if (context.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            logger.w { "READ_CALL_LOG permission not granted, cannot listen to call log changes." }
-            return
+    override fun registerForMissedCallChanges() = callbackFlow {
+        if (context.context.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            error("No permission to read call log.")
         }
-        context.contentResolver.registerContentObserver(
+        val observer = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                if (selfChange) return
+                if (uri != CallLog.Calls.CONTENT_URI) return
+                trySend(Unit)
+            }
+        }
+        context.context.contentResolver.registerContentObserver(
             CallLog.Calls.CONTENT_URI,
             true,
             observer
         )
-    }
 
-    override fun close() {
-        try {
-            context.contentResolver.unregisterContentObserver(observer)
-        } catch (e: IllegalArgumentException) {
-            logger.w { "Failed to unregister content observer, it may not have been registered." }
+        awaitClose {
+            try {
+                context.context.contentResolver.unregisterContentObserver(observer)
+            } catch (e: IllegalArgumentException) {
+                logger.w { "Failed to unregister content observer, it may not have been registered." }
+            }
         }
     }
 }

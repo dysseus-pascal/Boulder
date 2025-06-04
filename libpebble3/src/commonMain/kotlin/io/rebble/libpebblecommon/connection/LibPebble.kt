@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.Call
+import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
@@ -12,7 +13,6 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
-import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
@@ -141,6 +141,7 @@ class LibPebble3(
     private val timelineNotificationsDao: TimelineNotificationDao,
     private val actionOverrides: ActionOverrides,
     private val phoneCalendarSyncer: PhoneCalendarSyncer,
+    private val missedCallSyncer: MissedCallSyncer
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
     private val logger = Logger.withTag("LibPebble3")
@@ -150,6 +151,7 @@ class LibPebble3(
         gattServerManager.init()
         watchManager.init()
         phoneCalendarSyncer.init()
+        missedCallSyncer.init()
         notificationListenerConnection.init(this)
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")

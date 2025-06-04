@@ -11,7 +11,11 @@ import kotlinx.coroutines.flow.onEach
 import kotlin.random.Random
 import kotlin.random.nextUInt
 
-class PhoneControlManager(private val watchScope: ConnectionCoroutineScope, private val libPebble: LibPebble, private val phoneControlService: PhoneControlService) {
+class PhoneControlManager(
+    private val watchScope: ConnectionCoroutineScope,
+    private val libPebble: LibPebble,
+    private val phoneControlService: PhoneControlService
+) {
     companion object {
         private val logger = Logger.withTag(PhoneControlManager::class.simpleName!!)
     }

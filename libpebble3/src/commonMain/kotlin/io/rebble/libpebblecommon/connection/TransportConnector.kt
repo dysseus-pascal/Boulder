@@ -101,7 +101,7 @@ class RealPebbleConnector(
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val logDumpService: LogDumpService,
     private val getBytesService: GetBytesService,
-    private val phoneControl: PhoneControlManager
+    private val phoneControlManager: PhoneControlManager
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -177,7 +177,7 @@ class RealPebbleConnector(
                 appFetchProvider.init(watchInfo.platform.watchType)
                 appMessageService.init()
                 pkjsLifecycleManager.init(transport, watchInfo)
-                phoneControl.init()
+                phoneControlManager.init()
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,
@@ -190,7 +190,7 @@ class RealPebbleConnector(
                         time = systemService,
                         appMessages = appMessageService,
                         logs = logDumpService,
-                        coreDump = getBytesService
+                        coreDump = getBytesService,
                     )
                 )
             }

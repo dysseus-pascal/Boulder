@@ -99,9 +99,6 @@ class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
     }
 
     override fun registerForMissedCallChanges() = callbackFlow {
-        if (context.context.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            error("No permission to read call log.")
-        }
         val observer = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 if (selfChange) return
@@ -109,17 +106,25 @@ class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
                 trySend(Unit)
             }
         }
-        context.context.contentResolver.registerContentObserver(
-            CallLog.Calls.CONTENT_URI,
-            true,
+        val registeredObserver = try {
+            context.context.contentResolver.registerContentObserver(
+                CallLog.Calls.CONTENT_URI,
+                true,
+                observer
+            )
             observer
-        )
+        } catch (e: SecurityException) {
+            logger.e(e) { "Failed to register for missed calls" }
+            null
+        }
 
         awaitClose {
-            try {
-                context.context.contentResolver.unregisterContentObserver(observer)
-            } catch (e: IllegalArgumentException) {
-                logger.w { "Failed to unregister content observer, it may not have been registered." }
+            registeredObserver?.let {
+                try {
+                    context.context.contentResolver.unregisterContentObserver(it)
+                } catch (e: IllegalArgumentException) {
+                    logger.w { "Failed to unregister content observer, it may not have been registered." }
+                }
             }
         }
     }

@@ -81,6 +81,7 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
+import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -196,6 +197,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                 singleOf(::RealScanning) bind Scanning::class
                 single { libPebbleScope }
                 singleOf(::Locker)
+                singleOf(::PrivateLogger)
                 singleOf(::WebSyncManager) bind RequestSync::class
                 single { createTimeChanged(get()) }
                 singleOf(::LibPebble3) bind LibPebble::class

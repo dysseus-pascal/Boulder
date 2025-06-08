@@ -1,11 +1,13 @@
 package io.rebble.libpebblecommon
 
+import androidx.annotation.VisibleForTesting
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
+import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,9 +50,9 @@ private const val SETTINGS_KEY = "libpebble.settings"
 
 @Serializable
 data class LibPebbleConfig(
-    val bleConfig: BleConfig,
-    val watchConfig: WatchConfig,
-    val notificationConfig: NotificationConfig,
+    val bleConfig: BleConfig = BleConfig(),
+    val watchConfig: WatchConfig = WatchConfig(),
+    val notificationConfig: NotificationConfig = NotificationConfig(),
 )
 
 class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -59,7 +61,7 @@ class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
 
 @Serializable
 data class WatchConfig(
-    val multipleConnectedWatchesSupported: Boolean,
+    val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimit: Int = 25,
 )
 
@@ -67,29 +69,39 @@ class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
     val value: WatchConfig get() = flow.value.watchConfig
 }
 
+@VisibleForTesting
+fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watchConfig = this)))
+
 @Serializable
 data class BleConfig(
-    val reversedPPoG: Boolean,
-    val pinAddress: Boolean,
-    val phoneRequestsPairing: Boolean,
-    val writeConnectivityTrigger: Boolean,
+    val reversedPPoG: Boolean = false,
+    val pinAddress: Boolean = true,
+    val phoneRequestsPairing: Boolean = true,
+    val writeConnectivityTrigger: Boolean = true,
     val initialMtu: Int = DEFAULT_MTU,
     val desiredTxWindow: Int = MAX_TX_WINDOW,
     val desiredRxWindow: Int = MAX_RX_WINDOW,
-    val useNativeMtu: Boolean,
-    val sendPpogResetOnDisconnection: Boolean,
+    val useNativeMtu: Boolean = true,
+    val sendPpogResetOnDisconnection: Boolean = false,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
     val value: BleConfig get() = flow.value.bleConfig
 }
 
+@VisibleForTesting
+fun BleConfig.asFlow() = BleConfigFlow(MutableStateFlow(LibPebbleConfig(bleConfig = this)))
+
 @Serializable
 data class NotificationConfig(
-    val dumpNotificationContent: Boolean = false,
-    val obfuscateContent: Boolean = true
+    val dumpNotificationContent: Boolean = true,
+    val obfuscateContent: Boolean = true,
+    val sendLocalOnlyNotifications: Boolean = false,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
     val value: NotificationConfig get() = flow.value.notificationConfig
 }
+
+@VisibleForTesting
+fun NotificationConfig.asFlow() = NotificationConfigFlow(MutableStateFlow(LibPebbleConfig(notificationConfig = this)))

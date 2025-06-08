@@ -19,16 +19,16 @@ class BasicNotificationProcessor : NotificationProcessor {
     ): NotificationResult {
         //TODO: Implement a more sophisticated notification processor
         val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn, app, channel)
-        val title = sbn.notification.extras.getString(Notification.EXTRA_TITLE) ?: ""
-        val body = sbn.notification.extras.getString(Notification.EXTRA_TEXT) ?: ""
+        val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
+        val body = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT) ?: ""
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN) ?: false
         val notification = LibPebbleNotification(
             packageName = sbn.packageName,
             uuid = Uuid.random(),
             groupKey = sbn.groupKey,
             key = sbn.key,
-            title = title,
-            body = body,
+            title = title.toString(),
+            body = body.toString(),
             icon = TimelineIcon.NotificationGeneric, //TODO: Get the icon from package/category
             timestamp = if (showWhen) {
                 Instant.fromEpochMilliseconds(sbn.notification.`when`)

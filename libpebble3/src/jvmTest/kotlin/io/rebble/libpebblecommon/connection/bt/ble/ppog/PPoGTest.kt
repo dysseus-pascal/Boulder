@@ -2,7 +2,10 @@ package io.rebble.libpebblecommon.connection.bt.ble.ppog
 
 import io.ktor.utils.io.availableForRead
 import io.ktor.utils.io.readByteArray
-import io.rebble.libpebblecommon.connection.BleConfig
+import io.rebble.libpebblecommon.BleConfig
+import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -39,6 +42,7 @@ class PPoGTest {
         useNativeMtu = false,
         sendPpogResetOnDisconnection = false,
     )
+    val bleConfigFlow = bleConfig.asFlow()
     private lateinit var ppog: PPoG
     private var mtu = bleConfig.initialMtu
     private var ppogVersion = PPoGVersion.ONE
@@ -76,7 +80,7 @@ class PPoGTest {
     @Test
     fun initNormal() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init()
         testScheduler.advanceTimeBy(30.seconds)
@@ -87,7 +91,7 @@ class PPoGTest {
         assertThrows(IllegalStateException::class.java) {
             runTest {
                 val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-                ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+                ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
                 ppog.run()
                 init(sendResetComplete = false)
                 testScheduler.advanceTimeBy(30.seconds)
@@ -98,7 +102,7 @@ class PPoGTest {
     @Test
     fun runNormalV0() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init(version = PPoGVersion.ZERO)
         setMtu(50)
@@ -154,7 +158,7 @@ class PPoGTest {
     @Test
     fun inboundOutOfSequenceResendAck() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init()
         val inbound0 = ppogDataPacket(0)
@@ -172,7 +176,7 @@ class PPoGTest {
     @Test
     fun windowSize() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init(rxWindow = 2)
         val outboundBytes0 = randomBytes()
@@ -196,7 +200,7 @@ class PPoGTest {
             crashed.value = true
         }
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext + SupervisorJob() + exceptionHandler)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init()
 
@@ -222,7 +226,7 @@ class PPoGTest {
     @Test
     fun retrySendOnDuplicateAck() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
-        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfig, scope)
+        ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, scope)
         ppog.run()
         init()
 

@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
+import io.rebble.libpebblecommon.WatchConfig
+import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -124,7 +126,7 @@ class WatchManagerTest {
         override suspend fun stopClassicScan() {
         }
     }
-    private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false)
+    private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)

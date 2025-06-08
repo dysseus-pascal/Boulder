@@ -19,7 +19,7 @@ Copyright 2025 Core Devices LLC
 
 This software is dual-licensed by Core Devices LLC. It can be used either:
   
-(1) for free under the terms of the GNU Affero General Public License (as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version); OR
+(1) for free under the terms of the GNU GPLv3; OR
   
 (2) under the terms of a paid-for Core Devices Commercial License agreement between you and Core Devices (the terms of which may vary depending on what you and Core Devices have agreed to).
 

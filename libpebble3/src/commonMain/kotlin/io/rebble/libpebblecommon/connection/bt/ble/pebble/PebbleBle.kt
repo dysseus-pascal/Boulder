@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.LibPebbleConfig
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class PebbleBle(
-    private val config: LibPebbleConfig,
+    private val config: BleConfigFlow,
     private val transport: BleTransport,
     private val scope: ConnectionCoroutineScope,
     private val gattConnector: GattConnector,
@@ -36,8 +36,8 @@ class PebbleBle(
 
     override suspend fun connect(): PebbleConnectionResult =
         withContext(Dispatchers.Main) {
-            logger.d("connect() reversedPPoG = ${config.bleConfig.reversedPPoG}")
-            if (!config.bleConfig.reversedPPoG) {
+            logger.d("connect() reversedPPoG = ${config.value.reversedPPoG}")
+            if (!config.value.reversedPPoG) {
                 if (!gattServerManager.registerDevice(transport, pPoGStream.inboundPPoGBytesChannel)) {
                     return@withContext PebbleConnectionResult.Failed("failed to register with gatt server")
                 }

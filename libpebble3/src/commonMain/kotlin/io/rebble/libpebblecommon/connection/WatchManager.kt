@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
@@ -101,7 +102,7 @@ class WatchManager(
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val companionDevice: CompanionDevice,
     private val scanning: HackyProvider<Scanning>,
-    private val watchConfig: WatchConfig,
+    private val watchConfig: WatchConfigFlow,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -167,7 +168,7 @@ class WatchManager(
                     }
 
                     if (device.connectGoal && !hasConnectionAttempt && btstate.enabled()) {
-                        if (watchConfig.multipleConnectedWatchesSupported) {
+                        if (watchConfig.value.multipleConnectedWatchesSupported) {
                             connectTo(device)
                         } else {
                             if (active.isEmpty() && activeConnections.isEmpty()) {
@@ -261,7 +262,7 @@ class WatchManager(
                 if (entry.key == transport) {
                     entry.value.copy(connectGoal = true)
                 } else {
-                    if (watchConfig.multipleConnectedWatchesSupported) {
+                    if (watchConfig.value.multipleConnectedWatchesSupported) {
                         entry.value
                     } else {
                         entry.value.copy(connectGoal = false)

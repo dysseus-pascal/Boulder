@@ -1,14 +1,20 @@
 package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
+import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
+import io.rebble.libpebblecommon.LibPebbleConfigHolder
+import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
-import io.rebble.libpebblecommon.connection.BleConfig
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
-import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.Negotiator
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleConnector
@@ -27,6 +33,7 @@ import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
 import io.rebble.libpebblecommon.connection.WatchManager
+import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.RealBluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
@@ -77,8 +84,8 @@ import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.scopedOf
@@ -157,8 +164,7 @@ class HackyProvider<T>(val getter: () -> T) {
 
 expect val platformModule: Module
 
-@OptIn(DelicateCoroutinesApi::class)
-fun initKoin(config: LibPebbleConfig): Koin {
+fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContext: AppContext): Koin {
     val koin = koinApplication().koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
     koin.loadModules(
@@ -166,12 +172,15 @@ fun initKoin(config: LibPebbleConfig): Koin {
             module {
                 includes(platformModule)
 
-                factory { config }
-                factory { config.context }
-                factory { config.webServices }
-                factory { config.bleConfig }
-                factory { config.watchConfig }
+                single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
+                single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }
+                single { WatchConfigFlow(get<LibPebbleConfigHolder>().config) }
+                single { BleConfigFlow(get<LibPebbleConfigHolder>().config) }
+                single { NotificationConfigFlow(get<LibPebbleConfigHolder>().config) }
 
+                single { Settings() }
+                single { appContext }
+                single { webServices }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)
@@ -204,6 +213,13 @@ fun initKoin(config: LibPebbleConfig): Koin {
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)
                 singleOf(::MissedCallSyncer)
+                factory {
+                    Json {
+                        // Important that everything uses this - otherwise future additions to web apis will
+                        // crash the app.
+                        ignoreUnknownKeys = true
+                    }
+                }
 
                 scope<ConnectionScope> {
                     // Params
@@ -237,7 +253,7 @@ fun initKoin(config: LibPebbleConfig): Koin {
                     scopedOf(::PpogClient)
                     scopedOf(::PpogServer)
                     scoped<PPoGPacketSender> {
-                        when (get<BleConfig>().reversedPPoG) {
+                        when (get<BleConfigFlow>().value.reversedPPoG) {
                             true -> get<PpogClient>()
                             false -> get<PpogServer>()
                         }

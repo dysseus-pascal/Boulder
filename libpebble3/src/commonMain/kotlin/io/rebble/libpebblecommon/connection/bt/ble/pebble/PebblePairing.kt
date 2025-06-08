@@ -2,9 +2,8 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.BleConfig
-import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.PROPERTY_WRITE
@@ -23,7 +22,7 @@ import kotlinx.coroutines.withTimeout
 class PebblePairing(
     val context: AppContext,
     val transport: Transport,
-    val bleConfig: BleConfig,
+    val config: BleConfigFlow,
 ) {
     //    @Throws(IOException::class, SecurityException::class)
     suspend fun requestPairing(
@@ -44,6 +43,7 @@ class PebblePairing(
         check(transport is Transport.BluetoothTransport)
         val bondState = getBluetoothDevicePairEvents(context, transport, connectivity)
         var needsExplicitBond = true
+        val bleConfig = config.value
 
         // A writeable pairing trigger allows addr pinning
         val writeablePairTrigger = pairingTriggerCharacteristic.properties and PROPERTY_WRITE != 0

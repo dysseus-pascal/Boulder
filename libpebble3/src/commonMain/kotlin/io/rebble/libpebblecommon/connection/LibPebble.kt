@@ -2,13 +2,12 @@ package io.rebble.libpebblecommon.connection
 
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.LibPebbleConfigHolder
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
@@ -28,35 +27,12 @@ import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import org.koin.core.Koin
 import kotlin.uuid.Uuid
-
-data class LibPebbleConfig(
-    val context: AppContext,
-    val bleConfig: BleConfig,
-    val webServices: WebServices,
-    val watchConfig: WatchConfig,
-)
-
-data class WatchConfig(
-    val multipleConnectedWatchesSupported: Boolean,
-    val lockerSyncLimit: Int = 25,
-)
-
-data class BleConfig(
-    val reversedPPoG: Boolean,
-    val pinAddress: Boolean,
-    val phoneRequestsPairing: Boolean,
-    val writeConnectivityTrigger: Boolean,
-    val initialMtu: Int = DEFAULT_MTU,
-    val desiredTxWindow: Int = MAX_TX_WINDOW,
-    val desiredRxWindow: Int = MAX_RX_WINDOW,
-    val useNativeMtu: Boolean,
-    val sendPpogResetOnDisconnection: Boolean,
-)
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
 
@@ -66,6 +42,8 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     fun init()
 
     val watches: PebbleDevices
+    val config: StateFlow<LibPebbleConfig>
+    fun updateConfig(config: LibPebbleConfig)
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
@@ -141,7 +119,8 @@ class LibPebble3(
     private val timelineNotificationsDao: TimelineNotificationDao,
     private val actionOverrides: ActionOverrides,
     private val phoneCalendarSyncer: PhoneCalendarSyncer,
-    private val missedCallSyncer: MissedCallSyncer
+    private val missedCallSyncer: MissedCallSyncer,
+    private val libPebbleConfigFlow: LibPebbleConfigHolder,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
     private val logger = Logger.withTag("LibPebble3")
@@ -160,6 +139,13 @@ class LibPebble3(
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
+    override val config: StateFlow<LibPebbleConfig> = libPebbleConfigFlow.config
+
+    override fun updateConfig(config: LibPebbleConfig) {
+        logger.d("Updated config: $config")
+        libPebbleConfigFlow.update(config)
+    }
+
     override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
 
     override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
@@ -189,8 +175,17 @@ class LibPebble3(
     companion object {
         private lateinit var koin: Koin
 
-        fun create(config: LibPebbleConfig): LibPebble {
-            koin = initKoin(config)
+        fun create(
+            /**
+             * Default config, before any changes are made.
+             *
+             * Config will be persisted - this parameter will only be used on the first init.
+             */
+            defaultConfig: LibPebbleConfig,
+            webServices: WebServices,
+            appContext: AppContext,
+        ): LibPebble {
+            koin = initKoin(defaultConfig, webServices, appContext)
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }

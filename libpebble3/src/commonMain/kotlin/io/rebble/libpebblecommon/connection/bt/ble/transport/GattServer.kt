@@ -1,8 +1,9 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
@@ -33,9 +34,10 @@ expect class GattServer {
 }
 
 class GattServerManager(
-    private val config: LibPebbleConfig,
+    private val config: BleConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
+    private val appContext: AppContext,
 ) {
     private val serverMutex = Mutex()
     private val logger = Logger.withTag("GattServerManager")
@@ -84,13 +86,13 @@ class GattServerManager(
     }
 
     private suspend fun openIfNeeded() {
-        if (config.bleConfig.reversedPPoG) {
+        if (config.value.reversedPPoG) {
             return
         }
         serverMutex.withLock {
             if (gattServer != null) return@withLock
             logger.d("open gatt server")
-            gattServer = openGattServer(config.context)
+            gattServer = openGattServer(appContext)
             gattServer?.addServices()
             libPebbleCoroutineScope.launch {
                 gattServer?.characteristicReadRequest?.collect {

@@ -126,6 +126,7 @@ kotlin {
             implementation(libs.koin.core)
             implementation(compose.ui)
             implementation(project(":blobannotations"))
+            implementation(libs.settings)
         }
 
         commonTest.dependencies {

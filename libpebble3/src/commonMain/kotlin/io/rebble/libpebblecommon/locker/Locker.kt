@@ -6,10 +6,10 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
-import io.rebble.libpebblecommon.connection.WatchConfig
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.LockerEntry
@@ -35,7 +35,7 @@ class Locker(
     private val watchManager: WatchManager,
     database: Database,
     private val lockerPBWCache: LockerPBWCache,
-    private val config: WatchConfig,
+    private val config: WatchConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
@@ -88,14 +88,14 @@ class Locker(
                     ),
                     sideloaded = app.sideloaded,
                     configurable = app.configurable,
-                    sync = app.orderIndex < config.lockerSyncLimit,
+                    sync = app.orderIndex < config.value.lockerSyncLimit,
                 )
             }
         }
 
     override fun setAppOrder(id: Uuid, order: Int) {
         libPebbleCoroutineScope.launch {
-            lockerEntryDao.setOrder(id, order, config.lockerSyncLimit)
+            lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimit)
         }
     }
 
@@ -105,7 +105,7 @@ class Locker(
         logger.d("update: ${locker.applications.size}")
         // TODO delete deleted entries, don't insert unchanged entries, etc
         val toInsert = locker.applications.map { it.asEntity() }
-        lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.lockerSyncLimit)
+        lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
     }
 
     /**
@@ -121,7 +121,7 @@ class Locker(
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, it)
         }
 
-        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.lockerSyncLimit)
+        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimit)
         if (loadOnWatch) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
                 it.launchApp(lockerEntry.id)

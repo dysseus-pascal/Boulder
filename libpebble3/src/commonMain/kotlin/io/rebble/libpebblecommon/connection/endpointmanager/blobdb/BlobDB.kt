@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
-import io.rebble.libpebblecommon.connection.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
@@ -38,7 +37,6 @@ data class BlobDbDaos(
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
-    private val libPebbleConfig: LibPebbleConfig,
     private val platformConfig: PlatformConfig,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {

@@ -3,6 +3,8 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.os.Build
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfig
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
@@ -19,6 +21,7 @@ class NotificationHandler(
     private val notificationAppDao: NotificationAppRealDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timeProvider: TimeProvider,
+    private val notificationConfig: NotificationConfigFlow,
 ) {
     companion object {
         private val logger = Logger.withTag(NotificationHandler::class.simpleName!!)
@@ -52,6 +55,9 @@ class NotificationHandler(
     }
 
     private suspend fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
+        if (notificationConfig.value.dumpNotificationContent) {
+            sbn.dump()
+        }
         if (sbn.isOngoing) {
             verboseLog { "Ignoring ongoing notification from ${sbn.packageName}" }
             return null
@@ -141,4 +147,8 @@ class NotificationHandler(
             logger.d { "Failed to remove notification: ${sbn.key} not found in inflight" }
         }
     }
+}
+
+private fun StatusBarNotification.dump() {
+    Logger.d { "dump()" }
 }

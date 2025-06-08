@@ -161,6 +161,7 @@ class NotificationHandler(
 
     private fun StatusBarNotification.dump() {
         val wearableExtender = WearableExtender(notification)
+        val wearableBundle = notification.extras.getBundle(EXTRA_WEARABLE_BUNDLE)
         logger.v { """
 New notification:
     id = $id
@@ -184,7 +185,8 @@ New notification:
     groupAlertBehavior = ${notification.dumpGroupAlertBehaviour()}
     extras: ${notification.extras.dump(8)}
     actions = ${notification.actions?.asList()?.dump()}
-    WearableExtender actions: = ${wearableExtender.actions?.dump()}
+    WearableExtender actions: ${wearableExtender.actions?.dump()}
+    WearableExtender extras: ${wearableBundle?.dump(8)}
         """.trimIndent() }
     }
 
@@ -235,6 +237,7 @@ New notification:
 }
 
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
+private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

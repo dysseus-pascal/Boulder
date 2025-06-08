@@ -49,6 +49,9 @@ data class LibPebbleNotificationAction(
             packageName: String,
             action: Action
         ): LibPebbleNotificationAction? {
+            if (action.showsUserInterface()) {
+                return null
+            }
             val semanticAction = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 SemanticAction.fromId(action.semanticAction)
             } else {
@@ -57,11 +60,7 @@ data class LibPebbleNotificationAction(
             val title = action.title?.toString() ?: return null
             val pendingIntent = action.actionIntent ?: return null
             val input = action.remoteInputs?.firstOrNull {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    !it.isDataOnly
-                } else {
-                    true
-                }
+                it.allowFreeFormInput
             }
             val suggestedResponses = input?.choices?.map { it.toString() }
             return LibPebbleNotificationAction(

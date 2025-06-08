@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
+import android.app.Notification.WearableExtender
 import android.service.notification.StatusBarNotification
 import io.rebble.libpebblecommon.SystemAppIDs.NOTIFICATIONS_APP_UUID
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -47,12 +48,17 @@ data class LibPebbleNotification(
                 app = app,
                 channel = channel,
             )
-            val actions = sbn.notification.actions?.mapNotNull {
+            val wearableActions = WearableExtender(sbn.notification).actions
+            val actionsToUse = when {
+                wearableActions != null && wearableActions.isNotEmpty() -> wearableActions
+                else -> sbn.notification.actions?.asList() ?: emptyList()
+            }
+            val actions = actionsToUse.mapNotNull {
                 LibPebbleNotificationAction.fromNotificationAction(
                     packageName = sbn.packageName,
                     action = it
                 )
-            } ?: emptyList()
+            }
             return buildList {
                 dismissAction?.let { add(it) }
                 muteAction?.let { add(it) }

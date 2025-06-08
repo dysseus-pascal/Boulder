@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.app.Notification
+import android.app.Notification.Action
+import android.app.Notification.WearableExtender
 import android.app.RemoteInput
 import android.os.Build
 import android.os.Bundle
@@ -158,6 +160,7 @@ class NotificationHandler(
     }
 
     private fun StatusBarNotification.dump() {
+        val wearableExtender = WearableExtender(notification)
         logger.v { """
 New notification:
     id = $id
@@ -180,7 +183,8 @@ New notification:
     channelId = ${notification.dumpChannel().obfuscate(privateLogger)}
     groupAlertBehavior = ${notification.dumpGroupAlertBehaviour()}
     extras: ${notification.extras.dump(8)}
-    actions = ${notification.dumpActions()}
+    actions = ${notification.actions?.asList()?.dump()}
+    WearableExtender actions: = ${wearableExtender.actions?.dump()}
         """.trimIndent() }
     }
 
@@ -206,13 +210,13 @@ New notification:
         }
     }
 
-    private fun Notification.dumpActions(): String {
-        val newlineIndent = "\n${" ".repeat(8)}"
-        return actions?.joinToString(prefix = "\n", separator = "\n") { action ->
-"""        Action:
+    private fun Collection<Action>?.dump(): String {
+        return this?.joinToString(prefix = "\n", separator = "\n") { action ->
+            """        Action:
             title = ${action.title}
-            extras: ${action.extras.dump(12)}
-            remoteInputs: ${action.remoteInputs.dump(12)}"""
+            showUserInterface = ${action.showsUserInterface()}
+            extras: ${action.extras.dump(16)}
+            remoteInputs: ${action.remoteInputs.dump(16)}"""
         } ?: "[]"
     }
 
@@ -230,9 +234,12 @@ New notification:
     }
 }
 
+private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
+
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
 fun RemoteInput.dumpDataOnly(): Boolean? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
     return isDataOnly
 }
+fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)

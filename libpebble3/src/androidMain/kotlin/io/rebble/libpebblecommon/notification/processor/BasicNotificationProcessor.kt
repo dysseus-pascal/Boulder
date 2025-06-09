@@ -82,6 +82,7 @@ fun StatusBarNotification.icon(): TimelineIcon = when(packageName) {
     "com.google.android.apps.dynamite" -> TimelineIcon.NotificationGoogleHangouts
     "kik.android" -> TimelineIcon.NotificationKik
     "com.kakao.talk" -> TimelineIcon.NotificationKakaoTalk
+    "com.beeper.android" -> TimelineIcon.GenericSms
 
     else -> when (notification.category) {
         Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail

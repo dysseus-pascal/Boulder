@@ -29,7 +29,9 @@ class BasicNotificationProcessor(
             logger.v { "Ignoring group summary notification for ${sbn.packageName.obfuscate(privateLogger)}" }
             return NotificationResult.Ignored
         }
-        //TODO: Implement a more sophisticated notification processor
+        // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
+        // effectively doing the deduping right now. I'm sure we'll find cases where it isn't, but
+        // let's try that for now.
         val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn, app, channel)
         val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
@@ -43,7 +45,7 @@ class BasicNotificationProcessor(
             key = sbn.key,
             title = title.toString(),
             body = body.toString(),
-            icon = TimelineIcon.NotificationGeneric, //TODO: Get the icon from package/category
+            icon = sbn.icon(),
             timestamp = if (showWhen) {
                 Instant.fromEpochMilliseconds(sbn.notification.`when`)
             } else {
@@ -52,5 +54,50 @@ class BasicNotificationProcessor(
             actions = actions,
         )
         return NotificationResult.Processed(notification)
+    }
+}
+
+fun StatusBarNotification.icon(): TimelineIcon = when(packageName) {
+    "com.google.android.gm.lite", "com.google.android.gm" -> TimelineIcon.NotificationGmail
+    "com.microsoft.office.outlook" -> TimelineIcon.NotificationOutlook
+    "com.Slack" -> TimelineIcon.NotificationSlack
+    "com.snapchat.android" -> TimelineIcon.NotificationSnapchat
+    "com.twitter.android", "com.twitter.android.lite" -> TimelineIcon.NotificationTwitter
+    "org.telegram.messenger" -> TimelineIcon.NotificationTelegram
+    "com.facebook.katana", "com.facebook.lite" -> TimelineIcon.NotificationFacebook
+    "com.facebook.orca" -> TimelineIcon.NotificationFacebookMessenger
+    "com.whatsapp" -> TimelineIcon.NotificationWhatsapp
+    "com.linkedin.android" -> TimelineIcon.NotificationLinkedIn
+    "com.google.android.apps.messaging" -> TimelineIcon.NotificationGoogleMessenger
+    "com.tencent.mm" -> TimelineIcon.NotificationWeChat
+    "com.microsoft.office.lync" -> TimelineIcon.NotificationSkype
+    "jp.naver.line.android" -> TimelineIcon.NotificationLine
+    "com.amazon.mShop.android.shopping" -> TimelineIcon.NotificationAmazon
+    "com.google.android.apps.maps" -> TimelineIcon.NotificationGoogleMaps
+    "com.yahoo.mobile.client.android.mail" -> TimelineIcon.NotificationYahooMail
+    "com.google.android.apps.photos" -> TimelineIcon.NotificationGooglePhotos
+    "com.viber.voip" -> TimelineIcon.NotificationViber
+    "com.instagram.android" -> TimelineIcon.NotificationInstagram
+    "com.bbm.enterprise" -> TimelineIcon.NotificationBlackberryMessenger
+    "com.google.android.apps.dynamite" -> TimelineIcon.NotificationGoogleHangouts
+    "kik.android" -> TimelineIcon.NotificationKik
+    "com.kakao.talk" -> TimelineIcon.NotificationKakaoTalk
+
+    else -> when (notification.category) {
+        Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail
+        Notification.CATEGORY_MESSAGE -> TimelineIcon.GenericSms
+        Notification.CATEGORY_EVENT -> TimelineIcon.TimelineCalendar
+        Notification.CATEGORY_PROMO -> TimelineIcon.PayBill
+        Notification.CATEGORY_ALARM -> TimelineIcon.AlarmClock
+        Notification.CATEGORY_ERROR -> TimelineIcon.GenericWarning
+        Notification.CATEGORY_TRANSPORT -> TimelineIcon.AudioCassette
+        Notification.CATEGORY_SYSTEM -> TimelineIcon.Settings
+        Notification.CATEGORY_REMINDER -> TimelineIcon.NotificationReminder
+        Notification.CATEGORY_WORKOUT -> TimelineIcon.Activity
+        Notification.CATEGORY_MISSED_CALL -> TimelineIcon.TimelineMissedCall
+        Notification.CATEGORY_CALL -> TimelineIcon.IncomingPhoneCall
+        Notification.CATEGORY_NAVIGATION, Notification.CATEGORY_LOCATION_SHARING -> TimelineIcon.Location
+        Notification.CATEGORY_SOCIAL, Notification.CATEGORY_RECOMMENDATION -> TimelineIcon.NewsEvent
+        else -> TimelineIcon.NotificationGeneric
     }
 }

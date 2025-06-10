@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import org.koin.core.Koin
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
@@ -123,8 +124,13 @@ class LibPebble3(
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
     private val logger = Logger.withTag("LibPebble3")
+    private val initialized = AtomicBoolean(false)
 
     override fun init() {
+        if (!initialized.compareAndSet(expectedValue = false, newValue = true)) {
+            logger.w { "Already initialized!!!" }
+            return
+        }
         bluetoothStateProvider.init()
         gattServerManager.init()
         watchManager.init()

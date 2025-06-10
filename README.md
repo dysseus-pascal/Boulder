@@ -1,9 +1,23 @@
 # libpebble3
 A port/rewrite of [libpebble2](https://github.com/pebble/libpebble2/) to Kotlin Multiplatform with additional features useful for watch companion apps
 
-![Build](https://github.com/crc-32/libpebblecommon/workflows/Build/badge.svg)
+![Build](https://github.com/coredevices/libpebble3/workflows/Build/badge.svg)
 
-# Guidelines
+# Using libpebble3
+
+libpebble3 is still in development - maybe best described as alpha. The API surface is subject to (large) changes as we develop the library along with CoreApp (which uses the library).
+
+No artifacts are published yet (we include libpebble3 as a submodule for CoreApp development).
+
+In the future we envisage supporting more targets, but today only iOS/Android are supported.
+
+# Contributing
+
+We aren't actively encouraging contributions yet, while we are agressively building out feature parity with the original Pebble apps. CI testing is not comprehensive, so changes need to be manually tested with real hardware using CoreApp, and our roadmap/bug tracker is not currently on github. We will update when this changes.
+
+# Development Guidelines
+
+(We don't follow all of these everywhere, yet, and need to document a lot more..)
 
 - We share a version catalog with CoreApp to avoid duplicating definitions. This means a few extra library entries which are not used in libpebble (so they can share the version definition).
 - Use `optIn` in `build.gradle.kts` rather than individual source files.
@@ -14,6 +28,8 @@ Connection:
 - Endpoint managers are also scoped to the connection, and manage complex state around services.
 
 # Copyright and Licensing
+
+See https://ericmigi.notion.site/Core-Devices-Software-Licensing-1c0fbb55ea8480f88d27ccf20fcb84a8
 
 Copyright 2025 Core Devices LLC
 

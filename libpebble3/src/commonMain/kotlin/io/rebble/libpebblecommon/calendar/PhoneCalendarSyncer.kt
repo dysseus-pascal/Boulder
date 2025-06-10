@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
@@ -33,15 +34,19 @@ class PhoneCalendarSyncer(
     private val syncTrigger = MutableSharedFlow<Unit>()
 
     fun init() {
+        logger.v { "init()" }
         libPebbleCoroutineScope.launch {
-            requestSync()
-            syncTrigger.conflate().collect {
-                syncDeviceCalendarsToDb()
+            libPebbleCoroutineScope.launch {
+                syncTrigger.conflate().collect {
+                    syncDeviceCalendarsToDb()
+                }
             }
-        }
-        libPebbleCoroutineScope.launch {
-            systemCalendar.registerForCalendarChanges().debounce(5.seconds).collect {
-                requestSync()
+            delay(1.seconds)
+            requestSync()
+            libPebbleCoroutineScope.launch {
+                systemCalendar.registerForCalendarChanges().debounce(5.seconds).collect {
+                    requestSync()
+                }
             }
         }
     }
@@ -123,7 +128,10 @@ class PhoneCalendarSyncer(
             }
         }
         if (pinsToDelete.isNotEmpty()) {
-            timelinePinDao.markAllForDeletionWithReminders(pinsToDelete.map { it.itemId }, timelineReminderDao)
+            timelinePinDao.markAllForDeletionWithReminders(
+                pinsToDelete.map { it.itemId },
+                timelineReminderDao
+            )
         }
         if (remindersToInsert.isNotEmpty()) {
             timelineReminderDao.insertOrReplace(remindersToInsert)
@@ -141,7 +149,8 @@ class PhoneCalendarSyncer(
         remindersToDelete: MutableList<Uuid>,
     ) {
         val existingReminders = timelineReminderDao.getRemindersForPin(pinId)
-        val eventReminderTimestamps = event.reminders.map { event.startTime - it.minutesBefore.minutes }
+        val eventReminderTimestamps =
+            event.reminders.map { event.startTime - it.minutesBefore.minutes }
 
         remindersToDelete += existingReminders.filter { er ->
             eventReminderTimestamps.none { t ->

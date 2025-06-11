@@ -9,20 +9,27 @@ import android.companion.CompanionDeviceManager
 import android.content.IntentSender
 import android.os.Build
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun createCompanionDeviceManager(appContext: AppContext): CompanionDevice {
-    return AndroidCompanionDevice(appContext)
+actual fun createCompanionDeviceManager(appContext: AppContext, libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
+    return AndroidCompanionDevice(appContext, libPebbleCoroutineScope)
 }
 
 class AndroidCompanionDevice(
     private val appContext: AppContext,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : CompanionDevice {
     private val logger = Logger.withTag("AndroidCompanionDevice")
     private val context = appContext.context
+    private val _companionAccessGranted = MutableSharedFlow<Unit>()
+    override val companionAccessGranted = _companionAccessGranted.asSharedFlow()
 
     override suspend fun registerDevice(transport: Transport) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -67,6 +74,9 @@ class AndroidCompanionDevice(
 
             override fun onAssociationCreated(associationInfo: AssociationInfo) {
                 logger.d("onAssociationCreated")
+                libPebbleCoroutineScope.launch {
+                    _companionAccessGranted.emit(Unit)
+                }
                 result.complete(Unit)
             }
 

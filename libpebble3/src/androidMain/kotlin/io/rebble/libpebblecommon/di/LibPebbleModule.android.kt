@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNoti
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPackageChangedReceiver
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
@@ -47,6 +48,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     singleOf(::AndroidSystemCallLog) bind SystemCallLog::class
+    singleOf(::AndroidPackageChangedReceiver)
     single { get<AppContext>().context }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)

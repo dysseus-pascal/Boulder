@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.notification
 
+import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -7,6 +9,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.Process
+import android.os.UserHandle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
@@ -60,6 +63,24 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
 
     override fun onListenerDisconnected() {
         logger.d { "onListenerDisconnected()" }
+    }
+
+    override fun onNotificationChannelModified(
+        pkg: String,
+        user: UserHandle,
+        channel: NotificationChannel,
+        modificationType: Int,
+    ) {
+        notificationHandler?.onChannelChanged()
+    }
+
+    override fun onNotificationChannelGroupModified(
+        pkg: String,
+        user: UserHandle,
+        group: NotificationChannelGroup,
+        modificationType: Int,
+    ) {
+        notificationHandler?.onChannelChanged()
     }
 
     private data class MutableGroup(

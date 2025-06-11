@@ -208,7 +208,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 single { HttpClient() }
-                single { createCompanionDeviceManager(get()) }
+                single { createCompanionDeviceManager(get(), get()) }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 singleOf(::BlobDbDaos)

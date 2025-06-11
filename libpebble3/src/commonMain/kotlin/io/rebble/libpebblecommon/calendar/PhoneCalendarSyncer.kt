@@ -51,6 +51,7 @@ class PhoneCalendarSyncer(
                     syncDeviceCalendarsToDb()
                 }
             }
+            // Make sure the above is collecting already
             delay(1.seconds)
             requestSync()
             libPebbleCoroutineScope.launch {

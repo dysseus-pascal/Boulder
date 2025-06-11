@@ -19,6 +19,8 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
@@ -47,6 +49,15 @@ class NotificationHandler(
 
     fun getNotification(itemId: Uuid): LibPebbleNotification? {
         return inflightNotifications.values.firstOrNull { it.uuid == itemId }
+    }
+
+    private val _channelChanged = MutableSharedFlow<Unit>()
+    val channelChanged = _channelChanged.asSharedFlow()
+
+    fun onChannelChanged() {
+        libPebbleCoroutineScope.launch {
+            _channelChanged.emit(Unit)
+        }
     }
 
     private fun verboseLog(message: () -> String) {

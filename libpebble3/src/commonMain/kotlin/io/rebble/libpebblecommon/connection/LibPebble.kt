@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
+import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.time.TimeChanged
@@ -95,8 +96,6 @@ interface NotificationApps {
         muteState: MuteState,
     )
 
-    fun syncAppsFromOS()
-
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
@@ -117,7 +116,7 @@ class LibPebble3(
     private val gattServerManager: GattServerManager,
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val notificationListenerConnection: NotificationListenerConnection,
-    private val notificationApi: NotificationApps,
+    private val notificationApi: NotificationApi,
     private val timelineNotificationsDao: TimelineNotificationDao,
     private val actionOverrides: ActionOverrides,
     private val phoneCalendarSyncer: PhoneCalendarSyncer,
@@ -139,6 +138,7 @@ class LibPebble3(
         phoneCalendarSyncer.init()
         missedCallSyncer.init()
         notificationListenerConnection.init(this)
+        notificationApi.init()
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }

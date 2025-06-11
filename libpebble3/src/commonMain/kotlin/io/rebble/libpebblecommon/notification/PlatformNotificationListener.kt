@@ -19,7 +19,7 @@ interface NotificationListenerConnection {
 }
 
 interface NotificationAppsSync {
-    suspend fun syncAppsFromOS()
+    fun init()
 }
 
 class NotificationApi(
@@ -28,6 +28,10 @@ class NotificationApi(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
 ) : NotificationApps {
+    fun init() {
+        notificationAppsSync.init()
+    }
+
     override val notificationApps: Flow<List<NotificationAppItem>> =
         notificationAppDao.allAppsFlow()
 
@@ -53,12 +57,6 @@ class NotificationApi(
                     }
                 })
             }))
-        }
-    }
-
-    override fun syncAppsFromOS() {
-        libPebbleCoroutineScope.launch {
-            notificationAppsSync.syncAppsFromOS()
         }
     }
 

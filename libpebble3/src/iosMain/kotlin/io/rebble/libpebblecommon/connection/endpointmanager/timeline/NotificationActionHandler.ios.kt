@@ -24,6 +24,6 @@ class IosNotificationListenerConnection : NotificationListenerConnection {
 }
 
 class IosNotificationAppsSync : NotificationAppsSync {
-    override suspend fun syncAppsFromOS() {
+    override fun init() {
     }
 }

@@ -142,6 +142,10 @@ class IosSystemCalendar(
             }
         return flow
     }
+
+    override fun hasPermission(): Boolean {
+        return true
+    }
 }
 
 fun EKAlarm.asReminder(): EventReminder = EventReminder(

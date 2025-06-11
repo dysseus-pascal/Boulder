@@ -1,7 +1,9 @@
 package io.rebble.libpebblecommon.calendar
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.database.Cursor
 import android.net.Uri
@@ -9,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -299,6 +302,7 @@ private fun resolveReminders(eventId: Long, contentResolver: ContentResolver): L
 class AndroidSystemCalendar(
     private val contentResolver: ContentResolver,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val appContext: AppContext,
 ) : SystemCalendar {
     private val logger = Logger.withTag("AndroidSystemCalendar")
 
@@ -399,5 +403,10 @@ class AndroidSystemCalendar(
             logger.e(e) { "Error registering for calendar changes" }
         }
         return flow
+    }
+
+    override fun hasPermission(): Boolean {
+        return appContext.context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
+                    appContext.context.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
     }
 }

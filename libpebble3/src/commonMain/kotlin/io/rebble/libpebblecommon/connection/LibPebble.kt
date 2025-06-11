@@ -52,6 +52,8 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     suspend fun sendPing(cookie: UInt)
     suspend fun launchApp(uuid: Uuid)
     // ....
+
+    fun doStuffAfterPermissionsGranted()
 }
 
 interface WebServices {
@@ -169,6 +171,11 @@ class LibPebble3(
 
     override suspend fun launchApp(uuid: Uuid) {
         forEachConnectedWatch { launchApp(uuid) }
+    }
+
+    override fun doStuffAfterPermissionsGranted() {
+        phoneCalendarSyncer.init()
+        missedCallSyncer.init()
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {

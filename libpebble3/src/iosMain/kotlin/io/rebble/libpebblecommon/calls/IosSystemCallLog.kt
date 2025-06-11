@@ -11,4 +11,5 @@ class IosSystemCallLog: SystemCallLog {
     override suspend fun getMissedCalls(start: Instant): List<MissedCall> = emptyList()
 
     override fun registerForMissedCallChanges(): Flow<Unit> = emptyFlow()
+    override fun hasPermission(): Boolean = true
 }

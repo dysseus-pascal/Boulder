@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls
 
+import android.Manifest
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
@@ -127,5 +128,9 @@ class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
                 }
             }
         }
+    }
+
+    override fun hasPermission(): Boolean {
+        return context.context.checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
     }
 }

@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
 class MissedCallSyncer(
@@ -19,7 +20,17 @@ class MissedCallSyncer(
         private val logger = Logger.withTag("MissedCallSyncer")
     }
 
+    private val initialized = AtomicBoolean(false)
+
     fun init() {
+        if (!systemCallLog.hasPermission()) {
+            logger.w { "No permission" }
+            return
+        }
+        if (!initialized.compareAndSet(expectedValue = false, newValue = true)) {
+            logger.d { "Already initialized" }
+            return
+        }
         try {
             systemCallLog.registerForMissedCallChanges().debounce(3.seconds).onEach {
                 logger.d { "Missed call change detected, syncing missed calls..." }

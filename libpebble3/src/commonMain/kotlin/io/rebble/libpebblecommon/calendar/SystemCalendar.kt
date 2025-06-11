@@ -8,4 +8,5 @@ interface SystemCalendar {
     suspend fun getCalendars(): List<CalendarEntity>
     suspend fun getCalendarEvents(calendar: CalendarEntity, startDate: Instant, endDate: Instant): List<CalendarEvent>
     fun registerForCalendarChanges(): Flow<Unit>
+    fun hasPermission(): Boolean
 }

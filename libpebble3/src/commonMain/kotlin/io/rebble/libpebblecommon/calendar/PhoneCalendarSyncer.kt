@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -32,8 +33,17 @@ class PhoneCalendarSyncer(
 ) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
     private val syncTrigger = MutableSharedFlow<Unit>()
+    private val initialized = AtomicBoolean(false)
 
     fun init() {
+        if (!systemCalendar.hasPermission()) {
+            logger.w { "No permission" }
+            return
+        }
+        if (!initialized.compareAndSet(expectedValue = false, newValue = true)) {
+            logger.d { "Already initialized" }
+            return
+        }
         logger.v { "init()" }
         libPebbleCoroutineScope.launch {
             libPebbleCoroutineScope.launch {

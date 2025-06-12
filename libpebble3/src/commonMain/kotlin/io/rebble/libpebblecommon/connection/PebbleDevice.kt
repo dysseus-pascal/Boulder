@@ -2,6 +2,10 @@ package io.rebble.libpebblecommon.connection
 
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
+import io.rebble.libpebblecommon.music.MusicAction
+import io.rebble.libpebblecommon.music.PlaybackState
+import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -103,6 +107,21 @@ object ConnectedPebble {
         suspend fun getCoreDump(unread: Boolean): Path?
     }
 
+    interface Music {
+        suspend fun updateTrack(track: MusicTrack)
+        suspend fun updatePlaybackState(
+            state: PlaybackState,
+            trackPosMs: UInt,
+            playbackRatePct: UInt,
+            shuffle: Boolean,
+            repeatType: RepeatType
+        )
+        suspend fun updatePlayerInfo(packageId: String, name: String)
+        suspend fun updateVolumeInfo(volumePercent: UByte)
+        val musicActions: Flow<MusicAction>
+        val updateRequestTrigger: Flow<Unit>
+    }
+
     class Services(
         val debug: ConnectedPebble.Debug,
         val appRunState: ConnectedPebble.AppRunState,
@@ -112,6 +131,7 @@ object ConnectedPebble {
         val appMessages: AppMessages,
         val logs: Logs,
         val coreDump: CoreDump,
+        val music: Music,
     )
 
     class PrfServices(
@@ -132,4 +152,5 @@ interface ConnectedPebbleDevice :
     ConnectedPebble.Time,
     ConnectedPebble.AppMessages,
     ConnectedPebble.Logs,
-    ConnectedPebble.CoreDump
+    ConnectedPebble.CoreDump,
+    ConnectedPebble.Music

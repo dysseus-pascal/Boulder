@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolS
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
+import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -19,6 +20,7 @@ import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
+import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -101,7 +103,9 @@ class RealPebbleConnector(
     private val debugPebbleProtocolSender: DebugPebbleProtocolSender,
     private val logDumpService: LogDumpService,
     private val getBytesService: GetBytesService,
-    private val phoneControlManager: PhoneControlManager
+    private val phoneControlManager: PhoneControlManager,
+    private val musicService: MusicService,
+    private val musicControlManager: MusicControlManager
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -178,6 +182,7 @@ class RealPebbleConnector(
                 appMessageService.init()
                 pkjsLifecycleManager.init(transport, watchInfo)
                 phoneControlManager.init()
+                musicControlManager.init()
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,
@@ -191,6 +196,7 @@ class RealPebbleConnector(
                         appMessages = appMessageService,
                         logs = logDumpService,
                         coreDump = getBytesService,
+                        music = musicService,
                     )
                 )
             }

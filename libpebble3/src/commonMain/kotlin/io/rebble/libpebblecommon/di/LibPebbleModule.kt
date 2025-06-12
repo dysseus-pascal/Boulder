@@ -59,6 +59,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
@@ -73,6 +74,7 @@ import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
+import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PhoneControlService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
@@ -246,7 +248,19 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                             else -> TODO("not implemented")
                         }
                     }
-                    scopedOf(::RealPebbleConnector) bind PebbleConnector::class
+                    scoped {
+                        // We ran out of helper function overloads with enough params...
+                        RealPebbleConnector(
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get(), get(),
+                            get(), get()
+                        )
+                    } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
                     scopedOf(::Negotiator)
                     scoped { PebbleProtocolStreams() }
@@ -278,6 +292,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                     scopedOf(::LogDumpService)
                     scopedOf(::GetBytesService)
                     scopedOf(::PhoneControlService)
+                    scopedOf(::MusicService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
@@ -288,6 +303,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                     scopedOf(::PKJSLifecycleManager)
                     scopedOf(::BlobDB)
                     scopedOf(::PhoneControlManager)
+                    scopedOf(::MusicControlManager)
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

@@ -165,7 +165,8 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Time by services.time,
     ConnectedPebble.AppMessages by services.appMessages,
     ConnectedPebble.Logs by services.logs,
-    ConnectedPebble.CoreDump by services.coreDump {
+    ConnectedPebble.CoreDump by services.coreDump,
+    ConnectedPebble.Music by services.music {
 
     override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
 }

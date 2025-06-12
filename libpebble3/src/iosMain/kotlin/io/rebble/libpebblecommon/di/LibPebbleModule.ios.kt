@@ -38,6 +38,11 @@ actual val platformModule: Module = module {
             )
         )
     }
+    single {
+        PlatformFlags(
+            PhoneAppVersion.PlatformFlag.makeFlags(PhoneAppVersion.OSType.IOS, emptyList())
+        )
+    }
     singleOf(::IosNotificationActionHandler) bind PlatformNotificationActionHandler::class
     singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class

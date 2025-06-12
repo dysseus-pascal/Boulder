@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 
-class MusicControlTest {
+class MusicTest {
     @Test
     fun `serialize UpdateCurrentTrack with optional parameters`() {
         val packet = MusicControl.UpdateCurrentTrack(

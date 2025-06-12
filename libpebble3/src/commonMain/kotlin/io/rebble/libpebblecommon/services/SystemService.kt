@@ -3,9 +3,10 @@ package io.rebble.libpebblecommon.services
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
+import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.PingPong
@@ -36,6 +37,7 @@ class SystemService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
     private val phoneCapabilities: PhoneCapabilities,
+    private val platformFlags: PlatformFlags
 ) : ProtocolService,
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
@@ -84,7 +86,7 @@ class SystemService(
             PhoneAppVersion.AppVersionResponse(
                 UInt.MAX_VALUE,
                 0u,
-                0u,
+                platformFlags.flags,
                 2u,
                 4u,
                 4u,

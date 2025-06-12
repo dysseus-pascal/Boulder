@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
+import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
@@ -16,6 +17,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.Notifica
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcessor
+import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
@@ -41,6 +43,11 @@ actual val platformModule: Module = module {
 //                ProtocolCapsFlag.SupportsSmoothFwInstallProgress,
 //                ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection,
             )
+        )
+    }
+    single {
+        PlatformFlags(
+            PhoneAppVersion.PlatformFlag.makeFlags(PhoneAppVersion.OSType.Android, emptyList())
         )
     }
     singleOf(::AndroidPebbleNotificationListenerConnection) bind NotificationListenerConnection::class

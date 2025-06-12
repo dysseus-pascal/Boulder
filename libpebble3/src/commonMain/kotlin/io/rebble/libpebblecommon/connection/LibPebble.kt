@@ -37,6 +37,7 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
+data class PlatformFlags(val flags: UInt)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 

@@ -4,6 +4,7 @@ import io.rebble.libpebblecommon.calendar.IosSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
+import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
@@ -11,6 +12,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNot
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf

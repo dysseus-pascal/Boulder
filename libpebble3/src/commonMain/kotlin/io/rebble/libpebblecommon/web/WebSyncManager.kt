@@ -5,6 +5,8 @@ import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.locker.Locker
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
 
 /**
@@ -18,15 +20,19 @@ class WebSyncManager(
 ) : RequestSync {
     private val logger = Logger.withTag("WebSyncManager")
 
-    override fun requestLockerSync() {
+    override fun requestLockerSync(): Deferred<Unit> {
+        val result = CompletableDeferred<Unit>()
         libPebbleCoroutineScope.launch {
             // TODO probably don't want the logic in this class
             val response = webServices.fetchLocker()
             if (response == null) {
                 logger.i("locker response is null")
+                result.complete(Unit)
                 return@launch
             }
             locker.update(response)
+            result.complete(Unit)
         }
+        return result
     }
 }

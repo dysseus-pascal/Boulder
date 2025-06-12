@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +79,7 @@ interface Scanning {
 }
 
 interface RequestSync {
-    fun requestLockerSync()
+    fun requestLockerSync(): Deferred<Unit>
 }
 
 interface LockerApi {

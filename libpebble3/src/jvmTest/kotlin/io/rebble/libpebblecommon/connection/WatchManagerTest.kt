@@ -11,6 +11,8 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.web.FirmwareUpdateManager
+import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -132,6 +134,15 @@ class WatchManagerTest {
         }
     }
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
+    private val webServices = object : WebServices {
+        override suspend fun fetchLocker(): LockerModel? {
+            TODO("Not yet implemented")
+        }
+        override suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult? {
+            TODO("Not yet implemented")
+        }
+    }
+    private val firmwareUpdateManager = FirmwareUpdateManager(webServices)
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)
@@ -145,6 +156,7 @@ class WatchManagerTest {
             companionDevice = companionDevice,
             scanning = HackyProvider { scanning },
             watchConfig = watchConfig,
+            firmwareUpdateManager = firmwareUpdateManager,
         )
     }
 

@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.WatchConfigFlow
+import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
@@ -14,6 +15,7 @@ import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.SupervisorJob
@@ -26,7 +28,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
@@ -80,6 +84,7 @@ private data class Watch(
      */
     val asPersisted: KnownWatchItem?,
     val forget: Boolean,
+    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     // TODO can add non-persisted state here e.g. previous connection failures to manage backoff etc
 ) {
     init {
@@ -93,6 +98,13 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
     serial = serial,
 )
 
+private data class CombinedState(
+    val watches: Map<Transport, Watch>,
+    val active: Map<Transport, ConnectingPebbleState>,
+    val previousActive: Map<Transport, ConnectingPebbleState>,
+    val btstate: BluetoothState,
+)
+
 class WatchManager(
     private val knownWatchDao: KnownWatchDao,
     private val pebbleDeviceFactory: PebbleDeviceFactory,
@@ -103,6 +115,7 @@ class WatchManager(
     private val companionDevice: CompanionDevice,
     private val scanning: HackyProvider<Scanning>,
     private val watchConfig: WatchConfigFlow,
+    private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -121,21 +134,27 @@ class WatchManager(
                 activeConnection = null,
                 asPersisted = it,
                 forget = false,
+                firmwareUpdateAvailable = null,
             )
         }
     }
 
-    private suspend fun persistIfNeeded(watch: Watch) {
+    private suspend fun persistIfNeeded(
+        watch: Watch,
+        states: CurrentAndPreviousState?,
+        ) {
         if (watch.forget) {
             logger.d("Deleting $watch from db")
             knownWatchDao.remove(watch.transport)
         } else {
-            val wouldPersist = watch.asKnownWatchItem()
-            if (wouldPersist != null && wouldPersist != watch.asPersisted) {
-                knownWatchDao.insertOrUpdate(wouldPersist)
-                updateWatch(watch.transport) {
-                    logger.d("Persisting changes for $wouldPersist")
-                    it.copy(asPersisted = wouldPersist)
+            if (states.justConnected()) {
+                val wouldPersist = watch.asKnownWatchItem()
+                if (wouldPersist != null && wouldPersist != watch.asPersisted) {
+                    knownWatchDao.insertOrUpdate(wouldPersist)
+                    updateWatch(watch.transport) {
+                        logger.d("Persisting changes for $wouldPersist")
+                        it.copy(asPersisted = wouldPersist)
+                    }
                 }
             }
         }
@@ -151,15 +170,24 @@ class WatchManager(
                 activeConnectionStates,
                 bluetoothStateProvider.state,
             ) { watches, active, btstate ->
+                CombinedState(watches, active, emptyMap(), btstate)
+            }.scan(null as CombinedState?) { previous, current ->
+                current.copy(previousActive = previous?.active ?: emptyMap())
+            }.map { state ->
+                // State can be null for the first scan emission
+                val (watches, active, previousActive, btstate) = state ?: return@map emptyList()
                 logger.v { "combine: watches=$watches / active=$active / btstate=$btstate / activeConnections=$activeConnections" }
                 // Update for active connection state
                 watches.values.mapNotNull { device ->
                     val transport = device.transport
-                    val connectionState = active[transport]
+                    val states = CurrentAndPreviousState(
+                        previousState = previousActive[transport],
+                        currentState = active[transport],
+                    )
                     val hasConnectionAttempt =
                         active.containsKey(device.transport) || activeConnections.contains(device.transport)
 
-                    persistIfNeeded(device)
+                    persistIfNeeded(device, states)
                     // Removed forgotten device once it is disconnected
                     if (!hasConnectionAttempt && device.forget) {
                         logger.d("removing ${device.transport} from allWatches")
@@ -182,8 +210,9 @@ class WatchManager(
                         disconnectFrom(device.transport)
                     }
                     // Update persisted props after connection
-                    if (connectionState is ConnectingPebbleState.Connected) {
-                        val newProps = connectionState.watchInfo.asWatchProperties(transport)
+                    logger.v { "states=$states" }
+                    if (states.currentState is ConnectingPebbleState.Connected && states.previousState !is ConnectingPebbleState.Connected) {
+                        val newProps = states.currentState.watchInfo.asWatchProperties(transport)
                         if (newProps != device.knownWatchProps) {
                             updateWatch(transport) {
                                 it.copy(knownWatchProps = newProps)
@@ -194,14 +223,26 @@ class WatchManager(
                         if (device.scanResult != null) {
                             clearScanResults()
                         }
+
+                        updateWatch(transport) {
+                            it.copy(firmwareUpdateAvailable = null)
+                        }
+                        libPebbleCoroutineScope.launch {
+                            val update = firmwareUpdateManager.checkForUpdates(states.currentState.watchInfo)
+                            logger.d { "fw update available=$update" }
+                            updateWatch(transport) {
+                                it.copy(firmwareUpdateAvailable = update)
+                            }
+                        }
                     }
                     pebbleDeviceFactory.create(
                         transport = transport,
-                        state = connectionState,
+                        state = states.currentState,
                         watchConnector = this@WatchManager,
                         scanResult = device.scanResult,
                         knownWatchProperties = device.knownWatchProps,
                         connectGoal = device.connectGoal,
+                        firmwareUpdateAvailable = device.firmwareUpdateAvailable,
                     )
                 }
             }.collect {
@@ -226,6 +267,7 @@ class WatchManager(
                         activeConnection = null,
                         asPersisted = null,
                         forget = false,
+                        firmwareUpdateAvailable = null,
                     )
                 )
             } else {
@@ -357,7 +399,7 @@ class WatchManager(
                     pebbleConnector.connect(device.knownWatchProps != null)
 //                    disconnectDuringConnectionJob.cancel()
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $transport")
-                    pebbleConnector.disconnected.await()
+                    pebbleConnector.disconnected.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                     logger.d("watchmanager got disconnection: $transport")
                 } finally {
@@ -382,7 +424,7 @@ class WatchManager(
                 // TODO can this break when BT gets disabled? we call this, it times out, ...
                 withTimeout(DISCONNECT_TIMEOUT) {
                     logger.d("${transport}: cleanup: waiting for disconnection")
-                    pebbleConnector.disconnected.await()
+                    pebbleConnector.disconnected.disconnected.await()
                 }
             } catch (e: TimeoutCancellationException) {
                 logger.w("cleanup: timed out waiting for disconnection from ${transport}")
@@ -425,6 +467,16 @@ class WatchManager(
     companion object {
         private val DISCONNECT_TIMEOUT = 3.seconds
     }
+}
+
+data class CurrentAndPreviousState(
+    val previousState: ConnectingPebbleState?,
+    val currentState: ConnectingPebbleState?,
+)
+
+fun CurrentAndPreviousState?.justConnected(): Boolean {
+    if (this == null) return false
+    return currentState is ConnectingPebbleState.Connected && previousState !is ConnectingPebbleState.Connected
 }
 
 private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {

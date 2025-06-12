@@ -46,6 +46,8 @@ interface TransportConnector {
     val disconnected: Deferred<Unit>
 }
 
+class WasDisconnected(val disconnected: Deferred<Unit>)
+
 sealed class ConnectingPebbleState {
     abstract val transport: Transport
 
@@ -78,7 +80,7 @@ fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
 interface PebbleConnector {
     suspend fun connect(previouslyConnected: Boolean)
     fun disconnect()
-    val disconnected: Deferred<Unit>
+    val disconnected: WasDisconnected
     val state: StateFlow<ConnectingPebbleState>
 }
 
@@ -110,7 +112,7 @@ class RealPebbleConnector(
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
-    override val disconnected = transportConnector.disconnected
+    override val disconnected = WasDisconnected(transportConnector.disconnected)
 
     override suspend fun connect(previouslyConnected: Boolean) {
         _state.value = Connecting(transport)

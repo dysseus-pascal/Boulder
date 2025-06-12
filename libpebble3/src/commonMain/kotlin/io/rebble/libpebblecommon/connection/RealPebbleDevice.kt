@@ -13,6 +13,7 @@ class PebbleDeviceFactory {
         scanResult: PebbleScanResult?,
         knownWatchProperties: KnownWatchProperties?,
         connectGoal: Boolean,
+        firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
         if (!connectGoal && state.isActive()) {
@@ -34,6 +35,7 @@ class PebbleDeviceFactory {
                             watchInfo = state.watchInfo,
                             activeDevice = activeDevice,
                             services = state.services,
+                            firmwareUpdateAvailable = firmwareUpdateAvailable,
                         )
 
                     is ConnectingPebbleState.Connected.ConnectedNotInPrf ->
@@ -42,6 +44,7 @@ class PebbleDeviceFactory {
                             watchInfo = state.watchInfo,
                             activeDevice = activeDevice,
                             services = state.services,
+                            firmwareUpdateAvailable = firmwareUpdateAvailable,
                         )
                 }
             }
@@ -155,6 +158,7 @@ internal class RealConnectedPebbleDevice(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     private val services: ConnectedPebble.Services,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
 ) : ConnectedPebbleDevice,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
@@ -176,6 +180,7 @@ internal class RealConnectedPebbleDeviceInRecovery(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     private val services: ConnectedPebble.PrfServices,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
 ) : ConnectedPebbleDeviceInRecovery,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,

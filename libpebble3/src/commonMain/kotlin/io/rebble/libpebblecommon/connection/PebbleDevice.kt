@@ -51,6 +51,7 @@ interface NegotiatingPebbleDevice : ConnectingPebbleDevice, ActiveDevice
 
 interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
+    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?
 }
 
 interface ConnectedPebbleDeviceInRecovery :
@@ -91,7 +92,8 @@ object ConnectedPebble {
     }
 
     interface Firmware {
-        fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
+        fun updateFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
+        fun updateFirmware(url: String): Flow<FirmwareUpdate.FirmwareUpdateStatus>
     }
 
     interface AppRunState {

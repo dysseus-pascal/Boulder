@@ -20,9 +20,11 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.Deferred
@@ -61,7 +63,20 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
+    suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult?
 }
+
+data class ConnectedWatchFirmwareInfo(
+    val platform: WatchHardwarePlatform,
+    val version: FirmwareVersion,
+    val serial: String,
+)
+
+data class FirmwareUpdateCheckResult(
+    val version: FirmwareVersion,
+    val url: String,
+    val notes: String,
+)
 
 interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>

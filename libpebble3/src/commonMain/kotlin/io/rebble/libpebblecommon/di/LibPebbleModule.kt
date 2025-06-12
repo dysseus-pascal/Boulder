@@ -84,6 +84,8 @@ import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.util.PrivateLogger
+import io.rebble.libpebblecommon.web.FirmwareDownloader
+import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -217,6 +219,8 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)
                 singleOf(::MissedCallSyncer)
+                singleOf(::FirmwareUpdateManager)
+                singleOf(::FirmwareDownloader)
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will
@@ -296,7 +300,8 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
-                    scoped { FirmwareUpdate(get(), get<TransportConnector>().disconnected, get(), get()) }
+                    scoped { get<TransportConnector>().disconnected }
+                    scopedOf(::FirmwareUpdate)
                     scopedOf(::TimelineActionManager)
                     scopedOf(::AppFetchProvider)
                     scopedOf(::DebugPebbleProtocolSender)

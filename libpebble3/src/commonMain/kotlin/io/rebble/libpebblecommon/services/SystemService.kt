@@ -92,7 +92,8 @@ class SystemService(
                 4u,
                 2u,
                 ProtocolCapsFlag.makeFlags(phoneCapabilities.capabilities.toList())
-            ))
+            )
+        )
     }
 
     suspend fun sendFirmwareUpdateStart(
@@ -217,29 +218,38 @@ data class FirmwareVersion(
     override fun hashCode(): Int {
         return code() + timestamp.hashCode()
     }
+
+    companion object {
+        fun from(tag: String, isRecovery: Boolean, gitHash: String, timestamp: Instant): FirmwareVersion? {
+            val match = FIRMWARE_VERSION_REGEX.find(tag)
+            if (match == null) {
+                Logger.w("Couldn't decode fw version: '$tag'")
+                return null
+            }
+            val major = match.groupValues.get(1).toInt()
+            val minor = match.groupValues.get(2).toInt()
+            val patch = match.groupValues.get(3).toIntOrNull() ?: 0
+            val suffix = match.groupValues.get(4) // TODO empty or null-and-crash?
+            return FirmwareVersion(
+                stringVersion = tag,
+                timestamp = timestamp,
+                major = major,
+                minor = minor,
+                patch = patch,
+                suffix = suffix,
+                gitHash = gitHash,
+                isRecovery = isRecovery,
+            )
+        }
+    }
 }
 
 fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
-    val tag = versionTag.get()
-    val match = FIRMWARE_VERSION_REGEX.find(tag)
-    if (match == null) {
-        Logger.w("Couldn't decode fw version: '$tag'")
-        return null
-    }
-    val major = match.groupValues.get(1).toInt()
-    val minor = match.groupValues.get(2).toInt()
-    val patch = match.groupValues.get(3).toIntOrNull() ?: 0
-    val suffix = match.groupValues.get(4) // TODO empty or null-and-crash?
-
-    return FirmwareVersion(
-        stringVersion = tag,
-        timestamp = Instant.fromEpochSeconds(timestamp.get().toLong()),
-        major = major,
-        minor = minor,
-        patch = patch,
-        suffix = suffix,
+    return FirmwareVersion.from(
+        tag = versionTag.get(),
         gitHash = gitHash.get(),
         isRecovery = isRecovery.get(),
+        timestamp = Instant.fromEpochSeconds(timestamp.get().toLong()),
     )
 }
 

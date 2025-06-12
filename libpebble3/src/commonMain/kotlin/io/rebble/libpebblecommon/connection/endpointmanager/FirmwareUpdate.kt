@@ -4,16 +4,20 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.SystemService
+import io.rebble.libpebblecommon.web.FirmwareDownloader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.buffered
@@ -31,6 +35,8 @@ class FirmwareUpdate(
     private val watchDisconnected: Deferred<Unit>,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
+    private val firmwareDownloader: FirmwareDownloader,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : ConnectedPebble.Firmware {
     private val logger = Logger.withTag("FWUpdate-${transport.name}")
     private lateinit var watchPlatform: WatchHardwarePlatform
@@ -39,6 +45,7 @@ class FirmwareUpdate(
         data object WaitingToStart : FirmwareUpdateStatus()
         data class InProgress(val progress: Float) : FirmwareUpdateStatus()
         data object WaitingForReboot : FirmwareUpdateStatus()
+        data object ErrorStarting : FirmwareUpdateStatus()
     }
 
     fun setPlatform(watchPlatform: WatchHardwarePlatform) {
@@ -161,9 +168,18 @@ class FirmwareUpdate(
         resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
 
-    override fun sideloadFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {
+    override fun updateFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus> {
         return beginFirmwareUpdate(PbzFirmware(path), 0u)
     }
+
+    override fun updateFirmware(url: String): Flow<FirmwareUpdateStatus> = flow {
+        val path = firmwareDownloader.downloadFirmware(url)
+        if (path == null) {
+            emit(FirmwareUpdateStatus.ErrorStarting)
+            return@flow
+        }
+        emitAll(updateFirmware(path))
+    }.flowOn(libPebbleCoroutineScope.coroutineContext)
 
     private fun beginFirmwareUpdate(pbzFw: PbzFirmware, offset: UInt) = flow {
         val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
@@ -183,7 +199,7 @@ class FirmwareUpdate(
             //  be called because we cancel the scope when we disconnect).
             watchDisconnected.await()
         }
-    }
+    }.flowOn(libPebbleCoroutineScope.coroutineContext)
 
     private fun sendFirmware(
         pbzFw: PbzFirmware,

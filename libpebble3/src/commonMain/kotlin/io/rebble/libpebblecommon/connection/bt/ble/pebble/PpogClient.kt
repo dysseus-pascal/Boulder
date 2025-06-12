@@ -40,7 +40,7 @@ class PpogClient(
     override suspend fun sendPacket(packet: ByteArray): Boolean {
         return gattClient.writeCharacteristic(
             serviceUuid = PPOGATT_DEVICE_SERVICE_UUID_CLIENT,
-            characteristicUuid = PPOGATT_DEVICE_CHARACTERISTIC_WRITE,
+            characteristicUuid = PPOGATT_DEVICE_CHARACTERISTIC_READ,
             value = packet,
             writeType = GattWriteType.NoResponse,
         )

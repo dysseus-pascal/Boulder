@@ -99,7 +99,7 @@ class WatchManagerTest {
             onDisconnection()
         }
 
-        override val disconnected: Deferred<Unit> = _disconnected
+        override val disconnected: WasDisconnected = WasDisconnected(_disconnected)
         override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     }
     private val connectionScopeFactory = object : ConnectionScopeFactory {

@@ -10,6 +10,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotifica
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
+import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
@@ -48,5 +50,6 @@ actual val platformModule: Module = module {
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
+    singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
     single { PlatformConfig(syncNotificationApps = true) }
 }

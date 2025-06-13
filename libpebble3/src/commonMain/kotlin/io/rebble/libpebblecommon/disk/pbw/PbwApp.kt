@@ -69,8 +69,6 @@ fun PbwApp.toLockerEntry(): LockerEntry {
         pbwVersionCode = info.versionCode.toString(),
         sideloaded = true,
         platforms = platforms,
-        appstoreData = TODO(),
-//        recordHashcode = TODO(),
-//        deleted = TODO(),
+        appstoreData = null,
     )
 }

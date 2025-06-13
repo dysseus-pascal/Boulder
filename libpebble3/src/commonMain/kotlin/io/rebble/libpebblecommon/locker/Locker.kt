@@ -28,6 +28,8 @@ import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readString
+import kotlinx.io.writeString
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -221,6 +223,11 @@ abstract class LockerPBWCache(context: AppContext) {
         }
     }
 
+    private fun sanitizeJS(js: String): String {
+        // Replace non-breaking spaces with regular spaces
+        return js.replace("\u00a0", " ")
+    }
+
     fun getPKJSFileForApp(appId: Uuid): Path {
         val pkjsPath = pkjsPathForApp(appId)
         val appPath = pathForApp(appId)
@@ -230,8 +237,9 @@ abstract class LockerPBWCache(context: AppContext) {
                 SystemFileSystem.createDirectories(pkjsCacheDir, false)
                 val pbwApp = PbwApp(pathForApp(appId))
                 pbwApp.getPKJSFile().use { source ->
-                    SystemFileSystem.sink(pkjsPath).use { sink ->
-                        source.transferTo(sink)
+                    val js = sanitizeJS(source.readString())
+                    SystemFileSystem.sink(pkjsPath).buffered().use { sink ->
+                        sink.writeString(js)
                     }
                 }
                 pkjsPath

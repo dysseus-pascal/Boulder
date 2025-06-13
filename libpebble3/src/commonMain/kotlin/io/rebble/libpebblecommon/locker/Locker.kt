@@ -105,9 +105,23 @@ class Locker(
 
     suspend fun update(locker: LockerModel) {
         logger.d("update: ${locker.applications.size}")
-        // TODO delete deleted entries, don't insert unchanged entries, etc
-        val toInsert = locker.applications.map { it.asEntity() }
+        val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
+        val toInsert = locker.applications.mapNotNull { new ->
+            val newEntity = new.asEntity()
+            val existing = existingApps.remove(newEntity.id)
+            if (existing == null) {
+                new.asEntity()
+            } else if (existing.recordHashCode() != newEntity.recordHashCode()) {
+                newEntity.copy(orderIndex = existing.orderIndex)
+            } else {
+                null
+            }
+        }
+        logger.d { "inserting: $toInsert" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
+        val toDelete = existingApps.map { it.key }
+        logger.d { "deleting: $toDelete" }
+        lockerEntryDao.markAllForDeletion(toDelete)
     }
 
     /**
@@ -164,8 +178,7 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
                 pbwIconResourceId = pbw?.iconResourceId ?: 0,
             )
         },
-//        recordHashcode = TODO(),
-//        deleted = TODO(),
+        orderIndex = -1,
     )
 }
 

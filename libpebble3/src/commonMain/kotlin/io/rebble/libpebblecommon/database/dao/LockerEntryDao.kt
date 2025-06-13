@@ -40,6 +40,9 @@ interface LockerEntryRealDao : LockerEntryDao {
         updateSync(syncLimit)
     }
 
+    @Query("SELECT * FROM LockerEntryEntity WHERE deleted = 0")
+    suspend fun getAll(): List<LockerEntry>
+
     @Query("""
         UPDATE LockerEntryEntity
         SET orderIndex = :orderIndex

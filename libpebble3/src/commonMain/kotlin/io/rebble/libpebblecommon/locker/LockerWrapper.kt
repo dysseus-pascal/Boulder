@@ -1,8 +1,10 @@
 package io.rebble.libpebblecommon.locker
 
 import io.rebble.libpebblecommon.metadata.WatchType
+import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
+@Serializable
 enum class AppType(val code: String) {
     Watchface("watchface"),
     Watchapp("watchapp"),

@@ -18,6 +18,7 @@ actual fun createJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     libPebble: LibPebble,
+    jsTokenUtil: JsTokenUtil,
 ): JsRunner = WebViewJsRunner(
     appContext.context,
     device,
@@ -26,4 +27,5 @@ actual fun createJsRunner(
     lockerEntry,
     jsPath,
     libPebble,
+    jsTokenUtil,
 )

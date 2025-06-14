@@ -41,6 +41,7 @@ class WebViewJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     libPebble: LibPebble,
+    jsTokenUtil: JsTokenUtil,
 ): JsRunner(appInfo, lockerEntry, jsPath, device) {
 
     companion object {
@@ -52,7 +53,7 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private val initializedLock = Object()
-    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages)
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),

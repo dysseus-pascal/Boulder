@@ -66,6 +66,10 @@ interface WebServices {
     suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult?
 }
 
+interface TokenProvider {
+    suspend fun getDevToken(): String?
+}
+
 data class ConnectedWatchFirmwareInfo(
     val platform: WatchHardwarePlatform,
     val version: FirmwareVersion,
@@ -213,8 +217,9 @@ class LibPebble3(
             defaultConfig: LibPebbleConfig,
             webServices: WebServices,
             appContext: AppContext,
+            tokenProvider: TokenProvider,
         ): LibPebble {
-            koin = initKoin(defaultConfig, webServices, appContext)
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider)
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }

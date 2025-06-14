@@ -9,7 +9,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlin.uuid.Uuid
 
-abstract class PKJSInterface(protected val jsRunner: JsRunner, protected val device: PebbleJSDevice, private val libPebble: LibPebble) {
+abstract class PKJSInterface(
+    protected val jsRunner: JsRunner,
+    protected val device: PebbleJSDevice,
+    private val libPebble: LibPebble,
+    private val jsTokenUtil: JsTokenUtil,
+) {
     open fun showSimpleNotificationOnPebble(title: String, notificationText: String) {
         runBlocking {
             libPebble.sendNotification(
@@ -36,7 +41,7 @@ abstract class PKJSInterface(protected val jsRunner: JsRunner, protected val dev
     open fun getAccountToken(): String {
         //XXX: This is a blocking call, but it's fine because it's called from a WebView thread, maybe
         return runBlocking(Dispatchers.IO) {
-            JsTokenUtil.getAccountToken(Uuid.parse(jsRunner.appInfo.uuid)) ?: ""
+            jsTokenUtil.getAccountToken(Uuid.parse(jsRunner.appInfo.uuid)) ?: ""
         }
     }
 
@@ -47,7 +52,7 @@ abstract class PKJSInterface(protected val jsRunner: JsRunner, protected val dev
      */
     open fun getWatchToken(): String {
         return runBlocking(Dispatchers.IO) {
-            JsTokenUtil.getWatchToken(
+            jsTokenUtil.getWatchToken(
                 uuid = Uuid.parse(jsRunner.appInfo.uuid),
                 developerId = jsRunner.lockerEntry.appstoreData?.developerId,
                 watchInfo = device.watchInfo

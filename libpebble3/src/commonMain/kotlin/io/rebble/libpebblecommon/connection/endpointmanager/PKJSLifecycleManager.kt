@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.locker.Locker
@@ -29,6 +30,7 @@ class PKJSLifecycleManager(
     private val locker: Locker,
     private val scope: ConnectionCoroutineScope,
     private val libPebble: LibPebble,
+    private val jsTokenUtil: JsTokenUtil,
 ) {
     companion object {
         private val logger = Logger.withTag(PKJSLifecycleManager::class.simpleName!!)
@@ -56,6 +58,7 @@ class PKJSLifecycleManager(
                 pbw.info,
                 lockerEntry,
                 libPebble,
+                jsTokenUtil,
             ).apply {
                 start(scope)
             }

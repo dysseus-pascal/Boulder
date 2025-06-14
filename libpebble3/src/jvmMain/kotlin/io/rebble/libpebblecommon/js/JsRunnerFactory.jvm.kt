@@ -15,6 +15,7 @@ actual fun createJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     libPebble: LibPebble,
+    jsTokenUtil: JsTokenUtil,
 ): JsRunner {
     TODO("Not yet implemented")
 }

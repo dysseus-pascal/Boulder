@@ -29,6 +29,7 @@ import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
+import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
@@ -66,6 +67,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverr
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
@@ -144,7 +146,8 @@ interface ConnectionScopeFactory {
 class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
     override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
-        val scope = koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
+        val scope =
+            koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
         Logger.d("scope: $scope / $uuid")
         return RealConnectionScope(scope, props.transport, props.scope, uuid)
     }
@@ -169,7 +172,12 @@ class HackyProvider<T>(val getter: () -> T) {
 
 expect val platformModule: Module
 
-fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContext: AppContext): Koin {
+fun initKoin(
+    defaultConfig: LibPebbleConfig,
+    webServices: WebServices,
+    appContext: AppContext,
+    tokenProvider: TokenProvider,
+): Koin {
     val koin = koinApplication().koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
     koin.loadModules(
@@ -186,6 +194,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                 single { Settings() }
                 single { appContext }
                 single { webServices }
+                single { tokenProvider }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)
@@ -221,6 +230,7 @@ fun initKoin(defaultConfig: LibPebbleConfig, webServices: WebServices, appContex
                 singleOf(::MissedCallSyncer)
                 singleOf(::FirmwareUpdateManager)
                 singleOf(::FirmwareDownloader)
+                singleOf(::JsTokenUtil)
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will

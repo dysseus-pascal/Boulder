@@ -3,12 +3,13 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.js.JsRunner
+import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.PKJSInterface
 import io.rebble.libpebblecommon.js.PebbleJSDevice
 import platform.JavaScriptCore.JSContext
 
-class JSCPKJSInterface(jsRunner: JsRunner, device: PebbleJSDevice, libPebble: LibPebble) :
-    PKJSInterface(jsRunner, device, libPebble), RegisterableJsInterface {
+class JSCPKJSInterface(jsRunner: JsRunner, device: PebbleJSDevice, libPebble: LibPebble, jsTokenUtil: JsTokenUtil) :
+    PKJSInterface(jsRunner, device, libPebble, jsTokenUtil), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPKJSInterface")
     override fun showToast(toast: String) {
         //TODO: Implement showToast for JSCPKJSInterface

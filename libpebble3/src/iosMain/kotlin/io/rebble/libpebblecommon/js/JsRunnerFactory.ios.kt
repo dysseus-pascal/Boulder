@@ -16,6 +16,7 @@ actual fun createJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     libPebble: LibPebble,
+    jsTokenUtil: JsTokenUtil,
 ): JsRunner = JavascriptCoreJsRunner(
     appInfo,
     lockerEntry,
@@ -23,4 +24,5 @@ actual fun createJsRunner(
     device,
     scope,
     libPebble,
+    jsTokenUtil = jsTokenUtil,
 )

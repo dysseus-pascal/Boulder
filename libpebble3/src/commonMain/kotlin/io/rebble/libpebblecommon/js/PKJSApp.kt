@@ -43,6 +43,7 @@ class PKJSApp(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     private val libPebble: LibPebble,
+    private val jsTokenUtil: JsTokenUtil,
 ) {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
@@ -94,7 +95,7 @@ class PKJSApp(
     suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
-        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble)
+        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble, jsTokenUtil)
         launchIncomingAppMessageHandler(device, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")

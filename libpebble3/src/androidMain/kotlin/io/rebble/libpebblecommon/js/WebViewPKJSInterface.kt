@@ -11,7 +11,8 @@ class WebViewPKJSInterface(
     device: PebbleJSDevice,
     private val context: Context,
     libPebble: LibPebble,
-): PKJSInterface(jsRunner, device, libPebble) {
+    jsTokenUtil: JsTokenUtil,
+): PKJSInterface(jsRunner, device, libPebble, jsTokenUtil) {
     companion object {
         private val logger = Logger.withTag(WebViewPKJSInterface::class.simpleName!!)
     }

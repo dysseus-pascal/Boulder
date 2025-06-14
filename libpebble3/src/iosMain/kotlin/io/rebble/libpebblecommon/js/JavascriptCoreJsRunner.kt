@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.js.JsRunner
+import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ class JavascriptCoreJsRunner(
     private val scope: CoroutineScope,
     private val libPebble: LibPebble,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
+    private val jsTokenUtil: JsTokenUtil,
 ): JsRunner(appInfo, lockerEntry, jsPath, device) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -33,7 +35,7 @@ class JavascriptCoreJsRunner(
     private fun initInterfaces(jsContext: JSContext) {
         val instances = listOf(
             XMLHTTPRequestManager(scope, jsContext),
-            JSCPKJSInterface(this, device, libPebble),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages)
         )
         instances.forEach { it.register(jsContext) }

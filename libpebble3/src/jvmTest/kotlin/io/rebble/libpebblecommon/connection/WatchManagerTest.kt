@@ -141,9 +141,6 @@ class WatchManagerTest {
         override suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult? {
             TODO("Not yet implemented")
         }
-        override suspend fun fetchUid(): String? {
-            TODO("Not yet implemented")
-        }
     }
     private val firmwareUpdateManager = FirmwareUpdateManager(webServices)
 

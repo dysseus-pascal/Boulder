@@ -119,6 +119,7 @@ class WatchManagerTest {
 
         override val companionAccessGranted: SharedFlow<Unit>
             get() = MutableSharedFlow()
+        override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
     }
     private val scanning = object : Scanning {
         override suspend fun startBleScan() {

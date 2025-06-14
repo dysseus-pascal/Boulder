@@ -10,5 +10,6 @@ actual fun createCompanionDeviceManager(appContext: AppContext, libPebbleCorouti
         }
 
         override val companionAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
+        override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
     }
 }

@@ -8,4 +8,5 @@ expect fun createCompanionDeviceManager(appContext: AppContext, libPebbleCorouti
 interface CompanionDevice {
     suspend fun registerDevice(transport: Transport)
     val companionAccessGranted: SharedFlow<Unit>
+    val notificationAccessGranted: SharedFlow<Unit>
 }

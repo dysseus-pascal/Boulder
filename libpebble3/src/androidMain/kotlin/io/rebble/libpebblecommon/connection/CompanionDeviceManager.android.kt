@@ -12,6 +12,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -30,6 +31,8 @@ class AndroidCompanionDevice(
     private val context = appContext.context
     private val _companionAccessGranted = MutableSharedFlow<Unit>()
     override val companionAccessGranted = _companionAccessGranted.asSharedFlow()
+    private val _notificationAccessGranted = MutableSharedFlow<Unit>()
+    override val notificationAccessGranted = _notificationAccessGranted.asSharedFlow()
 
     override suspend fun registerDevice(transport: Transport) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -97,8 +100,15 @@ class AndroidCompanionDevice(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // TODO handle
         val component = LibPebbleNotificationListener.componentName(context)
         if (hasNotificationAccess(component)) {
+            libPebbleCoroutineScope.launch {
+                _notificationAccessGranted.emit(Unit)
+            }
             return
         }
         requestNotificationAccess(component)
+        libPebbleCoroutineScope.launch {
+            delay(5.seconds)
+            _notificationAccessGranted.emit(Unit)
+        }
     }
 }

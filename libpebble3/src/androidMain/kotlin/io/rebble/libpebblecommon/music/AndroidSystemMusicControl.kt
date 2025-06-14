@@ -8,6 +8,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.toLibPebbleState
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -21,6 +22,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -30,7 +32,8 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class AndroidSystemMusicControl(
     appContext: AppContext,
-    private val libPebbleCoroutineScope: LibPebbleCoroutineScope
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val companionDevice: CompanionDevice,
 ): SystemMusicControl {
     private val logger = Logger.withTag("AndroidSystemMusicControl")
     private val context = appContext.context
@@ -38,16 +41,31 @@ class AndroidSystemMusicControl(
     private val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
     private val notificationServiceComponent = LibPebbleNotificationListener.componentName(context)
 
+    private fun addCallbackSafely(listener: MediaSessionManager.OnActiveSessionsChangedListener): Boolean {
+        try {
+            mediaSessionManager.addOnActiveSessionsChangedListener(
+                listener,
+                notificationServiceComponent
+            )
+            return true
+        } catch (e: SecurityException) {
+            return false
+        }
+    }
+
     private val activeSessions = callbackFlow {
         val listener = MediaSessionManager.OnActiveSessionsChangedListener {
             trySend(
                 mediaSessionManager.getActiveSessions(notificationServiceComponent)
             )
         }
-        mediaSessionManager.addOnActiveSessionsChangedListener(
-            listener,
-            notificationServiceComponent
-        )
+        if (!addCallbackSafely(listener)) {
+            logger.i { "Couldn't add media listener; waiting for notification access" }
+            companionDevice.notificationAccessGranted.first()
+            if (!addCallbackSafely(listener)) {
+                logger.e { "Couldn't add media listener after notification access granted" }
+            }
+        }
         trySend(
             mediaSessionManager.getActiveSessions(notificationServiceComponent)
         )

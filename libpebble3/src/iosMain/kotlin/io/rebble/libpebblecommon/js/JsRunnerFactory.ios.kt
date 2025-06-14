@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.js
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
-import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JavascriptCoreJsRunner
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.io.files.Path

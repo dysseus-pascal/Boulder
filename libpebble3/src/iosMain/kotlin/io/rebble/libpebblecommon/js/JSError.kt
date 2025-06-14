@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.io.rebble.libpebblecommon.js
+package io.rebble.libpebblecommon.js
 
 data class JSError(
     val cause: String?,

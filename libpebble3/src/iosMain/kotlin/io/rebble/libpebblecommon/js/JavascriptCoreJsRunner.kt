@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.io.rebble.libpebblecommon.js
+package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble

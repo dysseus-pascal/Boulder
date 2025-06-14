@@ -15,7 +15,6 @@ import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -140,6 +139,9 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
         override suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult? {
+            TODO("Not yet implemented")
+        }
+        override suspend fun fetchUid(): String? {
             TODO("Not yet implemented")
         }
     }

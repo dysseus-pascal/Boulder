@@ -141,20 +141,17 @@ class WatchManager(
 
     private suspend fun persistIfNeeded(
         watch: Watch,
-        states: CurrentAndPreviousState?,
-        ) {
+    ) {
         if (watch.forget) {
             logger.d("Deleting $watch from db")
             knownWatchDao.remove(watch.transport)
         } else {
-            if (states.justConnected()) {
-                val wouldPersist = watch.asKnownWatchItem()
-                if (wouldPersist != null && wouldPersist != watch.asPersisted) {
-                    knownWatchDao.insertOrUpdate(wouldPersist)
-                    updateWatch(watch.transport) {
-                        logger.d("Persisting changes for $wouldPersist")
-                        it.copy(asPersisted = wouldPersist)
-                    }
+            val wouldPersist = watch.asKnownWatchItem()
+            if (wouldPersist != null && wouldPersist != watch.asPersisted) {
+                knownWatchDao.insertOrUpdate(wouldPersist)
+                updateWatch(watch.transport) {
+                    logger.d("Persisting changes for $wouldPersist")
+                    it.copy(asPersisted = wouldPersist)
                 }
             }
         }
@@ -187,7 +184,7 @@ class WatchManager(
                     val hasConnectionAttempt =
                         active.containsKey(device.transport) || activeConnections.contains(device.transport)
 
-                    persistIfNeeded(device, states)
+                    persistIfNeeded(device)
                     // Removed forgotten device once it is disconnected
                     if (!hasConnectionAttempt && device.forget) {
                         logger.d("removing ${device.transport} from allWatches")
@@ -228,7 +225,8 @@ class WatchManager(
                             it.copy(firmwareUpdateAvailable = null)
                         }
                         libPebbleCoroutineScope.launch {
-                            val update = firmwareUpdateManager.checkForUpdates(states.currentState.watchInfo)
+                            val update =
+                                firmwareUpdateManager.checkForUpdates(states.currentState.watchInfo)
                             logger.d { "fw update available=$update" }
                             updateWatch(transport) {
                                 it.copy(firmwareUpdateAvailable = update)

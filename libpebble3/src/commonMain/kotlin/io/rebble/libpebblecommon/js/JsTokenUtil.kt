@@ -13,7 +13,7 @@ class JsTokenUtil(
 ) {
     companion object {
         private const val ACCOUNT_TOKEN_SALT =
-            "MMIxeUT[G9/U#(7V67O^EuADSw,{\$C;B}`>|-  lrQCs|t|k=P_!*LETm,RKc,BG*'"
+            "MMIxeUT[G9/U#(7V67O^EuADSw,{\$C;B}`>|-nlrQCs|t|k=P_!*LETm,RKc,BG*'"
     }
 
     private fun md5Digest(input: String): String {

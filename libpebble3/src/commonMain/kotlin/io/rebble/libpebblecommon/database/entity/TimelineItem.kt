@@ -24,6 +24,7 @@ import kotlin.uuid.Uuid
     databaseId = BlobDatabase.Notification,
     onlyInsertAfter = true,
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
+    windowBeforeSecs = -1,
 )
 data class TimelineNotification(
     override val itemId: Uuid,
@@ -39,6 +40,7 @@ data class TimelineNotification(
     databaseId = BlobDatabase.Pin,
     windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
+    onlyInsertAfter = false,
 )
 data class TimelinePin(
     override val itemId: Uuid,
@@ -54,6 +56,7 @@ data class TimelinePin(
     databaseId = BlobDatabase.Reminder,
     windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
+    onlyInsertAfter = false,
 )
 data class TimelineReminder(
     override val itemId: Uuid,

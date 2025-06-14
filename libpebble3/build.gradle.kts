@@ -1,3 +1,6 @@
+import com.google.devtools.ksp.gradle.KspTask
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     `maven-publish`
@@ -155,8 +158,25 @@ kotlin {
 
 // Otherwise it doesn't trigger our blobdbgen processor when compiling code
 // https://github.com/google/ksp/issues/567
-tasks.withType<org.jetbrains.kotlin.gradle.dsl.KotlinCompile<*>>().all {
+tasks.withType<KotlinCompilationTask<*>>().all {
     if (name != "kspCommonMainKotlinMetadata") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+}
+afterEvaluate {
+    tasks.named("kspDebugKotlinAndroid") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+    tasks.named("kspReleaseKotlinAndroid") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+    tasks.named("kspKotlinIosArm64") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+    tasks.named("kspKotlinIosX64") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+    tasks.named("kspKotlinIosSimulatorArm64") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
 }

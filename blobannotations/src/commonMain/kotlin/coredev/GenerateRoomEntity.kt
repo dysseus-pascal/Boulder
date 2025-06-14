@@ -6,11 +6,11 @@ annotation class GenerateRoomEntity(
     val primaryKey: String,
     val databaseId: BlobDatabase,
     /** Assuming there is a [timestamp] field, how long before timestamp we should sync to watch */
-    val windowBeforeSecs: Long = -1,
+    val windowBeforeSecs: Long,
     /** Assuming there is a [timestamp] field, how long after timestamp we should sync to watch */
-    val windowAfterSecs: Long = -1,
+    val windowAfterSecs: Long,
     /** Only process inserts for records with [timestamp] after :insertOnlyAfterMs */
-    val onlyInsertAfter: Boolean = false,
+    val onlyInsertAfter: Boolean,
 )
 
 // TODO move somewhere better

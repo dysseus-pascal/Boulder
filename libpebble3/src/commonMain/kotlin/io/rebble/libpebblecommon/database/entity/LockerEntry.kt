@@ -13,7 +13,13 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
-@GenerateRoomEntity(primaryKey = "id", databaseId = BlobDatabase.App)
+@GenerateRoomEntity(
+    primaryKey = "id",
+    databaseId = BlobDatabase.App,
+    windowBeforeSecs = -1,
+    windowAfterSecs = -1,
+    onlyInsertAfter = false,
+)
 data class LockerEntry(
     val id: Uuid,
     val version: String,
@@ -23,8 +29,10 @@ data class LockerEntry(
     val configurable: Boolean,
     val pbwVersionCode: String,
     val sideloaded: Boolean = false,
-    @Embedded val appstoreData: LockerEntryAppstoreData? = null,
+    @Embedded
+    val appstoreData: LockerEntryAppstoreData? = null,
     val platforms: List<LockerEntryPlatform>,
+
     @ColumnInfo(defaultValue = "0")
     val orderIndex: Int = 0,
 ) : BlobDbItem {
@@ -107,4 +115,5 @@ fun List<LockerEntryPlatform>.recordHashCode(): Int {
     return result
 }
 
-private val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")
+private
+val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")

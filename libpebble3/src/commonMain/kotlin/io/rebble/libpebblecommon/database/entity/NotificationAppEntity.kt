@@ -23,7 +23,13 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
-@GenerateRoomEntity(primaryKey = "packageName", databaseId = BlobDatabase.CannedResponses)
+@GenerateRoomEntity(
+    primaryKey = "packageName",
+    databaseId = BlobDatabase.CannedResponses,
+    windowBeforeSecs = -1,
+    windowAfterSecs = -1,
+    onlyInsertAfter = false,
+)
 data class NotificationAppItem(
     val packageName: String,
     val name: String,
@@ -35,17 +41,25 @@ data class NotificationAppItem(
     val stateUpdated: MillisecondInstant,
     val lastNotified: MillisecondInstant,
 ) : BlobDbItem {
-    override fun key(): UByteArray = SFixedString(StructMapper(), packageName.length, packageName).toBytes()
+    override fun key(): UByteArray =
+        SFixedString(StructMapper(), packageName.length, packageName).toBytes()
 
     override fun value(platform: WatchType): UByteArray? {
         val m = StructMapper()
         val entity = NotificationAppBlobItem(
             attributes = listOf(
-                Attribute(TimelineAttribute.AppName.id, SFixedString(m, name.length, name).toBytes()),
+                Attribute(
+                    TimelineAttribute.AppName.id,
+                    SFixedString(m, name.length, name).toBytes()
+                ),
                 Attribute(TimelineAttribute.MuteDayOfWeek.id, SUByte(m, muteState.value).toBytes()),
                 Attribute(
                     TimelineAttribute.LastUpdated.id,
-                    SUInt(m, stateUpdated.instant.epochSeconds.toUInt(), endianness = Endian.Little).toBytes()
+                    SUInt(
+                        m,
+                        stateUpdated.instant.epochSeconds.toUInt(),
+                        endianness = Endian.Little
+                    ).toBytes()
                 ),
             )
         )
@@ -55,7 +69,8 @@ data class NotificationAppItem(
     override fun recordHashCode(): Int = hashCode()
 }
 
-fun NotificationAppItem.everNotified(): Boolean = lastNotified.instant.epochSeconds > Instant.DISTANT_PAST.epochSeconds
+fun NotificationAppItem.everNotified(): Boolean =
+    lastNotified.instant.epochSeconds > Instant.DISTANT_PAST.epochSeconds
 
 @Serializable
 enum class MuteState(val value: UByte) {
@@ -114,7 +129,8 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
     try {
         val packageName = key.asByteArray().decodeToString()
         val item = NotificationAppBlobItem().apply { fromBytes(DataBuffer(value)) }
-        val appName = item.attributes.get(TimelineAttribute.AppName)?.asByteArray()?.decodeToString()
+        val appName =
+            item.attributes.get(TimelineAttribute.AppName)?.asByteArray()?.decodeToString()
         if (appName == null) {
             logger.e("appName is null")
             return null

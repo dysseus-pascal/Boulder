@@ -1,5 +1,6 @@
 /* This is used in both iOS and Android, so make sure any changes are compatible with both */
 const _global = typeof window !== 'undefined' ? window : globalThis;
+window = _global; // For compatibility with existing code that expects `window`
 ((global) => {
     const PebbleEventTypes = {
         READY: 'ready',

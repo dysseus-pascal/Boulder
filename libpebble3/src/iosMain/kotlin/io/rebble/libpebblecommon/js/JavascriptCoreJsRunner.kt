@@ -3,9 +3,6 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
-import io.rebble.libpebblecommon.js.JsRunner
-import io.rebble.libpebblecommon.js.JsTokenUtil
-import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.io.buffered
@@ -35,6 +32,7 @@ class JavascriptCoreJsRunner(
     private fun initInterfaces(jsContext: JSContext) {
         val instances = listOf(
             XMLHTTPRequestManager(scope, jsContext),
+            JSTimeout(scope, jsContext),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages)
         )
@@ -81,7 +79,8 @@ class JavascriptCoreJsRunner(
         setupJsContext()
         logger.d { "JS Context set up" }
         evaluateInternalScript("XMLHTTPRequest")
-        logger.d { "XHR script evaluated" }
+        evaluateInternalScript("JSTimeout")
+        logger.d { "Standard lib scripts evaluated" }
         evaluateInternalScript("startup")
         logger.d { "Startup script evaluated" }
         loadAppJs(jsPath.toString())

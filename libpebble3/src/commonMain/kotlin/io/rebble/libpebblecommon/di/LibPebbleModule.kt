@@ -67,6 +67,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverr
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
@@ -231,6 +232,7 @@ fun initKoin(
                 singleOf(::FirmwareUpdateManager)
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
+                singleOf(::Datalogging)
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will

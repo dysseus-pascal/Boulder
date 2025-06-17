@@ -134,7 +134,7 @@ class RealPebbleConnector(
 
                 systemService.init()
                 appRunStateService.init()
-                dataLoggingService.init()
+                dataLoggingService.initialInit()
 
                 val watchInfo = negotiator.negotiate(systemService, appRunStateService)
                 if (watchInfo == null) {
@@ -146,7 +146,6 @@ class RealPebbleConnector(
 
                 putBytesService.init()
                 firmwareUpdate.setPlatform(watchInfo.platform)
-                dataLoggingService.acceptSessions = true
 
                 val recoveryMode = when {
                     watchInfo.runningFwVersion.isRecovery -> true.also {
@@ -185,6 +184,7 @@ class RealPebbleConnector(
                 pkjsLifecycleManager.init(transport, watchInfo)
                 phoneControlManager.init()
                 musicControlManager.init()
+                dataLoggingService.realInit(watchInfo.serial)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

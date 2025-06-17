@@ -65,6 +65,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
     suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult?
+    suspend fun uploadMemfaultChunk(chunk: ByteArray, deviceSerial: String)
 }
 
 interface TokenProvider {

@@ -149,7 +149,8 @@ internal class RealNegotiatingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
     private val activeDevice: ActiveDevice,
 ) :
-    PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
+    PebbleDevice by pebbleDevice, ConnectingPebbleDevice, NegotiatingPebbleDevice,
+    ActiveDevice by activeDevice {
     override fun toString(): String = "NegotiatingPebbleDevice: $pebbleDevice"
 }
 

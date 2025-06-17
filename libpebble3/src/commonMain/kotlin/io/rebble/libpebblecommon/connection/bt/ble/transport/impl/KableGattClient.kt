@@ -18,6 +18,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlin.uuid.Uuid
@@ -42,8 +43,8 @@ class KableGattConnector(
         peripheral.state.dropWhile {
             // Skip initial disconnected state before we connect
             it is State.Disconnected
-        }.first { it is State.Disconnected }.also {
-            logger.i { "Disconnection: $it" }
+        }.filterIsInstance<State.Disconnected>().first().also {
+            logger.i { "Disconnection: status=${it.status}" }
         }
     }
 
@@ -58,8 +59,10 @@ class KableGattConnector(
     }
 
     override suspend fun disconnect() {
+        logger.d { "disconnect()..." }
         peripheral.disconnect()
         peripheral.close()
+        logger.d { "/disconnect()..." }
     }
 
     override fun close() {

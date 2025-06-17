@@ -3,11 +3,14 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import com.juul.kable.ManufacturerData
 import com.oldguy.common.getShortAt
+import io.rebble.libpebblecommon.connection.bt.BluetoothState
+import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Companion.decodePebbleScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 data class BleScanResult(
@@ -26,8 +29,10 @@ class RealScanning(
     private val watchConnector: WatchConnector,
     private val bleScanner: BleScanner,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val bluetoothStateProvider: BluetoothStateProvider,
 ) : Scanning {
     private var bleScanJob: Job? = null
+    override val bluetoothEnabled: StateFlow<BluetoothState> = bluetoothStateProvider.state
 
     override suspend fun startBleScan() {
         // TODO add timeout

@@ -121,6 +121,9 @@ class WatchManagerTest {
         override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
     }
     private val scanning = object : Scanning {
+        override val bluetoothEnabled: StateFlow<BluetoothState>
+            get() = TODO("Not yet implemented")
+
         override suspend fun startBleScan() {
         }
 

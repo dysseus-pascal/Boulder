@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.LibPebbleConfigHolder
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
+import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
@@ -92,6 +93,7 @@ fun PebbleDevices.forDevice(transport: Transport): Flow<PebbleDevice> {
 }
 
 interface Scanning {
+    val bluetoothEnabled: StateFlow<BluetoothState>
     suspend fun startBleScan()
     suspend fun stopBleScan()
     suspend fun startClassicScan()

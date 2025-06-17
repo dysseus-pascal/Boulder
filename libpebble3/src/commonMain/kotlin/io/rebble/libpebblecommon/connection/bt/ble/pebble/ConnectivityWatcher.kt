@@ -1,15 +1,19 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
+import com.juul.kable.GattStatusException
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.experimental.and
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Talks to watch connectivity characteristic describing pair status, connection, and other parameters
@@ -26,11 +30,20 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
             return false
         }
         scope.launch {
-            connectivitySub.collect {
-                    _status.value = ConnectivityStatus(it).also {
-                        logger.d("connectivity: $it")
+            // There is some weird timing thing where this throws a GATT error "Authorization is
+            // insufficient", if done too early.
+            delay(2.seconds)
+            if (!connectivitySub.collectConnectivityChanges()) {
+                delay(5.seconds)
+                logger.i { "retrying connectivitySub.collectConnectivityChanges()" }
+                if (!connectivitySub.collectConnectivityChanges()) {
+                    delay(10.seconds)
+                    logger.i { "retrying connectivitySub.collectConnectivityChanges() (last attempt)" }
+                    if (!connectivitySub.collectConnectivityChanges()) {
+                        logger.w { "failed to subscribe to connectivity changes after retries" }
                     }
                 }
+            }
         }
         // Asterix doesn't notify on subscription right now - so we need to do an explicit read
         val connectivity =
@@ -41,6 +54,20 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
         }
         _status.value = ConnectivityStatus(connectivity)
         return true
+    }
+
+    private suspend fun Flow<ByteArray>.collectConnectivityChanges(): Boolean {
+        try {
+            collect {
+                _status.value = ConnectivityStatus(it).also {
+                    logger.d("connectivity: $it")
+                }
+            }
+            return true
+        } catch (e: GattStatusException) {
+            logger.e(e) { "connectivitySub.collect ${e.message}" }
+            return false
+        }
     }
 }
 

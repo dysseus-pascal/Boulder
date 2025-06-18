@@ -1,16 +1,11 @@
 package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.connection.Transport
-import io.rebble.libpebblecommon.connection.forDevice
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.DataLoggingIncomingPacket
 import io.rebble.libpebblecommon.packets.DataLoggingOutgoingPacket
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlin.uuid.Uuid
@@ -20,7 +15,7 @@ class DataLoggingService(
     private val scope: ConnectionCoroutineScope,
     private val datalogging: Datalogging,
 ) : ProtocolService {
-    private var deviceSerial: String? = null
+    private var watchInfo: WatchInfo? = null
     private var acceptSessions = false
 
     companion object {
@@ -41,9 +36,9 @@ class DataLoggingService(
         }
     }
 
-    suspend fun realInit(serial: String) {
+    suspend fun realInit(info: WatchInfo) {
         acceptSessions = true
-        deviceSerial = serial
+        watchInfo = info
         send(DataLoggingOutgoingPacket.ReportOpenSessions(emptyList()))
     }
 
@@ -66,16 +61,16 @@ class DataLoggingService(
                         return@onEach
                     }
                     sendAckNack(id)
-                    val serial = deviceSerial
-                    if (serial == null) {
-                        logger.e { "Device serial is null" }
+                    val info = watchInfo
+                    if (info == null) {
+                        logger.e { "watch info is null" }
                         return@onEach
                     }
                     datalogging.logData(
                         uuid = session.uuid,
                         tag = session.tag,
                         data = it.payload.get().toByteArray(),
-                        deviceSerial = serial,
+                        watchInfo = info,
                     )
                 }
 

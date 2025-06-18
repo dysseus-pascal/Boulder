@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.Deferred
@@ -65,7 +66,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
     suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult?
-    suspend fun uploadMemfaultChunk(chunk: ByteArray, deviceSerial: String)
+    suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
 }
 
 interface TokenProvider {

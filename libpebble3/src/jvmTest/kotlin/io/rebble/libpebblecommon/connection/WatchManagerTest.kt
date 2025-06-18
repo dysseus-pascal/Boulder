@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CompletableDeferred
@@ -145,7 +146,7 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
 
-        override suspend fun uploadMemfaultChunk(chunk: ByteArray, deviceSerial: String) {
+        override suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
             TODO("Not yet implemented")
         }
     }

@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
@@ -18,14 +19,14 @@ class Datalogging(
 ) {
     private val logger = Logger.withTag("Datalogging")
 
-    fun logData(uuid: Uuid, tag: UInt, data: ByteArray, deviceSerial: String) {
+    fun logData(uuid: Uuid, tag: UInt, data: ByteArray, watchInfo: WatchInfo) {
         if (uuid == SYSTEM_APP_UUID) {
             if (tag == MEMFAULT_CHUNKS_TAG) {
                 libPebbleCoroutineScope.launch {
                     val chunk = MemfaultChunk()
                     chunk.fromBytes(DataBuffer(data.toUByteArray()))
                     val chunkBytes = chunk.bytes.get()
-                    webServices.uploadMemfaultChunk(chunkBytes.toByteArray(), deviceSerial)
+                    webServices.uploadMemfaultChunk(chunkBytes.toByteArray(), watchInfo)
                 }
             }
         }

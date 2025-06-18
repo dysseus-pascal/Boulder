@@ -184,7 +184,7 @@ class RealPebbleConnector(
                 pkjsLifecycleManager.init(transport, watchInfo)
                 phoneControlManager.init()
                 musicControlManager.init()
-                dataLoggingService.realInit(watchInfo.serial)
+                dataLoggingService.realInit(watchInfo)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

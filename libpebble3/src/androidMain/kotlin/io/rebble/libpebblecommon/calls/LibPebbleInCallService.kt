@@ -8,13 +8,12 @@ import android.telecom.InCallService
 import android.telecom.VideoProfile
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class LibPebbleInCallService: InCallService(), KoinComponent {
     companion object {
-        private val logger = Logger.withTag(LibPebbleNotificationListener::class.simpleName!!)
+        private val logger = Logger.withTag("LibPebbleInCallService")
     }
 
     private val libPebble: LibPebble by inject()

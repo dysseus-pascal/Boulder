@@ -1,9 +1,6 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.js.JsRunner
-import io.rebble.libpebblecommon.js.PebbleJSDevice
-import io.rebble.libpebblecommon.js.PrivatePKJSInterface
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,6 +24,7 @@ class JSCPrivatePKJSInterface(
             "getVersionCode" to this::getVersionCode,
             "getTimelineTokenAsync" to this::getTimelineTokenAsync,
             "privateFnConfirmReadySignal" to this::privateFnConfirmReadySignal,
+            "getActivePebbleWatchInfo" to this::getActivePebbleWatchInfo,
         )
     }
 

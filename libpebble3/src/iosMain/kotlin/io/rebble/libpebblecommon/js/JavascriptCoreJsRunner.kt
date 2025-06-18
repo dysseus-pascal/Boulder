@@ -75,11 +75,23 @@ class JavascriptCoreJsRunner(
         jsContext = null
     }
 
-    override suspend fun start() {
-        setupJsContext()
-        logger.d { "JS Context set up" }
+    private fun evaluateStandardLib() {
         evaluateInternalScript("XMLHTTPRequest")
         evaluateInternalScript("JSTimeout")
+        evaluateInternalScript("JSGeolocation")
+    }
+
+    private fun setupNavigator() {
+        jsContext?.set("navigator", mapOf(
+            "userAgent" to "PKJS"
+        ))
+    }
+
+    override suspend fun start() {
+        setupJsContext()
+        setupNavigator()
+        logger.d { "JS Context set up" }
+        evaluateStandardLib()
         logger.d { "Standard lib scripts evaluated" }
         evaluateInternalScript("startup")
         logger.d { "Startup script evaluated" }

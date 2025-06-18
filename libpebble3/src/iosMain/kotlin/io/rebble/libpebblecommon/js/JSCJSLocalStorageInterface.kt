@@ -31,7 +31,6 @@ class JSCJSLocalStorageInterface(
     }
 
     override fun close() {
-        TODO("Not yet implemented")
     }
 
 }

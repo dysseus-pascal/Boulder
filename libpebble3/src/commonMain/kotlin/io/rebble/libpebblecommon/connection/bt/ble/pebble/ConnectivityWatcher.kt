@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.io.IOException
 import kotlin.experimental.and
 import kotlin.time.Duration.Companion.seconds
 
@@ -65,6 +66,11 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
             }
             return true
         } catch (e: GattStatusException) {
+            // Android
+            logger.e(e) { "connectivitySub.collect ${e.message}" }
+            return false
+        } catch (e: IOException) {
+            // iOS
             logger.e(e) { "connectivitySub.collect ${e.message}" }
             return false
         }

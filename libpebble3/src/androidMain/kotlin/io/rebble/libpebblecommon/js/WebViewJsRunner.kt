@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.js
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
@@ -23,8 +22,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,16 +35,16 @@ import kotlinx.serialization.json.Json
 
 
 class WebViewJsRunner(
-    val context: Context,
+    appContext: AppContext,
     device: PebbleJSDevice,
-    val scope: CoroutineScope,
+    private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
     libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
 ): JsRunner(appInfo, lockerEntry, jsPath, device) {
-
+    private val context = appContext.context
     companion object {
         const val API_NAMESPACE = "Pebble"
         const val PRIVATE_API_NAMESPACE = "_$API_NAMESPACE"
@@ -55,9 +56,16 @@ class WebViewJsRunner(
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages)
+    private val localStorageInterface = WebViewJSLocalStorageInterface(this, appContext) {
+        webView?.evaluateJavascript(
+            it,
+            null
+        )
+    }
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
-            Pair(PRIVATE_API_NAMESPACE, privateJsInterface)
+            Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
+            Pair("localStorage", localStorageInterface)
     )
 
     private val webViewClient = object : WebViewClient() {
@@ -181,7 +189,7 @@ class WebViewJsRunner(
             settings.allowUniversalAccessFromFileURLs = true
             settings.allowFileAccessFromFileURLs = true
 
-            settings.databaseEnabled = true
+            settings.databaseEnabled = false
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             it.clearCache(true)

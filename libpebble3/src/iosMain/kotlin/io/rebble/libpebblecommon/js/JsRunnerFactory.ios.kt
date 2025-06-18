@@ -21,6 +21,7 @@ actual fun createJsRunner(
     lockerEntry,
     jsPath,
     device,
+    appContext,
     scope,
     libPebble,
     jsTokenUtil = jsTokenUtil,

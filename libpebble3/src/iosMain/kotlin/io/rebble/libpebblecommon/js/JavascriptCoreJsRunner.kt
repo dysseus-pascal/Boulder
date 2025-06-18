@@ -1,8 +1,10 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.io.buffered
@@ -20,6 +22,7 @@ class JavascriptCoreJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     device: PebbleJSDevice,
+    private val appContext: AppContext,
     private val scope: CoroutineScope,
     private val libPebble: LibPebble,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
@@ -34,7 +37,8 @@ class JavascriptCoreJsRunner(
             XMLHTTPRequestManager(scope, jsContext),
             JSTimeout(scope, jsContext),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages)
+            JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages),
+            JSCJSLocalStorageInterface(this, appContext)
         )
         instances.forEach { it.register(jsContext) }
         interfaces = instances

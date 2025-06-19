@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -95,10 +96,10 @@ class Locker(
             }
         }
 
-    override fun setAppOrder(id: Uuid, order: Int) {
-        libPebbleCoroutineScope.launch {
+    override suspend fun setAppOrder(id: Uuid, order: Int) {
+        libPebbleCoroutineScope.async {
             lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimit)
-        }
+        }.await()
     }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)

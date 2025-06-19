@@ -109,7 +109,7 @@ interface RequestSync {
 interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path)
     fun getLocker(): Flow<List<LockerWrapper>>
-    fun setAppOrder(id: Uuid, order: Int)
+    suspend fun setAppOrder(id: Uuid, order: Int)
 }
 
 interface NotificationApps {

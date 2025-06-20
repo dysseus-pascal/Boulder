@@ -142,7 +142,7 @@ class WatchManagerTest {
         override suspend fun fetchLocker(): LockerModel? {
             TODO("Not yet implemented")
         }
-        override suspend fun checkForFirmwareUpdate(watch: ConnectedWatchFirmwareInfo): FirmwareUpdateCheckResult? {
+        override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult? {
             TODO("Not yet implemented")
         }
 

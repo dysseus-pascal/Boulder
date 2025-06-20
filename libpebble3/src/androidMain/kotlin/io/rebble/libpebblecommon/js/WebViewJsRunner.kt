@@ -240,7 +240,7 @@ class WebViewJsRunner(
     }
 
     override fun loadUrl(url: String) {
-        TODO()
+        _urlOpenRequests.tryEmit(url)
     }
 
     private suspend fun loadApp(url: String) {
@@ -309,5 +309,17 @@ class WebViewJsRunner(
             webView?.loadUrl("javascript:signalAppMessageNack(${Uri.encode("'" + (data ?: "null") + "'")})")
         }
         return true
+    }
+
+    override suspend fun signalShowConfiguration() {
+        withContext(Dispatchers.Main) {
+            webView?.loadUrl("javascript:signalShowConfiguration()")
+        }
+    }
+
+    override suspend fun signalWebviewClosed(data: String?) {
+        withContext(Dispatchers.Main) {
+            webView?.loadUrl("javascript:signalWebviewClosedEvent(${Uri.encode("'" + (data ?: "null") + "'")})")
+        }
     }
 }

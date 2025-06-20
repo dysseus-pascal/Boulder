@@ -204,6 +204,7 @@ class RealPebbleConnector(
                         logs = logDumpService,
                         coreDump = getBytesService,
                         music = musicService,
+                        pkjs = pkjsLifecycleManager
                     )
                 )
             }

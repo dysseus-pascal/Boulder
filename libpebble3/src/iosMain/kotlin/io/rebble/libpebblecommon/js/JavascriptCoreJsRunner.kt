@@ -109,7 +109,7 @@ class JavascriptCoreJsRunner(
     }
 
     override fun loadUrl(url: String) {
-        logger.e { "TODO" }
+        _urlOpenRequests.tryEmit(url)
     }
 
     override suspend fun loadAppJs(jsUrl: String) {
@@ -147,5 +147,13 @@ class JavascriptCoreJsRunner(
 
     override suspend fun signalReady() {
         jsContext?.globalObject?.invokeMethod("signalReady", null)
+    }
+
+    override suspend fun signalShowConfiguration() {
+        jsContext?.globalObject?.invokeMethod("signalShowConfiguration", null)
+    }
+
+    override suspend fun signalWebviewClosed(data: String?) {
+        jsContext?.globalObject?.invokeMethod("signalWebviewClosedEvent", listOf(data))
     }
 }

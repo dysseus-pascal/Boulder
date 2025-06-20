@@ -2,10 +2,6 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.js.JsRunner
-import io.rebble.libpebblecommon.js.JsTokenUtil
-import io.rebble.libpebblecommon.js.PKJSInterface
-import io.rebble.libpebblecommon.js.PebbleJSDevice
 import platform.JavaScriptCore.JSContext
 
 class JSCPKJSInterface(jsRunner: JsRunner, device: PebbleJSDevice, libPebble: LibPebble, jsTokenUtil: JsTokenUtil) :

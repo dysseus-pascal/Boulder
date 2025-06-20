@@ -23,7 +23,11 @@ abstract class JsRunner(
     abstract suspend fun signalTimelineToken(callId: String, token: String)
     abstract suspend fun signalTimelineTokenFail(callId: String)
     abstract suspend fun signalReady()
+    abstract suspend fun signalShowConfiguration()
+    abstract suspend fun signalWebviewClosed(data: String?)
 
     protected val _outgoingAppMessages = MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>(extraBufferCapacity = 1)
     val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
+    protected val _urlOpenRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val urlOpenRequests = _urlOpenRequests.asSharedFlow()
 }

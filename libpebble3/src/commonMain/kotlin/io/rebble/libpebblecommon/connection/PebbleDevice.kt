@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
+import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
@@ -101,6 +102,10 @@ object ConnectedPebble {
         val runningApp: StateFlow<Uuid?>
     }
 
+    interface PKJS {
+        val currentPKJSSession: StateFlow<PKJSApp?>
+    }
+
     interface Time {
         suspend fun updateTime()
     }
@@ -134,6 +139,7 @@ object ConnectedPebble {
         val logs: Logs,
         val coreDump: CoreDump,
         val music: Music,
+        val pkjs: PKJS,
     )
 
     class PrfServices(
@@ -155,4 +161,5 @@ interface ConnectedPebbleDevice :
     ConnectedPebble.AppMessages,
     ConnectedPebble.Logs,
     ConnectedPebble.CoreDump,
-    ConnectedPebble.Music
+    ConnectedPebble.Music,
+    ConnectedPebble.PKJS

@@ -13,9 +13,11 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.files.Path
@@ -51,6 +53,7 @@ class PKJSApp(
     val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
+    val urlOpenRequests: Flow<String>? get() = jsRunner?.urlOpenRequests
 
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {
@@ -92,6 +95,10 @@ class PKJSApp(
         }?.launchIn(scope) ?: error("JsRunner not initialized")
     }
 
+    suspend fun showConfiguration() {
+        jsRunner?.signalShowConfiguration()
+    }
+
     suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
@@ -105,6 +112,12 @@ class PKJSApp(
         jsRunner?.stop()
         runningScope?.cancel()
         jsRunner = null
+    }
+
+    fun triggerOnWebviewClosed(data: String) {
+        runningScope?.launch {
+            jsRunner?.signalWebviewClosed(data)
+        }
     }
 }
 

@@ -156,7 +156,7 @@ window = _global; // For compatibility with existing code that expects `window`
             removeAppMessageCallbacksForTransactionId(payload.transactionId);
         }
     }
-    global.signalSettingsWebuiLaunchOpportunity = (data) => {
+    global.signalShowConfiguration = (data) => {
         const payload = data ? JSON.parse(data) : {};
         dispatchPebbleEvent('showConfiguration', { payload });
         // Legacy event

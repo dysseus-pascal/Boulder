@@ -94,7 +94,7 @@ class AndroidNotificationAppsSync(
             val newAppItem = NotificationAppItem(
                 packageName = osApp.packageName,
                 name = name,
-                muteState = MuteState.Never,
+                muteState = defaultMuteStateForPackage(osApp.packageName),
                 channelGroups = channels,
                 stateUpdated = timeProvider.now().asMillisecond(),
                 lastNotified = Instant.DISTANT_PAST.asMillisecond(),
@@ -135,6 +135,18 @@ class AndroidNotificationAppsSync(
             notificationAppDao.markForDeletion(app.packageName)
         }
         logger.d("/syncAppsFromOS")
+    }
+
+    companion object {
+        private fun defaultMuteStateForPackage(pkg: String) = when {
+            pkg in NOTIFICATIONS_DISABLED_BY_DEFAULT_PACKAGES -> MuteState.Always
+            else -> MuteState.Never
+        }
+
+        private val NOTIFICATIONS_DISABLED_BY_DEFAULT_PACKAGES = setOf(
+            "com.samsung.android.calendar",
+            "com.google.android.calendar",
+        )
     }
 }
 

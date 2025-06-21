@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.di
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
+import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
@@ -11,6 +12,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotifica
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
@@ -51,5 +53,6 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
+    singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
     single { PlatformConfig(syncNotificationApps = true) }
 }

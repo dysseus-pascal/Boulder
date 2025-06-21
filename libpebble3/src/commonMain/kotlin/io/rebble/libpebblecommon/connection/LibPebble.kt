@@ -22,7 +22,6 @@ import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -46,7 +45,7 @@ data class PlatformFlags(val flags: UInt)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps {
     fun init()
 
     val watches: PebbleDevices
@@ -64,6 +63,11 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     fun doStuffAfterPermissionsGranted()
 }
 
+data class OtherPebbleApp(
+    val pkg: String,
+    val name: String,
+)
+
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
     suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult?
@@ -73,12 +77,6 @@ interface WebServices {
 interface TokenProvider {
     suspend fun getDevToken(): String?
 }
-
-data class ConnectedWatchFirmwareInfo(
-    val platform: WatchHardwarePlatform,
-    val version: FirmwareVersion,
-    val serial: String,
-)
 
 data class FirmwareUpdateCheckResult(
     val version: FirmwareVersion,
@@ -126,6 +124,11 @@ interface NotificationApps {
     suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
 
+interface OtherPebbleApps {
+    /** Any other companion apps installed will likely break connecitivity (multiple PPoG services) */
+    val otherPebbleCompanionAppsInstalled: StateFlow<List<OtherPebbleApp>>
+}
+
 interface CallManagement {
     val currentCall: MutableStateFlow<Call?>
 }
@@ -149,8 +152,10 @@ class LibPebble3(
     private val missedCallSyncer: MissedCallSyncer,
     private val libPebbleConfigFlow: LibPebbleConfigHolder,
     private val health: Health,
+    private val otherPebbleApps: OtherPebbleApps,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
-    NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
+    NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
+    OtherPebbleApps by otherPebbleApps {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

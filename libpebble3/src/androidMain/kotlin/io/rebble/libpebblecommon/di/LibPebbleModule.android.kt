@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
@@ -21,6 +22,7 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcessor
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.util.OtherPebbleAndroidApps
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -59,6 +61,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidSystemCallLog) bind SystemCallLog::class
     singleOf(::AndroidSystemMusicControl) bind SystemMusicControl::class
     singleOf(::AndroidPackageChangedReceiver)
+    singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
     single { get<AppContext>().context }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)

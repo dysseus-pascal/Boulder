@@ -4,6 +4,7 @@ import androidx.room.Upsert
 import coredev.BlobDatabase
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,6 @@ interface BlobDbRecord {
 
 interface BlobDbItem {
     fun key(): UByteArray
-    fun value(platform: WatchType): UByteArray?
+    fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray?
     fun recordHashCode(): Int
 }

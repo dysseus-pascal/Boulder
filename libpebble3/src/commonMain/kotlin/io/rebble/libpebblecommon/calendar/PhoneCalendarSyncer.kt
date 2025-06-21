@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.calendar
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.CALENDAR_APP_UUID
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.Calendar
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.CalendarDao
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.days
@@ -30,6 +32,7 @@ class PhoneCalendarSyncer(
     private val systemCalendar: SystemCalendar,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timelineReminderDao: TimelineReminderRealDao,
+    private val watchConfig: WatchConfigFlow,
 ) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
     private val syncTrigger = MutableSharedFlow<Unit>()
@@ -59,6 +62,15 @@ class PhoneCalendarSyncer(
                     requestSync()
                 }
             }
+            libPebbleCoroutineScope.launch {
+                var previous = watchConfig.value.calendarReminders
+                watchConfig.flow.map { it.watchConfig.calendarReminders }.collect {
+                    if (it != previous) {
+                        requestSync()
+                        previous = it
+                    }
+                }
+            }
         }
     }
 
@@ -67,7 +79,8 @@ class PhoneCalendarSyncer(
     }
 
     private suspend fun syncDeviceCalendarsToDb() {
-        logger.d("syncDeviceCalendarsToDb")
+        val remindersEnabled = watchConfig.value.calendarReminders
+        logger.d("syncDeviceCalendarsToDb remindersEnabled=$remindersEnabled")
         val existingCalendars = calendarDao.getAll()
         val calendars = systemCalendar.getCalendars()
         logger.d("Got ${calendars.size} calendars from device, syncing... (${existingCalendars.size} existing)")
@@ -111,6 +124,7 @@ class PhoneCalendarSyncer(
             val newPin = new.pin
             val existingPin = existingPins.find { it.backingId == newPin.backingId }
             syncReminders(
+                remindersEnabled = remindersEnabled,
                 event = new.event,
                 pinId = existingPin?.itemId ?: newPin.itemId,
                 remindersToInsert = remindersToInsert,
@@ -154,6 +168,7 @@ class PhoneCalendarSyncer(
     }
 
     private suspend fun syncReminders(
+        remindersEnabled: Boolean,
         event: CalendarEvent,
         pinId: Uuid,
         remindersToInsert: MutableList<TimelineReminder>,
@@ -164,12 +179,14 @@ class PhoneCalendarSyncer(
             event.reminders.map { event.startTime - it.minutesBefore.minutes }
 
         remindersToDelete += existingReminders.filter { er ->
+            if (!remindersEnabled) return@filter true
             eventReminderTimestamps.none { t ->
                 er.content.timestamp.instant == t
             }
         }.map { it.itemId }
 
         remindersToInsert += eventReminderTimestamps.filter { t ->
+            if (!remindersEnabled) return@filter false
             existingReminders.none { er ->
                 er.content.timestamp.instant == t
             }

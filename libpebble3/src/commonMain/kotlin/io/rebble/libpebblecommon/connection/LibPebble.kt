@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
+import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -147,6 +148,7 @@ class LibPebble3(
     private val phoneCalendarSyncer: PhoneCalendarSyncer,
     private val missedCallSyncer: MissedCallSyncer,
     private val libPebbleConfigFlow: LibPebbleConfigHolder,
+    private val health: Health,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer {
     private val logger = Logger.withTag("LibPebble3")
@@ -164,6 +166,7 @@ class LibPebble3(
         missedCallSyncer.init()
         notificationListenerConnection.init(this)
         notificationApi.init()
+        health.init()
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }

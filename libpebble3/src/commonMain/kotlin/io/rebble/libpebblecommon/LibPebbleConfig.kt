@@ -63,6 +63,8 @@ class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
 data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimit: Int = 25,
+    val calendarReminders: Boolean = true,
+    val enableHealth: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

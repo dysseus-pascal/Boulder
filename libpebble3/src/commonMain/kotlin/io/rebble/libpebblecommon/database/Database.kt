@@ -26,6 +26,9 @@ import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderSyncEntity
+import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
+import io.rebble.libpebblecommon.database.entity.WatchSettingsEntity
+import io.rebble.libpebblecommon.database.entity.WatchSettingsSyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
@@ -45,10 +48,13 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationAppItemEntity::class,
         NotificationAppItemSyncEntity::class,
         CalendarEntity::class,
+        WatchSettingsEntity::class,
+        WatchSettingsSyncEntity::class,
     ],
-    version = 11,
+    version = 12,
     autoMigrations = [
-        AutoMigration(from = 10, to = 11)
+        AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12),
     ],
     exportSchema = true,
 )
@@ -62,6 +68,7 @@ abstract class Database : RoomDatabase() {
     abstract fun timelinePinDao(): TimelinePinRealDao
     abstract fun calendarDao(): CalendarDao
     abstract fun timelineReminderDao(): TimelineReminderRealDao
+    abstract fun watchSettingsDao(): WatchSettingsDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
@@ -44,7 +45,7 @@ data class NotificationAppItem(
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
 
-    override fun value(platform: WatchType): UByteArray? {
+    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
         val m = StructMapper()
         val entity = NotificationAppBlobItem(
             attributes = listOf(

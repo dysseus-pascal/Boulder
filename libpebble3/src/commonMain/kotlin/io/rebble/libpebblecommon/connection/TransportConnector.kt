@@ -176,7 +176,12 @@ class RealPebbleConnector(
                 }
 
                 blobDBService.init()
-                blobDB.init(watchInfo.platform.watchType, watchInfo.isUnfaithful, previouslyConnected)
+                blobDB.init(
+                    watchType = watchInfo.platform.watchType,
+                    unfaithful = watchInfo.isUnfaithful,
+                    previouslyConnected = previouslyConnected,
+                    capabilities = watchInfo.capabilities,
+                )
                 appFetchService.init()
                 timelineActionManager.init()
                 appFetchProvider.init(watchInfo.platform.watchType)

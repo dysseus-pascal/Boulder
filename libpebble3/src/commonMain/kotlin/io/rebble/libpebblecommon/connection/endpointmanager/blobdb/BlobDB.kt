@@ -10,9 +10,11 @@ import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
+import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
@@ -37,6 +39,7 @@ data class BlobDbDaos(
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
+    private val watchSettingsDao: WatchSettingsDao,
     private val platformConfig: PlatformConfig,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
@@ -44,6 +47,7 @@ data class BlobDbDaos(
         add(notificationsDao)
         add(timelinePinDao)
         add(timelineReminderDao)
+        add(watchSettingsDao)
         if (platformConfig.syncNotificationApps) {
             add(notificationAppRealDao)
         }
@@ -118,7 +122,12 @@ class BlobDB(
         }
     }
 
-    fun init(watchType: WatchType, unfaithful: Boolean, previouslyConnected: Boolean) {
+    fun init(
+        watchType: WatchType,
+        unfaithful: Boolean,
+        previouslyConnected: Boolean,
+        capabilities: Set<ProtocolCapsFlag>,
+    ) {
         watchScope.launch {
             if (unfaithful || !previouslyConnected) {
                 logger.d("unfaithful: wiping DBs on watch")
@@ -141,7 +150,7 @@ class BlobDB(
                 db.deleteStaleRecords(timeProvider.now().toEpochMilliseconds())
                 dynamicQuery(dao = db, insert = true) { dirty ->
                     dirty.forEach { item ->
-                        handleInsert(db, item, watchType)
+                        handleInsert(db, item, watchType, capabilities)
                     }
                 }
                 dynamicQuery(dao = db, insert = false) { dirty ->
@@ -169,10 +178,11 @@ class BlobDB(
     private suspend fun handleInsert(
         db: BlobDbDao<BlobDbRecord>,
         item: BlobDbRecord,
-        watchType: WatchType
+        watchType: WatchType,
+        capabilities: Set<ProtocolCapsFlag>,
     ) {
         logger.d("insert: $item")
-        val value = item.record.value(watchType)
+        val value = item.record.value(watchType, capabilities)
         if (value == null) {
             logger.d("no value for $item for $watchType")
             return

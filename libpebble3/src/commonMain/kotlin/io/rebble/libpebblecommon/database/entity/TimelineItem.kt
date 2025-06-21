@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.database.MillisecondDuration
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -125,7 +126,7 @@ interface DbTimelineItem : BlobDbItem {
 
     override fun recordHashCode(): Int = content.hashCode()
     override fun key(): UByteArray = SUUID(StructMapper(), itemId).toBytes()
-    override fun value(platform: WatchType): UByteArray? {
+    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
         val item = TimelineItem(
             itemId = itemId,
             parentId = content.parentId,

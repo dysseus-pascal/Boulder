@@ -68,6 +68,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineAct
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
+import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
@@ -206,6 +207,7 @@ fun initKoin(
                 single { get<Database>().timelinePinDao() }
                 single { get<Database>().timelineReminderDao() }
                 single { get<Database>().calendarDao() }
+                single { get<Database>().watchSettingsDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -233,6 +235,7 @@ fun initKoin(
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
                 singleOf(::Datalogging)
+                singleOf(::Health)
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will

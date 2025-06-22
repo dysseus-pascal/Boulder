@@ -20,11 +20,9 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
@@ -35,7 +33,7 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override val watches: PebbleDevices = MutableStateFlow(emptyList())
+    override val watches: PebbleDevices = MutableStateFlow(fakeWatches())
 
     override val config: StateFlow<LibPebbleConfig> = MutableStateFlow(LibPebbleConfig())
 
@@ -145,6 +143,26 @@ class FakeLibPebble : LibPebble {
     // OtherPebbleApps interface
     override val otherPebbleCompanionAppsInstalled: StateFlow<List<OtherPebbleApp>> =
         MutableStateFlow(emptyList())
+}
+
+fun fakeWatches(): List<PebbleDevice> {
+    return buildList {
+        for (i in 1..3) {
+            add(fakeWatch())
+        }
+    }
+}
+
+fun fakeWatch(): PebbleDevice {
+    val num = Random.nextInt(1111, 9999)
+    return object : DiscoveredPebbleDevice {
+        override val transport: Transport = Transport.BluetoothTransport.BleTransport(
+            identifier = "00:00:00:00:00:00".asPebbleBluetoothIdentifier(),
+            name = "Core $num",
+        )
+
+        override suspend fun connect() { }
+    }
 }
 
 fun fakeNotificationApps(): List<NotificationAppItem> {

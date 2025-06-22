@@ -139,7 +139,7 @@ class NotificationAppsDbTest {
             stateUpdated = TIMESTAMP.asMillisecond(),
             lastNotified = TIMESTAMP.asMillisecond(),
         )
-        val encoded = item.value(WatchType.APLITE)!!
+        val encoded = item.value(WatchType.APLITE, emptySet())!!
         val write = DbWrite(
             token = 1.toUShort(),
             database = BlobDatabase.CannedResponses,

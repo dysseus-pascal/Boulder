@@ -1,13 +1,12 @@
 package io.rebble.libpebblecommon.time
 
-import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import io.rebble.libpebblecommon.connection.AppContext
 
-class AndroidTimeChangedReceiver(private val context: Application) : TimeChanged {
+class AndroidTimeChangedReceiver(private val context: Context) : TimeChanged {
     override fun registerForTimeChanges(onChanged: () -> Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {

@@ -63,6 +63,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidPackageChangedReceiver)
     singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
     single { get<AppContext>().context }
+    single { get<AppContext>().context as Application }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }

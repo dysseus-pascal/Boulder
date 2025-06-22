@@ -1,5 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import android.app.Application
+import android.content.Context
 
-actual class AppContext(val context: Application)
+actual class AppContext(val context: Context)

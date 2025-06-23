@@ -159,7 +159,7 @@ private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: Byte): A
     val jsonObject = jsonElement.jsonObject
     val tuples = jsonObject.mapNotNull { objectEntry ->
         val key = objectEntry.key
-        val keyId = appInfo.appKeys[key] ?: return@mapNotNull null
+        val keyId = appInfo.appKeys[key] ?: key.toIntOrNull() ?: return@mapNotNull null
         when (objectEntry.value) {
             is JsonArray -> {
                 Pair(keyId, objectEntry.value.jsonArray.map { it.jsonPrimitive.long.toUByte() }.toUByteArray())

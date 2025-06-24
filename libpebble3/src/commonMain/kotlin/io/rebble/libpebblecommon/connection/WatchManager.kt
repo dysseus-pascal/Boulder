@@ -4,6 +4,8 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.transport
@@ -29,10 +31,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.datetime.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
@@ -40,13 +43,15 @@ internal data class KnownWatchProperties(
     val name: String,
     val runningFwVersion: String,
     val serial: String,
+    val lastConnected: MillisecondInstant?
 )
 
-internal fun WatchInfo.asWatchProperties(transport: Transport): KnownWatchProperties =
+internal fun WatchInfo.asWatchProperties(transport: Transport, lastConnected: MillisecondInstant?): KnownWatchProperties =
     KnownWatchProperties(
         name = transport.name,
         runningFwVersion = runningFwVersion.stringVersion,
         serial = serial,
+        lastConnected = lastConnected,
     )
 
 private fun Watch.asKnownWatchItem(): KnownWatchItem? {
@@ -58,6 +63,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
         runningFwVersion = knownWatchProps.runningFwVersion,
         serial = knownWatchProps.serial,
         connectGoal = connectGoal,
+        lastConnected = knownWatchProps.lastConnected,
     )
 }
 
@@ -96,6 +102,7 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
     name = name,
     runningFwVersion = runningFwVersion,
     serial = serial,
+    lastConnected = lastConnected,
 )
 
 private data class CombinedState(
@@ -116,6 +123,7 @@ class WatchManager(
     private val scanning: HackyProvider<Scanning>,
     private val watchConfig: WatchConfigFlow,
     private val firmwareUpdateManager: FirmwareUpdateManager,
+    private val clock: Clock,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -209,7 +217,7 @@ class WatchManager(
                     // Update persisted props after connection
                     logger.v { "states=$states" }
                     if (states.currentState is ConnectingPebbleState.Connected && states.previousState !is ConnectingPebbleState.Connected) {
-                        val newProps = states.currentState.watchInfo.asWatchProperties(transport)
+                        val newProps = states.currentState.watchInfo.asWatchProperties(transport, clock.now().asMillisecond())
                         if (newProps != device.knownWatchProps) {
                             updateWatch(transport) {
                                 it.copy(knownWatchProps = newProps)

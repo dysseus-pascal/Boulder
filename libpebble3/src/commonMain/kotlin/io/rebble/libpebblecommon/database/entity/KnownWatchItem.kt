@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTran
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BtClassicTransport
 import io.rebble.libpebblecommon.connection.Transport.SocketTransport
 import io.rebble.libpebblecommon.connection.asPebbleBluetoothIdentifier
+import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothClassic
 import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothLe
 import io.rebble.libpebblecommon.database.entity.TransportType.Socket
@@ -20,6 +21,7 @@ data class KnownWatchItem (
     val runningFwVersion: String,
     val serial: String,
     val connectGoal: Boolean,
+    val lastConnected: MillisecondInstant? = null,
 )
 
 enum class TransportType {

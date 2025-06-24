@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.uuid.Uuid
 
@@ -41,6 +42,7 @@ interface BleDiscoveredPebbleDevice : DiscoveredPebbleDevice {
 interface KnownPebbleDevice : PebbleDevice {
     val runningFwVersion: String
     val serial: String
+    val lastConnected: Instant
     suspend fun forget()
 }
 
@@ -149,7 +151,7 @@ object ConnectedPebble {
     )
 }
 
-interface ConnectedPebbleDevice :
+sealed interface ConnectedPebbleDevice :
     KnownPebbleDevice,
     ActiveDevice,
     ConnectedPebble.Debug,

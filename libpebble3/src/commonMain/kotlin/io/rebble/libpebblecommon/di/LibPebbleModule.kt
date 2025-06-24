@@ -227,6 +227,7 @@ fun initKoin(
                 single { createCompanionDeviceManager(get(), get()) }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
+                factory<kotlinx.datetime.Clock> { kotlinx.datetime.Clock.System }
                 singleOf(::BlobDbDaos)
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)

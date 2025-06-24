@@ -3,7 +3,9 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.services.WatchInfo
+import kotlinx.datetime.Instant
 
 class PebbleDeviceFactory {
     internal fun create(
@@ -26,6 +28,7 @@ class PebbleDeviceFactory {
                     serial = state.watchInfo.serial,
                     pebbleDevice = pebbleDevice,
                     watchConnector = watchConnector,
+                    lastConnected = knownWatchProperties?.lastConnected.asLastConnected(),
                 )
                 val activeDevice = RealActiveDevice(transport, watchConnector)
                 when (state) {
@@ -76,6 +79,7 @@ class PebbleDeviceFactory {
                         serial = knownWatchProperties.serial,
                         pebbleDevice = pebbleDevice,
                         watchConnector = watchConnector,
+                        lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
                     )
 
                     else -> {
@@ -88,6 +92,8 @@ class PebbleDeviceFactory {
         }
     }
 }
+
+private fun MillisecondInstant?.asLastConnected(): Instant = this?.instant ?: Instant.DISTANT_PAST
 
 internal class RealPebbleDevice(
     override val transport: Transport,
@@ -114,6 +120,7 @@ internal class RealKnownPebbleDevice(
     override val serial: String,
     private val pebbleDevice: PebbleDevice,
     private val watchConnector: WatchConnector,
+    override val lastConnected: Instant,
 ) : KnownPebbleDevice,
     PebbleDevice by pebbleDevice {
     override suspend fun forget() {
@@ -121,7 +128,7 @@ internal class RealKnownPebbleDevice(
     }
 
     override fun toString(): String =
-        "KnownPebbleDevice: $pebbleDevice $serial / runningFwVersion=$runningFwVersion"
+        "KnownPebbleDevice: $pebbleDevice $serial / runningFwVersion=$runningFwVersion lastConnected=$lastConnected"
 }
 
 internal class RealActiveDevice(

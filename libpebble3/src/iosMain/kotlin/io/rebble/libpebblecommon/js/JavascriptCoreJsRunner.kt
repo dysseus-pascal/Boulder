@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -27,7 +28,8 @@ class JavascriptCoreJsRunner(
     private val libPebble: LibPebble,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
     private val jsTokenUtil: JsTokenUtil,
-): JsRunner(appInfo, lockerEntry, jsPath, device) {
+    urlOpenRequests: MutableSharedFlow<String>,
+): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfaces: List<RegisterableJsInterface>? = null
@@ -75,6 +77,7 @@ class JavascriptCoreJsRunner(
 
     private fun tearDownJsContext() {
         interfaces?.forEach { it.close() }
+        jsContext?.finalize()
         interfaces = null
         jsContext = null
     }
@@ -106,10 +109,6 @@ class JavascriptCoreJsRunner(
         logger.d { "Stopping JS Context" }
         tearDownJsContext()
         logger.d { "JS Context torn down" }
-    }
-
-    override fun loadUrl(url: String) {
-        _urlOpenRequests.tryEmit(url)
     }
 
     override suspend fun loadAppJs(jsUrl: String) {

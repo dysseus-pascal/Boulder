@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -53,7 +55,8 @@ class PKJSApp(
     val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
-    val urlOpenRequests: Flow<String>? get() = jsRunner?.urlOpenRequests
+    private val _urlOpenRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val urlOpenRequests: Flow<String> = _urlOpenRequests.asSharedFlow()
 
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {
@@ -96,13 +99,13 @@ class PKJSApp(
     }
 
     suspend fun showConfiguration() {
-        jsRunner?.signalShowConfiguration()
+        jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
     }
 
     suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
-        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble, jsTokenUtil)
+        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble, jsTokenUtil, _urlOpenRequests)
         launchIncomingAppMessageHandler(device, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")

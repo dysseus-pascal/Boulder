@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 
 actual fun createJsRunner(
@@ -16,6 +17,7 @@ actual fun createJsRunner(
     jsPath: Path,
     libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
+    urlOpenRequests: MutableSharedFlow<String>,
 ): JsRunner = WebViewJsRunner(
     appContext,
     device,
@@ -25,4 +27,5 @@ actual fun createJsRunner(
     jsPath,
     libPebble,
     jsTokenUtil,
+    urlOpenRequests
 )

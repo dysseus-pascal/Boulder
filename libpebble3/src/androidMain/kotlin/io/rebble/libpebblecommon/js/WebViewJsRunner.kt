@@ -29,6 +29,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStor
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -43,7 +44,8 @@ class WebViewJsRunner(
     jsPath: Path,
     libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
-): JsRunner(appInfo, lockerEntry, jsPath, device) {
+    urlOpenRequests: MutableSharedFlow<String>,
+): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private val context = appContext.context
     companion object {
         const val API_NAMESPACE = "Pebble"
@@ -237,10 +239,6 @@ class WebViewJsRunner(
         synchronized(initializedLock) {
             webView = null
         }
-    }
-
-    override fun loadUrl(url: String) {
-        _urlOpenRequests.tryEmit(url)
     }
 
     private suspend fun loadApp(url: String) {

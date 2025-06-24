@@ -11,11 +11,11 @@ abstract class JsRunner(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     val jsPath: Path,
-    val device: PebbleJSDevice
+    val device: PebbleJSDevice,
+    private val urlOpenRequests: MutableSharedFlow<String>,
 ) {
     abstract suspend fun start()
     abstract suspend fun stop()
-    abstract fun loadUrl(url: String)
     abstract suspend fun loadAppJs(jsUrl: String)
     abstract suspend fun signalNewAppMessageData(data: String?): Boolean
     abstract suspend fun signalAppMessageAck(data: String?): Boolean
@@ -25,9 +25,10 @@ abstract class JsRunner(
     abstract suspend fun signalReady()
     abstract suspend fun signalShowConfiguration()
     abstract suspend fun signalWebviewClosed(data: String?)
+    suspend fun loadUrl(url: String) {
+        urlOpenRequests.emit(url)
+    }
 
     protected val _outgoingAppMessages = MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>(extraBufferCapacity = 1)
     val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
-    protected val _urlOpenRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val urlOpenRequests = _urlOpenRequests.asSharedFlow()
 }

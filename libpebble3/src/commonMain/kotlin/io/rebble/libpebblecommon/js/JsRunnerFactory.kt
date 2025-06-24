@@ -5,6 +5,8 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 
 expect fun createJsRunner(
@@ -16,4 +18,5 @@ expect fun createJsRunner(
     jsPath: Path,
     libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
+    urlOpenRequests: MutableSharedFlow<String>
 ): JsRunner

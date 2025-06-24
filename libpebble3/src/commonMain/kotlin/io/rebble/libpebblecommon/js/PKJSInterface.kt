@@ -6,7 +6,9 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 abstract class PKJSInterface(
@@ -70,7 +72,11 @@ abstract class PKJSInterface(
      * Open a URL e.g. configuration page
      */
     open fun openURL(url: String): String {
-        jsRunner.loadUrl(url)
+        runBlocking {
+            withTimeout(2.seconds) {
+                jsRunner.loadUrl(url)
+            }
+        }
         return url
     }
 }

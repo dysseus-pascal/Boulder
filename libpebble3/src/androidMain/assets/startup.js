@@ -89,11 +89,6 @@ window = _global; // For compatibility with existing code that expects `window`
     const dispatchPebbleEvent = (type, detail = {}) => {
         const event = {type: type, bubbles: false, cancelable: false};
         Object.assign(event, detail);
-        if ('payload' in detail) event.data = detail.payload;
-        if ('response' in detail) event.data = detail.response;
-        if ('ready' in detail) event.data = detail.ready;
-        if ('opened' in detail) event.data = detail.opened;
-
         return pebbleEventHandler.dispatchEvent(event);
     };
     const removeAppMessageCallbacksForTransactionId = (tid) => {
@@ -118,15 +113,7 @@ window = _global; // For compatibility with existing code that expects `window`
         dispatchPebbleEvent(PebbleEventTypes.WEBVIEW_OPENED, { opened: data });
     }
     global.signalWebviewClosedEvent = (data) => {
-        let decoded = data;
-        if (data && data.length > 0) {
-            try {
-                decoded = JSON.parse(data);
-            } catch (e) {
-                console.error("Pebble JS Bridge: Error parsing webview closed data", e);
-            }
-        }
-        dispatchPebbleEvent(PebbleEventTypes.WEBVIEW_CLOSED, { closed: decoded });
+        dispatchPebbleEvent(PebbleEventTypes.WEBVIEW_CLOSED, { response: data });
     }
     global.signalReady = (data) => {
         const success = dispatchPebbleEvent(PebbleEventTypes.READY, { ready: data });

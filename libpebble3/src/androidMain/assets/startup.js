@@ -143,11 +143,10 @@ window = _global; // For compatibility with existing code that expects `window`
             removeAppMessageCallbacksForTransactionId(payload.transactionId);
         }
     }
-    global.signalShowConfiguration = (data) => {
-        const payload = data ? JSON.parse(data) : {};
-        dispatchPebbleEvent('showConfiguration', { payload });
+    global.signalShowConfiguration = () => {
+        dispatchPebbleEvent('showConfiguration', {});
         // Legacy event
-        dispatchPebbleEvent('settings_webui_allowed', { payload });
+        dispatchPebbleEvent('settings_webui_allowed', {});
     };
     global.signalTimelineTokenSuccess = (data) => {
         const payload = data ? JSON.parse(data) : {};
@@ -235,20 +234,9 @@ window = _global; // For compatibility with existing code that expects `window`
             const data = _Pebble.getActivePebbleWatchInfo();
             return data ? JSON.parse(data) : null;
         },
-        getAccountToken: () => {
-            //TODO
-            return null;
-        },
-        getWatchToken: () => {
-            //TODO
-            return null;
-        },
         appGlanceReload: (appGlanceSlices, onSuccess, onFailure) => {
             //TODO
         },
-        openURL: (url) => {
-            //TODO
-        }
     }
     global.Pebble.addEventListener = PebbleAPI.addEventListener;
     global.Pebble.removeEventListener = PebbleAPI.removeEventListener;
@@ -258,10 +246,7 @@ window = _global; // For compatibility with existing code that expects `window`
     global.Pebble.timelineUnsubscribe = PebbleAPI.timelineUnsubscribe;
     global.Pebble.timelineSubscriptions = PebbleAPI.timelineSubscriptions;
     global.Pebble.getActiveWatchInfo = PebbleAPI.getActiveWatchInfo;
-    global.Pebble.getAccountToken = PebbleAPI.getAccountToken;
-    global.Pebble.getWatchToken = PebbleAPI.getWatchToken;
     global.Pebble.appGlanceReload = PebbleAPI.appGlanceReload;
-    global.Pebble.openURL = PebbleAPI.openURL;
 
     console.log("Pebble JS Bridge initialized.");
 })(_global);

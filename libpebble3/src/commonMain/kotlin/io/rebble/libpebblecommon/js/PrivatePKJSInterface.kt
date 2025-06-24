@@ -24,7 +24,7 @@ abstract class PrivatePKJSInterface(
     }
 
     open fun privateLog(message: String) {
-        logger.v { "privateLog: $message" }
+        logger.i { "privateLog: $message" }
     }
 
     open fun logInterceptedSend() {

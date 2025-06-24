@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlinx.datetime.Clock
 import org.junit.Assert.assertFalse
 import org.junit.Test
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -165,6 +166,7 @@ class WatchManagerTest {
             scanning = HackyProvider { scanning },
             watchConfig = watchConfig,
             firmwareUpdateManager = firmwareUpdateManager,
+            clock = Clock.System,
         )
     }
 

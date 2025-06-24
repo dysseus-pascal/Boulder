@@ -38,7 +38,7 @@ class JavascriptCoreJsRunner(
             JSTimeout(scope, jsContext),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages),
-            JSCJSLocalStorageInterface(this, appContext)
+            JSCJSLocalStorageInterface(this, appContext, jsContext)
         )
         instances.forEach { it.register(jsContext) }
         interfaces = instances

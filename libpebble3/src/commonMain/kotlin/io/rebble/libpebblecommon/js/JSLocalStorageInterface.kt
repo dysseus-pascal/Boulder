@@ -15,7 +15,7 @@ abstract class JSLocalStorageInterface(
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size
 
-    open fun getItem(key: String): String? = settings[key]
+    open fun getItem(key: String): Any? = settings.get<String>(key)
 
     open fun setItem(key: String, value: String) {
         settings.putString(key, value)

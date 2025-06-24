@@ -11,7 +11,8 @@ import platform.JavaScriptCore.JSValue
 
 class JSCJSLocalStorageInterface(
     jsRunner: JsRunner,
-    appContext: AppContext
+    appContext: AppContext,
+    private val jsContext: JSContext
 ): JSLocalStorageInterface(jsRunner, appContext), RegisterableJsInterface {
     private lateinit var localStorage: JSValue
     override fun register(jsContext: JSContext) {
@@ -24,6 +25,10 @@ class JSCJSLocalStorageInterface(
         )
         localStorage = jsContext["localStorage"]!!
         setLength(getLength())
+    }
+
+    override fun getItem(key: String): Any? {
+        return super.getItem(key) ?: jsContext.evaluateScript("null")
     }
 
     override fun setLength(value: Int) {

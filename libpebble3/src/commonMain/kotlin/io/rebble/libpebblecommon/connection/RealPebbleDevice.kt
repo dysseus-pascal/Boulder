@@ -99,7 +99,7 @@ internal class RealPebbleDevice(
     override val transport: Transport,
     private val watchConnector: WatchConnector,
 ) : PebbleDevice, DiscoveredPebbleDevice {
-    override suspend fun connect() {
+    override fun connect() {
         watchConnector.requestConnection(transport)
     }
 
@@ -123,7 +123,7 @@ internal class RealKnownPebbleDevice(
     override val lastConnected: Instant,
 ) : KnownPebbleDevice,
     PebbleDevice by pebbleDevice {
-    override suspend fun forget() {
+    override fun forget() {
         watchConnector.forget(transport)
     }
 
@@ -135,7 +135,7 @@ internal class RealActiveDevice(
     private val transport: Transport,
     private val watchConnector: WatchConnector,
 ) : ActiveDevice {
-    override suspend fun disconnect() {
+    override fun disconnect() {
         watchConnector.requestDisconnection(transport)
     }
 }

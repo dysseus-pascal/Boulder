@@ -69,7 +69,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
 
 interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
-    suspend fun requestConnection(transport: Transport)
+    fun requestConnection(transport: Transport)
     fun requestDisconnection(transport: Transport)
     fun clearScanResults()
     fun forget(transport: Transport)
@@ -299,21 +299,23 @@ class WatchManager(
         }
     }
 
-    override suspend fun requestConnection(transport: Transport) {
-        logger.d("requestConnection: $transport")
-        companionDevice.registerDevice(transport)
-        val scanning = scanning.get()
-        scanning.stopBleScan()
-        scanning.stopClassicScan()
-        allWatches.update { watches ->
-            watches.mapValues { entry ->
-                if (entry.key == transport) {
-                    entry.value.copy(connectGoal = true)
-                } else {
-                    if (watchConfig.value.multipleConnectedWatchesSupported) {
-                        entry.value
+    override fun requestConnection(transport: Transport) {
+        libPebbleCoroutineScope.launch {
+            logger.d("requestConnection: $transport")
+            companionDevice.registerDevice(transport)
+            val scanning = scanning.get()
+            scanning.stopBleScan()
+            scanning.stopClassicScan()
+            allWatches.update { watches ->
+                watches.mapValues { entry ->
+                    if (entry.key == transport) {
+                        entry.value.copy(connectGoal = true)
                     } else {
-                        entry.value.copy(connectGoal = false)
+                        if (watchConfig.value.multipleConnectedWatchesSupported) {
+                            entry.value
+                        } else {
+                            entry.value.copy(connectGoal = false)
+                        }
                     }
                 }
             }

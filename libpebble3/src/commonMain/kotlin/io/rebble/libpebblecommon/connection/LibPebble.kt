@@ -46,6 +46,7 @@ data class PlatformFlags(val flags: UInt)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
+@Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps {
     fun init()
 
@@ -96,10 +97,10 @@ fun PebbleDevices.forDevice(transport: Transport): Flow<PebbleDevice> {
 
 interface Scanning {
     val bluetoothEnabled: StateFlow<BluetoothState>
-    suspend fun startBleScan()
-    suspend fun stopBleScan()
-    suspend fun startClassicScan()
-    suspend fun stopClassicScan()
+    fun startBleScan()
+    fun stopBleScan()
+    fun startClassicScan()
+    fun stopClassicScan()
 }
 
 interface RequestSync {

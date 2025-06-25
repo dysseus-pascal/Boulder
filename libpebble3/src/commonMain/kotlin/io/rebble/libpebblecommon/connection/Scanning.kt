@@ -34,7 +34,7 @@ class RealScanning(
     private var bleScanJob: Job? = null
     override val bluetoothEnabled: StateFlow<BluetoothState> = bluetoothStateProvider.state
 
-    override suspend fun startBleScan() {
+    override fun startBleScan() {
         // TODO add timeout
         Logger.d("startBleScan")
         bleScanJob?.cancel()
@@ -56,16 +56,16 @@ class RealScanning(
         }
     }
 
-    override suspend fun stopBleScan() {
+    override fun stopBleScan() {
         Logger.d("stopBleScan")
         bleScanJob?.cancel()
     }
 
-    override suspend fun startClassicScan() {
+    override fun startClassicScan() {
 
     }
 
-    override suspend fun stopClassicScan() {
+    override fun stopClassicScan() {
 
     }
 

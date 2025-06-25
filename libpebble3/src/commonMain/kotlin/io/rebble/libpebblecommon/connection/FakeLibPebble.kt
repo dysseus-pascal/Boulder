@@ -68,19 +68,19 @@ class FakeLibPebble : LibPebble {
     override val bluetoothEnabled: StateFlow<BluetoothState> =
         MutableStateFlow(BluetoothState.Disabled)
 
-    override suspend fun startBleScan() {
+    override fun startBleScan() {
         // No-op
     }
 
-    override suspend fun stopBleScan() {
+    override fun stopBleScan() {
         // No-op
     }
 
-    override suspend fun startClassicScan() {
+    override fun startClassicScan() {
         // No-op
     }
 
-    override suspend fun stopClassicScan() {
+    override fun stopClassicScan() {
         // No-op
     }
 
@@ -161,7 +161,7 @@ fun fakeWatch(): PebbleDevice {
             name = "Core $num",
         )
 
-        override suspend fun connect() { }
+        override fun connect() { }
     }
 }
 

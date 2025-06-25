@@ -20,7 +20,7 @@ import kotlin.uuid.Uuid
 
 
 interface ActiveDevice {
-    suspend fun disconnect()
+    fun disconnect()
 }
 
 // <T : Transport> ?
@@ -29,7 +29,7 @@ sealed interface PebbleDevice {
     val transport: Transport
     val name: String get() = transport.name
 
-    suspend fun connect()
+    fun connect()
 }
 
 interface DiscoveredPebbleDevice : PebbleDevice
@@ -45,7 +45,7 @@ interface KnownPebbleDevice : PebbleDevice {
     val runningFwVersion: String
     val serial: String
     val lastConnected: Instant
-    suspend fun forget()
+    fun forget()
 }
 
 interface DisconnectingPebbleDevice : PebbleDevice

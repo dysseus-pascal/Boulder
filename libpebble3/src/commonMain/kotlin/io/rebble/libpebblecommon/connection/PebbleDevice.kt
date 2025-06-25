@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
+import androidx.compose.runtime.Stable
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
@@ -23,6 +24,7 @@ interface ActiveDevice {
 }
 
 // <T : Transport> ?
+@Stable
 sealed interface PebbleDevice {
     val transport: Transport
     val name: String get() = transport.name

@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.LibPebbleConfig
@@ -111,6 +112,7 @@ interface LockerApi {
     suspend fun setAppOrder(id: Uuid, order: Int)
 }
 
+@Stable
 interface NotificationApps {
     val notificationApps: Flow<List<NotificationAppItem>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)

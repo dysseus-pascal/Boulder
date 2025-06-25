@@ -71,7 +71,7 @@ object DiskUtil {
         } catch (e: IOException) {
             throw IllegalStateException("Pbw does not contain manifest")
         }.buffered()
-        return pbwJson.decodeFromString(source.readString())
+        return pbwJson.decodeFromString(source.use { it.readString() })
     }
 
     /**

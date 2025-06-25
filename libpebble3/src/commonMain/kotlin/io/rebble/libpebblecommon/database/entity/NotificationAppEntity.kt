@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.compose.runtime.Immutable
 import co.touchlab.kermit.Logger
-import com.oldguy.common.getUIntAt
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondInstant
@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 
+@Immutable
 @GenerateRoomEntity(
     primaryKey = "packageName",
     databaseId = BlobDatabase.CannedResponses,
@@ -86,6 +87,7 @@ enum class MuteState(val value: UByte) {
     }
 }
 
+@Immutable
 @Serializable
 data class ChannelGroup(
     val id: String,
@@ -93,6 +95,7 @@ data class ChannelGroup(
     val channels: List<ChannelItem>,
 )
 
+@Immutable
 @Serializable
 data class ChannelItem(
     val id: String,

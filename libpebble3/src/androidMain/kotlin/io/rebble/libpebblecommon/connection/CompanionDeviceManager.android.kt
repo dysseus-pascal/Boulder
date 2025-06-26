@@ -19,35 +19,34 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun createCompanionDeviceManager(appContext: AppContext, libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
-    return AndroidCompanionDevice(appContext, libPebbleCoroutineScope)
+actual fun createCompanionDeviceManager(libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
+    return AndroidCompanionDevice(libPebbleCoroutineScope)
 }
 
 class AndroidCompanionDevice(
-    private val appContext: AppContext,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : CompanionDevice {
     private val logger = Logger.withTag("AndroidCompanionDevice")
-    private val context = appContext.context
     private val _companionAccessGranted = MutableSharedFlow<Unit>()
     override val companionAccessGranted = _companionAccessGranted.asSharedFlow()
     private val _notificationAccessGranted = MutableSharedFlow<Unit>()
     override val notificationAccessGranted = _notificationAccessGranted.asSharedFlow()
 
-    override suspend fun registerDevice(transport: Transport) {
+    override suspend fun registerDevice(transport: Transport, uiContext: UIContext) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return
         }
         if (transport !is Transport.BluetoothTransport) {
             return
         }
+        val context = uiContext.activity
         val service = context.getSystemService(CompanionDeviceManager::class.java)
 
         @Suppress("DEPRECATION")
         val existingBoundDevices = service.associations
         val macAddress = transport.identifier.macAddress
         if (existingBoundDevices.contains(macAddress)) {
-            service.requestNotificationAccessIfRequired()
+            service.requestNotificationAccessIfRequired(uiContext)
             return
         }
 
@@ -92,13 +91,13 @@ class AndroidCompanionDevice(
         service.associate(associationRequest, callback, null)
         withTimeoutOrNull(30.seconds) {
             result.await()
-            service.requestNotificationAccessIfRequired()
+            service.requestNotificationAccessIfRequired(uiContext)
         }
     }
 
-    private fun CompanionDeviceManager.requestNotificationAccessIfRequired() {
+    private fun CompanionDeviceManager.requestNotificationAccessIfRequired(context: UIContext) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // TODO handle
-        val component = LibPebbleNotificationListener.componentName(context)
+        val component = LibPebbleNotificationListener.componentName(context.activity.applicationContext)
         if (hasNotificationAccess(component)) {
             libPebbleCoroutineScope.launch {
                 _notificationAccessGranted.emit(Unit)

@@ -236,7 +236,7 @@ fun initKoin(
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 single { HttpClient() }
-                single { createCompanionDeviceManager(get(), get()) }
+                single { createCompanionDeviceManager(get()) }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlinx.datetime.Clock> { kotlinx.datetime.Clock.System }

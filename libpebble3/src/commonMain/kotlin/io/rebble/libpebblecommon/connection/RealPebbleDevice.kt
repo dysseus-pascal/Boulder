@@ -99,8 +99,8 @@ internal class RealPebbleDevice(
     override val transport: Transport,
     private val watchConnector: WatchConnector,
 ) : PebbleDevice, DiscoveredPebbleDevice {
-    override fun connect() {
-        watchConnector.requestConnection(transport)
+    override fun connect(uiContext: UIContext) {
+        watchConnector.requestConnection(transport, uiContext)
     }
 
     override fun toString(): String = transport.toString()

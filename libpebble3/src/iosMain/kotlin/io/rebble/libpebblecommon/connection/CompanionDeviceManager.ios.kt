@@ -4,10 +4,12 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 
-actual fun createCompanionDeviceManager(appContext: AppContext, libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
+actual fun createCompanionDeviceManager(libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
     return object : CompanionDevice {
-        override suspend fun registerDevice(transport: Transport) {
-        }
+        override suspend fun registerDevice(
+            transport: Transport,
+            uiContext: UIContext
+        ) {}
 
         override val companionAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
         override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()

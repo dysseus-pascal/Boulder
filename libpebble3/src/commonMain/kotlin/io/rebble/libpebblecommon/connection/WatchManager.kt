@@ -69,7 +69,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
 
 interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
-    fun requestConnection(transport: Transport)
+    fun requestConnection(transport: Transport, uiContext: UIContext)
     fun requestDisconnection(transport: Transport)
     fun clearScanResults()
     fun forget(transport: Transport)
@@ -299,10 +299,10 @@ class WatchManager(
         }
     }
 
-    override fun requestConnection(transport: Transport) {
+    override fun requestConnection(transport: Transport, uiContext: UIContext) {
         libPebbleCoroutineScope.launch {
             logger.d("requestConnection: $transport")
-            companionDevice.registerDevice(transport)
+            companionDevice.registerDevice(transport, uiContext)
             val scanning = scanning.get()
             scanning.stopBleScan()
             scanning.stopClassicScan()

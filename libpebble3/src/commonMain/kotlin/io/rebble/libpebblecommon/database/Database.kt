@@ -54,11 +54,12 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         WatchSettingsSyncEntity::class,
         LockerAppPermission::class,
     ],
-    version = 13,
+    version = 14,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
     ],
     exportSchema = true,
 )

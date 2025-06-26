@@ -25,6 +25,8 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
@@ -37,15 +39,17 @@ import kotlinx.serialization.json.Json
 
 class WebViewJsRunner(
     appContext: AppContext,
+    libPebble: LibPebble,
+    jsTokenUtil: JsTokenUtil,
+
     device: PebbleJSDevice,
     private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
-    libPebble: LibPebble,
-    jsTokenUtil: JsTokenUtil,
     urlOpenRequests: MutableSharedFlow<String>,
-): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
+
+): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
         const val API_NAMESPACE = "Pebble"
@@ -64,10 +68,12 @@ class WebViewJsRunner(
             null
         )
     }
+    private val geolocationInterface = WebViewGeolocationInterface(scope, this)
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
-            Pair("localStorage", localStorageInterface)
+            Pair("localStorage", localStorageInterface),
+            Pair("_PebbleGeo", geolocationInterface)
     )
 
     private val webViewClient = object : WebViewClient() {
@@ -168,13 +174,16 @@ class WebViewJsRunner(
             return false
         }
 
-        override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
-            logger.d { "Geolocation permission requested for $origin" }
-            callback?.invoke(origin, true, false)
+        override fun onPermissionRequest(request: PermissionRequest?) {
+            logger.d { "Permission request for: ${request?.resources?.joinToString()}" }
+            request?.deny()
         }
 
-        override fun onPermissionRequest(request: PermissionRequest?) {
-            request?.deny()
+        override fun onGeolocationPermissionsShowPrompt(
+            origin: String?,
+            callback: GeolocationPermissions.Callback?
+        ) {
+            callback?.invoke(origin, false, false)
         }
     }
 
@@ -191,7 +200,8 @@ class WebViewJsRunner(
             settings.allowUniversalAccessFromFileURLs = true
             settings.allowFileAccessFromFileURLs = true
 
-            settings.databaseEnabled = false
+            settings.setGeolocationEnabled(true)
+            settings.databaseEnabled = true
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             it.clearCache(true)
@@ -318,6 +328,14 @@ class WebViewJsRunner(
     override suspend fun signalWebviewClosed(data: String?) {
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalWebviewClosedEvent(${Uri.encode("'" + (data ?: "null") + "'")})")
+        }
+    }
+
+    override suspend fun eval(js: String) {
+        withContext(Dispatchers.Main) {
+            webView?.evaluateJavascript(js, null) ?: run {
+                logger.e { "WebView not initialized, cannot evaluate JS" }
+            }
         }
     }
 }

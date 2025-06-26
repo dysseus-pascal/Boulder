@@ -96,6 +96,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.serialization.json.Json
 import org.koin.core.Koin
+import org.koin.core.component.KoinComponent
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.scopedOf
 import org.koin.core.module.dsl.singleOf
@@ -174,18 +175,28 @@ class HackyProvider<T>(val getter: () -> T) {
 
 expect val platformModule: Module
 
+// https://insert-koin.io/docs/reference/koin-core/context-isolation/
+private object LibPebbleKoinContext {
+    private val koinApp = koinApplication()
+    val koin = koinApp.koin
+}
+
+internal interface LibPebbleKoinComponent : KoinComponent {
+    override fun getKoin(): Koin = LibPebbleKoinContext.koin
+}
+
 fun initKoin(
     defaultConfig: LibPebbleConfig,
     webServices: WebServices,
     appContext: AppContext,
     tokenProvider: TokenProvider,
 ): Koin {
-    val koin = koinApplication().koin
+    val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
     koin.loadModules(
         listOf(
             module {
-                includes(platformModule)
+                includes(platformModule, pkjsPlatformModule)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }
@@ -208,6 +219,7 @@ fun initKoin(
                 single { get<Database>().timelineReminderDao() }
                 single { get<Database>().calendarDao() }
                 single { get<Database>().watchSettingsDao() }
+                single { get<Database>().lockerAppPermissionDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class

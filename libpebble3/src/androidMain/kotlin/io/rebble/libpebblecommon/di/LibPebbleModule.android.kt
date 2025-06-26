@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidN
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPackageChangedReceiver
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.AndroidSystemGeolocation
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
@@ -23,6 +24,7 @@ import io.rebble.libpebblecommon.notification.processor.BasicNotificationProcess
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.util.OtherPebbleAndroidApps
+import io.rebble.libpebblecommon.util.SystemGeolocation
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -60,6 +62,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     singleOf(::AndroidSystemCallLog) bind SystemCallLog::class
     singleOf(::AndroidSystemMusicControl) bind SystemMusicControl::class
+    singleOf(::AndroidSystemGeolocation) bind SystemGeolocation::class
     singleOf(::AndroidPackageChangedReceiver)
     singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
     single { get<AppContext>().context }

@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
@@ -19,16 +20,17 @@ import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 
 class JavascriptCoreJsRunner(
+    private val appContext: AppContext,
+    private val libPebble: LibPebble,
+    private val jsTokenUtil: JsTokenUtil,
+
+    device: PebbleJSDevice,
+    private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
-    device: PebbleJSDevice,
-    private val appContext: AppContext,
-    private val scope: CoroutineScope,
-    private val libPebble: LibPebble,
-    private val pkjsBundleIdentifier: String = "coredevices.coreapp",
-    private val jsTokenUtil: JsTokenUtil,
     urlOpenRequests: MutableSharedFlow<String>,
+    private val pkjsBundleIdentifier: String = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -40,7 +42,8 @@ class JavascriptCoreJsRunner(
             JSTimeout(scope, jsContext),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages),
-            JSCJSLocalStorageInterface(this, appContext, jsContext)
+            JSCJSLocalStorageInterface(this, appContext, jsContext),
+            JSCGeolocationInterface(scope, this)
         )
         instances.forEach { it.register(jsContext) }
         interfaces = instances
@@ -85,7 +88,6 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         evaluateInternalScript("XMLHTTPRequest")
         evaluateInternalScript("JSTimeout")
-        evaluateInternalScript("JSGeolocation")
     }
 
     private fun setupNavigator() {
@@ -154,5 +156,9 @@ class JavascriptCoreJsRunner(
 
     override suspend fun signalWebviewClosed(data: String?) {
         jsContext?.globalObject?.invokeMethod("signalWebviewClosedEvent", listOf(data))
+    }
+
+    override suspend fun eval(js: String) {
+        jsContext?.evaluateScript(js)
     }
 }

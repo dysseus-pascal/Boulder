@@ -1,6 +1,55 @@
 /* This is used in both iOS and Android, so make sure any changes are compatible with both */
 const _global = typeof window !== 'undefined' ? window : globalThis;
 window = _global; // For compatibility with existing code that expects `window`
+_global.navigator = _global.navigator || {};
+_global._PebbleGeoCB = {
+    _requestCallbacks: new Map(),
+    _watchCallbacks: new Map(),
+    _resultGetSuccess: (id, latitude, longitude) => {
+        const callback = _PebbleGeoCB._requestCallbacks.get(id);
+        if (callback && callback.success) {
+            _PebbleGeoCB._requestCallbacks.delete(id);
+            callback.success({ coords: { latitude, longitude } });
+        }
+    },
+    _resultGetError: (id, message) => {
+        const callback = _PebbleGeoCB._requestCallbacks.get(id);
+        if (callback && callback.error) {
+            _PebbleGeoCB._requestCallbacks.delete(id);
+            callback.error({ message, code: 1 });
+        }
+    },
+    _resultWatchSuccess: (id, latitude, longitude) => {
+        const callback = _PebbleGeoCB._watchCallbacks.get(id);
+        if (callback && callback.success) {
+            callback.success({ coords: { latitude, longitude } });
+        }
+    },
+    _resultWatchError: (id, message) => {
+        const callback = _PebbleGeoCB._watchCallbacks.get(id);
+        if (callback && callback.error) {
+            callback.error({ message, code: 1 });
+        }
+    }
+};
+navigator.geolocation.getCurrentPosition = (success, error, options) => {
+    const id = _PebbleGeo.getRequestCallbackID();
+    _PebbleGeoCB._requestCallbacks.set(id, { success, error });
+    _PebbleGeo.getCurrentPosition(id);
+};
+navigator.geolocation.watchPosition = (success, error, options) => {
+    const id = _PebbleGeo.getWatchCallbackID();
+    _PebbleGeoCB._watchCallbacks.set(id, { success, error });
+    _PebbleGeo.watchPosition(id);
+    return id;
+};
+navigator.geolocation.clearWatch = (id) => {
+    _PebbleGeo.clearWatch(id);
+    if (_PebbleGeoCB._watchCallbacks.has(id)) {
+        _PebbleGeoCB._watchCallbacks.delete(id);
+    }
+};
+
 ((global) => {
     const PebbleEventTypes = {
         READY: 'ready',

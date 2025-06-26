@@ -12,12 +12,14 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotifica
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.IosSystemGeolocation
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.util.SystemGeolocation
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -53,6 +55,7 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
+    singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
     singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
     single { PlatformConfig(syncNotificationApps = true) }
 }

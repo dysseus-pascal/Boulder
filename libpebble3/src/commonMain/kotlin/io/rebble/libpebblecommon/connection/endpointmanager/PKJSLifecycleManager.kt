@@ -1,15 +1,12 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
-import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.js.PebbleJSDevice
 import io.rebble.libpebblecommon.locker.Locker
@@ -26,15 +23,12 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 
 class PKJSLifecycleManager(
-    private val appContext: AppContext,
     private val lockerPBWCache: LockerPBWCache,
     private val lockerEntryDao: LockerEntryRealDao,
     private val appRunStateService: AppRunStateService,
     private val appMessagesService: AppMessageService,
     private val locker: Locker,
-    private val scope: ConnectionCoroutineScope,
-    private val libPebble: LibPebble,
-    private val jsTokenUtil: JsTokenUtil,
+    private val scope: ConnectionCoroutineScope
 ): ConnectedPebble.PKJS {
     companion object {
         private val logger = Logger.withTag(PKJSLifecycleManager::class.simpleName!!)
@@ -63,13 +57,10 @@ class PKJSLifecycleManager(
 
             val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id)
             runningApp.value = PKJSApp(
-                appContext,
                 device,
                 jsPath,
                 pbw.info,
                 lockerEntry,
-                libPebble,
-                jsTokenUtil,
             ).apply {
                 start(scope)
             }

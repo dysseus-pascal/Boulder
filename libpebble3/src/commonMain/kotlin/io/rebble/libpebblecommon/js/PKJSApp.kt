@@ -1,10 +1,9 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
@@ -38,17 +37,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import org.koin.core.component.get
+import org.koin.core.parameter.parameterArrayOf
 import kotlin.uuid.Uuid
 
 class PKJSApp(
-    private val appContext: AppContext,
     private val device: PebbleJSDevice,
     private val jsPath: Path,
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
-    private val libPebble: LibPebble,
-    private val jsTokenUtil: JsTokenUtil,
-) {
+): LibPebbleKoinComponent {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
     }
@@ -102,10 +100,22 @@ class PKJSApp(
         jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
     }
 
+    private fun injectJsRunner(scope: CoroutineScope): JsRunner =
+        get {
+            parameterArrayOf(
+                device,
+                scope,
+                appInfo,
+                lockerEntry,
+                jsPath,
+                _urlOpenRequests
+            )
+        }
+
     suspend fun start(connectionScope: CoroutineScope) {
         val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
         runningScope = scope
-        jsRunner = createJsRunner(appContext, scope, device, appInfo, lockerEntry, jsPath, libPebble, jsTokenUtil, _urlOpenRequests)
+        jsRunner = injectJsRunner(scope)
         launchIncomingAppMessageHandler(device, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")

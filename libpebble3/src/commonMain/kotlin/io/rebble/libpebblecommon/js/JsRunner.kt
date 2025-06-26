@@ -25,6 +25,7 @@ abstract class JsRunner(
     abstract suspend fun signalReady()
     abstract suspend fun signalShowConfiguration()
     abstract suspend fun signalWebviewClosed(data: String?)
+    abstract suspend fun eval(js: String)
     suspend fun loadUrl(url: String) {
         urlOpenRequests.emit(url)
     }

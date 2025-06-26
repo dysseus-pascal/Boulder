@@ -9,12 +9,14 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
+import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
 import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
@@ -50,6 +52,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         CalendarEntity::class,
         WatchSettingsEntity::class,
         WatchSettingsSyncEntity::class,
+        LockerAppPermission::class,
     ],
     version = 13,
     autoMigrations = [
@@ -70,6 +73,7 @@ abstract class Database : RoomDatabase() {
     abstract fun calendarDao(): CalendarDao
     abstract fun timelineReminderDao(): TimelineReminderRealDao
     abstract fun watchSettingsDao(): WatchSettingsDao
+    abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

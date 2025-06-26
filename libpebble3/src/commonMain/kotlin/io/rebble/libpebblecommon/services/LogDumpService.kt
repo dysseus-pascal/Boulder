@@ -13,9 +13,11 @@ import io.rebble.libpebblecommon.packets.LogDump
 import io.rebble.libpebblecommon.packets.LogDump.ReceivedLogDumpMessage
 import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.util.randomCookie
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Instant
 import kotlinx.datetime.format
@@ -33,19 +35,17 @@ class LogDumpService(
 
     override suspend fun gatherLogs(): Path? {
         logger.d { "gatherLogs" }
-        return withTimeoutOrNull(LOG_DUMP_TIMEOUT) {
-            val tempLogFile = getTempFilePath(appContext, "logs-${transport.identifier.asString}")
-            SystemFileSystem.sink(tempLogFile).use { sink ->
-                sink.asByteWriteChannel().use {
-                    writeLine("# Device logs:")
-                    for (generation in 0..<NUM_GENERATIONS_LEGACY) {
-                        requestLogGeneration(generation, this)
-                    }
+        val tempLogFile = getTempFilePath(appContext, "logs-${transport.identifier.asString}")
+        SystemFileSystem.sink(tempLogFile).use { sink ->
+            sink.asByteWriteChannel().use {
+                writeLine("# Device logs:")
+                for (generation in 0..<NUM_GENERATIONS_LEGACY) {
+                    requestLogGeneration(generation, this)
                 }
             }
-            logger.d { "gatherLogs done" }
-            tempLogFile
         }
+        logger.d { "gatherLogs done" }
+        return tempLogFile
     }
 
     private suspend fun requestLogGeneration(
@@ -55,39 +55,48 @@ class LogDumpService(
         logger.d { "requestLogGeneration: $generation" }
         writeChannel.writeLine("=== Generation: $generation ===")
         val cookie = randomCookie()
-        protocolHandler.inboundMessages
-            .onSubscription {
-                protocolHandler.send(
-                    LogDump.RequestLogDump(
-                        logGeneration = generation.toUByte(),
-                        cookie = cookie,
+        try {
+            protocolHandler.inboundMessages
+                .onSubscription {
+                    protocolHandler.send(
+                        LogDump.RequestLogDump(
+                            logGeneration = generation.toUByte(),
+                            cookie = cookie,
+                        )
                     )
-                )
-            }
-            .filterIsInstance(ReceivedLogDumpMessage::class)
-            .takeWhile {
-                when (it) {
-                    is LogDump.LogLine -> true
-                    is LogDump.Done -> false
-                    is LogDump.NoLogs -> false
                 }
-            }.collect {
-                if (it is LogDump.LogLine) {
-                    val level = LogLevel.fromCode(it.level.get()).str
-                    val instant = Instant.fromEpochSeconds(it.timestamp.get().toLong())
-                    val timestamp = instant.format(DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET)
-                    val filename = it.filename.get()
-                    val lineNumber = it.line.get()
-                    val message = it.messageText.get()
-                    val logString = "$level $timestamp $filename:$lineNumber> $message"
-                    writeChannel.writeLine(logString)
+                .filterIsInstance(ReceivedLogDumpMessage::class)
+                .takeWhile {
+                    when (it) {
+                        is LogDump.LogLine -> true
+                        is LogDump.Done -> false
+                        is LogDump.NoLogs -> false
+                    }
                 }
-            }
-        logger.d { "finished generation $generation" }
+                .timeout(LOG_RECEIVE_TIMEOUT)
+                .collect {
+                    if (it is LogDump.LogLine) {
+                        val level = LogLevel.fromCode(it.level.get()).str
+                        val instant = Instant.fromEpochSeconds(it.timestamp.get().toLong())
+                        val timestamp =
+                            instant.format(DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET)
+                        val filename = it.filename.get()
+                        val lineNumber = it.line.get()
+                        val message = it.messageText.get()
+                        val logString = "$level $timestamp $filename:$lineNumber> $message"
+                        writeChannel.writeLine(logString)
+                    }
+                }
+        } catch (e: TimeoutCancellationException) {
+            logger.w { "Timeout receiving logs for generation $generation" }
+            writeChannel.writeLine("!!! Timeout receiving logs for this generation !!!")
+        } finally {
+            logger.d { "finished generation $generation" }
+        }
     }
 
     companion object {
-        private val LOG_DUMP_TIMEOUT = 90.seconds
+        private val LOG_RECEIVE_TIMEOUT = 3.seconds
         private val NUM_GENERATIONS_LEGACY = 4
     }
 }

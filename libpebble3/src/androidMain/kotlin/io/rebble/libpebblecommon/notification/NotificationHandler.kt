@@ -22,6 +22,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.uuid.Uuid
 
 class NotificationHandler(
@@ -38,7 +39,7 @@ class NotificationHandler(
 
     //TODO: Datastore
     private val verboseLogging: Boolean = true
-    private val inflightNotifications = mutableMapOf<String, LibPebbleNotification>()
+    private val inflightNotifications = ConcurrentHashMap<String, LibPebbleNotification>()
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
     val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
 
@@ -129,14 +130,14 @@ class NotificationHandler(
 
     fun setActiveNotifications(notifications: List<StatusBarNotification>) =
         libPebbleCoroutineScope.launch {
-
+            val inflightSnapshot = inflightNotifications.toMap()
             val newNotifs = notifications.mapNotNull { sbn ->
-                if (inflightNotifications.any { it.key == sbn.key }) {
+                if (inflightSnapshot.any { it.key == sbn.key }) {
                     return@mapNotNull null
                 }
                 val notification = processNotification(sbn) ?: return@mapNotNull null
                 // Check if the notification is already in the list
-                if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
+                if (inflightSnapshot.values.any { it.displayDataEquals(notification) }) {
                     return@mapNotNull null
                 }
                 notification

@@ -23,8 +23,13 @@ import kotlin.uuid.Uuid
 
 class LibPebbleNotificationListener : NotificationListenerService(), KoinComponent {
     companion object {
-        private val logger = Logger.withTag(LibPebbleNotificationListener::class.simpleName!!)
+        private val logger = Logger.withTag("LibPebbleNotificationListener")
         fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        logger.v { "onCreate: ($this)" }
     }
 
     private val binder = LocalBinder()
@@ -44,16 +49,17 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        logger.d { "onBind()" }
         return if (intent?.action == AndroidPebbleNotificationListenerConnection.ACTION_BIND_LOCAL) {
+            logger.d { "onBind() ACTION_BIND_LOCAL  ($this)" }
             binder
         } else {
+            logger.d { "onBind()  ($this)" }
             super.onBind(intent)
         }
     }
 
     override fun onListenerConnected() {
-        logger.d { "onListenerConnected()" }
+        logger.d { "onListenerConnected() ($this)" }
         try {
             notificationHandler?.setActiveNotifications(getActiveNotifications().toList())
         } catch (e: SecurityException) {
@@ -62,7 +68,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     override fun onListenerDisconnected() {
-        logger.d { "onListenerDisconnected()" }
+        logger.d { "onListenerDisconnected() ($this)" }
     }
 
     override fun onNotificationChannelModified(
@@ -129,7 +135,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        logger.d { "onNotificationPosted(${sbn.packageName})" }
+        logger.d { "onNotificationPosted(${sbn.packageName})  ($this)" }
         notificationHandler?.handleNotificationPosted(sbn)
     }
 
@@ -138,7 +144,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         rankingMap: RankingMap,
         reason: Int
     ) {
-        logger.d { "onNotificationRemoved(${sbn.packageName})" }
+        logger.d { "onNotificationRemoved(${sbn.packageName})  ($this)" }
         notificationHandler?.handleNotificationRemoved(sbn)
     }
 }

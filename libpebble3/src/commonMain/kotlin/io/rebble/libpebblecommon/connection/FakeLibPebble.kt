@@ -157,7 +157,7 @@ fun fakeWatch(): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
     return object : DiscoveredPebbleDevice {
         override val transport: Transport = Transport.BluetoothTransport.BleTransport(
-            identifier = "00:00:00:00:00:00".asPebbleBluetoothIdentifier(),
+            identifier = randomMacAddress().asPebbleBluetoothIdentifier(),
             name = "Core $num",
         )
 
@@ -199,6 +199,18 @@ fun randomName(): String {
     return (1..length)
         .map { allowedChars[Random.nextInt(0, allowedChars.length)] }
         .joinToString("")
+}
+
+fun randomMacAddress(): String {
+    val allowedChars = "0123456789ABCDEF"
+    return (1..6).joinToString(":") {
+        (1..2).map {
+            allowedChars[Random.nextInt(
+                0,
+                allowedChars.length
+            )]
+        }.joinToString("")
+    }
 }
 
 fun fakeLockerEntry(): LockerWrapper {

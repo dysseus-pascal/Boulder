@@ -115,8 +115,13 @@ class WatchManagerTest {
         override val state: StateFlow<BluetoothState> = MutableStateFlow(BluetoothState.Enabled).asStateFlow()
     }
     private val companionDevice = object : CompanionDevice {
-        override suspend fun registerDevice(transport: Transport) {
+        override suspend fun registerDevice(
+            transport: Transport,
+            uiContext: UIContext?
+        ): Boolean {
+            return true
         }
+
 
         override val companionAccessGranted: SharedFlow<Unit>
             get() = MutableSharedFlow()
@@ -126,16 +131,16 @@ class WatchManagerTest {
         override val bluetoothEnabled: StateFlow<BluetoothState>
             get() = TODO("Not yet implemented")
 
-        override suspend fun startBleScan() {
+        override fun startBleScan() {
         }
 
-        override suspend fun stopBleScan() {
+        override fun stopBleScan() {
         }
 
-        override suspend fun startClassicScan() {
+        override fun startClassicScan() {
         }
 
-        override suspend fun stopClassicScan() {
+        override fun stopClassicScan() {
         }
     }
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
@@ -190,7 +195,7 @@ class WatchManagerTest {
         watchManager.init()
         yield()
         watchManager.addScanResult(scanResult)
-        watchManager.requestConnection(transport)
+        watchManager.requestConnection(transport, null)
         for (i in 1..20) {
             watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
             watchManager.watches.first { it.any { it !is ActiveDevice } }

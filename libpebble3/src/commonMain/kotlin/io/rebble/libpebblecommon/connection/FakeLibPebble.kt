@@ -164,7 +164,7 @@ fun fakeWatch(): PebbleDevice {
             name = "Core $num",
         )
 
-        override fun connect(uiContext: UIContext) {
+        override fun connect(uiContext: UIContext?) {
         }
     }
 }

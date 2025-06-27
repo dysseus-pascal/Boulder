@@ -8,8 +8,10 @@ actual fun createCompanionDeviceManager(libPebbleCoroutineScope: LibPebbleCorout
     return object : CompanionDevice {
         override suspend fun registerDevice(
             transport: Transport,
-            uiContext: UIContext
-        ) {}
+            uiContext: UIContext?,
+        ): Boolean {
+            return true
+        }
 
         override val companionAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
         override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()

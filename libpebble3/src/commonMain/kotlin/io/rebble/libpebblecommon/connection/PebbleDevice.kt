@@ -29,7 +29,7 @@ sealed interface PebbleDevice {
     val transport: Transport
     val name: String get() = transport.name
 
-    fun connect(uiContext: UIContext)
+    fun connect(uiContext: UIContext?)
 }
 
 interface DiscoveredPebbleDevice : PebbleDevice

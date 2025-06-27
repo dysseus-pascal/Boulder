@@ -32,14 +32,18 @@ class AndroidCompanionDevice(
     private val _notificationAccessGranted = MutableSharedFlow<Unit>()
     override val notificationAccessGranted = _notificationAccessGranted.asSharedFlow()
 
-    override suspend fun registerDevice(transport: Transport, uiContext: UIContext) {
+    override suspend fun registerDevice(transport: Transport, uiContext: UIContext?): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
+            return true
         }
         if (transport !is Transport.BluetoothTransport) {
-            return
+            return true
         }
-        val context = uiContext.activity
+        val context = uiContext?.activity
+        if (context == null) {
+            logger.w("context is null")
+            return false
+        }
         val service = context.getSystemService(CompanionDeviceManager::class.java)
 
         @Suppress("DEPRECATION")
@@ -47,7 +51,7 @@ class AndroidCompanionDevice(
         val macAddress = transport.identifier.macAddress
         if (existingBoundDevices.contains(macAddress)) {
             service.requestNotificationAccessIfRequired(uiContext)
-            return
+            return true
         }
 
         val filter = when (transport) {
@@ -67,7 +71,7 @@ class AndroidCompanionDevice(
             setSingleDevice(true)
         }.build()
 
-        val result = CompletableDeferred<Unit>()
+        val result = CompletableDeferred<Boolean>()
         val callback = object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) {
                 logger.d("onAssociationPending")
@@ -79,20 +83,25 @@ class AndroidCompanionDevice(
                 libPebbleCoroutineScope.launch {
                     _companionAccessGranted.emit(Unit)
                 }
-                result.complete(Unit)
+                result.complete(true)
             }
 
             override fun onFailure(error: CharSequence?) {
                 logger.d("onFailure: $error")
-                result.complete(Unit)
+                result.complete(false)
             }
         }
         logger.d("requesting association")
         service.associate(associationRequest, callback, null)
-        withTimeoutOrNull(30.seconds) {
-            result.await()
-            service.requestNotificationAccessIfRequired(uiContext)
-        }
+        val succeeded = withTimeoutOrNull(30.seconds) {
+            if (!result.await()) {
+                false
+            } else {
+                service.requestNotificationAccessIfRequired(uiContext)
+                true
+            }
+        } ?: false
+        return succeeded
     }
 
     private fun CompanionDeviceManager.requestNotificationAccessIfRequired(context: UIContext) {

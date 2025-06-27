@@ -43,6 +43,12 @@ class PPoG(
         }
     }
 
+    private fun verboseLog(message: () -> String) {
+        if (bleConfig.value.verbosePpogLogging) {
+            logger.v(message = message)
+        }
+    }
+
     suspend fun close() {
         if (closed) return
         closed = true
@@ -199,7 +205,7 @@ class PPoG(
                 }
                 pPoGStream.inboundPPoGBytesChannel.onReceive { bytes ->
                     val packet = bytes.asPPoGPacket()
-                    logger.v("received packet: $packet")
+                    verboseLog { "received packet: $packet" }
                     when (packet) {
                         is PPoGPacket.Ack -> {
                             removeResendsUpTo(packet.sequence)
@@ -255,7 +261,7 @@ class PPoG(
     private fun maxDataBytes() = mtu - DATA_HEADER_OVERHEAD_BYTES
 
     private suspend fun sendPacketImmediately(packet: PPoGPacket, version: PPoGVersion) {
-        logger.v("sendPacketImmediately: $packet")
+        verboseLog { "sendPacketImmediately: $packet" }
         if (!pPoGPacketSender.sendPacket(packet.serialize(version))) {
             logger.e("Couldn't send packet!")
             throw IllegalStateException("Couldn't send packet!")

@@ -85,6 +85,7 @@ data class BleConfig(
     val desiredRxWindow: Int = MAX_RX_WINDOW,
     val useNativeMtu: Boolean = true,
     val sendPpogResetOnDisconnection: Boolean = false,
+    val verbosePpogLogging: Boolean = false,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

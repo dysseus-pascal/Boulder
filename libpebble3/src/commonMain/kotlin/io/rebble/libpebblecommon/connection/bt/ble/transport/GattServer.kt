@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.Uuid
 
-expect fun openGattServer(appContext: AppContext): GattServer?
+expect fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer?
 
 expect class GattServer {
     suspend fun addServices()
@@ -38,6 +38,7 @@ class GattServerManager(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val appContext: AppContext,
+    private val bleConfigFlow: BleConfigFlow,
 ) {
     private val serverMutex = Mutex()
     private val logger = Logger.withTag("GattServerManager")
@@ -92,7 +93,7 @@ class GattServerManager(
         serverMutex.withLock {
             if (gattServer != null) return@withLock
             logger.d("open gatt server")
-            gattServer = openGattServer(appContext)
+            gattServer = openGattServer(appContext, bleConfigFlow)
             gattServer?.addServices()
             libPebbleCoroutineScope.launch {
                 gattServer?.characteristicReadRequest?.collect {

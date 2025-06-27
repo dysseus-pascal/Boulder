@@ -24,7 +24,7 @@ class PebbleProtocolRunner(
     private val pebbleProtocolStreams: PebbleProtocolStreams,
     private val transport: Transport,
 ) {
-    private val logger = Logger.withTag("PebbleProtocolRunner-$transport")
+    private val logger = Logger.withTag("PebbleProtocolRunner-${transport.name}")
 
     suspend fun run() {
         try {

@@ -37,7 +37,7 @@ import kotlin.time.Instant.Companion.DISTANT_PAST
 sealed class PebbleConnectionResult {
     data object Success : PebbleConnectionResult()
 
-    class Failed(reason: String) : PebbleConnectionResult()
+    data class Failed(val reason: String) : PebbleConnectionResult()
 }
 
 interface TransportConnector {

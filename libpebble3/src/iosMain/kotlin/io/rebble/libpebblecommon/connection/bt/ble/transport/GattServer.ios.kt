@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
@@ -80,8 +81,15 @@ private fun ByteArray.toNSData(): NSData = memScoped {
 
 actual class GattServer(
     private val peripheralManager: CBPeripheralManager,
+    private val bleConfigFlow: BleConfigFlow,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
     private val logger = Logger.withTag("GattServer")
+
+    private fun verboseLog(message: () -> String) {
+        if (bleConfigFlow.value.verbosePpogLogging) {
+            logger.v(message = message)
+        }
+    }
 
     private val registeredDevices: MutableMap<PebbleBluetoothIdentifier, RegisteredDevice> =
         mutableMapOf()
@@ -214,7 +222,7 @@ actual class GattServer(
         didReceiveWriteRequests: List<*>,
     ) {
         didReceiveWriteRequests.mapNotNull { it as? CBATTRequest }.forEach { request ->
-            logger.v("writeRequest: ${request.characteristic.UUID} / ${request.value}")
+            verboseLog { "writeRequest: ${request.characteristic.UUID} / ${request.value}" }
             val identifier = request.central.identifier.asUuid().asPebbleBluetoothIdentifier()
             val device = registeredDevices[identifier]
             if (device == null) {
@@ -301,6 +309,6 @@ actual class GattServer(
 private val SEND_TIMEOUT = 5.seconds
 
 
-actual fun openGattServer(appContext: AppContext): GattServer? {
-    return GattServer(CBPeripheralManager())
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
+    return GattServer(CBPeripheralManager(), bleConfigFlow)
 }

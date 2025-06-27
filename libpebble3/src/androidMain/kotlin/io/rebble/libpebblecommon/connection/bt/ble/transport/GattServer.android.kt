@@ -14,6 +14,7 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.asPebbleBluetoothIdentifier
@@ -40,9 +41,9 @@ import kotlin.uuid.toJavaUuid
 private fun getService(appContext: AppContext): BluetoothManager? =
     appContext.context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
 
-actual fun openGattServer(appContext: AppContext): GattServer? {
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
     return try {
-        val callback = GattServerCallback()
+        val callback = GattServerCallback(bleConfigFlow)
         getService(appContext)?.openGattServer(appContext.context, callback)?.let {
             callback.server = it
             io.rebble.libpebblecommon.connection.bt.ble.transport.GattServer(it, callback)
@@ -59,12 +60,20 @@ data class RegisteredDevice(
     val notificationsEnabled: Boolean,
 )
 
-class GattServerCallback : BluetoothGattServerCallback() {
+class GattServerCallback(
+    private val bleConfigFlow: BleConfigFlow,
+) : BluetoothGattServerCallback() {
     private val logger = Logger.withTag("GattServerCallback")
     //    private val _connectionState = MutableStateFlow<ServerConnectionstateChanged?>(null)
 //    val connectionState = _connectionState.asSharedFlow()
     val registeredDevices: MutableMap<String, RegisteredDevice> = mutableMapOf()
     var server: BluetoothGattServer? = null
+
+    private fun verboseLog(message: () -> String) {
+        if (bleConfigFlow.value.verbosePpogLogging) {
+            logger.v(message = message)
+        }
+    }
 
     override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
         logger.d("onConnectionStateChange: ${device.address} = $newState")
@@ -146,7 +155,7 @@ class GattServerCallback : BluetoothGattServerCallback() {
         offset: Int,
         value: ByteArray?,
     ) {
-        logger.d("onDescriptorWriteRequest: ${device.address} / ${descriptor.characteristic.uuid}")
+        verboseLog { "onDescriptorWriteRequest: ${device.address} / ${descriptor.characteristic.uuid}" }
         val registeredDevice = registeredDevices[device.address]
         if (registeredDevice == null) {
             logger.e("onDescriptorWriteRequest device not registered!")

@@ -1,12 +1,13 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.Transport
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
-actual fun openGattServer(appContext: AppContext): GattServer? {
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
     TODO("Not yet implemented")
 }
 

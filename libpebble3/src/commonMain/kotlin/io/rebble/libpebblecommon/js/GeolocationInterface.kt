@@ -43,12 +43,13 @@ abstract class GeolocationInterface(
     }
 
     private suspend fun triggerPositionResultGet(id: Int, result: GeolocationPositionResult) {
-        Logger.i { "result for getPosition: ${result::class.simpleName}" }
         when (result) {
             is GeolocationPositionResult.Success -> {
+                Logger.i { "Geolocation get position success" }
                 jsRunner.eval("_PebbleGeoCB._resultGetSuccess($id, ${result.latitude}, ${result.longitude})")
             }
             is GeolocationPositionResult.Error -> {
+                Logger.w { "Geolocation get position error: ${result.message}" }
                 jsRunner.eval("_PebbleGeoCB._resultGetError($id, ${result.message.quote()})")
             }
         }

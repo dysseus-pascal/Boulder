@@ -71,10 +71,12 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
             val location = suspendCancellableCoroutine { cont ->
                 val lastKnownLocation = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
                 if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) < MAX_CACHED_TIME) {
+                    logger.d { "Returning last known location" }
                     cont.resume(lastKnownLocation)
                     return@suspendCancellableCoroutine
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    logger.d { "Requesting current location with Fused Provider" }
                     locationManager.getCurrentLocation(
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             android.location.LocationManager.FUSED_PROVIDER
@@ -93,6 +95,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                         )
                     }
                 } else {
+                    logger.d { "Requesting single update for location" }
                     locationManager.requestSingleUpdate(
                         android.location.LocationManager.GPS_PROVIDER,
                         { location ->

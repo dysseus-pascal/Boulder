@@ -9,6 +9,8 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
+import io.rebble.libpebblecommon.database.entity.ChannelGroup
+import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
+import kotlin.random.nextInt
 import kotlin.uuid.Uuid
 
 class FakeLibPebble : LibPebble {
@@ -179,10 +182,36 @@ fun fakeNotificationApp(): NotificationAppItem {
         name = randomName(),
         packageName = randomName(),
         muteState = if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
-        channelGroups = emptyList(),
+        channelGroups = if (Random.nextBoolean()) emptyList() else fakeChannelGroups(),
         stateUpdated = Instant.DISTANT_PAST.asMillisecond(),
         lastNotified = Instant.DISTANT_PAST.asMillisecond(),
     )
+}
+
+fun fakeChannelGroups(): List<ChannelGroup> {
+    return buildList {
+        for (i in 1..Random.nextInt(2,5)) {
+            add(ChannelGroup(
+                id = randomName(),
+                name = randomName(),
+                channels = fakeChannels(),
+            ))
+        }
+    }
+}
+
+fun fakeChannels(): List<ChannelItem> {
+    return buildList {
+        for (i in 1..Random.nextInt(1, 8)) {
+            add(
+                ChannelItem(
+                    id = randomName(),
+                    name = randomName(),
+                    muteState = if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
+                )
+            )
+        }
+    }
 }
 
 fun fakeLockerEntries(): List<LockerWrapper> {

@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import io.mockk.mockk
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
@@ -116,7 +115,7 @@ class WatchManagerTest {
         override val state: StateFlow<BluetoothState> = MutableStateFlow(BluetoothState.Enabled).asStateFlow()
     }
     private val companionDevice = object : CompanionDevice {
-        override suspend fun registerDevice(transport: Transport, uiContext: UIContext) {
+        override suspend fun registerDevice(transport: Transport) {
         }
 
         override val companionAccessGranted: SharedFlow<Unit>
@@ -127,16 +126,16 @@ class WatchManagerTest {
         override val bluetoothEnabled: StateFlow<BluetoothState>
             get() = TODO("Not yet implemented")
 
-        override fun startBleScan() {
+        override suspend fun startBleScan() {
         }
 
-        override fun stopBleScan() {
+        override suspend fun stopBleScan() {
         }
 
-        override fun startClassicScan() {
+        override suspend fun startClassicScan() {
         }
 
-        override fun stopClassicScan() {
+        override suspend fun stopClassicScan() {
         }
     }
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
@@ -188,11 +187,10 @@ class WatchManagerTest {
     fun repeatConnections() = runTest(timeout = 5.seconds) {
         val watchManager = create(backgroundScope)
         val scanResult = PebbleScanResult(transport, 0, null)
-        val uiContext: UIContext = mockk()
         watchManager.init()
         yield()
         watchManager.addScanResult(scanResult)
-        watchManager.requestConnection(transport, uiContext)
+        watchManager.requestConnection(transport)
         for (i in 1..20) {
             watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
             watchManager.watches.first { it.any { it !is ActiveDevice } }

@@ -10,8 +10,12 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Com
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 data class BleScanResult(
     val transport: Transport,
@@ -33,14 +37,20 @@ class RealScanning(
 ) : Scanning {
     private var bleScanJob: Job? = null
     override val bluetoothEnabled: StateFlow<BluetoothState> = bluetoothStateProvider.state
+    private val _isBleScanning = MutableStateFlow(false)
+    override val isScanningBle: StateFlow<Boolean> = _isBleScanning.asStateFlow()
 
     override fun startBleScan() {
-        // TODO add timeout
         Logger.d("startBleScan")
         bleScanJob?.cancel()
         watchConnector.clearScanResults()
         val scanResults = bleScanner.scan("Pebble" /* TODO remove? */)
+        _isBleScanning.value = true
         bleScanJob = libPebbleCoroutineScope.launch {
+            launch {
+                delay(BLE_SCANNING_TIMEOUT)
+                stopBleScan()
+            }
             scanResults.collect {
                 if (it.manufacturerData.code !in VENDOR_IDS) {
                     return@collect
@@ -59,6 +69,7 @@ class RealScanning(
     override fun stopBleScan() {
         Logger.d("stopBleScan")
         bleScanJob?.cancel()
+        _isBleScanning.value = false
     }
 
     override fun startClassicScan() {
@@ -73,5 +84,5 @@ class RealScanning(
         val PEBBLE_VENDOR_ID = byteArrayOf(0x54, 0x01).getShortAt(0).toInt()
         val CORE_VENDOR_ID = byteArrayOf(0xEA.toByte(), 0x0E).getShortAt(0).toInt()
         val VENDOR_IDS = listOf(PEBBLE_VENDOR_ID, CORE_VENDOR_ID)
-    }
+        private val BLE_SCANNING_TIMEOUT = 30.seconds    }
 }

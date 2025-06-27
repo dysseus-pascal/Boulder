@@ -130,6 +130,8 @@ class WatchManagerTest {
     private val scanning = object : Scanning {
         override val bluetoothEnabled: StateFlow<BluetoothState>
             get() = TODO("Not yet implemented")
+        override val isScanningBle: StateFlow<Boolean>
+            get() = TODO("Not yet implemented")
 
         override fun startBleScan() {
         }

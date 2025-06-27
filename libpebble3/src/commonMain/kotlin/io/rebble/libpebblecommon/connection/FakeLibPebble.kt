@@ -37,6 +37,9 @@ class FakeLibPebble : LibPebble {
     }
 
     override val watches: PebbleDevices = MutableStateFlow(fakeWatches())
+    override fun watchesDebugState(): String {
+        return ""
+    }
 
     override val config: StateFlow<LibPebbleConfig> = MutableStateFlow(LibPebbleConfig())
 

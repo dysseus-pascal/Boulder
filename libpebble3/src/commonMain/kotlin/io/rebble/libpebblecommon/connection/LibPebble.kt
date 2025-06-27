@@ -51,6 +51,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     fun init()
 
     val watches: PebbleDevices
+    fun watchesDebugState(): String
     val config: StateFlow<LibPebbleConfig>
     fun updateConfig(config: LibPebbleConfig)
 
@@ -183,6 +184,8 @@ class LibPebble3(
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
+    override fun watchesDebugState(): String = watchManager.debugState()
+
     override val config: StateFlow<LibPebbleConfig> = libPebbleConfigFlow.config
 
     override fun updateConfig(config: LibPebbleConfig) {

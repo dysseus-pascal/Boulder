@@ -132,6 +132,10 @@ class WatchManager(
     private val activeConnections = mutableSetOf<Transport>()
     private var connectionNum = 0
 
+    fun debugState(): String = "allWatches=${allWatches.value.entries.joinToString("\n")}\n" +
+            "activeConnections=$activeConnections\n" +
+            "btState=${bluetoothStateProvider.state.value}"
+
     private suspend fun loadKnownWatchesFromDb() {
         allWatches.value = knownWatchDao.knownWatches().associate {
             it.transport() to Watch(

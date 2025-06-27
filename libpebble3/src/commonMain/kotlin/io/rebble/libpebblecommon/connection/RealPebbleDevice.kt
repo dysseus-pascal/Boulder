@@ -112,7 +112,7 @@ internal class RealBleDiscoveredPebbleDevice(
     override val rssi: Int,
 ) : PebbleDevice by pebbleDevice, BleDiscoveredPebbleDevice {
     override fun toString(): String =
-        "RealBleDiscoveredPebbleDevice: $pebbleDevice / pebbleScanRecord=$pebbleScanRecord"
+        "RealBleDiscoveredPebbleDevice: $pebbleDevice / pebbleScanRecord=$pebbleScanRecord / rssi=$rssi"
 }
 
 internal class RealKnownPebbleDevice(
@@ -138,11 +138,17 @@ internal class RealActiveDevice(
     override fun disconnect() {
         watchConnector.requestDisconnection(transport)
     }
+
+    override fun toString(): String =
+        "ActiveDevice: $transport"
 }
 
 internal class RealDisconnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
-) : DisconnectingPebbleDevice, PebbleDevice by pebbleDevice
+) : DisconnectingPebbleDevice, PebbleDevice by pebbleDevice {
+    override fun toString(): String =
+        "DisconnectingPebbleDevice: $pebbleDevice"
+}
 
 internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
@@ -181,7 +187,7 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Music by services.music,
     ConnectedPebble.PKJS by services.pkjs {
 
-    override fun toString(): String = "ConnectedPebbleDevice: $knownDevice"
+    override fun toString(): String = "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }
 
 internal class RealConnectedPebbleDeviceInRecovery(
@@ -195,4 +201,7 @@ internal class RealConnectedPebbleDeviceInRecovery(
     ActiveDevice by activeDevice,
     ConnectedPebble.Firmware by services.firmware,
     ConnectedPebble.Logs by services.logs,
-    ConnectedPebble.CoreDump by services.coreDump
+    ConnectedPebble.CoreDump by services.coreDump {
+
+    override fun toString(): String = "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
+}

@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
@@ -71,4 +72,7 @@ actual val platformModule: Module = module {
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }
+    single { BlePlatformConfig(
+        delayBleConnectionsForSafety = true,
+    ) }
 }

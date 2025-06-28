@@ -5,6 +5,7 @@ import com.oldguy.common.io.BitSet
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.PROPERTY_WRITE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
@@ -23,6 +24,7 @@ class PebblePairing(
     val context: AppContext,
     val transport: Transport,
     val config: BleConfigFlow,
+    val blePlatformConfig: BlePlatformConfig,
 ) {
     //    @Throws(IOException::class, SecurityException::class)
     suspend fun requestPairing(
@@ -47,16 +49,16 @@ class PebblePairing(
 
         // A writeable pairing trigger allows addr pinning
         val writeablePairTrigger = pairingTriggerCharacteristic.properties and PROPERTY_WRITE != 0
-        if (writeablePairTrigger && bleConfig.writeConnectivityTrigger) {
+        if (writeablePairTrigger && blePlatformConfig.writeConnectivityTrigger) {
             needsExplicitBond = when {
-                bleConfig.pinAddress -> connectivityRecord.supportsPinningWithoutSlaveSecurity && bleConfig.phoneRequestsPairing
-                else -> bleConfig.phoneRequestsPairing
+                blePlatformConfig.pinAddress -> connectivityRecord.supportsPinningWithoutSlaveSecurity && blePlatformConfig.phoneRequestsPairing
+                else -> blePlatformConfig.phoneRequestsPairing
             }
             val pairValue = makePairingTriggerValue(
                 noSecurityRequest = needsExplicitBond,
                 autoAcceptFuturePairing = false,
                 watchAsGattServer = bleConfig.reversedPPoG,
-                pinAddress = bleConfig.pinAddress,
+                pinAddress = blePlatformConfig.pinAddress,
             )
             val writeRes = device.writeCharacteristic(
                 PAIRING_SERVICE_UUID,

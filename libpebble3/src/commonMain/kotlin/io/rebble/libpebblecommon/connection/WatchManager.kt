@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -130,6 +131,7 @@ class WatchManager(
     private val watchConfig: WatchConfigFlow,
     private val firmwareUpdateManager: FirmwareUpdateManager,
     private val clock: Clock,
+    private val blePlatformConfig: BlePlatformConfig,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
@@ -419,7 +421,7 @@ class WatchManager(
 
             connectionScope.launch {
                 try {
-                    if ((clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
+                    if (blePlatformConfig.delayBleConnectionsForSafety && (clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
                         logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
@@ -462,8 +464,10 @@ class WatchManager(
             // This is essentially a hack to work around the case where we disconnect+reconnect so
             // fast that the watch doesn't realize. Wait a little bit before trying to connect
             // again
-            logger.d { "delaying before marking as disconnected.." }
-            delay(APP_START_WAIT_TO_CONNECT)
+            if (blePlatformConfig.delayBleConnectionsForSafety) {
+                logger.d { "delaying before marking as disconnected.." }
+                delay(APP_START_WAIT_TO_CONNECT)
+            }
             activeConnections.remove(transport)
             updateWatch(transport) { it.copy(activeConnection = null) }
         }.await()
@@ -498,7 +502,7 @@ class WatchManager(
 
     companion object {
         private val DISCONNECT_TIMEOUT = 3.seconds
-        private val APP_START_WAIT_TO_CONNECT = 3.seconds
+        private val APP_START_WAIT_TO_CONNECT = 2.5.seconds
     }
 }
 

@@ -5,6 +5,7 @@ import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -27,10 +28,11 @@ class PPoG(
     private val pPoGStream: PPoGStream,
     private val pPoGPacketSender: PPoGPacketSender,
     private val bleConfig: BleConfigFlow,
+    private val blePlatformConfig: BlePlatformConfig,
     private val scope: ConnectionCoroutineScope,
 ) {
     private val logger = Logger.withTag("PPoG")
-    private var mtu: Int = bleConfig.value.initialMtu
+    private var mtu: Int = blePlatformConfig.initialMtu
     private var closed = false
 
     fun run() {
@@ -57,7 +59,7 @@ class PPoG(
         if (closed) return
         closed = true
         logger.d("close")
-        if (bleConfig.value.sendPpogResetOnDisconnection) {
+        if (blePlatformConfig.sendPpogResetOnDisconnection) {
             // This really for iOS, where the "connection" will stay alive when the app "disconnects",
             // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
             sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
@@ -115,8 +117,8 @@ class PPoG(
         sendPacketImmediately(
             packet = PPoGPacket.ResetComplete(
                 sequence = 0,
-                rxWindow = min(bleConfig.value.desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
-                txWindow = min(bleConfig.value.desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
+                rxWindow = min(blePlatformConfig.desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
+                txWindow = min(blePlatformConfig.desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
             ),
             version = resetRequest.ppogVersion
         )
@@ -127,8 +129,8 @@ class PPoG(
         logger.d("got $resetComplete")
 
         return PPoGConnectionParams(
-            rxWindow = min(min(resetComplete.txWindow, bleConfig.value.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE),
-            txWindow = min(min(resetComplete.rxWindow, bleConfig.value.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE),
+            rxWindow = min(min(resetComplete.txWindow, blePlatformConfig.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE),
+            txWindow = min(min(resetComplete.rxWindow, blePlatformConfig.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE),
             pPoGversion = resetRequest.ppogVersion,
         )
     }

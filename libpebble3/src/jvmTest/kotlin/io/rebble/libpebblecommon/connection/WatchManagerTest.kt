@@ -1,9 +1,11 @@
 package io.rebble.libpebblecommon.connection
 
+import io.rebble.libpebblecommon.BleConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.di.ConnectionScope
@@ -61,6 +63,7 @@ class WatchManagerTest {
     private val transport = Transport.SocketTransport(PebbleSocketIdentifier("addr"), "name")
 
     private var activeConnections = 0
+    private var totalConnections = 0
     private var connectSuccess = false
     private var exceededMax = false
 
@@ -75,6 +78,7 @@ class WatchManagerTest {
 
         override suspend fun connect(previouslyConnected: Boolean) {
             activeConnections++
+            totalConnections++
             if (activeConnections > 1) {
                 exceededMax = true
                 throw IllegalStateException("too many active connections!")
@@ -159,6 +163,7 @@ class WatchManagerTest {
         }
     }
     private val firmwareUpdateManager = FirmwareUpdateManager(webServices)
+    private val blePlatformConfig = BlePlatformConfig(delayBleConnectionsForSafety = false)
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)
@@ -174,6 +179,7 @@ class WatchManagerTest {
             watchConfig = watchConfig,
             firmwareUpdateManager = firmwareUpdateManager,
             clock = Clock.System,
+            blePlatformConfig = blePlatformConfig,
         )
     }
 
@@ -199,8 +205,7 @@ class WatchManagerTest {
         watchManager.addScanResult(scanResult)
         watchManager.requestConnection(transport, null)
         for (i in 1..20) {
-            watchManager.watches.first { it.any { it is ConnectingPebbleDevice } }
-            watchManager.watches.first { it.any { it !is ActiveDevice } }
+            watchManager.watches.first { totalConnections >= i && it.any { it is ConnectingPebbleDevice } }
         }
         assertFalse(exceededMax)
     }

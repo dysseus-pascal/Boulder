@@ -77,14 +77,6 @@ fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watc
 @Serializable
 data class BleConfig(
     val reversedPPoG: Boolean = false,
-    val pinAddress: Boolean = true,
-    val phoneRequestsPairing: Boolean = true,
-    val writeConnectivityTrigger: Boolean = true,
-    val initialMtu: Int = DEFAULT_MTU,
-    val desiredTxWindow: Int = MAX_TX_WINDOW,
-    val desiredRxWindow: Int = MAX_RX_WINDOW,
-    val useNativeMtu: Boolean = true,
-    val sendPpogResetOnDisconnection: Boolean = false,
     val verbosePpogLogging: Boolean = false,
 )
 

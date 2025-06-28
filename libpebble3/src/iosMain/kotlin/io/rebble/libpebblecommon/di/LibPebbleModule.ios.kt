@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
@@ -58,4 +59,10 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
     singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
     single { PlatformConfig(syncNotificationApps = true) }
+    single { BlePlatformConfig(
+        pinAddress = false,
+        phoneRequestsPairing = false,
+        useNativeMtu = false,
+        sendPpogResetOnDisconnection = true,
+    ) }
 }

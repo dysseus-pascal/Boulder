@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.BleConfigFlow
-import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
@@ -31,6 +30,7 @@ expect class GattServer {
         transport: BleTransport, serviceUuid: Uuid,
         characteristicUuid: Uuid, data: ByteArray
     ): Boolean
+    fun wasRestoredWithSubscribedCentral(): Boolean
 }
 
 class GattServerManager(
@@ -84,6 +84,10 @@ class GattServerManager(
         data: ByteArray,
     ): Boolean {
         return gattServer?.sendData(transport, serviceUuid, characteristicUuid, data) ?: false
+    }
+
+    fun wasRestoredWithSubscribedCentral(): Boolean {
+        return gattServer?.wasRestoredWithSubscribedCentral() ?: false
     }
 
     private suspend fun openIfNeeded() {

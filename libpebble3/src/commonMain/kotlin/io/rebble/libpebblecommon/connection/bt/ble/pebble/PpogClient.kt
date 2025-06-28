@@ -45,4 +45,6 @@ class PpogClient(
             writeType = GattWriteType.NoResponse,
         )
     }
+
+    override fun wasRestoredWithSubscribedCentral(): Boolean = false
 }

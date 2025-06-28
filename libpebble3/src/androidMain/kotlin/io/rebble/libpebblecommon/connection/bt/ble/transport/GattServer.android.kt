@@ -365,6 +365,10 @@ actual class GattServer(
             false
         }
     }
+
+    actual fun wasRestoredWithSubscribedCentral(): Boolean {
+        return false
+    }
 }
 
 private fun UUID.asUuid(): Uuid = Uuid.parse(toString())

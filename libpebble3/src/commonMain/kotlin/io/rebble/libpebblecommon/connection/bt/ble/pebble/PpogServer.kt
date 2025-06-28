@@ -18,4 +18,8 @@ class PpogServer(
             data = packet
         )
     }
+
+    override fun wasRestoredWithSubscribedCentral(): Boolean {
+        return gattServerManager.wasRestoredWithSubscribedCentral()
+    }
 }

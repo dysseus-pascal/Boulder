@@ -38,4 +38,8 @@ actual class GattServer {
     ): Boolean {
         TODO("Not yet implemented")
     }
+
+    actual fun wasRestoredWithSubscribedCentral(): Boolean {
+        TODO("Not yet implemented")
+    }
 }

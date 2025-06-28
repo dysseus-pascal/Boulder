@@ -41,6 +41,7 @@ import platform.CoreBluetooth.CBMutableCharacteristic
 import platform.CoreBluetooth.CBMutableService
 import platform.CoreBluetooth.CBPeripheralManager
 import platform.CoreBluetooth.CBPeripheralManagerDelegateProtocol
+import platform.CoreBluetooth.CBPeripheralManagerOptionRestoreIdentifierKey
 import platform.CoreBluetooth.CBService
 import platform.CoreBluetooth.CBUUID
 import platform.Foundation.NSData
@@ -80,10 +81,19 @@ private fun ByteArray.toNSData(): NSData = memScoped {
 }
 
 actual class GattServer(
-    private val peripheralManager: CBPeripheralManager,
     private val bleConfigFlow: BleConfigFlow,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
     private val logger = Logger.withTag("GattServer")
+    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
+        delegate = this,
+        queue = null,
+        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
+    )
+    private val registeredDevices: MutableMap<PebbleBluetoothIdentifier, RegisteredDevice> =
+        mutableMapOf()
+    private val registeredServices = mutableMapOf<Uuid, Map<Uuid, CBMutableCharacteristic>>()
+    private var wasSubscribedAtRestore = false
+
 
     private fun verboseLog(message: () -> String) {
         if (bleConfigFlow.value.verbosePpogLogging) {
@@ -91,20 +101,32 @@ actual class GattServer(
         }
     }
 
-    private val registeredDevices: MutableMap<PebbleBluetoothIdentifier, RegisteredDevice> =
-        mutableMapOf()
-    private val registeredServices = mutableMapOf<Uuid, Map<Uuid, CBMutableCharacteristic>>()
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        willRestoreState: Map<Any?, *>
+    ) {
+        val restoredServices = willRestoreState["kCBRestoredServices"] as? List<CBMutableService>
+        restoredServices?.forEach { service ->
+            val characteristics = buildMap {
+                val characteristics = service.characteristics as? List<CBMutableCharacteristic>
+                characteristics?.forEach { c ->
+                    if (c.subscribedCentrals?.isNotEmpty() ?: false) {
+                        logger.d { "${c.UUID} was subscribed at restore time" }
+                        wasSubscribedAtRestore = true
+                    }
+                    put(c.UUID.asUuid(), c)
+                }
+            }
+            registeredServices.put(service.UUID.asUuid(), characteristics)
+        }
+        logger.d { "restoredServices" }
+    }
 
     private fun findCharacteristic(
         serviceUuid: Uuid,
         characteristicUuid: Uuid
     ): CBMutableCharacteristic? =
         registeredServices[serviceUuid]?.get(characteristicUuid)
-
-    init {
-        peripheralManager.delegate = this
-        peripheralManager
-    }
 
     actual suspend fun addServices() {
         logger.d("addServices: waiting for power on")
@@ -143,6 +165,10 @@ actual class GattServer(
         serviceUuid: Uuid,
         characteristics: List<CBMutableCharacteristic>,
     ) {
+        if (findCharacteristic(serviceUuid, characteristics.first().UUID.asUuid()) != null) {
+            logger.d { "service $serviceUuid already present!" }
+            return
+        }
         logger.d("addService: $serviceUuid")
         val service = CBMutableService(type = serviceUuid.asCbUuid(), primary = true)
         service.setCharacteristics(characteristics)
@@ -206,6 +232,10 @@ actual class GattServer(
             }
             false
         }
+    }
+
+    actual fun wasRestoredWithSubscribedCentral(): Boolean {
+        return wasSubscribedAtRestore
     }
 
     private val peripheralManagerState = MutableStateFlow(CBManagerStateUnknown)
@@ -310,5 +340,5 @@ private val SEND_TIMEOUT = 5.seconds
 
 
 actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
-    return GattServer(CBPeripheralManager(), bleConfigFlow)
+    return GattServer(bleConfigFlow)
 }

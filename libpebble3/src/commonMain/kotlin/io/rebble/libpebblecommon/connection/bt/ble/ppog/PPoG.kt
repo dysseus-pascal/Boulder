@@ -17,6 +17,7 @@ import kotlin.time.Duration.Companion.seconds
 
 interface PPoGPacketSender {
     suspend fun sendPacket(packet: ByteArray): Boolean
+    fun wasRestoredWithSubscribedCentral(): Boolean
 }
 
 class PPoGStream(val inboundPPoGBytesChannel: Channel<ByteArray> = Channel(capacity = 100))
@@ -35,9 +36,12 @@ class PPoG(
     fun run() {
         scope.launch {
             val params = withTimeoutOrNull(12.seconds) {
-                initWaitingForResetRequest()
-            } ?: withTimeoutOrNull(5.seconds) {
-                initWithResetRequest()
+                if (pPoGPacketSender.wasRestoredWithSubscribedCentral()) {
+                    logger.d { "gattserver already has subscribers: starting with reset request" }
+                    initWithResetRequest()
+                } else {
+                    initWaitingForResetRequest()
+                }
             } ?: throw IllegalStateException("Timed out initializing PPoG")
             runConnection(params)
         }
@@ -75,9 +79,7 @@ class PPoG(
     }
 
     private suspend fun initWithResetRequest(): PPoGConnectionParams? {
-        if (!bleConfig.value.reversedPPoG) return null
-
-        logger.d("initWithResetRequest (iOS reversed PPoG fallback)")
+        logger.d("initWithResetRequest")
         // Reversed PPoG doesn't have a meta characteristic, so we have to assume.
         val ppogVersion = PPoGVersion.ONE
 
@@ -261,7 +263,11 @@ class PPoG(
     private fun maxDataBytes() = mtu - DATA_HEADER_OVERHEAD_BYTES
 
     private suspend fun sendPacketImmediately(packet: PPoGPacket, version: PPoGVersion) {
-        verboseLog { "sendPacketImmediately: $packet" }
+        if (packet is PPoGPacket.Data) {
+            verboseLog { "sendPacketImmediately: $packet" }
+        } else {
+            logger.d { "sendPacketImmediately: $packet" }
+        }
         if (!pPoGPacketSender.sendPacket(packet.serialize(version))) {
             logger.e("Couldn't send packet!")
             throw IllegalStateException("Couldn't send packet!")

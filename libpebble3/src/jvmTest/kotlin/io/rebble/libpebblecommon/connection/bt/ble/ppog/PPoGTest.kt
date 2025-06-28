@@ -30,6 +30,10 @@ class PPoGTest {
             outboundPPoGPackets.send(packet)
             return true
         }
+
+        override fun wasRestoredWithSubscribedCentral(): Boolean {
+            return false
+        }
     }
     val bleConfig = BleConfig(
         reversedPPoG = false,

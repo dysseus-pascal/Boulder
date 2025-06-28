@@ -34,7 +34,7 @@ class NotificationHandler(
     private val privateLogger: PrivateLogger,
 ) {
     companion object {
-        private val logger = Logger.withTag(NotificationHandler::class.simpleName!!)
+        private val logger = Logger.withTag("NotificationHandler")
     }
 
     //TODO: Datastore
@@ -182,6 +182,7 @@ New notification:
     postTime = $postTime
     tag = ${tag.obfuscate(privateLogger)}
     pkg = ${packageName.obfuscate(privateLogger)}
+    user = $user
     ongoing = $isOngoing
     when = ${notification.`when`}
     number = ${notification.number}

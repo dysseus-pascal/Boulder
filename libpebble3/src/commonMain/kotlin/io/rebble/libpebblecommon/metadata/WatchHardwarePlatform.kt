@@ -28,7 +28,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     PEBBLE_SPALDING_BIGBOARD(251u, WatchType.CHALK, "spalding_bb2"),
     PEBBLE_SILK_EVT(12u, WatchType.DIORITE, "silk_evt"),
     PEBBLE_SILK(14u, WatchType.DIORITE, "silk"),
-    PEBBLE_ASTERIX(15u, WatchType.DIORITE, "asterix"),
+    CORE_ASTERIX(15u, WatchType.DIORITE, "asterix"),
     PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "silk_bb"),
     PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "silk_bb2"),
     PEBBLE_ROBERT_EVT(13u, WatchType.EMERY, "robert_evt"),
@@ -40,7 +40,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
             return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN
         }
 
-        fun fromHWRevision(revision: String): WatchHardwarePlatform {
+        fun fromHWRevision(revision: String?): WatchHardwarePlatform {
             if (revision == "unk") return UNKNOWN
             return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN
         }

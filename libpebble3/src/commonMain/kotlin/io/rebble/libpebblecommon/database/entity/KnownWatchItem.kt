@@ -22,6 +22,7 @@ data class KnownWatchItem (
     val serial: String,
     val connectGoal: Boolean,
     val lastConnected: MillisecondInstant? = null,
+    val watchType: String? = null,
 )
 
 enum class TransportType {

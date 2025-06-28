@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
@@ -45,6 +46,7 @@ interface KnownPebbleDevice : PebbleDevice {
     val runningFwVersion: String
     val serial: String
     val lastConnected: Instant
+    val watchType: WatchHardwarePlatform
     fun forget()
 }
 

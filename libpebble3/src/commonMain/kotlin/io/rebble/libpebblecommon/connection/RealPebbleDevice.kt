@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.datetime.Instant
 
@@ -25,6 +26,7 @@ class PebbleDeviceFactory {
                 pebbleDevice = pebbleDevice,
                 watchConnector = watchConnector,
                 lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
+                watchType = knownWatchProperties.watchType,
             )
         }
         if (!connectGoal && state.isActive()) {
@@ -41,6 +43,7 @@ class PebbleDeviceFactory {
                     pebbleDevice = pebbleDevice,
                     watchConnector = watchConnector,
                     lastConnected = knownWatchProperties?.lastConnected.asLastConnected(),
+                    watchType = state.watchInfo.platform,
                 )
                 val activeDevice = RealActiveDevice(transport, watchConnector)
                 when (state) {
@@ -89,13 +92,7 @@ class PebbleDeviceFactory {
                             rssi = scanResult.rssi,
                         )
 
-                    knownWatchProperties != null -> RealKnownPebbleDevice(
-                        runningFwVersion = knownWatchProperties.runningFwVersion,
-                        serial = knownWatchProperties.serial,
-                        pebbleDevice = pebbleDevice,
-                        watchConnector = watchConnector,
-                        lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
-                    )
+                    knownDevice != null -> knownDevice
 
                     else -> {
                         Logger.w("not sure how to create a device for $transport")
@@ -136,6 +133,7 @@ internal class RealKnownPebbleDevice(
     private val pebbleDevice: PebbleDevice,
     private val watchConnector: WatchConnector,
     override val lastConnected: Instant,
+    override val watchType: WatchHardwarePlatform,
 ) : KnownPebbleDevice,
     PebbleDevice by pebbleDevice {
     override fun forget() {
@@ -143,7 +141,7 @@ internal class RealKnownPebbleDevice(
     }
 
     override fun toString(): String =
-        "KnownPebbleDevice: $pebbleDevice $serial / runningFwVersion=$runningFwVersion lastConnected=$lastConnected"
+        "KnownPebbleDevice: $pebbleDevice watchType=${watchType.revision} serial=$serial runningFwVersion=$runningFwVersion lastConnected=$lastConnected"
 }
 
 internal class RealActiveDevice(

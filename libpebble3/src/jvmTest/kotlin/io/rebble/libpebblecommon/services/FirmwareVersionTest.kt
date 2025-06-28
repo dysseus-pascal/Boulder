@@ -9,7 +9,7 @@ import kotlin.time.Instant
 class FirmwareVersionTest {
     companion object {
         private const val GITHASH = "ABCDEFG"
-        private val HARDWARE_PLATFORM = WatchHardwarePlatform.PEBBLE_ASTERIX
+        private val HARDWARE_PLATFORM = WatchHardwarePlatform.CORE_ASTERIX
         private const val RECOVERY = false
         private val TIMESTAMP = Instant.fromEpochSeconds(123456789)
     }

@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -43,7 +44,8 @@ internal data class KnownWatchProperties(
     val name: String,
     val runningFwVersion: String,
     val serial: String,
-    val lastConnected: MillisecondInstant?
+    val lastConnected: MillisecondInstant?,
+    val watchType: WatchHardwarePlatform,
 )
 
 internal fun WatchInfo.asWatchProperties(transport: Transport, lastConnected: MillisecondInstant?): KnownWatchProperties =
@@ -52,6 +54,7 @@ internal fun WatchInfo.asWatchProperties(transport: Transport, lastConnected: Mi
         runningFwVersion = runningFwVersion.stringVersion,
         serial = serial,
         lastConnected = lastConnected,
+        watchType = platform,
     )
 
 private fun Watch.asKnownWatchItem(): KnownWatchItem? {
@@ -64,6 +67,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
         serial = knownWatchProps.serial,
         connectGoal = connectGoal,
         lastConnected = knownWatchProps.lastConnected,
+        watchType = knownWatchProps.watchType.revision,
     )
 }
 
@@ -103,6 +107,7 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
     runningFwVersion = runningFwVersion,
     serial = serial,
     lastConnected = lastConnected,
+    watchType = WatchHardwarePlatform.fromHWRevision(watchType)
 )
 
 private data class CombinedState(

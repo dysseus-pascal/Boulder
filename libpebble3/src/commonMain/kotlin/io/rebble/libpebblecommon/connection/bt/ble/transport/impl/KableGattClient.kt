@@ -14,12 +14,14 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.io.IOException
 import kotlin.uuid.Uuid
 
@@ -35,20 +37,27 @@ expect fun peripheralFromIdentifier(transport: BleTransport): Peripheral?
 class KableGattConnector(
     private val transport: BleTransport,
     private val peripheral: Peripheral,
-    scope: ConnectionCoroutineScope,
+    private val scope: ConnectionCoroutineScope,
 ) : GattConnector {
     private val logger = Logger.withTag("KableGattConnector/${transport.identifier.asString}")
 
-    override val disconnected: Deferred<Unit> = scope.async {
-        peripheral.state.dropWhile {
-            // Skip initial disconnected state before we connect
-            it is State.Disconnected
-        }.filterIsInstance<State.Disconnected>().first().also {
-            logger.i { "Disconnection: status=${it.status}" }
-        }
-    }
+    private val _disconnected = CompletableDeferred<Unit>()
+    override val disconnected: Deferred<Unit> = _disconnected
 
     override suspend fun connect(): ConnectedGattClient? {
+        if (!peripheral.scope.isActive) {
+            logger.w { "connect(): peripheral already closed!" }
+            _disconnected.complete(Unit)
+            return null
+        }
+        scope.async {
+            val disconnected = peripheral.state.dropWhile {
+                // Skip initial disconnected state before we connect
+                it is State.Disconnected
+            }.filterIsInstance<State.Disconnected>().first()
+            logger.i { "Disconnection: status=${disconnected.status}" }
+            _disconnected.complete(Unit)
+        }
         try {
             val kableScope = peripheral.connect()
             return KableConnectedGattClient(transport, peripheral)

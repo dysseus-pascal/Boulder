@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -136,6 +137,7 @@ class WatchManager(
     val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
     private val activeConnections = mutableSetOf<Transport>()
     private var connectionNum = 0
+    private val timeInitialized = clock.now()
 
     fun debugState(): String = "allWatches=${allWatches.value.entries.joinToString("\n")}\n" +
             "activeConnections=$activeConnections\n" +
@@ -417,6 +419,10 @@ class WatchManager(
 
             connectionScope.launch {
                 try {
+                    if ((clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
+                        logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
+                        delay(APP_START_WAIT_TO_CONNECT)
+                    }
                     pebbleConnector.connect(device.knownWatchProps != null)
 //                    disconnectDuringConnectionJob.cancel()
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $transport")
@@ -453,6 +459,11 @@ class WatchManager(
             logger.d("${transport}: cleanup: removing active device")
             logger.d("${transport}: cleanup: cancelling scope")
             close()
+            // This is essentially a hack to work around the case where we disconnect+reconnect so
+            // fast that the watch doesn't realize. Wait a little bit before trying to connect
+            // again
+            logger.d { "delaying before marking as disconnected.." }
+            delay(APP_START_WAIT_TO_CONNECT)
             activeConnections.remove(transport)
             updateWatch(transport) { it.copy(activeConnection = null) }
         }.await()
@@ -487,6 +498,7 @@ class WatchManager(
 
     companion object {
         private val DISCONNECT_TIMEOUT = 3.seconds
+        private val APP_START_WAIT_TO_CONNECT = 3.seconds
     }
 }
 

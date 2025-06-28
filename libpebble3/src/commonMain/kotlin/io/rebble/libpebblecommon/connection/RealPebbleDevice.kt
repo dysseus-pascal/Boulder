@@ -35,8 +35,12 @@ class PebbleDeviceFactory {
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
         }
-        return when (state) {
-            is ConnectingPebbleState.Connected -> {
+        return when {
+            !connectGoal && state.isActive() -> when (knownDevice) {
+                null -> RealDisconnectingPebbleDevice(pebbleDevice)
+                else -> RealDisconnectingKnownPebbleDevice(knownDevice)
+            }
+            state is ConnectingPebbleState.Connected -> {
                 val knownDevice = RealKnownPebbleDevice(
                     runningFwVersion = state.watchInfo.runningFwVersion.stringVersion,
                     serial = state.watchInfo.serial,
@@ -67,7 +71,9 @@ class PebbleDeviceFactory {
                 }
             }
 
-            is ConnectingPebbleState.Connecting, is ConnectingPebbleState.Negotiating -> when (knownDevice) {
+            state is ConnectingPebbleState.Connecting ||
+                    state is ConnectingPebbleState.Negotiating ||
+                         connectGoal -> when (knownDevice) {
                 null -> RealConnectingPebbleDevice(
                     pebbleDevice = pebbleDevice,
                     activeDevice = RealActiveDevice(transport, watchConnector),
@@ -81,8 +87,7 @@ class PebbleDeviceFactory {
                 )
             }
 
-            is ConnectingPebbleState.Failed, is ConnectingPebbleState.Inactive,
-            null -> {
+            else -> {
                 val leScanRecord = scanResult?.leScanRecord
                 when {
                     leScanRecord != null && transport is BleTransport ->

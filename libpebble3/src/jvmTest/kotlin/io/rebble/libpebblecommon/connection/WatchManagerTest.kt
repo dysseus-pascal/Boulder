@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import io.rebble.libpebblecommon.BleConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
@@ -163,7 +162,7 @@ class WatchManagerTest {
         }
     }
     private val firmwareUpdateManager = FirmwareUpdateManager(webServices)
-    private val blePlatformConfig = BlePlatformConfig(delayBleConnectionsForSafety = false)
+    private val blePlatformConfig = BlePlatformConfig(delayBleConnectionsAfterAppStart = false, delayBleDisconnections = false)
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)

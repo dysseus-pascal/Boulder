@@ -18,8 +18,20 @@ class PebbleDeviceFactory {
         firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
+        val knownDevice = knownWatchProperties?.let {
+            RealKnownPebbleDevice(
+                runningFwVersion = knownWatchProperties.runningFwVersion,
+                serial = knownWatchProperties.serial,
+                pebbleDevice = pebbleDevice,
+                watchConnector = watchConnector,
+                lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
+            )
+        }
         if (!connectGoal && state.isActive()) {
-            return RealDisconnectingPebbleDevice(pebbleDevice)
+            return when (knownDevice) {
+                null -> RealDisconnectingPebbleDevice(pebbleDevice)
+                else -> RealDisconnectingKnownPebbleDevice(knownDevice)
+            }
         }
         return when (state) {
             is ConnectingPebbleState.Connected -> {
@@ -52,16 +64,19 @@ class PebbleDeviceFactory {
                 }
             }
 
-            // TODO should have separate "KnownConnecting" (so we can show serial/etc in UI)
-            is ConnectingPebbleState.Connecting -> RealConnectingPebbleDevice(
-                pebbleDevice = pebbleDevice,
-                activeDevice = RealActiveDevice(transport, watchConnector),
-            )
+            is ConnectingPebbleState.Connecting, is ConnectingPebbleState.Negotiating -> when (knownDevice) {
+                null -> RealConnectingPebbleDevice(
+                    pebbleDevice = pebbleDevice,
+                    activeDevice = RealActiveDevice(transport, watchConnector),
+                    negotiating = state is ConnectingPebbleState.Negotiating,
+                )
 
-            is ConnectingPebbleState.Negotiating -> RealNegotiatingPebbleDevice(
-                pebbleDevice = pebbleDevice,
-                activeDevice = RealActiveDevice(transport, watchConnector),
-            )
+                else -> RealConnectingKnownPebbleDevice(
+                    knownDevice = knownDevice,
+                    activeDevice = RealActiveDevice(transport, watchConnector),
+                    negotiating = state is ConnectingPebbleState.Negotiating,
+                )
+            }
 
             is ConnectingPebbleState.Failed, is ConnectingPebbleState.Inactive,
             null -> {
@@ -150,21 +165,28 @@ internal class RealDisconnectingPebbleDevice(
         "DisconnectingPebbleDevice: $pebbleDevice"
 }
 
+internal class RealDisconnectingKnownPebbleDevice(
+    private val knownDevice: KnownPebbleDevice,
+) : DisconnectingKnownPebbleDevice, KnownPebbleDevice by knownDevice {
+    override fun toString(): String =
+        "DisconnectingKnownPebbleDevice: $knownDevice"
+}
+
 internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
     private val activeDevice: ActiveDevice,
+    override val negotiating: Boolean,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
     override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
 }
 
-internal class RealNegotiatingPebbleDevice(
-    private val pebbleDevice: PebbleDevice,
+internal class RealConnectingKnownPebbleDevice(
+    private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
-) :
-    PebbleDevice by pebbleDevice, ConnectingPebbleDevice, NegotiatingPebbleDevice,
-    ActiveDevice by activeDevice {
-    override fun toString(): String = "NegotiatingPebbleDevice: $pebbleDevice"
+    override val negotiating: Boolean,
+) : ConnectingKnownPebbleDevice, ActiveDevice by activeDevice, KnownPebbleDevice by knownDevice {
+    override fun toString(): String = "ConnectingKnownPebbleDevice: $knownDevice"
 }
 
 internal class RealConnectedPebbleDevice(
@@ -187,7 +209,8 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Music by services.music,
     ConnectedPebble.PKJS by services.pkjs {
 
-    override fun toString(): String = "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
+    override fun toString(): String =
+        "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }
 
 internal class RealConnectedPebbleDeviceInRecovery(
@@ -203,5 +226,6 @@ internal class RealConnectedPebbleDeviceInRecovery(
     ConnectedPebble.Logs by services.logs,
     ConnectedPebble.CoreDump by services.coreDump {
 
-    override fun toString(): String = "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
+    override fun toString(): String =
+        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }

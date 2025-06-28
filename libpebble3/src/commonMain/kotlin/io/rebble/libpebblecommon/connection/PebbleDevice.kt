@@ -49,10 +49,12 @@ interface KnownPebbleDevice : PebbleDevice {
 }
 
 interface DisconnectingPebbleDevice : PebbleDevice
+interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbleDevice
 
-interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice
-
-interface NegotiatingPebbleDevice : ConnectingPebbleDevice, ActiveDevice
+interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
+    val negotiating: Boolean
+}
+interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevice
 
 interface ConnectedWatchInfo {
     val watchInfo: WatchInfo

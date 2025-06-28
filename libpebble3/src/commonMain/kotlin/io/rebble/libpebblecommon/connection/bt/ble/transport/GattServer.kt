@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.SERVER_META_RESPONSE
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.SendChannel
@@ -39,6 +40,7 @@ class GattServerManager(
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val appContext: AppContext,
     private val bleConfigFlow: BleConfigFlow,
+    private val blePlatformConfig: BlePlatformConfig,
 ) {
     private val serverMutex = Mutex()
     private val logger = Logger.withTag("GattServerManager")
@@ -50,7 +52,11 @@ class GattServerManager(
                 logger.d("Bluetooth state: $bluetooth")
                 when (bluetooth) {
                     BluetoothState.Enabled -> openIfNeeded()
-                    BluetoothState.Disabled -> close()
+                    BluetoothState.Disabled -> {
+                        if (blePlatformConfig.closeGattServerWhenBtDisabled) {
+                            close()
+                        }
+                    }
                 }
             }
         }

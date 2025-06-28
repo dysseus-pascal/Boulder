@@ -38,11 +38,12 @@ class PPoG(
     fun run() {
         scope.launch {
             val params = withTimeoutOrNull(12.seconds) {
-                if (pPoGPacketSender.wasRestoredWithSubscribedCentral()) {
-                    logger.d { "gattserver already has subscribers: starting with reset request" }
+                initWaitingForResetRequest()
+            } ?: withTimeoutOrNull(5.seconds) {
+                if (blePlatformConfig.fallbackToResetRequest) {
                     initWithResetRequest()
                 } else {
-                    initWaitingForResetRequest()
+                    null
                 }
             } ?: throw IllegalStateException("Timed out initializing PPoG")
             runConnection(params)

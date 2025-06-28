@@ -73,6 +73,7 @@ actual val platformModule: Module = module {
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }
     single { BlePlatformConfig(
-        delayBleConnectionsForSafety = true,
+        delayBleConnectionsAfterAppStart = true,
+        delayBleDisconnections = true,
     ) }
 }

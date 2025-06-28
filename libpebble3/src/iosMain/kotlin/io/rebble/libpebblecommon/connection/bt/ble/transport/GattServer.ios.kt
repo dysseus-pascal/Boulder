@@ -290,6 +290,7 @@ actual class GattServer(
         didUnsubscribeFromCharacteristic: CBCharacteristic,
     ) {
         logger.d("didUnsubscribeFromCharacteristic")
+        wasSubscribedAtRestore = false
     }
 
     private val serviceAdded = MutableSharedFlow<ServerServiceAdded>()

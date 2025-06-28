@@ -13,5 +13,8 @@ data class BlePlatformConfig(
     val desiredRxWindow: Int = MAX_RX_WINDOW,
     val useNativeMtu: Boolean = true,
     val sendPpogResetOnDisconnection: Boolean = false,
-    val delayBleConnectionsForSafety: Boolean = false,
+    val delayBleConnectionsAfterAppStart: Boolean = false,
+    val delayBleDisconnections: Boolean = false,
+    val fallbackToResetRequest: Boolean = false,
+    val closeGattServerWhenBtDisabled: Boolean = true,
 )

@@ -421,7 +421,7 @@ class WatchManager(
 
             connectionScope.launch {
                 try {
-                    if (blePlatformConfig.delayBleConnectionsForSafety && (clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
+                    if (blePlatformConfig.delayBleConnectionsAfterAppStart && (clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
                         logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
@@ -464,7 +464,7 @@ class WatchManager(
             // This is essentially a hack to work around the case where we disconnect+reconnect so
             // fast that the watch doesn't realize. Wait a little bit before trying to connect
             // again
-            if (blePlatformConfig.delayBleConnectionsForSafety) {
+            if (blePlatformConfig.delayBleDisconnections) {
                 logger.d { "delaying before marking as disconnected.." }
                 delay(APP_START_WAIT_TO_CONNECT)
             }

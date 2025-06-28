@@ -64,5 +64,8 @@ actual val platformModule: Module = module {
         phoneRequestsPairing = false,
         useNativeMtu = false,
         sendPpogResetOnDisconnection = true,
+        fallbackToResetRequest = true,
+        closeGattServerWhenBtDisabled = false,
+        delayBleConnectionsAfterAppStart = true,
     ) }
 }

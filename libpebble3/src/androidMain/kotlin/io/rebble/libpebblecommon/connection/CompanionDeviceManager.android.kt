@@ -73,8 +73,17 @@ class AndroidCompanionDevice(
 
         val result = CompletableDeferred<Boolean>()
         val callback = object : CompanionDeviceManager.Callback() {
+            // Called on API levels below 33
+            @Deprecated("Deprecated in API 33 / Android 13, use onAssociationPending instead")
+            @Suppress("DEPRECATION") // Suppress lint for using deprecated onDeviceFound
+            override fun onDeviceFound(intentSender: IntentSender) {
+                logger.d("onDeviceFound (API < 33)")
+                context.startIntentSender(intentSender, null, 0, 0, 0)
+            }
+
+            // Called on API levels 33 and above
             override fun onAssociationPending(intentSender: IntentSender) {
-                logger.d("onAssociationPending")
+                logger.d("onAssociationPending (API >= 33)")
                 context.startIntentSender(intentSender, null, 0, 0, 0)
             }
 

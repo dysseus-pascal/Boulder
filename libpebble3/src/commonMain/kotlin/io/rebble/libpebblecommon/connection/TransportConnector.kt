@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -107,7 +108,8 @@ class RealPebbleConnector(
     private val getBytesService: GetBytesService,
     private val phoneControlManager: PhoneControlManager,
     private val musicService: MusicService,
-    private val musicControlManager: MusicControlManager
+    private val musicControlManager: MusicControlManager,
+    private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -190,6 +192,7 @@ class RealPebbleConnector(
                 phoneControlManager.init()
                 musicControlManager.init()
                 dataLoggingService.realInit(watchInfo)
+                firmwareUpdateManager.init(watchInfo)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

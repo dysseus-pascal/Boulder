@@ -90,6 +90,7 @@ import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
+import io.rebble.libpebblecommon.web.RealFirmwareUpdateManager
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -120,6 +121,7 @@ interface ConnectionScope {
     val pebbleConnector: PebbleConnector
     fun close()
     val closed: AtomicBoolean
+    val firmwareUpdateManager: FirmwareUpdateManager
 }
 
 class RealConnectionScope(
@@ -128,6 +130,7 @@ class RealConnectionScope(
     private val coroutineScope: ConnectionCoroutineScope,
     private val uuid: Uuid,
     override val closed: AtomicBoolean = AtomicBoolean(false),
+    override val firmwareUpdateManager: FirmwareUpdateManager,
 ) : ConnectionScope {
     override val pebbleConnector: PebbleConnector = koinScope.get()
 
@@ -152,7 +155,13 @@ class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactor
         val scope =
             koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
         Logger.d("scope: $scope / $uuid")
-        return RealConnectionScope(scope, props.transport, props.scope, uuid)
+        return RealConnectionScope(
+            scope,
+            props.transport,
+            props.scope,
+            uuid,
+            firmwareUpdateManager = scope.get(),
+        )
     }
 }
 
@@ -244,7 +253,6 @@ fun initKoin(
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)
                 singleOf(::MissedCallSyncer)
-                singleOf(::FirmwareUpdateManager)
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
                 singleOf(::Datalogging)
@@ -290,7 +298,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(), get()
+                            get(), get(), get()
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -337,6 +345,8 @@ fun initKoin(
                     scopedOf(::BlobDB)
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
+                    scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
+
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args

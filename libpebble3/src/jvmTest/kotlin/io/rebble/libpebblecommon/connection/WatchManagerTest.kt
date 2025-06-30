@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -51,14 +52,17 @@ class WatchManagerTest {
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }
+
     class TestConnectionScope(
         override val transport: Transport,
         override val pebbleConnector: PebbleConnector,
         override val closed: AtomicBoolean = AtomicBoolean(false),
+        override val firmwareUpdateManager: FirmwareUpdateManager,
     ) : ConnectionScope {
         override fun close() {
         }
     }
+
     private val transport = Transport.SocketTransport(PebbleSocketIdentifier("addr"), "name")
 
     private var activeConnections = 0
@@ -66,9 +70,10 @@ class WatchManagerTest {
     private var connectSuccess = false
     private var exceededMax = false
 
-    inner class TestPebbleConnector :  PebbleConnector {
+    inner class TestPebbleConnector : PebbleConnector {
         private val _disconnected = CompletableDeferred<Unit>()
-        private val _state = MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(transport))
+        private val _state =
+            MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(transport))
 
         fun onDisconnection() {
             activeConnections--
@@ -106,16 +111,33 @@ class WatchManagerTest {
         override val disconnected: WasDisconnected = WasDisconnected(_disconnected)
         override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     }
+
+    private val firmwareUpdateManager = object : FirmwareUpdateManager {
+        override fun init(watchInfo: WatchInfo) {
+        }
+
+        override fun checkForUpdates() {
+        }
+
+        override val availableUpdates: Flow<FirmwareUpdateCheckResult?>
+            get() = MutableStateFlow(null)
+
+    }
     private val connectionScopeFactory = object : ConnectionScopeFactory {
         override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
-            return TestConnectionScope(props.transport, TestPebbleConnector())
+            return TestConnectionScope(
+                props.transport,
+                TestPebbleConnector(),
+                firmwareUpdateManager = firmwareUpdateManager,
+            )
         }
     }
     private val bluetoothStateProvider = object : BluetoothStateProvider {
         override fun init() {
         }
 
-        override val state: StateFlow<BluetoothState> = MutableStateFlow(BluetoothState.Enabled).asStateFlow()
+        override val state: StateFlow<BluetoothState> =
+            MutableStateFlow(BluetoothState.Enabled).asStateFlow()
     }
     private val companionDevice = object : CompanionDevice {
         override suspend fun registerDevice(
@@ -153,6 +175,7 @@ class WatchManagerTest {
         override suspend fun fetchLocker(): LockerModel? {
             TODO("Not yet implemented")
         }
+
         override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult? {
             TODO("Not yet implemented")
         }
@@ -161,8 +184,8 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
     }
-    private val firmwareUpdateManager = FirmwareUpdateManager(webServices)
-    private val blePlatformConfig = BlePlatformConfig(delayBleConnectionsAfterAppStart = false, delayBleDisconnections = false)
+    private val blePlatformConfig =
+        BlePlatformConfig(delayBleConnectionsAfterAppStart = false, delayBleDisconnections = false)
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)
@@ -176,7 +199,6 @@ class WatchManagerTest {
             companionDevice = companionDevice,
             scanning = HackyProvider { scanning },
             watchConfig = watchConfig,
-            firmwareUpdateManager = firmwareUpdateManager,
             clock = Clock.System,
             blePlatformConfig = blePlatformConfig,
         )

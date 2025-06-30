@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.web.FirmwareDownloader
+import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,7 @@ class FirmwareUpdate(
     private val firmwareDownloader: FirmwareDownloader,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
+    private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : ConnectedPebble.Firmware {
     private val logger = Logger.withTag("FWUpdate-${transport.name}")
     private lateinit var watchPlatform: WatchHardwarePlatform
@@ -193,6 +195,10 @@ class FirmwareUpdate(
             beginFirmwareUpdate(PbzFirmware(path), 0u, flow)
         }
         return flow.asSharedFlow()
+    }
+
+    override fun checkforFirmwareUpdate() {
+        firmwareUpdateManager.checkForUpdates()
     }
 
     private suspend fun beginFirmwareUpdate(

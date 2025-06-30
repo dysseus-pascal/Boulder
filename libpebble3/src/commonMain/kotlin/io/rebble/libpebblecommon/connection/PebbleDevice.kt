@@ -103,6 +103,7 @@ object ConnectedPebble {
     interface Firmware {
         fun updateFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
         fun updateFirmware(url: String): Flow<FirmwareUpdate.FirmwareUpdateStatus>
+        fun checkforFirmwareUpdate()
     }
 
     interface AppRunState {

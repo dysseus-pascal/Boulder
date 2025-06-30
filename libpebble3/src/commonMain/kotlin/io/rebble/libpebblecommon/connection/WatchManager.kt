@@ -19,7 +19,6 @@ import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
-import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.SupervisorJob
@@ -114,8 +113,8 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
 
 private data class CombinedState(
     val watches: Map<Transport, Watch>,
-    val active: Map<Transport, ConnectingPebbleState>,
-    val previousActive: Map<Transport, ConnectingPebbleState>,
+    val active: Map<Transport, ActivePebbleState>,
+    val previousActive: Map<Transport, ActivePebbleState>,
     val btstate: BluetoothState,
 )
 
@@ -129,7 +128,6 @@ class WatchManager(
     private val companionDevice: CompanionDevice,
     private val scanning: HackyProvider<Scanning>,
     private val watchConfig: WatchConfigFlow,
-    private val firmwareUpdateManager: FirmwareUpdateManager,
     private val clock: Clock,
     private val blePlatformConfig: BlePlatformConfig,
 ) : WatchConnector {
@@ -227,10 +225,19 @@ class WatchManager(
                     } else if (!device.connectGoal && hasConnectionAttempt) {
                         disconnectFrom(device.transport)
                     }
+
+                    val firmwareUpdateAvailable = active[transport]?.firmwareUpdateAvailable
+                    if (firmwareUpdateAvailable != device.firmwareUpdateAvailable) {
+                        updateWatch(transport) {
+                            it.copy(firmwareUpdateAvailable = firmwareUpdateAvailable)
+                        }
+                    }
+
                     // Update persisted props after connection
                     logger.v { "states=$states" }
-                    if (states.currentState is ConnectingPebbleState.Connected && states.previousState !is ConnectingPebbleState.Connected) {
-                        val newProps = states.currentState.watchInfo.asWatchProperties(transport, clock.now().asMillisecond())
+                    if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Connected
+                        && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Connected) {
+                        val newProps = states.currentState.connectingPebbleState.watchInfo.asWatchProperties(transport, clock.now().asMillisecond())
                         if (newProps != device.knownWatchProps) {
                             updateWatch(transport) {
                                 it.copy(knownWatchProps = newProps)
@@ -241,22 +248,10 @@ class WatchManager(
                         if (device.scanResult != null) {
                             clearScanResults()
                         }
-
-                        updateWatch(transport) {
-                            it.copy(firmwareUpdateAvailable = null)
-                        }
-                        libPebbleCoroutineScope.launch {
-                            val update =
-                                firmwareUpdateManager.checkForUpdates(states.currentState.watchInfo)
-                            logger.d { "fw update available=$update" }
-                            updateWatch(transport) {
-                                it.copy(firmwareUpdateAvailable = update)
-                            }
-                        }
                     }
                     pebbleDeviceFactory.create(
                         transport = transport,
-                        state = states.currentState,
+                        state = states.currentState?.connectingPebbleState,
                         watchConnector = this@WatchManager,
                         scanResult = device.scanResult,
                         knownWatchProperties = device.knownWatchProps,
@@ -507,8 +502,8 @@ class WatchManager(
 }
 
 data class CurrentAndPreviousState(
-    val previousState: ConnectingPebbleState?,
-    val currentState: ConnectingPebbleState?,
+    val previousState: ActivePebbleState?,
+    val currentState: ActivePebbleState?,
 )
 
 fun CurrentAndPreviousState?.justConnected(): Boolean {
@@ -516,15 +511,32 @@ fun CurrentAndPreviousState?.justConnected(): Boolean {
     return currentState is ConnectingPebbleState.Connected && previousState !is ConnectingPebbleState.Connected
 }
 
-private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ConnectingPebbleState>> {
+data class ActivePebbleState(
+    val connectingPebbleState: ConnectingPebbleState,
+    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+)
+
+private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ActivePebbleState>> {
     return flatMapLatest { map ->
-        val listOfInnerFlows =
-            map.values.mapNotNull { it.activeConnection?.pebbleConnector?.state }
+        val listOfInnerFlows: List<Flow<ActivePebbleState>> =
+            map.values.mapNotNull { watchValue ->
+                val connector = watchValue.activeConnection?.pebbleConnector
+                val fwUpdateFlow =
+                    watchValue.activeConnection?.firmwareUpdateManager?.availableUpdates ?: flowOf(null)
+
+                if (connector == null) {
+                    null
+                } else {
+                    combine(connector.state, fwUpdateFlow) { connectingState, fwUpdate ->
+                        ActivePebbleState(connectingState, fwUpdate)
+                    }
+                }
+            }
         if (listOfInnerFlows.isEmpty()) {
             flowOf(emptyMap())
         } else {
             combine(listOfInnerFlows) { innerValues ->
-                innerValues.associateBy { it.transport }
+                innerValues.associateBy { it.connectingPebbleState.transport }
             }
         }
     }

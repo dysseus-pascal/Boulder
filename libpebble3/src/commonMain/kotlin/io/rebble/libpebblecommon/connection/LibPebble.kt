@@ -64,6 +64,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     // ....
 
     fun doStuffAfterPermissionsGranted()
+    fun checkForFirmwareUpdates()
 }
 
 data class OtherPebbleApp(
@@ -218,7 +219,17 @@ class LibPebble3(
         missedCallSyncer.init()
     }
 
+    override fun checkForFirmwareUpdates() {
+        forEachConnectedWatchNonSuspend { checkforFirmwareUpdate() }
+    }
+
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {
+        watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
+            it.block()
+        }
+    }
+
+    private fun forEachConnectedWatchNonSuspend(block: ConnectedPebbleDevice.() -> Unit) {
         watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
             it.block()
         }

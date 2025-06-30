@@ -69,6 +69,9 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun checkForFirmwareUpdates() {
+    }
+
     // Scanning interface
     override val bluetoothEnabled: StateFlow<BluetoothState> =
         MutableStateFlow(BluetoothState.Disabled)

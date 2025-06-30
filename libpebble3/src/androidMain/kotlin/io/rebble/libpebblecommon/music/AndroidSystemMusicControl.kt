@@ -66,9 +66,13 @@ class AndroidSystemMusicControl(
                 logger.e { "Couldn't add media listener after notification access granted" }
             }
         }
-        trySend(
-            mediaSessionManager.getActiveSessions(notificationServiceComponent)
-        )
+        try {
+            trySend(
+                mediaSessionManager.getActiveSessions(notificationServiceComponent)
+            )
+        } catch (e: SecurityException) {
+            logger.e(e) { "Error getting music sessions" }
+        }
         awaitClose {
             mediaSessionManager.removeOnActiveSessionsChangedListener(listener)
         }

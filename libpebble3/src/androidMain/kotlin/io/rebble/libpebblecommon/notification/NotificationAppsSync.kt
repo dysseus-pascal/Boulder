@@ -100,7 +100,7 @@ class AndroidNotificationAppsSync(
                 lastNotified = Instant.DISTANT_PAST.asMillisecond(),
             )
             if (existing == null) {
-                logger.d("adding ${osApp.packageName}")
+//                logger.d("adding ${osApp.packageName}")
                 notificationAppDao.insertOrReplace(newAppItem)
             } else {
                 val newEntryWithExistingMuteStates = newAppItem.copy(

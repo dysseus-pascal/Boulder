@@ -27,6 +27,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
     }
 
+    private var warnedAboutNotificationchannelsPermission = false
+
     override fun onCreate() {
         super.onCreate()
         logger.v { "onCreate: ($this)" }
@@ -129,7 +131,10 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
                 )
             }
         } catch (e: Exception) {
-            logger.w("getChannelsFor", e)
+            if (!warnedAboutNotificationchannelsPermission) {
+                warnedAboutNotificationchannelsPermission = true
+                logger.w("getChannelsFor", e)
+            }
             return emptyList()
         }
     }

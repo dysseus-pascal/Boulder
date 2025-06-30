@@ -150,3 +150,5 @@ class XMLHttpRequest {
         }
     }
 }
+
+globalThis.XMLHttpRequest = XMLHttpRequest;

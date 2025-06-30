@@ -56,7 +56,7 @@ class JavascriptCoreJsRunner(
         val js = SystemFileSystem.source(Path(path)).buffered().use {
             it.readString()
         }
-        jsContext?.evaluateScript(js, NSURL.fileURLWithPath(path))
+        jsContext?.evalCatching(js, NSURL.fileURLWithPath(path))
     }
 
     private fun exceptionHandler(context: JSContext?, exception: JSValue?) {
@@ -92,7 +92,8 @@ class JavascriptCoreJsRunner(
 
     private fun setupNavigator() {
         jsContext?.set("navigator", mapOf(
-            "userAgent" to "PKJS"
+            "userAgent" to "PKJS",
+            "geolocation" to emptyMap<String, Any>()
         ))
     }
 
@@ -116,49 +117,49 @@ class JavascriptCoreJsRunner(
     override suspend fun loadAppJs(jsUrl: String) {
         SystemFileSystem.source(Path(jsUrl)).buffered().use {
             val js = it.readString()
-            jsContext?.evaluateScript(js, NSURL.fileURLWithPath(jsUrl))
+            jsContext?.evalCatching(js, NSURL.fileURLWithPath(jsUrl))
         }
         signalReady()
     }
 
     override suspend fun signalNewAppMessageData(data: String?): Boolean {
-        jsContext?.globalObject?.invokeMethod("signalNewAppMessageData", listOf(data))
+        jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
         return true
     }
 
     override suspend fun signalAppMessageAck(data: String?): Boolean {
-        jsContext?.globalObject?.invokeMethod("signalAppMessageAck", listOf(data))
+        jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
         return jsContext != null
     }
 
     override suspend fun signalAppMessageNack(data: String?): Boolean {
-        jsContext?.globalObject?.invokeMethod("signalAppMessageNack", listOf(data))
+        jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
         return jsContext != null
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
-        jsContext?.globalObject?.invokeMethod("signalTimelineToken", listOf(tokenJson))
+        jsContext?.evalCatching("globalThis.signalTimelineTokenSuccess($tokenJson)")
     }
 
     override suspend fun signalTimelineTokenFail(callId: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to null, "callId" to callId))
-        jsContext?.globalObject?.invokeMethod("signalTimelineToken", listOf(tokenJson))
+        jsContext?.evalCatching("globalThis.signalTimelineTokenFailure($tokenJson)")
     }
 
     override suspend fun signalReady() {
-        jsContext?.globalObject?.invokeMethod("signalReady", null)
+        jsContext?.evalCatching("globalThis.signalReady()")
     }
 
     override suspend fun signalShowConfiguration() {
-        jsContext?.globalObject?.invokeMethod("signalShowConfiguration", null)
+        jsContext?.evalCatching("globalThis.signalShowConfiguration()")
     }
 
     override suspend fun signalWebviewClosed(data: String?) {
-        jsContext?.globalObject?.invokeMethod("signalWebviewClosedEvent", listOf(data))
+        jsContext?.evalCatching("globalThis.signalWebviewClosedEvent(${Json.encodeToString(data)})")
     }
 
     override suspend fun eval(js: String) {
-        jsContext?.evaluateScript(js)
+        jsContext?.evalCatching(js)
     }
 }

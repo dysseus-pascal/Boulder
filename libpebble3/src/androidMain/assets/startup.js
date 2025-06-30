@@ -1,6 +1,12 @@
 /* This is used in both iOS and Android, so make sure any changes are compatible with both */
 const _global = typeof window !== 'undefined' ? window : globalThis;
 window = _global; // For compatibility with existing code that expects `window`
+_global.onerror = (message, source, lineno, colno, error) => {
+    _Pebble.onError(message, source, lineno, colno, error);
+};
+_global.onunhandledrejection = (event) => {
+    _Pebble.onUnhandledRejection(event.reason);
+}
 _global.navigator = _global.navigator || {};
 _global._PebbleGeoCB = {
     _requestCallbacks: new Map(),
@@ -227,6 +233,12 @@ navigator.geolocation.clearWatch = (id) => {
         },
         sendAppMessage: (data, onSuccess, onFailure) => {
             const transactionId = _Pebble.sendAppMessageString(JSON.stringify(data));
+            if (transactionId === -1) {
+                if (onFailure) {
+                    onFailure({data: null});
+                }
+                return -1;
+            }
             if (onSuccess) {
                 const callback = (e) => {
                     try {

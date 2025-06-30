@@ -66,6 +66,16 @@ class WebViewPrivatePKJSInterface(
     }
 
     @JavascriptInterface
+    override fun onError(message: String?, source: String?, line: Double?, column: Double?) {
+        super.onError(message, source, line, column)
+    }
+
+    @JavascriptInterface
+    override fun onUnhandledRejection(reason: String) {
+        super.onUnhandledRejection(reason)
+    }
+
+    @JavascriptInterface
     override fun getVersionCode(): Int {
         return super.getVersionCode()
     }

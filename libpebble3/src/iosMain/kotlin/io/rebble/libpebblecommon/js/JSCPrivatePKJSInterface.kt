@@ -20,6 +20,8 @@ class JSCPrivatePKJSInterface(
         jsContext["_Pebble"] = mapOf(
             "sendAppMessageString" to this::sendAppMessageString,
             "privateLog" to this::privateLog,
+            "onError" to this::onError,
+            "onUnhandledRejection" to this::onUnhandledRejection,
             "logInterceptedSend" to this::logInterceptedSend,
             "getVersionCode" to this::getVersionCode,
             "getTimelineTokenAsync" to this::getTimelineTokenAsync,

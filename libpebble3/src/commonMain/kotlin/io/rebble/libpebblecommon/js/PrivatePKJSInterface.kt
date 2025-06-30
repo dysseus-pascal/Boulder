@@ -5,6 +5,7 @@ import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -25,6 +26,14 @@ abstract class PrivatePKJSInterface(
 
     open fun privateLog(message: String) {
         logger.i { "privateLog: $message" }
+    }
+
+    open fun onError(message: String?, source: String?, line: Double?, column: Double?) {
+        logger.e { "JS Error: $message at $source:${line?.toInt()}:${column?.toInt()}" }
+    }
+
+    open fun onUnhandledRejection(reason: String) {
+        logger.e { "Unhandled Rejection: $reason" }
     }
 
     open fun logInterceptedSend() {
@@ -59,9 +68,14 @@ abstract class PrivatePKJSInterface(
             logger.e { "Failed to emit outgoing AppMessage" }
             error("Failed to emit outgoing AppMessage")
         }
-        return runBlocking {
-            withTimeout(10.seconds) {
-                completable.await().toInt()
+            return runBlocking {
+                try {
+                    withTimeout(10.seconds) {
+                    completable.await().toInt()
+                }
+            } catch (_: TimeoutCancellationException) {
+                logger.e { "Timeout while waiting for AppMessage ack" }
+                -1
             }
         }
     }

@@ -20,6 +20,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 
@@ -95,26 +99,18 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
         private val headers = mutableMapOf<String, Any>()
         var requestJob: Job? = null
 
-        private fun getJsInstance(): JSValue? {
-            return jsContext.evaluateScript("XMLHttpRequest._instances.get($id)")
-        }
+        private val jsInstance = "XMLHttpRequest._instances.get($id)"
 
         private fun changeReadyState(newState: Int) {
-            val instance = getJsInstance()
-            instance?.set("readyState", newState) ?: {
-                logger.e { "XHR instance $id not found" }
-            }
+            jsContext.evalCatching("$jsInstance.readyState = $newState")
             dispatchEvent(XHREvent.ReadyStateChange)
         }
 
-        private fun dispatchEvent(event: XHREvent, data: Map<String, Any> = emptyMap()) {
-            val evt = mapOf(
-                "type" to event.toJsName(),
-            ) + data
-            val instance = getJsInstance()
-            instance?.invokeMethod("_dispatchEvent", listOf(event.toJsName(), evt)) ?: {
-                logger.e { "XHR instance $id not found" }
-            }
+        private fun dispatchEvent(event: XHREvent, data: JsonObject = JsonObject(emptyMap())) {
+            val evt = buildJsonObject {
+                put("type", event.toJsName())
+            } + data
+            jsContext.evalCatching("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
         }
 
         fun open(method: String, url: String, async: Boolean?, user: String?, password: String?) {
@@ -159,25 +155,22 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     dispatchEvent(XHREvent.Error)
                     return
                 }
-                val responseHeaders = response.headers
+                val responseHeaders = Json.encodeToString(response.headers
                     .flattenEntries()
                     .toMap()
-                    .mapKeys { it.key.lowercase() }
-                val body: Any? = when (responseType) {
-                    "arraybuffer" -> response.bodyAsBytes().toList()
-                    "text", "", "json", null -> response.bodyAsText() // JSON is handled by JS side
+                    .mapKeys { it.key.lowercase() })
+                val body = when (responseType) {
+                    "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().toList())
+                    "text", "", "json", null -> Json.encodeToString(response.bodyAsText())
                     else -> {
                         logger.e { "Invalid response type: $responseType" }
-                        null
+                        "null"
                     }
                 }
-                val status = response.status.value
-                val statusText = response.status.description
-                val instance = getJsInstance()
-                instance?.invokeMethod("_onResponseComplete", listOf(responseHeaders, status, statusText, body))
-                    ?: {
-                        logger.e { "XHR instance $id not found" }
-                    }
+                val status = Json.encodeToString(response.status.value)
+                val statusText = Json.encodeToString(response.status.description)
+                logger.v { "XHR Response: $status $statusText, Body: $body" }
+                jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
                 changeReadyState(DONE)
                 dispatchEvent(XHREvent.Load)
                 dispatchEvent(XHREvent.LoadEnd)

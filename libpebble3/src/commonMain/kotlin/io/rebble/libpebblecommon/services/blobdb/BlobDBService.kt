@@ -70,10 +70,6 @@ class BlobDBService(
                 }
             }
         }
-        scope.launch {
-//            insertApp("com.google.Dynamite", "Chat")
-//            insertApp("com.google.Gmail", "Gmail")
-        }
     }
 
     private suspend fun syncDirtyDbs() {

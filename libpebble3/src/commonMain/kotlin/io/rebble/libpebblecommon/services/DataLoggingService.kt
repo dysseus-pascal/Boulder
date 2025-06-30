@@ -19,7 +19,7 @@ class DataLoggingService(
     private var acceptSessions = false
 
     companion object {
-        private val logger = Logger.withTag(DataLoggingService::class.simpleName!!)
+        private val logger = Logger.withTag("DataLoggingService")
     }
 
     private val sessions = mutableMapOf<UByte, DataLoggingSession>()

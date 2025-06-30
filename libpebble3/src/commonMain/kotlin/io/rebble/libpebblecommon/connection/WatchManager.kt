@@ -484,7 +484,7 @@ class WatchManager(
     }
 
     private fun Watch.isOnlyScanResult() =
-        scanResult != null && activeConnection == null && !connectGoal
+        scanResult != null && activeConnection == null && !connectGoal && knownWatchProps == null
 
     override fun clearScanResults() {
         logger.d("clearScanResults")

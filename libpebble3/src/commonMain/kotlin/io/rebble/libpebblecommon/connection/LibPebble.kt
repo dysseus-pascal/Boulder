@@ -21,6 +21,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.notification.NotificationApi
@@ -47,7 +48,7 @@ data class PlatformFlags(val flags: UInt)
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken {
     fun init()
 
     val watches: PebbleDevices
@@ -139,6 +140,10 @@ interface CallManagement {
     val currentCall: MutableStateFlow<Call?>
 }
 
+interface PKJSToken {
+    suspend fun getAccountToken(appUuid: Uuid): String?
+}
+
 // Impl
 
 class LibPebble3(
@@ -159,9 +164,10 @@ class LibPebble3(
     private val libPebbleConfigFlow: LibPebbleConfigHolder,
     private val health: Health,
     private val otherPebbleApps: OtherPebbleApps,
+    private val jsTokenUtil: JsTokenUtil,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
-    OtherPebbleApps by otherPebbleApps {
+    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

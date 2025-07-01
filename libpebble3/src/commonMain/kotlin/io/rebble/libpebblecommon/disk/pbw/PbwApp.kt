@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.disk.pbw
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.disk.PbwBinHeader
@@ -10,6 +11,7 @@ import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwManifest
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwPKJSFile
 import io.rebble.libpebblecommon.metadata.WatchType
+import kotlinx.datetime.Instant
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.files.FileSystem
@@ -43,7 +45,7 @@ class PbwApp(private val path: Path) {
     }
 }
 
-fun PbwApp.toLockerEntry(): LockerEntry {
+fun PbwApp.toLockerEntry(now: Instant): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
     val platforms = info.targetPlatforms.mapNotNull {
         val watchType = WatchType.fromCodename(it) ?: run {
@@ -68,6 +70,7 @@ fun PbwApp.toLockerEntry(): LockerEntry {
         configurable = info.capabilities.any { it == "configurable" },
         pbwVersionCode = info.versionCode.toString(),
         sideloaded = true,
+        sideloadeTimestamp = now.asMillisecond(),
         platforms = platforms,
         appstoreData = null,
     )

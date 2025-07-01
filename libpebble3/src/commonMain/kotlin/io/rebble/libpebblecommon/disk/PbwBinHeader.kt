@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.disk
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.structmapper.*
 import io.rebble.libpebblecommon.util.DataBuffer
+import io.rebble.libpebblecommon.util.Endian
 
 class PbwBinHeader() : StructMappable() {
     /**
@@ -63,7 +64,7 @@ class PbwBinHeader() : StructMappable() {
     /**
      * Resource ID of the primary icon.
      */
-    val icon: SUInt = SUInt(m)
+    val icon: SUInt = SUInt(m, endianness = Endian.Little)
 
     /**
      * ???
@@ -73,7 +74,7 @@ class PbwBinHeader() : StructMappable() {
     /**
      * List of app install flags. Should be forwarded to the watch when inserting into BlobDB.
      */
-    val flags: SUInt = SUInt(m)
+    val flags: SUInt = SUInt(m, endianness = Endian.Little)
 
     /**
      * ???

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Clock
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -40,6 +41,7 @@ class Locker(
     private val lockerPBWCache: LockerPBWCache,
     private val config: WatchConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val clock: Clock,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
@@ -133,7 +135,7 @@ class Locker(
      */
     suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean) {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
-        val lockerEntry = pbwApp.toLockerEntry()
+        val lockerEntry = pbwApp.toLockerEntry(clock.now())
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, it)
         }

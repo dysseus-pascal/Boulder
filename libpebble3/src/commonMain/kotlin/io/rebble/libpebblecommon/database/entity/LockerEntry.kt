@@ -5,6 +5,7 @@ import androidx.room.Embedded
 import androidx.room.Index
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
+import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -30,6 +31,7 @@ data class LockerEntry(
     val configurable: Boolean,
     val pbwVersionCode: String,
     val sideloaded: Boolean = false,
+    val sideloadeTimestamp: MillisecondInstant? = null,
     @Embedded
     val appstoreData: LockerEntryAppstoreData? = null,
     val platforms: List<LockerEntryPlatform>,
@@ -52,6 +54,7 @@ data class LockerEntry(
         result = 31 * result + developerName.hashCode()
         result = 31 * result + pbwVersionCode.hashCode()
         result = 31 * result + sideloaded.hashCode()
+        result = 31 * result + (sideloadeTimestamp?.hashCode() ?: 0)
         result = 31 * result + platforms.recordHashCode()
         return result
     }

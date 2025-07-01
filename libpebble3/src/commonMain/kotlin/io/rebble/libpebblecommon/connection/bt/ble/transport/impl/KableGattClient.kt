@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.io.IOException
 import kotlin.uuid.Uuid
 
@@ -50,7 +51,7 @@ class KableGattConnector(
             _disconnected.complete(Unit)
             return null
         }
-        scope.async {
+        scope.launch {
             val disconnected = peripheral.state.dropWhile {
                 // Skip initial disconnected state before we connect
                 it is State.Disconnected

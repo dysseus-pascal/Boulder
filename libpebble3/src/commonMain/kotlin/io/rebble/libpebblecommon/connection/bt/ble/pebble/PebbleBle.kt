@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 class PebbleBle(
     private val config: BleConfigFlow,
@@ -70,8 +71,12 @@ class PebbleBle(
             return PebbleConnectionResult.Failed("failed to subscribe to connectivity")
         }
         logger.d("subscribed connectivity d")
-        val connectionStatus = withTimeout(CONNECTIVITY_UPDATE_TIMEOUT) {
+        val connectionStatus = withTimeoutOrNull(CONNECTIVITY_UPDATE_TIMEOUT) {
             connectivity.status.first()
+        }
+        if (connectionStatus == null) {
+            logger.d("failed to get connection status")
+            return PebbleConnectionResult.Failed("failed to get connection status")
         }
         logger.d("connectionStatus = $connectionStatus")
 

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 
@@ -219,7 +220,7 @@ class FirmwareUpdate(
         flow.emit(FirmwareUpdateStatus.WaitingForReboot)
         systemService.sendFirmwareUpdateComplete()
         withContext(libPebbleCoroutineScope.coroutineContext) {
-            withTimeout(60_000) {
+            withTimeoutOrNull(60_000) {
                 watchDisconnected.await()
             }
         }

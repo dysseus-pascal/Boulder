@@ -16,6 +16,7 @@ import kotlinx.cinterop.allocArrayOf
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.usePinned
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -217,19 +218,24 @@ actual class GattServer(
             logger.w("couldn't find characteristic for $serviceUuid / $characteristicUuid")
             return false
         }
-        return withTimeout(SEND_TIMEOUT) {
-            while (true) {
-                if (peripheralManager.updateValue(
-                        value = data.toNSData(),
-                        forCharacteristic = cbCharacteristic,
-                        onSubscribedCentrals = null,
-                    )
-                ) {
-                    return@withTimeout true
+        return try {
+            withTimeout(SEND_TIMEOUT) {
+                while (true) {
+                    if (peripheralManager.updateValue(
+                            value = data.toNSData(),
+                            forCharacteristic = cbCharacteristic,
+                            onSubscribedCentrals = null,
+                        )
+                    ) {
+                        return@withTimeout true
+                    }
+                    // Write did not succeed; wait for queue to drain
+                    peripheralManagerReady.first()
                 }
-                // Write did not succeed; wait for queue to drain
-                peripheralManagerReady.first()
+                false
             }
+        } catch (e: TimeoutCancellationException) {
+            logger.e { "timeout sending" }
             false
         }
     }

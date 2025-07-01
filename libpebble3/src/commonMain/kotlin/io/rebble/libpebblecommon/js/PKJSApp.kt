@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -62,7 +63,7 @@ class PKJSApp(
                 logger.v { "Ignoring app message for different app: ${it.uuid} != $uuid" }
                 return@onEach
             }
-            withTimeout(1000) {
+            withTimeoutOrNull(1000) {
                 device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
             }
             val dataString = it.data.toJSData(appInfo.appKeys)

@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -91,8 +92,12 @@ class AndroidPebbleNotificationListenerConnection(
 
     suspend fun getService(): LibPebbleNotificationListener {
         check(!bindingDied) { "Binding died" }
-        return withTimeout(5_000L) {
-            _service.value ?: _service.filterNotNull().first()
+        return try {
+            withTimeout(5_000L) {
+                _service.value ?: _service.filterNotNull().first()
+            }
+        } catch (e: TimeoutCancellationException) {
+            throw IllegalStateException("Timed out waiting for service", e)
         }
     }
 

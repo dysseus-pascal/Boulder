@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.random.Random
@@ -195,8 +196,8 @@ class BlobDB(
                 value = value,
             )
         )
-        logger.d("insert: result = ${result.responseValue}")
-        if (result.responseValue == BlobResponse.BlobStatus.Success) {
+        logger.d("insert: result = ${result?.responseValue}")
+        if (result?.responseValue == BlobResponse.BlobStatus.Success) {
             db.markSyncedToWatch(
                 transport = transport.identifier.asString,
                 item = item,
@@ -217,8 +218,8 @@ class BlobDB(
                 key = item.record.key(),
             )
         )
-        logger.d("delete: result = ${result.responseValue}")
-        if (result.responseValue == BlobResponse.BlobStatus.Success) {
+        logger.d("delete: result = ${result?.responseValue}")
+        if (result?.responseValue == BlobResponse.BlobStatus.Success) {
             db.markDeletedFromWatch(
                 transport = transport.identifier.asString,
                 item = item,
@@ -231,8 +232,8 @@ class BlobDB(
         return random.nextInt(0, UShort.MAX_VALUE.toInt()).toUShort()
     }
 
-    private suspend fun sendWithTimeout(command: BlobCommand) =
-        withTimeout(BLOBDB_RESPONSE_TIMEOUT) {
+    private suspend fun sendWithTimeout(command: BlobCommand): BlobResponse? =
+        withTimeoutOrNull(BLOBDB_RESPONSE_TIMEOUT) {
             blobDBService.send(command)
         }
 }

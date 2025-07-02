@@ -182,12 +182,11 @@ class BlobDB(
         watchType: WatchType,
         capabilities: Set<ProtocolCapsFlag>,
     ) {
-        logger.d("insert: $item")
         val value = item.record.value(watchType, capabilities)
         if (value == null) {
-            logger.d("no value for $item for $watchType")
             return
         }
+        logger.d("insert: $item")
         val result = sendWithTimeout(
             BlobCommand.InsertCommand(
                 token = generateToken(),

@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -17,6 +18,7 @@ class PebbleDeviceFactory {
         knownWatchProperties: KnownWatchProperties?,
         connectGoal: Boolean,
         firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+        bluetoothState: BluetoothState,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
         val knownDevice = knownWatchProperties?.let {
@@ -29,18 +31,18 @@ class PebbleDeviceFactory {
                 watchType = knownWatchProperties.watchType,
             )
         }
-        if (!connectGoal && state.isActive()) {
+        if (bluetoothState.enabled() && !connectGoal && state.isActive()) {
             return when (knownDevice) {
                 null -> RealDisconnectingPebbleDevice(pebbleDevice)
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
         }
         return when {
-            !connectGoal && state.isActive() -> when (knownDevice) {
+            bluetoothState.enabled() && !connectGoal && state.isActive() -> when (knownDevice) {
                 null -> RealDisconnectingPebbleDevice(pebbleDevice)
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
-            state is ConnectingPebbleState.Connected -> {
+            bluetoothState.enabled() && state is ConnectingPebbleState.Connected -> {
                 val knownDevice = RealKnownPebbleDevice(
                     runningFwVersion = state.watchInfo.runningFwVersion.stringVersion,
                     serial = state.watchInfo.serial,
@@ -71,9 +73,9 @@ class PebbleDeviceFactory {
                 }
             }
 
-            state is ConnectingPebbleState.Connecting ||
+            bluetoothState.enabled() && (state is ConnectingPebbleState.Connecting ||
                     state is ConnectingPebbleState.Negotiating ||
-                         connectGoal -> when (knownDevice) {
+                         connectGoal) -> when (knownDevice) {
                 null -> RealConnectingPebbleDevice(
                     pebbleDevice = pebbleDevice,
                     activeDevice = RealActiveDevice(transport, watchConnector),

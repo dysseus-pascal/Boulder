@@ -257,6 +257,7 @@ class WatchManager(
                         knownWatchProperties = device.knownWatchProps,
                         connectGoal = device.connectGoal,
                         firmwareUpdateAvailable = device.firmwareUpdateAvailable,
+                        bluetoothState = btstate,
                     )
                 }
             }.collect {

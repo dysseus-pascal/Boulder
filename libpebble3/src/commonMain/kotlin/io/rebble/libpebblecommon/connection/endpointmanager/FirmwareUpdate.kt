@@ -16,19 +16,15 @@ import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
+import kotlin.concurrent.atomics.AtomicBoolean
 
 sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
@@ -49,6 +45,7 @@ class FirmwareUpdate(
 ) : ConnectedPebble.Firmware {
     private val logger = Logger.withTag("FWUpdate-${transport.name}")
     private lateinit var watchPlatform: WatchHardwarePlatform
+    private val firmwareUpdateInProgress = AtomicBoolean(false)
 
     sealed class FirmwareUpdateStatus {
         data object WaitingToStart : FirmwareUpdateStatus()
@@ -207,22 +204,32 @@ class FirmwareUpdate(
         offset: UInt,
         flow: MutableSharedFlow<FirmwareUpdateStatus>,
     ) {
-        val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
-        require(totalBytes > 0) { "Firmware size is 0" }
-        performSafetyChecks(pbzFw)
-        flow.emit(FirmwareUpdateStatus.WaitingToStart)
-        val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
-        if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
-            error("Failed to start firmware update: $result")
+        if (!firmwareUpdateInProgress.compareAndSet(expectedValue = false, newValue = true)) {
+            logger.w { "Firmware updatew already in progress!" }
+            flow.emit(FirmwareUpdateStatus.ErrorStarting)
+            return
         }
-        flow.sendFirmwareParts(pbzFw, offset)
-        logger.d { "Firmware update completed, waiting for reboot" }
-        flow.emit(FirmwareUpdateStatus.WaitingForReboot)
-        systemService.sendFirmwareUpdateComplete()
-        withContext(libPebbleCoroutineScope.coroutineContext) {
-            withTimeoutOrNull(60_000) {
-                watchDisconnected.await()
+
+        try {
+            val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
+            require(totalBytes > 0) { "Firmware size is 0" }
+            performSafetyChecks(pbzFw)
+            flow.emit(FirmwareUpdateStatus.WaitingToStart)
+            val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
+            if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
+                error("Failed to start firmware update: $result")
             }
+            flow.sendFirmwareParts(pbzFw, offset)
+            logger.d { "Firmware update completed, waiting for reboot" }
+            flow.emit(FirmwareUpdateStatus.WaitingForReboot)
+            systemService.sendFirmwareUpdateComplete()
+            withContext(libPebbleCoroutineScope.coroutineContext) {
+                withTimeoutOrNull(60_000) {
+                    watchDisconnected.await()
+                }
+            }
+        } finally {
+            firmwareUpdateInProgress.store(false)
         }
     }
 

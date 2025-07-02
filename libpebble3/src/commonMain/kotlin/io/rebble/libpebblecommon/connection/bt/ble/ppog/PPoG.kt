@@ -266,7 +266,7 @@ class PPoG(
     private fun maxDataBytes() = mtu - DATA_HEADER_OVERHEAD_BYTES
 
     private suspend fun sendPacketImmediately(packet: PPoGPacket, version: PPoGVersion) {
-        if (packet is PPoGPacket.Data) {
+        if (packet is PPoGPacket.Data || packet is PPoGPacket.Ack) {
             verboseLog { "sendPacketImmediately: $packet" }
         } else {
             logger.d { "sendPacketImmediately: $packet" }

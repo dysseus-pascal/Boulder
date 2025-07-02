@@ -148,6 +148,7 @@ class RealPebbleConnector(
 
                 putBytesService.init()
                 firmwareUpdate.setPlatform(watchInfo.platform)
+                firmwareUpdateManager.init(watchInfo)
 
                 val recoveryMode = when {
                     watchInfo.runningFwVersion.isRecovery -> true.also {
@@ -192,7 +193,6 @@ class RealPebbleConnector(
                 phoneControlManager.init()
                 musicControlManager.init()
                 dataLoggingService.realInit(watchInfo)
-                firmwareUpdateManager.init(watchInfo)
 
                 _state.value = Connected.ConnectedNotInPrf(
                     transport = transport,

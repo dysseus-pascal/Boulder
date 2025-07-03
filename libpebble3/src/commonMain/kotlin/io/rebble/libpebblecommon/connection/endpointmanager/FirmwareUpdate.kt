@@ -175,6 +175,7 @@ class FirmwareUpdate(
     }
 
     override fun updateFirmware(path: Path): Flow<FirmwareUpdateStatus> {
+        logger.d { "updateFirmware path: $path" }
         val flow = MutableSharedFlow<FirmwareUpdateStatus>()
         connectionCoroutineScope.launch {
             beginFirmwareUpdate(PbzFirmware(path), 0u, flow)
@@ -183,6 +184,7 @@ class FirmwareUpdate(
     }
 
     override fun updateFirmware(url: String): Flow<FirmwareUpdateStatus> {
+        logger.d { "updateFirmware url: $url" }
         val flow = MutableSharedFlow<FirmwareUpdateStatus>()
         connectionCoroutineScope.launch {
             val path = firmwareDownloader.downloadFirmware(url)
@@ -209,6 +211,7 @@ class FirmwareUpdate(
             flow.emit(FirmwareUpdateStatus.ErrorStarting)
             return
         }
+        logger.d { "beginFirmwareUpdate" }
 
         try {
             val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)

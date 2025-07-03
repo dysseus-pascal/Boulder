@@ -9,6 +9,7 @@ import io.ktor.utils.io.readRemaining
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.locker.getLockerPBWCacheDirectory
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.IOException
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
@@ -24,7 +25,12 @@ class FirmwareDownloader(
         return withTimeoutOrNull(20.seconds) {
             val path = Path(fwDir, "fw.pbz")
             SystemFileSystem.delete(path, mustExist = false)
-            val response = httpClient.get(url)
+            val response = try {
+                httpClient.get(url)
+            } catch (e: IOException) {
+                logger.w(e) { "Error downloading fw: ${e.message}" }
+                return@withTimeoutOrNull null
+            }
             if (!response.status.isSuccess()) {
                 logger.w("http call failed: $response")
                 return@withTimeoutOrNull null

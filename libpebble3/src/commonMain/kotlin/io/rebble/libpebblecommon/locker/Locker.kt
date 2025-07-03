@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
+import kotlinx.io.IOException
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -196,7 +197,12 @@ class StaticLockerPBWCache(
         val pbwPath = pathForApp(appId)
         val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
         return withTimeoutOrNull(5.seconds) {
-            val response = httpClient.get(pbwUrl)
+            val response = try {
+                httpClient.get(pbwUrl)
+            }  catch (e: IOException) {
+                Logger.w(e) { "Error fetching pbw: ${e.message}" }
+                return@withTimeoutOrNull null
+            }
             if (!response.status.isSuccess()) {
                 Logger.i("http call failed: $response")
                 return@withTimeoutOrNull null

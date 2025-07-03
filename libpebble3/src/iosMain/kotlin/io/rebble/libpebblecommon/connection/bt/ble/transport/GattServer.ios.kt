@@ -336,7 +336,7 @@ actual class GattServer(
     private val peripheralManagerReady = MutableSharedFlow<Unit>()
 
     override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
-        logger.d("peripheralManagerIsReadyToUpdateSubscribers")
+        verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
         runBlocking {
             peripheralManagerReady.emit(Unit)
         }

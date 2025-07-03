@@ -408,13 +408,6 @@ class WatchManager(
             )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
 
-//            // TODO why do we need this?
-//            val disconnectDuringConnectionJob = connectionScope.launch {
-//                pebbleConnector.disconnected.await()
-//                logger.d("got disconnection (before connection)")
-//                connectionKoinScope.cleanup()
-//            }
-
             connectionScope.launch {
                 try {
                     if (blePlatformConfig.delayBleConnectionsAfterAppStart && (clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
@@ -422,11 +415,15 @@ class WatchManager(
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
                     pebbleConnector.connect(device.knownWatchProps != null)
-//                    disconnectDuringConnectionJob.cancel()
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $transport")
                     pebbleConnector.disconnected.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                     logger.d("watchmanager got disconnection: $transport")
+                } catch (e: Exception) {
+                    // Because we call cleanup() in the `finally` block, the CoroutineExceptionHandler is not called.
+                    // So catch it here just to log it.
+                    logger.e(e) { "connect crashed" }
+                    throw e
                 } finally {
                     connectionKoinScope.cleanup()
                 }

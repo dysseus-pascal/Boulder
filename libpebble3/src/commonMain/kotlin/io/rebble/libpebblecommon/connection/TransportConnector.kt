@@ -29,10 +29,13 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
@@ -129,87 +132,15 @@ class RealPebbleConnector(
 
             is PebbleConnectionResult.Success -> {
                 logger.d("$result")
-                _state.value = Negotiating(transport)
-                scope.launch {
-                    pebbleProtocolRunner.run()
+                val negotiationJob = scope.async {
+                    doAfterConnection(previouslyConnected)
                 }
-
-                systemService.init()
-                appRunStateService.init()
-                dataLoggingService.initialInit()
-
-                val watchInfo = negotiator.negotiate(systemService, appRunStateService)
-                if (watchInfo == null) {
-                    logger.w("negotiation failed: disconnecting")
-                    transportConnector.disconnect()
-                    _state.value = Failed(transport)
-                    return
+                val disconnectedJob = scope.launch {
+                    transportConnector.disconnected.await()
+                    logger.w { "Disconnected during negotiation" }
+                    negotiationJob.cancel()
                 }
-
-                putBytesService.init()
-                firmwareUpdate.setPlatform(watchInfo.platform)
-                firmwareUpdateManager.init(watchInfo)
-
-                val recoveryMode = when {
-                    watchInfo.runningFwVersion.isRecovery -> true.also {
-                        logger.i("PRF running; going into recovery mode")
-                    }
-
-                    watchInfo.recoveryFwVersion == null -> true.also {
-                        logger.w("No recovery FW installed!!! going into recovery mode")
-                    }
-
-                    watchInfo.runningFwVersion < FW_3_0_0 -> true.also {
-                        logger.w("FW below v3.0 isn't supported; going into recovery mode")
-                    }
-
-                    else -> false
-                }
-                if (recoveryMode) {
-                    _state.value = Connected.ConnectedInPrf(
-                        transport = transport,
-                        watchInfo = watchInfo,
-                        services = ConnectedPebble.PrfServices(
-                            firmware = firmwareUpdate,
-                            logs = logDumpService,
-                            coreDump = getBytesService,
-                        ),
-                    )
-                    return
-                }
-
-                blobDBService.init()
-                blobDB.init(
-                    watchType = watchInfo.platform.watchType,
-                    unfaithful = watchInfo.isUnfaithful,
-                    previouslyConnected = previouslyConnected,
-                    capabilities = watchInfo.capabilities,
-                )
-                appFetchService.init()
-                timelineActionManager.init()
-                appFetchProvider.init(watchInfo.platform.watchType)
-                appMessageService.init()
-                pkjsLifecycleManager.init(transport, watchInfo)
-                phoneControlManager.init()
-                musicControlManager.init()
-                dataLoggingService.realInit(watchInfo)
-
-                _state.value = Connected.ConnectedNotInPrf(
-                    transport = transport,
-                    watchInfo = watchInfo,
-                    services = ConnectedPebble.Services(
-                        debug = systemService,
-                        appRunState = appRunStateService,
-                        firmware = firmwareUpdate,
-                        messages = debugPebbleProtocolSender,
-                        time = systemService,
-                        appMessages = appMessageService,
-                        logs = logDumpService,
-                        coreDump = getBytesService,
-                        music = musicService,
-                        pkjs = pkjsLifecycleManager
-                    )
-                )
+                disconnectedJob.cancel()
             }
         }
     }
@@ -218,6 +149,90 @@ class RealPebbleConnector(
         scope.launch {
             transportConnector.disconnect()
         }
+    }
+
+    private suspend fun doAfterConnection(previouslyConnected: Boolean) {
+        _state.value = Negotiating(transport)
+        scope.launch {
+            pebbleProtocolRunner.run()
+        }
+
+        systemService.init()
+        appRunStateService.init()
+        dataLoggingService.initialInit()
+
+        val watchInfo = negotiator.negotiate(systemService, appRunStateService)
+        if (watchInfo == null) {
+            logger.w("negotiation failed: disconnecting")
+            transportConnector.disconnect()
+            _state.value = Failed(transport)
+            return
+        }
+
+        putBytesService.init()
+        firmwareUpdate.setPlatform(watchInfo.platform)
+        firmwareUpdateManager.init(watchInfo)
+
+        val recoveryMode = when {
+            watchInfo.runningFwVersion.isRecovery -> true.also {
+                logger.i("PRF running; going into recovery mode")
+            }
+
+            watchInfo.recoveryFwVersion == null -> true.also {
+                logger.w("No recovery FW installed!!! going into recovery mode")
+            }
+
+            watchInfo.runningFwVersion < FW_3_0_0 -> true.also {
+                logger.w("FW below v3.0 isn't supported; going into recovery mode")
+            }
+
+            else -> false
+        }
+        if (recoveryMode) {
+            _state.value = Connected.ConnectedInPrf(
+                transport = transport,
+                watchInfo = watchInfo,
+                services = ConnectedPebble.PrfServices(
+                    firmware = firmwareUpdate,
+                    logs = logDumpService,
+                    coreDump = getBytesService,
+                ),
+            )
+            return
+        }
+
+        blobDBService.init()
+        blobDB.init(
+            watchType = watchInfo.platform.watchType,
+            unfaithful = watchInfo.isUnfaithful,
+            previouslyConnected = previouslyConnected,
+            capabilities = watchInfo.capabilities,
+        )
+        appFetchService.init()
+        timelineActionManager.init()
+        appFetchProvider.init(watchInfo.platform.watchType)
+        appMessageService.init()
+        pkjsLifecycleManager.init(transport, watchInfo)
+        phoneControlManager.init()
+        musicControlManager.init()
+        dataLoggingService.realInit(watchInfo)
+
+        _state.value = Connected.ConnectedNotInPrf(
+            transport = transport,
+            watchInfo = watchInfo,
+            services = ConnectedPebble.Services(
+                debug = systemService,
+                appRunState = appRunStateService,
+                firmware = firmwareUpdate,
+                messages = debugPebbleProtocolSender,
+                time = systemService,
+                appMessages = appMessageService,
+                logs = logDumpService,
+                coreDump = getBytesService,
+                music = musicService,
+                pkjs = pkjsLifecycleManager
+            )
+        )
     }
 }
 

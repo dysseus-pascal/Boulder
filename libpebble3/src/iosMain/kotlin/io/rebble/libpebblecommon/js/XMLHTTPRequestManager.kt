@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import platform.JavaScriptCore.JSContext
@@ -106,10 +105,10 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             dispatchEvent(XHREvent.ReadyStateChange)
         }
 
-        private fun dispatchEvent(event: XHREvent, data: JsonObject = JsonObject(emptyMap())) {
+        private fun dispatchEvent(event: XHREvent) {
             val evt = buildJsonObject {
                 put("type", event.toJsName())
-            } + data
+            }
             jsContext.evalCatching("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
         }
 
@@ -125,6 +124,11 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
 
         fun setRequestHeader(header: String, value: Any) {
             headers[header] = value
+        }
+
+        private fun dispatchError() {
+            changeReadyState(DONE)
+            dispatchEvent(XHREvent.Error)
         }
 
         fun send(data: ByteArray?, responseType: String?) {
@@ -151,21 +155,32 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     return
                 } catch (e: Exception) {
                     logger.e(e) { "Request failed: ${e.message}" }
-                    changeReadyState(DONE)
-                    dispatchEvent(XHREvent.Error)
+                    dispatchError()
                     return
                 }
-                val responseHeaders = Json.encodeToString(response.headers
-                    .flattenEntries()
-                    .toMap()
-                    .mapKeys { it.key.lowercase() })
-                val body = when (responseType) {
-                    "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().toList())
-                    "text", "", "json", null -> Json.encodeToString(response.bodyAsText())
-                    else -> {
-                        logger.e { "Invalid response type: $responseType" }
-                        "null"
+                val responseHeaders = try {
+                    Json.encodeToString(response.headers
+                        .flattenEntries()
+                        .toMap()
+                        .mapKeys { it.key.lowercase() })
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to serialize response headers: ${e.message}" }
+                    dispatchError()
+                    return
+                }
+                val body = try {
+                    when (responseType) {
+                        "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().toList())
+                        "text", "", "json", null -> Json.encodeToString(response.bodyAsText())
+                        else -> {
+                            logger.e { "Invalid response type: $responseType" }
+                            "null"
+                        }
                     }
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to read response body (type $responseType): ${e.message}" }
+                    dispatchError()
+                    return
                 }
                 val status = Json.encodeToString(response.status.value)
                 val statusText = Json.encodeToString(response.status.description)

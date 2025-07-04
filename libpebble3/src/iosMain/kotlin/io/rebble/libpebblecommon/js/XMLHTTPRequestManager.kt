@@ -10,6 +10,7 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -170,7 +171,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                 }
                 val body = try {
                     when (responseType) {
-                        "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().toList())
+                        "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().encodeBase64())
                         "text", "", "json", null -> Json.encodeToString(response.bodyAsText())
                         else -> {
                             logger.e { "Invalid response type: $responseType" }

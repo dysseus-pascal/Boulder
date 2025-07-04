@@ -83,7 +83,7 @@ class XMLHttpRequest {
         switch (this.responseType) {
             case "arraybuffer":
                 this.responseText = null;
-                this.response = new Uint8Array(body);
+                this.response = Uint8Array.fromBase64(body);
                 break;
             case "blob":
                 this.response = null; // no blob in JSContext

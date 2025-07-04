@@ -34,7 +34,7 @@ class RealFirmwareUpdateManager(
 
     companion object {
         private val INITIAL_DELAY_PERIOD = 1.seconds
-        private val UPDATE_CHECK_PERIOD = 12.hours
+        private val UPDATE_CHECK_PERIOD = 6.hours
     }
 
     override fun init(watchInfo: WatchInfo) {

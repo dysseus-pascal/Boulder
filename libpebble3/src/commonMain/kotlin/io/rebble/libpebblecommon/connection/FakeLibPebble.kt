@@ -1,11 +1,14 @@
 package io.rebble.libpebblecommon.connection
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
@@ -14,14 +17,24 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppProperties
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.LockerWrapper
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.music.MusicAction
+import io.rebble.libpebblecommon.music.PlaybackState
+import io.rebble.libpebblecommon.music.RepeatType
+import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.services.appmessage.AppMessageData
+import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -74,9 +87,9 @@ class FakeLibPebble : LibPebble {
 
     // Scanning interface
     override val bluetoothEnabled: StateFlow<BluetoothState> =
-        MutableStateFlow(BluetoothState.Disabled)
+        MutableStateFlow(BluetoothState.Enabled)
 
-    override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(true)
+    override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(false)
 
     override fun startBleScan() {
         // No-op
@@ -161,7 +174,7 @@ class FakeLibPebble : LibPebble {
 
 fun fakeWatches(): List<PebbleDevice> {
     return buildList {
-        for (i in 1..3) {
+        for (i in 1..8) {
             add(fakeWatch())
         }
     }
@@ -169,15 +182,102 @@ fun fakeWatches(): List<PebbleDevice> {
 
 fun fakeWatch(): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
-    return object : DiscoveredPebbleDevice {
-        override val transport: Transport = Transport.BluetoothTransport.BleTransport(
-            identifier = randomMacAddress().asPebbleBluetoothIdentifier(),
-            name = "Core $num",
+    val connected = Random.nextBoolean()
+    val fakeTransport = Transport.BluetoothTransport.BleTransport(
+        identifier = randomMacAddress().asPebbleBluetoothIdentifier(),
+        name = "Core $num",
+    )
+    return if (connected) {
+        val updating = Random.nextBoolean()
+        val fwupState = if (updating) {
+            FirmwareUpdate.FirmwareUpdateStatus.InProgress(0.47f)
+        } else {
+            FirmwareUpdate.FirmwareUpdateStatus.NotInProgress.Idle
+        }
+        FakeConnectedDevice(
+            transport = fakeTransport,
+            firmwareUpdateState = MutableStateFlow(fwupState),
+            firmwareUpdateAvailable = null,
         )
+    } else {
+        object : DiscoveredPebbleDevice {
+            override val transport: Transport = fakeTransport
 
-        override fun connect(uiContext: UIContext?) {
+            override fun connect(uiContext: UIContext?) {
+            }
         }
     }
+}
+
+class FakeConnectedDevice(
+    override val transport: Transport,
+    override val firmwareUpdateState: StateFlow<FirmwareUpdate.FirmwareUpdateStatus>,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+) : ConnectedPebbleDevice {
+    override val runningFwVersion: String = "v1.2.3-core"
+    override val serial: String = "XXXXXXXXXXXX"
+    override val lastConnected: Instant = Instant.DISTANT_PAST
+    override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX
+
+    override fun forget() {}
+
+    override fun connect(uiContext: UIContext?) {}
+
+    override fun disconnect() {}
+
+    override suspend fun sendPing(cookie: UInt): UInt = cookie
+
+    override suspend fun resetIntoPrf() {}
+
+    override suspend fun sendPPMessage(bytes: ByteArray) {}
+
+    override suspend fun sendPPMessage(ppMessage: PebblePacket) {}
+
+    override val inboundMessages: Flow<PebblePacket> = MutableSharedFlow()
+
+    override fun updateFirmware(path: Path) {}
+
+    override fun updateFirmware(url: String) {}
+
+    override fun checkforFirmwareUpdate() {}
+
+    override suspend fun launchApp(uuid: Uuid) {}
+
+    override val runningApp: StateFlow<Uuid?> = MutableStateFlow(null)
+    override val watchInfo: WatchInfo
+        get() = TODO("Not yet implemented")
+
+    override suspend fun updateTime() {}
+
+    override val inboundAppMessages: Flow<AppMessageData> = MutableSharedFlow()
+    override val transactionSequence: Iterator<Byte> = iterator { }
+
+    override suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult =
+        AppMessageResult.ACK(appMessageData.transactionId)
+
+    override suspend fun sendAppMessageResult(appMessageResult: AppMessageResult) {}
+
+    override suspend fun gatherLogs(): Path? = null
+
+    override suspend fun getCoreDump(unread: Boolean): Path? = null
+
+    override suspend fun updateTrack(track: MusicTrack) {}
+
+    override suspend fun updatePlaybackState(
+        state: PlaybackState,
+        trackPosMs: UInt,
+        playbackRatePct: UInt,
+        shuffle: Boolean,
+        repeatType: RepeatType
+    ) {}
+
+    override suspend fun updatePlayerInfo(packageId: String, name: String) {}
+
+    override suspend fun updateVolumeInfo(volumePercent: UByte) {}
+
+    override val musicActions: Flow<MusicAction> = MutableSharedFlow()
+    override val updateRequestTrigger: Flow<Unit> = MutableSharedFlow()
+    override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
 }
 
 fun fakeNotificationApps(): List<NotificationAppItem> {

@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -96,6 +97,7 @@ private data class Watch(
     val asPersisted: KnownWatchItem?,
     val forget: Boolean,
     val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    val lastFirmwareUpdateState: FirmwareUpdateStatus,
     // TODO can add non-persisted state here e.g. previous connection failures to manage backoff etc
 ) {
     init {
@@ -154,6 +156,7 @@ class WatchManager(
                 asPersisted = it,
                 forget = false,
                 firmwareUpdateAvailable = null,
+                lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
             )
         }
     }
@@ -235,6 +238,7 @@ class WatchManager(
 
                     // Update persisted props after connection
                     logger.v { "states=$states" }
+                    // Watch just connected
                     if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Connected) {
                         val newProps = states.currentState.connectingPebbleState.watchInfo.asWatchProperties(transport, clock.now().asMillisecond())
@@ -249,6 +253,16 @@ class WatchManager(
                             clearScanResults()
                         }
                     }
+                    // Watch just disconnected
+                    if (states.currentState?.connectingPebbleState !is ConnectingPebbleState.Connected
+                        && states.previousState?.connectingPebbleState is ConnectingPebbleState.Connected) {
+                        val lastFwupState = states.previousState.connectingPebbleState.firmwareUpdateState()
+                        if (device.lastFirmwareUpdateState != lastFwupState) {
+                            updateWatch(transport) {
+                                it.copy(lastFirmwareUpdateState = lastFwupState)
+                            }
+                        }
+                    }
                     pebbleDeviceFactory.create(
                         transport = transport,
                         state = states.currentState?.connectingPebbleState,
@@ -258,6 +272,7 @@ class WatchManager(
                         connectGoal = device.connectGoal,
                         firmwareUpdateAvailable = device.firmwareUpdateAvailable,
                         bluetoothState = btstate,
+                        lastFirmwareUpdateState = device.lastFirmwareUpdateState,
                     )
                 }
             }.collect {
@@ -283,6 +298,7 @@ class WatchManager(
                         asPersisted = null,
                         forget = false,
                         firmwareUpdateAvailable = null,
+                        lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
                     )
                 )
             } else {
@@ -538,4 +554,9 @@ private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transp
             }
         }
     }
+}
+
+fun ConnectingPebbleState.Connected.firmwareUpdateState(): FirmwareUpdateStatus = when (this) {
+    is ConnectingPebbleState.Connected.ConnectedInPrf -> this.services.firmware.firmwareUpdateState.value
+    is ConnectingPebbleState.Connected.ConnectedNotInPrf -> this.services.firmware.firmwareUpdateState.value
 }

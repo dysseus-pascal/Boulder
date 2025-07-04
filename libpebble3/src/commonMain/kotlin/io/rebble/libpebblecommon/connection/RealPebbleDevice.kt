@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -19,6 +20,7 @@ class PebbleDeviceFactory {
         connectGoal: Boolean,
         firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
         bluetoothState: BluetoothState,
+        lastFirmwareUpdateState: FirmwareUpdateStatus,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
         val knownDevice = knownWatchProperties?.let {
@@ -80,12 +82,14 @@ class PebbleDeviceFactory {
                     pebbleDevice = pebbleDevice,
                     activeDevice = RealActiveDevice(transport, watchConnector),
                     negotiating = state is ConnectingPebbleState.Negotiating,
+                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
                 )
 
                 else -> RealConnectingKnownPebbleDevice(
                     knownDevice = knownDevice,
                     activeDevice = RealActiveDevice(transport, watchConnector),
                     negotiating = state is ConnectingPebbleState.Negotiating,
+                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
                 )
             }
 
@@ -181,6 +185,7 @@ internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
     private val activeDevice: ActiveDevice,
     override val negotiating: Boolean,
+    override val rebootingAfterFirmwareUpdate: Boolean,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
     override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
@@ -190,6 +195,7 @@ internal class RealConnectingKnownPebbleDevice(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     override val negotiating: Boolean,
+    override val rebootingAfterFirmwareUpdate: Boolean,
 ) : ConnectingKnownPebbleDevice, ActiveDevice by activeDevice, KnownPebbleDevice by knownDevice {
     override fun toString(): String = "ConnectingKnownPebbleDevice: $knownDevice"
 }

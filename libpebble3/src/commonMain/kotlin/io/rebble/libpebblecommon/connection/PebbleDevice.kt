@@ -55,6 +55,7 @@ interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbl
 
 interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
     val negotiating: Boolean
+    val rebootingAfterFirmwareUpdate: Boolean
 }
 interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevice
 
@@ -101,9 +102,10 @@ object ConnectedPebble {
     }
 
     interface Firmware {
-        fun updateFirmware(path: Path): Flow<FirmwareUpdate.FirmwareUpdateStatus>
-        fun updateFirmware(url: String): Flow<FirmwareUpdate.FirmwareUpdateStatus>
+        fun updateFirmware(path: Path)
+        fun updateFirmware(url: String)
         fun checkforFirmwareUpdate()
+        val firmwareUpdateState: StateFlow<FirmwareUpdate.FirmwareUpdateStatus>
     }
 
     interface AppRunState {

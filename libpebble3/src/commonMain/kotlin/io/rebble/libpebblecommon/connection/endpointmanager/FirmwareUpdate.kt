@@ -5,7 +5,6 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.ObjectType
@@ -14,17 +13,16 @@ import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
-import kotlin.concurrent.atomics.AtomicBoolean
 
 sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
@@ -35,23 +33,33 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
 
 class FirmwareUpdate(
     transport: Transport,
-    private val watchDisconnected: Deferred<Unit>,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
     private val firmwareDownloader: FirmwareDownloader,
-    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : ConnectedPebble.Firmware {
     private val logger = Logger.withTag("FWUpdate-${transport.name}")
     private lateinit var watchPlatform: WatchHardwarePlatform
-    private val firmwareUpdateInProgress = AtomicBoolean(false)
+    private val _firmwareUpdateState =
+        MutableStateFlow<FirmwareUpdateStatus>(FirmwareUpdateStatus.NotInProgress.Idle)
+    override val firmwareUpdateState: StateFlow<FirmwareUpdateStatus> =
+        _firmwareUpdateState.asStateFlow()
 
     sealed class FirmwareUpdateStatus {
+        sealed class NotInProgress : FirmwareUpdateStatus() {
+            data object Idle : NotInProgress()
+            data object ErrorStarting : NotInProgress()
+        }
+
         data object WaitingToStart : FirmwareUpdateStatus()
         data class InProgress(val progress: Float) : FirmwareUpdateStatus()
+
+        /**
+         * Won't be in this state for long (we'll be disconnected very soon, at which point no-one
+         * is looking at this state).
+         */
         data object WaitingForReboot : FirmwareUpdateStatus()
-        data object ErrorStarting : FirmwareUpdateStatus()
     }
 
     fun setPlatform(watchPlatform: WatchHardwarePlatform) {
@@ -81,7 +89,7 @@ class FirmwareUpdate(
         }
     }
 
-    private suspend fun MutableSharedFlow<FirmwareUpdateStatus>.sendFirmwareParts(
+    private suspend fun sendFirmwareParts(
         pbzFw: PbzFirmware,
         offset: UInt
     ) {
@@ -98,7 +106,7 @@ class FirmwareUpdate(
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for firmware" }
-                            emit(FirmwareUpdateStatus.InProgress(0f))
+                            _firmwareUpdateState.value = FirmwareUpdateStatus.InProgress(0f)
                         }
 
                         is PutBytesSession.SessionState.Sending -> {
@@ -106,7 +114,7 @@ class FirmwareUpdate(
                             val progress =
                                 (it.totalSent.toFloat() / pbzFw.manifest.firmware.size) / 2.0f
                             logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
-                            emit(FirmwareUpdateStatus.InProgress(progress))
+                            _firmwareUpdateState.value = FirmwareUpdateStatus.InProgress(progress)
                         }
 
                         is PutBytesSession.SessionState.Finished -> {
@@ -142,7 +150,7 @@ class FirmwareUpdate(
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for resources" }
-                            emit(FirmwareUpdateStatus.InProgress(0.5f))
+                            _firmwareUpdateState.value = FirmwareUpdateStatus.InProgress(0.5f)
                         }
 
                         is PutBytesSession.SessionState.Sending -> {
@@ -150,7 +158,7 @@ class FirmwareUpdate(
                             val progress =
                                 0.5f + ((it.totalSent.toFloat() / res.size.toFloat()) / 2.0f)
                             logger.i { "Resources update progress: $progress (putbytes cookie: ${it.cookie})" }
-                            emit(FirmwareUpdateStatus.InProgress(progress))
+                            _firmwareUpdateState.value = FirmwareUpdateStatus.InProgress(progress)
                         }
 
                         is PutBytesSession.SessionState.Finished -> {
@@ -174,66 +182,55 @@ class FirmwareUpdate(
         resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
 
-    override fun updateFirmware(path: Path): Flow<FirmwareUpdateStatus> {
+    override fun updateFirmware(path: Path) {
         logger.d { "updateFirmware path: $path" }
-        val flow = MutableSharedFlow<FirmwareUpdateStatus>()
         connectionCoroutineScope.launch {
-            beginFirmwareUpdate(PbzFirmware(path), 0u, flow)
+            beginFirmwareUpdate(PbzFirmware(path), 0u)
         }
-        return flow.asSharedFlow()
     }
 
-    override fun updateFirmware(url: String): Flow<FirmwareUpdateStatus> {
+    override fun updateFirmware(url: String) {
         logger.d { "updateFirmware url: $url" }
-        val flow = MutableSharedFlow<FirmwareUpdateStatus>()
         connectionCoroutineScope.launch {
             val path = firmwareDownloader.downloadFirmware(url)
             if (path == null) {
-                flow.emit(FirmwareUpdateStatus.ErrorStarting)
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting
                 return@launch
             }
-            beginFirmwareUpdate(PbzFirmware(path), 0u, flow)
+            beginFirmwareUpdate(PbzFirmware(path), 0u)
         }
-        return flow.asSharedFlow()
     }
 
     override fun checkforFirmwareUpdate() {
         firmwareUpdateManager.checkForUpdates()
     }
 
+    private val startMutex = Mutex()
+
     private suspend fun beginFirmwareUpdate(
         pbzFw: PbzFirmware,
         offset: UInt,
-        flow: MutableSharedFlow<FirmwareUpdateStatus>,
     ) {
-        if (!firmwareUpdateInProgress.compareAndSet(expectedValue = false, newValue = true)) {
-            logger.w { "Firmware updatew already in progress!" }
-            flow.emit(FirmwareUpdateStatus.ErrorStarting)
-            return
+        startMutex.withLock {
+            if (_firmwareUpdateState.value !is FirmwareUpdateStatus.NotInProgress) {
+                logger.w { "Firmware update already in progress!" }
+                return
+            }
+            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingToStart
         }
         logger.d { "beginFirmwareUpdate" }
 
-        try {
-            val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
-            require(totalBytes > 0) { "Firmware size is 0" }
-            performSafetyChecks(pbzFw)
-            flow.emit(FirmwareUpdateStatus.WaitingToStart)
-            val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
-            if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
-                error("Failed to start firmware update: $result")
-            }
-            flow.sendFirmwareParts(pbzFw, offset)
-            logger.d { "Firmware update completed, waiting for reboot" }
-            flow.emit(FirmwareUpdateStatus.WaitingForReboot)
-            systemService.sendFirmwareUpdateComplete()
-            withContext(libPebbleCoroutineScope.coroutineContext) {
-                withTimeoutOrNull(60_000) {
-                    watchDisconnected.await()
-                }
-            }
-        } finally {
-            firmwareUpdateInProgress.store(false)
+        val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
+        require(totalBytes > 0) { "Firmware size is 0" }
+        performSafetyChecks(pbzFw)
+        val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
+        if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
+            error("Failed to start firmware update: $result")
         }
+        sendFirmwareParts(pbzFw, offset)
+        logger.d { "Firmware update completed, waiting for reboot" }
+        _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot
+        systemService.sendFirmwareUpdateComplete()
     }
 
     private fun sendFirmware(

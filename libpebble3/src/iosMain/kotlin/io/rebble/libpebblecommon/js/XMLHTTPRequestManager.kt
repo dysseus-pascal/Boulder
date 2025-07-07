@@ -22,8 +22,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 
@@ -107,9 +105,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
         }
 
         private fun dispatchEvent(event: XHREvent) {
-            val evt = buildJsonObject {
-                put("type", event.toJsName())
-            }
+            val evt = "{\"type\": \"${event.toJsName()}\"}"
             jsContext.evalCatching("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
         }
 

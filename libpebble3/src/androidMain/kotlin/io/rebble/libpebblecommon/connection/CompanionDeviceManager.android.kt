@@ -33,9 +33,6 @@ class AndroidCompanionDevice(
     override val notificationAccessGranted = _notificationAccessGranted.asSharedFlow()
 
     override suspend fun registerDevice(transport: Transport, uiContext: UIContext?): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return true
-        }
         if (transport !is Transport.BluetoothTransport) {
             return true
         }
@@ -114,7 +111,6 @@ class AndroidCompanionDevice(
     }
 
     private fun CompanionDeviceManager.requestNotificationAccessIfRequired(context: UIContext) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return // TODO handle
         val component = LibPebbleNotificationListener.componentName(context.activity.applicationContext)
         if (hasNotificationAccess(component)) {
             libPebbleCoroutineScope.launch {

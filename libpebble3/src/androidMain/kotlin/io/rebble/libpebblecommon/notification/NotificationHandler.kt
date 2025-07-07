@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.Notification.Action
 import android.app.Notification.WearableExtender
 import android.app.RemoteInput
-import android.os.Build
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
@@ -68,7 +67,6 @@ class NotificationHandler(
     }
 
     private fun NotificationAppItem.getChannelFor(sbn: StatusBarNotification): ChannelItem? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         val channelId = sbn.notification.channelId ?: return null
         return channelGroups.flatMap { it.channels }.find { it.id == channelId }
     }
@@ -204,12 +202,10 @@ New notification:
     }
 
     private fun Notification.dumpChannel(): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "<before channels>"
         return channelId
     }
 
     private fun Notification.dumpGroupAlertBehaviour(): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         return when (groupAlertBehavior) {
             Notification.GROUP_ALERT_ALL -> "GROUP_ALERT_ALL"
             Notification.GROUP_ALERT_CHILDREN -> "GROUP_ALERT_CHILDREN"
@@ -255,7 +251,6 @@ private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
 fun RemoteInput.dumpDataOnly(): Boolean? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
     return isDataOnly
 }
 fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)

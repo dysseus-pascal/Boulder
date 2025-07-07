@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import android.os.UserHandle
@@ -98,7 +97,6 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     )
 
     fun getChannelsForApp(packageName: String): List<ChannelGroup> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
         try {
             val user = Process.myUserHandle()
             val groups = getNotificationChannelGroups(packageName, user)

@@ -141,7 +141,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                         if (data != null) {
                             setBody(data)
                         }
-                        headers.entries().forEach {
+                        this@XHRInstance.headers.entries.forEach {
                             header(it.key, it.value)
                         }
                     }

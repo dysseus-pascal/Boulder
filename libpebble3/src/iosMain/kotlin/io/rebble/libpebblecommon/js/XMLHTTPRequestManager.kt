@@ -150,8 +150,8 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     changeReadyState(DONE)
                     dispatchEvent(XHREvent.Timeout)
                     return
-                } catch (e: Exception) {
-                    logger.e(e) { "Request failed: ${e.message}" }
+                } catch (e: Throwable) {
+                    logger.e(e) { "Request to $url (size ${data?.size}) failed: ${e.message}" }
                     dispatchError()
                     return
                 }
@@ -160,7 +160,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                         .flattenEntries()
                         .toMap()
                         .mapKeys { it.key.lowercase() })
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     logger.e(e) { "Failed to serialize response headers: ${e.message}" }
                     dispatchError()
                     return
@@ -174,7 +174,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                             "null"
                         }
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     logger.e(e) { "Failed to read response body (type $responseType): ${e.message}" }
                     dispatchError()
                     return

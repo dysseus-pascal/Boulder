@@ -34,8 +34,9 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String) {
     Time2Gunmetal(31, "pebble_time_2_black"),
     Time2Silver(32, "pebble_time_2_silver"),
     Time2Gold(33, "pebble_time_2_gold"),
-    TimeRoundBlackSilverPolish20(34, "pebble_time_round_polished_silver"),
-    TimeRoundBlackGoldPolish20(35, "pebble_time_round_polished_gold"),
+    Pebble2DuoBlack(34, "pebble_2_duo_black"),
+    Pebble2DuoWhite(35, "pebble_2_duo_white"),
+    PebbleTime2Black(36, "pebble_time_2_black"),
     Unknown(-1, "unknown_unknown");
 
     companion object {

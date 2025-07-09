@@ -16,6 +16,8 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
+import io.rebble.libpebblecommon.util.PrivateLogger
+import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,6 +37,7 @@ class AndroidNotificationAppsSync(
     private val androidPackageChangedReceiver: AndroidPackageChangedReceiver,
     private val notificationHandler: NotificationHandler,
     private val companionDevice: CompanionDevice,
+    private val privateLogger: PrivateLogger,
 ) : NotificationAppsSync {
     private val logger = Logger.withTag("NotificationAppsSync")
     private val syncTrigger = MutableSharedFlow<Unit>()
@@ -121,7 +124,7 @@ class AndroidNotificationAppsSync(
                     lastNotified = existing.lastNotified,
                 )
                 if (existing != newEntryWithExistingMuteStates) {
-                    logger.d("updating ${osApp.packageName}")
+                    logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")
                     notificationAppDao.insertOrReplace(
                         newEntryWithExistingMuteStates.copy(
                             stateUpdated = timeProvider.now().asMillisecond()

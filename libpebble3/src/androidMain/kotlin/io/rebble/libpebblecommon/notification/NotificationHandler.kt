@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
@@ -98,7 +99,7 @@ class NotificationHandler(
             verboseLog { "Ignoring muted app channel (${channel.name.obfuscate(privateLogger)}) from ${sbn.packageName.obfuscate(privateLogger)}" }
             return null
         }
-        logger.d { "Processing notification from ${sbn.packageName}" }
+        logger.d { "Processing notification from ${sbn.packageName.obfuscate(privateLogger)}" }
         for (processor in notificationProcessors) {
             try {
                 when (val result = processor.processNotification(sbn, appEntry, channel)) {
@@ -151,6 +152,7 @@ class NotificationHandler(
     }
 
     fun handleNotificationPosted(sbn: StatusBarNotification) = libPebbleCoroutineScope.launch {
+        logger.d { "onNotificationPosted(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
         val notification = processNotification(sbn) ?: return@launch
         if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
             logger.d { "Notification ${sbn.key} already in inflight" }
@@ -160,6 +162,7 @@ class NotificationHandler(
     }
 
     fun handleNotificationRemoved(sbn: StatusBarNotification) {
+        logger.d { "onNotificationRemoved(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
         val inflight = inflightNotifications[sbn.key]
         if (inflight != null) {
             inflightNotifications.remove(sbn.key)
@@ -217,7 +220,11 @@ New notification:
     private fun Bundle.dump(indent: Int): String {
         val newlineIndent = "\n${" ".repeat(indent)}"
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
-            "$it = ${get(it)}"
+            val value = get(it)
+            when {
+                value is String || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${value.toString().obfuscate(privateLogger)}"
+                else -> "$it = ${get(it)}"
+            }
         }
     }
 
@@ -247,6 +254,7 @@ New notification:
 
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
+private val EXTRA_KEYS_NON_STRING_SENSITIVE = setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

@@ -137,7 +137,7 @@ class PhoneCalendarSyncer(
             val pin = existingPin?.let {
                 newPin.copy(itemId = it.itemId)
             } ?: newPin
-            logger.d("New Pin: $newPin (existed: ${existingPin != null})")
+            logger.d("New Pin: ${newPin.itemId} (existed: ${existingPin != null})")
             return@mapNotNull pin
         }
         if (toInsert.isNotEmpty()) {

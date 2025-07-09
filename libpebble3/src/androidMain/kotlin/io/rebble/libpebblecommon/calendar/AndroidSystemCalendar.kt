@@ -14,6 +14,8 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.util.PrivateLogger
+import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -303,6 +305,7 @@ class AndroidSystemCalendar(
     private val contentResolver: ContentResolver,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
+    private val privateLogger: PrivateLogger,
 ) : SystemCalendar {
     private val logger = Logger.withTag("AndroidSystemCalendar")
 
@@ -363,7 +366,7 @@ class AndroidSystemCalendar(
                     + " AND IFNULL(" + CalendarContract.Instances.SELF_ATTENDEE_STATUS + ", " + CalendarContract.Attendees.ATTENDEE_STATUS_NONE + ") != " + CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED,
             arrayOf(calendar.platformId), "BEGIN ASC"
         )?.use { cursor ->
-            logger.d("Found ${cursor.count} events for calendar ${calendar.name}")
+            logger.d("Found ${cursor.count} events for calendar ${calendar.name.obfuscate(privateLogger)}")
             val list = mutableListOf<CalendarEvent>()
             while (cursor.moveToNext()) {
                 val event = resolveCalendarInstance(contentResolver, cursor, calendar.ownerId)

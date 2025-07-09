@@ -138,7 +138,6 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        logger.d { "onNotificationPosted(${sbn.packageName})  ($this)" }
         notificationHandler?.handleNotificationPosted(sbn)
     }
 
@@ -147,7 +146,6 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         rankingMap: RankingMap,
         reason: Int
     ) {
-        logger.d { "onNotificationRemoved(${sbn.packageName})  ($this)" }
         notificationHandler?.handleNotificationRemoved(sbn)
     }
 }

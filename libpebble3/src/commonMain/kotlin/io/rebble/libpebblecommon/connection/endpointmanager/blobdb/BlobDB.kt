@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
@@ -71,6 +72,7 @@ class BlobDB(
     private val transport: Transport,
     private val blobDatabases: BlobDbDaos,
     private val timeProvider: TimeProvider,
+    private val notificationConfigFlow: NotificationConfigFlow,
 ) {
     protected val watchIdentifier: String = transport.identifier.asString
 
@@ -186,7 +188,11 @@ class BlobDB(
         if (value == null) {
             return
         }
-        logger.d("insert: $item")
+        if (notificationConfigFlow.value.obfuscateContent) {
+            logger.d("insert: ${item.record.key()} hashcode: ${item.recordHashcode}")
+        } else {
+            logger.d("insert: $item")
+        }
         val result = sendWithTimeout(
             BlobCommand.InsertCommand(
                 token = generateToken(),
@@ -209,7 +215,11 @@ class BlobDB(
         db: BlobDbDao<BlobDbRecord>,
         item: BlobDbRecord,
     ) {
-        logger.d("delete: $item")
+        if (notificationConfigFlow.value.obfuscateContent) {
+            logger.d("delete: ${item.record.key()} hashcode: ${item.recordHashcode}")
+        } else {
+            logger.d("delete: $item")
+        }
         val result = sendWithTimeout(
             BlobCommand.DeleteCommand(
                 token = generateToken(),

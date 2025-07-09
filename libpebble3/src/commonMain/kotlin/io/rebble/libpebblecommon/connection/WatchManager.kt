@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate.FirmwareUpdateStatus
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -256,7 +256,7 @@ class WatchManager(
                     // Watch just disconnected
                     if (states.currentState?.connectingPebbleState !is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState is ConnectingPebbleState.Connected) {
-                        val lastFwupState = states.previousState.connectingPebbleState.firmwareUpdateState()
+                        val lastFwupState = states.previousState.firmwareUpdateStatus
                         if (device.lastFirmwareUpdateState != lastFwupState) {
                             updateWatch(transport) {
                                 it.copy(lastFirmwareUpdateState = lastFwupState)
@@ -271,6 +271,7 @@ class WatchManager(
                         knownWatchProperties = device.knownWatchProps,
                         connectGoal = device.connectGoal,
                         firmwareUpdateAvailable = device.firmwareUpdateAvailable,
+                        firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
                         bluetoothState = btstate,
                         lastFirmwareUpdateState = device.lastFirmwareUpdateState,
                     )
@@ -520,14 +521,10 @@ data class CurrentAndPreviousState(
     val currentState: ActivePebbleState?,
 )
 
-fun CurrentAndPreviousState?.justConnected(): Boolean {
-    if (this == null) return false
-    return currentState is ConnectingPebbleState.Connected && previousState !is ConnectingPebbleState.Connected
-}
-
 data class ActivePebbleState(
     val connectingPebbleState: ConnectingPebbleState,
     val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    val firmwareUpdateStatus: FirmwareUpdateStatus,
 )
 
 private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ActivePebbleState>> {
@@ -535,14 +532,15 @@ private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transp
         val listOfInnerFlows: List<Flow<ActivePebbleState>> =
             map.values.mapNotNull { watchValue ->
                 val connector = watchValue.activeConnection?.pebbleConnector
-                val fwUpdateFlow =
+                val fwUpdateAvailableFlow =
                     watchValue.activeConnection?.firmwareUpdateManager?.availableUpdates ?: flowOf(null)
+                val fwUpdateStatusFlow = watchValue.activeConnection?.firmwareUpdater?.firmwareUpdateState ?: flowOf(FirmwareUpdateStatus.NotInProgress.Idle)
 
                 if (connector == null) {
                     null
                 } else {
-                    combine(connector.state, fwUpdateFlow) { connectingState, fwUpdate ->
-                        ActivePebbleState(connectingState, fwUpdate)
+                    combine(connector.state, fwUpdateAvailableFlow, fwUpdateStatusFlow) { connectingState, fwUpdateAvailable, fwUpdateStatus ->
+                        ActivePebbleState(connectingState, fwUpdateAvailable, fwUpdateStatus)
                     }
                 }
             }

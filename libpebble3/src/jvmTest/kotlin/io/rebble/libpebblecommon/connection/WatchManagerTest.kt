@@ -5,6 +5,8 @@ import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.di.ConnectionScope
@@ -12,6 +14,7 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.LockerModel
@@ -28,6 +31,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlinx.datetime.Clock
+import kotlinx.io.files.Path
 import org.junit.Assert.assertFalse
 import org.junit.Test
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -58,6 +62,7 @@ class WatchManagerTest {
         override val pebbleConnector: PebbleConnector,
         override val closed: AtomicBoolean = AtomicBoolean(false),
         override val firmwareUpdateManager: FirmwareUpdateManager,
+        override val firmwareUpdater: FirmwareUpdater,
     ) : ConnectionScope {
         override fun close() {
         }
@@ -123,12 +128,25 @@ class WatchManagerTest {
             get() = MutableStateFlow(null)
 
     }
+    private val firmwareUpdater = object : FirmwareUpdater {
+        override val firmwareUpdateState: StateFlow<FirmwareUpdater.FirmwareUpdateStatus>
+            = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle)
+
+        override fun setPlatform(watchPlatform: WatchHardwarePlatform) {}
+
+        override fun sideloadFirmware(path: Path) {}
+
+        override fun updateFirmware(update: FirmwareUpdateCheckResult) {}
+
+        override fun checkforFirmwareUpdate() {}
+    }
     private val connectionScopeFactory = object : ConnectionScopeFactory {
         override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
             return TestConnectionScope(
-                props.transport,
-                TestPebbleConnector(),
+                transport = props.transport,
+                pebbleConnector = TestPebbleConnector(),
                 firmwareUpdateManager = firmwareUpdateManager,
+                firmwareUpdater = firmwareUpdater,
             )
         }
     }

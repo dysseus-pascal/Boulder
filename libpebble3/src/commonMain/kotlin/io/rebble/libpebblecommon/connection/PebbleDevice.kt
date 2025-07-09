@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import androidx.compose.runtime.Stable
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -61,7 +61,6 @@ interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevic
 
 interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
-    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?
 }
 
 interface ConnectedPebbleDeviceInRecovery :
@@ -101,12 +100,18 @@ object ConnectedPebble {
         val inboundMessages: Flow<PebblePacket>
     }
 
-    interface Firmware {
-        fun updateFirmware(path: Path)
-        fun updateFirmware(url: String)
+    interface FirmwareUpdate {
+        fun sideloadFirmware(path: Path)
+        fun updateFirmware(update: FirmwareUpdateCheckResult)
         fun checkforFirmwareUpdate()
-        val firmwareUpdateState: StateFlow<FirmwareUpdate.FirmwareUpdateStatus>
     }
+
+    interface FirmwareStatus {
+        val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus
+        val firmwareUpdateAvailable: FirmwareUpdateCheckResult?
+    }
+
+    interface Firmware : FirmwareUpdate, FirmwareStatus
 
     interface AppRunState {
         suspend fun launchApp(uuid: Uuid)
@@ -141,9 +146,9 @@ object ConnectedPebble {
     }
 
     class Services(
-        val debug: ConnectedPebble.Debug,
-        val appRunState: ConnectedPebble.AppRunState,
-        val firmware: ConnectedPebble.Firmware,
+        val debug: Debug,
+        val appRunState: AppRunState,
+        val firmware: FirmwareUpdater,
         val messages: Messages,
         val time: Time,
         val appMessages: AppMessages,
@@ -154,7 +159,7 @@ object ConnectedPebble {
     )
 
     class PrfServices(
-        val firmware: ConnectedPebble.Firmware,
+        val firmware: FirmwareUpdater,
         val logs: Logs,
         val coreDump: CoreDump,
     )

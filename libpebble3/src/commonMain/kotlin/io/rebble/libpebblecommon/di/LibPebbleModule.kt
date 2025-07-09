@@ -54,8 +54,9 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConne
 import io.rebble.libpebblecommon.connection.createCompanionDeviceManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
+import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
@@ -122,6 +123,7 @@ interface ConnectionScope {
     fun close()
     val closed: AtomicBoolean
     val firmwareUpdateManager: FirmwareUpdateManager
+    val firmwareUpdater: FirmwareUpdater
 }
 
 class RealConnectionScope(
@@ -133,6 +135,7 @@ class RealConnectionScope(
     override val firmwareUpdateManager: FirmwareUpdateManager,
 ) : ConnectionScope {
     override val pebbleConnector: PebbleConnector = koinScope.get()
+    override val firmwareUpdater: FirmwareUpdater = koinScope.get()
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -337,7 +340,7 @@ fun initKoin(
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
                     scoped { get<TransportConnector>().disconnected }
-                    scopedOf(::FirmwareUpdate)
+                    scopedOf(::RealFirmwareUpdater) bind FirmwareUpdater::class
                     scopedOf(::TimelineActionManager)
                     scopedOf(::AppFetchProvider)
                     scopedOf(::DebugPebbleProtocolSender)

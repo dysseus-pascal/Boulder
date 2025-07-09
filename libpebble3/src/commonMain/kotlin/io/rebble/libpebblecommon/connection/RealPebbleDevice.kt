@@ -4,7 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate.FirmwareUpdateStatus
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -19,6 +19,7 @@ class PebbleDeviceFactory {
         knownWatchProperties: KnownWatchProperties?,
         connectGoal: Boolean,
         firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+        firmwareUpdateState: FirmwareUpdateStatus,
         bluetoothState: BluetoothState,
         lastFirmwareUpdateState: FirmwareUpdateStatus,
     ): PebbleDevice {
@@ -61,6 +62,7 @@ class PebbleDeviceFactory {
                             watchInfo = state.watchInfo,
                             activeDevice = activeDevice,
                             services = state.services,
+                            firmwareUpdateState = firmwareUpdateState,
                             firmwareUpdateAvailable = firmwareUpdateAvailable,
                         )
 
@@ -70,6 +72,7 @@ class PebbleDeviceFactory {
                             watchInfo = state.watchInfo,
                             activeDevice = activeDevice,
                             services = state.services,
+                            firmwareUpdateState = firmwareUpdateState,
                             firmwareUpdateAvailable = firmwareUpdateAvailable,
                         )
                 }
@@ -205,13 +208,14 @@ internal class RealConnectedPebbleDevice(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     private val services: ConnectedPebble.Services,
+    override val firmwareUpdateState: FirmwareUpdateStatus,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
 ) : ConnectedPebbleDevice,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
     ConnectedPebble.Debug by services.debug,
     ConnectedPebble.AppRunState by services.appRunState,
-    ConnectedPebble.Firmware by services.firmware,
+    ConnectedPebble.FirmwareUpdate by services.firmware,
     ConnectedPebble.Messages by services.messages,
     ConnectedPebble.Time by services.time,
     ConnectedPebble.AppMessages by services.appMessages,
@@ -221,7 +225,7 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.PKJS by services.pkjs {
 
     override fun toString(): String =
-        "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
+        "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }
 
 internal class RealConnectedPebbleDeviceInRecovery(
@@ -229,14 +233,15 @@ internal class RealConnectedPebbleDeviceInRecovery(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     private val services: ConnectedPebble.PrfServices,
+    override val firmwareUpdateState: FirmwareUpdateStatus,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
 ) : ConnectedPebbleDeviceInRecovery,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
-    ConnectedPebble.Firmware by services.firmware,
+    ConnectedPebble.FirmwareUpdate by services.firmware,
     ConnectedPebble.Logs by services.logs,
     ConnectedPebble.CoreDump by services.coreDump {
 
     override fun toString(): String =
-        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateAvailable=$firmwareUpdateAvailable"
+        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }

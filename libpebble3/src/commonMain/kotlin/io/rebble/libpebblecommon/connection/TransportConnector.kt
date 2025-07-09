@@ -8,7 +8,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
@@ -30,12 +30,10 @@ import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
 sealed class PebbleConnectionResult {
@@ -98,7 +96,7 @@ class RealPebbleConnector(
     private val appRunStateService: AppRunStateService,
     private val dataLoggingService: DataLoggingService,
     private val putBytesService: PutBytesService,
-    private val firmwareUpdate: FirmwareUpdate,
+    private val firmwareUpdater: FirmwareUpdater,
     private val blobDBService: BlobDBService,
     private val appFetchService: AppFetchService,
     private val appMessageService: AppMessageService,
@@ -170,7 +168,7 @@ class RealPebbleConnector(
         }
 
         putBytesService.init()
-        firmwareUpdate.setPlatform(watchInfo.platform)
+        firmwareUpdater.setPlatform(watchInfo.platform)
         firmwareUpdateManager.init(watchInfo)
 
         val recoveryMode = when {
@@ -193,7 +191,7 @@ class RealPebbleConnector(
                 transport = transport,
                 watchInfo = watchInfo,
                 services = ConnectedPebble.PrfServices(
-                    firmware = firmwareUpdate,
+                    firmware = firmwareUpdater,
                     logs = logDumpService,
                     coreDump = getBytesService,
                 ),
@@ -223,7 +221,7 @@ class RealPebbleConnector(
             services = ConnectedPebble.Services(
                 debug = systemService,
                 appRunState = appRunStateService,
-                firmware = firmwareUpdate,
+                firmware = firmwareUpdater,
                 messages = debugPebbleProtocolSender,
                 time = systemService,
                 appMessages = appMessageService,

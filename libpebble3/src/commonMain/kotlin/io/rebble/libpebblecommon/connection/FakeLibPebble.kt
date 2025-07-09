@@ -1,13 +1,12 @@
 package io.rebble.libpebblecommon.connection
 
-import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdate
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -28,6 +27,7 @@ import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
@@ -190,14 +191,19 @@ fun fakeWatch(): PebbleDevice {
     return if (connected) {
         val updating = Random.nextBoolean()
         val fwupState = if (updating) {
-            FirmwareUpdate.FirmwareUpdateStatus.InProgress(0.47f)
+            val fakeUpdate = FirmwareUpdateCheckResult(
+                version = FirmwareVersion.from("v4.9.9-core1", isRecovery = false, gitHash = "", timestamp = kotlin.time.Instant.DISTANT_PAST)!!,
+                url = "",
+                notes = "v4.9.9-core1 is great",
+            )
+            FirmwareUpdater.FirmwareUpdateStatus.InProgress(fakeUpdate, MutableStateFlow(0.47f))
         } else {
-            FirmwareUpdate.FirmwareUpdateStatus.NotInProgress.Idle
+            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle
         }
         FakeConnectedDevice(
             transport = fakeTransport,
-            firmwareUpdateState = MutableStateFlow(fwupState),
             firmwareUpdateAvailable = null,
+            firmwareUpdateState = FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle,
         )
     } else {
         object : DiscoveredPebbleDevice {
@@ -211,8 +217,8 @@ fun fakeWatch(): PebbleDevice {
 
 class FakeConnectedDevice(
     override val transport: Transport,
-    override val firmwareUpdateState: StateFlow<FirmwareUpdate.FirmwareUpdateStatus>,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
 ) : ConnectedPebbleDevice {
     override val runningFwVersion: String = "v1.2.3-core"
     override val serial: String = "XXXXXXXXXXXX"
@@ -235,9 +241,9 @@ class FakeConnectedDevice(
 
     override val inboundMessages: Flow<PebblePacket> = MutableSharedFlow()
 
-    override fun updateFirmware(path: Path) {}
+    override fun sideloadFirmware(path: Path) {}
 
-    override fun updateFirmware(url: String) {}
+    override fun updateFirmware(update: FirmwareUpdateCheckResult) {}
 
     override fun checkforFirmwareUpdate() {}
 

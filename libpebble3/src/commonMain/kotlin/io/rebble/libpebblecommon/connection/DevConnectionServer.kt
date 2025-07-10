@@ -19,10 +19,12 @@ import io.rebble.libpebblecommon.structmapper.SByte
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.StructMappable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -56,7 +58,7 @@ class DevConnectionServer(private val libPebble: LibPebble) {
                         val reason = this@webSocket.closeReason.await()
                         logger.i { "WebSocket connection closed for ${transport.name}: (${reason?.code}) ${reason?.message ?: "No reason provided"}" }
                     }
-                    libPebble.watches.forDevice(transport).collectLatest { device ->
+                    libPebble.watches.forDevice(transport).debounce(500).collectLatest { device ->
                         when (device) {
                             is ConnectedPebble.Messages -> {
                                 logger.d { "Device '${device.name}' connected, updating client + forwarding messages" }
@@ -64,6 +66,7 @@ class DevConnectionServer(private val libPebble: LibPebble) {
                                 device.rawInboundMessages.onEach {
                                     send(byteArrayOf(ServerMessageType.RelayFromWatch.value) + it)
                                 }.launchIn(this)
+                                delay(10) //XXX: Give the client a moment to set up the connection
                                 for (frame in incoming) {
                                     when (frame) {
                                         is Frame.Binary -> {

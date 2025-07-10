@@ -30,13 +30,13 @@ class PebbleProtocolRunner(
         try {
             while (true) {
                 val sizeBytes = pebbleProtocolStreams.inboundPPBytes.peek(2)
-                val sizeArray = sizeBytes?.toByteArray()?.toUByteArray()
+                val sizeArray = sizeBytes?.toByteArray()?.asUByteArray()
                     ?: throw IOException("couldn't read size")
                 val payloadSize = sizeArray.getUShortAt(0, littleEndian = false)
                 val packetSize = payloadSize + PP_HEADER_SIZE
                 val packetBytes =
                     pebbleProtocolStreams.inboundPPBytes.readByteArray(packetSize.toInt())
-                        .toUByteArray()
+                        .asUByteArray()
                 val packet = try {
                     PebblePacket.deserialize(packetBytes)
                 } catch (e: Exception) {

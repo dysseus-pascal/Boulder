@@ -2,22 +2,32 @@ package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.PacketPriority
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 
 interface PebbleProtocolHandler {
     val inboundMessages: SharedFlow<PebblePacket>
+    val rawInboundMessages: Flow<ByteArray>
     suspend fun send(message: PebblePacket, priority: PacketPriority = PacketPriority.NORMAL)
     suspend fun send(message: ByteArray, priority: PacketPriority = PacketPriority.NORMAL)
 }
 
 class RealPebbleProtocolHandler(
     private val pebbleProtocolStreams: PebbleProtocolStreams,
+    connectionScope: ConnectionCoroutineScope,
     transport: Transport,
 ) : PebbleProtocolHandler {
     private val logger = Logger.withTag("PebbleProtocol-${transport.identifier}")
     override val inboundMessages: SharedFlow<PebblePacket> =
         pebbleProtocolStreams.inboundMessagesFlow
+            .map { it.packet }.shareIn(connectionScope, SharingStarted.Lazily)
+    override val rawInboundMessages: Flow<ByteArray> =
+        pebbleProtocolStreams.inboundMessagesFlow.map { it.rawBytes.asByteArray() }
 
     override suspend fun send(message: PebblePacket, priority: PacketPriority) {
         logger.d("sending $message")

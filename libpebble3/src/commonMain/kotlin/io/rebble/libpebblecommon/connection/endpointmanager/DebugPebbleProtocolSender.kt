@@ -16,4 +16,5 @@ class DebugPebbleProtocolSender(
     }
 
     override val inboundMessages = pebbleProtocolHandler.inboundMessages
+    override val rawInboundMessages = pebbleProtocolHandler.rawInboundMessages
 }

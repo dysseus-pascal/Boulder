@@ -90,6 +90,12 @@ object ConnectedPebble {
         suspend fun resetIntoPrf()
     }
 
+    interface DevConnection {
+        suspend fun startDevConnection()
+        suspend fun stopDevConnection()
+        val devConnectionActive: StateFlow<Boolean>
+    }
+
     interface Logs {
         suspend fun gatherLogs(): Path?
     }
@@ -98,6 +104,7 @@ object ConnectedPebble {
         suspend fun sendPPMessage(bytes: ByteArray)
         suspend fun sendPPMessage(ppMessage: PebblePacket)
         val inboundMessages: Flow<PebblePacket>
+        val rawInboundMessages: Flow<ByteArray>
     }
 
     interface FirmwareUpdate {
@@ -156,6 +163,7 @@ object ConnectedPebble {
         val coreDump: CoreDump,
         val music: Music,
         val pkjs: PKJS,
+        val devConnection: DevConnection,
     )
 
     class PrfServices(
@@ -178,4 +186,5 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.Logs,
     ConnectedPebble.CoreDump,
     ConnectedPebble.Music,
-    ConnectedPebble.PKJS
+    ConnectedPebble.PKJS,
+    ConnectedPebble.DevConnection

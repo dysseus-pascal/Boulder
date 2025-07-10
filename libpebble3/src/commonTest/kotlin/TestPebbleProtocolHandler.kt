@@ -10,6 +10,7 @@ class TestPebbleProtocolHandler(
 ) : PebbleProtocolHandler {
     private val _inboundMessages = MutableSharedFlow<PebblePacket>()
     override val inboundMessages: SharedFlow<PebblePacket> = _inboundMessages.asSharedFlow()
+    override val rawInboundMessages get() = TODO()
 
     suspend fun receivePacket(message: PebblePacket) = _inboundMessages.emit(message)
 

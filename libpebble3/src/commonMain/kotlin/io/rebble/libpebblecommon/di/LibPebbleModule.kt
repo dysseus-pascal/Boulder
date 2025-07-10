@@ -13,6 +13,8 @@ import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
+import io.rebble.libpebblecommon.connection.DevConnectionManager
+import io.rebble.libpebblecommon.connection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Negotiator
@@ -247,6 +249,7 @@ fun initKoin(
                 singleOf(::NotificationApi) bind NotificationApps::class
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
+                singleOf(::DevConnectionServer)
                 single { HttpClient() }
                 single { createCompanionDeviceManager(get()) }
                 factory { HackyProvider { get<Scanning>() } }
@@ -301,7 +304,8 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(), get(), get()
+                            get(), get(), get(),
+                            get()
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -349,6 +353,7 @@ fun initKoin(
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
+                    scopedOf(::DevConnectionManager)
 
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still

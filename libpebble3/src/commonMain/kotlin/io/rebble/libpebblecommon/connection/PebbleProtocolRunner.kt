@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import com.oldguy.common.getUShortAt
 import io.ktor.utils.io.ByteChannel
-import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.peek
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -11,13 +10,36 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.IOException
 
+data class InboundPPMessage(
+    val packet: PebblePacket,
+    val rawBytes: UByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as InboundPPMessage
+
+        if (packet != other.packet) return false
+        if (!rawBytes.contentEquals(other.rawBytes)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = packet.hashCode()
+        result = 31 * result + rawBytes.contentHashCode()
+        return result
+    }
+}
+
 class PebbleProtocolStreams(
     val inboundPPBytes: ByteChannel = ByteChannel(),
     // Using ByteArray here because I'm not 100% sure how the watch handles multiple PP messages
     // within a single PPoG packet (we could make this [Byte] (or use source/sink) if that
     // works OK (for all knowns LE watches)).
     val outboundPPBytes: Channel<ByteArray> = Channel(capacity = 100),
-    val inboundMessagesFlow: MutableSharedFlow<PebblePacket> = MutableSharedFlow(),
+    val inboundMessagesFlow: MutableSharedFlow<InboundPPMessage> = MutableSharedFlow(),
 )
 
 class PebbleProtocolRunner(
@@ -45,7 +67,12 @@ class PebbleProtocolRunner(
                 }
                 logger.d("inbound pebble protocol packet: $packet")
                 if (packet != null) {
-                    pebbleProtocolStreams.inboundMessagesFlow.emit(packet)
+                    pebbleProtocolStreams.inboundMessagesFlow.emit(
+                        InboundPPMessage(
+                            packet,
+                            packetBytes
+                        )
+                    )
                 }
             }
         } catch (e: IOException) {

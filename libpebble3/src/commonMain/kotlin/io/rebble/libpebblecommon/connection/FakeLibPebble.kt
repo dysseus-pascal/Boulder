@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
@@ -240,6 +239,7 @@ class FakeConnectedDevice(
     override suspend fun sendPPMessage(ppMessage: PebblePacket) {}
 
     override val inboundMessages: Flow<PebblePacket> = MutableSharedFlow()
+    override val rawInboundMessages: Flow<ByteArray> = MutableSharedFlow()
 
     override fun sideloadFirmware(path: Path) {}
 
@@ -284,6 +284,10 @@ class FakeConnectedDevice(
     override val musicActions: Flow<MusicAction> = MutableSharedFlow()
     override val updateRequestTrigger: Flow<Unit> = MutableSharedFlow()
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
+
+    override suspend fun startDevConnection() {}
+    override suspend fun stopDevConnection() {}
+    override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
 }
 
 fun fakeNotificationApps(): List<NotificationAppItem> {

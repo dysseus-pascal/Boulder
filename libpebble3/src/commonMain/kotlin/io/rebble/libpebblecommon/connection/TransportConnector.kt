@@ -111,6 +111,7 @@ class RealPebbleConnector(
     private val musicService: MusicService,
     private val musicControlManager: MusicControlManager,
     private val firmwareUpdateManager: FirmwareUpdateManager,
+    private val devConnectionManager: DevConnectionManager,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
@@ -228,7 +229,8 @@ class RealPebbleConnector(
                 logs = logDumpService,
                 coreDump = getBytesService,
                 music = musicService,
-                pkjs = pkjsLifecycleManager
+                pkjs = pkjsLifecycleManager,
+                devConnection = devConnectionManager
             )
         )
     }

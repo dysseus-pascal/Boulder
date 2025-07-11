@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.request
@@ -34,7 +35,7 @@ private const val DONE = 4
 class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsContext: JSContext): RegisterableJsInterface {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
-    private val client = HttpClient()
+    private val client = HttpClient(Darwin)
     private val logger = Logger.withTag("XMLHTTPRequestManager")
 
     override fun register(jsContext: JSContext) {

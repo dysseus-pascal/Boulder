@@ -8,27 +8,19 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
-import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.isGroupSummary
+import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import io.rebble.libpebblecommon.util.PrivateLogger
-import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.datetime.Instant
 import kotlin.uuid.Uuid
 
-class BasicNotificationProcessor(
-    private val privateLogger: PrivateLogger,
-) : NotificationProcessor {
+class BasicNotificationProcessor : NotificationProcessor {
     private val logger = Logger.withTag("BasicNotificationProcessor")
 
-    override fun processNotification(
+    override fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
         channel: ChannelItem?,
     ): NotificationResult {
-        if (sbn.notification.isGroupSummary()) {
-            logger.v { "Ignoring group summary notification for ${sbn.packageName.obfuscate(privateLogger)}" }
-            return NotificationResult.Ignored
-        }
         // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
         // effectively doing the deduping right now. I'm sure we'll find cases where it isn't, but
         // let's try that for now.
@@ -36,7 +28,7 @@ class BasicNotificationProcessor(
         val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-        val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN) ?: false
+        val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
         val body = bigText ?: text ?: ""
         val notification = LibPebbleNotification(
             packageName = sbn.packageName,
@@ -53,7 +45,7 @@ class BasicNotificationProcessor(
             },
             actions = actions,
         )
-        return NotificationResult.Processed(notification)
+        return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
     }
 }
 

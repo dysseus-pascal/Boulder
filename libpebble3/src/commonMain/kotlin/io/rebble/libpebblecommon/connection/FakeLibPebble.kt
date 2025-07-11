@@ -10,6 +10,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.dao.AppWithCount
+import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
@@ -129,7 +132,9 @@ class FakeLibPebble : LibPebble {
 
     val _notificationApps = MutableStateFlow(fakeNotificationApps())
 
-    override val notificationApps: Flow<List<NotificationAppItem>> = _notificationApps
+    override val notificationApps: Flow<List<AppWithCount>> = _notificationApps.map { it.map { AppWithCount(it, 0) } }
+    override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
+        MutableStateFlow(emptyList())
 
     override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
         // No-op

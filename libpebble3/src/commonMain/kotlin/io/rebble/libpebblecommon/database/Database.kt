@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
@@ -21,6 +22,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
 import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
@@ -53,8 +55,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         WatchSettingsEntity::class,
         WatchSettingsSyncEntity::class,
         LockerAppPermission::class,
+        NotificationEntity::class,
     ],
-    version = 16,
+    version = 17,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -62,6 +65,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
+        AutoMigration(from = 16, to = 17),
     ],
     exportSchema = true,
 )
@@ -77,6 +81,7 @@ abstract class Database : RoomDatabase() {
     abstract fun timelineReminderDao(): TimelineReminderRealDao
     abstract fun watchSettingsDao(): WatchSettingsDao
     abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
+    abstract fun notificationsDao(): NotificationDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

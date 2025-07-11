@@ -1,9 +1,18 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
+import io.rebble.libpebblecommon.notification.NotificationDecision
+
 sealed class NotificationResult {
-    data class Processed(
-        val notification: LibPebbleNotification
+    /**
+     * Extracted. Maybe send to watch, depending on decision.
+     */
+    data class Extracted(
+        val notification: LibPebbleNotification,
+        val decision: NotificationDecision,
     ) : NotificationResult()
-    data object Ignored : NotificationResult()
+
+    /**
+     * Not processed - try with another processor.
+     */
     data object NotProcessed : NotificationResult()
 }

@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.Housekeeping
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
@@ -13,9 +14,10 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.database.dao.AppWithCount
+import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -119,7 +121,8 @@ interface LockerApi {
 
 @Stable
 interface NotificationApps {
-    val notificationApps: Flow<List<NotificationAppItem>>
+    val notificationApps: Flow<List<AppWithCount>>
+    fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
     fun updateNotificationChannelMuteState(
         packageName: String,
@@ -165,6 +168,7 @@ class LibPebble3(
     private val health: Health,
     private val otherPebbleApps: OtherPebbleApps,
     private val jsTokenUtil: JsTokenUtil,
+    private val housekeeping: Housekeeping,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil {
@@ -188,6 +192,7 @@ class LibPebble3(
             logger.d("Time changed")
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
         }
+        housekeeping.init()
     }
 
     override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches

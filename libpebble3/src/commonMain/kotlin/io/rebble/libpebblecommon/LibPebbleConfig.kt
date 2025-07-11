@@ -92,6 +92,7 @@ data class NotificationConfig(
     val dumpNotificationContent: Boolean = true,
     val obfuscateContent: Boolean = true,
     val sendLocalOnlyNotifications: Boolean = false,
+    val storeNotifiationsForDays: Int = 7,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

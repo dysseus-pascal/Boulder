@@ -4,9 +4,11 @@ import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.database.dao.AppWithCount
+import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.entity.MuteState
-import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -25,6 +27,7 @@ interface NotificationAppsSync {
 class NotificationApi(
     private val notificationAppsSync: NotificationAppsSync,
     private val notificationAppDao: NotificationAppRealDao,
+    private val notificationsDao: NotificationDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
 ) : NotificationApps {
@@ -32,8 +35,11 @@ class NotificationApi(
         notificationAppsSync.init()
     }
 
-    override val notificationApps: Flow<List<NotificationAppItem>> =
-        notificationAppDao.allAppsFlow()
+    override val notificationApps: Flow<List<AppWithCount>> =
+        notificationAppDao.allAppsWithCountsFlow()
+
+    override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
+        notificationsDao.channelNotificationCounts(packageName)
 
     override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
         libPebbleCoroutineScope.launch {

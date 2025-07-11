@@ -11,11 +11,17 @@ import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
-import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentGroupSummary
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
+import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
@@ -32,6 +38,7 @@ class NotificationHandler(
     private val timeProvider: TimeProvider,
     private val notificationConfig: NotificationConfigFlow,
     private val privateLogger: PrivateLogger,
+    private val notificationDao: NotificationDao,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -73,58 +80,83 @@ class NotificationHandler(
     }
 
     private suspend fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
-        if (notificationConfig.value.dumpNotificationContent) {
-            sbn.dump()
-        }
+        // Don't even check (or persist) ongoing notifications
         if (sbn.isOngoing) {
-            verboseLog { "Ignoring ongoing notification from ${sbn.packageName.obfuscate(privateLogger)}" }
-            return null
-        }
-        if (sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications) {
-            verboseLog { "Ignoring local-only notification from ${sbn.packageName.obfuscate(privateLogger)}" }
+            verboseLog {
+                "Ignoring ongoing notification from ${sbn.packageName.obfuscate(privateLogger)}"
+            }
             return null
         }
         val appEntry = notificationAppDao.getEntry(sbn.packageName)
+        // Don't do any further processing if we don't know the app
         if (appEntry == null) {
-            verboseLog { "Ignoring system app notification from ${sbn.packageName.obfuscate(privateLogger)}" }
+            verboseLog {
+                "Ignoring unknown (maybe system) app notification from ${
+                    sbn.packageName.obfuscate(
+                        privateLogger
+                    )
+                }"
+            }
             return null
         }
-        notificationAppDao.insertOrReplace(appEntry.copy(lastNotified = timeProvider.now().asMillisecond()))
-        if (appEntry.muteState == MuteState.Always) {
-            verboseLog { "Ignoring muted app notification from ${sbn.packageName.obfuscate(privateLogger)}" }
-            return null
-        }
+        notificationAppDao.insertOrReplace(
+            appEntry.copy(
+                lastNotified = timeProvider.now().asMillisecond()
+            )
+        )
         val channel = appEntry.getChannelFor(sbn)
-        if (channel != null && channel.muteState == MuteState.Always) {
-            verboseLog { "Ignoring muted app channel (${channel.name.obfuscate(privateLogger)}) from ${sbn.packageName.obfuscate(privateLogger)}" }
-            return null
+        val result = extractNotification(sbn, appEntry, channel)
+        if (notificationConfig.value.dumpNotificationContent) {
+            sbn.dump(result)
         }
-        logger.d { "Processing notification from ${sbn.packageName.obfuscate(privateLogger)}" }
-        for (processor in notificationProcessors) {
-            try {
-                when (val result = processor.processNotification(sbn, appEntry, channel)) {
-                    is NotificationResult.Processed -> {
-                        if (verboseLogging) {
-                            logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} processed by ${processor::class.simpleName}" }
-                        }
-                        return result.notification
-                    }
-
-                    is NotificationResult.Ignored -> {
-                        if (verboseLogging) {
-                            logger.v { "Ignoring notification from ${sbn.packageName.obfuscate(privateLogger)}" }
-                        }
-                        break
-                    }
-
-                    is NotificationResult.NotProcessed -> { /* Continue */
-                    }
+        val notification = when (result) {
+            is NotificationResult.Extracted -> result.notification
+            NotificationResult.NotProcessed -> {
+                verboseLog {
+                    "Ignoring notification from ${sbn.packageName.obfuscate(privateLogger)} (not extracted)"
                 }
-            } catch (e: Exception) {
-                logger.e(e) { "Error processing notification from ${sbn.packageName.obfuscate(privateLogger)}" }
+                return null
             }
         }
-        return null
+        val decision = when {
+            sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
+                NotSentLocalOnly
+            sbn.notification.isGroupSummary() -> NotSentGroupSummary
+            appEntry.muteState == MuteState.Always -> NotSentAppMuted
+            channel != null && channel.muteState == MuteState.Always -> NotSendChannelMuted
+            inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
+            else -> result.decision
+        }
+        notificationDao.insert(notification.toEntity(decision, channel?.id))
+        if (decision != SendToWatch) {
+            verboseLog { "Not sending notification from ${sbn.packageName.obfuscate(privateLogger)} because $decision" }
+            return null
+        }
+        return notification
+    }
+
+    private fun extractNotification(
+        sbn: StatusBarNotification,
+        app: NotificationAppItem,
+        channel: ChannelItem?,
+    ): NotificationResult {
+        for (processor in notificationProcessors) {
+            try {
+                when (val result = processor.extractNotification(sbn, app, channel)) {
+                    is NotificationResult.Extracted -> {
+                        verboseLog { "Notification from ${sbn.packageName.obfuscate(privateLogger)} extracted by ${processor::class.simpleName}" }
+                        return result
+                    }
+
+                    is NotificationResult.NotProcessed -> Unit
+                }
+            } catch (e: Exception) {
+                logger.e(e) {
+                    "Error processing notification from ${sbn.packageName.obfuscate(privateLogger)}"
+                }
+            }
+        }
+        return NotificationResult.NotProcessed
     }
 
     fun setActiveNotifications(notifications: List<StatusBarNotification>) =
@@ -154,10 +186,6 @@ class NotificationHandler(
     fun handleNotificationPosted(sbn: StatusBarNotification) = libPebbleCoroutineScope.launch {
         logger.d { "onNotificationPosted(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
         val notification = processNotification(sbn) ?: return@launch
-        if (inflightNotifications.values.any { it.displayDataEquals(notification) }) {
-            logger.d { "Notification ${sbn.key} already in inflight" }
-            return@launch
-        }
         sendNotification(notification)
     }
 
@@ -172,10 +200,11 @@ class NotificationHandler(
         }
     }
 
-    private fun StatusBarNotification.dump() {
+    private fun StatusBarNotification.dump(result: NotificationResult) {
         val wearableExtender = WearableExtender(notification)
         val wearableBundle = notification.extras.getBundle(EXTRA_WEARABLE_BUNDLE)
-        logger.v { """
+        logger.v {
+            """
 New notification:
     id = $id
     key = ${key.obfuscate(privateLogger)}
@@ -201,7 +230,11 @@ New notification:
     actions = ${notification.actions?.asList()?.dump()}
     WearableExtender actions: ${wearableExtender.actions?.dump()}
     WearableExtender extras: ${wearableBundle?.dump(8)}
-        """.trimIndent() }
+Processed as:
+    title = ${result.notification()?.title.obfuscate(privateLogger)}
+    body = ${result.notification()?.body.obfuscate(privateLogger)}
+        """.trimIndent()
+        }
     }
 
     private fun Notification.dumpChannel(): String {
@@ -222,7 +255,10 @@ New notification:
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
             val value = get(it)
             when {
-                value is String || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${value.toString().obfuscate(privateLogger)}"
+                value is String || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                    value.toString().obfuscate(privateLogger)
+                }"
+
                 else -> "$it = ${get(it)}"
             }
         }
@@ -254,11 +290,13 @@ New notification:
 
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
-private val EXTRA_KEYS_NON_STRING_SENSITIVE = setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
+private val EXTRA_KEYS_NON_STRING_SENSITIVE =
+    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
 fun RemoteInput.dumpDataOnly(): Boolean? {
     return isDataOnly
 }
+
 fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)

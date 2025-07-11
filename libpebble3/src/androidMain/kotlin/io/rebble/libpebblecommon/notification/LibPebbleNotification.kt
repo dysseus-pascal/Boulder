@@ -3,10 +3,13 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.app.Notification.WearableExtender
 import android.service.notification.StatusBarNotification
 import io.rebble.libpebblecommon.SystemAppIDs.NOTIFICATIONS_APP_UUID
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.datetime.Instant
@@ -99,3 +102,23 @@ data class LibPebbleNotification(
         }
     }
 }
+
+fun LibPebbleNotification.toEntity(
+    decision: NotificationDecision,
+    channelId: String?,
+): NotificationEntity = NotificationEntity(
+    pkg = packageName,
+    key = key,
+    groupKey = groupKey,
+    timestamp = timestamp.asMillisecond(),
+    title = title,
+    body = body,
+    decision = decision,
+    channelId = channelId,
+)
+
+fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
+    is NotificationResult.Extracted -> notification
+    NotificationResult.NotProcessed -> null
+}
+

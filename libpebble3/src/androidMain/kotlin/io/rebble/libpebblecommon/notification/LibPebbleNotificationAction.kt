@@ -124,7 +124,7 @@ data class LibPebbleNotificationAction(
             if (channel == null) return null
             return LibPebbleNotificationAction(
                 packageName = app.packageName,
-                title = "Mute ${channel.name}",
+                title = "Mute Channel ${channel.name}",
                 semanticAction = SemanticAction.Mute,
                 pendingIntent = null,
                 type = ActionType.MuteChannel,

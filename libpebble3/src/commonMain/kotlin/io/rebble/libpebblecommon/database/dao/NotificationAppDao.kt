@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.database.dao
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Query
 import androidx.room.Transaction
 import co.touchlab.kermit.Logger
@@ -15,6 +16,11 @@ import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
 
+data class AppWithCount(
+    @Embedded val app: NotificationAppItem,
+    val count: Int,
+)
+
 @Dao
 interface NotificationAppRealDao : NotificationAppItemDao {
     @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
@@ -22,6 +28,14 @@ interface NotificationAppRealDao : NotificationAppItemDao {
 
     @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
     fun allAppsFlow(): Flow<List<NotificationAppItem>>
+
+    @Query("SELECT a.*, COUNT(ne.id) as count " +
+            "FROM NotificationAppItemEntity a " +
+            "LEFT JOIN NotificationEntity ne ON a.packageName = ne.pkg " +
+            "WHERE a.deleted = 0 " +
+            "GROUP BY a.packageName " +
+            "ORDER BY a.name ASC")
+    fun allAppsWithCountsFlow(): Flow<List<AppWithCount>>
 
     @Transaction
     suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {

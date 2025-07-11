@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.Housekeeping
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
@@ -234,12 +235,14 @@ fun initKoin(
                 single { get<Database>().calendarDao() }
                 single { get<Database>().watchSettingsDao() }
                 single { get<Database>().lockerAppPermissionDao() }
+                single { get<Database>().notificationsDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
                 single { libPebbleScope }
                 singleOf(::Locker)
                 singleOf(::PrivateLogger)
+                singleOf(::Housekeeping)
                 singleOf(::WebSyncManager) bind RequestSync::class
                 single { createTimeChanged(get()) }
                 singleOf(::LibPebble3) bind LibPebble::class

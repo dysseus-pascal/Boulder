@@ -22,4 +22,7 @@ interface NotificationDao {
     @Query("SELECT channelId, COUNT(*) as count FROM NotificationEntity" +
             " WHERE pkg = :pkg GROUP BY channelId")
     fun channelNotificationCounts(pkg: String): Flow<List<ChannelAndCount>>
+
+    @Query("SELECT * FROM NotificationEntity WHERE pkg = :pkg AND (:channelId IS NULL OR channelId = :channelId) ORDER BY timestamp DESC LIMIT :limit")
+    fun mostRecentNotificationsFor(pkg: String, channelId: String?, limit: Int): Flow<List<NotificationEntity>>
 }

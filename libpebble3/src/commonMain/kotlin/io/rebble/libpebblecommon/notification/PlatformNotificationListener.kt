@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -40,6 +41,16 @@ class NotificationApi(
 
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
         notificationsDao.channelNotificationCounts(packageName)
+
+    override fun mostRecentNotificationsFor(
+        pkg: String,
+        channelId: String?,
+        limit: Int,
+    ): Flow<List<NotificationEntity>> = notificationsDao.mostRecentNotificationsFor(
+        pkg = pkg,
+        channelId = channelId,
+        limit = limit,
+    )
 
     override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
         libPebbleCoroutineScope.launch {

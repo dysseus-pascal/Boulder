@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -123,6 +124,7 @@ interface LockerApi {
 interface NotificationApps {
     val notificationApps: Flow<List<AppWithCount>>
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
+    fun mostRecentNotificationsFor(pkg: String, channelId: String?, limit: Int): Flow<List<NotificationEntity>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
     fun updateNotificationChannelMuteState(
         packageName: String,

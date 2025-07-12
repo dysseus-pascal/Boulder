@@ -19,7 +19,6 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
-import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentGroupSummary
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
 import io.rebble.libpebblecommon.util.PrivateLogger
@@ -80,10 +79,16 @@ class NotificationHandler(
     }
 
     private suspend fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
-        // Don't even check (or persist) ongoing notifications
+        // Don't even check (or persist) ongoing/group summary notifications
         if (sbn.isOngoing) {
             verboseLog {
                 "Ignoring ongoing notification from ${sbn.packageName.obfuscate(privateLogger)}"
+            }
+            return null
+        }
+        if (sbn.notification.isGroupSummary()) {
+            verboseLog {
+                "Ignoring group summary notification from ${sbn.packageName.obfuscate(privateLogger)}"
             }
             return null
         }
@@ -121,7 +126,7 @@ class NotificationHandler(
         val decision = when {
             sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
                 NotSentLocalOnly
-            sbn.notification.isGroupSummary() -> NotSentGroupSummary
+
             appEntry.muteState == MuteState.Always -> NotSentAppMuted
             channel != null && channel.muteState == MuteState.Always -> NotSendChannelMuted
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate

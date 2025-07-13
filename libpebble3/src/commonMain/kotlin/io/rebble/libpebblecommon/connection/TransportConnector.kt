@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicCo
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -171,6 +172,7 @@ class RealPebbleConnector(
         putBytesService.init()
         firmwareUpdater.setPlatform(watchInfo.platform)
         firmwareUpdateManager.init(watchInfo)
+        logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
         val recoveryMode = when {
             watchInfo.runningFwVersion.isRecovery -> true.also {

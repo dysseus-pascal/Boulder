@@ -36,7 +36,7 @@ actual val platformModule: Module = module {
         PhoneCapabilities(
             setOf(
                 ProtocolCapsFlag.SupportsAppRunStateProtocol,
-                //ProtocolCapsFlag.SupportsInfiniteLogDump,
+                ProtocolCapsFlag.SupportsInfiniteLogDump,
                 ProtocolCapsFlag.SupportsExtendedMusicProtocol,
                 ProtocolCapsFlag.SupportsTwoWayDismissal,
                 //ProtocolCapsFlag.SupportsLocalization

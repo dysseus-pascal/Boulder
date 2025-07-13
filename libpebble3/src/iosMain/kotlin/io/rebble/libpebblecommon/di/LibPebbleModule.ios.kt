@@ -31,7 +31,7 @@ actual val platformModule: Module = module {
         PhoneCapabilities(
             setOf(
                 ProtocolCapsFlag.SupportsAppRunStateProtocol,
-                //ProtocolCapsFlag.SupportsInfiniteLogDump,
+                ProtocolCapsFlag.SupportsInfiniteLogDump,
                 //ProtocolCapsFlag.SupportsLocalization
                 ProtocolCapsFlag.Supports8kAppMessage,
 //                ProtocolCapsFlag.SupportsHealthInsights,

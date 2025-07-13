@@ -8,9 +8,11 @@ import io.ktor.utils.io.writeString
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
+import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.packets.LogDump
 import io.rebble.libpebblecommon.packets.LogDump.ReceivedLogDumpMessage
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.util.randomCookie
 import kotlinx.coroutines.TimeoutCancellationException
@@ -32,15 +34,28 @@ class LogDumpService(
     private val transport: Transport,
 ) : ProtocolService, ConnectedPebble.Logs {
     private val logger = Logger.withTag("LogDumpService")
+    private var supportsInfiniteLogDump = false
+
+    fun init(supportsInfiniteLogDump: Boolean) {
+        this.supportsInfiniteLogDump = supportsInfiniteLogDump
+    }
 
     override suspend fun gatherLogs(): Path? {
-        logger.d { "gatherLogs" }
+        logger.d { "gatherLogs() supportsInfiniteLogDump=$supportsInfiniteLogDump" }
         val tempLogFile = getTempFilePath(appContext, "logs-${transport.identifier.asString}")
         SystemFileSystem.sink(tempLogFile).use { sink ->
             sink.asByteWriteChannel().use {
                 writeLine("# Device logs:")
-                for (generation in 0..<NUM_GENERATIONS_LEGACY) {
-                    requestLogGeneration(generation, this)
+                if (supportsInfiniteLogDump) {
+                    var generation = 0
+                    do {
+                        val success = requestLogGeneration(generation, this)
+                        generation++ // Increment after the call
+                    } while (success)
+                } else {
+                    for (generation in 0..<NUM_GENERATIONS_LEGACY) {
+                        requestLogGeneration(generation, this)
+                    }
                 }
             }
         }
@@ -51,10 +66,11 @@ class LogDumpService(
     private suspend fun requestLogGeneration(
         generation: Int,
         writeChannel: ByteWriteChannel,
-    ) {
+    ): Boolean {
         logger.d { "requestLogGeneration: $generation" }
         writeChannel.writeLine("=== Generation: $generation ===")
         val cookie = randomCookie()
+        var noLogsForGeneration = false
         try {
             protocolHandler.inboundMessages
                 .onSubscription {
@@ -70,7 +86,10 @@ class LogDumpService(
                     when (it) {
                         is LogDump.LogLine -> true
                         is LogDump.Done -> false
-                        is LogDump.NoLogs -> false
+                        is LogDump.NoLogs -> {
+                            noLogsForGeneration = true
+                            false
+                        }
                     }
                 }
                 .timeout(LOG_RECEIVE_TIMEOUT)
@@ -93,6 +112,7 @@ class LogDumpService(
         } finally {
             logger.d { "finished generation $generation" }
         }
+        return !noLogsForGeneration
     }
 
     companion object {

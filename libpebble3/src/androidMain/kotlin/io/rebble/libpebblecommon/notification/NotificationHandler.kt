@@ -260,7 +260,7 @@ Processed as:
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
             val value = get(it)
             when {
-                value is String || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
                     value.toString().obfuscate(privateLogger)
                 }"
 
@@ -296,7 +296,7 @@ Processed as:
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 private val EXTRA_KEYS_NON_STRING_SENSITIVE =
-    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
+    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list", "android.largeIcon")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

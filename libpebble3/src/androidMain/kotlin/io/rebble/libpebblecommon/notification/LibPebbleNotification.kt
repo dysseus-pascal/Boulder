@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.app.Notification.WearableExtender
 import android.service.notification.StatusBarNotification
+import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.SystemAppIDs.NOTIFICATIONS_APP_UUID
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -37,6 +38,7 @@ data class LibPebbleNotification(
             sbn: StatusBarNotification,
             app: NotificationAppItem,
             channel: ChannelItem?,
+            notificationConfig: NotificationConfig,
         ): List<LibPebbleNotificationAction> {
             val dismissAction = LibPebbleNotificationAction.dismissActionFromNotification(
                 packageName = sbn.packageName,
@@ -59,7 +61,8 @@ data class LibPebbleNotification(
             val actions = actionsToUse.mapNotNull {
                 LibPebbleNotificationAction.fromNotificationAction(
                     packageName = sbn.packageName,
-                    action = it
+                    action = it,
+                    notificationConfig = notificationConfig,
                 )
             }
             return buildList {

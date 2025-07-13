@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.notification.processor
 import android.app.Notification
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotification
@@ -13,7 +14,9 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlinx.datetime.Instant
 import kotlin.uuid.Uuid
 
-class BasicNotificationProcessor : NotificationProcessor {
+class BasicNotificationProcessor(
+    private val notificationConfigFlow: NotificationConfigFlow,
+) : NotificationProcessor {
     private val logger = Logger.withTag("BasicNotificationProcessor")
 
     override fun extractNotification(
@@ -24,7 +27,7 @@ class BasicNotificationProcessor : NotificationProcessor {
         // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
         // effectively doing the deduping right now. I'm sure we'll find cases where it isn't, but
         // let's try that for now.
-        val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn, app, channel)
+        val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn, app, channel, notificationConfigFlow.value)
         val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)

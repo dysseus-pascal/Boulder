@@ -5,6 +5,7 @@ import android.app.Notification.Action
 import android.app.PendingIntent
 import android.app.RemoteInput
 import android.os.Build
+import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -47,9 +48,10 @@ data class LibPebbleNotificationAction(
     companion object {
         fun fromNotificationAction(
             packageName: String,
-            action: Action
+            action: Action,
+            notificationConfig: NotificationConfig,
         ): LibPebbleNotificationAction? {
-            if (action.showsUserInterface()) {
+            if (action.showsUserInterface() && !notificationConfig.addShowsUserInterfaceActions) {
                 return null
             }
             val semanticAction = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

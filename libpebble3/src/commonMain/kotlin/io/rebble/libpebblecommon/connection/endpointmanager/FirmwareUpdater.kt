@@ -36,6 +36,11 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
         FirmwareUpdateException(message, cause)
 }
 
+enum class FirmwareUpdateErrorStarting {
+    ErrorDownloading,
+    ErrorParsingPbw,
+}
+
 interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
     fun setPlatform(watchPlatform: WatchHardwarePlatform)
@@ -43,7 +48,7 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     sealed class FirmwareUpdateStatus {
         sealed class NotInProgress : FirmwareUpdateStatus() {
             data object Idle : NotInProgress()
-            data object ErrorStarting : NotInProgress()
+            data class ErrorStarting(val error: FirmwareUpdateErrorStarting) : NotInProgress()
         }
 
         sealed class Active : FirmwareUpdateStatus() {
@@ -125,7 +130,8 @@ class RealFirmwareUpdater(
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for firmware" }
-                            _firmwareUpdateState.value = FirmwareUpdateStatus.InProgress(update, progessFlow)
+                            _firmwareUpdateState.value =
+                                FirmwareUpdateStatus.InProgress(update, progessFlow)
                         }
 
                         is PutBytesSession.SessionState.Sending -> {
@@ -201,31 +207,50 @@ class RealFirmwareUpdater(
         resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
 
-    override fun sideloadFirmware(path: Path) {
-        val pbz = PbzFirmware(path)
-        val updateToVersion = pbz.manifest.asFirmwareVersion()
-        if (updateToVersion == null) {
-            logger.w { "Failed to parse firmware version to sideload from ${pbz.manifest}" }
-            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting
-            return
+    private suspend fun tryStartUpdateMutex(update: FirmwareUpdateCheckResult): Boolean {
+        startMutex.withLock {
+            if (_firmwareUpdateState.value !is FirmwareUpdateStatus.NotInProgress) {
+                logger.w { "Firmware update already in progress!" }
+                return false
+            }
+            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingToStart(update)
+            return true
         }
-        val update = FirmwareUpdateCheckResult(
-            version = updateToVersion,
-            url = "",
-            notes = "Sideloaded",
-        )
-        logger.d { "updateFirmware path: $path" }
+    }
+
+    override fun sideloadFirmware(path: Path) {
         connectionCoroutineScope.launch {
+            val pbz = PbzFirmware(path)
+            val updateToVersion = pbz.manifest.asFirmwareVersion()
+            if (updateToVersion == null) {
+                logger.w { "Failed to parse firmware version to sideload from ${pbz.manifest}" }
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorParsingPbw)
+                return@launch
+            }
+            val update = FirmwareUpdateCheckResult(
+                version = updateToVersion,
+                url = "",
+                notes = "Sideloaded",
+            )
+            logger.d { "sideloadFirmware path: $path" }
+            if (!tryStartUpdateMutex(update)) {
+                return@launch
+            }
             beginFirmwareUpdate(pbz, 0u, update)
         }
     }
 
     override fun updateFirmware(update: FirmwareUpdateCheckResult) {
-        logger.d { "updateFirmware: $update" }
         connectionCoroutineScope.launch {
+            logger.d { "updateFirmware: $update" }
+            if (!tryStartUpdateMutex(update)) {
+                return@launch
+            }
             val path = firmwareDownloader.downloadFirmware(update.url)
             if (path == null) {
-                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorDownloading)
                 return@launch
             }
             beginFirmwareUpdate(PbzFirmware(path), 0u, update)
@@ -243,13 +268,6 @@ class RealFirmwareUpdater(
         offset: UInt,
         update: FirmwareUpdateCheckResult,
     ) {
-        startMutex.withLock {
-            if (_firmwareUpdateState.value !is FirmwareUpdateStatus.NotInProgress) {
-                logger.w { "Firmware update already in progress!" }
-                return
-            }
-            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingToStart(update)
-        }
         logger.d { "beginFirmwareUpdate" }
 
         val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)

@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.MAX_CACHED_TIME
 import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.MAX_FALLBACK_TIME
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.coroutines.resume
@@ -44,16 +46,19 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                     )
                 )
             }
-            locationManager.requestLocationUpdates(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    android.location.LocationManager.FUSED_PROVIDER
-                } else {
-                    android.location.LocationManager.GPS_PROVIDER
-                },
-                250L,
-                0f,
-                locationListener
-            )
+            withContext(Dispatchers.Main) {
+                // This can crash if done away from main thread
+                locationManager.requestLocationUpdates(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        android.location.LocationManager.FUSED_PROVIDER
+                    } else {
+                        android.location.LocationManager.GPS_PROVIDER
+                    },
+                    250L,
+                    0f,
+                    locationListener
+                )
+            }
             awaitClose {
                 locationManager.removeUpdates(locationListener)
             }

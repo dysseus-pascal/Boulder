@@ -501,7 +501,15 @@ class WatchManager(
         allWatches.update { aw ->
             aw.filterValues { watch ->
                 !watch.isOnlyScanResult()
-            }.mapValues { it.value.copy(scanResult = null) }
+            }.mapValues {
+                if (it.value.knownWatchProps != null) {
+                    it.value.copy(scanResult = null)
+                } else {
+                    // Edge-case where we were disconnecting when this happened - don't leave an
+                    // invalid totally empty watch record.
+                    it.value
+                }
+            }
         }
     }
 

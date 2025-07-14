@@ -201,7 +201,7 @@ class NotificationHandler(
             inflightNotifications.remove(sbn.key)
             notificationDeleteQueue.trySend(inflight.uuid)
         } else {
-            logger.d { "Failed to remove notification: ${sbn.key} not found in inflight" }
+            logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
         }
     }
 

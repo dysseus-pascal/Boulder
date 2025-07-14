@@ -15,12 +15,14 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 import kotlin.uuid.Uuid
 
-class LibPebbleNotificationListener : NotificationListenerService(), KoinComponent {
+class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKoinComponent {
     companion object {
         private val logger = Logger.withTag("LibPebbleNotificationListener")
         fun componentName(context: Context) = ComponentName(context, LibPebbleNotificationListener::class.java)
@@ -34,18 +36,14 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     private val binder = LocalBinder()
-    private var notificationHandler: NotificationHandler? = null
+    private val notificationHandler: NotificationHandler = get()
 
     inner class LocalBinder : Binder() {
         fun getService(): LibPebbleNotificationListener = this@LibPebbleNotificationListener
     }
 
-    fun setNotificationHandler(handler: NotificationHandler) {
-        notificationHandler = handler
-    }
-
     fun cancelNotification(itemId: Uuid) {
-        val sbn = notificationHandler?.getNotification(itemId) ?: return
+        val sbn = notificationHandler.getNotification(itemId) ?: return
         cancelNotification(sbn.key)
     }
 
@@ -62,7 +60,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     override fun onListenerConnected() {
         logger.d { "onListenerConnected() ($this)" }
         try {
-            notificationHandler?.setActiveNotifications(getActiveNotifications().toList())
+            notificationHandler.setActiveNotifications(getActiveNotifications().toList())
         } catch (e: SecurityException) {
             logger.e("error getting active notifications", e)
         }
@@ -78,7 +76,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         channel: NotificationChannel,
         modificationType: Int,
     ) {
-        notificationHandler?.onChannelChanged()
+        notificationHandler.onChannelChanged()
     }
 
     override fun onNotificationChannelGroupModified(
@@ -87,7 +85,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         group: NotificationChannelGroup,
         modificationType: Int,
     ) {
-        notificationHandler?.onChannelChanged()
+        notificationHandler.onChannelChanged()
     }
 
     private data class MutableGroup(
@@ -138,7 +136,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        notificationHandler?.handleNotificationPosted(sbn)
+        notificationHandler.handleNotificationPosted(sbn)
     }
 
     override fun onNotificationRemoved(
@@ -146,6 +144,6 @@ class LibPebbleNotificationListener : NotificationListenerService(), KoinCompone
         rankingMap: RankingMap,
         reason: Int
     ) {
-        notificationHandler?.handleNotificationRemoved(sbn)
+        notificationHandler.handleNotificationRemoved(sbn)
     }
 }

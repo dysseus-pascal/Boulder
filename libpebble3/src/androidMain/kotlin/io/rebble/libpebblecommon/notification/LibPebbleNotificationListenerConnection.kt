@@ -55,11 +55,21 @@ class AndroidPebbleNotificationListenerConnection(
 
     suspend fun dismissNotification(itemId: Uuid) {
         val service = getService()
+        if (service == null) {
+            logger.w { "Couldn't get service to dismiss notification" }
+            return
+        }
         service.cancelNotification(itemId)
     }
 
-    suspend fun getChannelsForApp(packageName: String): List<ChannelGroup> =
-        getService().getChannelsForApp(packageName)
+    suspend fun getChannelsForApp(packageName: String): List<ChannelGroup> {
+        val service = getService()
+        if (service == null) {
+            logger.w { "Couldn't get service to dismiss notification" }
+            return emptyList()
+        }
+        return service.getChannelsForApp(packageName)
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -90,8 +100,10 @@ class AndroidPebbleNotificationListenerConnection(
         }
     }
 
-    suspend fun getService(): LibPebbleNotificationListener {
-        check(!bindingDied) { "Binding died" }
+    suspend fun getService(): LibPebbleNotificationListener? {
+        if (!isBound) {
+            bind(context)
+        }
         return try {
             withTimeout(5_000L) {
                 _service.value ?: _service.filterNotNull().first()
@@ -102,9 +114,8 @@ class AndroidPebbleNotificationListenerConnection(
     }
 
     override fun init(libPebble: LibPebble) {
-        check(bind(context)) { "Failed to bind to LibPebbleNotificationListener" }
-        libPebbleCoroutineScope.launch {
-            getService().setNotificationHandler(notificationHandler)
+        if (!bind(context)) {
+            logger.w { "Couldn't bind to LibPebbleNotificationListener on init" }
         }
         logger.d { "LibPebbleNotificationListener bound" }
         notificationSendQueue.onEach {

@@ -5,7 +5,6 @@ import android.app.NotificationChannelGroup
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Binder
 import android.os.IBinder
 import android.os.Process
 import android.os.UserHandle
@@ -18,7 +17,6 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
-import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.uuid.Uuid
 
@@ -35,12 +33,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         logger.v { "onCreate: ($this)" }
     }
 
-    private val binder = LocalBinder()
     private val notificationHandler: NotificationHandler = get()
-
-    inner class LocalBinder : Binder() {
-        fun getService(): LibPebbleNotificationListener = this@LibPebbleNotificationListener
-    }
+    private val connection: AndroidPebbleNotificationListenerConnection = get()
 
     fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return
@@ -48,26 +42,27 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        return if (intent?.action == AndroidPebbleNotificationListenerConnection.ACTION_BIND_LOCAL) {
-            logger.d { "onBind() ACTION_BIND_LOCAL  ($this)" }
-            binder
-        } else {
-            logger.d { "onBind()  ($this)" }
-            super.onBind(intent)
-        }
+        logger.d { "onBind() ($this)" }
+        return super.onBind(intent)
     }
 
     override fun onListenerConnected() {
+        // Note: this can be called twice if Android gets confused when the app is killed/restarted
+        // quickly (as it will be often, because Android agressively tries to keep the process
+        // running because it has a notification listener...). Don't do anything here that shouldn't
+        // be done twice.
         logger.d { "onListenerConnected() ($this)" }
-        try {
-            notificationHandler.setActiveNotifications(getActiveNotifications().toList())
-        } catch (e: SecurityException) {
-            logger.e("error getting active notifications", e)
-        }
+        connection.setService(this)
+//        try {
+//            notificationHandler.setActiveNotifications(getActiveNotifications().toList())
+//        } catch (e: SecurityException) {
+//            logger.e("error getting active notifications", e)
+//        }
     }
 
     override fun onListenerDisconnected() {
         logger.d { "onListenerDisconnected() ($this)" }
+        connection.setService(null)
     }
 
     override fun onNotificationChannelModified(
@@ -135,6 +130,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         }
     }
 
+    // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
+    // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         notificationHandler.handleNotificationPosted(sbn)
     }

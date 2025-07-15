@@ -166,9 +166,13 @@ class AndroidNotificationActionHandler(
         }
     }
 
-    private suspend fun actionIntent(intent: PendingIntent, fillIntent: Intent? = null): Int {
+    private suspend fun actionIntent(intent: PendingIntent, fillIntent: Intent? = null): Int? {
         val actionContext =
-            notificationListenerConnection.notificationListenerContext.first()
+            notificationListenerConnection.getService()
+        if (actionContext == null) {
+            logger.w { "No service context to perform action" }
+            return null
+        }
         return suspendCancellableCoroutine { continuation ->
             val callback =
                 PendingIntent.OnFinished { pendingIntent, intent, resultCode, resultData, resultExtras ->

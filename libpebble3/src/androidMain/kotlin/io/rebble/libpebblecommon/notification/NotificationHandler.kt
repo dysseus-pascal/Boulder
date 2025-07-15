@@ -164,24 +164,24 @@ class NotificationHandler(
         return NotificationResult.NotProcessed
     }
 
-    fun setActiveNotifications(notifications: List<StatusBarNotification>) =
-        libPebbleCoroutineScope.launch {
-            val inflightSnapshot = inflightNotifications.toMap()
-            val newNotifs = notifications.mapNotNull { sbn ->
-                if (inflightSnapshot.any { it.key == sbn.key }) {
-                    return@mapNotNull null
-                }
-                val notification = processNotification(sbn) ?: return@mapNotNull null
-                // Check if the notification is already in the list
-                if (inflightSnapshot.values.any { it.displayDataEquals(notification) }) {
-                    return@mapNotNull null
-                }
-                notification
-            }
-            newNotifs.forEach {
-                sendNotification(it)
-            }
-        }
+//    fun setActiveNotifications(notifications: List<StatusBarNotification>) =
+//        libPebbleCoroutineScope.launch {
+//            val inflightSnapshot = inflightNotifications.toMap()
+//            val newNotifs = notifications.mapNotNull { sbn ->
+//                if (inflightSnapshot.any { it.key == sbn.key }) {
+//                    return@mapNotNull null
+//                }
+//                val notification = processNotification(sbn) ?: return@mapNotNull null
+//                // Check if the notification is already in the list
+//                if (inflightSnapshot.values.any { it.displayDataEquals(notification) }) {
+//                    return@mapNotNull null
+//                }
+//                notification
+//            }
+//            newNotifs.forEach {
+//                sendNotification(it)
+//            }
+//        }
 
     private fun sendNotification(notification: LibPebbleNotification) {
         inflightNotifications[notification.key] = notification

@@ -8,7 +8,7 @@ data class PbwAppInfo(
     val shortName: String,
     val longName: String = "",
     val companyName: String = "",
-    val versionCode: Long = -1,
+    val versionCode: Float = -1f,
     val versionLabel: String,
     val appKeys: Map<String, Int> = emptyMap(),
     val capabilities: List<String> = emptyList(),

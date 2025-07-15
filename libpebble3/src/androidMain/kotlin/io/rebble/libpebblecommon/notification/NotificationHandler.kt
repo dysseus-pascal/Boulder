@@ -26,6 +26,9 @@ import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.uuid.Uuid
@@ -48,6 +51,14 @@ class NotificationHandler(
     private val inflightNotifications = ConcurrentHashMap<String, LibPebbleNotification>()
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
     val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
+    private val notificationsToProcess = Channel<StatusBarNotification>(Channel.BUFFERED)
+
+    fun init() {
+        notificationsToProcess.consumeAsFlow().onEach {
+            val notification = processNotification(it) ?: return@onEach
+            sendNotification(notification)
+        }.launchIn(libPebbleCoroutineScope)
+    }
 
     fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
         val notification = getNotification(itemId)
@@ -185,13 +196,20 @@ class NotificationHandler(
 
     private fun sendNotification(notification: LibPebbleNotification) {
         inflightNotifications[notification.key] = notification
-        notificationSendQueue.trySend(notification)
+        notificationSendQueue.trySend(notification).also {
+            if (it.isFailure) {
+                logger.w { "Couldn't write notification to send queue" }
+            }
+        }
     }
 
-    fun handleNotificationPosted(sbn: StatusBarNotification) = libPebbleCoroutineScope.launch {
+    fun handleNotificationPosted(sbn: StatusBarNotification) {
         logger.d { "onNotificationPosted(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
-        val notification = processNotification(sbn) ?: return@launch
-        sendNotification(notification)
+        notificationsToProcess.trySend(sbn).also {
+            if (it.isFailure) {
+                logger.w { "Couldn't write notification to processing queue" }
+            }
+        }
     }
 
     fun handleNotificationRemoved(sbn: StatusBarNotification) {
@@ -199,7 +217,11 @@ class NotificationHandler(
         val inflight = inflightNotifications[sbn.key]
         if (inflight != null) {
             inflightNotifications.remove(sbn.key)
-            notificationDeleteQueue.trySend(inflight.uuid)
+            notificationDeleteQueue.trySend(inflight.uuid).also {
+                if (it.isFailure) {
+                    logger.w { "Couldn't write notification to deletion queue" }
+                }
+            }
         } else {
             logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
         }

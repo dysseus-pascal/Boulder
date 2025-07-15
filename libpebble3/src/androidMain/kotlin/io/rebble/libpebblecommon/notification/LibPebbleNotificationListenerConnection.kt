@@ -51,7 +51,7 @@ class AndroidPebbleNotificationListenerConnection(
     }
 
     override fun init(libPebble: LibPebble) {
-        logger.d { "LibPebbleNotificationListener bound" }
+        notificationHandler.init()
         notificationSendQueue.onEach {
             libPebble.sendNotification(it.toTimelineNotification())
         }.launchIn(libPebbleCoroutineScope)

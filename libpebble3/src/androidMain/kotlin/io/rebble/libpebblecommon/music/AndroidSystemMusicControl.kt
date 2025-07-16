@@ -97,10 +97,7 @@ class AndroidSystemMusicControl(
         logger.d { "Active media sessions changed: ${it.size}" }
     }
     private val targetSession = activeSessions.map { sessions ->
-        val prioritized = sessions.sortedByDescending {
-            it.playbackState?.lastPositionUpdateTime ?: 0L
-        }
-        prioritized.firstOrNull {
+        sessions.lastOrNull {
             it.playbackState?.state in setOf(
                 PlaybackState.STATE_FAST_FORWARDING,
                 PlaybackState.STATE_REWINDING,
@@ -111,7 +108,7 @@ class AndroidSystemMusicControl(
                 PlaybackState.STATE_CONNECTING,
                 PlaybackState.STATE_PLAYING,
             )
-        } ?: prioritized.firstOrNull()
+        } ?: sessions.lastOrNull()
     }.stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
 
     override val playbackState: StateFlow<PlaybackStatus?> = targetSession.flatMapLatest { session ->

@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifest
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
@@ -269,18 +270,29 @@ class RealFirmwareUpdater(
         update: FirmwareUpdateCheckResult,
     ) {
         logger.d { "beginFirmwareUpdate" }
-
-        val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
-        require(totalBytes > 0) { "Firmware size is 0" }
-        performSafetyChecks(pbzFw)
-        val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
-        if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
-            error("Failed to start firmware update: $result")
+        try {
+            val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
+            require(totalBytes > 0) { "Firmware size is 0" }
+            performSafetyChecks(pbzFw)
+            val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
+            if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
+                error("Failed to start firmware update: $result")
+            }
+            sendFirmwareParts(pbzFw, offset, update)
+            logger.d { "Firmware update completed, waiting for reboot" }
+            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
+            systemService.sendFirmwareUpdateComplete()
+        } catch (e: IllegalArgumentException) {
+            logger.e(e) { "Firmware update failed: ${e.message}" }
+        } catch (e: PutBytesService.PutBytesException) {
+            logger.e(e) { "Firmware update failed: ${e.message}" }
+        } catch (e: FirmwareUpdateException) {
+            logger.e(e) { "Firmware update failed: ${e.message}" }
+        } catch (e: IllegalStateException) {
+            logger.e(e) { "Firmware update failed: ${e.message}" }
+        } finally {
+            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle
         }
-        sendFirmwareParts(pbzFw, offset, update)
-        logger.d { "Firmware update completed, waiting for reboot" }
-        _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
-        systemService.sendFirmwareUpdateComplete()
     }
 
     private fun sendFirmware(

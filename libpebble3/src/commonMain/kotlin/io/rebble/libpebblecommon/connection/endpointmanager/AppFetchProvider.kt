@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.packets.AppFetchRequest
 import io.rebble.libpebblecommon.packets.AppFetchResponseStatus
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.PutBytesService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.channels.consumeEach
@@ -47,7 +48,15 @@ class AppFetchProvider(
                         }
                         // Remove PKJS cached file, so we get an updated version if there is one
                         pbwCache.clearPKJSFileForApp(uuid)
-                        sendApp(app, appId, watchType)
+                        try {
+                            sendApp(app, appId, watchType)
+                        } catch (e: IllegalArgumentException) {
+                            logger.e(e) { "App install failed: ${e.message}" }
+                        } catch (e: PutBytesService.PutBytesException) {
+                            logger.e(e) { "App install failed: ${e.message}" }
+                        } catch (e: IllegalStateException) {
+                            logger.e(e) { "App install failed: ${e.message}" }
+                        }
                     }
                 }
             }

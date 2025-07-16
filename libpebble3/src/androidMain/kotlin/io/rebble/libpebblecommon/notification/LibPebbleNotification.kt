@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction.ActionType
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -65,9 +66,12 @@ data class LibPebbleNotification(
                     notificationConfig = notificationConfig,
                 )
             }
+            val replyActions = actions.filter { it.type == ActionType.Reply }
+            val nonReplyActions = actions.filterNot { it.type == ActionType.Reply }
             return buildList {
                 dismissAction?.let { add(it) }
-                addAll(actions)
+                addAll(replyActions)
+                addAll(nonReplyActions)
                 contentAction?.let { add(it) }
                 muteAction?.let { add(it) }
                 muteChannelAction?.let { add(it) }

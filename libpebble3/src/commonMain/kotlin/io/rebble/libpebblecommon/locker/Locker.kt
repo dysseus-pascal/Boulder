@@ -20,10 +20,14 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModel
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.io.IOException
@@ -50,9 +54,7 @@ class Locker(
         private val logger = Logger.withTag(Locker::class.simpleName!!)
     }
 
-    override suspend fun sideloadApp(pbwPath: Path) {
-        sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
-    }
+    override suspend fun sideloadApp(pbwPath: Path): Boolean = sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
 
     override fun getLocker(): Flow<List<LockerWrapper>> = lockerEntryDao.getAllFlow()
         .map { entries ->
@@ -134,18 +136,37 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean) {
+    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val lockerEntry = pbwApp.toLockerEntry(clock.now())
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, it)
         }
-
-        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimit)
-        if (loadOnWatch) {
-            watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
-                it.launchApp(lockerEntry.id)
+        val tasks = if (loadOnWatch) {
+            watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
+                libPebbleCoroutineScope.async {
+                    val entryStatus = lockerEntryDao.existsOnWatch(
+                        it.transport.identifier.asString,
+                        lockerEntry.id
+                    ).drop(1).first()
+                    if (entryStatus) {
+                        logger.d { "App synced, launching" }
+                        it.launchApp(lockerEntry.id)
+                    }
+                }
             }
+        } else {
+            null
+        }
+        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimit)
+        return try {
+            withTimeout(15.seconds) {
+                tasks?.awaitAll()
+                true
+            }
+        } catch (e: TimeoutCancellationException) {
+            logger.w { "Timeout while waiting for app to sync+launch on watches" }
+            false
         }
     }
 }

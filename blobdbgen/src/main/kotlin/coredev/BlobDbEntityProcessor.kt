@@ -332,6 +332,37 @@ class BlobDbEntityProcessor(
                     .build()
             )
             daoBuilder.addFunction(
+                FunSpec.builder("existsOnWatch")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .addParameter("transport", STRING)
+                    .addParameter("item", entityTypeName)
+                    .returns(ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(BOOLEAN))
+                    .addStatement("return existsOnWatch(transport, item.record.$primaryKey)")
+                    .build()
+            )
+            daoBuilder.addFunction(
+                FunSpec.builder("existsOnWatch")
+                    .addModifiers(KModifier.ABSTRACT)
+                    .addParameter("transport", STRING)
+                    .addParameter("primaryKey", primaryKeyField.type.resolve().toClassName())
+                    .returns(ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(BOOLEAN))
+                    .addAnnotation(
+                        AnnotationSpec.builder(ClassName("androidx.room", "Query"))
+                            .addMember(
+                                "value = %S",
+                                """
+                            SELECT EXISTS (
+                                SELECT 1
+                                FROM $syncEntityClassName s
+                                WHERE s.recordId = :primaryKey
+                                AND s.transport = :transport
+                            )
+                            """.trimIndent()
+                            ).build()
+                    )
+                    .build()
+            )
+            daoBuilder.addFunction(
                 FunSpec.builder("insertOrReplace")
                     .addModifiers(KModifier.SUSPEND)
                     .addParameter("item", classDeclaration.toClassName())

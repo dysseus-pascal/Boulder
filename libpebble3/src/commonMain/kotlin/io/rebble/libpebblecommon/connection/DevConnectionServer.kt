@@ -10,6 +10,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.utils.io.core.writeFully
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
@@ -18,7 +19,10 @@ import io.ktor.websocket.send
 import io.rebble.libpebblecommon.structmapper.SByte
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +32,12 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+
+internal expect fun getTempPbwPath(): Path
 
 class DevConnectionServer(private val libPebble: LibPebble) {
     companion object {
@@ -83,10 +93,19 @@ class DevConnectionServer(private val libPebble: LibPebble) {
                                                     device.sendPPMessage(payload)
                                                 }
                                                 ClientMessageType.InstallBundle -> {
-                                                    logger.d { "Received InstallBundle" }
-                                                    val message = "Mobile app currently doesn't support operation."
-                                                    send(PhoneAppLogMessage(message))
-                                                    close(CloseReason(CloseReason.Codes.INTERNAL_ERROR, message))
+                                                    val path = getTempPbwPath()
+                                                    logger.d { "Received InstallBundle message with payload size ${payload.size}, saving to $path" }
+                                                    try {
+                                                        withContext(Dispatchers.IO) {
+                                                            SystemFileSystem.sink(path).buffered().use {
+                                                                it.writeFully(payload)
+                                                            }
+                                                        }
+                                                        send(InstallStatusMessage(libPebble.sideloadApp(path)))
+                                                    } catch (e: Exception) {
+                                                        logger.e(e) { "Failed to save/install bundle: ${e.message}" }
+                                                        send(InstallStatusMessage(false))
+                                                    }
                                                 }
                                                 // Handle other message types as needed
                                                 ClientMessageType.TimelinePin -> {
@@ -143,6 +162,13 @@ private class PhoneAppLogMessage(
 ): StructMappable() {
     val type = SByte(m, ServerMessageType.PhoneAppLog.value)
     val message = SFixedString(m, message.length, message)
+}
+
+private class InstallStatusMessage(
+    success: Boolean
+): StructMappable() {
+    val type = SByte(m, ServerMessageType.InstallStatus.value)
+    val status = SUInt(m, if (success) 0u else 1u)
 }
 
 private enum class ClientMessageType(val value: Byte) {

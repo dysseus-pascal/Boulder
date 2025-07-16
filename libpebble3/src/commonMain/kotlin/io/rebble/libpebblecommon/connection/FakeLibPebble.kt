@@ -118,8 +118,9 @@ class FakeLibPebble : LibPebble {
     }
 
     // LockerApi interface
-    override suspend fun sideloadApp(pbwPath: Path) {
+    override suspend fun sideloadApp(pbwPath: Path): Boolean {
         // No-op
+        return true
     }
 
     val locker = MutableStateFlow(fakeLockerEntries())

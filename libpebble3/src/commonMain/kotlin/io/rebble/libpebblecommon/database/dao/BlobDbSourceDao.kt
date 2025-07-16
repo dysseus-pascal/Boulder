@@ -2,13 +2,11 @@ package io.rebble.libpebblecommon.database.dao
 
 import androidx.room.Upsert
 import coredev.BlobDatabase
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
-import kotlin.time.Duration
 
 interface BlobDbDao<T : BlobDbRecord> {
     // Compiler will choke on these methods unless they are overridden in each Dao
@@ -24,6 +22,7 @@ interface BlobDbDao<T : BlobDbRecord> {
         item: T,
         hashcode: Int,
     )
+    fun existsOnWatch(transport: String, item: T): Flow<Boolean>
     fun databaseId(): BlobDatabase
     @Upsert
     suspend fun insertOrReplace(item: T)

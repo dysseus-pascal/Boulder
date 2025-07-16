@@ -115,7 +115,10 @@ interface RequestSync {
 }
 
 interface LockerApi {
-    suspend fun sideloadApp(pbwPath: Path)
+    /**
+     * @return true if the app was successfully synced and launched on all connected watches.
+     */
+    suspend fun sideloadApp(pbwPath: Path): Boolean
     fun getLocker(): Flow<List<LockerWrapper>>
     suspend fun setAppOrder(id: Uuid, order: Int)
 }

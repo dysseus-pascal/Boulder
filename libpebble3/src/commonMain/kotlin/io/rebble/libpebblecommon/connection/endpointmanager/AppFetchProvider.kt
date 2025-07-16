@@ -73,6 +73,7 @@ class AppFetchProvider(
         val manifest = app.getManifest(variant)
         val binary = app.getBinaryFor(variant)
         val resources = app.getResourcesFor(variant)
+        val worker = app.getWorkerFor(variant)
         putBytesSession.currentSession.filter { it == null }.first()
         putBytesSession.beginAppSession(appId, manifest.application.size.toUInt(), ObjectType.APP_EXECUTABLE, binary)
             .flowOn(Dispatchers.IO)
@@ -82,7 +83,7 @@ class AppFetchProvider(
                         logger.d { "Opened PutBytes session for binary ${it.cookie}" }
                     }
                     is PutBytesSession.SessionState.Sending -> {
-                        logger.d { "PutBytes progress: ${((it.totalSent.toFloat()/manifest.application.size)*100).roundToInt()}%" }
+                        logger.d { "PutBytes app progress: ${((it.totalSent.toFloat()/manifest.application.size)*100).roundToInt()}%" }
                     }
 
                     is PutBytesSession.SessionState.Finished -> Unit
@@ -98,13 +99,30 @@ class AppFetchProvider(
                             logger.d { "Opened PutBytes session for resources ${it.cookie}" }
                         }
                         is PutBytesSession.SessionState.Sending -> {
-                            logger.d { "PutBytes progress: ${((it.totalSent.toFloat()/manifest.resources.size)*100).roundToInt()}%" }
+                            logger.d { "PutBytes app resources progress: ${((it.totalSent.toFloat()/manifest.resources.size)*100).roundToInt()}%" }
                         }
 
                         is PutBytesSession.SessionState.Finished -> Unit
                     }
                 }
             logger.d { "Resources sent" }
+        }
+        if (worker != null) {
+            putBytesSession.beginAppSession(appId, manifest.worker!!.size.toUInt(), ObjectType.WORKER, worker)
+                .flowOn(Dispatchers.IO)
+                .collect {
+                    when (it) {
+                        is PutBytesSession.SessionState.Open -> {
+                            logger.d { "Opened PutBytes session for worker ${it.cookie}" }
+                        }
+                        is PutBytesSession.SessionState.Sending -> {
+                            logger.d { "PutBytes worker progress: ${((it.totalSent.toFloat()/manifest.worker.size)*100).roundToInt()}%" }
+                        }
+
+                        is PutBytesSession.SessionState.Finished -> Unit
+                    }
+                }
+            logger.d { "Worker sent" }
         }
     }
 }

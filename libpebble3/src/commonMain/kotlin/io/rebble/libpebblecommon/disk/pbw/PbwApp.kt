@@ -37,6 +37,10 @@ class PbwApp(private val path: Path) {
             PbwBinHeader.parseFileHeader(source.readByteArray(PbwBinHeader.SIZE).asUByteArray())
         }
     }
+    fun getWorkerFor(watchType: WatchType): Source? {
+        val filename = getManifest(watchType).worker ?: return null
+        return requirePbwBinaryBlob(path, watchType, filename.name)
+    }
     fun getPKJSFile(): Source {
         return requirePbwPKJSFile(path)
     }

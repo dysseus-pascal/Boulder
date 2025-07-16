@@ -67,10 +67,10 @@ data class LibPebbleNotification(
             }
             return buildList {
                 dismissAction?.let { add(it) }
+                addAll(actions)
+                contentAction?.let { add(it) }
                 muteAction?.let { add(it) }
                 muteChannelAction?.let { add(it) }
-                contentAction?.let { add(it) }
-                addAll(actions)
             }
         }
     }

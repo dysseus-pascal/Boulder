@@ -114,9 +114,9 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
 )
 
 private data class CombinedState(
-    val watches: Map<Transport, Watch>,
-    val active: Map<Transport, ActivePebbleState>,
-    val previousActive: Map<Transport, ActivePebbleState>,
+    val watches: Map<PebbleIdentifier, Watch>,
+    val active: Map<PebbleIdentifier, ActivePebbleState>,
+    val previousActive: Map<PebbleIdentifier, ActivePebbleState>,
     val btstate: BluetoothState,
 )
 
@@ -134,7 +134,7 @@ class WatchManager(
     private val blePlatformConfig: BlePlatformConfig,
 ) : WatchConnector {
     private val logger = Logger.withTag("WatchManager")
-    private val allWatches = MutableStateFlow<Map<Transport, Watch>>(emptyMap())
+    private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
     private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
     val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
     private val activeConnections = mutableSetOf<Transport>()
@@ -147,7 +147,7 @@ class WatchManager(
 
     private suspend fun loadKnownWatchesFromDb() {
         allWatches.value = knownWatchDao.knownWatches().associate {
-            it.transport() to Watch(
+            it.transport().identifier to Watch(
                 transport = it.transport(),
                 scanResult = null,
                 connectGoal = it.connectGoal,
@@ -200,17 +200,17 @@ class WatchManager(
                 watches.values.mapNotNull { device ->
                     val transport = device.transport
                     val states = CurrentAndPreviousState(
-                        previousState = previousActive[transport],
-                        currentState = active[transport],
+                        previousState = previousActive[transport.identifier],
+                        currentState = active[transport.identifier],
                     )
                     val hasConnectionAttempt =
-                        active.containsKey(device.transport) || activeConnections.contains(device.transport)
+                        active.containsKey(device.transport.identifier) || activeConnections.contains(device.transport)
 
                     persistIfNeeded(device)
                     // Removed forgotten device once it is disconnected
                     if (!hasConnectionAttempt && device.forget) {
                         logger.d("removing ${device.transport} from allWatches")
-                        allWatches.update { it.minus(device.transport) }
+                        allWatches.update { it.minus(device.transport.identifier) }
                         return@mapNotNull null
                     }
 
@@ -229,7 +229,7 @@ class WatchManager(
                         disconnectFrom(device.transport)
                     }
 
-                    val firmwareUpdateAvailable = active[transport]?.firmwareUpdateAvailable
+                    val firmwareUpdateAvailable = active[transport.identifier]?.firmwareUpdateAvailable
                     if (firmwareUpdateAvailable != device.firmwareUpdateAvailable) {
                         updateWatch(transport) {
                             it.copy(firmwareUpdateAvailable = firmwareUpdateAvailable)
@@ -287,10 +287,10 @@ class WatchManager(
         val transport = scanResult.transport
         allWatches.update { devices ->
             val mutableDevices = devices.toMutableMap()
-            val existing = devices[transport]
+            val existing = devices[transport.identifier]
             if (existing == null) {
                 mutableDevices.put(
-                    transport, Watch(
+                    transport.identifier, Watch(
                         transport = transport,
                         scanResult = scanResult,
                         connectGoal = false,
@@ -303,7 +303,7 @@ class WatchManager(
                     )
                 )
             } else {
-                mutableDevices.put(transport, existing.copy(scanResult = scanResult))
+                mutableDevices.put(transport.identifier, existing.copy(scanResult = scanResult))
             }
             mutableDevices
         }
@@ -315,13 +315,13 @@ class WatchManager(
      */
     private fun updateWatch(transport: Transport, mutation: (Watch) -> Watch?) {
         allWatches.update { watches ->
-            val device = watches[transport]
+            val device = watches[transport.identifier]
             if (device == null) {
                 logger.w("couldn't mutate device $transport - not found")
                 return@update watches
             }
             val mutated = mutation(device) ?: return@update watches
-            watches.plus(transport to mutated)
+            watches.plus(transport.identifier to mutated)
         }
     }
 
@@ -338,7 +338,7 @@ class WatchManager(
             }
             allWatches.update { watches ->
                 watches.mapValues { entry ->
-                    if (entry.key == transport) {
+                    if (entry.key == transport.identifier) {
                         entry.value.copy(connectGoal = true)
                     } else {
                         if (watchConfig.value.multipleConnectedWatchesSupported) {
@@ -386,7 +386,7 @@ class WatchManager(
                 caughtException = true
                 // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
                 //  bad FW version) by not attempting to endlessly reconnect.
-                val connection = allWatches.value[transport]?.activeConnection
+                val connection = allWatches.value[transport.identifier]?.activeConnection
                 connection?.let {
                     libPebbleCoroutineScope.launch {
                         connection.cleanup()
@@ -485,7 +485,7 @@ class WatchManager(
 
     private fun disconnectFrom(transport: Transport) {
         logger.d("disconnectFrom: $transport")
-        val activeConnection = allWatches.value[transport]?.activeConnection
+        val activeConnection = allWatches.value[transport.identifier]?.activeConnection
         if (activeConnection == null) {
             Logger.d("disconnectFrom / not an active device")
             return
@@ -535,7 +535,7 @@ data class ActivePebbleState(
     val firmwareUpdateStatus: FirmwareUpdateStatus,
 )
 
-private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transport, ActivePebbleState>> {
+private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map<PebbleIdentifier, ActivePebbleState>> {
     return flatMapLatest { map ->
         val listOfInnerFlows: List<Flow<ActivePebbleState>> =
             map.values.mapNotNull { watchValue ->
@@ -556,7 +556,7 @@ private fun StateFlow<Map<Transport, Watch>>.flowOfAllDevices(): Flow<Map<Transp
             flowOf(emptyMap())
         } else {
             combine(listOfInnerFlows) { innerValues ->
-                innerValues.associateBy { it.connectingPebbleState.transport }
+                innerValues.associateBy { it.connectingPebbleState.transport.identifier }
             }
         }
     }

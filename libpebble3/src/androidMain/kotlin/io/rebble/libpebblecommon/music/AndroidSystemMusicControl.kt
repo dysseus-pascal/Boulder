@@ -30,6 +30,23 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Duration.Companion.milliseconds
 
+private fun createTrack(metadata: MediaMetadata): MusicTrack {
+    return MusicTrack(
+        title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE),
+        artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST),
+        album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM),
+        length = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION).milliseconds,
+        trackNumber = metadata.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER).toInt()
+            .takeIf {
+                it > 0
+            },
+        totalTracks = metadata.getLong(MediaMetadata.METADATA_KEY_NUM_TRACKS).toInt()
+            .takeIf {
+                it > 0
+            }
+    )
+}
+
 class AndroidSystemMusicControl(
     appContext: AppContext,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -99,22 +116,6 @@ class AndroidSystemMusicControl(
 
     override val playbackState: StateFlow<PlaybackStatus?> = targetSession.flatMapLatest { session ->
         callbackFlow {
-            fun createTrack(metadata: MediaMetadata): MusicTrack {
-                return MusicTrack(
-                    title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE),
-                    artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST),
-                    album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM),
-                    length = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION).milliseconds,
-                    trackNumber = metadata.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER).toInt()
-                        .takeIf {
-                            it > 0
-                        },
-                    totalTracks = metadata.getLong(MediaMetadata.METADATA_KEY_NUM_TRACKS).toInt()
-                        .takeIf {
-                            it > 0
-                        }
-                )
-            }
             var lastState = PlaybackStatus(
                 playbackState = session?.playbackState?.toLibPebbleState()
                     ?: io.rebble.libpebblecommon.music.PlaybackState.Paused,
@@ -128,7 +129,8 @@ class AndroidSystemMusicControl(
             val listener = object : MediaController.Callback() {
                 override fun onMetadataChanged(metadata: MediaMetadata?) {
                     lastState = lastState.copy(
-                        currentTrack = metadata?.let { createTrack(it) }
+                        currentTrack = metadata?.let { createTrack(it) },
+                        playbackPosition = 0L
                     )
                     trySend(lastState)
                 }

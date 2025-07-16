@@ -8,8 +8,11 @@ import io.rebble.libpebblecommon.music.PlaybackStatus
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.services.MusicService
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlin.math.absoluteValue
 import kotlin.time.Duration
 
 class MusicControlManager(
@@ -51,16 +54,41 @@ class MusicControlManager(
                 repeatType = status?.repeat ?: RepeatType.Off
             )
         }.launchIn(watchScope)
-        systemMusicControl.playerInfo.onEach { playerInfo ->
+        systemMusicControl.playerInfo.debounce(50).onEach { playerInfo ->
             logger.d { "Player info updated: $playerInfo" }
             musicControlService.updatePlayerInfo(
                 packageId = playerInfo?.packageId ?: "",
                 name = playerInfo?.name ?: ""
             )
-        }
-        systemMusicControl.playbackState.onEach { status ->
-            status?.currentTrack?.let { musicControlService.updateTrack(it) }
+        }.launchIn(watchScope)
+        systemMusicControl.playbackState.debounce(50).distinctUntilChanged { a, b ->
+            return@distinctUntilChanged when {
+                a == b -> true // No change in playback state
+                a == null && b != null -> false // Transition from no playback state to a valid one
+                a != null && b == null -> false // Transition from a valid playback state to no playback state
+                a?.playbackState != b?.playbackState ||
+                        // Check changes in current track without checking album as we don't use it (and it sometimes changes afterwards)
+                        a?.currentTrack?.title != b?.currentTrack?.title ||
+                        a?.currentTrack?.artist != b?.currentTrack?.artist ||
+                        a?.currentTrack?.length != b?.currentTrack?.length ||
+                        a?.shuffle != b?.shuffle ||
+                        a?.repeat != b?.repeat ||
+                        a?.playbackRate != b?.playbackRate -> false // Change of meaningful playback state
+                a?.playbackPosition != null && b?.playbackPosition != null &&
+                        (b.playbackPosition - a.playbackPosition).absoluteValue >= 200 -> false // Significant change in playback position
+                else -> {
+                    // No significant change, treat as unchanged
+                    logger.d { "Playback state not significantly changed: ${a?.playbackState} ${a?.playbackPosition}" }
+                    true
+                }
+            }
+        }.onEach { status ->
             if (status == lastPlaybackStatus) return@onEach
+            logger.d {
+                "Playback state changed: ${status?.playbackState} ${status?.playbackPosition} " +
+                        "(${status?.currentTrack?.title ?: "No Track"})"
+            }
+            status?.currentTrack?.let { musicControlService.updateTrack(it) }
             musicControlService.updateVolumeInfo(100u) // TODO: Update with actual volume info if available
             status?.let {
                 musicControlService.updatePlaybackState(

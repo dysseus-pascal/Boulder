@@ -36,12 +36,17 @@ class IosSystemCalendar(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : SystemCalendar {
     private val logger = Logger.withTag("IosSystemCalendar")
+    private var _eventStore: EKEventStore? = null
 
     private suspend fun eventStore(): EKEventStore? {
+        if (_eventStore != null) {
+            return _eventStore
+        }
         val es = EKEventStore()
         val deferred = CompletableDeferred<EKEventStore?>()
         es.requestFullAccessToEventsWithCompletion { granted, error ->
             if (granted) {
+                _eventStore = es
                 deferred.complete(es)
             } else {
                 logger.e { "error getting ios calendar access: $error" }
@@ -144,7 +149,7 @@ class IosSystemCalendar(
     }
 
     override fun hasPermission(): Boolean {
-        return true
+        return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == platform.EventKit.EKAuthorizationStatusAuthorized
     }
 }
 

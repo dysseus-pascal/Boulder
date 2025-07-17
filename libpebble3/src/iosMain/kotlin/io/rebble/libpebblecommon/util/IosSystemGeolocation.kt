@@ -67,7 +67,11 @@ class IosSystemGeolocation: SystemGeolocation {
                             GeolocationPositionResult.Success(
                                 timestamp = Instant.fromEpochMilliseconds((location.timestamp.timeIntervalSince1970 * 1000).toLong()),
                                 latitude = latitude,
-                                longitude = longitude
+                                longitude = longitude,
+                                accuracy = location.horizontalAccuracy,
+                                altitude = location.altitude,
+                                heading = location.course,
+                                speed = location.speed,
                             )
                         )
                     }

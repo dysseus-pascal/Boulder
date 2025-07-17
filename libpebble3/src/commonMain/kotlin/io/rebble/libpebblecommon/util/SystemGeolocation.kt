@@ -5,7 +5,15 @@ import kotlinx.datetime.Instant
 import kotlin.time.Duration.Companion.seconds
 
 sealed class GeolocationPositionResult {
-    data class Success(val timestamp: Instant, val latitude: Double, val longitude: Double) : GeolocationPositionResult()
+    data class Success(
+        val timestamp: Instant,
+        val latitude: Double,
+        val longitude: Double,
+        val accuracy: Double,
+        val altitude: Double,
+        val heading: Double,
+        val speed: Double
+    ) : GeolocationPositionResult()
     data class Error(val message: String) : GeolocationPositionResult()
 }
 

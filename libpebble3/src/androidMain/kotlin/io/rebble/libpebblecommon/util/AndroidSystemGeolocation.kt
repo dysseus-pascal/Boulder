@@ -42,7 +42,11 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                     GeolocationPositionResult.Success(
                         timestamp = Instant.fromEpochMilliseconds(location.time),
                         latitude = location.latitude,
-                        longitude = location.longitude
+                        longitude = location.longitude,
+                        accuracy = location.accuracy.toDouble(),
+                        altitude = location.altitude,
+                        heading = location.bearing.toDouble(),
+                        speed = location.speed.toDouble()
                     )
                 )
             }
@@ -114,7 +118,11 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 GeolocationPositionResult.Success(
                     timestamp = Instant.fromEpochMilliseconds(location.time),
                     latitude = location.latitude,
-                    longitude = location.longitude
+                    longitude = location.longitude,
+                    accuracy = location.accuracy.toDouble(),
+                    altitude = location.altitude,
+                    heading = location.bearing.toDouble(),
+                    speed = location.speed.toDouble()
                 )
             } else {
                 GeolocationPositionResult.Error("Location not available")

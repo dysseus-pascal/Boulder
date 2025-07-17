@@ -11,11 +11,11 @@ _global.navigator = _global.navigator || {};
 _global._PebbleGeoCB = {
     _requestCallbacks: new Map(),
     _watchCallbacks: new Map(),
-    _resultGetSuccess: (id, latitude, longitude) => {
+    _resultGetSuccess: (id, latitude, longitude, accuracy, altitude, heading, speed) => {
         const callback = _PebbleGeoCB._requestCallbacks.get(id);
         if (callback && callback.success) {
             _PebbleGeoCB._requestCallbacks.delete(id);
-            callback.success({ coords: { latitude, longitude } });
+            callback.success({ coords: { latitude, longitude, accuracy, altitude, heading, speed } });
         }
     },
     _resultGetError: (id, message) => {
@@ -25,10 +25,10 @@ _global._PebbleGeoCB = {
             callback.error({ message, code: 1 });
         }
     },
-    _resultWatchSuccess: (id, latitude, longitude) => {
+    _resultWatchSuccess: (id, latitude, longitude, accuracy, altitude, heading, speed) => {
         const callback = _PebbleGeoCB._watchCallbacks.get(id);
         if (callback && callback.success) {
-            callback.success({ coords: { latitude, longitude } });
+            callback.success({ coords: { latitude, longitude, accuracy, altitude, heading, speed } });
         }
     },
     _resultWatchError: (id, message) => {

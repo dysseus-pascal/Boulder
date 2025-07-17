@@ -46,7 +46,7 @@ abstract class GeolocationInterface(
         when (result) {
             is GeolocationPositionResult.Success -> {
                 Logger.i { "Geolocation get position success" }
-                jsRunner.eval("_PebbleGeoCB._resultGetSuccess($id, ${result.latitude}, ${result.longitude})")
+                jsRunner.eval("_PebbleGeoCB._resultGetSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
             }
             is GeolocationPositionResult.Error -> {
                 Logger.w { "Geolocation get position error: ${result.message}" }
@@ -58,7 +58,7 @@ abstract class GeolocationInterface(
     private suspend fun triggerPositionResultWatch(id: Int, result: GeolocationPositionResult) {
         when (result) {
             is GeolocationPositionResult.Success -> {
-                jsRunner.eval("_PebbleGeoCB._resultWatchSuccess($id, ${result.latitude}, ${result.longitude})")
+                jsRunner.eval("_PebbleGeoCB._resultWatchSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
             }
             is GeolocationPositionResult.Error -> {
                 jsRunner.eval("_PebbleGeoCB._resultWatchError($id, ${result.message.quote()})")

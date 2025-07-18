@@ -8,3 +8,5 @@ enum class PlaybackState(val protocolValue: MusicControl.PlaybackState) {
     Buffering(MusicControl.PlaybackState.Playing),
     Error(MusicControl.PlaybackState.Paused),
 }
+
+fun PlaybackState.isActive(): Boolean = this == PlaybackState.Playing || this == PlaybackState.Buffering

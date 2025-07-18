@@ -12,7 +12,6 @@ interface SystemMusicControl {
     fun volumeDown()
     fun volumeUp()
     val playbackState: StateFlow<PlaybackStatus?>
-    val playerInfo: StateFlow<PlayerInfo?>
 }
 
 data class PlayerInfo(
@@ -21,10 +20,12 @@ data class PlayerInfo(
 )
 
 data class PlaybackStatus(
+    val playerInfo: PlayerInfo?,
     val playbackState: PlaybackState,
     val currentTrack: MusicTrack? = null,
-    val playbackPosition: Long, // Position in milliseconds
+    val playbackPositionMs: Long, // Position in milliseconds
     val playbackRate: Float, // Playback rate, 1.0 is normal speed
     val shuffle: Boolean,
-    val repeat: RepeatType
+    val repeat: RepeatType,
+    val volume: Int,
 )

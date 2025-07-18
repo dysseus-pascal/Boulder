@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.music
 
 import io.rebble.libpebblecommon.music.PlaybackStatus
-import io.rebble.libpebblecommon.music.PlayerInfo
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,5 +36,4 @@ class IosSystemMusicControl : SystemMusicControl {
     }
 
     override val playbackState: StateFlow<PlaybackStatus?> = MutableStateFlow(null).asStateFlow()
-    override val playerInfo: StateFlow<PlayerInfo?> = MutableStateFlow(null).asStateFlow()
 }

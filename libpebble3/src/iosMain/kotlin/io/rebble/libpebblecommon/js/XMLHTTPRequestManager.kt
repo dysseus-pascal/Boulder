@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import platform.Foundation.NSNull
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 
@@ -77,6 +78,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             is ByteArray -> data
             is String -> data.encodeToByteArray()
             null -> null
+            NSNull -> null
             else -> {
                 logger.e { "Invalid data type for send: ${data::class.simpleName}" }
                 null

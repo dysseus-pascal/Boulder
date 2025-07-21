@@ -27,8 +27,10 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -132,16 +134,18 @@ class WatchManager(
     private val watchConfig: WatchConfigFlow,
     private val clock: Clock,
     private val blePlatformConfig: BlePlatformConfig,
-) : WatchConnector {
+) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
     private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
-    val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
+    override val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
+    private val _connectionEvents = MutableSharedFlow<PebbleConnectionEvent>(extraBufferCapacity = 5)
+    override val connectionEvents: Flow<PebbleConnectionEvent> = _connectionEvents.asSharedFlow()
     private val activeConnections = mutableSetOf<Transport>()
     private var connectionNum = 0
     private val timeInitialized = clock.now()
 
-    fun debugState(): String = "allWatches=${allWatches.value.entries.joinToString("\n")}\n" +
+    override fun watchesDebugState(): String = "allWatches=${allWatches.value.entries.joinToString("\n")}\n" +
             "activeConnections=$activeConnections\n" +
             "btState=${bluetoothStateProvider.state.value}"
 
@@ -236,6 +240,19 @@ class WatchManager(
                         }
                     }
 
+                    val pebbleDevice = pebbleDeviceFactory.create(
+                        transport = transport,
+                        state = states.currentState?.connectingPebbleState,
+                        watchConnector = this@WatchManager,
+                        scanResult = device.scanResult,
+                        knownWatchProperties = device.knownWatchProps,
+                        connectGoal = device.connectGoal,
+                        firmwareUpdateAvailable = device.firmwareUpdateAvailable,
+                        firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
+                        bluetoothState = btstate,
+                        lastFirmwareUpdateState = device.lastFirmwareUpdateState,
+                    )
+
                     // Update persisted props after connection
                     logger.v { "states=$states" }
                     // Watch just connected
@@ -252,6 +269,13 @@ class WatchManager(
                         if (device.scanResult != null) {
                             clearScanResults()
                         }
+
+                        val connectedDevice = pebbleDevice as? CommonConnectedDevice
+                        if (connectedDevice == null) {
+                            logger.w { "$pebbleDevice isn't a CommonConnectedDevice" }
+                        } else {
+                            _connectionEvents.emit(PebbleConnectionEvent.PebbleConnectedEvent(connectedDevice))
+                        }
                     }
                     // Watch just disconnected
                     if (states.currentState?.connectingPebbleState !is ConnectingPebbleState.Connected
@@ -262,19 +286,10 @@ class WatchManager(
                                 it.copy(lastFirmwareUpdateState = lastFwupState)
                             }
                         }
+
+                        _connectionEvents.emit(PebbleConnectionEvent.PebbleDisconnectedEvent(device.transport))
                     }
-                    pebbleDeviceFactory.create(
-                        transport = transport,
-                        state = states.currentState?.connectingPebbleState,
-                        watchConnector = this@WatchManager,
-                        scanResult = device.scanResult,
-                        knownWatchProperties = device.knownWatchProps,
-                        connectGoal = device.connectGoal,
-                        firmwareUpdateAvailable = device.firmwareUpdateAvailable,
-                        firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
-                        bluetoothState = btstate,
-                        lastFirmwareUpdateState = device.lastFirmwareUpdateState,
-                    )
+                    pebbleDevice
                 }
             }.collect {
                 _watches.value = it.also { logger.v("watches: $it") }

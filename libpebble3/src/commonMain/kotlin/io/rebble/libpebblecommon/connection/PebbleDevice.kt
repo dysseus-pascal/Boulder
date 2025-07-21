@@ -63,13 +63,26 @@ interface ConnectedWatchInfo {
     val watchInfo: WatchInfo
 }
 
-interface ConnectedPebbleDeviceInRecovery :
-    KnownPebbleDevice,
+interface CommonConnectedDevice : KnownPebbleDevice,
     ActiveDevice,
     ConnectedPebble.Firmware,
     ConnectedWatchInfo,
     ConnectedPebble.Logs,
     ConnectedPebble.CoreDump
+
+interface ConnectedPebbleDeviceInRecovery : CommonConnectedDevice
+
+sealed interface ConnectedPebbleDevice :
+    CommonConnectedDevice,
+    KnownPebbleDevice,
+    ConnectedPebble.Debug,
+    ConnectedPebble.Messages,
+    ConnectedPebble.AppRunState,
+    ConnectedPebble.Time,
+    ConnectedPebble.AppMessages,
+    ConnectedPebble.Music,
+    ConnectedPebble.PKJS,
+    ConnectedPebble.DevConnection
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -172,19 +185,3 @@ object ConnectedPebble {
         val coreDump: CoreDump,
     )
 }
-
-sealed interface ConnectedPebbleDevice :
-    KnownPebbleDevice,
-    ActiveDevice,
-    ConnectedPebble.Debug,
-    ConnectedPebble.Messages,
-    ConnectedPebble.Firmware,
-    ConnectedPebble.AppRunState,
-    ConnectedWatchInfo,
-    ConnectedPebble.Time,
-    ConnectedPebble.AppMessages,
-    ConnectedPebble.Logs,
-    ConnectedPebble.CoreDump,
-    ConnectedPebble.Music,
-    ConnectedPebble.PKJS,
-    ConnectedPebble.DevConnection

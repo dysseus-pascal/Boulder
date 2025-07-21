@@ -50,12 +50,15 @@ data class PlatformFlags(val flags: UInt)
 
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
+sealed class PebbleConnectionEvent {
+    data class PebbleConnectedEvent(val device: CommonConnectedDevice) : PebbleConnectionEvent()
+    data class PebbleDisconnectedEvent(val device: Transport) : PebbleConnectionEvent()
+}
+
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches {
     fun init()
 
-    val watches: PebbleDevices
-    fun watchesDebugState(): String
     val config: StateFlow<LibPebbleConfig>
     fun updateConfig(config: LibPebbleConfig)
 
@@ -75,6 +78,12 @@ data class OtherPebbleApp(
     val pkg: String,
     val name: String,
 )
+
+interface Watches {
+    val watches: PebbleDevices
+    val connectionEvents: Flow<PebbleConnectionEvent>
+    fun watchesDebugState(): String
+}
 
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
@@ -176,7 +185,7 @@ class LibPebble3(
     private val housekeeping: Housekeeping,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
-    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil {
+    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -199,9 +208,6 @@ class LibPebble3(
         }
         housekeeping.init()
     }
-
-    override val watches: StateFlow<List<PebbleDevice>> = watchManager.watches
-    override fun watchesDebugState(): String = watchManager.debugState()
 
     override val config: StateFlow<LibPebbleConfig> = libPebbleConfigFlow.config
 

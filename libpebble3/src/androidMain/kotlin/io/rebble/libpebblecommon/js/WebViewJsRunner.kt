@@ -31,7 +31,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStor
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -47,7 +47,7 @@ class WebViewJsRunner(
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
-    urlOpenRequests: MutableSharedFlow<String>,
+    urlOpenRequests: Channel<String>,
 
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context

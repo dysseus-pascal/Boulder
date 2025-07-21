@@ -11,16 +11,14 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -54,8 +52,7 @@ class PKJSApp(
     val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
-    private val _urlOpenRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val urlOpenRequests: Flow<String> = _urlOpenRequests.asSharedFlow()
+    private val urlOpenRequests = Channel<String>(Channel.RENDEZVOUS)
 
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {
@@ -97,8 +94,14 @@ class PKJSApp(
         }?.launchIn(scope) ?: error("JsRunner not initialized")
     }
 
-    suspend fun showConfiguration() {
+    suspend fun requestConfigurationUrl(): String? {
+        if (runningScope == null) {
+            logger.e { "Cannot show configuration, PKJSApp is not running" }
+            return null
+        }
+        val url = runningScope!!.async { urlOpenRequests.receive() }
         jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
+        return url.await()
     }
 
     private fun injectJsRunner(scope: CoroutineScope): JsRunner =
@@ -109,7 +112,7 @@ class PKJSApp(
                 appInfo,
                 lockerEntry,
                 jsPath,
-                _urlOpenRequests
+                urlOpenRequests
             )
         }
 

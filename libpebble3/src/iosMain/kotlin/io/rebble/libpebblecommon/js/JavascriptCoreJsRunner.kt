@@ -8,7 +8,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -29,7 +29,7 @@ class JavascriptCoreJsRunner(
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
-    urlOpenRequests: MutableSharedFlow<String>,
+    urlOpenRequests: Channel<String>,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null

@@ -316,19 +316,39 @@ class AndroidSystemCalendar(
                     return@use generateSequence {
                         if (cursor.moveToNext()) {
                             val id = cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
-                                ?.let { cursor.getLong(it) } ?: return@generateSequence null
+                                ?.let { cursor.getLong(it) }
+                            if (id == null) {
+                                logger.w("Calendar has no ID")
+                                return@generateSequence null
+                            }
                             val accountName =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
-                                    ?.let { cursor.getString(it) } ?: return@generateSequence null
+                                    ?.let { cursor.getString(it) }
+                            if (accountName == null) {
+                                logger.w("Calendar has no accountName")
+                                return@generateSequence null
+                            }
                             val displayName =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
-                                    ?.let { cursor.getString(it) } ?: return@generateSequence null
+                                    ?.let { cursor.getString(it) }
+                            if (displayName == null) {
+                                logger.w("Calendar has no displayName")
+                                return@generateSequence null
+                            }
                             val ownerAccount =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
-                                    ?.let { cursor.getString(it) } ?: return@generateSequence null
+                                    ?.let { cursor.getString(it) }
+                            if (ownerAccount == null) {
+                                logger.w("Calendar has no ownerAccount")
+                                return@generateSequence null
+                            }
                             val color =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_COLOR)
-                                    ?.let { cursor.getInt(it) } ?: return@generateSequence null
+                                    ?.let { cursor.getInt(it) }
+                            if (color == null) {
+                                logger.w("Calendar has no color")
+                                return@generateSequence null
+                            }
 
                             CalendarEntity(
                                 platformId = id.toString(),

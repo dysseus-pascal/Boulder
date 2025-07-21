@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.util.Endian
     windowBeforeSecs = -1,
     windowAfterSecs = -1,
     onlyInsertAfter = false,
+    sendDeletions = true,
 )
 data class WatchSettings(
     val id: String,

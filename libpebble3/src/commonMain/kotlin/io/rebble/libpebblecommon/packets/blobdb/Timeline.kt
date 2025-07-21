@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.packets.blobdb
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
@@ -196,7 +197,13 @@ class TimelineItem(
         /**
          * When set, quick view will be displayed on the watchface when event in progress.
          */
-        PERSIST_QUICK_VIEW(5);
+        PERSIST_QUICK_VIEW(5),
+
+        /**
+         * Marks a notification as read (dismisses if visible, and removes actions).
+         */
+        STATE_READ(12),
+        ;
 
         companion object {
             fun makeFlags(flags: List<Flag>): UShort {

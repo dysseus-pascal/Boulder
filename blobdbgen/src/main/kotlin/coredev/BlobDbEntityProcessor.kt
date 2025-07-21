@@ -230,14 +230,16 @@ class BlobDbEntityProcessor(
             )
             daoBuilder.addFunction(
                 FunSpec.builder("dirtyRecordsForWatchDelete")
-                    .addModifiers(KModifier.OVERRIDE, KModifier.ABSTRACT)
                     .addParameter("transport", STRING)
                     .addParameter("timestampMs", LONG)
-                    .addAnnotation(
-                        AnnotationSpec.builder(ClassName("androidx.room", "Query"))
-                            .addMember(
-                                "value = %S",
-                                """
+                    .apply {
+                        if (annotation.sendDeletions) {
+                            addModifiers(KModifier.OVERRIDE, KModifier.ABSTRACT)
+                            addAnnotation(
+                                AnnotationSpec.builder(ClassName("androidx.room", "Query"))
+                                    .addMember(
+                                        "value = %S",
+                                        """
                             SELECT e.*
                             FROM $entityClassName e
                             WHERE 
@@ -250,9 +252,16 @@ class BlobDbEntityProcessor(
                                     AND s.transport = :transport
                                 )
                             """.trimIndent()
+                                    )
+                                    .build()
                             )
-                            .build()
-                    )
+                        } else {
+                            // Deletions are always empty
+                            addModifiers(KModifier.OVERRIDE)
+                            addStatement("return flowOf(emptyList())")
+                        }
+
+                    }
                     .returns(flowOfListOfBlobDbRecord)
                     .build()
             )
@@ -263,6 +272,18 @@ class BlobDbEntityProcessor(
             } else {
                 // Because room fails to compile if we don't use the :timestampMs variable in the query
                 "OR :timestampMs != :timestampMs\n"
+            }
+            val andNotsyncedToWatchClause = if (annotation.sendDeletions) {
+                """
+                    AND
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM $syncEntityClassName s
+                        WHERE s.recordId = e.$primaryKey
+                    )
+                """.trimIndent()
+            } else {
+                ""
             }
             daoBuilder.addFunction(
                 FunSpec.builder("deleteStaleRecords")
@@ -280,12 +301,7 @@ class BlobDbEntityProcessor(
                                     e.deleted = 1
                                     $purgeSelectClause
                                 )
-                                AND
-                                NOT EXISTS (
-                                    SELECT 1
-                                    FROM $syncEntityClassName s
-                                    WHERE s.recordId = e.$primaryKey
-                                )
+                                $andNotsyncedToWatchClause
                             """.trimIndent()
                             )
                             .build()
@@ -476,6 +492,7 @@ class BlobDbEntityProcessor(
                 .addType(syncEntityBuilder.build())
                 .addType(daoBuilder.build())
                 .addImport("androidx.room", "ForeignKey")
+                .addImport("kotlinx.coroutines.flow", "flowOf")
                 .build()
             file.writeTo(codeGenerator, true)
         }

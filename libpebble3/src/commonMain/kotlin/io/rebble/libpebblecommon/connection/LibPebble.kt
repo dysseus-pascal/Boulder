@@ -16,11 +16,11 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverr
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
-import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
@@ -65,7 +65,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
     suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
-    suspend fun deleteNotification(itemId: Uuid)
+    suspend fun markNotificationRead(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
     suspend fun launchApp(uuid: Uuid)
     // ....
@@ -174,7 +174,7 @@ class LibPebble3(
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val notificationListenerConnection: NotificationListenerConnection,
     private val notificationApi: NotificationApi,
-    private val timelineNotificationsDao: TimelineNotificationDao,
+    private val timelineNotificationsDao: TimelineNotificationRealDao,
     private val actionOverrides: ActionOverrides,
     private val phoneCalendarSyncer: PhoneCalendarSyncer,
     private val missedCallSyncer: MissedCallSyncer,
@@ -223,8 +223,8 @@ class LibPebble3(
         actionHandlers?.let { actionOverrides.setActionHandlers(notification.itemId, actionHandlers) }
     }
 
-    override suspend fun deleteNotification(itemId: Uuid) {
-        timelineNotificationsDao.markForDeletion(itemId)
+    override suspend fun markNotificationRead(itemId: Uuid) {
+        timelineNotificationsDao.markNotificationRead(itemId)
         actionOverrides.setActionHandlers(itemId, emptyMap())
     }
 

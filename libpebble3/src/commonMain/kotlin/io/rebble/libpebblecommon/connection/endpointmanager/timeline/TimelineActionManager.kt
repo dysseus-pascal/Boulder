@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.timeline
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -24,7 +24,7 @@ class TimelineActionManager(
     private val timelineService: TimelineService,
     private val notifActionHandler: PlatformNotificationActionHandler,
     private val scope: ConnectionCoroutineScope,
-    private val notificationDao: TimelineNotificationDao,
+    private val notificationDao: TimelineNotificationRealDao,
     private val actionOverrides: ActionOverrides,
 ) {
     companion object {

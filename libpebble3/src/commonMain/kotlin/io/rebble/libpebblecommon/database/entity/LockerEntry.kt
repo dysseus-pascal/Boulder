@@ -21,6 +21,7 @@ import kotlin.uuid.Uuid
     windowBeforeSecs = -1,
     windowAfterSecs = -1,
     onlyInsertAfter = false,
+    sendDeletions = true,
 )
 data class LockerEntry(
     val id: Uuid,

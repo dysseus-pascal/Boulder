@@ -56,7 +56,7 @@ class AndroidPebbleNotificationListenerConnection(
             libPebble.sendNotification(it.toTimelineNotification())
         }.launchIn(libPebbleCoroutineScope)
         notificationDeleteQueue.onEach {
-            libPebble.deleteNotification(it)
+            libPebble.markNotificationRead(it)
         }.launchIn(libPebbleCoroutineScope)
     }
 }

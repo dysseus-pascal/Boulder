@@ -11,6 +11,8 @@ annotation class GenerateRoomEntity(
     val windowAfterSecs: Long,
     /** Only process inserts for records with [timestamp] after :insertOnlyAfterMs */
     val onlyInsertAfter: Boolean,
+    /** Send deletions to watch? We never want to e.g. for notifications */
+    val sendDeletions: Boolean,
 )
 
 // TODO move somewhere better

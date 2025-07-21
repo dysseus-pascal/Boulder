@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.database.entity
 
 import androidx.room.Embedded
+import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondDuration
@@ -26,6 +27,8 @@ import kotlin.uuid.Uuid
     onlyInsertAfter = true,
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     windowBeforeSecs = -1,
+    /** Watch cleans these up itself - never send deletions */
+    sendDeletions = false,
 )
 data class TimelineNotification(
     override val itemId: Uuid,
@@ -42,6 +45,7 @@ data class TimelineNotification(
     windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
+    sendDeletions = true,
 )
 data class TimelinePin(
     override val itemId: Uuid,
@@ -58,6 +62,7 @@ data class TimelinePin(
     windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
+    sendDeletions = true,
 )
 data class TimelineReminder(
     override val itemId: Uuid,

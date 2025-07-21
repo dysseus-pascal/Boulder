@@ -31,6 +31,7 @@ import kotlinx.serialization.Serializable
     windowBeforeSecs = -1,
     windowAfterSecs = -1,
     onlyInsertAfter = false,
+    sendDeletions = true,
 )
 data class NotificationAppItem(
     val packageName: String,

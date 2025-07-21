@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
@@ -23,7 +24,6 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
-import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -75,7 +75,7 @@ abstract class Database : RoomDatabase() {
     abstract fun knownWatchDao(): KnownWatchDao
     abstract fun lockerEntryDao(): LockerEntryRealDao
     abstract fun notificationAppDao(): NotificationAppRealDao
-    abstract fun timelineNotificationDao(): TimelineNotificationDao
+    abstract fun timelineNotificationDao(): TimelineNotificationRealDao
     abstract fun timelinePinDao(): TimelinePinRealDao
     abstract fun calendarDao(): CalendarDao
     abstract fun timelineReminderDao(): TimelineReminderRealDao

@@ -8,9 +8,9 @@ import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
-import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -37,7 +36,7 @@ import kotlin.time.Duration.Companion.seconds
 
 data class BlobDbDaos(
     private val lockerEntryDao: LockerEntryRealDao,
-    private val notificationsDao: TimelineNotificationDao,
+    private val notificationsDao: TimelineNotificationRealDao,
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,

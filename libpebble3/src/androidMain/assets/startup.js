@@ -57,6 +57,55 @@ navigator.geolocation.clearWatch = (id) => {
 };
 
 ((global) => {
+    const oldConsole = {
+        log: console.log,
+        warn: console.warn,
+        error: console.error,
+        info: console.info,
+        debug: console.debug,
+    }
+    const sendLog = (level, ...args) => {
+        // build args into a single string
+        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        const traceback = new Error().stack;
+        const callerLine = traceback ? traceback.split('\n')[3].trim() : null;
+        _Pebble.onConsoleLog(level, message, callerLine);
+    }
+    console.log = (...args) => {
+        oldConsole.log.apply(console, args);
+        sendLog('log', ...args);
+    }
+    console.warn = (...args) => {
+        oldConsole.warn.apply(console, args);
+        sendLog('warn', ...args);
+    }
+    console.error = (...args) => {
+        oldConsole.error.apply(console, args);
+        sendLog('error', ...args);
+    }
+    console.info = (...args) => {
+        oldConsole.info.apply(console, args);
+        sendLog('info', ...args);
+    }
+    console.debug = (...args) => {
+        oldConsole.debug.apply(console, args);
+        sendLog('debug', ...args);
+    }
+    console.trace = (...args) => {
+        oldConsole.trace.apply(console, args);
+        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        const traceback = new Error().stack;
+        const tracebackWithoutThis = traceback ? traceback.split('\n').slice(2).join('\n') : null;
+        _Pebble.onConsoleLog('trace', message, "\n"+tracebackWithoutThis);
+    }
+    console.assert = (condition, ...args) => {
+        if (!condition) {
+            const message = "Assertion failed:" + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+            const traceback = new Error().stack;
+            const caller = traceback ? traceback.split('\n')[2].trim() : null;
+            _Pebble.onConsoleLog('assert', message, caller);
+        }
+    }
     const PebbleEventTypes = {
         READY: 'ready',
         SHOW_CONFIGURATION: 'showConfiguration',

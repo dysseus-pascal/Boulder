@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -76,6 +78,13 @@ class DevConnectionServer(private val libPebble: LibPebble) {
                                 device.rawInboundMessages.onEach {
                                     send(byteArrayOf(ServerMessageType.RelayFromWatch.value) + it)
                                 }.launchIn(this)
+                                if (device is ConnectedPebble.PKJS) {
+                                    device.currentPKJSSession.flatMapLatest {
+                                        it?.logMessages ?: emptyFlow()
+                                    }.onEach {
+                                        send(PhoneAppLogMessage(it))
+                                    }.launchIn(this)
+                                }
                                 delay(10) //XXX: Give the client a moment to set up the connection
                                 for (frame in incoming) {
                                     when (frame) {

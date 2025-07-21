@@ -7,7 +7,6 @@ import android.net.http.SslError
 import android.os.Build
 import android.os.Message
 import android.view.View
-import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
@@ -32,6 +31,7 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -48,8 +48,9 @@ class WebViewJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     urlOpenRequests: Channel<String>,
+    private val logMessages: MutableSharedFlow<String>,
 
-): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
+    ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
         const val API_NAMESPACE = "Pebble"
@@ -61,7 +62,7 @@ class WebViewJsRunner(
     private var webView: WebView? = null
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages)
     private val localStorageInterface = WebViewJSLocalStorageInterface(this, appContext) {
         webView?.evaluateJavascript(
             it,
@@ -139,12 +140,6 @@ class WebViewJsRunner(
     }
 
     private val chromeClient = object : WebChromeClient() {
-        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-            consoleMessage?.let {
-                logger.d { "WebView: ${it.message()}" }
-            }
-            return false
-        }
 
         override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
             return false

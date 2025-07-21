@@ -18,7 +18,8 @@ actual val pkjsPlatformModule: Module = module {
             appInfo = params.get(),
             lockerEntry = params.get(),
             jsPath = params.get(),
-            urlOpenRequests = params.get()
+            urlOpenRequests = params.get(),
+            logMessages = params.get(),
         )
     } bind JsRunner::class
 }

@@ -18,7 +18,8 @@ abstract class PrivatePKJSInterface(
     protected val jsRunner: JsRunner,
     private val device: PebbleJSDevice,
     protected val scope: CoroutineScope,
-    private val outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>
+    private val outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    private val logMessages: MutableSharedFlow<String>,
 ) {
     companion object {
         private val logger = Logger.withTag(PrivatePKJSInterface::class.simpleName!!)
@@ -26,6 +27,25 @@ abstract class PrivatePKJSInterface(
 
     open fun privateLog(message: String) {
         logger.i { "privateLog: $message" }
+    }
+
+    open fun onConsoleLog(level: String, message: String, source: String?) {
+        logger.i {
+            buildString {
+                append("[PKJS:${level.uppercase()}] \"")
+                append(message)
+                append("\" ")
+                source?.let {
+                    append(source)
+                }
+            }
+        }
+        val lineNumber = source
+            ?.substringAfterLast("${jsRunner.appInfo.uuid}.js:", "")
+            ?.ifBlank { null }
+        lineNumber?.let {
+            logMessages.tryEmit("${jsRunner.appInfo.longName}:$lineNumber $message")
+        }
     }
 
     open fun onError(message: String?, source: String?, line: Double?, column: Double?) {

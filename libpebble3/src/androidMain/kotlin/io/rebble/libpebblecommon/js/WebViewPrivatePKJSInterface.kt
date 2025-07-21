@@ -13,8 +13,9 @@ class WebViewPrivatePKJSInterface(
     jsRunner: WebViewJsRunner,
     device: PebbleJSDevice,
     scope: CoroutineScope,
-    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages) {
+    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    logMessages: MutableSharedFlow<String>
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages) {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)
@@ -63,6 +64,11 @@ class WebViewPrivatePKJSInterface(
     @JavascriptInterface
     override fun privateLog(message: String) {
         super.privateLog(message)
+    }
+
+    @JavascriptInterface
+    override fun onConsoleLog(level: String, message: String, source: String?) {
+        super.onConsoleLog(level, message, source)
     }
 
     @JavascriptInterface

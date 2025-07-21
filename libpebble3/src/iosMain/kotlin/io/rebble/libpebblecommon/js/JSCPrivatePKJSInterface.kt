@@ -12,14 +12,21 @@ class JSCPrivatePKJSInterface(
     jsRunner: JsRunner,
     device: PebbleJSDevice,
     scope: CoroutineScope,
-    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages), RegisterableJsInterface {
+    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    logMessages: MutableSharedFlow<String>
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override fun register(jsContext: JSContext) {
         jsContext["_Pebble"] = mapOf(
             "sendAppMessageString" to this::sendAppMessageString,
             "privateLog" to this::privateLog,
+            "onConsoleLog" to { level: String, message: String, source: String? ->
+                val sourceFmt = source?.let {
+                    "at ${it.substringAfter("code@")}"
+                }
+                this.onConsoleLog(level, message, sourceFmt)
+            },
             "onError" to this::onError,
             "onUnhandledRejection" to this::onUnhandledRejection,
             "logInterceptedSend" to this::logInterceptedSend,

@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageI
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -30,6 +31,7 @@ class JavascriptCoreJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     urlOpenRequests: Channel<String>,
+    private val logMessages: MutableSharedFlow<String>,
     private val pkjsBundleIdentifier: String = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
@@ -41,7 +43,7 @@ class JavascriptCoreJsRunner(
             XMLHTTPRequestManager(scope, jsContext),
             JSTimeout(scope, jsContext),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages),
+            JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages, logMessages),
             JSCJSLocalStorageInterface(this, appContext, jsContext),
             JSCGeolocationInterface(scope, this)
         )

@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -53,6 +55,9 @@ class PKJSApp(
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
     private val urlOpenRequests = Channel<String>(Channel.RENDEZVOUS)
+
+    private val _logMessages = MutableSharedFlow<String>(10)
+    val logMessages = _logMessages.asSharedFlow()
 
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {
@@ -112,7 +117,8 @@ class PKJSApp(
                 appInfo,
                 lockerEntry,
                 jsPath,
-                urlOpenRequests
+                urlOpenRequests,
+                _logMessages
             )
         }
 

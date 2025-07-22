@@ -23,6 +23,10 @@ abstract class PrivatePKJSInterface(
 ) {
     companion object {
         private val logger = Logger.withTag(PrivatePKJSInterface::class.simpleName!!)
+        private val sensitiveTerms = setOf(
+            "token", "password", "secret", "key", "credentials",
+            "auth", "bearer", "lat", "lon", "location"
+        )
     }
 
     open fun privateLog(message: String) {
@@ -31,9 +35,16 @@ abstract class PrivatePKJSInterface(
 
     open fun onConsoleLog(level: String, message: String, source: String?) {
         logger.i {
+            val containsSensitiveInfo = sensitiveTerms.any { term ->
+                message.contains(term, ignoreCase = true)
+            }
             buildString {
                 append("[PKJS:${level.uppercase()}] \"")
-                append(message)
+                if (containsSensitiveInfo) {
+                    append("<REDACTED>")
+                } else {
+                    append(message)
+                }
                 append("\" ")
                 source?.let {
                     append(source)

@@ -31,6 +31,10 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -202,7 +206,18 @@ private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: Byte): A
                     objectEntry.value.jsonPrimitive.booleanOrNull != null -> {
                         Pair(keyId, objectEntry.value.jsonPrimitive.boolean)
                     }
-                    else -> error("Invalid JSON value, unsupported primitive type")
+                    objectEntry.value.jsonPrimitive.doubleOrNull != null -> {
+                        val value = objectEntry.value.jsonPrimitive.double.toInt()
+                        Pair(keyId, value)
+                    }
+                    objectEntry.value.jsonPrimitive.floatOrNull != null -> {
+                        val value = objectEntry.value.jsonPrimitive.float.toInt()
+                        Pair(keyId, value)
+                    }
+                    else -> {
+                        Logger.e("toAppMessageData") { "Invalid JSON value for key $key: ${objectEntry.value}" }
+                        null // Skip unsupported types
+                    }
                 }
             }
         }

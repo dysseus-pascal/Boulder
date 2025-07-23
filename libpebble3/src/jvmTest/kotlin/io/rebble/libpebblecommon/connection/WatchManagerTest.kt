@@ -5,10 +5,12 @@ import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.ConnectionScope
 import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
@@ -63,6 +65,7 @@ class WatchManagerTest {
         override val closed: AtomicBoolean = AtomicBoolean(false),
         override val firmwareUpdateManager: FirmwareUpdateManager,
         override val firmwareUpdater: FirmwareUpdater,
+        override val batteryWatcher: BatteryWatcher,
     ) : ConnectionScope {
         override fun close() {
         }
@@ -140,16 +143,6 @@ class WatchManagerTest {
 
         override fun checkforFirmwareUpdate() {}
     }
-    private val connectionScopeFactory = object : ConnectionScopeFactory {
-        override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
-            return TestConnectionScope(
-                transport = props.transport,
-                pebbleConnector = TestPebbleConnector(),
-                firmwareUpdateManager = firmwareUpdateManager,
-                firmwareUpdater = firmwareUpdater,
-            )
-        }
-    }
     private val bluetoothStateProvider = object : BluetoothStateProvider {
         override fun init() {
         }
@@ -207,6 +200,19 @@ class WatchManagerTest {
 
     private fun create(scope: CoroutineScope): WatchManager {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)
+        val connectionCoroutineScope = ConnectionCoroutineScope(scope.coroutineContext)
+        val batteryWatcher = BatteryWatcher(connectionCoroutineScope)
+        val connectionScopeFactory = object : ConnectionScopeFactory {
+            override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
+                return TestConnectionScope(
+                    transport = props.transport,
+                    pebbleConnector = TestPebbleConnector(),
+                    firmwareUpdateManager = firmwareUpdateManager,
+                    firmwareUpdater = firmwareUpdater,
+                    batteryWatcher = batteryWatcher,
+                )
+            }
+        }
         return WatchManager(
             knownWatchDao = knownWatchDao,
             pebbleDeviceFactory = pebbleDeviceFactory,

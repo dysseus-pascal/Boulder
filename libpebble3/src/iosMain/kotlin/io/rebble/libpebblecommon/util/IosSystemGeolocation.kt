@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.util
 
+import LibPebbleSwift.IOSLocation
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -23,9 +24,11 @@ import platform.Foundation.timeIntervalSince1970
 import platform.darwin.NSObject
 
 class IosSystemGeolocation: SystemGeolocation {
+    private val iosLocation = IOSLocation()
     private val logger = Logger.withTag("IosSystemGeolocation")
     private val locationManager = CLLocationManager().apply {
         activityType = CLActivityTypeOther
+        logger.e { iosLocation.test() ?: "" }
     }
     private val location = callbackFlow {
         val delegate = object : CLLocationManagerDelegateProtocol, NSObject() {

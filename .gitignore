@@ -4,3 +4,5 @@
 /.gradle
 **.DS_Store
 /.kotlin
+/libpebble3/libpebble-swift/LibPebbleSwift.xcodeproj/project.xcworkspace/xcuserdata
+/libpebble3/libpebble-swift/LibPebbleSwift.xcodeproj/xcuserdata

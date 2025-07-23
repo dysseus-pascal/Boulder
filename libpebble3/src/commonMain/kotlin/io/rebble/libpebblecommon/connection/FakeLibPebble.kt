@@ -304,6 +304,7 @@ class FakeConnectedDevice(
     override suspend fun startDevConnection() {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val batteryLevel: Int? = 50
 }
 
 fun fakeNotificationApps(): List<NotificationAppItem> {

@@ -32,6 +32,7 @@ class PebbleBle(
     private val connectivity: ConnectivityWatcher,
     private val pairing: PebblePairing,
     private val gattServerManager: GattServerManager,
+    private val batteryWatcher: BatteryWatcher,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${transport.identifier.asString}")
 
@@ -79,6 +80,7 @@ class PebbleBle(
             return PebbleConnectionResult.Failed("failed to get connection status")
         }
         logger.d("connectionStatus = $connectionStatus")
+        batteryWatcher.subscribe(device)
 
         val needToPair = if (connectionStatus.paired) {
             if (device.isBonded()) {

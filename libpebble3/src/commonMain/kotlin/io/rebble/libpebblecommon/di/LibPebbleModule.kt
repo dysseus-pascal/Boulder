@@ -40,6 +40,7 @@ import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.RealBluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.Mtu
@@ -127,6 +128,7 @@ interface ConnectionScope {
     val closed: AtomicBoolean
     val firmwareUpdateManager: FirmwareUpdateManager
     val firmwareUpdater: FirmwareUpdater
+    val batteryWatcher: BatteryWatcher
 }
 
 class RealConnectionScope(
@@ -139,6 +141,7 @@ class RealConnectionScope(
 ) : ConnectionScope {
     override val pebbleConnector: PebbleConnector = koinScope.get()
     override val firmwareUpdater: FirmwareUpdater = koinScope.get()
+    override val batteryWatcher: BatteryWatcher = koinScope.get()
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -308,7 +311,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get()
+                            get(), get()
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -327,6 +330,7 @@ fun initKoin(
                     scopedOf(::ConnectionParams)
                     scopedOf(::Mtu)
                     scopedOf(::ConnectivityWatcher)
+                    scopedOf(::BatteryWatcher)
                     scopedOf(::PebblePairing)
                     scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
 

@@ -68,7 +68,8 @@ interface CommonConnectedDevice : KnownPebbleDevice,
     ConnectedPebble.Firmware,
     ConnectedWatchInfo,
     ConnectedPebble.Logs,
-    ConnectedPebble.CoreDump
+    ConnectedPebble.CoreDump,
+    ConnectedPebble.Battery
 
 interface ConnectedPebbleDeviceInRecovery : CommonConnectedDevice
 
@@ -132,6 +133,10 @@ object ConnectedPebble {
     }
 
     interface Firmware : FirmwareUpdate, FirmwareStatus
+
+    interface Battery {
+        val batteryLevel: Int?
+    }
 
     interface AppRunState {
         suspend fun launchApp(uuid: Uuid)

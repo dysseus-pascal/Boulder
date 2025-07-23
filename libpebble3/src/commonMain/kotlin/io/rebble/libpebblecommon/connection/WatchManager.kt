@@ -251,6 +251,7 @@ class WatchManager(
                         firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
                         bluetoothState = btstate,
                         lastFirmwareUpdateState = device.lastFirmwareUpdateState,
+                        batteryLevel = states.currentState?.batteryLevel,
                     )
 
                     // Update persisted props after connection
@@ -548,6 +549,7 @@ data class ActivePebbleState(
     val connectingPebbleState: ConnectingPebbleState,
     val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     val firmwareUpdateStatus: FirmwareUpdateStatus,
+    val batteryLevel: Int?,
 )
 
 private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map<PebbleIdentifier, ActivePebbleState>> {
@@ -558,12 +560,13 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
                 val fwUpdateAvailableFlow =
                     watchValue.activeConnection?.firmwareUpdateManager?.availableUpdates ?: flowOf(null)
                 val fwUpdateStatusFlow = watchValue.activeConnection?.firmwareUpdater?.firmwareUpdateState ?: flowOf(FirmwareUpdateStatus.NotInProgress.Idle)
+                val batteryLevelFlow = watchValue.activeConnection?.batteryWatcher?.batteryLevel ?: flowOf(null)
 
                 if (connector == null) {
                     null
                 } else {
-                    combine(connector.state, fwUpdateAvailableFlow, fwUpdateStatusFlow) { connectingState, fwUpdateAvailable, fwUpdateStatus ->
-                        ActivePebbleState(connectingState, fwUpdateAvailable, fwUpdateStatus)
+                    combine(connector.state, fwUpdateAvailableFlow, fwUpdateStatusFlow, batteryLevelFlow) { connectingState, fwUpdateAvailable, fwUpdateStatus, batteryLevel ->
+                        ActivePebbleState(connectingState, fwUpdateAvailable, fwUpdateStatus, batteryLevel)
                     }
                 }
             }

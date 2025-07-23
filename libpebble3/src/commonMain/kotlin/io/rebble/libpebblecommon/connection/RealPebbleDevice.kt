@@ -22,6 +22,7 @@ class PebbleDeviceFactory {
         firmwareUpdateState: FirmwareUpdateStatus,
         bluetoothState: BluetoothState,
         lastFirmwareUpdateState: FirmwareUpdateStatus,
+        batteryLevel: Int?,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
         val knownDevice = knownWatchProperties?.let {
@@ -64,6 +65,7 @@ class PebbleDeviceFactory {
                             services = state.services,
                             firmwareUpdateState = firmwareUpdateState,
                             firmwareUpdateAvailable = firmwareUpdateAvailable,
+                            batteryLevel = batteryLevel,
                         )
 
                     is ConnectingPebbleState.Connected.ConnectedNotInPrf ->
@@ -74,6 +76,7 @@ class PebbleDeviceFactory {
                             services = state.services,
                             firmwareUpdateState = firmwareUpdateState,
                             firmwareUpdateAvailable = firmwareUpdateAvailable,
+                            batteryLevel = batteryLevel,
                         )
                 }
             }
@@ -210,6 +213,7 @@ internal class RealConnectedPebbleDevice(
     private val services: ConnectedPebble.Services,
     override val firmwareUpdateState: FirmwareUpdateStatus,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val batteryLevel: Int?,
 ) : ConnectedPebbleDevice,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
@@ -226,7 +230,7 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.DevConnection by services.devConnection {
 
     override fun toString(): String =
-        "ConnectedPebbleDevice: $knownDevice $watchInfo firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"
+        "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"
 }
 
 internal class RealConnectedPebbleDeviceInRecovery(
@@ -236,6 +240,7 @@ internal class RealConnectedPebbleDeviceInRecovery(
     private val services: ConnectedPebble.PrfServices,
     override val firmwareUpdateState: FirmwareUpdateStatus,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val batteryLevel: Int?,
 ) : ConnectedPebbleDeviceInRecovery,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
@@ -244,5 +249,5 @@ internal class RealConnectedPebbleDeviceInRecovery(
     ConnectedPebble.CoreDump by services.coreDump {
 
     override fun toString(): String =
-        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"
+        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"
 }

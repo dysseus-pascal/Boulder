@@ -18,6 +18,7 @@ abstract class GeolocationInterface(
     private val scope: CoroutineScope,
     private val jsRunner: JsRunner,
 ): LibPebbleKoinComponent {
+    private val logger = Logger.withTag("GeolocationInterface")
     private val permissionDao: LockerAppPermissionDao by inject()
     private val systemGeolocation: SystemGeolocation by inject()
     private var requestIDs = (1..Int.MAX_VALUE).iterator()
@@ -76,6 +77,7 @@ abstract class GeolocationInterface(
     open fun getWatchCallbackID() = getNextWatchID()
 
     open fun getCurrentPosition(id: Double): Int {
+        logger.d { "getCurrentPosition()" }
         scope.launch {
             if (!geolocationPermissionGranted()) {
                 Logger.w { "Watchapp location permission not granted for getCurrentPosition" }
@@ -88,6 +90,7 @@ abstract class GeolocationInterface(
     }
 
     open fun watchPosition(id: Double): Int {
+        logger.d { "watchPosition()" }
         val job = scope.launch {
             if (!geolocationPermissionGranted()) {
                 triggerPositionResultWatch(id.toInt(), GeolocationPositionResult.Error("Location permission not granted"))
@@ -102,6 +105,7 @@ abstract class GeolocationInterface(
     }
 
     open fun clearWatch(id: Int) {
+        logger.d { "clearWatch()" }
         watchJobs.remove(id)?.cancel("Watch cleared")
     }
 }

@@ -77,8 +77,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
         val bytes = when (data) {
             is ByteArray -> data
             is String -> data.encodeToByteArray()
-            null -> null
-            NSNull -> null
+            is NSNull, null -> null
             else -> {
                 logger.e { "Invalid data type for send: ${data::class.simpleName}" }
                 null

@@ -6,7 +6,12 @@
 //
 
 #include <Foundation/Foundation.h>
+#include <CoreLocation/CoreLocation.h>
 
 @interface IOSLocation : NSObject
-- (NSString *) test;
+- (void) start;
+- (void) stop;
+- (IOSLocation* _Nonnull)initWithLocationCallback:(void (^ _Nonnull)(CLLocation * _Nullable))locationCallback
+                      authorizationCallback:(void (^ _Nonnull)(BOOL))authorizationCallback
+                          errorCallback:(void (^ _Nonnull)(NSError * _Nonnull))errorCallback;
 @end

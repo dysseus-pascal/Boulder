@@ -196,6 +196,15 @@ afterEvaluate {
     tasks.named("cinteropLibPebbleSwiftIosSimulatorArm64") {
         dependsOn("buildFrameworkLibPebbleSwift")
     }
+    tasks.named("compileKotlinIosArm64") {
+        dependsOn("buildFrameworkLibPebbleSwift")
+    }
+    tasks.named("compileKotlinIosX64") {
+        dependsOn("buildFrameworkLibPebbleSwift")
+    }
+    tasks.named("compileKotlinIosSimulatorArm64") {
+        dependsOn("buildFrameworkLibPebbleSwift")
+    }
 }
 
 dependencies {

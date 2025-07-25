@@ -39,21 +39,23 @@ class BatteryWatcher(
                 }
             }
         }
-        val batteryLevel = try {
-            gattClient.readCharacteristic(BATTERY_SERVICE_UUID, BATTERY_LEVEL_CHARACTERISTIC_UUID)?.get(0)?.toInt()
+        val initialLevelBytes = try {
+            gattClient.readCharacteristic(BATTERY_SERVICE_UUID, BATTERY_LEVEL_CHARACTERISTIC_UUID)
         } catch (e: GattStatusException) {
             logger.e(e) { "failed to read battery level" }
             null
         }
-        logger.v { "initial batteryLevel = $batteryLevel" }
-        batteryLevel?.let { _battery.value = it }
+        val initialLevel = initialLevelBytes?.asBatteryLevel()
+        logger.v { "initial batteryLevel = $initialLevel (raw: ${initialLevelBytes?.toHexString()})" }
+        initialLevel?.let { _battery.value = it }
     }
 
     private suspend fun Flow<ByteArray>.collectBatteryChanges(): Boolean {
         try {
-            collect {
-                _battery.value =
-                    it[0].toInt().also { logger.v { "battery level changed: $it" } }
+            collect { bytes ->
+                val batteryLevel = bytes.asBatteryLevel()
+                batteryLevel.also { logger.v { "battery level changed: $batteryLevel (raw: ${bytes.toHexString()})" } }
+                _battery.value = batteryLevel
             }
             return true
         } catch (e: GattStatusException) {
@@ -66,6 +68,8 @@ class BatteryWatcher(
             return false
         }
     }
+
+    private fun ByteArray.asBatteryLevel(): Int? = getOrNull(0)?.toInt()
 
     companion object {
         private const val BLUETOOTH_BASE_UUID_POSTFIX = "0000-1000-8000-00805F9B34FB"

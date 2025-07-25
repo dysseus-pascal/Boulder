@@ -134,16 +134,22 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             suspend fun execute() {
                 dispatchEvent(XHREvent.LoadStart)
                 val response = try {
+                    logger.i { "Request" }
                     client.request {
                         this.method = this@XHRInstance.method!!
+                        logger.i { "URL" }
                         this.url(this@XHRInstance.url!!)
+                        logger.i { "User/Pass" }
                         if (user != null && password != null) {
                             basicAuth(user!!, password!!)
                         }
+                        logger.i { "Data" }
                         if (data != null) {
                             setBody(data)
                         }
+                        logger.i { "Headers" }
                         this@XHRInstance.headers.entries.forEach {
+                            logger.i { "Header ${it.key}" }
                             header(it.key, it.value)
                         }
                     }

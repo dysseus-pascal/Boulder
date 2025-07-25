@@ -218,7 +218,7 @@ fun fakeWatch(): PebbleDevice {
         FakeConnectedDevice(
             transport = fakeTransport,
             firmwareUpdateAvailable = null,
-            firmwareUpdateState = FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle,
+            firmwareUpdateState = fwupState,
         )
     } else {
         object : DiscoveredPebbleDevice {

@@ -57,12 +57,17 @@ class MusicControlManager(
         }.launchIn(watchScope)
     }
 
-    private fun hasPositionChanged(positionMs: Long): Boolean {
+    private fun hasPositionChanged(status: PlaybackStatus?): Boolean {
+        val positionMs = status?.playbackPositionMs ?: 0
         val now = clock.now()
         val diff = (now - lastPosition.timestamp).inWholeMilliseconds.toFloat()
         val expectedPosition = lastPosition.positionMs + (lastPosition.rate * diff).toLong()
         val difference = abs(positionMs - expectedPosition)
-        return difference.milliseconds > POSITION_CHANGE_THRESHOLD
+        val changedEnough = difference.milliseconds > POSITION_CHANGE_THRESHOLD
+        if (changedEnough) {
+            logger.v { "hasPositionChanged: $difference (status = $status)" }
+        }
+        return changedEnough
     }
 
     private suspend fun sendChangesToWatch(status: PlaybackStatus?) {
@@ -73,7 +78,7 @@ class MusicControlManager(
             )
         }
         if (lastSentStatus?.playbackState != status?.playbackState
-            || hasPositionChanged(status?.playbackPositionMs ?: 0)
+            || hasPositionChanged(status)
             || lastSentStatus?.playbackRate != status?.playbackRate
             || lastSentStatus?.shuffle != status?.shuffle
             || lastSentStatus?.repeat != status?.repeat) {

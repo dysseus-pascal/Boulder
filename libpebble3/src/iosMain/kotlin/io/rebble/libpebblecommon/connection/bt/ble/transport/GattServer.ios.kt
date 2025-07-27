@@ -95,7 +95,6 @@ actual class GattServer(
     private val registeredServices = mutableMapOf<Uuid, Map<Uuid, CBMutableCharacteristic>>()
     private var wasSubscribedAtRestore = false
 
-
     private fun verboseLog(message: () -> String) {
         if (bleConfigFlow.value.verbosePpogLogging) {
             logger.v(message = message)
@@ -215,7 +214,14 @@ actual class GattServer(
             characteristicUuid = characteristicUuid,
         )
         if (cbCharacteristic == null) {
-            logger.w("couldn't find characteristic for $serviceUuid / $characteristicUuid")
+            logger.w("sendData: couldn't find characteristic for $serviceUuid / $characteristicUuid")
+            return false
+        }
+        val central = (cbCharacteristic.subscribedCentrals as? List<CBCentral>)?.firstOrNull {
+            it.identifier.asUuid().asPebbleBluetoothIdentifier() == transport.identifier
+        }
+        if (central == null) {
+            logger.w("sendData: couldn't find central for ${transport.identifier}")
             return false
         }
         return try {
@@ -224,7 +230,7 @@ actual class GattServer(
                     if (peripheralManager.updateValue(
                             value = data.toNSData(),
                             forCharacteristic = cbCharacteristic,
-                            onSubscribedCentrals = null,
+                            onSubscribedCentrals = listOf(central),
                         )
                     ) {
                         return@withTimeout true

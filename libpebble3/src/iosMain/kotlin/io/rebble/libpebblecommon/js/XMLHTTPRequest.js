@@ -38,7 +38,13 @@ class XMLHttpRequest {
         }
     }
 
-    open(method, url, async = true, user = null, password = null) {
+    open(method, url, async = true, user, password) {
+        if (!user) {
+            user = "";
+        }
+        if (!password) {
+            password = "";
+        }
         _XMLHTTPRequestManager.open(this._instanceID, method, url, async, user, password);
     }
 

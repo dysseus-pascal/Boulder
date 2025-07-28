@@ -25,7 +25,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSNull
 import platform.JavaScriptCore.JSContext
-import platform.JavaScriptCore.JSValue
 
 private const val UNSENT = 0
 private const val OPENED = 1
@@ -41,19 +40,12 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
 
     override fun register(jsContext: JSContext) {
         jsContext["_XMLHTTPRequestManager"] = mapOf(
-            "test" to this::test,
             "getXHRInstanceID" to this::getXHRInstanceID,
             "open" to this::open,
             "setRequestHeader" to this::setRequestHeader,
             "send" to this::send,
             "abort" to this::abort,
         )
-    }
-
-    private fun test(thiz: Any, func: JSValue) {
-        Logger.d("Thiz: $thiz")
-        Logger.d { "Test function called: ${func.isSymbol} ${func.toObject()}" }
-        func.callWithArguments(listOf("hi"))
     }
 
     private fun getXHRInstanceID(): Int {
@@ -63,17 +55,20 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
     }
 
     // JSC uses double for numbers
-    private fun open(instanceId: Double, method: String, url: String, async: Boolean?, user: String?, password: String?) {
+    private fun open(instanceId: Double, method: String, url: String, async: Boolean, user: String, password: String) {
         logger.d { "Instance $instanceId open()" }
-        instances[instanceId.toInt()]?.open(method, url, async, user, password)
+        val userNullable = user.ifEmpty { null }
+        val passwordNullable = password.ifEmpty { null }
+        instances[instanceId.toInt()]?.open(method, url, async, userNullable, passwordNullable)
     }
 
     private fun setRequestHeader(instanceId: Double, header: String, value: Any) {
         instances[instanceId.toInt()]?.setRequestHeader(header, value)
     }
 
-    private fun send(instanceId: Double, responseType: String?, data: Any?) {
+    private fun send(instanceId: Double, responseType: String, data: Any?) {
         logger.d { "Instance $instanceId send()" }
+        val responseTypeNullable = responseType.ifEmpty { null }
         val bytes = when (data) {
             is ByteArray -> data
             is String -> data.encodeToByteArray()
@@ -83,7 +78,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                 null
             }
         }
-        instances[instanceId.toInt()]?.send(bytes, responseType)
+        instances[instanceId.toInt()]?.send(bytes, responseTypeNullable)
     }
 
     private fun abort(instanceId: Double) {
@@ -134,22 +129,16 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             suspend fun execute() {
                 dispatchEvent(XHREvent.LoadStart)
                 val response = try {
-                    logger.i { "Request" }
                     client.request {
                         this.method = this@XHRInstance.method!!
-                        logger.i { "URL" }
                         this.url(this@XHRInstance.url!!)
-                        logger.i { "User/Pass" }
                         if (user != null && password != null) {
                             basicAuth(user!!, password!!)
                         }
-                        logger.i { "Data" }
                         if (data != null) {
                             setBody(data)
                         }
-                        logger.i { "Headers" }
                         this@XHRInstance.headers.entries.forEach {
-                            logger.i { "Header ${it.key}" }
                             header(it.key, it.value)
                         }
                     }
@@ -158,8 +147,8 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     changeReadyState(DONE)
                     dispatchEvent(XHREvent.Timeout)
                     return
-                } catch (e: Throwable) {
-                    logger.e(e) { "Request to $url (size ${data?.size}) failed: ${e.message}" }
+                } catch (e: Exception) {
+                    logger.e(e) { "Request (size ${data?.size}) failed: ${e.message}" }
                     dispatchError()
                     return
                 }
@@ -189,7 +178,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                 }
                 val status = Json.encodeToString(response.status.value)
                 val statusText = Json.encodeToString(response.status.description)
-                logger.v { "XHR Response: $status $statusText, Body: $body" }
+                logger.v { "XHR Response: $status $statusText" }
                 jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
                 changeReadyState(DONE)
                 dispatchEvent(XHREvent.Load)

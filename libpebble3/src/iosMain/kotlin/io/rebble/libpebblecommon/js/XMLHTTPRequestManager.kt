@@ -3,10 +3,16 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
+import io.ktor.client.request.basicAuth
+import io.ktor.client.request.header
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.request.url
+import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
 import io.ktor.util.encodeBase64
-import io.rebble.libpebblecommon.util.toNative
+import io.ktor.util.flattenEntries
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -15,83 +21,17 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import okio.ByteString.Companion.toByteString
-import platform.Foundation.HTTPMethod
-import platform.Foundation.NSHTTPURLResponse
-import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSNull
-import platform.Foundation.NSURL
-import platform.Foundation.NSURLSession
-import platform.Foundation.addValue
-import platform.Foundation.dataTaskWithRequest
-import platform.Foundation.setHTTPBody
 import platform.JavaScriptCore.JSContext
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import platform.JavaScriptCore.JSValue
 
 private const val UNSENT = 0
 private const val OPENED = 1
 private const val HEADERS = 2
 private const val LOADING = 3
 private const val DONE = 4
-
-internal data class Response(
-    val status: Int,
-    val headers: Map<String, String>,
-    val body: ByteArray
-)
-
-internal suspend fun request(
-    method: HttpMethod,
-    url: String,
-    user: String? = null,
-    password: String? = null,
-    data: ByteArray? = null,
-    headers: Map<String, Any> = emptyMap()
-): Response = suspendCancellableCoroutine { cont ->
-    val request = NSMutableURLRequest(NSURL.URLWithString(url)!!)
-    request.HTTPMethod = method.value.uppercase()
-    headers.forEach {
-        request.addValue(it.value.toString(), forHTTPHeaderField = it.key)
-    }
-    if (user != null && password != null) {
-        request.addValue("Basic ${"$user:$password".encodeBase64()}", forHTTPHeaderField = "Authorization")
-    }
-    data?.let { request.setHTTPBody(it.toNative()) }
-
-    val session = NSURLSession.sharedSession
-    val task = session.dataTaskWithRequest(request) { data, response, error ->
-        Logger.d("request") { "Response received" }
-        if (error != null) {
-            cont.resumeWithException(Exception("Network request failed: ${error.localizedDescription}"))
-            return@dataTaskWithRequest
-        }
-        if (response == null || data == null) {
-            cont.resumeWithException(Exception("No response or data received"))
-            return@dataTaskWithRequest
-        }
-        checkNotNull(response as? NSHTTPURLResponse) { "Invalid response type" }
-
-        val status = response.statusCode.toInt()
-        val headersMap = response.allHeaderFields.map {
-            it.key.toString() to it.value.toString()
-        }.toMap()
-        val responseData = data.toByteString()
-        cont.resume(Response(
-            status = status,
-            headers = headersMap,
-            body = responseData.toByteArray()
-        ))
-    }
-    task.resume()
-    cont.invokeOnCancellation {
-        task.cancel()
-    }
-}
 
 class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsContext: JSContext): RegisterableJsInterface {
     private var lastInstance = 0
@@ -101,12 +41,19 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
 
     override fun register(jsContext: JSContext) {
         jsContext["_XMLHTTPRequestManager"] = mapOf(
+            "test" to this::test,
             "getXHRInstanceID" to this::getXHRInstanceID,
             "open" to this::open,
             "setRequestHeader" to this::setRequestHeader,
             "send" to this::send,
             "abort" to this::abort,
         )
+    }
+
+    private fun test(thiz: Any, func: JSValue) {
+        Logger.d("Thiz: $thiz")
+        Logger.d { "Test function called: ${func.isSymbol} ${func.toObject()}" }
+        func.callWithArguments(listOf("hi"))
     }
 
     private fun getXHRInstanceID(): Int {
@@ -187,15 +134,24 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             suspend fun execute() {
                 dispatchEvent(XHREvent.LoadStart)
                 val response = try {
-                    withContext(Dispatchers.IO) {
-                        request(
-                            method = this@XHRInstance.method!!,
-                            url = this@XHRInstance.url!!,
-                            user = user,
-                            password = password,
-                            data = data,
-                            headers = this@XHRInstance.headers
-                        )
+                    logger.i { "Request" }
+                    client.request {
+                        this.method = this@XHRInstance.method!!
+                        logger.i { "URL" }
+                        this.url(this@XHRInstance.url!!)
+                        logger.i { "User/Pass" }
+                        if (user != null && password != null) {
+                            basicAuth(user!!, password!!)
+                        }
+                        logger.i { "Data" }
+                        if (data != null) {
+                            setBody(data)
+                        }
+                        logger.i { "Headers" }
+                        this@XHRInstance.headers.entries.forEach {
+                            logger.i { "Header ${it.key}" }
+                            header(it.key, it.value)
+                        }
                     }
                 } catch (e: TimeoutCancellationException) {
                     logger.e { "Request timed out: ${e.message}" }
@@ -208,7 +164,10 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     return
                 }
                 val responseHeaders = try {
-                    Json.encodeToString(response.headers.mapKeys { it.key.lowercase() })
+                    Json.encodeToString(response.headers
+                        .flattenEntries()
+                        .toMap()
+                        .mapKeys { it.key.lowercase() })
                 } catch (e: Throwable) {
                     logger.e(e) { "Failed to serialize response headers: ${e.message}" }
                     dispatchError()
@@ -216,8 +175,8 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                 }
                 val body = try {
                     when (responseType) {
-                        "arraybuffer" -> Json.encodeToString(response.body.encodeBase64())
-                        "text", "", "json", null -> Json.encodeToString(response.body.decodeToString())
+                        "arraybuffer" -> Json.encodeToString(response.bodyAsBytes().encodeBase64())
+                        "text", "", "json", null -> Json.encodeToString(response.bodyAsText())
                         else -> {
                             logger.e { "Invalid response type: $responseType" }
                             "null"
@@ -228,8 +187,8 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     dispatchError()
                     return
                 }
-                val status = Json.encodeToString(response.status)
-                val statusText = Json.encodeToString(HttpStatusCode.fromValue(response.status).description)
+                val status = Json.encodeToString(response.status.value)
+                val statusText = Json.encodeToString(response.status.description)
                 logger.v { "XHR Response: $status $statusText, Body: $body" }
                 jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
                 changeReadyState(DONE)

@@ -23,7 +23,9 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.io.IOException
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 fun kableGattConnector(transport: BleTransport, scope: ConnectionCoroutineScope): GattConnector? {
@@ -60,8 +62,10 @@ class KableGattConnector(
             _disconnected.complete(Unit)
         }
         try {
-            val kableScope = peripheral.connect()
-            return KableConnectedGattClient(transport, peripheral)
+            return withTimeout(CONNECT_TIMEOUT) {
+                val kableScope = peripheral.connect()
+                KableConnectedGattClient(transport, peripheral)
+            }
         } catch (e: Exception) {
             logger.e("error connecting", e)
             return null
@@ -77,6 +81,10 @@ class KableGattConnector(
 
     override fun close() {
         peripheral.close()
+    }
+
+    companion object {
+        private val CONNECT_TIMEOUT = 60.seconds
     }
 }
 

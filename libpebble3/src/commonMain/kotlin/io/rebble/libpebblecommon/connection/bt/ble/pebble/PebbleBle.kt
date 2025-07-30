@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.TransportConnector
@@ -40,14 +41,14 @@ class PebbleBle(
         logger.d("connect() reversedPPoG = ${config.value.reversedPPoG}")
         if (!config.value.reversedPPoG) {
             if (!gattServerManager.registerDevice(transport, pPoGStream.inboundPPoGBytesChannel)) {
-                return PebbleConnectionResult.Failed("failed to register with gatt server")
+                return PebbleConnectionResult.Failed(ConnectionFailureReason.RegisterGattServer)
             }
         }
 
         val device = gattConnector.connect()
         if (device == null) {
             logger.d("pebbleble: null device")
-            return PebbleConnectionResult.Failed("failed to connect")
+            return PebbleConnectionResult.Failed(ConnectionFailureReason.FailedToConnect)
         }
         val services = device.discoverServices()
         logger.d("services = $services")
@@ -69,7 +70,7 @@ class PebbleBle(
 
         if (!connectivity.subscribe(device)) {
             logger.d("failed to subscribe to connectivity")
-            return PebbleConnectionResult.Failed("failed to subscribe to connectivity")
+            return PebbleConnectionResult.Failed(ConnectionFailureReason.SubscribeConnectivity)
         }
         logger.d("subscribed connectivity d")
         val connectionStatus = withTimeoutOrNull(CONNECTIVITY_UPDATE_TIMEOUT) {
@@ -77,7 +78,7 @@ class PebbleBle(
         }
         if (connectionStatus == null) {
             logger.d("failed to get connection status")
-            return PebbleConnectionResult.Failed("failed to get connection status")
+            return PebbleConnectionResult.Failed(ConnectionFailureReason.ConnectionStatus)
         }
         logger.d("connectionStatus = $connectionStatus")
         batteryWatcher.subscribe(device)

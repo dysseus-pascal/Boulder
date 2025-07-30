@@ -33,7 +33,6 @@ class PebblePairing(
         connectivity: Flow<ConnectivityStatus>,
     ) {
         Logger.d("Requesting pairing")
-        Logger.d("Requesting pairing/services = ${device.services}")
         val pairingService =
             device.services?.firstOrNull { it.uuid == PAIRING_SERVICE_UUID }
         check(pairingService != null) { "Pairing service not found" }

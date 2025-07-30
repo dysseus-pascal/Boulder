@@ -37,10 +37,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Instant.Companion.DISTANT_PAST
 
+enum class ConnectionFailureReason {
+    RegisterGattServer,
+    FailedToConnect,
+    SubscribeConnectivity,
+    ConnectionStatus,
+}
+
 sealed class PebbleConnectionResult {
     data object Success : PebbleConnectionResult()
 
-    data class Failed(val reason: String) : PebbleConnectionResult()
+    data class Failed(val reason: ConnectionFailureReason) : PebbleConnectionResult()
 }
 
 interface TransportConnector {

@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
@@ -12,7 +11,7 @@ class JSCPrivatePKJSInterface(
     jsRunner: JsRunner,
     device: PebbleJSDevice,
     scope: CoroutineScope,
-    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
     logMessages: MutableSharedFlow<String>
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")

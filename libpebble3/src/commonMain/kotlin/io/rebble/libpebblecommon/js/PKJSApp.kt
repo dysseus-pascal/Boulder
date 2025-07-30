@@ -81,23 +81,13 @@ class PKJSApp(
     }
 
     private fun launchOutgoingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        jsRunner?.outgoingAppMessages?.onEach { (tIDDeferred, data) ->
-            logger.d { "Sending app message: $data" }
+        jsRunner?.outgoingAppMessages?.onEach { request ->
+            logger.d { "Sending app message: ${request.data}" }
             val tID = device.transactionSequence.next()
-            val appMessage = data.toAppMessageData(appInfo, tID)
-            tIDDeferred.complete(tID)
+            val appMessage = request.data.toAppMessageData(appInfo, tID)
+            request.state.value = AppMessageRequest.State.TransactionId(tID)
             val result = device.sendAppMessage(appMessage)
-            val resultData = buildJsonObject {
-                put("transactionId", tID.toInt())
-            }
-            when (result) {
-                is AppMessageResult.ACK -> {
-                    jsRunner?.signalAppMessageAck(resultData.toString())
-                }
-                is AppMessageResult.NACK -> {
-                    jsRunner?.signalAppMessageAck(resultData.toString())
-                }
-            }
+            request.state.value = AppMessageRequest.State.Sent(result)
         }?.catch {
             logger.e(it) { "Error sending app message" }
         }?.launchIn(scope) ?: error("JsRunner not initialized")

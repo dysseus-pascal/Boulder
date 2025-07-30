@@ -2,9 +2,10 @@ package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
-import kotlinx.coroutines.CompletableDeferred
+import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.io.files.Path
 
@@ -31,6 +32,17 @@ abstract class JsRunner(
         urlOpenRequests.send(url)
     }
 
-    protected val _outgoingAppMessages = MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>(extraBufferCapacity = 1)
+    protected val _outgoingAppMessages = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
     val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
+}
+
+class AppMessageRequest(
+    val data: String
+) {
+    sealed class State {
+        object Pending : State()
+        data class TransactionId(val transactionId: Byte) : State()
+        data class Sent(val result: AppMessageResult) : State()
+    }
+    val state = MutableStateFlow<State>(State.Pending)
 }

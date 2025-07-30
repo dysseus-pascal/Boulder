@@ -3,13 +3,14 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
-import kotlinx.coroutines.CompletableDeferred
+import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
@@ -18,7 +19,7 @@ abstract class PrivatePKJSInterface(
     protected val jsRunner: JsRunner,
     private val device: PebbleJSDevice,
     protected val scope: CoroutineScope,
-    private val outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    private val outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
     private val logMessages: MutableSharedFlow<String>,
 ) {
     companion object {
@@ -94,20 +95,40 @@ abstract class PrivatePKJSInterface(
 
     open fun sendAppMessageString(jsonAppMessage: String): Int {
         logger.v { "sendAppMessageString" }
-        val completable = CompletableDeferred<Byte>()
-        if (!outgoingAppMessages.tryEmit(Pair(completable, jsonAppMessage))) {
+        val request = AppMessageRequest(jsonAppMessage)
+        scope.launch {
+            val result = request.state.filterIsInstance<AppMessageRequest.State.Sent>().first().result
+            when (result) {
+                is AppMessageResult.ACK -> {
+                    val payload = mapOf("data" to mapOf("transactionId" to result.transactionId.toInt()))
+                    logger.v { "AppMessage ACK: ${result.transactionId}" }
+                    jsRunner.eval("signalAppMessageAck(${Json.encodeToString(Json.encodeToString(payload))})")
+                }
+                is AppMessageResult.NACK -> {
+                    val payload = mapOf("data" to mapOf("transactionId" to -1), "error" to "nack")
+                    logger.v { "AppMessage NACK: ${result.transactionId}" }
+                    jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})")
+                }
+            }
+        }
+        if (!outgoingAppMessages.tryEmit(request)) {
             logger.e { "Failed to emit outgoing AppMessage" }
             error("Failed to emit outgoing AppMessage")
         }
-            return runBlocking {
-                try {
-                    withTimeout(10.seconds) {
-                    completable.await().toInt()
-                }
-            } catch (_: TimeoutCancellationException) {
-                logger.e { "Timeout while waiting for AppMessage ack" }
-                -1
+        val transactionId = runBlocking {
+            withTimeoutOrNull(5.seconds) {
+                request.state
+                    .filterIsInstance<AppMessageRequest.State.TransactionId>()
+                    .first()
             }
+        }
+        if (transactionId == null) {
+            logger.e { "Timeout while waiting for AppMessage transaction ID" }
+            val payload = mapOf("data" to mapOf("transactionId" to -1), "error" to "timeout")
+            scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+            return -1
+        } else {
+            return transactionId.transactionId.toInt()
         }
     }
 

@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.js
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import co.touchlab.kermit.Logger
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -13,7 +12,7 @@ class WebViewPrivatePKJSInterface(
     jsRunner: WebViewJsRunner,
     device: PebbleJSDevice,
     scope: CoroutineScope,
-    outgoingAppMessages: MutableSharedFlow<Pair<CompletableDeferred<Byte>, String>>,
+    outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
     logMessages: MutableSharedFlow<String>
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages) {
 

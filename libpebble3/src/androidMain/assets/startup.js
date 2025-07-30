@@ -284,17 +284,19 @@ navigator.geolocation.clearWatch = (id) => {
             const transactionId = _Pebble.sendAppMessageString(JSON.stringify(data));
             if (transactionId === -1) {
                 if (onFailure) {
-                    onFailure({data: null});
+                    onFailure({error: "Failed to connect to Pebble"});
                 }
                 return -1;
             }
             if (onSuccess) {
                 const callback = (e) => {
                     try {
-                        if (e.data.transactionId === transactionId) {
-                            onSuccess(e);
+                        if (e.payload.data.transactionId === transactionId) {
+                            onSuccess(e.payload.data);
                         }
-                    } catch (error) {}
+                    } catch (error) {
+                        console.error("PKJS Error in app message success callback", error);
+                    }
                 }
                 appMessageAckCallbacks.set(transactionId, callback);
                 pebbleEventHandler.addEventListener(PebbleEventTypes.APP_MESSAGE_ACK, callback);
@@ -302,10 +304,12 @@ navigator.geolocation.clearWatch = (id) => {
             if (onFailure) {
                 const callback = (e) => {
                     try {
-                        if (e.data.transactionId === transactionId) {
-                            onFailure(e);
+                        if (e.payload.data.transactionId === transactionId) {
+                            onFailure(e.payload.data, e.payload.error);
                         }
-                    } catch (error) {}
+                    } catch (error) {
+                        console.error("PKJS Error in app message failure callback", error);
+                    }
                 }
                 appMessageNackCallbacks.set(transactionId, callback);
                 pebbleEventHandler.addEventListener(PebbleEventTypes.APP_MESSAGE_NACK, callback);

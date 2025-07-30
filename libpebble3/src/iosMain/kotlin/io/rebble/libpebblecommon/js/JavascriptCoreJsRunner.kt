@@ -81,6 +81,7 @@ class JavascriptCoreJsRunner(
     }
 
     private fun tearDownJsContext() {
+        _readyState.value = false
         interfaces?.forEach { it.close() }
         jsContext?.finalize()
         interfaces = null
@@ -151,6 +152,7 @@ class JavascriptCoreJsRunner(
 
     override suspend fun signalReady() {
         jsContext?.evalCatching("globalThis.signalReady()")
+        _readyState.value = true
     }
 
     override suspend fun signalShowConfiguration() {

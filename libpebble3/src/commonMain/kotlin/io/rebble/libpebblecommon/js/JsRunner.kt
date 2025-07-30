@@ -34,6 +34,8 @@ abstract class JsRunner(
 
     protected val _outgoingAppMessages = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
     val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
+    protected val _readyState = MutableStateFlow(false)
+    val readyState = _readyState.asSharedFlow()
 }
 
 class AppMessageRequest(

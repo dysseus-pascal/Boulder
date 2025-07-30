@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -229,7 +230,7 @@ class WebViewJsRunner(
 
     override suspend fun stop() {
         //TODO: Close config screens
-
+        _readyState.value = false
         withContext(Dispatchers.Main) {
             interfaces.forEach { (namespace, _) ->
                 webView?.removeJavascriptInterface(namespace)
@@ -291,9 +292,11 @@ class WebViewJsRunner(
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalReady(${Uri.encode(readyJson)})")
         }
+        _readyState.value = true
     }
 
     override suspend fun signalNewAppMessageData(data: String?): Boolean {
+        readyState.first { it }
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalNewAppMessageData(${Uri.encode("'" + (data ?: "null") + "'")})")
         }
@@ -315,6 +318,7 @@ class WebViewJsRunner(
     }
 
     override suspend fun signalShowConfiguration() {
+        readyState.first { it }
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalShowConfiguration()")
         }

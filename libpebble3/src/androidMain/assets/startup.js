@@ -292,7 +292,7 @@ navigator.geolocation.clearWatch = (id) => {
                 const callback = (e) => {
                     try {
                         if (e.payload.data.transactionId === transactionId) {
-                            onSuccess(e.payload.data);
+                            onSuccess(e.payload);
                         }
                     } catch (error) {
                         console.error("PKJS Error in app message success callback", error);
@@ -305,7 +305,7 @@ navigator.geolocation.clearWatch = (id) => {
                 const callback = (e) => {
                     try {
                         if (e.payload.data.transactionId === transactionId) {
-                            onFailure(e.payload.data, e.payload.error);
+                            onFailure(e.payload, e.payload.error);
                         }
                     } catch (error) {
                         console.error("PKJS Error in app message failure callback", error);

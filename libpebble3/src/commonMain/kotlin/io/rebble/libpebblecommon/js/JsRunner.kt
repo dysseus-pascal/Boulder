@@ -29,7 +29,7 @@ abstract class JsRunner(
     abstract suspend fun signalWebviewClosed(data: String?)
     abstract suspend fun eval(js: String)
     suspend fun loadUrl(url: String) {
-        urlOpenRequests.send(url)
+        urlOpenRequests.trySend(url)
     }
 
     protected val _outgoingAppMessages = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
@@ -41,6 +41,7 @@ class AppMessageRequest(
 ) {
     sealed class State {
         object Pending : State()
+        object DataError : State()
         data class TransactionId(val transactionId: Byte) : State()
         data class Sent(val result: AppMessageResult) : State()
     }

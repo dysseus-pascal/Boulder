@@ -25,6 +25,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.boolean
@@ -84,7 +85,13 @@ class PKJSApp(
         jsRunner?.outgoingAppMessages?.onEach { request ->
             logger.d { "Sending app message: ${request.data}" }
             val tID = device.transactionSequence.next()
-            val appMessage = request.data.toAppMessageData(appInfo, tID)
+            val appMessage = try {
+                request.data.toAppMessageData(appInfo, tID)
+            } catch (e: IllegalArgumentException) {
+                logger.e(e) { "Invalid app message data" }
+                request.state.value = AppMessageRequest.State.DataError
+                return@onEach
+            }
             request.state.value = AppMessageRequest.State.TransactionId(tID)
             val result = device.sendAppMessage(appMessage)
             request.state.value = AppMessageRequest.State.Sent(result)
@@ -173,6 +180,7 @@ fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
 
 private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: Byte): AppMessageData {
     val jsonElement = Json.parseToJsonElement(this)
+    require(jsonElement !is JsonNull) { "Invalid JSON data" }
     val jsonObject = jsonElement.jsonObject
     val tuples = jsonObject.mapNotNull { objectEntry ->
         val key = objectEntry.key

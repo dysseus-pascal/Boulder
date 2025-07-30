@@ -5,13 +5,17 @@ import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -96,39 +100,75 @@ abstract class PrivatePKJSInterface(
     open fun sendAppMessageString(jsonAppMessage: String): Int {
         logger.v { "sendAppMessageString" }
         val request = AppMessageRequest(jsonAppMessage)
-        scope.launch {
+        val job = scope.launch {
             val result = request.state.filterIsInstance<AppMessageRequest.State.Sent>().first().result
             when (result) {
                 is AppMessageResult.ACK -> {
-                    val payload = mapOf("data" to mapOf("transactionId" to result.transactionId.toInt()))
+                    val payload = buildJsonObject {
+                        put("data", buildJsonObject {
+                            put("transactionId", result.transactionId.toInt())
+                        })
+                    }
                     logger.v { "AppMessage ACK: ${result.transactionId}" }
                     jsRunner.eval("signalAppMessageAck(${Json.encodeToString(Json.encodeToString(payload))})")
                 }
                 is AppMessageResult.NACK -> {
-                    val payload = mapOf("data" to mapOf("transactionId" to -1), "error" to "nack")
+                    val payload = buildJsonObject {
+                        put("data", buildJsonObject {
+                            put("transactionId", result.transactionId.toInt())
+                        })
+                        put("error", "nack")
+                    }
                     logger.v { "AppMessage NACK: ${result.transactionId}" }
                     jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})")
                 }
             }
         }
-        if (!outgoingAppMessages.tryEmit(request)) {
-            logger.e { "Failed to emit outgoing AppMessage" }
-            error("Failed to emit outgoing AppMessage")
-        }
-        val transactionId = runBlocking {
-            withTimeoutOrNull(5.seconds) {
-                request.state
-                    .filterIsInstance<AppMessageRequest.State.TransactionId>()
-                    .first()
+        try {
+            if (!outgoingAppMessages.tryEmit(request)) {
+                logger.e { "Failed to emit outgoing AppMessage" }
+                error("Failed to emit outgoing AppMessage")
             }
-        }
-        if (transactionId == null) {
-            logger.e { "Timeout while waiting for AppMessage transaction ID" }
-            val payload = mapOf("data" to mapOf("transactionId" to -1), "error" to "timeout")
-            scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
-            return -1
-        } else {
-            return transactionId.transactionId.toInt()
+            val transactionId = runBlocking {
+                withTimeoutOrNull(5.seconds) {
+                    request.state
+                        .filter { it is AppMessageRequest.State.TransactionId || it is AppMessageRequest.State.DataError}
+                        .first()
+                }
+            }
+            return when (transactionId) {
+                null -> {
+                    logger.e { "Timeout while waiting for AppMessage transaction ID" }
+                    val payload = buildJsonObject {
+                        put("data", buildJsonObject {
+                            put("transactionId", -1)
+                        })
+                        put("error", "timeout")
+                    }
+                    scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                    job.cancel("Timeout while waiting for AppMessage transaction ID")
+                    -1
+                }
+                is AppMessageRequest.State.DataError -> {
+                    logger.e { "Data error while sending AppMessage" }
+                    val payload = buildJsonObject {
+                        put("data", buildJsonObject {
+                            put("transactionId", -1)
+                        })
+                        put("error", "data_error")
+                    }
+                    scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                    job.cancel("Data error while sending AppMessage")
+                    -1
+                }
+                is AppMessageRequest.State.TransactionId -> {
+                    transactionId.transactionId.toInt()
+                }
+                else -> error("Unexpected state: $transactionId")
+            }
+        } catch (e: Exception) {
+            job.cancel("Error while sending AppMessage")
+            throw e
         }
     }
 

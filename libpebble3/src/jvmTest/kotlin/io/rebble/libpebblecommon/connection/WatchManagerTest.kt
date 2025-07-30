@@ -39,6 +39,7 @@ import org.junit.Test
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 class WatchManagerTest {
     private val knownWatchDao = object : KnownWatchDao {
@@ -184,6 +185,10 @@ class WatchManagerTest {
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
     private val webServices = object : WebServices {
         override suspend fun fetchLocker(): LockerModel? {
+            TODO("Not yet implemented")
+        }
+
+        override suspend fun removeFromLocker(id: Uuid): Boolean {
             TODO("Not yet implemented")
         }
 

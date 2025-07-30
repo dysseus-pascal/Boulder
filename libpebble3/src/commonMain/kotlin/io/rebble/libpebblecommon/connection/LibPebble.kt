@@ -87,6 +87,7 @@ interface Watches {
 
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
+    suspend fun removeFromLocker(id: Uuid): Boolean
     suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult?
     suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
 }
@@ -130,6 +131,7 @@ interface LockerApi {
     suspend fun sideloadApp(pbwPath: Path): Boolean
     fun getLocker(): Flow<List<LockerWrapper>>
     suspend fun setAppOrder(id: Uuid, order: Int)
+    suspend fun removeApp(id: Uuid): Boolean
 }
 
 @Stable

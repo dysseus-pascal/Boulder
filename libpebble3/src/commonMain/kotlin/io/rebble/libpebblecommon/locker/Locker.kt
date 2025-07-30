@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
 import io.rebble.libpebblecommon.connection.WatchManager
+import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
@@ -20,6 +21,7 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -40,6 +42,8 @@ import kotlinx.io.writeString
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
+class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
+
 class Locker(
     private val watchManager: WatchManager,
     database: Database,
@@ -47,6 +51,8 @@ class Locker(
     private val config: WatchConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val clock: Clock,
+    private val webServices: WebServices,
+    private val webSyncManagerProvider: WebSyncManagerProvider,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
@@ -105,6 +111,30 @@ class Locker(
         libPebbleCoroutineScope.async {
             lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimit)
         }.await()
+    }
+
+    override suspend fun removeApp(id: Uuid): Boolean {
+        val lockerEntry = lockerEntryDao.getEntry(id)
+        if (lockerEntry == null) {
+            logger.e { "removeApp: not found: $id" }
+            return false
+        }
+        logger.d { "Deleting app: $lockerEntry" }
+        lockerPBWCache.deleteApp(id)
+        if (!lockerEntry.sideloaded) {
+            // Need to remove from remote locker (and only process deletion if that succeeds)
+            if (!webServices.removeFromLocker(id)) {
+                logger.w { "Failied to remove from remote locker" }
+                return false
+            }
+        }
+        lockerEntryDao.markForDeletion(id)
+        if (lockerEntry.sideloaded) {
+            logger.d { "Requesting locker sync after removing sideloaded app" }
+            // If it was sideloaded, trigger a resync (in case the same app is in the locker).
+            webSyncManagerProvider.webSyncManager().requestLockerSync()
+        }
+        return true
     }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
@@ -297,5 +327,10 @@ abstract class LockerPBWCache(context: AppContext) {
         if (SystemFileSystem.exists(pkjsPath)) {
             SystemFileSystem.delete(pkjsPath)
         }
+    }
+
+    fun deleteApp(appId: Uuid) {
+        clearPKJSFileForApp(appId)
+        SystemFileSystem.delete(pathForApp(appId), mustExist = false)
     }
 }

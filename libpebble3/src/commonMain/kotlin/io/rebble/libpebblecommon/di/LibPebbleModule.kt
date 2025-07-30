@@ -77,6 +77,7 @@ import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
+import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
@@ -246,6 +247,7 @@ fun initKoin(
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
                 singleOf(::WebSyncManager) bind RequestSync::class
+                single { WebSyncManagerProvider { get() } }
                 single { createTimeChanged(get()) }
                 singleOf(::LibPebble3) bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class

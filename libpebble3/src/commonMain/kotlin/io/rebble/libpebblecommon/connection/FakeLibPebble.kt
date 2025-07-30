@@ -135,6 +135,8 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override suspend fun removeApp(id: Uuid): Boolean = true
+
     val _notificationApps = MutableStateFlow(fakeNotificationApps())
 
     override val notificationApps: Flow<List<AppWithCount>> = _notificationApps.map { it.map { AppWithCount(it, 0) } }

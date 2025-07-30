@@ -11,7 +11,7 @@ import kotlin.uuid.Uuid
 
 @Dao
 interface LockerEntryRealDao : LockerEntryDao {
-    @Query("SELECT * FROM LockerEntryEntity ORDER BY orderIndex ASC, title ASC")
+    @Query("SELECT * FROM LockerEntryEntity WHERE deleted = 0 ORDER BY orderIndex ASC, title ASC")
     fun getAllFlow(): Flow<List<LockerEntry>>
 
     @Transaction

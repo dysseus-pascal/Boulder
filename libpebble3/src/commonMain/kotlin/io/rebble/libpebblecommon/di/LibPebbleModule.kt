@@ -55,7 +55,6 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
-import io.rebble.libpebblecommon.connection.createCompanionDeviceManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
@@ -257,7 +256,6 @@ fun initKoin(
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 singleOf(::DevConnectionServer)
                 single { HttpClient() }
-                single { createCompanionDeviceManager(get()) }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlinx.datetime.Clock> { kotlinx.datetime.Clock.System }

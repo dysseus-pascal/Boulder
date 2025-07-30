@@ -3,9 +3,12 @@ package io.rebble.libpebblecommon.di
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
+import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
+import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.UIContext
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
@@ -21,6 +24,8 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.util.SystemGeolocation
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -68,4 +73,15 @@ actual val platformModule: Module = module {
         closeGattServerWhenBtDisabled = false,
         delayBleConnectionsAfterAppStart = true,
     ) }
+    single { object : CompanionDevice {
+        override suspend fun registerDevice(
+            transport: Transport,
+            uiContext: UIContext?,
+        ): Boolean {
+            return true
+        }
+
+        override val companionAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
+        override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
+    } } bind CompanionDevice::class
 }

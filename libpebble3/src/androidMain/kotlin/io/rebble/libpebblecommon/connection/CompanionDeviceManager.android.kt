@@ -9,6 +9,7 @@ import android.companion.CompanionDeviceManager
 import android.content.IntentSender
 import android.os.Build
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.CompletableDeferred
@@ -19,12 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun createCompanionDeviceManager(libPebbleCoroutineScope: LibPebbleCoroutineScope): CompanionDevice {
-    return AndroidCompanionDevice(libPebbleCoroutineScope)
-}
-
 class AndroidCompanionDevice(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val watchConfigFlow: WatchConfigFlow,
 ) : CompanionDevice {
     private val logger = Logger.withTag("AndroidCompanionDevice")
     private val _companionAccessGranted = MutableSharedFlow<Unit>()
@@ -34,6 +32,10 @@ class AndroidCompanionDevice(
 
     override suspend fun registerDevice(transport: Transport, uiContext: UIContext?): Boolean {
         if (transport !is Transport.BluetoothTransport) {
+            return true
+        }
+        if (!watchConfigFlow.value.useAndroidCompanionDeviceManager) {
+            logger.i { "Not using companion device manager; disable in watch config" }
             return true
         }
         val context = uiContext?.activity

@@ -127,7 +127,9 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
 
         fun send(data: ByteArray?, responseType: String?) {
             suspend fun execute() {
-                dispatchEvent(XHREvent.LoadStart)
+                if (async) {
+                    dispatchEvent(XHREvent.LoadStart)
+                }
                 val response = try {
                     client.request {
                         this.method = this@XHRInstance.method!!
@@ -144,12 +146,14 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     }
                 } catch (e: TimeoutCancellationException) {
                     logger.e { "Request timed out: ${e.message}" }
-                    changeReadyState(DONE)
-                    dispatchEvent(XHREvent.Timeout)
+                    scope.launch {
+                        changeReadyState(DONE)
+                        dispatchEvent(XHREvent.Timeout)
+                    }
                     return
                 } catch (e: Exception) {
                     logger.e(e) { "Request (size ${data?.size}) failed: ${e.message}" }
-                    dispatchError()
+                    scope.launch { dispatchError() }
                     return
                 }
                 val responseHeaders = try {
@@ -159,7 +163,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                         .mapKeys { it.key.lowercase() })
                 } catch (e: Throwable) {
                     logger.e(e) { "Failed to serialize response headers: ${e.message}" }
-                    dispatchError()
+                    scope.launch { dispatchError() }
                     return
                 }
                 val body = try {
@@ -173,16 +177,18 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                     }
                 } catch (e: Throwable) {
                     logger.e(e) { "Failed to read response body (type $responseType): ${e.message}" }
-                    dispatchError()
+                    scope.launch { dispatchError() }
                     return
                 }
                 val status = Json.encodeToString(response.status.value)
                 val statusText = Json.encodeToString(response.status.description)
                 logger.v { "XHR Response: $status $statusText" }
-                jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
-                changeReadyState(DONE)
-                dispatchEvent(XHREvent.Load)
-                dispatchEvent(XHREvent.LoadEnd)
+                scope.launch {
+                    jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
+                    changeReadyState(DONE)
+                    dispatchEvent(XHREvent.Load)
+                    dispatchEvent(XHREvent.LoadEnd)
+                }
             }
             if (async) {
                 requestJob = scope.launch(Dispatchers.IO) {

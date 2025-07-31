@@ -28,6 +28,11 @@ abstract class JsRunner(
     abstract suspend fun signalShowConfiguration()
     abstract suspend fun signalWebviewClosed(data: String?)
     abstract suspend fun eval(js: String)
+
+    fun onReadyConfirmed(success: Boolean) {
+        _readyState.value = true
+    }
+
     suspend fun loadUrl(url: String) {
         urlOpenRequests.trySend(url)
     }

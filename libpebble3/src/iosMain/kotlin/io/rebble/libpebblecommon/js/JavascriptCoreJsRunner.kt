@@ -152,7 +152,6 @@ class JavascriptCoreJsRunner(
 
     override suspend fun signalReady() {
         jsContext?.evalCatching("globalThis.signalReady()")
-        _readyState.value = true
     }
 
     override suspend fun signalShowConfiguration() {

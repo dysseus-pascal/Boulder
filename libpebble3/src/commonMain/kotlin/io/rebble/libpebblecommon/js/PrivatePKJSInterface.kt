@@ -179,6 +179,6 @@ abstract class PrivatePKJSInterface(
 
     open fun privateFnConfirmReadySignal(success: Boolean) {
         logger.v { "privateFnConfirmReadySignal($success)" }
-        //TODO: signalShowConfiguration() if needed
+        jsRunner.onReadyConfirmed(success)
     }
 }

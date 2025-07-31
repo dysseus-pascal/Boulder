@@ -113,6 +113,9 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
             this.user = user
             this.password = password
             this.headers.clear()
+            if (!this.async) {
+                logger.w { "Synchronous XHR opened" }
+            }
             changeReadyState(OPENED)
         }
 

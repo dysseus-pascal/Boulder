@@ -48,7 +48,7 @@ import org.koin.core.parameter.parameterArrayOf
 import kotlin.uuid.Uuid
 
 class PKJSApp(
-    private val device: PebbleJSDevice,
+    val device: PebbleJSDevice,
     private val jsPath: Path,
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
@@ -63,6 +63,7 @@ class PKJSApp(
 
     private val _logMessages = MutableSharedFlow<String>(10)
     val logMessages = _logMessages.asSharedFlow()
+    val sessionIsReady get() = jsRunner?.readyState?.value ?: false
 
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages.onEach {

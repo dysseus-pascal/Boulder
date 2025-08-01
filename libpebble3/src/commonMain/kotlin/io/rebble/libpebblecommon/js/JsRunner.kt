@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.io.files.Path
 
 abstract class JsRunner(
@@ -40,7 +41,7 @@ abstract class JsRunner(
     protected val _outgoingAppMessages = MutableSharedFlow<AppMessageRequest>(extraBufferCapacity = 1)
     val outgoingAppMessages = _outgoingAppMessages.asSharedFlow()
     protected val _readyState = MutableStateFlow(false)
-    val readyState = _readyState.asSharedFlow()
+    val readyState = _readyState.asStateFlow()
 }
 
 class AppMessageRequest(

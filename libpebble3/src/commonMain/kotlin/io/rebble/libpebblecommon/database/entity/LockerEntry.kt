@@ -31,6 +31,7 @@ data class LockerEntry(
     val developerName: String,
     val configurable: Boolean,
     val pbwVersionCode: String,
+    val category: String? = null,
     val sideloaded: Boolean = false,
     val sideloadeTimestamp: MillisecondInstant? = null,
     @Embedded
@@ -102,6 +103,7 @@ data class LockerEntryPlatform(
     val listImageUrl: String? = null,
     val iconImageUrl: String? = null,
     val pbwIconResourceId: Int,
+    val description: String? = null,
 )
 
 // Only some fields should trigger a watch resync if changed:

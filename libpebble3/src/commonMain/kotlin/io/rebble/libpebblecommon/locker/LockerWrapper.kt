@@ -22,6 +22,7 @@ data class AppPlatform(
     val screenshotImageUrl: String? = null,
     val listImageUrl: String? = null,
     val iconImageUrl: String? = null,
+    val description: String? = null,
 )
 
 data class AppProperties(
@@ -30,6 +31,16 @@ data class AppProperties(
     val title: String,
     val developerName: String,
     val platforms: List<AppPlatform>,
+    val version: String?,
+    val hearts: Int?,
+    val category: String?,
+)
+
+data class AppBasicProperties(
+    val id: Uuid,
+    val type: AppType,
+    val title: String,
+    val developerName: String,
 )
 
 @Immutable

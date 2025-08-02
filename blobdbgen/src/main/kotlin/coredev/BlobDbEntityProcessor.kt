@@ -487,6 +487,28 @@ class BlobDbEntityProcessor(
                     .returns(classDeclaration.toClassName().copy(nullable = true))
                     .build()
             )
+            val flowOfNullableBlobDbRecord =
+                ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(classDeclaration.toClassName().copy(nullable = true))
+            daoBuilder.addFunction(
+                FunSpec.builder("getEntryFlow")
+                    .addModifiers(KModifier.ABSTRACT)
+                    .addParameter(primaryKey, primaryKeyField.type.resolve().toClassName())
+                    .addAnnotation(
+                        AnnotationSpec.builder(ClassName("androidx.room", "Query"))
+                            .addMember(
+                                "value = %S",
+                                """
+                            SELECT *
+                            FROM $entityClassName
+                            WHERE $primaryKey = :$primaryKey
+                            AND deleted = 0
+                            """.trimIndent()
+                            )
+                            .build()
+                    )
+                    .returns(flowOfNullableBlobDbRecord)
+                    .build()
+            )
             val file = FileSpec.builder(classDeclaration.packageName.asString(), entityClassName)
                 .addType(entityBuilder.build())
                 .addType(syncEntityBuilder.build())

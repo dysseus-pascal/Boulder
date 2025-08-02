@@ -25,6 +25,8 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
+import io.rebble.libpebblecommon.locker.AppBasicProperties
+import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.notification.NotificationApi
@@ -43,6 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import org.koin.core.Koin
 import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
@@ -129,8 +132,11 @@ interface LockerApi {
      * @return true if the app was successfully synced and launched on all connected watches.
      */
     suspend fun sideloadApp(pbwPath: Path): Boolean
-    fun getLocker(): Flow<List<LockerWrapper>>
+    fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
+    fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
+    fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
     suspend fun setAppOrder(id: Uuid, order: Int)
+    suspend fun waitUntilAppSyncedToWatch(id: Uuid, transport: Transport, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
 }
 

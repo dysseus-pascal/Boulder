@@ -5,14 +5,34 @@ import androidx.room.Query
 import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
+import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 @Dao
 interface LockerEntryRealDao : LockerEntryDao {
-    @Query("SELECT * FROM LockerEntryEntity WHERE deleted = 0 ORDER BY orderIndex ASC, title ASC")
-    fun getAllFlow(): Flow<List<LockerEntry>>
+    @Query("""
+        SELECT * FROM LockerEntryEntity
+        WHERE deleted = 0
+        AND type = :type
+        AND (:searchQuery IS NULL OR title LIKE '%' || :searchQuery || '%' OR developerName LIKE '%' || :searchQuery || '%')
+        ORDER BY orderIndex ASC, title ASC
+        LIMIT :limit
+    """)
+    fun getAllFlow(type: String, searchQuery: String?, limit: Int): Flow<List<LockerEntry>>
+
+    data class DbAppBasicProperties(
+        val id: Uuid,
+        val title: String,
+        val type: String,
+        val developerName: String,
+    )
+
+    @Query("""
+        SELECT id, type, title, developerName FROM LockerEntryEntity
+    """)
+    fun getAllBasicInfoFlow(): Flow<List<DbAppBasicProperties>>
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {

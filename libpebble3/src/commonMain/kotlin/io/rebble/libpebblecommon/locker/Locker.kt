@@ -10,8 +10,10 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
+import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
@@ -27,8 +29,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
@@ -39,6 +44,8 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.io.writeString
+import kotlin.collections.map
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -53,6 +60,7 @@ class Locker(
     private val clock: Clock,
     private val webServices: WebServices,
     private val webSyncManagerProvider: WebSyncManagerProvider,
+    private val timeProvider: TimeProvider,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
@@ -60,57 +68,75 @@ class Locker(
         private val logger = Logger.withTag(Locker::class.simpleName!!)
     }
 
-    override suspend fun sideloadApp(pbwPath: Path): Boolean = sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
+    override suspend fun sideloadApp(pbwPath: Path): Boolean =
+        sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
 
-    override fun getLocker(): Flow<List<LockerWrapper>> = lockerEntryDao.getAllFlow()
-        .map { entries ->
-            SystemApps.entries.map { systemApp ->
-                LockerWrapper.SystemApp(
-                    properties = AppProperties(
-                        id = systemApp.uuid,
-                        type = systemApp.type,
-                        title = systemApp.displayName,
-                        developerName = "Pebble",
-                        platforms = systemApp.compatiblePlatforms.map {
-                            AppPlatform(
-                                watchType = it,
-                                screenshotImageUrl = null,
-                                listImageUrl = null,
-                                iconImageUrl = null,
-                            )
-                        },
-                    ),
-                    systemApp = systemApp,
-                )
-            } + entries.mapNotNull apps@{ app ->
-                val type = AppType.fromString(app.type) ?: return@apps null
-                LockerWrapper.NormalApp(
-                    properties = AppProperties(
-                        id = app.id,
-                        type = type,
-                        title = app.title,
-                        developerName = app.developerName,
-                        platforms = app.platforms.mapNotNull platforms@{
-                            val platform = WatchType.fromCodename(it.name) ?: return@platforms null
-                            AppPlatform(
-                                watchType = platform,
-                                screenshotImageUrl = it.screenshotImageUrl,
-                                listImageUrl = it.listImageUrl,
-                                iconImageUrl = it.iconImageUrl,
-                            )
-                        },
-                    ),
-                    sideloaded = app.sideloaded,
-                    configurable = app.configurable,
-                    sync = app.orderIndex < config.value.lockerSyncLimit,
+    /**
+     * Get the locker contents, filtered by type/search query. Limit this, so that you don't run
+     * out of memory if there is a particularly large locker.
+     */
+    override fun getLocker(
+        type: AppType,
+        searchQuery: String?,
+        limit: Int
+    ): Flow<List<LockerWrapper>> =
+        lockerEntryDao.getAllFlow(type.code, searchQuery, limit)
+            .map { entries ->
+                SystemApps.entries.filter { it.type == type }
+                    .map { systemApp ->
+                        systemApp.wrap()
+                    } + entries.mapNotNull { app ->
+                    app.wrap(config)
+                }
+            }
+
+    override fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>> {
+        return lockerEntryDao.getAllBasicInfoFlow().map {
+            it.mapNotNull { entry ->
+                val appType = AppType.fromString(entry.type) ?: return@mapNotNull null
+                AppBasicProperties(
+                    id = entry.id,
+                    title = entry.title,
+                    type = appType,
+                    developerName = entry.developerName,
                 )
             }
         }
+    }
+
+    override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
+        val asSystemApp = findSystemApp(id)
+        if (asSystemApp != null) {
+            return flow { asSystemApp.wrap() }
+        }
+        return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
+    }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
         libPebbleCoroutineScope.async {
             lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimit)
         }.await()
+    }
+
+    override suspend fun waitUntilAppSyncedToWatch(id: Uuid, transport: Transport, timeout: Duration): Boolean {
+        try {
+            withTimeout(timeout) {
+                lockerEntryDao.dirtyRecordsForWatchInsert(
+                    transport = transport.identifier.asString,
+                    timestampMs = timeProvider.now().toEpochMilliseconds(),
+                    insertOnlyAfterMs = timeProvider.now().toEpochMilliseconds(),
+                ).filter { entries ->
+                    // Wait until there is no match for this app in the dirty records
+                    entries.find { entry ->
+                        entry.record.id == id
+                    } == null
+                }.first()
+            }
+            return true
+        } catch (_: TimeoutCancellationException) {
+            logger.w { "waitUntilAppSyncedToWatch: timed out" }
+            return false
+        }
     }
 
     override suspend fun removeApp(id: Uuid): Boolean {
@@ -147,10 +173,13 @@ class Locker(
             val existing = existingApps.remove(newEntity.id)
             if (existing == null) {
                 new.asEntity()
-            } else if (existing.recordHashCode() != newEntity.recordHashCode()) {
-                newEntity.copy(orderIndex = existing.orderIndex)
             } else {
-                null
+                val newWithExistingOrder = newEntity.copy(orderIndex = existing.orderIndex)
+                if (newWithExistingOrder != existing) {
+                    newWithExistingOrder
+                } else {
+                    null
+                }
             }
         }
         logger.d { "inserting: $toInsert" }
@@ -201,6 +230,57 @@ class Locker(
     }
 }
 
+fun SystemApps.wrap(): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
+    properties = AppProperties(
+        id = uuid,
+        type = type,
+        title = displayName,
+        developerName = "Pebble",
+        platforms = compatiblePlatforms.map {
+            AppPlatform(
+                watchType = it,
+                screenshotImageUrl = null,
+                listImageUrl = null,
+                iconImageUrl = null,
+            )
+        },
+        version = null,
+        hearts = null,
+        category = null,
+    ),
+    systemApp = this,
+)
+
+fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
+    val type = AppType.fromString(type) ?: return null
+    return LockerWrapper.NormalApp(
+        properties = AppProperties(
+            id = id,
+            type = type,
+            title = title,
+            developerName = developerName,
+            platforms = platforms.mapNotNull platforms@{
+                val platform = WatchType.fromCodename(it.name) ?: return@platforms null
+                AppPlatform(
+                    watchType = platform,
+                    screenshotImageUrl = it.screenshotImageUrl,
+                    listImageUrl = it.listImageUrl,
+                    iconImageUrl = it.iconImageUrl,
+                    description = it.description,
+                )
+            },
+            version = version,
+            hearts = appstoreData?.hearts,
+            category = category,
+        ),
+        sideloaded = sideloaded,
+        configurable = configurable,
+        sync = orderIndex < config.value.lockerSyncLimit,
+    )
+}
+
+fun findSystemApp(uuid: Uuid): SystemApps? = SystemApps.entries.find { it.uuid == uuid }
+
 fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
     val uuid = Uuid.parse(uuid)
     return LockerEntry(
@@ -211,6 +291,7 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
         developerName = developer.name,
         configurable = isConfigurable,
         pbwVersionCode = pbw?.releaseId ?: "", // FIXME
+        category = category,
         sideloaded = false,
         appstoreData = LockerEntryAppstoreData(
             hearts = hearts,
@@ -231,6 +312,7 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
                 listImageUrl = platform.images.list,
                 iconImageUrl = platform.images.icon,
                 pbwIconResourceId = pbw?.iconResourceId ?: 0,
+                description = platform.description,
             )
         },
         orderIndex = -1,
@@ -247,21 +329,26 @@ class StaticLockerPBWCache(
     override suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path? {
         val pbwPath = pathForApp(appId)
         val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
-        return withTimeoutOrNull(5.seconds) {
-            val response = try {
-                httpClient.get(pbwUrl)
-            }  catch (e: IOException) {
-                Logger.w(e) { "Error fetching pbw: ${e.message}" }
-                return@withTimeoutOrNull null
+        return try {
+            withTimeout(15.seconds) {
+                val response = try {
+                    httpClient.get(pbwUrl)
+                } catch (e: IOException) {
+                    Logger.w(e) { "Error fetching pbw: ${e.message}" }
+                    return@withTimeout null
+                }
+                if (!response.status.isSuccess()) {
+                    Logger.i("http call failed: $response")
+                    return@withTimeout null
+                }
+                SystemFileSystem.sink(pbwPath).use { sink ->
+                    response.bodyAsChannel().readRemaining().transferTo(sink)
+                }
+                pbwPath
             }
-            if (!response.status.isSuccess()) {
-                Logger.i("http call failed: $response")
-                return@withTimeoutOrNull null
-            }
-            SystemFileSystem.sink(pbwPath).use { sink ->
-                response.bodyAsChannel().readRemaining().transferTo(sink)
-            }
-            pbwPath
+        } catch (_: TimeoutCancellationException) {
+            Logger.w { "Timeout fetching pbw" }
+            null
         }
     }
 }

@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppProperties
 import io.rebble.libpebblecommon.locker.AppType
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Instant
 import kotlinx.io.files.Path
 import kotlin.random.Random
+import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
 class FakeLibPebble : LibPebble {
@@ -125,15 +127,29 @@ class FakeLibPebble : LibPebble {
         return true
     }
 
+    override fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>> {
+        return flow { emptyList<AppBasicProperties>() }
+    }
+
     val locker = MutableStateFlow(fakeLockerEntries())
 
-    override fun getLocker(): Flow<List<LockerWrapper>> {
+    override fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>> {
         return locker
     }
 
-    override suspend fun setAppOrder(id: Uuid, order: Int) {
-        // No-op
+    override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
+        return flow { null }
     }
+
+    override suspend fun setAppOrder(id: Uuid, order: Int) {
+
+    }
+
+    override suspend fun waitUntilAppSyncedToWatch(
+        id: Uuid,
+        transport: Transport,
+        timeout: Duration,
+    ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
 
@@ -415,6 +431,9 @@ fun fakeLockerEntry(): LockerWrapper {
                     iconImageUrl = "",
                 )
             ),
+            version = "1.0",
+            hearts = 50,
+            category = "fun stuff",
         ),
         sideloaded = false,
         configurable = Random.nextBoolean(),

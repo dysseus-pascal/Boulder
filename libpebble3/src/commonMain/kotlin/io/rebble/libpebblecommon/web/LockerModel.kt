@@ -20,7 +20,7 @@ data class LockerEntry(
     val version: String? = null,
     val hearts: Int,
     @SerialName("is_configurable") val isConfigurable: Boolean,
-    @SerialName("is_timeline_enabled") val isTimelineEnabled: Boolean,
+    @SerialName("is_timeline_enabled") val isTimelineEnabled: Boolean?,
     val links: LockerEntryLinks,
     val developer: LockerEntryDeveloper,
     @SerialName("hardware_platforms") val hardwarePlatforms: List<LockerEntryPlatform>,

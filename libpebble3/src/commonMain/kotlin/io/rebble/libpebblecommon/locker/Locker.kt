@@ -296,7 +296,7 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
         appstoreData = LockerEntryAppstoreData(
             hearts = hearts,
             developerId = developer.id,
-            timelineEnabled = isTimelineEnabled,
+            timelineEnabled = isTimelineEnabled ?: false,
             removeLink = links.remove,
             shareLink = links.share,
             pbwLink = pbw?.file ?: "", // FIXME

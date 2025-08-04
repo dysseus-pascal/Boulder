@@ -2,7 +2,9 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.util
 
 import android.annotation.SuppressLint
 import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
+import android.os.CancellationSignal
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
@@ -37,6 +39,14 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
             close()
             awaitClose()
         } else {
+            val bestProvider = getBestProvider()
+            if (bestProvider == null) {
+                trySend(GeolocationPositionResult.Error("Location not available, no suitable provider found"))
+                close()
+                awaitClose()
+                return@callbackFlow
+            }
+            logger.d { "Flow using location provider: $bestProvider" }
             val locationListener = LocationListener { location ->
                 trySend(
                     GeolocationPositionResult.Success(
@@ -53,11 +63,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
             withContext(Dispatchers.Main) {
                 // This can crash if done away from main thread
                 locationManager.requestLocationUpdates(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        android.location.LocationManager.FUSED_PROVIDER
-                    } else {
-                        android.location.LocationManager.GPS_PROVIDER
-                    },
+                    bestProvider,
                     250L,
                     0f,
                     locationListener
@@ -74,6 +80,32 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
+    private fun getBestProvider(): String? {
+        val enabledProviders = locationManager.getProviders(true)
+        val result = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    LocationManager.FUSED_PROVIDER in enabledProviders -> LocationManager.FUSED_PROVIDER
+            LocationManager.GPS_PROVIDER in enabledProviders -> LocationManager.GPS_PROVIDER
+            LocationManager.NETWORK_PROVIDER in enabledProviders -> LocationManager.NETWORK_PROVIDER
+            else -> null
+        }
+        result ?: run {
+            val providerStates = locationManager.getProviders(false).joinToString {
+                "$it: ${locationManager.isProviderEnabled(it)}"
+            }
+            val locationEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                locationManager.isLocationEnabled.toString()
+            } else {
+                "Unknown (requires API 31+)"
+            }
+            logger.e { """No suitable location provider found, location may be disabled?
+                | $providerStates
+                | Location enabled: $locationEnabled
+            """.trimMargin() }
+        }
+        return result
+    }
+
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
         logger.d { "getCurrentPosition called" }
         return if (checkPermission()) {
@@ -84,21 +116,28 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                     cont.resume(lastKnownLocation)
                     return@suspendCancellableCoroutine
                 }
+                val bestProvider = getBestProvider()
+                if (bestProvider == null) {
+                    cont.resume(null)
+                    return@suspendCancellableCoroutine
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    logger.d { "Requesting current location with Fused Provider" }
+                    logger.d { "Requesting current location from provider: $bestProvider" }
+                    val cancellationSignal = CancellationSignal()
+                    cont.invokeOnCancellation {
+                        cancellationSignal.cancel()
+                    }
                     locationManager.getCurrentLocation(
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            android.location.LocationManager.FUSED_PROVIDER
-                        } else {
-                            android.location.LocationManager.GPS_PROVIDER
-                        },
-                        null,
+                        bestProvider,
+                        cancellationSignal,
                         context.mainExecutor
                     ) { location ->
                         cont.resume(
                             location ?: if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) > MAX_FALLBACK_TIME) {
+                                logger.w { "No current location available, last location too old" }
                                 null
                             } else {
+                                logger.w { "No current location available, returning last known location" }
                                 lastKnownLocation
                             }
                         )
@@ -106,7 +145,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 } else {
                     logger.d { "Requesting single update for location" }
                     locationManager.requestSingleUpdate(
-                        android.location.LocationManager.GPS_PROVIDER,
+                        bestProvider,
                         { location ->
                             cont.resume(location)
                         },

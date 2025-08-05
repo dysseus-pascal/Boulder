@@ -8,15 +8,17 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -45,6 +47,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import org.koin.core.component.get
 import org.koin.core.parameter.parameterArrayOf
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class PKJSApp(
@@ -65,18 +68,46 @@ class PKJSApp(
     val logMessages = _logMessages.asSharedFlow()
     val sessionIsReady get() = jsRunner?.readyState?.value ?: false
 
+    private suspend fun replyNACK(id: Byte) {
+        withTimeoutOrNull(1000) {
+            device.sendAppMessageResult(AppMessageResult.ACK(id))
+        }
+    }
+
+    private suspend fun replyACK(id: Byte) {
+        withTimeoutOrNull(1000) {
+            device.sendAppMessageResult(AppMessageResult.ACK(id))
+        }
+    }
+
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        device.inboundAppMessages.onEach {
-            if (it.uuid != uuid) {
-                logger.v { "Ignoring app message for different app: ${it.uuid} != $uuid" }
+        device.inboundAppMessages.onEach { appMessageData ->
+            if (appMessageData.uuid != uuid) {
+                logger.v { "App message for different app: ${appMessageData.uuid} != $uuid, sending NACK" }
+                replyNACK(appMessageData.transactionId)
                 return@onEach
             }
-            withTimeoutOrNull(1000) {
-                device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
+            jsRunner?.let { runner ->
+                if (!runner.readyState.value) {
+                    logger.w { "JsRunner not ready, waiting" }
+                    val result = withTimeoutOrNull(6.seconds) {
+                        runner.readyState.first { it }
+                    } ?: false
+                    if (!result) {
+                        logger.w { "JsRunner still not ready after waiting, sending NACK" }
+                        replyNACK(appMessageData.transactionId)
+                        return@onEach
+                    }
+                }
+                replyACK(appMessageData.transactionId)
+                val dataString = appMessageData.data.toJSData(appInfo.appKeys)
+                logger.d("Received app message: ${appMessageData.transactionId}")
+                runner.signalNewAppMessageData(dataString)
+            } ?: run {
+                logger.w { "JsRunner not init'd, sending NACK" }
+                replyNACK(appMessageData.transactionId)
+                return@onEach
             }
-            val dataString = it.data.toJSData(appInfo.appKeys)
-            logger.d("Received app message: ${it.transactionId} $dataString")
-            jsRunner?.signalNewAppMessageData(dataString)
         }.catch {
             logger.e(it) { "Error receiving app message: ${it.message}" }
         }.launchIn(scope)
@@ -125,7 +156,10 @@ class PKJSApp(
         }
 
     suspend fun start(connectionScope: CoroutineScope) {
-        val scope = connectionScope + SupervisorJob() + CoroutineName("PKJSApp-$uuid")
+        val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+            logger.e(throwable) { "Unhandled exception in PKJSApp: ${throwable.message}" }
+        }
+        val scope = connectionScope + Job() + CoroutineName("PKJSApp-$uuid") + exceptionHandler
         runningScope = scope
         jsRunner = injectJsRunner(scope)
         launchIncomingAppMessageHandler(device, scope)

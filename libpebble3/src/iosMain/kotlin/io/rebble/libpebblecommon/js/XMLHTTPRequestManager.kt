@@ -25,6 +25,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSNull
 import platform.JavaScriptCore.JSContext
+import platform.JavaScriptCore.JSValue
 
 private const val UNSENT = 0
 private const val OPENED = 1
@@ -32,7 +33,7 @@ private const val HEADERS = 2
 private const val LOADING = 3
 private const val DONE = 4
 
-class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsContext: JSContext): RegisterableJsInterface {
+class XMLHTTPRequestManager(private val scope: CoroutineScope, private val eval: (String) -> JSValue?): RegisterableJsInterface {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
     private val client = HttpClient(Darwin)
@@ -97,13 +98,13 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
         private val jsInstance = "XMLHttpRequest._instances.get($id)"
 
         private fun changeReadyState(newState: Int) {
-            jsContext.evalCatching("$jsInstance.readyState = $newState")
+            eval("$jsInstance.readyState = $newState")
             dispatchEvent(XHREvent.ReadyStateChange)
         }
 
         private fun dispatchEvent(event: XHREvent) {
             val evt = "{\"type\": \"${event.toJsName()}\"}"
-            jsContext.evalCatching("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
+            eval("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
         }
 
         fun open(method: String, url: String, async: Boolean?, user: String?, password: String?) {
@@ -187,7 +188,7 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val jsCon
                 val statusText = Json.encodeToString(response.status.description)
                 logger.v { "XHR Response: $status $statusText" }
                 scope.launch {
-                    jsContext.evalCatching("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
+                    eval("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
                     changeReadyState(DONE)
                     dispatchEvent(XHREvent.Load)
                     dispatchEvent(XHREvent.LoadEnd)

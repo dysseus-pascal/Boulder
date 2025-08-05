@@ -12,7 +12,7 @@ import platform.JavaScriptCore.JSValue
 class JSCJSLocalStorageInterface(
     jsRunner: JsRunner,
     appContext: AppContext,
-    private val jsContext: JSContext
+    private val evalRaw: (String) -> JSValue?
 ): JSLocalStorageInterface(jsRunner, appContext), RegisterableJsInterface {
     private lateinit var localStorage: JSValue
     override fun register(jsContext: JSContext) {
@@ -28,7 +28,7 @@ class JSCJSLocalStorageInterface(
     }
 
     override fun getItem(key: String): Any? {
-        return super.getItem(key) ?: jsContext.evaluateScript("null")
+        return super.getItem(key) ?: evalRaw("null")
     }
 
     override fun setLength(value: Int) {

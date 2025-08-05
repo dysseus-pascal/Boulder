@@ -8,8 +8,14 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.plus
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -37,15 +43,20 @@ class JavascriptCoreJsRunner(
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfaces: List<RegisterableJsInterface>? = null
+    @OptIn(DelicateCoroutinesApi::class)
+    private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
 
     private fun initInterfaces(jsContext: JSContext) {
+        fun eval(js: String) = this.jsContext?.evalCatching(js)
+        fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
+        val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(scope, jsContext),
-            JSTimeout(scope, jsContext),
+            XMLHTTPRequestManager(interfacesScope, ::eval),
+            JSTimeout(interfacesScope, ::evalRaw),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, scope, _outgoingAppMessages, logMessages),
-            JSCJSLocalStorageInterface(this, appContext, jsContext),
-            JSCGeolocationInterface(scope, this)
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages),
+            JSCJSLocalStorageInterface(this, appContext, ::evalRaw),
+            JSCGeolocationInterface(interfacesScope, this)
         )
         instances.forEach { it.register(jsContext) }
         interfaces = instances
@@ -58,7 +69,9 @@ class JavascriptCoreJsRunner(
         val js = SystemFileSystem.source(Path(path)).buffered().use {
             it.readString()
         }
-        jsContext?.evalCatching(js, NSURL.fileURLWithPath(path))
+        runBlocking(threadContext) {
+            jsContext?.evalCatching(js, NSURL.fileURLWithPath(path))
+        }
     }
 
     private fun exceptionHandler(context: JSContext?, exception: JSValue?) {
@@ -72,20 +85,26 @@ class JavascriptCoreJsRunner(
     }
 
     private fun setupJsContext() {
-        val jsContext = JSContext()
-        this.jsContext = jsContext
-        initInterfaces(jsContext)
-        jsContext.exceptionHandler = ::exceptionHandler
-        jsContext.setName("PKJS: ${appInfo.longName}")
-        jsContext.setInspectable(true)
+        runBlocking(threadContext) {
+            val jsContext = JSContext()
+            this@JavascriptCoreJsRunner.jsContext = jsContext
+            initInterfaces(jsContext)
+            jsContext.exceptionHandler = ::exceptionHandler
+            jsContext.setName("PKJS: ${appInfo.longName}")
+            jsContext.setInspectable(true)
+        }
     }
 
     private fun tearDownJsContext() {
+        scope.cancel()
         _readyState.value = false
-        interfaces?.forEach { it.close() }
-        jsContext?.finalize()
-        interfaces = null
-        jsContext = null
+        runBlocking(threadContext) {
+            interfaces?.forEach { it.close() }
+            interfaces = null
+            jsContext?.finalize()
+            jsContext = null
+        }
+        threadContext.close()
     }
 
     private fun evaluateStandardLib() {
@@ -120,49 +139,69 @@ class JavascriptCoreJsRunner(
     override suspend fun loadAppJs(jsUrl: String) {
         SystemFileSystem.source(Path(jsUrl)).buffered().use {
             val js = it.readString()
-            jsContext?.evalCatching(js, NSURL.fileURLWithPath(jsUrl))
+            withContext(threadContext) {
+                jsContext?.evalCatching(js, NSURL.fileURLWithPath(jsUrl))
+            }
         }
         signalReady()
     }
 
     override suspend fun signalNewAppMessageData(data: String?): Boolean {
-        jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
+        }
         return true
     }
 
     override suspend fun signalAppMessageAck(data: String?): Boolean {
-        jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
+        }
         return jsContext != null
     }
 
     override suspend fun signalAppMessageNack(data: String?): Boolean {
-        jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
+        }
         return jsContext != null
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
-        jsContext?.evalCatching("globalThis.signalTimelineTokenSuccess($tokenJson)")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalTimelineTokenSuccess($tokenJson)")
+        }
     }
 
     override suspend fun signalTimelineTokenFail(callId: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to null, "callId" to callId))
-        jsContext?.evalCatching("globalThis.signalTimelineTokenFailure($tokenJson)")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalTimelineTokenFailure($tokenJson)")
+        }
     }
 
     override suspend fun signalReady() {
-        jsContext?.evalCatching("globalThis.signalReady()")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalReady()")
+        }
     }
 
     override suspend fun signalShowConfiguration() {
-        jsContext?.evalCatching("globalThis.signalShowConfiguration()")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalShowConfiguration()")
+        }
     }
 
     override suspend fun signalWebviewClosed(data: String?) {
-        jsContext?.evalCatching("globalThis.signalWebviewClosedEvent(${Json.encodeToString(data)})")
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalWebviewClosedEvent(${Json.encodeToString(data)})")
+        }
     }
 
     override suspend fun eval(js: String) {
-        jsContext?.evalCatching(js)
+        withContext(threadContext) {
+            jsContext?.evalCatching(js)
+        }
     }
 }

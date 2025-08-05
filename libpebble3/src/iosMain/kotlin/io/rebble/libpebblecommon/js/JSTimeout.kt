@@ -11,11 +11,11 @@ import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 import kotlin.time.Duration.Companion.milliseconds
 
-class JSTimeout(private val scope: CoroutineScope, private val jsContext: JSContext): RegisterableJsInterface {
+class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String) -> JSValue?): RegisterableJsInterface {
     private val timeouts = mutableMapOf<Int, Job>()
     private var timeoutIDs = (1..Int.MAX_VALUE).iterator()
-    private val jsFunTriggerTimeout: JSValue by lazy { jsContext.globalObject?.get("_LibPebbleTriggerTimeout")!! }
-    private val jsFunTriggerInterval: JSValue by lazy { jsContext.globalObject?.get("_LibPebbleTriggerInterval")!! }
+    private val jsFunTriggerTimeout: JSValue by lazy { evalRaw("globalThis._LibPebbleTriggerTimeout")!! }
+    private val jsFunTriggerInterval: JSValue by lazy { evalRaw("globalThis._LibPebbleTriggerInterval")!! }
     override fun register(jsContext: JSContext) {
         jsContext["_Timeout"] = mapOf(
             "setTimeout" to this::setTimeout,

@@ -5,6 +5,8 @@ import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filter
@@ -100,7 +102,7 @@ abstract class PrivatePKJSInterface(
     open fun sendAppMessageString(jsonAppMessage: String): Int {
         logger.v { "sendAppMessageString" }
         val request = AppMessageRequest(jsonAppMessage)
-        val job = scope.launch {
+        val job = scope.launch(Dispatchers.IO) {
             val result = request.state.filterIsInstance<AppMessageRequest.State.Sent>().first().result
             when (result) {
                 is AppMessageResult.ACK -> {

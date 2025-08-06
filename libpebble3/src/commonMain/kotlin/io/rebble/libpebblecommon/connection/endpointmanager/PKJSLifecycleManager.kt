@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -71,9 +71,9 @@ class PKJSLifecycleManager(
         }
     }
 
-    fun init(transport: Transport, watchInfo: WatchInfo) {
+    fun init(identifier: PebbleIdentifier, watchInfo: WatchInfo) {
         this.device = PebbleJSDevice(
-            transport,
+            identifier,
             watchInfo,
             appMessagesService
         )

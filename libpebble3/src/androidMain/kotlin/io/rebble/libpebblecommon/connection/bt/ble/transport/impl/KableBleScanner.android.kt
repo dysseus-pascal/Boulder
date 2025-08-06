@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport.impl
 
 import com.juul.kable.Identifier
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 
-actual fun Identifier.asPebbleBluetoothIdentifier(): PebbleBluetoothIdentifier
- = PebbleBluetoothIdentifier(macAddress = toString())
+actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier
+ = PebbleBleIdentifier(macAddress = toString())

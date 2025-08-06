@@ -47,12 +47,12 @@ class DevConnectionServer(private val libPebble: LibPebble) {
         private val logger = Logger.withTag("DevConnectionServer")
     }
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
-    private val _activeDevice = MutableStateFlow<Transport?>(null)
-    val activeDevice: StateFlow<Transport?> = _activeDevice.asStateFlow()
-    suspend fun startForDevice(transport: Transport) {
+    private val _activeDevice = MutableStateFlow<PebbleIdentifier?>(null)
+    val activeDevice: StateFlow<PebbleIdentifier?> = _activeDevice.asStateFlow()
+    suspend fun startForDevice(identifier: PebbleIdentifier) {
         server?.stopSuspend()
-        logger.i { "Starting server for ${transport.name} on port $PORT" }
-        _activeDevice.value = transport
+        logger.i { "Starting server for $identifier on port $PORT" }
+        _activeDevice.value = identifier
         server = embeddedServer(CIO, configure = {
             connectors.add(EngineConnectorBuilder().apply {
                 host = "0.0.0.0"
@@ -65,12 +65,12 @@ class DevConnectionServer(private val libPebble: LibPebble) {
             install(WebSockets)
             routing {
                 webSocket("/") {
-                    logger.i { "WebSocket connection established for ${transport.name}" }
+                    logger.i { "WebSocket connection established for $identifier" }
                     launch {
                         val reason = this@webSocket.closeReason.await()
-                        logger.i { "WebSocket connection closed for ${transport.name}: (${reason?.code}) ${reason?.message ?: "No reason provided"}" }
+                        logger.i { "WebSocket connection closed for $identifier: (${reason?.code}) ${reason?.message ?: "No reason provided"}" }
                     }
-                    libPebble.watches.forDevice(transport).debounce(500).collectLatest { device ->
+                    libPebble.watches.forDevice(identifier.asString).debounce(500).collectLatest { device ->
                         when (device) {
                             is ConnectedPebble.Messages -> {
                                 logger.d { "Device '${device.name}' connected, updating client + forwarding messages" }

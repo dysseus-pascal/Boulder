@@ -23,6 +23,7 @@ import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PutBytesService
+import io.rebble.libpebblecommon.services.ScreenshotService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
@@ -59,23 +60,23 @@ interface TransportConnector {
 class WasDisconnected(val disconnected: Deferred<Unit>)
 
 sealed class ConnectingPebbleState {
-    abstract val transport: Transport
+    abstract val identifier: PebbleIdentifier
 
-    data class Inactive(override val transport: Transport) : ConnectingPebbleState()
-    data class Connecting(override val transport: Transport) : ConnectingPebbleState()
-    data class Failed(override val transport: Transport) : ConnectingPebbleState()
-    data class Negotiating(override val transport: Transport) : ConnectingPebbleState()
+    data class Inactive(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Connecting(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Failed(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Negotiating(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     sealed class Connected : ConnectingPebbleState() {
         abstract val watchInfo: WatchInfo
 
         data class ConnectedInPrf(
-            override val transport: Transport,
+            override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.PrfServices,
         ) : Connected()
 
         data class ConnectedNotInPrf(
-            override val transport: Transport,
+            override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.Services,
         ) : Connected()
@@ -96,7 +97,7 @@ interface PebbleConnector {
 
 class RealPebbleConnector(
     private val transportConnector: TransportConnector,
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
     private val scope: ConnectionCoroutineScope,
     private val negotiator: Negotiator,
     private val pebbleProtocolRunner: PebbleProtocolRunner,
@@ -120,21 +121,22 @@ class RealPebbleConnector(
     private val musicControlManager: MusicControlManager,
     private val firmwareUpdateManager: FirmwareUpdateManager,
     private val devConnectionManager: DevConnectionManager,
+    private val screenshotService: ScreenshotService,
 ) : PebbleConnector {
-    private val logger = Logger.withTag("PebbleConnector-${transport.identifier}")
-    private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(transport))
+    private val logger = Logger.withTag("PebbleConnector-$identifier")
+    private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     override val disconnected = WasDisconnected(transportConnector.disconnected)
 
     override suspend fun connect(previouslyConnected: Boolean) {
-        _state.value = Connecting(transport)
+        _state.value = Connecting(identifier)
 
         val result = transportConnector.connect()
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 logger.e("failed to connect: $result")
                 transportConnector.disconnect()
-                _state.value = Failed(transport)
+                _state.value = Failed(identifier)
             }
 
             is PebbleConnectionResult.Success -> {
@@ -159,7 +161,7 @@ class RealPebbleConnector(
     }
 
     private suspend fun doAfterConnection(previouslyConnected: Boolean) {
-        _state.value = Negotiating(transport)
+        _state.value = Negotiating(identifier)
         scope.launch {
             pebbleProtocolRunner.run()
         }
@@ -172,7 +174,7 @@ class RealPebbleConnector(
         if (watchInfo == null) {
             logger.w("negotiation failed: disconnecting")
             transportConnector.disconnect()
-            _state.value = Failed(transport)
+            _state.value = Failed(identifier)
             return
         }
 
@@ -198,7 +200,7 @@ class RealPebbleConnector(
         }
         if (recoveryMode) {
             _state.value = Connected.ConnectedInPrf(
-                transport = transport,
+                identifier = identifier,
                 watchInfo = watchInfo,
                 services = ConnectedPebble.PrfServices(
                     firmware = firmwareUpdater,
@@ -220,13 +222,13 @@ class RealPebbleConnector(
         timelineActionManager.init()
         appFetchProvider.init(watchInfo.platform.watchType)
         appMessageService.init()
-        pkjsLifecycleManager.init(transport, watchInfo)
+        pkjsLifecycleManager.init(identifier, watchInfo)
         phoneControlManager.init()
         musicControlManager.init()
         dataLoggingService.realInit(watchInfo)
 
         _state.value = Connected.ConnectedNotInPrf(
-            transport = transport,
+            identifier = identifier,
             watchInfo = watchInfo,
             services = ConnectedPebble.Services(
                 debug = systemService,
@@ -239,7 +241,8 @@ class RealPebbleConnector(
                 coreDump = getBytesService,
                 music = musicService,
                 pkjs = pkjsLifecycleManager,
-                devConnection = devConnectionManager
+                devConnection = devConnectionManager,
+                screenshot = screenshotService,
             )
         )
     }

@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppProperties
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.LockerWrapper
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.music.MusicAction
@@ -131,14 +132,14 @@ class FakeLibPebble : LibPebble {
         return flow { emptyList<AppBasicProperties>() }
     }
 
-    val locker = MutableStateFlow(fakeLockerEntries())
+    val locker = MutableStateFlow(fakeLockerEntries)
 
     override fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>> {
         return locker
     }
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
-        return flow { null }
+        return flow { fakeLockerEntries.first() }
     }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
@@ -147,13 +148,13 @@ class FakeLibPebble : LibPebble {
 
     override suspend fun waitUntilAppSyncedToWatch(
         id: Uuid,
-        transport: Transport,
+        identifier: PebbleIdentifier,
         timeout: Duration,
     ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
 
-    val _notificationApps = MutableStateFlow(fakeNotificationApps())
+    private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
     override val notificationApps: Flow<List<AppWithCount>> = _notificationApps.map { it.map { AppWithCount(it, 0) } }
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
@@ -216,11 +217,9 @@ fun fakeWatches(): List<PebbleDevice> {
 
 fun fakeWatch(): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
+    val name = "Core $num"
     val connected = Random.nextBoolean()
-    val fakeTransport = Transport.BluetoothTransport.BleTransport(
-        identifier = randomMacAddress().asPebbleBluetoothIdentifier(),
-        name = "Core $num",
-    )
+    val fakeIdentifier = randomMacAddress().asPebbleBleIdentifier()
     return if (connected) {
         val updating = Random.nextBoolean()
         val fwupState = if (updating) {
@@ -233,14 +232,27 @@ fun fakeWatch(): PebbleDevice {
         } else {
             FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle
         }
+        val fwupAvailable = if (!updating && Random.nextBoolean()) {
+            FirmwareUpdateCheckResult(
+                version = FirmwareVersion.from("v4.9.9-core2", isRecovery = false, gitHash = "", timestamp = kotlin.time.Instant.DISTANT_PAST)!!,
+                url = "http://something",
+                notes = "update!!",
+            )
+        } else {
+            null
+        }
         FakeConnectedDevice(
-            transport = fakeTransport,
-            firmwareUpdateAvailable = null,
+            identifier = fakeIdentifier,
+            firmwareUpdateAvailable = fwupAvailable,
             firmwareUpdateState = fwupState,
+            name = name,
+            nickname = null,
         )
     } else {
         object : DiscoveredPebbleDevice {
-            override val transport: Transport = fakeTransport
+            override val identifier = fakeIdentifier
+            override val name: String = "Fake 1234"
+            override val nickname: String? = "Faker 1234"
 
             override fun connect(uiContext: UIContext?) {
             }
@@ -249,16 +261,28 @@ fun fakeWatch(): PebbleDevice {
 }
 
 class FakeConnectedDevice(
-    override val transport: Transport,
+    override val identifier: PebbleIdentifier,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
+    override val name: String,
+    override val nickname: String?,
 ) : ConnectedPebbleDevice {
     override val runningFwVersion: String = "v1.2.3-core"
     override val serial: String = "XXXXXXXXXXXX"
     override val lastConnected: Instant = Instant.DISTANT_PAST
     override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX
+    override val color: WatchColor = run {
+        val white = Random.nextBoolean()
+        if (white) {
+            WatchColor.Pebble2DuoWhite
+        } else {
+            WatchColor.Pebble2DuoBlack
+        }
+    }
 
     override fun forget() {}
+    override fun setNickname(nickname: String?) {
+    }
 
     override fun connect(uiContext: UIContext?) {}
 
@@ -284,8 +308,24 @@ class FakeConnectedDevice(
     override suspend fun launchApp(uuid: Uuid) {}
 
     override val runningApp: StateFlow<Uuid?> = MutableStateFlow(null)
-    override val watchInfo: WatchInfo
-        get() = TODO("Not yet implemented")
+    override val watchInfo: WatchInfo = WatchInfo(
+        runningFwVersion = FirmwareVersion.from(runningFwVersion, isRecovery = false, gitHash = "", timestamp = kotlin.time.Instant.DISTANT_PAST)!!,
+        recoveryFwVersion = FirmwareVersion.from(runningFwVersion, isRecovery = true, gitHash = "", timestamp = kotlin.time.Instant.DISTANT_PAST)!!,
+        platform = WatchHardwarePlatform.CORE_ASTERIX,
+        bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        board = "board",
+        serial = serial,
+        btAddress = "11:22:33:44:55:66",
+        resourceCrc = -9999999,
+        resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        language = "en-GB",
+        languageVersion = 1,
+        capabilities = emptySet(),
+        isUnfaithful = false,
+        healthInsightsVersion = null,
+        javascriptVersion = null,
+        color = color,
+    )
 
     override suspend fun updateTime() {}
 
@@ -323,7 +363,16 @@ class FakeConnectedDevice(
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
     override val batteryLevel: Int? = 50
+    override suspend fun takeScreenshot(): ImageBitmap {
+        // Return an orange square as a placeholder
+        val width = 144
+        val height = 168
+        val buffer = IntArray(width * height) { Color(0xFFFA4A36).toArgb() }
+        return ImageBitmap(width, height).apply { readPixels(buffer) }
+    }
 }
+
+private val fakeNotificationApps by lazy { fakeNotificationApps() }
 
 fun fakeNotificationApps(): List<NotificationAppItem> {
     return buildList {
@@ -369,6 +418,8 @@ fun fakeChannels(): List<ChannelItem> {
         }
     }
 }
+
+val fakeLockerEntries by lazy { fakeLockerEntries() }
 
 fun fakeLockerEntries(): List<LockerWrapper> {
     return buildList {

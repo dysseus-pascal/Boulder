@@ -18,13 +18,15 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 data class BleScanResult(
-    val transport: Transport,
+    val identifier: PebbleBleIdentifier,
+    val name: String,
     val rssi: Int,
     val manufacturerData: ManufacturerData,
 )
 
 data class PebbleScanResult(
-    val transport: Transport,
+    val identifier: PebbleBleIdentifier,
+    val name: String,
     val rssi: Int,
     val leScanRecord: PebbleLeScanRecord?,
 )
@@ -57,7 +59,8 @@ class RealScanning(
                 }
                 val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
                 val device = PebbleScanResult(
-                    transport = it.transport,
+                    identifier = it.identifier,
+                    name = it.name,
                     rssi = it.rssi,
                     leScanRecord = pebbleScanRecord,
                 )

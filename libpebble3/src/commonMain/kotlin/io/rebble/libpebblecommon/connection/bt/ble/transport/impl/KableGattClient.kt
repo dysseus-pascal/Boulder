@@ -6,7 +6,7 @@ import com.juul.kable.DiscoveredService
 import com.juul.kable.Peripheral
 import com.juul.kable.State
 import com.juul.kable.WriteType
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
@@ -16,7 +16,6 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filterIsInstance
@@ -28,21 +27,20 @@ import kotlinx.io.IOException
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(transport: BleTransport, scope: ConnectionCoroutineScope): GattConnector? {
-    val peripheral = peripheralFromIdentifier(transport)
+fun kableGattConnector(identifier: PebbleBleIdentifier, scope: ConnectionCoroutineScope, name: String): GattConnector? {
+    val peripheral = peripheralFromIdentifier(identifier, name)
     if (peripheral == null) return null
-    return KableGattConnector(transport, peripheral, scope)
+    return KableGattConnector(identifier, peripheral, scope)
 }
 
-
-expect fun peripheralFromIdentifier(transport: BleTransport): Peripheral?
+expect fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral?
 
 class KableGattConnector(
-    private val transport: BleTransport,
+    private val identifier: PebbleBleIdentifier,
     private val peripheral: Peripheral,
     private val scope: ConnectionCoroutineScope,
 ) : GattConnector {
-    private val logger = Logger.withTag("KableGattConnector/${transport.identifier.asString}")
+    private val logger = Logger.withTag("KableGattConnector/${identifier.asString}")
 
     private val _disconnected = CompletableDeferred<Unit>()
     override val disconnected: Deferred<Unit> = _disconnected
@@ -64,7 +62,7 @@ class KableGattConnector(
         try {
             return withTimeout(CONNECT_TIMEOUT) {
                 val kableScope = peripheral.connect()
-                KableConnectedGattClient(transport, peripheral)
+                KableConnectedGattClient(identifier, peripheral)
             }
         } catch (e: Exception) {
             logger.e("error connecting", e)
@@ -91,10 +89,10 @@ class KableGattConnector(
 expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
 
 class KableConnectedGattClient(
-    val transport: BleTransport,
+    val identifier: PebbleBleIdentifier,
     val peripheral: Peripheral,
 ) : ConnectedGattClient {
-    private val logger = Logger.withTag("KableConnectedGattClient-${transport.identifier.asString}")
+    private val logger = Logger.withTag("KableConnectedGattClient-${identifier.asString}")
 
     override suspend fun discoverServices(): Boolean {
         // Kable already discovered upon connect
@@ -116,7 +114,7 @@ class KableConnectedGattClient(
     }
 
     override suspend fun isBonded(): Boolean {
-        return io.rebble.libpebblecommon.connection.bt.isBonded(transport)
+        return io.rebble.libpebblecommon.connection.bt.isBonded(identifier)
     }
 
     fun GattWriteType.asKableWriteType() = when (this) {

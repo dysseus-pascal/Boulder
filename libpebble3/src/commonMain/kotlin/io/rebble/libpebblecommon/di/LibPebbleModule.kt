@@ -20,11 +20,14 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Negotiator
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleConnector
 import io.rebble.libpebblecommon.connection.PebbleDeviceFactory
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.PebbleProtocolRunner
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
+import io.rebble.libpebblecommon.connection.PebbleSocketIdentifier
 import io.rebble.libpebblecommon.connection.PlatformIdentifier
 import io.rebble.libpebblecommon.connection.RealCreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.RealPebbleConnector
@@ -33,7 +36,6 @@ import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
 import io.rebble.libpebblecommon.connection.TokenProvider
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
 import io.rebble.libpebblecommon.connection.WatchManager
@@ -86,6 +88,7 @@ import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PhoneControlService
 import io.rebble.libpebblecommon.services.PutBytesService
+import io.rebble.libpebblecommon.services.ScreenshotService
 import io.rebble.libpebblecommon.services.SystemService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService
@@ -116,13 +119,13 @@ import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 data class ConnectionScopeProperties(
-    val transport: Transport,
+    val identifier: PebbleIdentifier,
     val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
 )
 
 interface ConnectionScope {
-    val transport: Transport
+    val identifier: PebbleIdentifier
     val pebbleConnector: PebbleConnector
     fun close()
     val closed: AtomicBoolean
@@ -133,7 +136,7 @@ interface ConnectionScope {
 
 class RealConnectionScope(
     private val koinScope: Scope,
-    override val transport: Transport,
+    override val identifier: PebbleIdentifier,
     private val coroutineScope: ConnectionCoroutineScope,
     private val uuid: Uuid,
     override val closed: AtomicBoolean = AtomicBoolean(false),
@@ -162,13 +165,13 @@ class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactor
     override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
         val scope =
-            koin.createScope<ConnectionScope>("${props.transport.identifier.asString}-$uuid", props)
+            koin.createScope<ConnectionScope>("${props.identifier.asString}-$uuid", props)
         Logger.d("scope: $scope / $uuid")
         return RealConnectionScope(
-            scope,
-            props.transport,
-            props.scope,
-            uuid,
+            koinScope = scope,
+            identifier = props.identifier,
+            coroutineScope = props.scope,
+            uuid = uuid,
             firmwareUpdateManager = scope.get(),
         )
     }
@@ -280,23 +283,23 @@ fun initKoin(
                 scope<ConnectionScope> {
                     // Params
                     scoped { get<ConnectionScopeProperties>().scope }
-                    scoped { get<ConnectionScopeProperties>().transport }
-                    scoped { get<ConnectionScopeProperties>().transport as Transport.BluetoothTransport.BleTransport }
-                    scoped { get<ConnectionScopeProperties>().transport as Transport.SocketTransport }
+                    scoped { get<ConnectionScopeProperties>().identifier }
+                    scoped { get<ConnectionScopeProperties>().identifier as PebbleBleIdentifier }
+                    scoped { get<ConnectionScopeProperties>().identifier as PebbleSocketIdentifier }
                     scoped { (get<ConnectionScopeProperties>().platformIdentifier as PlatformIdentifier.BlePlatformIdentifier).peripheral }
 
                     // Connection
                     scopedOf(::KableGattConnector)
                     scopedOf(::PebbleBle)
                     scoped<GattConnector> {
-                        when (get<Transport>()) {
-                            is Transport.BluetoothTransport.BleTransport -> get<KableGattConnector>()
+                        when (get<PebbleIdentifier>()) {
+                            is PebbleBleIdentifier -> get<KableGattConnector>()
                             else -> TODO("not implemented")
                         }
                     }
                     scoped<TransportConnector> {
-                        when (get<Transport>()) {
-                            is Transport.BluetoothTransport.BleTransport -> get<PebbleBle>()
+                        when (get<PebbleIdentifier>()) {
+                            is PebbleBleIdentifier -> get<PebbleBle>()
                             else -> TODO("not implemented")
                         }
                     }
@@ -311,7 +314,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get()
+                            get(), get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -347,6 +350,7 @@ fun initKoin(
                     scopedOf(::GetBytesService)
                     scopedOf(::PhoneControlService)
                     scopedOf(::MusicService)
+                    scopedOf(::ScreenshotService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)

@@ -200,7 +200,7 @@ class BlobDbEntityProcessor(
             daoBuilder.addFunction(
                 FunSpec.builder("dirtyRecordsForWatchInsert")
                     .addModifiers(KModifier.OVERRIDE, KModifier.ABSTRACT)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("timestampMs", LONG)
                     .addParameter("insertOnlyAfterMs", LONG)
                     .addAnnotation(
@@ -218,7 +218,7 @@ class BlobDbEntityProcessor(
                                     SELECT 1
                                     FROM $syncEntityClassName s
                                     WHERE s.recordId = e.$primaryKey
-                                    AND s.transport = :transport
+                                    AND s.transport = :identifier
                                     AND s.watchSynchHashcode = e.recordHashcode
                                 )
                             """.trimIndent()
@@ -230,7 +230,7 @@ class BlobDbEntityProcessor(
             )
             daoBuilder.addFunction(
                 FunSpec.builder("dirtyRecordsForWatchDelete")
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("timestampMs", LONG)
                     .apply {
                         if (annotation.sendDeletions) {
@@ -249,7 +249,7 @@ class BlobDbEntityProcessor(
                                     SELECT 1
                                     FROM $syncEntityClassName s
                                     WHERE s.recordId = e.$primaryKey
-                                    AND s.transport = :transport
+                                    AND s.transport = :identifier
                                 )
                             """.trimIndent()
                                     )
@@ -312,10 +312,10 @@ class BlobDbEntityProcessor(
             daoBuilder.addFunction(
                 FunSpec.builder("markSyncedToWatch")
                     .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("item", entityTypeName)
                     .addParameter("hashcode", INT)
-                    .addStatement("markSyncedToWatch($syncEntityClassName(item.record.$primaryKey, transport, hashcode))")
+                    .addStatement("markSyncedToWatch($syncEntityClassName(item.record.$primaryKey, identifier, hashcode))")
                     .build()
             )
             daoBuilder.addFunction(
@@ -331,10 +331,10 @@ class BlobDbEntityProcessor(
             daoBuilder.addFunction(
                 FunSpec.builder("markDeletedFromWatch")
                     .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("item", entityTypeName)
                     .addParameter("hashcode", INT)
-                    .addStatement("markDeletedFromWatch($syncEntityClassName(item.record.$primaryKey, transport, hashcode))")
+                    .addStatement("markDeletedFromWatch($syncEntityClassName(item.record.$primaryKey, identifier, hashcode))")
                     .build()
             )
             daoBuilder.addFunction(
@@ -350,16 +350,16 @@ class BlobDbEntityProcessor(
             daoBuilder.addFunction(
                 FunSpec.builder("existsOnWatch")
                     .addModifiers(KModifier.OVERRIDE)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("item", entityTypeName)
                     .returns(ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(BOOLEAN))
-                    .addStatement("return existsOnWatch(transport, item.record.$primaryKey)")
+                    .addStatement("return existsOnWatch(identifier, item.record.$primaryKey)")
                     .build()
             )
             daoBuilder.addFunction(
                 FunSpec.builder("existsOnWatch")
                     .addModifiers(KModifier.ABSTRACT)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addParameter("primaryKey", primaryKeyField.type.resolve().toClassName())
                     .returns(ClassName("kotlinx.coroutines.flow", "Flow").parameterizedBy(BOOLEAN))
                     .addAnnotation(
@@ -371,7 +371,7 @@ class BlobDbEntityProcessor(
                                 SELECT 1
                                 FROM $syncEntityClassName s
                                 WHERE s.recordId = :primaryKey
-                                AND s.transport = :transport
+                                AND s.transport = :identifier
                             )
                             """.trimIndent()
                             ).build()
@@ -452,7 +452,7 @@ class BlobDbEntityProcessor(
             daoBuilder.addFunction(
                 FunSpec.builder("markAllDeletedFromWatch")
                     .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND, KModifier.ABSTRACT)
-                    .addParameter("transport", STRING)
+                    .addParameter("identifier", STRING)
                     .addAnnotation(
                         AnnotationSpec.builder(ClassName("androidx.room", "Query"))
                             .addMember(
@@ -460,7 +460,7 @@ class BlobDbEntityProcessor(
                                 """
                             DELETE
                             FROM $syncEntityClassName
-                            WHERE transport = :transport
+                            WHERE transport = :identifier
                             """.trimIndent()
                             )
                             .build()

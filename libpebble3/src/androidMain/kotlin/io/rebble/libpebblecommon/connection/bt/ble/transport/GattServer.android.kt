@@ -16,8 +16,8 @@ import android.content.Context
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
-import io.rebble.libpebblecommon.connection.asPebbleBluetoothIdentifier
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CHARACTERISTIC_CONFIGURATION_DESCRIPTOR
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
@@ -180,7 +180,7 @@ class GattServerCallback(
 //        logger.d("onNotificationSent: ${device.address}")
         notificationSent.tryEmit(
             NotificationSent(
-                deviceId = device.address.asPebbleBluetoothIdentifier(),
+                deviceId = device.address.asPebbleBleIdentifier(),
                 status = status,
             )
         )
@@ -196,7 +196,7 @@ actual class GattServer(
 
     actual val characteristicReadRequest = callback.characteristicReadRequest.filterNotNull().map {
         ServerCharacteristicReadRequest(
-            deviceId = it.device.address.asPebbleBluetoothIdentifier(),
+            deviceId = it.device.address.asPebbleBleIdentifier(),
             uuid = it.characteristic.uuid.asUuid(),
             respond = { bytes ->
                 try {
@@ -282,14 +282,14 @@ actual class GattServer(
     }
 
     actual fun registerDevice(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         sendChannel: SendChannel<ByteArray>
     ) {
-        logger.d("registerDevice: $transport")
+        logger.d("registerDevice: $identifier")
         @Suppress("DEPRECATION")
         val adapter = BluetoothAdapter.getDefaultAdapter()
-        val bluetoothDevice = adapter.getRemoteDevice(transport.identifier.macAddress)
-        callback.registeredDevices[transport.identifier.macAddress] =
+        val bluetoothDevice = adapter.getRemoteDevice(identifier.macAddress)
+        callback.registeredDevices[identifier.macAddress] =
             RegisteredDevice(
                 dataChannel = sendChannel,
                 device = bluetoothDevice,
@@ -297,20 +297,20 @@ actual class GattServer(
             )
     }
 
-    actual fun unregisterDevice(transport: BleTransport) {
-        callback.registeredDevices.remove(transport.identifier.macAddress)
+    actual fun unregisterDevice(identifier: PebbleBleIdentifier) {
+        callback.registeredDevices.remove(identifier.macAddress)
     }
 
     @SuppressLint("MissingPermission")
     actual suspend fun sendData(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
     ): Boolean {
-        val registeredDevice = callback.registeredDevices[transport.identifier.macAddress]
+        val registeredDevice = callback.registeredDevices[identifier.macAddress]
         if (registeredDevice == null) {
-            logger.e("sendData: couldn't find registered device: $transport")
+            logger.e("sendData: couldn't find registered device: $identifier")
             return false
         }
         val service = server.getService(serviceUuid.toJavaUuid())
@@ -352,7 +352,7 @@ actual class GattServer(
         return try {
             val res = withTimeout(cbTimeout) {
                 callback.notificationSent.filterNotNull()
-                    .first { transport.identifier == it.deviceId }
+                    .first { identifier == it.deviceId }
             }
             if (res.status != GATT_SUCCESS) {
                 logger.e("characteristic notify error: ${res.status}")

@@ -72,12 +72,20 @@ open class PebblePacket{
                 ProtocolEndpoint.getByValue(ep.get()),
                 packet
             )
-            try {
-                ret.m.fromBytes(buf)
-            } catch (e: Exception) {
-                throw PacketDecodeException("Failed to decode packet $ret", e)
-            }
+            deserialize(buf, ret)
             return ret
+        }
+
+        fun deserialize(data: UByteArray, packet: PebblePacket) {
+            return deserialize(DataBuffer(data), packet)
+        }
+
+        private fun deserialize(buf: DataBuffer, packet: PebblePacket) {
+            try {
+                packet.m.fromBytes(buf)
+            } catch (e: Exception) {
+                throw PacketDecodeException("Failed to decode packet $packet", e)
+            }
         }
     }
 }

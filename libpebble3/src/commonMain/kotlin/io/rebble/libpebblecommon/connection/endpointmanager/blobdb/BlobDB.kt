@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import io.rebble.libpebblecommon.NotificationConfigFlow
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
@@ -68,12 +68,12 @@ class RealTimeProvider : TimeProvider {
 class BlobDB(
     private val watchScope: ConnectionCoroutineScope,
     private val blobDBService: BlobDBService,
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
     private val blobDatabases: BlobDbDaos,
     private val timeProvider: TimeProvider,
     private val notificationConfigFlow: NotificationConfigFlow,
 ) {
-    protected val watchIdentifier: String = transport.identifier.asString
+    protected val watchIdentifier: String = identifier.asString
 
     companion object {
         private val BLOBDB_RESPONSE_TIMEOUT = 5.seconds
@@ -103,13 +103,13 @@ class BlobDB(
                 .flatMapLatest {
                     if (insert) {
                         dao.dirtyRecordsForWatchInsert(
-                            transport = transport.identifier.asString,
+                            transport = identifier.asString,
                             timestampMs = timeProvider.now().toEpochMilliseconds(),
                             insertOnlyAfterMs = initialTimestamp.toEpochMilliseconds(),
                         )
                     } else {
                         dao.dirtyRecordsForWatchDelete(
-                            transport = transport.identifier.asString,
+                            transport = identifier.asString,
                             timestampMs = timeProvider.now().toEpochMilliseconds(),
                         )
                     }
@@ -144,7 +144,7 @@ class BlobDB(
                 }
                 // Mark all of our local DBs not synched
                 blobDatabases.get().forEach { db ->
-                    db.markAllDeletedFromWatch(transport.identifier.asString)
+                    db.markAllDeletedFromWatch(identifier.asString)
                 }
             }
 
@@ -166,7 +166,7 @@ class BlobDB(
                 val dao = blobDatabases.get().find { it.databaseId() == message.database }
                 val result = dao?.handleWrite(
                     write = message,
-                    transport = transport.identifier.asString,
+                    transport = identifier.asString,
                 ) ?: BlobResponse.BlobStatus.Success
                 val response = when (message.writeType) {
                     WriteType.Write -> BlobDB2Response.WriteResponse(message.token, result)
@@ -203,7 +203,7 @@ class BlobDB(
         logger.d("insert: result = ${result?.responseValue}")
         if (result?.responseValue == BlobResponse.BlobStatus.Success) {
             db.markSyncedToWatch(
-                transport = transport.identifier.asString,
+                transport = identifier.asString,
                 item = item,
                 hashcode = item.recordHashcode,
             )
@@ -229,7 +229,7 @@ class BlobDB(
         logger.d("delete: result = ${result?.responseValue}")
         if (result?.responseValue == BlobResponse.BlobStatus.Success) {
             db.markDeletedFromWatch(
-                transport = transport.identifier.asString,
+                transport = identifier.asString,
                 item = item,
                 hashcode = item.recordHashcode,
             )

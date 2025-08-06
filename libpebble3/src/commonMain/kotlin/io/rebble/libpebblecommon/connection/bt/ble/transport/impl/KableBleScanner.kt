@@ -4,8 +4,7 @@ import com.juul.kable.Filter
 import com.juul.kable.Identifier
 import com.juul.kable.Scanner
 import io.rebble.libpebblecommon.connection.BleScanResult
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
@@ -27,10 +26,8 @@ class KableBleScanner : BleScanner {
                 val name = it.name ?: return@mapNotNull null
                 val manufacturerData = it.manufacturerData ?: return@mapNotNull null
                 BleScanResult(
-                    transport = BleTransport(
-                        identifier = it.identifier.asPebbleBluetoothIdentifier(),
-                        name = name,
-                    ),
+                    identifier = it.identifier.asPebbleBleIdentifier(),
+                    name = name,
                     rssi = it.rssi,
                     manufacturerData = manufacturerData
                 )
@@ -38,4 +35,4 @@ class KableBleScanner : BleScanner {
     }
 }
 
-expect fun Identifier.asPebbleBluetoothIdentifier(): PebbleBluetoothIdentifier
+expect fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier

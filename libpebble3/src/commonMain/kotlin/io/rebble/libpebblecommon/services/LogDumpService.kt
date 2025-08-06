@@ -7,12 +7,10 @@ import io.ktor.utils.io.asByteWriteChannel
 import io.ktor.utils.io.writeString
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.connection.PhoneCapabilities
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.packets.LogDump
 import io.rebble.libpebblecommon.packets.LogDump.ReceivedLogDumpMessage
-import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.util.randomCookie
 import kotlinx.coroutines.TimeoutCancellationException
@@ -20,7 +18,6 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.timeout
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Instant
 import kotlinx.datetime.format
 import kotlinx.datetime.format.DateTimeComponents
@@ -31,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 class LogDumpService(
     private val protocolHandler: PebbleProtocolHandler,
     private val appContext: AppContext,
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
 ) : ProtocolService, ConnectedPebble.Logs {
     private val logger = Logger.withTag("LogDumpService")
     private var supportsInfiniteLogDump = false
@@ -42,7 +39,7 @@ class LogDumpService(
 
     override suspend fun gatherLogs(): Path? {
         logger.d { "gatherLogs() supportsInfiniteLogDump=$supportsInfiniteLogDump" }
-        val tempLogFile = getTempFilePath(appContext, "logs-${transport.identifier.asString}")
+        val tempLogFile = getTempFilePath(appContext, "logs-${identifier.asString}")
         SystemFileSystem.sink(tempLogFile).use { sink ->
             sink.asByteWriteChannel().use {
                 writeLine("# Device logs:")
@@ -106,7 +103,7 @@ class LogDumpService(
                         writeChannel.writeLine(logString)
                     }
                 }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             logger.w { "Timeout receiving logs for generation $generation" }
             writeChannel.writeLine("!!! Timeout receiving logs for this generation !!!")
         } finally {

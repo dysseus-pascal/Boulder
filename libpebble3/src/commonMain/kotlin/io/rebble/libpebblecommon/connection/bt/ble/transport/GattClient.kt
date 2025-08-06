@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.Deferred
@@ -11,12 +11,13 @@ import kotlin.uuid.Uuid
 //expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
 
 fun gattConnector(
-    transport: BleTransport,
+    identifier: PebbleBleIdentifier,
+    name: String,
     appContext: AppContext,
     scope: ConnectionCoroutineScope,
 ): GattConnector?
 // = libpebbleGattConnector(scannedPebbleDevice, appContext)
-        = kableGattConnector(transport, scope)
+        = kableGattConnector(identifier = identifier, scope = scope, name = name)
 
 interface GattConnector : AutoCloseable {
     suspend fun connect(): ConnectedGattClient?

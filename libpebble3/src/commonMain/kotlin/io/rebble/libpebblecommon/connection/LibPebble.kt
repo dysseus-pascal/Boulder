@@ -55,7 +55,7 @@ typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
 sealed class PebbleConnectionEvent {
     data class PebbleConnectedEvent(val device: CommonConnectedDevice) : PebbleConnectionEvent()
-    data class PebbleDisconnectedEvent(val device: Transport) : PebbleConnectionEvent()
+    data class PebbleDisconnectedEvent(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
 }
 
 @Stable
@@ -110,8 +110,8 @@ interface Calendar {
     fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
 }
 
-fun PebbleDevices.forDevice(transport: Transport): Flow<PebbleDevice> {
-    return mapNotNull { it.firstOrNull { it.transport == transport } }
+fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
+    return mapNotNull { it.firstOrNull { it.identifier.asString == identifier } }
 }
 
 interface Scanning {
@@ -136,7 +136,7 @@ interface LockerApi {
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
     fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
     suspend fun setAppOrder(id: Uuid, order: Int)
-    suspend fun waitUntilAppSyncedToWatch(id: Uuid, transport: Transport, timeout: Duration): Boolean
+    suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
 }
 

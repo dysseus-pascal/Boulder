@@ -10,12 +10,12 @@ sealed class PlatformIdentifier {
 
 
 interface CreatePlatformIdentifier {
-    fun identifier(transport: Transport): PlatformIdentifier?
+    fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier?
 }
 
 class RealCreatePlatformIdentifier : CreatePlatformIdentifier {
-    override fun identifier(transport: Transport): PlatformIdentifier? = when (transport) {
-        is Transport.BluetoothTransport.BleTransport -> peripheralFromIdentifier(transport)?.let {
+    override fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier? = when (identifier) {
+        is PebbleBleIdentifier -> peripheralFromIdentifier(identifier, name)?.let {
             PlatformIdentifier.BlePlatformIdentifier(
                 it
             )

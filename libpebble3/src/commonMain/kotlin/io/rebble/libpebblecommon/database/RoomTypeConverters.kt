@@ -5,6 +5,8 @@ import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.BaseAttribute
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
+import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
@@ -98,4 +100,10 @@ class RoomTypeConverters {
     fun TimelineFlagListToString(list: List<TimelineItem.Flag>): String {
         return json.encodeToString(list)
     }
+
+    @TypeConverter
+    fun IntToWatchColor(code: Int?): WatchColor? = fromProtocolNumber(code)
+
+    @TypeConverter
+    fun WatchColorToInt(color: WatchColor): Int? = color.protocolNumber
 }

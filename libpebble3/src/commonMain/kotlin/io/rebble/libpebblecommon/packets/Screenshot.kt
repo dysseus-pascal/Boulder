@@ -15,11 +15,13 @@ class ScreenshotRequest : PebblePacket(ProtocolEndpoint.SCREENSHOT) {
     val command = SUByte(m, 0u)
 }
 
-class ScreenshotResponse : PebblePacket(ProtocolEndpoint.SCREENSHOT) {
+sealed class ScreenshotResponse : PebblePacket(ProtocolEndpoint.SCREENSHOT)
+
+class ScreenshotData : ScreenshotResponse() {
     val data = SUnboundBytes(m)
 }
 
-class ScreenshotHeader : StructMappable() {
+class ScreenshotHeader : ScreenshotResponse() {
     /**
      * @see ScreenshotResponseCode
      */
@@ -37,9 +39,9 @@ class ScreenshotHeader : StructMappable() {
 
 enum class ScreenshotResponseCode(val rawCode: UByte) {
     OK(0u),
-    MalformedCommand(0u),
-    OutOfMemory(0u),
-    AlreadyInProgress(0u);
+    MalformedCommand(1u),
+    OutOfMemory(2u),
+    AlreadyInProgress(3u);
 
     companion object {
         fun fromRawCode(rawCode: UByte): ScreenshotResponseCode {
@@ -49,9 +51,9 @@ enum class ScreenshotResponseCode(val rawCode: UByte) {
     }
 }
 
-enum class ScreenshotVersion(val rawCode: UInt) {
-    BLACK_WHITE_1_BIT(1u),
-    COLOR_8_BIT(2u);
+enum class ScreenshotVersion(val rawCode: UInt, val bitsPerPixel: Int) {
+    BLACK_WHITE_1_BIT(1u, 8),
+    COLOR_8_BIT(2u, 1);
 
     companion object {
         fun fromRawCode(rawCode: UInt): ScreenshotVersion {
@@ -63,6 +65,8 @@ enum class ScreenshotVersion(val rawCode: UInt) {
 
 fun screenshotPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.SCREENSHOT) {
-        ScreenshotResponse()
+        // The services needs to decide whether each message is a header or not (but this
+        // needs to create some kind of Screenshot packet).
+        ScreenshotData()
     }
 }

@@ -4,7 +4,7 @@ import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.PROPERTY_WRITE
@@ -22,7 +22,7 @@ import kotlinx.coroutines.withTimeout
 
 class PebblePairing(
     val context: AppContext,
-    val transport: Transport,
+    val identifier: PebbleBleIdentifier,
     val config: BleConfigFlow,
     val blePlatformConfig: BlePlatformConfig,
 ) {
@@ -41,8 +41,7 @@ class PebblePairing(
         }
         check(pairingTriggerCharacteristic != null) { "Pairing trigger characteristic not found" }
 
-        check(transport is Transport.BluetoothTransport)
-        val bondState = getBluetoothDevicePairEvents(context, transport, connectivity)
+        val bondState = getBluetoothDevicePairEvents(context, identifier, connectivity)
         var needsExplicitBond = true
         val bleConfig = config.value
 
@@ -84,7 +83,7 @@ class PebblePairing(
 
         if (needsExplicitBond) {
             Logger.d("Explicit bond required")
-            if (!createBond(transport)) {
+            if (!createBond(identifier)) {
                 Logger.e("Failed to request create bond")
                 // TODO actually fail connection when these things fail
                 return

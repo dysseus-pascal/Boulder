@@ -2,10 +2,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport.impl
 
 import co.touchlab.kermit.Logger
 import com.juul.kable.Peripheral
-import com.juul.kable.logs.Logging
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.asCbUuid
 import io.rebble.libpebblecommon.connection.bt.ble.transport.asUuid
@@ -13,8 +10,8 @@ import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBPeripheral
 import kotlin.uuid.Uuid
 
-actual fun peripheralFromIdentifier(transport: BleTransport): Peripheral? {
-    val peripheral = peripheralFromUuid(transport.identifier.uuid)
+actual fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral? {
+    val peripheral = peripheralFromUuid(identifier.uuid)
     if (peripheral != null) {
         return peripheral
     }
@@ -22,7 +19,7 @@ actual fun peripheralFromIdentifier(transport: BleTransport): Peripheral? {
     val connected = CBCentralManager().retrieveConnectedPeripheralsWithServices(listOf(
         PAIRING_SERVICE_UUID.asCbUuid()
     )) as List<CBPeripheral>
-    val match = connected.firstOrNull { it.name == transport.name }
+    val match = connected.firstOrNull { it.name == name }
     if (match != null) {
         val fallbackPeripheral = peripheralFromUuid(match.identifier.asUuid())
         Logger.d("ios fallback: fallbackPeripheral = $fallbackPeripheral")
@@ -33,7 +30,7 @@ actual fun peripheralFromIdentifier(transport: BleTransport): Peripheral? {
     // For some reason, after restarting the app, even thought the UUID is initially invalid,
     // calling retrieveConnectedPeripheralsWithServices does not return the peripheral we want, but
     // it *does* make the next call to peripheralFromUuid work :confused:
-    val peripheral2 = peripheralFromUuid(transport.identifier.uuid)
+    val peripheral2 = peripheralFromUuid(identifier.uuid)
     if (peripheral2 != null) {
         Logger.d("peripheral found after ios workaround!")
         return peripheral2

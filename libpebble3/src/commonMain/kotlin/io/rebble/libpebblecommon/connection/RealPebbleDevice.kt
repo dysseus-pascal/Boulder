@@ -1,18 +1,20 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.datetime.Instant
 
 class PebbleDeviceFactory {
     internal fun create(
-        transport: Transport,
+        identifier: PebbleIdentifier,
+        name: String,
+        nickname: String?,
         state: ConnectingPebbleState?,
         watchConnector: WatchConnector,
         scanResult: PebbleScanResult?,
@@ -24,7 +26,12 @@ class PebbleDeviceFactory {
         lastFirmwareUpdateState: FirmwareUpdateStatus,
         batteryLevel: Int?,
     ): PebbleDevice {
-        val pebbleDevice = RealPebbleDevice(transport = transport, watchConnector)
+        val pebbleDevice = RealPebbleDevice(
+            identifier = identifier,
+            name = name,
+            nickname = nickname,
+            watchConnector = watchConnector,
+        )
         val knownDevice = knownWatchProperties?.let {
             RealKnownPebbleDevice(
                 runningFwVersion = knownWatchProperties.runningFwVersion,
@@ -33,6 +40,7 @@ class PebbleDeviceFactory {
                 watchConnector = watchConnector,
                 lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
                 watchType = knownWatchProperties.watchType,
+                color = knownWatchProperties.color,
             )
         }
         if (bluetoothState.enabled() && !connectGoal && state.isActive()) {
@@ -46,6 +54,7 @@ class PebbleDeviceFactory {
                 null -> RealDisconnectingPebbleDevice(pebbleDevice)
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
+
             bluetoothState.enabled() && state is ConnectingPebbleState.Connected -> {
                 val knownDevice = RealKnownPebbleDevice(
                     runningFwVersion = state.watchInfo.runningFwVersion.stringVersion,
@@ -54,8 +63,9 @@ class PebbleDeviceFactory {
                     watchConnector = watchConnector,
                     lastConnected = knownWatchProperties?.lastConnected.asLastConnected(),
                     watchType = state.watchInfo.platform,
+                    color = state.watchInfo.color,
                 )
-                val activeDevice = RealActiveDevice(transport, watchConnector)
+                val activeDevice = RealActiveDevice(identifier, watchConnector)
                 when (state) {
                     is ConnectingPebbleState.Connected.ConnectedInPrf ->
                         RealConnectedPebbleDeviceInRecovery(
@@ -83,17 +93,17 @@ class PebbleDeviceFactory {
 
             bluetoothState.enabled() && (state is ConnectingPebbleState.Connecting ||
                     state is ConnectingPebbleState.Negotiating ||
-                         connectGoal) -> when (knownDevice) {
+                    connectGoal) -> when (knownDevice) {
                 null -> RealConnectingPebbleDevice(
                     pebbleDevice = pebbleDevice,
-                    activeDevice = RealActiveDevice(transport, watchConnector),
+                    activeDevice = RealActiveDevice(identifier, watchConnector),
                     negotiating = state is ConnectingPebbleState.Negotiating,
                     rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
                 )
 
                 else -> RealConnectingKnownPebbleDevice(
                     knownDevice = knownDevice,
-                    activeDevice = RealActiveDevice(transport, watchConnector),
+                    activeDevice = RealActiveDevice(identifier, watchConnector),
                     negotiating = state is ConnectingPebbleState.Negotiating,
                     rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
                 )
@@ -102,7 +112,7 @@ class PebbleDeviceFactory {
             else -> {
                 val leScanRecord = scanResult?.leScanRecord
                 when {
-                    leScanRecord != null && transport is BleTransport ->
+                    leScanRecord != null && identifier is PebbleBleIdentifier ->
                         RealBleDiscoveredPebbleDevice(
                             pebbleDevice = pebbleDevice,
                             pebbleScanRecord = leScanRecord,
@@ -112,7 +122,7 @@ class PebbleDeviceFactory {
                     knownDevice != null -> knownDevice
 
                     else -> {
-                        Logger.w("not sure how to create a device for $transport")
+                        Logger.w("not sure how to create a device for $identifier")
                         pebbleDevice
                     }
                 }
@@ -125,14 +135,16 @@ class PebbleDeviceFactory {
 private fun MillisecondInstant?.asLastConnected(): Instant = this?.instant ?: Instant.DISTANT_PAST
 
 internal class RealPebbleDevice(
-    override val transport: Transport,
+    override val identifier: PebbleIdentifier,
+    override val name: String,
+    override val nickname: String?,
     private val watchConnector: WatchConnector,
 ) : PebbleDevice, DiscoveredPebbleDevice {
     override fun connect(uiContext: UIContext?) {
-        watchConnector.requestConnection(transport, uiContext)
+        watchConnector.requestConnection(identifier, uiContext)
     }
 
-    override fun toString(): String = transport.toString()
+    override fun toString(): String = "$identifier - $name"
 }
 
 internal class RealBleDiscoveredPebbleDevice(
@@ -151,10 +163,15 @@ internal class RealKnownPebbleDevice(
     private val watchConnector: WatchConnector,
     override val lastConnected: Instant,
     override val watchType: WatchHardwarePlatform,
+    override val color: WatchColor?,
 ) : KnownPebbleDevice,
     PebbleDevice by pebbleDevice {
     override fun forget() {
-        watchConnector.forget(transport)
+        watchConnector.forget(identifier)
+    }
+
+    override fun setNickname(nickname: String?) {
+        watchConnector.setNickname(identifier, nickname)
     }
 
     override fun toString(): String =
@@ -162,15 +179,15 @@ internal class RealKnownPebbleDevice(
 }
 
 internal class RealActiveDevice(
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
     private val watchConnector: WatchConnector,
 ) : ActiveDevice {
     override fun disconnect() {
-        watchConnector.requestDisconnection(transport)
+        watchConnector.requestDisconnection(identifier)
     }
 
     override fun toString(): String =
-        "ActiveDevice: $transport"
+        "ActiveDevice: $identifier"
 }
 
 internal class RealDisconnectingPebbleDevice(
@@ -227,7 +244,8 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.CoreDump by services.coreDump,
     ConnectedPebble.Music by services.music,
     ConnectedPebble.PKJS by services.pkjs,
-    ConnectedPebble.DevConnection by services.devConnection {
+    ConnectedPebble.DevConnection by services.devConnection,
+    ConnectedPebble.Screenshot by services.screenshot {
 
     override fun toString(): String =
         "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"

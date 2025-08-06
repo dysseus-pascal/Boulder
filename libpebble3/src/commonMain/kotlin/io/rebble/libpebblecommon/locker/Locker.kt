@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
@@ -33,9 +33,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.io.IOException
 import kotlinx.io.Source
@@ -44,7 +42,6 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.io.writeString
-import kotlin.collections.map
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
@@ -118,11 +115,11 @@ class Locker(
         }.await()
     }
 
-    override suspend fun waitUntilAppSyncedToWatch(id: Uuid, transport: Transport, timeout: Duration): Boolean {
+    override suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean {
         try {
             withTimeout(timeout) {
                 lockerEntryDao.dirtyRecordsForWatchInsert(
-                    transport = transport.identifier.asString,
+                    identifier = identifier.asString,
                     timestampMs = timeProvider.now().toEpochMilliseconds(),
                     insertOnlyAfterMs = timeProvider.now().toEpochMilliseconds(),
                 ).filter { entries ->
@@ -205,7 +202,7 @@ class Locker(
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
                 libPebbleCoroutineScope.async {
                     val entryStatus = lockerEntryDao.existsOnWatch(
-                        it.transport.identifier.asString,
+                        it.identifier.asString,
                         lockerEntry.id
                     ).drop(1).first()
                     if (entryStatus) {

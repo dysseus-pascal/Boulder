@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -71,14 +71,14 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
 }
 
 class RealFirmwareUpdater(
-    transport: Transport,
+    identifier: PebbleIdentifier,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
     private val firmwareDownloader: FirmwareDownloader,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : FirmwareUpdater {
-    private val logger = Logger.withTag("FWUpdate-${transport.name}")
+    private val logger = Logger.withTag("FWUpdate-$identifier")
     private lateinit var watchPlatform: WatchHardwarePlatform
     private val _firmwareUpdateState =
         MutableStateFlow<FirmwareUpdateStatus>(FirmwareUpdateStatus.NotInProgress.Idle)

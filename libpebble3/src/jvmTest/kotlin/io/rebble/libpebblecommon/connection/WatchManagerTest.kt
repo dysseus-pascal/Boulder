@@ -7,7 +7,6 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
-import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -52,16 +51,19 @@ class WatchManagerTest {
 
         override suspend fun remove(transportIdentifier: String) {
         }
+
+        override suspend fun setNickname(identifier: String, nickname: String?) {
+        }
     }
     private val pebbleDeviceFactory = PebbleDeviceFactory()
     private val createPlatformIdentifier = object : CreatePlatformIdentifier {
-        override fun identifier(transport: Transport): PlatformIdentifier {
+        override fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier {
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }
 
     class TestConnectionScope(
-        override val transport: Transport,
+        override val identifier: PebbleIdentifier,
         override val pebbleConnector: PebbleConnector,
         override val closed: AtomicBoolean = AtomicBoolean(false),
         override val firmwareUpdateManager: FirmwareUpdateManager,
@@ -72,7 +74,8 @@ class WatchManagerTest {
         }
     }
 
-    private val transport = Transport.SocketTransport(PebbleSocketIdentifier("addr"), "name")
+    private val identifier = "addr".asPebbleBleIdentifier()
+    private val name = "name"
 
     private var activeConnections = 0
     private var totalConnections = 0
@@ -82,7 +85,7 @@ class WatchManagerTest {
     inner class TestPebbleConnector : PebbleConnector {
         private val _disconnected = CompletableDeferred<Unit>()
         private val _state =
-            MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(transport))
+            MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(identifier))
 
         fun onDisconnection() {
             activeConnections--
@@ -96,24 +99,24 @@ class WatchManagerTest {
                 exceededMax = true
                 throw IllegalStateException("too many active connections!")
             }
-            _state.value = ConnectingPebbleState.Connecting(transport)
+            _state.value = ConnectingPebbleState.Connecting(identifier)
             delay(1.milliseconds)
-            _state.value = ConnectingPebbleState.Negotiating(transport)
+            _state.value = ConnectingPebbleState.Negotiating(identifier)
             delay(1.milliseconds)
             if (connectSuccess) {
                 _state.value = ConnectingPebbleState.Connected.ConnectedNotInPrf(
-                    transport = transport,
+                    identifier = identifier,
                     watchInfo = TODO(),
                     services = TODO(),
                 )
             } else {
-                _state.value = ConnectingPebbleState.Failed(transport)
+                _state.value = ConnectingPebbleState.Failed(identifier)
                 onDisconnection()
             }
         }
 
         override fun disconnect() {
-            _state.value = ConnectingPebbleState.Inactive(transport)
+            _state.value = ConnectingPebbleState.Inactive(identifier)
             onDisconnection()
         }
 
@@ -153,7 +156,7 @@ class WatchManagerTest {
     }
     private val companionDevice = object : CompanionDevice {
         override suspend fun registerDevice(
-            transport: Transport,
+            identifier: PebbleIdentifier,
             uiContext: UIContext?
         ): Boolean {
             return true
@@ -210,7 +213,7 @@ class WatchManagerTest {
         val connectionScopeFactory = object : ConnectionScopeFactory {
             override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
                 return TestConnectionScope(
-                    transport = props.transport,
+                    identifier = props.identifier,
                     pebbleConnector = TestPebbleConnector(),
                     firmwareUpdateManager = firmwareUpdateManager,
                     firmwareUpdater = firmwareUpdater,
@@ -249,11 +252,11 @@ class WatchManagerTest {
     @Test
     fun repeatConnections() = runTest(timeout = 5.seconds) {
         val watchManager = create(backgroundScope)
-        val scanResult = PebbleScanResult(transport, 0, null)
+        val scanResult = PebbleScanResult(identifier, name, 0, null)
         watchManager.init()
         yield()
         watchManager.addScanResult(scanResult)
-        watchManager.requestConnection(transport, null)
+        watchManager.requestConnection(identifier, null)
         for (i in 1..20) {
             watchManager.watches.first { totalConnections >= i && it.any { it is ConnectingPebbleDevice } }
         }

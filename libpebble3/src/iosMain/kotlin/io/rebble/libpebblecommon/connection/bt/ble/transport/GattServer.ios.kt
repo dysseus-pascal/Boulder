@@ -3,13 +3,12 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
-import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.asPebbleBluetoothIdentifier
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.allocArrayOf
@@ -56,7 +55,7 @@ import kotlin.uuid.Uuid
 
 data class RegisteredDevice(
     val dataChannel: SendChannel<ByteArray>,
-    val device: PebbleBluetoothIdentifier,
+    val device: PebbleBleIdentifier,
     val notificationsEnabled: Boolean,
 )
 
@@ -90,7 +89,7 @@ actual class GattServer(
         queue = null,
         options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
     )
-    private val registeredDevices: MutableMap<PebbleBluetoothIdentifier, RegisteredDevice> =
+    private val registeredDevices: MutableMap<PebbleBleIdentifier, RegisteredDevice> =
         mutableMapOf()
     private val registeredServices = mutableMapOf<Uuid, Map<Uuid, CBMutableCharacteristic>>()
     private var wasSubscribedAtRestore = false
@@ -187,24 +186,24 @@ actual class GattServer(
         _characteristicReadRequest.asSharedFlow()
 
     actual fun registerDevice(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         sendChannel: SendChannel<ByteArray>,
     ) {
-        logger.d("registerDevice: $transport")
-        registeredDevices[transport.identifier] =
+        logger.d("registerDevice: $identifier")
+        registeredDevices[identifier] =
             RegisteredDevice(
                 dataChannel = sendChannel,
-                device = transport.identifier,
+                device = identifier,
                 notificationsEnabled = false,
             )
     }
 
-    actual fun unregisterDevice(transport: BleTransport) {
-        registeredDevices.remove(transport.identifier)
+    actual fun unregisterDevice(identifier: PebbleBleIdentifier) {
+        registeredDevices.remove(identifier)
     }
 
     actual suspend fun sendData(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
@@ -218,10 +217,10 @@ actual class GattServer(
             return false
         }
         val central = (cbCharacteristic.subscribedCentrals as? List<CBCentral>)?.firstOrNull {
-            it.identifier.asUuid().asPebbleBluetoothIdentifier() == transport.identifier
+            it.identifier.asUuid().toString().asPebbleBleIdentifier() == identifier
         }
         if (central == null) {
-            logger.w("sendData: couldn't find central for ${transport.identifier}")
+            logger.w("sendData: couldn't find central for $identifier")
             return false
         }
         return try {
@@ -265,7 +264,7 @@ actual class GattServer(
     ) {
         didReceiveWriteRequests.mapNotNull { it as? CBATTRequest }.forEach { request ->
             verboseLog { "writeRequest: ${request.characteristic.UUID} / ${request.value}" }
-            val identifier = request.central.identifier.asUuid().asPebbleBluetoothIdentifier()
+            val identifier = request.central.identifier.asUuid().toString().asPebbleBleIdentifier()
             val device = registeredDevices[identifier]
             if (device == null) {
                 logger.w("write request for unknown device: $identifier")
@@ -289,7 +288,7 @@ actual class GattServer(
         central: CBCentral,
         didSubscribeToCharacteristic: CBCharacteristic,
     ) {
-        val identifier = central.identifier.asUuid().asPebbleBluetoothIdentifier()
+        val identifier = central.identifier.asUuid().toString().asPebbleBleIdentifier()
         logger.d("didSubscribeToCharacteristic: device=$identifier cuuid=${didSubscribeToCharacteristic.UUID}")
         val device = registeredDevices[identifier] ?: return
         registeredDevices[identifier] = device.copy(notificationsEnabled = true)
@@ -326,8 +325,8 @@ actual class GattServer(
         runBlocking {
             _characteristicReadRequest.emit(
                 ServerCharacteristicReadRequest(
-                    deviceId = didReceiveReadRequest.central.identifier.asUuid()
-                        .asPebbleBluetoothIdentifier(),
+                    deviceId = didReceiveReadRequest.central.identifier.asUuid().toString()
+                        .asPebbleBleIdentifier(),
                     uuid = didReceiveReadRequest.characteristic.UUID.asUuid(),
                     respond = { bytes ->
                         didReceiveReadRequest.setValue(bytes.toNSData())

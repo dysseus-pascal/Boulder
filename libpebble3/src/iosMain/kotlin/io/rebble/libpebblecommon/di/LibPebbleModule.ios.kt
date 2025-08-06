@@ -5,9 +5,9 @@ import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.connection.UIContext
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
@@ -75,7 +75,7 @@ actual val platformModule: Module = module {
     ) }
     single { object : CompanionDevice {
         override suspend fun registerDevice(
-            transport: Transport,
+            identifier: PebbleIdentifier,
             uiContext: UIContext?,
         ): Boolean {
             return true

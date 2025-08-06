@@ -3,8 +3,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.PebbleBluetoothIdentifier
-import io.rebble.libpebblecommon.connection.Transport.BluetoothTransport.BleTransport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
@@ -25,10 +24,10 @@ expect class GattServer {
     val characteristicReadRequest: Flow<ServerCharacteristicReadRequest>
 
     //    val connectionState: Flow<ServerConnectionstateChanged>
-    fun registerDevice(transport: BleTransport, sendChannel: SendChannel<ByteArray>)
-    fun unregisterDevice(transport: BleTransport)
+    fun registerDevice(identifier: PebbleBleIdentifier, sendChannel: SendChannel<ByteArray>)
+    fun unregisterDevice(identifier: PebbleBleIdentifier)
     suspend fun sendData(
-        transport: BleTransport, serviceUuid: Uuid,
+        identifier: PebbleBleIdentifier, serviceUuid: Uuid,
         characteristicUuid: Uuid, data: ByteArray
     ): Boolean
     fun wasRestoredWithSubscribedCentral(): Boolean
@@ -63,7 +62,7 @@ class GattServerManager(
     }
 
     suspend fun registerDevice(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         sendChannel: SendChannel<ByteArray>
     ): Boolean {
         if (gattServer == null && bluetoothStateProvider.state.value == BluetoothState.Enabled) {
@@ -72,24 +71,24 @@ class GattServerManager(
         }
         val gs = gattServer
         if (gs != null) {
-            gs.registerDevice(transport, sendChannel)
+            gs.registerDevice(identifier, sendChannel)
             return true
         } else {
             return false
         }
     }
 
-    fun unregisterDevice(transport: BleTransport) {
-        gattServer?.unregisterDevice(transport)
+    fun unregisterDevice(identifier: PebbleBleIdentifier) {
+        gattServer?.unregisterDevice(identifier)
     }
 
     suspend fun sendData(
-        transport: BleTransport,
+        identifier: PebbleBleIdentifier,
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
     ): Boolean {
-        return gattServer?.sendData(transport, serviceUuid, characteristicUuid, data) ?: false
+        return gattServer?.sendData(identifier, serviceUuid, characteristicUuid, data) ?: false
     }
 
     fun wasRestoredWithSubscribedCentral(): Boolean {
@@ -126,18 +125,18 @@ class GattServerManager(
 
 data class ServerServiceAdded(val uuid: Uuid)
 data class ServerConnectionstateChanged(
-    val deviceId: PebbleBluetoothIdentifier,
+    val deviceId: PebbleBleIdentifier,
     val connectionState: Int
 )
 
 // Watch reading meta characteristic
 data class ServerCharacteristicReadRequest(
-    val deviceId: PebbleBluetoothIdentifier,
+    val deviceId: PebbleBleIdentifier,
     val uuid: Uuid,
     val respond: (ByteArray) -> Boolean
 )
 
-data class NotificationSent(val deviceId: PebbleBluetoothIdentifier, val status: Int)
+data class NotificationSent(val deviceId: PebbleBleIdentifier, val status: Int)
 
 data class GattService(
     val uuid: Uuid,

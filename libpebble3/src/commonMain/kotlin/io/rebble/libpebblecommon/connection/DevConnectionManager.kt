@@ -8,17 +8,17 @@ import kotlinx.coroutines.flow.stateIn
 
 class DevConnectionManager(
     private val server: DevConnectionServer,
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
     scope: ConnectionCoroutineScope
 ): ConnectedPebble.DevConnection {
     override val devConnectionActive: StateFlow<Boolean> =
-        server.activeDevice.map { it == transport }.stateIn(
+        server.activeDevice.map { it == identifier }.stateIn(
             scope,
             SharingStarted.Eagerly,
             false
         )
     override suspend fun startDevConnection() {
-        server.startForDevice(transport)
+        server.startForDevice(identifier)
     }
 
     override suspend fun stopDevConnection() {

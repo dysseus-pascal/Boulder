@@ -1,10 +1,12 @@
 package io.rebble.libpebblecommon.connection
 
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
@@ -27,10 +29,19 @@ interface ActiveDevice {
 // <T : Transport> ?
 @Stable
 sealed interface PebbleDevice {
-    val transport: Transport
-    val name: String get() = transport.name
+    val identifier: PebbleIdentifier
+    val name: String
+    val nickname: String?
 
     fun connect(uiContext: UIContext?)
+    fun displayName(): String {
+        val actualNickname = nickname
+        if (actualNickname != null && actualNickname.isNotEmpty()) {
+            return actualNickname
+        } else {
+            return name
+        }
+    }
 }
 
 interface DiscoveredPebbleDevice : PebbleDevice
@@ -47,7 +58,9 @@ interface KnownPebbleDevice : PebbleDevice {
     val serial: String
     val lastConnected: Instant
     val watchType: WatchHardwarePlatform
+    val color: WatchColor?
     fun forget()
+    fun setNickname(nickname: String?)
 }
 
 interface DisconnectingPebbleDevice : PebbleDevice
@@ -83,7 +96,8 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.AppMessages,
     ConnectedPebble.Music,
     ConnectedPebble.PKJS,
-    ConnectedPebble.DevConnection
+    ConnectedPebble.DevConnection,
+    ConnectedPebble.Screenshot
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -108,6 +122,10 @@ object ConnectedPebble {
         suspend fun startDevConnection()
         suspend fun stopDevConnection()
         val devConnectionActive: StateFlow<Boolean>
+    }
+
+    interface Screenshot {
+        suspend fun takeScreenshot(): ImageBitmap?
     }
 
     interface Logs {
@@ -182,6 +200,7 @@ object ConnectedPebble {
         val music: Music,
         val pkjs: PKJS,
         val devConnection: DevConnection,
+        val screenshot: Screenshot,
     )
 
     class PrfServices(

@@ -287,7 +287,7 @@ class WebViewJsRunner(
     }
 
     override suspend fun signalReady() {
-        val readyDeviceIds = listOf(device.transport.identifier.asString)
+        val readyDeviceIds = listOf(device.identifier.asString)
         val readyJson = Json.encodeToString(readyDeviceIds)
         withContext(Dispatchers.Main) {
             webView?.loadUrl("javascript:signalReady(${Uri.encode(readyJson)})")

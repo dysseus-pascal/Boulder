@@ -3,8 +3,8 @@ package io.rebble.libpebblecommon.services
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
-import io.rebble.libpebblecommon.connection.Transport
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.GetBytesCoreDump
 import io.rebble.libpebblecommon.packets.GetBytesError
@@ -26,7 +26,7 @@ class GetBytesService(
     private val protocolHandler: PebbleProtocolHandler,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val appContext: AppContext,
-    private val transport: Transport,
+    private val identifier: PebbleIdentifier,
 ) : ProtocolService, ConnectedPebble.CoreDump {
     private val logger = Logger.withTag("GetBytesService")
 
@@ -50,7 +50,7 @@ class GetBytesService(
             }
             val numBytes = imageInfo.numBytes.get()
             var bytesRemaining = numBytes
-            val tempFile = getTempFilePath(appContext, "coredump-${transport.identifier.asString}")
+            val tempFile = getTempFilePath(appContext, "coredump-${identifier.asString}")
             SystemFileSystem.sink(tempFile).buffered().use { sink ->
                 while (bytesRemaining > 0u) {
                     val packet = withTimeoutOrNull(TIMEOUT) { messages.receive() }

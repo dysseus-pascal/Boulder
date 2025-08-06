@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport
 
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.Transport
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
@@ -22,16 +22,16 @@ actual class GattServer {
         get() = TODO("Not yet implemented")
 
     actual fun registerDevice(
-        transport: Transport.BluetoothTransport.BleTransport,
+        identifier: PebbleBleIdentifier,
         sendChannel: SendChannel<ByteArray>
     ) {
     }
 
-    actual fun unregisterDevice(transport: Transport.BluetoothTransport.BleTransport) {
+    actual fun unregisterDevice(identifier: PebbleBleIdentifier) {
     }
 
     actual suspend fun sendData(
-        transport: Transport.BluetoothTransport.BleTransport,
+        identifier: PebbleBleIdentifier,
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray

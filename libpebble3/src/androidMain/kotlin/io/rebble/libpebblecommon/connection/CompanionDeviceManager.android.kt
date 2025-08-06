@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
-import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.IntentSender
@@ -30,8 +29,11 @@ class AndroidCompanionDevice(
     private val _notificationAccessGranted = MutableSharedFlow<Unit>()
     override val notificationAccessGranted = _notificationAccessGranted.asSharedFlow()
 
-    override suspend fun registerDevice(transport: Transport, uiContext: UIContext?): Boolean {
-        if (transport !is Transport.BluetoothTransport) {
+    override suspend fun registerDevice(
+        identifier: PebbleIdentifier,
+        uiContext: UIContext?
+    ): Boolean {
+        if (identifier !is PebbleBleIdentifier) {
             return true
         }
         if (!watchConfigFlow.value.useAndroidCompanionDeviceManager) {
@@ -47,21 +49,15 @@ class AndroidCompanionDevice(
 
         @Suppress("DEPRECATION")
         val existingBoundDevices = service.associations
-        val macAddress = transport.identifier.macAddress
+        val macAddress = identifier.macAddress
         if (existingBoundDevices.contains(macAddress)) {
             service.requestNotificationAccessIfRequired(uiContext)
             return true
         }
 
-        val filter = when (transport) {
-            is Transport.BluetoothTransport.BtClassicTransport -> BluetoothDeviceFilter.Builder()
-                .setAddress(macAddress)
-                .build()
-
-            is Transport.BluetoothTransport.BleTransport -> BluetoothLeDeviceFilter.Builder()
-                .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
-                .build()
-        }
+        val filter = BluetoothLeDeviceFilter.Builder()
+            .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
+            .build()
         val associationRequest = AssociationRequest.Builder().apply {
             addDeviceFilter(filter)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -113,7 +109,8 @@ class AndroidCompanionDevice(
     }
 
     private fun CompanionDeviceManager.requestNotificationAccessIfRequired(context: UIContext) {
-        val component = LibPebbleNotificationListener.componentName(context.activity.applicationContext)
+        val component =
+            LibPebbleNotificationListener.componentName(context.activity.applicationContext)
         if (hasNotificationAccess(component)) {
             libPebbleCoroutineScope.launch {
                 _notificationAccessGranted.emit(Unit)

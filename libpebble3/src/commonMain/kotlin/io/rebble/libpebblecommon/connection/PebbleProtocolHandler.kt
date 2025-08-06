@@ -20,9 +20,9 @@ interface PebbleProtocolHandler {
 class RealPebbleProtocolHandler(
     private val pebbleProtocolStreams: PebbleProtocolStreams,
     connectionScope: ConnectionCoroutineScope,
-    transport: Transport,
+    identifier: PebbleIdentifier,
 ) : PebbleProtocolHandler {
-    private val logger = Logger.withTag("PebbleProtocol-${transport.identifier}")
+    private val logger = Logger.withTag("PebbleProtocol-${identifier}")
     override val inboundMessages: SharedFlow<PebblePacket> =
         pebbleProtocolStreams.inboundMessagesFlow
             .map { it.packet }.shareIn(connectionScope, SharingStarted.Lazily)

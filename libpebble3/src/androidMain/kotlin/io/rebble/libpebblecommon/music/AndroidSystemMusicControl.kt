@@ -92,6 +92,7 @@ class AndroidSystemMusicControl(
 
     private val activeSessions: Flow<List<MediaController>> = callbackFlow {
         val listener = MediaSessionManager.OnActiveSessionsChangedListener { sessions ->
+            logger.v { "sessions changed: $sessions" }
             trySend(sessions?.mapNotNull { it } ?: emptyList())
         }
         if (!addCallbackSafely(listener)) {
@@ -132,6 +133,9 @@ class AndroidSystemMusicControl(
                 callbackFlow {
                     val initialPlaybackState = session.playbackState?.toLibPebbleState()
                         ?: io.rebble.libpebblecommon.music.PlaybackState.Paused
+                    if (session.playbackState?.position == null) {
+                        logger.v { "position null on session callback init" }
+                    }
                     var currentState = PlaybackStatusWithControls(
                         playbackStatus = PlaybackStatus(
                             playbackState = initialPlaybackState,
@@ -152,6 +156,7 @@ class AndroidSystemMusicControl(
 
                     val callback = object : MediaController.Callback() {
                         override fun onMetadataChanged(metadata: MediaMetadata?) {
+                            logger.v { "onMetadataChanged (resetting position)" }
                             currentState = currentState.copy(
                                 playbackStatus = currentState.playbackStatus.copy(
                                     currentTrack = metadata?.let { createTrack(it) },
@@ -167,6 +172,9 @@ class AndroidSystemMusicControl(
                             if (newPlaybackState == io.rebble.libpebblecommon.music.PlaybackState.Playing
                                 && currentState.playbackStatus.playbackState != io.rebble.libpebblecommon.music.PlaybackState.Playing ) {
                                 packageMostRecentlyStartedPlayingAt[session.packageName] = clock.now()
+                            }
+                            if (state?.position == null) {
+                                logger.v { "position null on onPlaybackStateChanged" }
                             }
                             currentState = currentState.copy(
                                 playbackStatus = currentState.playbackStatus.copy(

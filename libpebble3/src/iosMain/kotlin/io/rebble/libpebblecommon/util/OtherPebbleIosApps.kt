@@ -6,6 +6,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class OtherPebbleIosApps : OtherPebbleApps {
-    override val otherPebbleCompanionAppsInstalled: StateFlow<List<OtherPebbleApp>> =
+    override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =
         MutableStateFlow(emptyList())
 }

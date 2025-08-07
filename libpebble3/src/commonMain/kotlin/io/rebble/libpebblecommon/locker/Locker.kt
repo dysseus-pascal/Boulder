@@ -104,7 +104,7 @@ class Locker(
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         val asSystemApp = findSystemApp(id)
         if (asSystemApp != null) {
-            return flow { asSystemApp.wrap() }
+            return flow { emit(asSystemApp.wrap()) }
         }
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }

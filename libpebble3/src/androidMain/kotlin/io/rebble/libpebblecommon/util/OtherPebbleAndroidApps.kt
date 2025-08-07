@@ -11,13 +11,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class OtherPebbleAndroidApps(
-    notificationAppDao: NotificationAppRealDao,
+    private val notificationAppDao: NotificationAppRealDao,
     private val application: Application,
-    libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : OtherPebbleApps {
     private val myPackageName by lazy { application.packageName }
 
-    override val otherPebbleCompanionAppsInstalled: StateFlow<List<OtherPebbleApp>> =
+    override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =
         notificationAppDao.allAppsFlow().map { apps ->
             apps.mapNotNull { app ->
                 if (app.packageName == myPackageName) return@mapNotNull null

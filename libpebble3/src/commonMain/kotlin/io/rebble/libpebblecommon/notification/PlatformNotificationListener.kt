@@ -36,7 +36,7 @@ class NotificationApi(
         notificationAppsSync.init()
     }
 
-    override val notificationApps: Flow<List<AppWithCount>> =
+    override fun notificationApps(): Flow<List<AppWithCount>> =
         notificationAppDao.allAppsWithCountsFlow()
 
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =

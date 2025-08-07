@@ -142,7 +142,7 @@ interface LockerApi {
 
 @Stable
 interface NotificationApps {
-    val notificationApps: Flow<List<AppWithCount>>
+    fun notificationApps(): Flow<List<AppWithCount>>
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
     fun mostRecentNotificationsFor(pkg: String, channelId: String?, limit: Int): Flow<List<NotificationEntity>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
@@ -158,7 +158,7 @@ interface NotificationApps {
 
 interface OtherPebbleApps {
     /** Any other companion apps installed will likely break connecitivity (multiple PPoG services) */
-    val otherPebbleCompanionAppsInstalled: StateFlow<List<OtherPebbleApp>>
+    fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>>
 }
 
 interface CallManagement {

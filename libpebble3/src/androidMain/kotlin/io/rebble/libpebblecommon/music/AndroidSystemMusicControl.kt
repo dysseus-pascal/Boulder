@@ -117,8 +117,8 @@ class AndroidSystemMusicControl(
     }
 
     private suspend fun getNameForPackage(packageName: String): String {
-        return appNameForPackage[packageName] ?:
-            notificationAppRealDao.getEntry(packageName)?.name?.also {
+        return appNameForPackage[packageName]
+            ?: notificationAppRealDao.getEntry(packageName)?.name?.also {
                 appNameForPackage[packageName] = it
             } ?: "Unknown"
     }
@@ -156,13 +156,28 @@ class AndroidSystemMusicControl(
 
                     val callback = object : MediaController.Callback() {
                         override fun onMetadataChanged(metadata: MediaMetadata?) {
-                            logger.v { "onMetadataChanged (resetting position)" }
-                            currentState = currentState.copy(
-                                playbackStatus = currentState.playbackStatus.copy(
-                                    currentTrack = metadata?.let { createTrack(it) },
-                                    playbackPositionMs = 0 // Reset position on track change
+                            val newTrack = metadata?.let { createTrack(it) }
+                            val oldTrack = currentState.playbackStatus.currentTrack
+                            if (newTrack != oldTrack) {
+                                val justAddedArtistOrAlbum = (newTrack?.title == oldTrack?.title) &&
+                                        ((!newTrack?.artist.isNullOrEmpty() && oldTrack?.artist.isNullOrEmpty()) ||
+                                                (!newTrack?.album.isNullOrEmpty() && oldTrack?.album.isNullOrEmpty()))
+                                val newPosition = if (justAddedArtistOrAlbum) {
+                                    logger.v { "onMetadataChanged (not resetting position))" }
+                                    currentState.playbackStatus.playbackPositionMs
+                                } else {
+                                    logger.v { "onMetadataChanged (resetting position): new $newTrack != old $oldTrack" }
+                                    0
+                                }
+                                currentState = currentState.copy(
+                                    playbackStatus = currentState.playbackStatus.copy(
+                                        currentTrack = newTrack,
+                                        playbackPositionMs = newPosition,
+                                    )
                                 )
-                            )
+                            } else {
+                                logger.v { "onMetadataChanged (ignored - didn't actually change)" }
+                            }
                             trySend(currentState)
                         }
 
@@ -170,8 +185,10 @@ class AndroidSystemMusicControl(
                             val newPlaybackState = state?.toLibPebbleState()
                                 ?: io.rebble.libpebblecommon.music.PlaybackState.Paused
                             if (newPlaybackState == io.rebble.libpebblecommon.music.PlaybackState.Playing
-                                && currentState.playbackStatus.playbackState != io.rebble.libpebblecommon.music.PlaybackState.Playing ) {
-                                packageMostRecentlyStartedPlayingAt[session.packageName] = clock.now()
+                                && currentState.playbackStatus.playbackState != io.rebble.libpebblecommon.music.PlaybackState.Playing
+                            ) {
+                                packageMostRecentlyStartedPlayingAt[session.packageName] =
+                                    clock.now()
                             }
                             if (state?.position == null) {
                                 logger.v { "position null on onPlaybackStateChanged" }
@@ -203,7 +220,8 @@ class AndroidSystemMusicControl(
             val playingSession = newSessions.filter { session ->
                 session.playbackStatus.playbackState == io.rebble.libpebblecommon.music.PlaybackState.Playing
             }.maxByOrNull {
-                packageMostRecentlyStartedPlayingAt[it.playbackStatus.playerInfo?.packageId] ?: Instant.DISTANT_PAST
+                packageMostRecentlyStartedPlayingAt[it.playbackStatus.playerInfo?.packageId]
+                    ?: Instant.DISTANT_PAST
             } ?: newSessions.firstOrNull { session ->
                 session.playbackStatus.playbackState == io.rebble.libpebblecommon.music.PlaybackState.Buffering
             }
@@ -219,8 +237,9 @@ class AndroidSystemMusicControl(
             }
         }.stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
 
-    override val playbackState: StateFlow<PlaybackStatus?> = targetSession.map { it?.playbackStatus }
-        .stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
+    override val playbackState: StateFlow<PlaybackStatus?> =
+        targetSession.map { it?.playbackStatus }
+            .stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
 
     override fun play() {
         logger.d { "Playing media" }

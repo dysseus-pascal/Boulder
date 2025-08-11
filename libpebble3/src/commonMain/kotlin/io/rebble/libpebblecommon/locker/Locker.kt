@@ -179,7 +179,7 @@ class Locker(
                 }
             }
         }
-        logger.d { "inserting: $toInsert" }
+        logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
         val toDelete = existingApps.map { it.key }
         logger.d { "deleting: $toDelete" }

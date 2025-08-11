@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
@@ -59,7 +60,7 @@ sealed class PebbleConnectionEvent {
 }
 
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches, Errors {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -77,10 +78,20 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     fun checkForFirmwareUpdates()
 }
 
+sealed class UserFacingError {
+    abstract val message: String
+
+    data class FailedToDownloadPbw(override val message: String) : UserFacingError()
+}
+
 data class OtherPebbleApp(
     val pkg: String,
     val name: String,
 )
+
+interface Errors {
+    val userFacingErrors: Flow<UserFacingError>
+}
 
 interface Watches {
     val watches: PebbleDevices
@@ -191,9 +202,11 @@ class LibPebble3(
     private val otherPebbleApps: OtherPebbleApps,
     private val jsTokenUtil: JsTokenUtil,
     private val housekeeping: Housekeeping,
+    private val errorTracker: ErrorTracker,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
-    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager {
+    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
+    Errors by errorTracker {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

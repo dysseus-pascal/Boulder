@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
@@ -272,6 +273,7 @@ fun initKoin(
                 singleOf(::JsTokenUtil)
                 singleOf(::Datalogging)
                 singleOf(::Health)
+                singleOf(::ErrorTracker)
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will

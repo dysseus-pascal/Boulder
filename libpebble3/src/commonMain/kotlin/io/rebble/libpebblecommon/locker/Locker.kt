@@ -6,11 +6,13 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
+import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LockerApi
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.UserFacingError
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
@@ -321,21 +323,24 @@ expect fun getLockerPBWCacheDirectory(context: AppContext): Path
 class StaticLockerPBWCache(
     context: AppContext,
     private val httpClient: HttpClient,
+    private val errorTracker: ErrorTracker,
 ) :
     LockerPBWCache(context) {
     override suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path? {
         val pbwPath = pathForApp(appId)
         val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
         return try {
-            withTimeout(15.seconds) {
+            withTimeout(20.seconds) {
                 val response = try {
                     httpClient.get(pbwUrl)
                 } catch (e: IOException) {
                     Logger.w(e) { "Error fetching pbw: ${e.message}" }
+                    errorTracker.reportError(UserFacingError.FailedToDownloadPbw("Error fetching pbw: ${e.message}"))
                     return@withTimeout null
                 }
                 if (!response.status.isSuccess()) {
                     Logger.i("http call failed: $response")
+                    errorTracker.reportError(UserFacingError.FailedToDownloadPbw("Error fetching pbw: ${response.status.description}"))
                     return@withTimeout null
                 }
                 SystemFileSystem.sink(pbwPath).use { sink ->

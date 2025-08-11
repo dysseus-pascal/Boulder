@@ -205,6 +205,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun getAccountToken(appUuid: Uuid): String? {
         return ""
     }
+
+    override val userFacingErrors: Flow<UserFacingError>
+        get() = flow {  }
 }
 
 fun fakeWatches(): List<PebbleDevice> {

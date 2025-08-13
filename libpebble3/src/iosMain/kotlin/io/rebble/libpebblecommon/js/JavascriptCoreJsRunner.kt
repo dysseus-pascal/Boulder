@@ -25,6 +25,8 @@ import platform.Foundation.NSBundle
 import platform.Foundation.NSURL
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
+import kotlin.native.runtime.GC
+import kotlin.native.runtime.NativeRuntimeApi
 
 class JavascriptCoreJsRunner(
     private val appContext: AppContext,
@@ -55,7 +57,7 @@ class JavascriptCoreJsRunner(
             JSTimeout(interfacesScope, ::evalRaw),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages),
-            JSCJSLocalStorageInterface(this, appContext, ::evalRaw),
+            JSCJSLocalStorageInterface(jsContext, this, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )
         instances.forEach { it.register(jsContext) }
@@ -95,6 +97,7 @@ class JavascriptCoreJsRunner(
         }
     }
 
+    @OptIn(NativeRuntimeApi::class)
     private fun tearDownJsContext() {
         scope.cancel()
         _readyState.value = false
@@ -104,6 +107,7 @@ class JavascriptCoreJsRunner(
             jsContext?.finalize()
             jsContext = null
         }
+        GC.collect()
         threadContext.close()
     }
 

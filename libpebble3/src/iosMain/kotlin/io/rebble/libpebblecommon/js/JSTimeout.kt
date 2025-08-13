@@ -8,14 +8,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import platform.JavaScriptCore.JSContext
+import platform.JavaScriptCore.JSManagedValue
 import platform.JavaScriptCore.JSValue
 import kotlin.time.Duration.Companion.milliseconds
 
 class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String) -> JSValue?): RegisterableJsInterface {
     private val timeouts = mutableMapOf<Int, Job>()
     private var timeoutIDs = (1..Int.MAX_VALUE).iterator()
-    private val jsFunTriggerTimeout: JSValue by lazy { evalRaw("globalThis._LibPebbleTriggerTimeout")!! }
-    private val jsFunTriggerInterval: JSValue by lazy { evalRaw("globalThis._LibPebbleTriggerInterval")!! }
+    private val jsFunTriggerTimeout: JSManagedValue get() = JSManagedValue(evalRaw("globalThis._LibPebbleTriggerTimeout")!!)
+    private val jsFunTriggerInterval: JSManagedValue get() = JSManagedValue(evalRaw("globalThis._LibPebbleTriggerInterval")!!)
     override fun register(jsContext: JSContext) {
         jsContext["_Timeout"] = mapOf(
             "setTimeout" to this::setTimeout,
@@ -26,10 +27,10 @@ class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String)
     }
 
     private fun triggerTimeout(id: Int) {
-        jsFunTriggerTimeout.callWithArguments(listOf(id.toDouble()))
+        jsFunTriggerTimeout.value?.callWithArguments(listOf(id.toDouble()))
     }
     private fun triggerInterval(id: Int) {
-        jsFunTriggerInterval.callWithArguments(listOf(id.toDouble()))
+        jsFunTriggerInterval.value?.callWithArguments(listOf(id.toDouble()))
     }
 
     fun setTimeout(delay: Double): Double {

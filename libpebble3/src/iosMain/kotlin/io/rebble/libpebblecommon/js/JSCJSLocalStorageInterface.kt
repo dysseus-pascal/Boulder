@@ -7,14 +7,16 @@ import io.rebble.libpebblecommon.js.RegisterableJsInterface
 import io.rebble.libpebblecommon.js.get
 import io.rebble.libpebblecommon.js.set
 import platform.JavaScriptCore.JSContext
+import platform.JavaScriptCore.JSManagedValue
 import platform.JavaScriptCore.JSValue
 
 class JSCJSLocalStorageInterface(
+    private val jsContext: JSContext,
     jsRunner: JsRunner,
     appContext: AppContext,
     private val evalRaw: (String) -> JSValue?
 ): JSLocalStorageInterface(jsRunner, appContext), RegisterableJsInterface {
-    private lateinit var localStorage: JSValue
+    private lateinit var localStorage: JSManagedValue
     override fun register(jsContext: JSContext) {
         jsContext["localStorage"] = mapOf(
             "getItem" to this::getItem,
@@ -23,7 +25,8 @@ class JSCJSLocalStorageInterface(
             "clear" to this::clear,
             "key" to this::key
         )
-        localStorage = jsContext["localStorage"]!!
+        localStorage = JSManagedValue(jsContext["localStorage"]!!)
+        jsContext.virtualMachine!!.addManagedReference(localStorage, this)
         setLength(getLength())
     }
 
@@ -32,10 +35,11 @@ class JSCJSLocalStorageInterface(
     }
 
     override fun setLength(value: Int) {
-        localStorage["length"] = value
+        localStorage.value?.set("length", value)
     }
 
     override fun close() {
+        jsContext.virtualMachine?.removeManagedReference(localStorage, this)
     }
 
 }

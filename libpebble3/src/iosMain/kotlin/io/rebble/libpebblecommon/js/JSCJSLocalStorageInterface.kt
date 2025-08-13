@@ -27,7 +27,7 @@ class JSCJSLocalStorageInterface(
         setLength(getLength())
     }
 
-    override fun getItem(key: String): Any? {
+    override fun getItem(key: Any): Any? {
         return super.getItem(key) ?: evalRaw("null")
     }
 

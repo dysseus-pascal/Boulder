@@ -21,7 +21,7 @@ class WebViewJSLocalStorageInterface(
     }
 
     @JavascriptInterface
-    override fun getItem(key: String): Any? {
+    override fun getItem(key: Any): Any? {
         return super.getItem(key)
     }
 
@@ -31,12 +31,12 @@ class WebViewJSLocalStorageInterface(
     }
 
     @JavascriptInterface
-    override fun removeItem(key: String) {
+    override fun removeItem(key: Any) {
         super.removeItem(key)
     }
 
     @JavascriptInterface
-    override fun setItem(key: String, value: String) {
+    override fun setItem(key: Any, value: Any) {
         super.setItem(key, value)
     }
 }

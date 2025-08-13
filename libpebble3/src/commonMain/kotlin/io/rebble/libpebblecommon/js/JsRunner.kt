@@ -50,7 +50,7 @@ class AppMessageRequest(
     sealed class State {
         object Pending : State()
         object DataError : State()
-        data class TransactionId(val transactionId: Byte) : State()
+        data class TransactionId(val transactionId: UByte) : State()
         data class Sent(val result: AppMessageResult) : State()
     }
     val state = MutableStateFlow<State>(State.Pending)

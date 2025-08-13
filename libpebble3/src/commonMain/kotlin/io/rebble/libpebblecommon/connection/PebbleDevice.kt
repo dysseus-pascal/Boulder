@@ -108,7 +108,7 @@ sealed interface ConnectedPebbleDevice :
 object ConnectedPebble {
     interface AppMessages {
         val inboundAppMessages: Flow<AppMessageData>
-        val transactionSequence: Iterator<Byte>
+        val transactionSequence: Iterator<UByte>
         suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult
         suspend fun sendAppMessageResult(appMessageResult: AppMessageResult)
     }

@@ -68,13 +68,13 @@ class PKJSApp(
     val logMessages = _logMessages.asSharedFlow()
     val sessionIsReady get() = jsRunner?.readyState?.value ?: false
 
-    private suspend fun replyNACK(id: Byte) {
+    private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(1000) {
             device.sendAppMessageResult(AppMessageResult.ACK(id))
         }
     }
 
-    private suspend fun replyACK(id: Byte) {
+    private suspend fun replyACK(id: UByte) {
         withTimeoutOrNull(1000) {
             device.sendAppMessageResult(AppMessageResult.ACK(id))
         }
@@ -213,7 +213,7 @@ fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
     }.toString()
 }
 
-private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: Byte): AppMessageData {
+private fun String.toAppMessageData(appInfo: PbwAppInfo, transactionId: UByte): AppMessageData {
     val jsonElement = Json.parseToJsonElement(this)
     require(jsonElement !is JsonNull) { "Invalid JSON data" }
     val jsonObject = jsonElement.jsonObject

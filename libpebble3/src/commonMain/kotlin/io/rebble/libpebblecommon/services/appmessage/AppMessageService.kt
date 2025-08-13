@@ -24,7 +24,7 @@ class AppMessageService(
 ) : ProtocolService, ConnectedPebble.AppMessages {
     private val receivedMessages = Channel<AppMessageData>(Channel.BUFFERED)
     override val inboundAppMessages: Flow<AppMessageData> = receivedMessages.consumeAsFlow().shareIn(scope, started = SharingStarted.Lazily)
-    override val transactionSequence: Iterator<Byte> = AppMessageTransactionSequence().iterator()
+    override val transactionSequence: Iterator<UByte> = AppMessageTransactionSequence().iterator()
     private var appMessageCallback: CompletableDeferred<AppMessage>? = null
 
     fun init() {
@@ -102,23 +102,23 @@ private fun Map<Int, Any>.toAppMessageTuples(): List<AppMessageTuple> {
 typealias AppMessageDictionary = Map<Int, Any>
 
 data class AppMessageData(
-    val transactionId: Byte,
+    val transactionId: UByte,
     val uuid: Uuid,
     val data: AppMessageDictionary
 )
 
-sealed class AppMessageResult(val transactionId: Byte) {
-    class ACK(transactionId: Byte) : AppMessageResult(transactionId)
-    class NACK(transactionId: Byte) : AppMessageResult(transactionId)
+sealed class AppMessageResult(val transactionId: UByte) {
+    class ACK(transactionId: UByte) : AppMessageResult(transactionId)
+    class NACK(transactionId: UByte) : AppMessageResult(transactionId)
 }
 
 private fun AppMessage.AppMessagePush.appMessageData(): AppMessageData {
     return AppMessageData(
-        transactionId = transactionId.get().toByte(),
+        transactionId = transactionId.get(),
         uuid = uuid.get(),
         data = dictionary.list.associate { it.key.get().toInt() to it.getTypedData() }
     )
 }
 
-private fun AppMessage.AppMessageACK.appMessageResult() = AppMessageResult.ACK(transactionId.get().toByte())
-private fun AppMessage.AppMessageNACK.appMessageResult() = AppMessageResult.NACK(transactionId.get().toByte())
+private fun AppMessage.AppMessageACK.appMessageResult() = AppMessageResult.ACK(transactionId.get())
+private fun AppMessage.AppMessageNACK.appMessageResult() = AppMessageResult.NACK(transactionId.get())

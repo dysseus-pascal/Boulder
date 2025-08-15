@@ -41,6 +41,7 @@ actual val platformModule: Module = module {
                 ProtocolCapsFlag.SupportsInfiniteLogDump,
                 ProtocolCapsFlag.SupportsExtendedMusicProtocol,
                 ProtocolCapsFlag.SupportsTwoWayDismissal,
+                ProtocolCapsFlag.SupportsAppDictation,
                 //ProtocolCapsFlag.SupportsLocalization
                 ProtocolCapsFlag.Supports8kAppMessage,
 //                ProtocolCapsFlag.SupportsHealthInsights,

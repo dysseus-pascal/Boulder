@@ -63,6 +63,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolS
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
@@ -83,6 +84,7 @@ import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
 import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
@@ -91,12 +93,14 @@ import io.rebble.libpebblecommon.services.PhoneControlService
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.ScreenshotService
 import io.rebble.libpebblecommon.services.SystemService
+import io.rebble.libpebblecommon.services.VoiceService
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.util.PrivateLogger
+import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.RealFirmwareUpdateManager
@@ -212,6 +216,7 @@ fun initKoin(
     webServices: WebServices,
     appContext: AppContext,
     tokenProvider: TokenProvider,
+    transcriptionProvider: TranscriptionProvider
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -230,6 +235,7 @@ fun initKoin(
                 single { appContext }
                 single { webServices }
                 single { tokenProvider }
+                single { transcriptionProvider }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)
@@ -316,7 +322,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(), get(),
+                            get(), get(), get()
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -353,6 +359,8 @@ fun initKoin(
                     scopedOf(::PhoneControlService)
                     scopedOf(::MusicService)
                     scopedOf(::ScreenshotService)
+                    scopedOf(::VoiceService)
+                    scopedOf(::AudioStreamService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
@@ -367,6 +375,7 @@ fun initKoin(
                     scopedOf(::MusicControlManager)
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
                     scopedOf(::DevConnectionManager)
+                    scopedOf(::VoiceSessionManager)
 
 
                     // TODO we ccoouulllddd scope this further to inject more things that we still

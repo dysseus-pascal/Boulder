@@ -380,7 +380,18 @@ class SFixedList<T : Mappable>(
     default: List<T> = emptyList(),
     private val itemFactory: () -> T
 ) :
-    Mappable(Endian.Unspecified) {
+    Mappable(Endian.Unspecified), List<T> {
+
+    override fun contains(element: T): Boolean = list.contains(element)
+    override fun containsAll(elements: Collection<T>): Boolean = list.containsAll(elements)
+    override fun isEmpty(): Boolean = list.isEmpty()
+    override fun iterator(): Iterator<T> = list.iterator()
+    override fun indexOf(element: T): Int = list.indexOf(element)
+    override fun lastIndexOf(element: T): Int = list.lastIndexOf(element)
+    override fun listIterator(): ListIterator<T> = list.listIterator()
+    override fun listIterator(index: Int): ListIterator<T> = list.listIterator(index)
+    override fun subList(fromIndex: Int, toIndex: Int): List<T> = list.subList(fromIndex, toIndex)
+    override fun get(index: Int): T = list[index]
 
     var count = count
         set(value) {

@@ -36,6 +36,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
+import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -291,8 +292,9 @@ class LibPebble3(
             webServices: WebServices,
             appContext: AppContext,
             tokenProvider: TokenProvider,
+            transcriptionProvider: TranscriptionProvider
         ): LibPebble {
-            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider)
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, transcriptionProvider)
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }

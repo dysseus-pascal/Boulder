@@ -4,10 +4,6 @@ import androidx.annotation.VisibleForTesting
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_RX_WINDOW
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.MAX_TX_WINDOW
-import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.bt
 
 import com.juul.kable.Bluetooth
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,13 +21,17 @@ enum class BluetoothState {
     fun enabled(): Boolean = this == Enabled
 }
 
+expect fun registerNativeBtStateLogging(appContext: AppContext)
+
 class RealBluetoothStateProvider(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val appContext: AppContext,
 ) : BluetoothStateProvider {
     private val _state = MutableStateFlow(BluetoothState.Disabled)
     override val state: StateFlow<BluetoothState> = _state.asStateFlow()
 
     override fun init() {
+        registerNativeBtStateLogging(appContext)
         libPebbleCoroutineScope.launch {
             Bluetooth.availability.collect {
                 when (it) {

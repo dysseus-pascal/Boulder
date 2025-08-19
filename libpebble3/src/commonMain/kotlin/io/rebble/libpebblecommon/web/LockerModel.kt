@@ -13,7 +13,7 @@ data class LockerModel(
 data class LockerEntry(
     val id: String,
     val uuid: String,
-    @SerialName("user_token") val userToken: String,
+    @SerialName("user_token") val userToken: String? = null,
     val title: String,
     val type: String,
     val category: String,

@@ -14,11 +14,10 @@ class JSCPKJSInterface(jsRunner: JsRunner, device: PebbleJSDevice, libPebble: Li
 
     override fun register(jsContext: JSContext) {
         jsContext["Pebble"] = mapOf(
-            "showSimpleNotificationOnPebble" to this::showNotificationOnPebble,
+            "showSimpleNotificationOnPebble" to this::showSimpleNotificationOnPebble,
             "getAccountToken" to this::getAccountToken,
             "getWatchToken" to this::getWatchToken,
             "showToast" to this::showToast,
-            "showNotificationOnPebble" to this::showNotificationOnPebble,
             "openURL" to this::openURL
         )
     }

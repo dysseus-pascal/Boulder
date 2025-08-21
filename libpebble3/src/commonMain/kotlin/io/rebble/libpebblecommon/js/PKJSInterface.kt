@@ -62,10 +62,6 @@ abstract class PKJSInterface(
 
     abstract fun showToast(toast: String)
 
-    open fun showNotificationOnPebble(jsonObjectStringNotificationData: String) {
-        TODO("Not yet implemented")
-    }
-
     /**
      * Open a URL e.g. configuration page
      */

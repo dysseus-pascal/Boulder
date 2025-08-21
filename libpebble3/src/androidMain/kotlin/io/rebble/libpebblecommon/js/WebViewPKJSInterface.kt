@@ -37,11 +37,6 @@ class WebViewPKJSInterface(
     }
 
     @JavascriptInterface
-    override fun showNotificationOnPebble(jsonObjectStringNotificationData: String) {
-        super.showNotificationOnPebble(jsonObjectStringNotificationData)
-    }
-
-    @JavascriptInterface
     override fun openURL(url: String): String {
         return super.openURL(url)
     }

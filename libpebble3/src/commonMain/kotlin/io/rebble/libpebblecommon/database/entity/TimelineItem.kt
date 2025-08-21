@@ -42,7 +42,7 @@ data class TimelineNotification(
 @GenerateRoomEntity(
     primaryKey = "itemId",
     databaseId = BlobDatabase.Pin,
-    windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
+    windowBeforeSecs = 5 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
     sendDeletions = true,
@@ -59,7 +59,7 @@ data class TimelinePin(
 @GenerateRoomEntity(
     primaryKey = "itemId",
     databaseId = BlobDatabase.Reminder,
-    windowBeforeSecs = 3 * 60 * 60 * 24, // 3 days
+    windowBeforeSecs = 5 * 60 * 60 * 24, // 3 days
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
     sendDeletions = true,

@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connected
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
@@ -16,6 +17,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicCo
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.metadata.isDevelopmentDeviceWhichMightNotHavePrf
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
@@ -124,6 +127,7 @@ class RealPebbleConnector(
     private val devConnectionManager: DevConnectionManager,
     private val screenshotService: ScreenshotService,
     private val voiceSessionManager: VoiceSessionManager,
+    private val watchConfig: WatchConfigFlow,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -185,12 +189,13 @@ class RealPebbleConnector(
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
+        val ignoreMissingPrfOnThisDevice = watchConfig.value.ignoreMissingPrf && watchInfo.platform.isDevelopmentDeviceWhichMightNotHavePrf()
         val recoveryMode = when {
             watchInfo.runningFwVersion.isRecovery -> true.also {
                 logger.i("PRF running; going into recovery mode")
             }
 
-            watchInfo.recoveryFwVersion == null -> true.also {
+            !ignoreMissingPrfOnThisDevice && watchInfo.recoveryFwVersion == null -> true.also {
                 logger.w("No recovery FW installed!!! going into recovery mode")
             }
 

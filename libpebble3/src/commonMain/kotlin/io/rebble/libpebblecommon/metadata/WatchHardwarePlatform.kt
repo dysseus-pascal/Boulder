@@ -48,6 +48,11 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     }
 }
 
+fun WatchHardwarePlatform.isDevelopmentDeviceWhichMightNotHavePrf(): Boolean = when (this) {
+    WatchHardwarePlatform.CORE_OBELIX -> true
+    else -> false
+}
+
 @Serializer(WatchHardwarePlatform::class)
 class WatchHardwarePlatformSerializer {
     override val descriptor: SerialDescriptor

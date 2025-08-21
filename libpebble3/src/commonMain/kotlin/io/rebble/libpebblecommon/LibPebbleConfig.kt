@@ -62,6 +62,7 @@ data class WatchConfig(
     val calendarReminders: Boolean = true,
     val enableHealth: Boolean = true,
     val useAndroidCompanionDeviceManager: Boolean = true,
+    val ignoreMissingPrf: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

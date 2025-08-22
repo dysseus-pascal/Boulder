@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.DevConnectionServer
@@ -30,6 +31,7 @@ import io.rebble.libpebblecommon.connection.PebbleProtocolRunner
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.PebbleSocketIdentifier
 import io.rebble.libpebblecommon.connection.PlatformIdentifier
+import io.rebble.libpebblecommon.connection.RealConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.RealCreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.RealPebbleConnector
 import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
@@ -51,6 +53,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebblePairing
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogClient
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogServer
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PreConnectScanner
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
@@ -280,6 +283,7 @@ fun initKoin(
                 singleOf(::Datalogging)
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
+                singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will
@@ -345,6 +349,7 @@ fun initKoin(
                     scopedOf(::BatteryWatcher)
                     scopedOf(::PebblePairing)
                     scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
+                    scopedOf(::PreConnectScanner)
 
                     // Services
                     scopedOf(::SystemService)

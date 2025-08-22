@@ -12,7 +12,7 @@ plugins {
 
 android {
     namespace = "coredevices.blobannotations"
-    compileSdk = 34
+    compileSdk = libs.versions.android.compileSdk.get().toInt()
     defaultConfig {
         minSdk = 26
         lint.targetSdk = compileSdk

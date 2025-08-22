@@ -5,10 +5,13 @@ import com.juul.kable.DiscoveredCharacteristic
 import com.juul.kable.DiscoveredService
 import com.juul.kable.Peripheral
 import com.juul.kable.State
+import com.juul.kable.State.Disconnected.Status
 import com.juul.kable.WriteType
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnectionResult
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
@@ -23,11 +26,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(identifier: PebbleBleIdentifier, scope: ConnectionCoroutineScope, name: String): GattConnector? {
+fun kableGattConnector(
+    identifier: PebbleBleIdentifier,
+    scope: ConnectionCoroutineScope,
+    name: String
+): GattConnector? {
     val peripheral = peripheralFromIdentifier(identifier, name)
     if (peripheral == null) return null
     return KableGattConnector(identifier, peripheral, scope)
@@ -42,14 +50,14 @@ class KableGattConnector(
 ) : GattConnector {
     private val logger = Logger.withTag("KableGattConnector/${identifier.asString}")
 
-    private val _disconnected = CompletableDeferred<Unit>()
-    override val disconnected: Deferred<Unit> = _disconnected
+    private val _disconnected = CompletableDeferred<ConnectionFailureReason>()
+    override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
 
-    override suspend fun connect(): ConnectedGattClient? {
+    override suspend fun connect(): GattConnectionResult {
         if (!peripheral.scope.isActive) {
             logger.w { "connect(): peripheral already closed!" }
-            _disconnected.complete(Unit)
-            return null
+            _disconnected.complete(ConnectionFailureReason.PeripheralAlreadyClosed)
+            return GattConnectionResult.Failure(ConnectionFailureReason.PeripheralAlreadyClosed)
         }
         scope.launch {
             val disconnected = peripheral.state.dropWhile {
@@ -57,16 +65,19 @@ class KableGattConnector(
                 it is State.Disconnected
             }.filterIsInstance<State.Disconnected>().first()
             logger.i { "Disconnection: status=${disconnected.status}" }
-            _disconnected.complete(Unit)
+            _disconnected.complete(disconnected.status.asFailureReason())
         }
-        try {
-            return withTimeout(CONNECT_TIMEOUT) {
+        return try {
+            withTimeout(CONNECT_TIMEOUT) {
                 val kableScope = peripheral.connect()
-                KableConnectedGattClient(identifier, peripheral)
+                GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral))
             }
         } catch (e: Exception) {
-            logger.e("error connecting", e)
-            return null
+            logger.e("error connecting.. waiting for disconnection to to reason", e)
+            val disconnectReason = withTimeoutOrNull(2.seconds) {
+                _disconnected.await()
+            } ?: ConnectionFailureReason.FailedToConnect
+            GattConnectionResult.Failure(disconnectReason)
         }
     }
 
@@ -84,6 +95,22 @@ class KableGattConnector(
     companion object {
         private val CONNECT_TIMEOUT = 60.seconds
     }
+}
+
+private fun Status?.asFailureReason(): ConnectionFailureReason = when (this) {
+    Status.Cancelled, Status.CentralDisconnected, Status.ConnectionLimitReached,
+    Status.EncryptionTimedOut, Status.Failed, Status.L2CapFailure,
+    Status.LinkManagerProtocolTimeout, Status.PeripheralDisconnected,
+    Status.UnknownDevice-> ConnectionFailureReason.FailedToConnect
+    Status.Timeout -> ConnectionFailureReason.ConnectTimeout
+    is Status.Unknown -> {
+        when (this.status) {
+            5 -> ConnectionFailureReason.GattInsufficientAuth
+            147 -> ConnectionFailureReason.GattErrorUnknown147
+            else -> ConnectionFailureReason.GattErrorUnknown
+        }
+    }
+    null -> ConnectionFailureReason.FailedToConnect
 }
 
 expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int

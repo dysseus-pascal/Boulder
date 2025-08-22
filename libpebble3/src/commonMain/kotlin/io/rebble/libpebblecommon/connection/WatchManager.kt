@@ -110,7 +110,7 @@ private data class Watch(
     val forget: Boolean,
     val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     val lastFirmwareUpdateState: FirmwareUpdateStatus,
-    // TODO can add non-persisted state here e.g. previous connection failures to manage backoff etc
+    val lastConnectionFailureReason: ConnectionFailureReason?,
 ) {
     init {
         check(scanResult != null || knownWatchProps != null)
@@ -146,6 +146,7 @@ class WatchManager(
     private val watchConfig: WatchConfigFlow,
     private val clock: Clock,
     private val blePlatformConfig: BlePlatformConfig,
+    private val connectionFailureHandler: ConnectionFailureHandler,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
@@ -187,6 +188,7 @@ class WatchManager(
                 firmwareUpdateAvailable = null,
                 lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
                 nickname = it.nickname,
+                lastConnectionFailureReason = null,
             )
         }
     }
@@ -244,6 +246,7 @@ class WatchManager(
                         return@mapNotNull null
                     }
 
+                    // Goals
                     if (device.connectGoal && !hasConnectionAttempt && btstate.enabled()) {
                         if (watchConfig.value.multipleConnectedWatchesSupported) {
                             connectTo(device)
@@ -294,7 +297,10 @@ class WatchManager(
                         )
                         if (newProps != device.knownWatchProps) {
                             updateWatch(identifier) {
-                                it.copy(knownWatchProps = newProps)
+                                it.copy(
+                                    knownWatchProps = newProps,
+                                    lastConnectionFailureReason = null,
+                                )
                             }
                         }
 
@@ -321,6 +327,21 @@ class WatchManager(
                         }
 
                         _connectionEvents.emit(PebbleConnectionEvent.PebbleDisconnectedEvent(identifier))
+                    }
+
+                    // Connection error
+                    if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Failed && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Failed) {
+                        val failureReason = states.currentState.connectingPebbleState.reason
+                        if (failureReason != device.lastConnectionFailureReason) {
+                            logger.d { "New failure reason: $failureReason" }
+                            updateWatch(identifier) {
+                                it.copy(
+                                    lastConnectionFailureReason = failureReason,
+                                )
+                            }
+                        } else {
+                            connectionFailureHandler.handleRepeatFailure(identifier, failureReason)
+                        }
                     }
                     pebbleDevice
                 }
@@ -350,6 +371,7 @@ class WatchManager(
                         firmwareUpdateAvailable = null,
                         lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
                         nickname = null,
+                        lastConnectionFailureReason = null,
                     )
                 )
             } else {
@@ -410,14 +432,11 @@ class WatchManager(
     private fun connectTo(device: Watch) {
         val identifier = device.identifier
         logger.d("connectTo: $identifier (activeConnections=$activeConnections)")
-        // TODO I think there is a still a race here, where we can wind up connecting multiple
-        //  times to the same watch, because the Flow wasn't updated yet
         if (device.activeConnection != null) {
             logger.w("Already connecting to $identifier")
             return
         }
         updateWatch(identifier = identifier) { watch ->
-//            val connectionExists = allWatches.value[transport]?.activeConnection != null
             val connectionExists = activeConnections.contains(identifier)
             if (connectionExists) {
                 logger.e("Already connecting to $identifier (this is a bug)")
@@ -434,8 +453,6 @@ class WatchManager(
                     return@CoroutineExceptionHandler
                 }
                 caughtException = true
-                // TODO (not necessarily here but..) handle certain types of "fatal" disconnection (e.g.
-                //  bad FW version) by not attempting to endlessly reconnect.
                 val connection = allWatches.value[identifier]?.activeConnection
                 connection?.let {
                     libPebbleCoroutineScope.launch {
@@ -481,7 +498,10 @@ class WatchManager(
                         logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
-                    pebbleConnector.connect(device.knownWatchProps != null)
+                    pebbleConnector.connect(
+                        previouslyConnected = device.knownWatchProps != null,
+                        lastError = device.lastConnectionFailureReason,
+                    )
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $identifier")
                     pebbleConnector.disconnected.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)

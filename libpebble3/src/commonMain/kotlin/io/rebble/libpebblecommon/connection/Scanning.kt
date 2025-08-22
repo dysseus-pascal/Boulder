@@ -46,7 +46,7 @@ class RealScanning(
         Logger.d("startBleScan")
         bleScanJob?.cancel()
         watchConnector.clearScanResults()
-        val scanResults = bleScanner.scan("Pebble" /* TODO remove? */)
+        val scanResults = bleScanner.scan()
         _isBleScanning.value = true
         bleScanJob = libPebbleCoroutineScope.launch {
             launch {

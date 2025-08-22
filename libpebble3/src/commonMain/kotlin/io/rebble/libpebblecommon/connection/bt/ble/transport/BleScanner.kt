@@ -13,5 +13,5 @@ fun bleScanner(): BleScanner
 // = libpebbleBleScanner()
 
 interface BleScanner {
-    fun scan(namePrefix: String?): Flow<BleScanResult>
+    fun scan(): Flow<BleScanResult>
 }

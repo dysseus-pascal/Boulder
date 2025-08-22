@@ -83,16 +83,16 @@ class WatchManagerTest {
     private var exceededMax = false
 
     inner class TestPebbleConnector : PebbleConnector {
-        private val _disconnected = CompletableDeferred<Unit>()
+        private val _disconnected = CompletableDeferred<ConnectionFailureReason>()
         private val _state =
             MutableStateFlow<ConnectingPebbleState>(ConnectingPebbleState.Inactive(identifier))
 
         fun onDisconnection() {
             activeConnections--
-            _disconnected.complete(Unit)
+            _disconnected.complete(ConnectionFailureReason.FailedToConnect)
         }
 
-        override suspend fun connect(previouslyConnected: Boolean) {
+        override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
             activeConnections++
             totalConnections++
             if (activeConnections > 1) {
@@ -110,7 +110,7 @@ class WatchManagerTest {
                     services = TODO(),
                 )
             } else {
-                _state.value = ConnectingPebbleState.Failed(identifier)
+                _state.value = ConnectingPebbleState.Failed(identifier, ConnectionFailureReason.FailedToConnect)
                 onDisconnection()
             }
         }
@@ -221,6 +221,14 @@ class WatchManagerTest {
                 )
             }
         }
+        val connectionFailureHandler = object : ConnectionFailureHandler {
+            override suspend fun handleRepeatFailure(
+                identifier: PebbleIdentifier,
+                reason: ConnectionFailureReason
+            ) {
+
+            }
+        }
         return WatchManager(
             knownWatchDao = knownWatchDao,
             pebbleDeviceFactory = pebbleDeviceFactory,
@@ -233,6 +241,7 @@ class WatchManagerTest {
             watchConfig = watchConfig,
             clock = Clock.System,
             blePlatformConfig = blePlatformConfig,
+            connectionFailureHandler = connectionFailureHandler,
         )
     }
 

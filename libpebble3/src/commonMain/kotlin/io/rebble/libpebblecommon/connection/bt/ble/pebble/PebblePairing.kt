@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
@@ -26,12 +27,11 @@ class PebblePairing(
     val config: BleConfigFlow,
     val blePlatformConfig: BlePlatformConfig,
 ) {
-    //    @Throws(IOException::class, SecurityException::class)
     suspend fun requestPairing(
         device: ConnectedGattClient,
         connectivityRecord: ConnectivityStatus,
         connectivity: Flow<ConnectivityStatus>,
-    ) {
+    ): ConnectionFailureReason? {
         Logger.d("Requesting pairing")
         val pairingService =
             device.services?.firstOrNull { it.uuid == PAIRING_SERVICE_UUID }
@@ -77,7 +77,7 @@ class PebblePairing(
                 device.readCharacteristic(PAIRING_SERVICE_UUID, PAIRING_TRIGGER_CHARACTERISTIC)
             if (readRes == null) {
                 Logger.e("Failed to read pairing trigger")
-                return
+                return ConnectionFailureReason.ReadPairingTrigger
             }
         }
 
@@ -85,8 +85,7 @@ class PebblePairing(
             Logger.d("Explicit bond required")
             if (!createBond(identifier)) {
                 Logger.e("Failed to request create bond")
-                // TODO actually fail connection when these things fail
-                return
+                return ConnectionFailureReason.CreateBondFailed
             }
         }
         try {
@@ -98,8 +97,9 @@ class PebblePairing(
             Logger.d("got bond state!")
         } catch (e: TimeoutCancellationException) {
             Logger.e("Failed to bond in time")
-            return
+            return ConnectionFailureReason.PairingTimedOut
         }
+        return null
     }
 
     private fun makePairingTriggerValue(

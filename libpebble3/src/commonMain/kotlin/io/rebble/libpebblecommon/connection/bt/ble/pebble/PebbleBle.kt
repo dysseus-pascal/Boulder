@@ -5,18 +5,20 @@ import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
-import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
+import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnectionResult
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 class PebbleBle(
     private val config: BleConfigFlow,
@@ -32,10 +34,11 @@ class PebbleBle(
     private val pairing: PebblePairing,
     private val gattServerManager: GattServerManager,
     private val batteryWatcher: BatteryWatcher,
+    private val preConnectScanner: PreConnectScanner,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${identifier.asString}")
 
-    override suspend fun connect(): PebbleConnectionResult {
+    override suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult {
         logger.d("connect() reversedPPoG = ${config.value.reversedPPoG}")
         if (!config.value.reversedPPoG) {
             if (!gattServerManager.registerDevice(identifier, pPoGStream.inboundPPoGBytesChannel)) {
@@ -43,10 +46,18 @@ class PebbleBle(
             }
         }
 
-        val device = gattConnector.connect()
-        if (device == null) {
-            logger.d("pebbleble: null device")
-            return PebbleConnectionResult.Failed(ConnectionFailureReason.FailedToConnect)
+        if (lastError == ConnectionFailureReason.GattErrorUnknown147) {
+            // Try scanning before connecting (this seems to magically allow android to connect,
+            // when otherwise it can't).
+            preConnectScanner.scanBeforeConnect(identifier)
+        }
+
+        val result = gattConnector.connect()
+        val device = when (result) {
+            is GattConnectionResult.Failure -> {
+                 return PebbleConnectionResult.Failed(result.reason)
+            }
+            is GattConnectionResult.Success -> result.client
         }
         val services = device.discoverServices()
         logger.d("services = $services")
@@ -63,7 +74,10 @@ class PebbleBle(
                 ppog.updateMtu(newMtu)
             }
         }
-        mtuParam.update(device, TARGET_MTU)
+        val mtuResult = mtuParam.update(device, TARGET_MTU)
+        if (mtuResult != PebbleConnectionResult.Success) {
+            return mtuResult
+        }
         logger.d("done mtu update")
 
         if (!connectivity.subscribe(device)) {
@@ -100,7 +114,10 @@ class PebbleBle(
         }
 
         if (needToPair) {
-            pairing.requestPairing(device, connectionStatus, connectivity.status)
+            val pairingResult = pairing.requestPairing(device, connectionStatus, connectivity.status)
+            if (pairingResult != null) {
+                PebbleConnectionResult.Failed(pairingResult)
+            }
         }
 
         if (ppogPacketSender is PpogClient) {
@@ -123,6 +140,28 @@ class PebbleBle(
 
     companion object {
         private val CONNECTIVITY_UPDATE_TIMEOUT = 10000L
+    }
+}
+
+class PreConnectScanner(
+    private val bleScanner: BleScanner,
+    private val identifier: PebbleBleIdentifier,
+) {
+    private val logger = Logger.withTag("PreConnectScanner")
+
+    suspend fun scanBeforeConnect(identifier: PebbleBleIdentifier) {
+        logger.d { "scanBeforeConnect(): $identifier" }
+        val scanResults = bleScanner.scan()
+        val found = withTimeoutOrNull(SCAN_TIMEOUT_MS) {
+            scanResults.first {
+                it.identifier == identifier
+            }
+        }
+        logger.d { "scanBeforeConnect: found = $found" }
+    }
+
+    companion object {
+        private val SCAN_TIMEOUT_MS = 10.seconds
     }
 }
 

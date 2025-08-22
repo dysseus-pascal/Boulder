@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
+import com.juul.kable.State
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -19,10 +21,15 @@ fun gattConnector(
 // = libpebbleGattConnector(scannedPebbleDevice, appContext)
         = kableGattConnector(identifier = identifier, scope = scope, name = name)
 
+sealed class GattConnectionResult {
+    data class Success(val client: ConnectedGattClient) : GattConnectionResult()
+    data class Failure(val reason: ConnectionFailureReason) : GattConnectionResult()
+}
+
 interface GattConnector : AutoCloseable {
-    suspend fun connect(): ConnectedGattClient?
+    suspend fun connect(): GattConnectionResult
     suspend fun disconnect()
-    val disconnected: Deferred<Unit>
+    val disconnected: Deferred<ConnectionFailureReason>
 }
 
 enum class GattWriteType {

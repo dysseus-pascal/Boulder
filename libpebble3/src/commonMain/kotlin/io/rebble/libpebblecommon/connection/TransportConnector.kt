@@ -17,7 +17,6 @@ import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicCo
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.isDevelopmentDeviceWhichMightNotHavePrf
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
@@ -45,8 +44,18 @@ import kotlin.time.Instant.Companion.DISTANT_PAST
 enum class ConnectionFailureReason {
     RegisterGattServer,
     FailedToConnect,
+    ConnectTimeout,
     SubscribeConnectivity,
     ConnectionStatus,
+    MtuGattError,
+    NegotiationFailed,
+    PeripheralAlreadyClosed,
+    GattErrorUnknown,
+    GattErrorUnknown147,
+    GattInsufficientAuth,
+    ReadPairingTrigger,
+    CreateBondFailed,
+    PairingTimedOut,
 }
 
 sealed class PebbleConnectionResult {
@@ -56,19 +65,19 @@ sealed class PebbleConnectionResult {
 }
 
 interface TransportConnector {
-    suspend fun connect(): PebbleConnectionResult
+    suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult
     suspend fun disconnect()
-    val disconnected: Deferred<Unit>
+    val disconnected: Deferred<ConnectionFailureReason>
 }
 
-class WasDisconnected(val disconnected: Deferred<Unit>)
+class WasDisconnected(val disconnected: Deferred<ConnectionFailureReason>)
 
 sealed class ConnectingPebbleState {
     abstract val identifier: PebbleIdentifier
 
     data class Inactive(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     data class Connecting(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
-    data class Failed(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Failed(override val identifier: PebbleIdentifier, val reason: ConnectionFailureReason) : ConnectingPebbleState()
     data class Negotiating(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     sealed class Connected : ConnectingPebbleState() {
         abstract val watchInfo: WatchInfo
@@ -93,7 +102,7 @@ fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
 }
 
 interface PebbleConnector {
-    suspend fun connect(previouslyConnected: Boolean)
+    suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason? = null)
     fun disconnect()
     val disconnected: WasDisconnected
     val state: StateFlow<ConnectingPebbleState>
@@ -134,15 +143,15 @@ class RealPebbleConnector(
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     override val disconnected = WasDisconnected(transportConnector.disconnected)
 
-    override suspend fun connect(previouslyConnected: Boolean) {
+    override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
         _state.value = Connecting(identifier)
 
-        val result = transportConnector.connect()
+        val result = transportConnector.connect(lastError)
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 logger.e("failed to connect: $result")
                 transportConnector.disconnect()
-                _state.value = Failed(identifier)
+                _state.value = Failed(identifier, result.reason)
             }
 
             is PebbleConnectionResult.Success -> {
@@ -180,7 +189,7 @@ class RealPebbleConnector(
         if (watchInfo == null) {
             logger.w("negotiation failed: disconnecting")
             transportConnector.disconnect()
-            _state.value = Failed(identifier)
+            _state.value = Failed(identifier, ConnectionFailureReason.NegotiationFailed)
             return
         }
 

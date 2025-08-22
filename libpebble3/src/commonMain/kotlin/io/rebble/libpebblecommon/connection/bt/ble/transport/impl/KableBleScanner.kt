@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.mapNotNull
 fun kableBleScanner(): BleScanner = KableBleScanner()
 
 class KableBleScanner : BleScanner {
-    override fun scan(namePrefix: String?): Flow<BleScanResult> {
+    override fun scan(): Flow<BleScanResult> {
         return Scanner {
             filters {
                 match {

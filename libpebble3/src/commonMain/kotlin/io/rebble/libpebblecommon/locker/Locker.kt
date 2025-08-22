@@ -174,7 +174,7 @@ class Locker(
                 new.asEntity()
             } else {
                 val newWithExistingOrder = newEntity.copy(orderIndex = existing.orderIndex)
-                if (newWithExistingOrder != existing) {
+                if (newWithExistingOrder != existing && !existing.sideloaded) {
                     newWithExistingOrder
                 } else {
                     null
@@ -183,7 +183,7 @@ class Locker(
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
-        val toDelete = existingApps.map { it.key }
+        val toDelete = existingApps.mapNotNull { if (!it.value.sideloaded) it.key else null }
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
     }

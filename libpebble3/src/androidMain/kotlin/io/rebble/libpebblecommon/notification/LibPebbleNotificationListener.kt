@@ -43,6 +43,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     override fun onBind(intent: Intent?): IBinder? {
         logger.d { "onBind() ($this)" }
+        notificationHandler.onServiceBound()
         return super.onBind(intent)
     }
 

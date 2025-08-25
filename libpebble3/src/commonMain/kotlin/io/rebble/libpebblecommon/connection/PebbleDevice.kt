@@ -33,7 +33,7 @@ sealed interface PebbleDevice {
     val name: String
     val nickname: String?
 
-    fun connect(uiContext: UIContext?)
+    fun connect()
     fun displayName(): String {
         val actualNickname = nickname
         if (actualNickname != null && actualNickname.isNotEmpty()) {

@@ -52,12 +52,18 @@ class NotificationHandler(
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
     val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
     private val notificationsToProcess = Channel<StatusBarNotification>(Channel.BUFFERED)
+    private val _notificationServiceBound = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val notificationServiceBound = _notificationServiceBound.asSharedFlow()
 
     fun init() {
         notificationsToProcess.consumeAsFlow().onEach {
             val notification = processNotification(it) ?: return@onEach
             sendNotification(notification)
         }.launchIn(libPebbleCoroutineScope)
+    }
+
+    fun onServiceBound() {
+        _notificationServiceBound.tryEmit(Unit)
     }
 
     fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {

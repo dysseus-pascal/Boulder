@@ -9,11 +9,11 @@ import android.media.session.PlaybackState
 import android.view.KeyEvent
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.toLibPebbleState
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.music.PlaybackStatus
 import io.rebble.libpebblecommon.music.PlayerInfo
 import io.rebble.libpebblecommon.music.RepeatType
@@ -37,7 +37,6 @@ import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlin.collections.set
 import kotlin.time.Duration.Companion.milliseconds
 
 private data class PlaybackStatusWithControls(
@@ -65,9 +64,9 @@ private fun createTrack(metadata: MediaMetadata): MusicTrack {
 class AndroidSystemMusicControl(
     appContext: AppContext,
     libPebbleCoroutineScope: LibPebbleCoroutineScope,
-    private val companionDevice: CompanionDevice,
     private val clock: Clock,
     private val notificationAppRealDao: NotificationAppRealDao,
+    private val notificationHandler: NotificationHandler,
 ) : SystemMusicControl {
     private val logger = Logger.withTag("AndroidSystemMusicControl")
     private val context = appContext.context
@@ -97,7 +96,7 @@ class AndroidSystemMusicControl(
         }
         if (!addCallbackSafely(listener)) {
             logger.i { "Couldn't add media listener; waiting for notification access" }
-            companionDevice.notificationAccessGranted.first()
+            notificationHandler.notificationServiceBound.first()
             if (!addCallbackSafely(listener)) {
                 logger.e { "Couldn't add media listener after notification access granted" }
             }

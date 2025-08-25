@@ -61,7 +61,6 @@ data class WatchConfig(
     val lockerSyncLimit: Int = 25,
     val calendarReminders: Boolean = true,
     val enableHealth: Boolean = true,
-    val useAndroidCompanionDeviceManager: Boolean = true,
     val ignoreMissingPrf: Boolean = false,
 )
 

@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
@@ -36,7 +35,6 @@ class AndroidNotificationAppsSync(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val androidPackageChangedReceiver: AndroidPackageChangedReceiver,
     private val notificationHandler: NotificationHandler,
-    private val companionDevice: CompanionDevice,
     private val privateLogger: PrivateLogger,
 ) : NotificationAppsSync {
     private val logger = Logger.withTag("NotificationAppsSync")
@@ -68,7 +66,7 @@ class AndroidNotificationAppsSync(
             }
             libPebbleCoroutineScope.launch {
                 // This one can be spammy - debounce
-                companionDevice.companionAccessGranted.collect {
+                notificationHandler.notificationServiceBound.collect {
                     logger.d { "Notification access granted" }
                     // This means we have notification channels access (we probably previously had a
                     // list of installed apps but not with channels).

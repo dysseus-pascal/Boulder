@@ -4,9 +4,7 @@ import android.app.Application
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.SystemCallLog
-import io.rebble.libpebblecommon.connection.AndroidCompanionDevice
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.CompanionDevice
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
@@ -69,7 +67,6 @@ actual val platformModule: Module = module {
     singleOf(::AndroidSystemGeolocation) bind SystemGeolocation::class
     singleOf(::AndroidPackageChangedReceiver)
     singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
-    singleOf(::AndroidCompanionDevice) bind CompanionDevice::class
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get()) }

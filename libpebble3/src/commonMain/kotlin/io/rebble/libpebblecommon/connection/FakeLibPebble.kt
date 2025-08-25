@@ -257,7 +257,7 @@ fun fakeWatch(): PebbleDevice {
             override val name: String = "Fake 1234"
             override val nickname: String? = "Faker 1234"
 
-            override fun connect(uiContext: UIContext?) {
+            override fun connect() {
             }
         }
     }
@@ -287,7 +287,7 @@ class FakeConnectedDevice(
     override fun setNickname(nickname: String?) {
     }
 
-    override fun connect(uiContext: UIContext?) {}
+    override fun connect() {}
 
     override fun disconnect() {}
 

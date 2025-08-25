@@ -91,6 +91,9 @@ data class OtherPebbleApp(
 )
 
 interface Errors {
+    /**
+     * Errors which should be displayed to the user (e.g. using a snackbar).
+     */
     val userFacingErrors: Flow<UserFacingError>
 }
 

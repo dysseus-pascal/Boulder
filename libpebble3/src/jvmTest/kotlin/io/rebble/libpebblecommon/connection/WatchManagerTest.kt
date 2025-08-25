@@ -23,9 +23,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -154,19 +152,6 @@ class WatchManagerTest {
         override val state: StateFlow<BluetoothState> =
             MutableStateFlow(BluetoothState.Enabled).asStateFlow()
     }
-    private val companionDevice = object : CompanionDevice {
-        override suspend fun registerDevice(
-            identifier: PebbleIdentifier,
-            uiContext: UIContext?
-        ): Boolean {
-            return true
-        }
-
-
-        override val companionAccessGranted: SharedFlow<Unit>
-            get() = MutableSharedFlow()
-        override val notificationAccessGranted: SharedFlow<Unit> = MutableSharedFlow()
-    }
     private val scanning = object : Scanning {
         override val bluetoothEnabled: StateFlow<BluetoothState>
             get() = TODO("Not yet implemented")
@@ -236,7 +221,6 @@ class WatchManagerTest {
             connectionScopeFactory = connectionScopeFactory,
             libPebbleCoroutineScope = libPebbleCoroutineScope,
             bluetoothStateProvider = bluetoothStateProvider,
-            companionDevice = companionDevice,
             scanning = HackyProvider { scanning },
             watchConfig = watchConfig,
             clock = Clock.System,
@@ -265,7 +249,7 @@ class WatchManagerTest {
         watchManager.init()
         yield()
         watchManager.addScanResult(scanResult)
-        watchManager.requestConnection(identifier, null)
+        watchManager.requestConnection(identifier)
         for (i in 1..20) {
             watchManager.watches.first { totalConnections >= i && it.any { it is ConnectingPebbleDevice } }
         }

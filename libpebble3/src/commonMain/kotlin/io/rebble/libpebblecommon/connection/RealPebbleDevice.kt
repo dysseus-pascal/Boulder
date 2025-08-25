@@ -140,8 +140,8 @@ internal class RealPebbleDevice(
     override val nickname: String?,
     private val watchConnector: WatchConnector,
 ) : PebbleDevice, DiscoveredPebbleDevice {
-    override fun connect(uiContext: UIContext?) {
-        watchConnector.requestConnection(identifier, uiContext)
+    override fun connect() {
+        watchConnector.requestConnection(identifier)
     }
 
     override fun toString(): String = "$identifier - $name"

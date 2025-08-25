@@ -84,7 +84,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
 
 interface WatchConnector {
     fun addScanResult(scanResult: PebbleScanResult)
-    fun requestConnection(identifier: PebbleIdentifier, uiContext: UIContext?)
+    fun requestConnection(identifier: PebbleIdentifier)
     fun requestDisconnection(identifier: PebbleIdentifier)
     fun clearScanResults()
     fun forget(identifier: PebbleIdentifier)
@@ -141,7 +141,6 @@ class WatchManager(
     private val connectionScopeFactory: ConnectionScopeFactory,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
-    private val companionDevice: CompanionDevice,
     private val scanning: HackyProvider<Scanning>,
     private val watchConfig: WatchConfigFlow,
     private val clock: Clock,
@@ -397,17 +396,12 @@ class WatchManager(
         }
     }
 
-    override fun requestConnection(identifier: PebbleIdentifier, uiContext: UIContext?) {
+    override fun requestConnection(identifier: PebbleIdentifier) {
         libPebbleCoroutineScope.launch {
             logger.d("requestConnection: $identifier")
             val scanning = scanning.get()
             scanning.stopBleScan()
             scanning.stopClassicScan()
-            val registered = companionDevice.registerDevice(identifier, uiContext)
-            if (!registered) {
-                logger.w { "failed to register companion device; not connecting to $identifier" }
-                return@launch
-            }
             allWatches.update { watches ->
                 watches.mapValues { entry ->
                     if (entry.key == identifier) {

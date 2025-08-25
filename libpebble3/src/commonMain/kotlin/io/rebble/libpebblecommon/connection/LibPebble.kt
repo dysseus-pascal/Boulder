@@ -83,6 +83,7 @@ sealed class UserFacingError {
     abstract val message: String
 
     data class FailedToDownloadPbw(override val message: String) : UserFacingError()
+    data class FailedToRemovePbwFromLocker(override val message: String) : UserFacingError()
 }
 
 data class OtherPebbleApp(

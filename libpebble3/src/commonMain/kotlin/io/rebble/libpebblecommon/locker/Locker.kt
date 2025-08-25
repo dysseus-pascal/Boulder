@@ -60,6 +60,7 @@ class Locker(
     private val webServices: WebServices,
     private val webSyncManagerProvider: WebSyncManagerProvider,
     private val timeProvider: TimeProvider,
+    private val errorTracker: ErrorTracker,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
@@ -149,7 +150,8 @@ class Locker(
         if (!lockerEntry.sideloaded) {
             // Need to remove from remote locker (and only process deletion if that succeeds)
             if (!webServices.removeFromLocker(id)) {
-                logger.w { "Failied to remove from remote locker" }
+                logger.w { "Failed to remove from remote locker" }
+                errorTracker.reportError(UserFacingError.FailedToRemovePbwFromLocker("Failed to remove app from remote locker"))
                 return false
             }
         }

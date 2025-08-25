@@ -119,6 +119,7 @@ class Locker(
     }
 
     override suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean {
+        logger.v { "waitUntilAppSyncedToWatch $id" }
         try {
             withTimeout(timeout) {
                 lockerEntryDao.dirtyRecordsForWatchInsert(
@@ -132,6 +133,7 @@ class Locker(
                     } == null
                 }.first()
             }
+            logger.v { "waitUntilAppSyncedToWatch $id done!" }
             return true
         } catch (_: TimeoutCancellationException) {
             logger.w { "waitUntilAppSyncedToWatch: timed out" }

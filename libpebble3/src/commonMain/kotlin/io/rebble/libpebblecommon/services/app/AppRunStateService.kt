@@ -24,6 +24,7 @@ class AppRunStateService(
 
     override suspend fun launchApp(uuid: Uuid) {
         protocolHandler.send(AppRunStateMessage.AppRunStateStart(uuid))
+        runningApp.first { it == uuid }
     }
 
     suspend fun stopApp(uuid: Uuid) {

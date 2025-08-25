@@ -39,7 +39,7 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
 
 enum class FirmwareUpdateErrorStarting {
     ErrorDownloading,
-    ErrorParsingPbw,
+    ErrorParsingPbz,
 }
 
 interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
@@ -226,7 +226,7 @@ class RealFirmwareUpdater(
             if (updateToVersion == null) {
                 logger.w { "Failed to parse firmware version to sideload from ${pbz.manifest}" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                    FirmwareUpdateErrorStarting.ErrorParsingPbw)
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
                 return@launch
             }
             val update = FirmwareUpdateCheckResult(
@@ -254,7 +254,15 @@ class RealFirmwareUpdater(
                     FirmwareUpdateErrorStarting.ErrorDownloading)
                 return@launch
             }
-            beginFirmwareUpdate(PbzFirmware(path), 0u, update)
+            val pbz = try {
+                PbzFirmware(path)
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to parse firmware: ${e.message}" }
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
+                return@launch
+            }
+            beginFirmwareUpdate(pbz, 0u, update)
         }
     }
 
@@ -290,6 +298,8 @@ class RealFirmwareUpdater(
             logger.e(e) { "Firmware update failed: ${e.message}" }
         } catch (e: IllegalStateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
+        } catch (e: Exception) {
+            logger.e(e) { "Firmware update failed (unknown): ${e.message}" }
         } finally {
             _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle
         }

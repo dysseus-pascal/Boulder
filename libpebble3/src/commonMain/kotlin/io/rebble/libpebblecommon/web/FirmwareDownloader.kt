@@ -43,6 +43,7 @@ class FirmwareDownloader(
             SystemFileSystem.sink(path).use { sink ->
                 response.bodyAsChannel().readRemaining().transferTo(sink)
             }
+            logger.v { "Downloaded firmware to $path" }
             path
         }) {
             logger.w { "downloadFirmware timed out" }

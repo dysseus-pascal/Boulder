@@ -56,6 +56,7 @@ enum class ConnectionFailureReason {
     ReadPairingTrigger,
     CreateBondFailed,
     PairingTimedOut,
+    NotAnError_NeverAttmpedConnection,
 }
 
 sealed class PebbleConnectionResult {

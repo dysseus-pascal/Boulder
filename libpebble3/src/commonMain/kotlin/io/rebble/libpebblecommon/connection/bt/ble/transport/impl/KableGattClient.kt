@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -52,6 +53,7 @@ class KableGattConnector(
 
     private val _disconnected = CompletableDeferred<ConnectionFailureReason>()
     override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
+    private val attemptedConnection = MutableStateFlow(false)
 
     override suspend fun connect(): GattConnectionResult {
         if (!peripheral.scope.isActive) {
@@ -69,6 +71,7 @@ class KableGattConnector(
         }
         return try {
             withTimeout(CONNECT_TIMEOUT) {
+                attemptedConnection.value = true
                 val kableScope = peripheral.connect()
                 GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral))
             }
@@ -85,6 +88,10 @@ class KableGattConnector(
         logger.d { "disconnect()..." }
         peripheral.disconnect()
         peripheral.close()
+        if (!attemptedConnection.value) {
+            logger.d { "Marking $identifier as disconnected (never attempted connection)" }
+            _disconnected.complete(ConnectionFailureReason.NotAnError_NeverAttmpedConnection)
+        }
         logger.d { "/disconnect()..." }
     }
 

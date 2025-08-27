@@ -4,9 +4,9 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.sample
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
@@ -32,7 +32,7 @@ class MissedCallSyncer(
             return
         }
         try {
-            systemCallLog.registerForMissedCallChanges().debounce(3.seconds).onEach {
+            systemCallLog.registerForMissedCallChanges().sample(3.seconds).onEach {
                 logger.d { "Missed call change detected, syncing missed calls..." }
                 //TODO: see if we need to persist last sync time + push all calls in time window to avoid missing any
                 val startTime = timeProvider.now() - 10.seconds

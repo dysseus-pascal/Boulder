@@ -21,7 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
@@ -59,7 +59,7 @@ class AndroidNotificationAppsSync(
             }
             libPebbleCoroutineScope.launch {
                 // This one can be spammy - debounce
-                notificationHandler.channelChanged.conflate().debounce(5.seconds).collect {
+                notificationHandler.channelChanged.conflate().sample(5.seconds).collect {
                     logger.d { "Channel changed" }
                     requestSync()
                 }

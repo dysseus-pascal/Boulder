@@ -28,11 +28,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
@@ -70,7 +70,7 @@ class DevConnectionServer(private val libPebble: LibPebble) {
                         val reason = this@webSocket.closeReason.await()
                         logger.i { "WebSocket connection closed for $identifier: (${reason?.code}) ${reason?.message ?: "No reason provided"}" }
                     }
-                    libPebble.watches.forDevice(identifier.asString).debounce(500).collectLatest { device ->
+                    libPebble.watches.forDevice(identifier.asString).sample(500).collectLatest { device ->
                         when (device) {
                             is ConnectedPebble.Messages -> {
                                 logger.d { "Device '${device.name}' connected, updating client + forwarding messages" }

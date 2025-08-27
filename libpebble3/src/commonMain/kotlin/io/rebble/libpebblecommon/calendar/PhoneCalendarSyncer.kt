@@ -16,8 +16,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.days
@@ -58,7 +58,7 @@ class PhoneCalendarSyncer(
             delay(1.seconds)
             requestSync()
             libPebbleCoroutineScope.launch {
-                systemCalendar.registerForCalendarChanges().debounce(5.seconds).collect {
+                systemCalendar.registerForCalendarChanges().sample(5.seconds).collect {
                     requestSync()
                 }
             }

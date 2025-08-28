@@ -21,6 +21,7 @@ class WebSyncManager(
     private val logger = Logger.withTag("WebSyncManager")
 
     override fun requestLockerSync(): Deferred<Unit> {
+        logger.d { "requestLockerSync()" }
         val result = CompletableDeferred<Unit>()
         libPebbleCoroutineScope.launch {
             // TODO probably don't want the logic in this class

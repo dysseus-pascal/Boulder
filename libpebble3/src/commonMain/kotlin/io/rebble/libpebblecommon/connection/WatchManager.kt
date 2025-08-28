@@ -477,11 +477,13 @@ class WatchManager(
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString-$thisConnectionNum")
             val connectionScope = ConnectionCoroutineScope(coroutineContext)
             logger.v("transport.createConnector")
+            val color = watch.color()
             val connectionKoinScope = connectionScopeFactory.createScope(
                 ConnectionScopeProperties(
                     identifier,
                     connectionScope,
-                    platformIdentifier
+                    platformIdentifier,
+                    color,
                 )
             )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
@@ -632,3 +634,7 @@ fun ConnectingPebbleState.Connected.firmwareUpdateState(): FirmwareUpdateStatus 
     is ConnectingPebbleState.Connected.ConnectedInPrf -> this.services.firmware.firmwareUpdateState.value
     is ConnectingPebbleState.Connected.ConnectedNotInPrf -> this.services.firmware.firmwareUpdateState.value
 }
+
+private fun Watch.color(): WatchColor = knownWatchProps?.color ?:
+scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) } ?:
+WatchColor.Unknown

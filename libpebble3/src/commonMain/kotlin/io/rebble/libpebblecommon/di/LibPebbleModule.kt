@@ -85,6 +85,7 @@ import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
 import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AudioStreamService
@@ -130,6 +131,7 @@ data class ConnectionScopeProperties(
     val identifier: PebbleIdentifier,
     val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
+    val color: WatchColor,
 )
 
 interface ConnectionScope {

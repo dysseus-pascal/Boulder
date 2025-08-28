@@ -47,7 +47,7 @@ object DiskUtil {
         } catch (e: IOException) {
             return null
         }.buffered()
-        return pbwJson.decodeFromString(source.readString())
+        return source.use { pbwJson.decodeFromString(source.readString()) }
     }
 
     fun pkjsFileExists(pbwPath: Path): Boolean {

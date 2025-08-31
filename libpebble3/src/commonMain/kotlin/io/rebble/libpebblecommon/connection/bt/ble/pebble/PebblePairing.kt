@@ -35,7 +35,7 @@ class PebblePairing(
         connectivityRecord: ConnectivityStatus,
         connectivity: Flow<ConnectivityStatus>,
     ): ConnectionFailureReason? {
-        val needsPairingTrigger = scopeProps.color.platform.needsPairingTrigger()
+        val needsPairingTrigger = scopeProps.color.platform.needsPairingTrigger() || !blePlatformConfig.phoneRequestsPairing
         Logger.d("Requesting pairing: needsPairingTrigger = $needsPairingTrigger")
         val pairingService =
             device.services?.firstOrNull { it.uuid == PAIRING_SERVICE_UUID }

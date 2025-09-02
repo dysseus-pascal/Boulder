@@ -16,6 +16,7 @@ import platform.CoreGraphics.CGColorGetComponents
 import platform.CoreGraphics.CGColorGetNumberOfComponents
 import platform.CoreGraphics.CGColorRef
 import platform.EventKit.EKAlarm
+import platform.EventKit.EKAuthorizationStatusAuthorized
 import platform.EventKit.EKCalendar
 import platform.EventKit.EKEntityType
 import platform.EventKit.EKEvent
@@ -30,7 +31,9 @@ import platform.EventKit.EKEventStatusNone
 import platform.EventKit.EKEventStatusTentative
 import platform.EventKit.EKEventStore
 import platform.EventKit.EKParticipant
+import platform.Foundation.NSError
 import platform.Foundation.NSNotificationCenter
+import platform.UIKit.UIDevice
 
 class IosSystemCalendar(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -44,7 +47,7 @@ class IosSystemCalendar(
         }
         val es = EKEventStore()
         val deferred = CompletableDeferred<EKEventStore?>()
-        es.requestFullAccessToEventsWithCompletion { granted, error ->
+        val completionHandler: (Boolean, NSError?) -> Unit = { granted: Boolean, error: NSError? ->
             if (granted) {
                 _eventStore = es
                 deferred.complete(es)
@@ -52,6 +55,13 @@ class IosSystemCalendar(
                 logger.e { "error getting ios calendar access: $error" }
                 deferred.complete(null)
             }
+        }
+        val majorVersion =
+            UIDevice.currentDevice.systemVersion.split(".").firstOrNull()?.toIntOrNull() ?: 0
+        if (majorVersion >= 17) {
+            es.requestFullAccessToEventsWithCompletion(completionHandler)
+        } else {
+            es.requestAccessToEntityType(EKEntityType.EKEntityTypeEvent, completionHandler)
         }
         return deferred.await()
     }
@@ -149,7 +159,7 @@ class IosSystemCalendar(
     }
 
     override fun hasPermission(): Boolean {
-        return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == platform.EventKit.EKAuthorizationStatusAuthorized
+        return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == EKAuthorizationStatusAuthorized
     }
 }
 

@@ -12,9 +12,11 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimel
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
+import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
@@ -31,6 +33,7 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
+import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -161,10 +164,36 @@ class FakeLibPebble : LibPebble {
         MutableStateFlow(emptyList())
 
     override fun mostRecentNotificationsFor(
-        pkg: String,
+        pkg: String?,
         channelId: String?,
+        contactId: String?,
         limit: Int
-    ): Flow<List<NotificationEntity>> = flow { emptyList<NotificationEntity>() }
+    ): Flow<List<NotificationEntity>> = flow {
+        emit(fakeNotifications)
+    }
+
+    private val fakeNotifications by lazy { fakeNotifications() }
+
+    private fun fakeNotifications(): List<NotificationEntity> {
+        return buildList {
+            for (i in 1..25) {
+                add(fakeNotification())
+            }
+        }
+    }
+
+    private fun fakeNotification(): NotificationEntity {
+        return NotificationEntity(
+            pkg = randomName(),
+            key = randomName(),
+            groupKey = randomName(),
+            channelId = randomName(),
+            timestamp = Instant.DISTANT_PAST.asMillisecond(),
+            title = randomName(),
+            body = randomName(),
+            decision = NotificationDecision.SendToWatch,
+        )
+    }
 
     override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
         // No-op
@@ -208,6 +237,20 @@ class FakeLibPebble : LibPebble {
 
     override val userFacingErrors: Flow<UserFacingError>
         get() = flow {  }
+
+    override fun getContactsWithCounts(): Flow<List<ContactWithCount>> {
+        return flow { emptyList<ContactWithCount>() }
+    }
+
+    override fun updateContactMuteState(
+        contactId: String,
+        muteState: MuteState
+    ) {
+    }
+
+    override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
+        return null
+    }
 }
 
 fun fakeWatches(): List<PebbleDevice> {

@@ -3,13 +3,16 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.Notification.WearableExtender
+import android.app.Person
 import android.app.RemoteInput
+import android.os.Build
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -17,6 +20,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
@@ -36,6 +40,7 @@ import kotlin.uuid.Uuid
 class NotificationHandler(
     private val notificationProcessors: Set<NotificationProcessor>,
     private val notificationAppDao: NotificationAppRealDao,
+    private val contactDao: ContactDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timeProvider: TimeProvider,
     private val notificationConfig: NotificationConfigFlow,
@@ -46,7 +51,6 @@ class NotificationHandler(
         private val logger = Logger.withTag("NotificationHandler")
     }
 
-    //TODO: Datastore
     private val verboseLogging: Boolean = true
     private val inflightNotifications = ConcurrentHashMap<String, LibPebbleNotification>()
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
@@ -140,12 +144,17 @@ class NotificationHandler(
                 return null
             }
         }
+        val contactEntries = notification.people.map {
+            contactDao.getContact(it)
+        }
+        val anyContactMuted = contactEntries.any { it.muteState == MuteState.Always }
+        val anyContactStarred = contactEntries.any { it.muteState == MuteState.Exempt }
         val decision = when {
             sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
                 NotSentLocalOnly
-
-            appEntry.muteState == MuteState.Always -> NotSentAppMuted
-            channel != null && channel.muteState == MuteState.Always -> NotSendChannelMuted
+            anyContactMuted -> NotSendContactMuted
+            !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
+            !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
             else -> result.decision
         }
@@ -259,6 +268,9 @@ New notification:
     isLocalOnly = ${notification.isLocalOnly()}
     channelId = ${notification.dumpChannel().obfuscate(privateLogger)}
     groupAlertBehavior = ${notification.dumpGroupAlertBehaviour()}
+    people: ${notification.people().joinToString { it.dump(privateLogger) }}
+    contacts: ${result.notification()?.people}
+    messagingUser: ${notification.messagingUser()?.dump(privateLogger)}
     extras: ${notification.extras.dump(8)}
     actions = ${notification.actions?.asList()?.dump()}
     WearableExtender actions: ${wearableExtender.actions?.dump()}
@@ -331,5 +343,17 @@ fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONL
 fun RemoteInput.dumpDataOnly(): Boolean? {
     return isDataOnly
 }
+
+fun Person.dump(privateLogger: PrivateLogger): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    "[Person: ${privateLogger.obfuscate(name)} / ${privateLogger.obfuscate(uri)} / $key]"
+} else ""
+
+fun Notification.people(): List<Person> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    extras.getParcelableArrayList<Person>("android.people.list")?.toList() ?: emptyList()
+} else emptyList()
+
+fun Notification.messagingUser(): Person? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    extras.getParcelable("android.messagingUser")
+} else null
 
 fun Action.showsUserInterface(): Boolean = extras.getBoolean(ACTION_KEY_SHOWS_USER_INTERFACE, false)

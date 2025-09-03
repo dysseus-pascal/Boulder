@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
+import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.DevConnectionServer
@@ -76,6 +77,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneCo
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
+import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
@@ -86,6 +88,7 @@ import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
 import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
 import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AudioStreamService
@@ -254,6 +257,7 @@ fun initKoin(
                 single { get<Database>().watchSettingsDao() }
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
+                single { get<Database>().contactDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -286,6 +290,8 @@ fun initKoin(
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
+                singleOf(::PhoneContactsSyncer)
+                singleOf(::ContactsApi) bind Contacts::class
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will

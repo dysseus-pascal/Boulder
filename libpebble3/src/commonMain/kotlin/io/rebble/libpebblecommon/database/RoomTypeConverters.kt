@@ -106,4 +106,16 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun WatchColorToInt(color: WatchColor): Int? = color.protocolNumber
+
+    @TypeConverter
+    fun StringToStringList(value: String?): List<String> {
+        return value?.let {
+            json.decodeFromString(it)
+        } ?: emptyList()
+    }
+
+    @TypeConverter
+    fun StringListToString(list: List<String>): String {
+        return json.encodeToString(list)
+    }
 }

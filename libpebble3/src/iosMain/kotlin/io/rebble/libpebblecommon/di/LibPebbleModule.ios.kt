@@ -11,7 +11,9 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotifica
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.IosSystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.IosSystemGeolocation
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
@@ -58,6 +60,7 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
     singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
+    singleOf(::IosSystemContacts) bind SystemContacts::class
     single { PlatformConfig(syncNotificationApps = true) }
     single { BlePlatformConfig(
         pinAddress = false,

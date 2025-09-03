@@ -15,10 +15,13 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
+import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
+import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
@@ -61,7 +64,7 @@ sealed class PebbleConnectionEvent {
 }
 
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches, Errors {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches, Errors, Contacts {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -156,11 +159,17 @@ interface LockerApi {
     suspend fun removeApp(id: Uuid): Boolean
 }
 
+interface Contacts {
+    fun getContactsWithCounts(): Flow<List<ContactWithCount>>
+    fun updateContactMuteState(contactId: String, muteState: MuteState)
+    suspend fun getContactImage(lookupKey: String): ImageBitmap?
+}
+
 @Stable
 interface NotificationApps {
     fun notificationApps(): Flow<List<AppWithCount>>
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
-    fun mostRecentNotificationsFor(pkg: String, channelId: String?, limit: Int): Flow<List<NotificationEntity>>
+    fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
     fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
     fun updateNotificationChannelMuteState(
         packageName: String,
@@ -208,10 +217,12 @@ class LibPebble3(
     private val jsTokenUtil: JsTokenUtil,
     private val housekeeping: Housekeeping,
     private val errorTracker: ErrorTracker,
+    private val phoneContactsSyncer: PhoneContactsSyncer,
+    private val contacts: Contacts,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
-    Errors by errorTracker {
+    Errors by errorTracker, Contacts by contacts {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -224,6 +235,7 @@ class LibPebble3(
         gattServerManager.init()
         watchManager.init()
         phoneCalendarSyncer.init()
+        phoneContactsSyncer.init()
         missedCallSyncer.init()
         notificationListenerConnection.init(this)
         notificationApi.init()
@@ -265,6 +277,7 @@ class LibPebble3(
     override fun doStuffAfterPermissionsGranted() {
         phoneCalendarSyncer.init()
         missedCallSyncer.init()
+        phoneContactsSyncer.init()
     }
 
     override fun checkForFirmwareUpdates() {

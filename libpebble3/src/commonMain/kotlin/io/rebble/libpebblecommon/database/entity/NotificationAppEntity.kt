@@ -81,6 +81,7 @@ enum class MuteState(val value: UByte) {
     Weekends(65u),
     Weekdays(62u),
     Never(0u),
+    Exempt(1u), // Not support on watch (only use for android things)
     ;
 
     companion object {

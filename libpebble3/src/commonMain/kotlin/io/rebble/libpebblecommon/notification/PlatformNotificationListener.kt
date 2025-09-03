@@ -43,12 +43,14 @@ class NotificationApi(
         notificationsDao.channelNotificationCounts(packageName)
 
     override fun mostRecentNotificationsFor(
-        pkg: String,
+        pkg: String?,
         channelId: String?,
+        contactId: String?,
         limit: Int,
     ): Flow<List<NotificationEntity>> = notificationsDao.mostRecentNotificationsFor(
         pkg = pkg,
         channelId = channelId,
+        contactId = contactId,
         limit = limit,
     )
 

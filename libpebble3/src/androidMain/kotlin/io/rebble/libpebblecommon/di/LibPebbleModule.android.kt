@@ -11,7 +11,9 @@ import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.AndroidSystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.AndroidSystemMusicControl
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPackageChangedReceiver
@@ -67,9 +69,10 @@ actual val platformModule: Module = module {
     singleOf(::AndroidSystemGeolocation) bind SystemGeolocation::class
     singleOf(::AndroidPackageChangedReceiver)
     singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
+    singleOf(::AndroidSystemContacts) bind SystemContacts::class
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
-    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get()) }
+    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }

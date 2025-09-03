@@ -26,7 +26,8 @@ data class LibPebbleNotification(
     val title: String?,
     val body: String?,
     val icon: TimelineIcon,
-    val actions: List<LibPebbleNotificationAction>
+    val actions: List<LibPebbleNotificationAction>,
+    val people: List<String>
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
@@ -122,6 +123,7 @@ fun LibPebbleNotification.toEntity(
     body = body,
     decision = decision,
     channelId = channelId,
+    people = people,
 )
 
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {

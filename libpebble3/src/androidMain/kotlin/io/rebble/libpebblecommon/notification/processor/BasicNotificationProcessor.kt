@@ -1,24 +1,33 @@
 package io.rebble.libpebblecommon.notification.processor
 
 import android.app.Notification
+import android.app.Person
+import android.content.Context
+import android.database.Cursor
+import android.net.Uri
+import android.os.Build
+import android.provider.ContactsContract
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlinx.datetime.Instant
 import kotlin.uuid.Uuid
 
+private val logger = Logger.withTag("BasicNotificationProcessor")
+
 class BasicNotificationProcessor(
     private val notificationConfigFlow: NotificationConfigFlow,
+    private val context: AppContext,
 ) : NotificationProcessor {
-    private val logger = Logger.withTag("BasicNotificationProcessor")
-
     override fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
@@ -27,12 +36,19 @@ class BasicNotificationProcessor(
         // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
         // effectively doing the deduping right now. I'm sure we'll find cases where it isn't, but
         // let's try that for now.
-        val actions = LibPebbleNotification.actionsFromStatusBarNotification(sbn, app, channel, notificationConfigFlow.value)
+        val actions = LibPebbleNotification.actionsFromStatusBarNotification(
+            sbn,
+            app,
+            channel,
+            notificationConfigFlow.value
+        )
         val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
         val body = bigText ?: text ?: ""
+        val people = sbn.notification.people()
+        val contactKeys = people.asContacts(context.context)
         val notification = LibPebbleNotification(
             packageName = sbn.packageName,
             uuid = Uuid.random(),
@@ -47,12 +63,111 @@ class BasicNotificationProcessor(
                 Instant.fromEpochMilliseconds(sbn.postTime)
             },
             actions = actions,
+            people = contactKeys,
         )
         return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
     }
 }
 
-fun StatusBarNotification.icon(): TimelineIcon = when(packageName) {
+private fun lookupKeyFromCursor(cursor: Cursor): String? {
+    if (!cursor.moveToFirst()) {
+        return null
+    }
+    val lookupKeyIndex =
+        cursor.getColumnIndex(ContactsContract.PhoneLookup.LOOKUP_KEY)
+    if (lookupKeyIndex == -1) {
+        logger.w { "asContacts: No lookup key index" }
+        return null
+    }
+    return cursor.getString(lookupKeyIndex)
+}
+
+private fun Uri.lookupContactTel(context: Context): String? {
+    val phoneNumber = schemeSpecificPart
+    if (phoneNumber.isNullOrEmpty()) {
+        logger.w { "asContacts: Empty phone number from tel URI" }
+        return null
+    }
+    val phoneLookupUri = Uri.withAppendedPath(
+        ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+        Uri.encode(phoneNumber)
+    )
+    val projection = arrayOf(ContactsContract.PhoneLookup.LOOKUP_KEY)
+    context.contentResolver.query(phoneLookupUri, projection, null, null, null)?.use { cursor ->
+        return lookupKeyFromCursor(cursor)
+    }
+    return null
+}
+
+private fun Uri.lookupContactMailto(context: Context): String? {
+    val emailAddress = schemeSpecificPart
+    if (emailAddress.isNullOrEmpty()) {
+        logger.w { "asContacts: Empty phone number from mailto URI" }
+        return null
+    }
+    val emailProjection = arrayOf(ContactsContract.CommonDataKinds.Email.LOOKUP_KEY)
+    context.contentResolver.query(
+        ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+        emailProjection,
+        "${ContactsContract.CommonDataKinds.Email.ADDRESS} = ?",
+        arrayOf(emailAddress),
+        null // No specific sort order needed for just getting the key
+    )?.use { cursor ->
+        return lookupKeyFromCursor(cursor)
+    }
+    return null
+}
+
+private fun Uri.lookupContent(context: Context): String? {
+    val contactUri: Uri? = ContactsContract.Contacts.lookupContact(context.contentResolver, this)
+    if (contactUri == null) {
+        logger.w { "asContacts: null contactUri" }
+        return null
+    }
+    context.contentResolver.query(
+        contactUri,
+        arrayOf(ContactsContract.Contacts.LOOKUP_KEY),
+        null, null, null
+    )?.use { cursor ->
+        return lookupKeyFromCursor(cursor)
+    }
+    return null
+}
+
+private fun lookupKey(key: String?, context: Context): String? {
+    if (key == null) {
+        return null
+    }
+    context.contentResolver.query(
+        ContactsContract.Contacts.CONTENT_URI,
+        arrayOf(ContactsContract.Contacts.LOOKUP_KEY),
+        "${ContactsContract.Contacts.LOOKUP_KEY} = ?",
+        arrayOf(key),
+        null
+    )?.use { cursor ->
+        return lookupKeyFromCursor(cursor)
+    }
+    return null
+}
+
+private fun List<Person>.asContacts(context: Context): List<String> = mapNotNull { person ->
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        return@mapNotNull null
+    }
+    val lookupUri = person.uri?.let { Uri.parse(it) }
+    if (lookupUri == null) {
+        logger.v { "asContacts: null lookupUri" }
+        return@mapNotNull null
+    }
+    when (lookupUri.scheme) {
+        "tel" -> lookupUri.lookupContactTel(context)
+        "mailto" -> lookupUri.lookupContactMailto(context)
+        "content" -> lookupUri.lookupContent(context)
+        else -> lookupKey(person.key, context)
+    }
+}
+
+fun StatusBarNotification.icon(): TimelineIcon = when (packageName) {
     "com.google.android.gm.lite", "com.google.android.gm" -> TimelineIcon.NotificationGmail
     "com.microsoft.office.outlook" -> TimelineIcon.NotificationOutlook
     "com.Slack" -> TimelineIcon.NotificationSlack

@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -21,4 +22,6 @@ data class NotificationEntity(
     val title: String?,
     val body: String?,
     val decision: NotificationDecision,
+    @ColumnInfo(defaultValue = "NULL")
+    val people: List<String>? = emptyList(),
 )

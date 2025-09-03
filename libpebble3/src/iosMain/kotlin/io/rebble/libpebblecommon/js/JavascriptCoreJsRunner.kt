@@ -22,6 +22,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSBundle
+import platform.Foundation.NSSelectorFromString
 import platform.Foundation.NSURL
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
@@ -93,7 +94,12 @@ class JavascriptCoreJsRunner(
             initInterfaces(jsContext)
             jsContext.exceptionHandler = ::exceptionHandler
             jsContext.setName("PKJS: ${appInfo.longName}")
-            jsContext.setInspectable(true)
+            val selector = NSSelectorFromString("setInspectable:")
+            if (jsContext.respondsToSelector(selector)) {
+                jsContext.setInspectable(true)
+            } else {
+                logger.w { "JSContext.setInspectable not available on this iOS version" }
+            }
         }
     }
 

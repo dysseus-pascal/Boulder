@@ -89,19 +89,24 @@ class AndroidSystemContacts(
         )?.use { cursor ->
             val keyCol = cursor.getColumnIndex(ContactsContract.Contacts.LOOKUP_KEY)
             val nameCol = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+            if (keyCol == -1 || nameCol == -1) {
+                logger.w { "Missing required columns in cursor" }
+                return emptyList()
+            }
             cursor.moveToFirst()
             val contacts = mutableListOf<SystemContact>()
 
             while (!cursor.isAfterLast) {
                 val key = cursor.getString(keyCol)
                 val name = cursor.getString(nameCol)
-
-                contacts.add(
-                    SystemContact(
-                        name = name,
-                        key = key,
+                if (key != null && name != null) {
+                    contacts.add(
+                        SystemContact(
+                            name = name,
+                            key = key,
+                        )
                     )
-                )
+                }
                 cursor.moveToNext()
             }
             contacts

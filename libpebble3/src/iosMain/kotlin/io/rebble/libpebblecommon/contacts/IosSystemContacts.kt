@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts
 
+import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.contacts.SystemContact
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import kotlinx.coroutines.flow.Flow
@@ -16,5 +17,9 @@ class IosSystemContacts : SystemContacts {
 
     override fun hasPermission(): Boolean {
         return false
+    }
+
+    override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
+        return null
     }
 }

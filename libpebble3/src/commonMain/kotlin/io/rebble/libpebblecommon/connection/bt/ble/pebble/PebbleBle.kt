@@ -139,7 +139,7 @@ class PebbleBle(
     override val disconnected = gattConnector.disconnected
 
     companion object {
-        private val CONNECTIVITY_UPDATE_TIMEOUT = 10000L
+        private val CONNECTIVITY_UPDATE_TIMEOUT = 10.seconds
     }
 }
 

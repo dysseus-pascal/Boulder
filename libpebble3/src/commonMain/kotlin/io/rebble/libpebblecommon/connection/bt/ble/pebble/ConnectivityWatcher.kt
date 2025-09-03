@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlin.experimental.and
 import kotlin.time.Duration.Companion.seconds
@@ -24,11 +25,11 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
     private val _status = MutableStateFlow<ConnectivityStatus?>(null)
     val status = _status.asStateFlow().filterNotNull()
 
-    suspend fun subscribe(gattClient: ConnectedGattClient): Boolean {
+    suspend fun subscribe(gattClient: ConnectedGattClient): Boolean = withTimeoutOrNull(10.seconds) {
         val connectivitySub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
         if (connectivitySub == null) {
             logger.e("connectivitySub is null")
-            return false
+            return@withTimeoutOrNull false
         }
         scope.launch {
             // There is some weird timing thing where this throws a GATT error "Authorization is
@@ -51,11 +52,11 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
             gattClient.readCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
         if (connectivity == null) {
             logger.d("connectivity == null")
-            return true
+            return@withTimeoutOrNull true
         }
         _status.value = ConnectivityStatus(connectivity)
-        return true
-    }
+        true
+    } ?: false
 
     private suspend fun Flow<ByteArray>.collectConnectivityChanges(): Boolean {
         try {

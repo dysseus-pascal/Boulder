@@ -135,7 +135,7 @@ class KableConnectedGattClient(
 
     private fun mapServices() = peripheral.services.value?.map { it.asGattService() }
 
-    override suspend fun subscribeToCharacteristic(
+    override fun subscribeToCharacteristic(
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
     ): Flow<ByteArray>? {

@@ -39,7 +39,7 @@ enum class GattWriteType {
 
 interface ConnectedGattClient : AutoCloseable {
     suspend fun discoverServices(): Boolean
-    suspend fun subscribeToCharacteristic(
+    fun subscribeToCharacteristic(
         serviceUuid: Uuid,
         characteristicUuid: Uuid
     ): Flow<ByteArray>?

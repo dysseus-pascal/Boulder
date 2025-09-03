@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.connection
+package io.rebble.libpebblecommon.connection.devconnection
 
 import android.content.Context
 import kotlinx.io.files.Path

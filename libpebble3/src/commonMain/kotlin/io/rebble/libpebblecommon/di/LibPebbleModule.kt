@@ -17,8 +17,8 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
-import io.rebble.libpebblecommon.connection.DevConnectionManager
-import io.rebble.libpebblecommon.connection.DevConnectionServer
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Negotiator
@@ -62,6 +62,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
@@ -115,6 +116,9 @@ import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.core.component.KoinComponent
@@ -224,6 +228,7 @@ fun initKoin(
     webServices: WebServices,
     appContext: AppContext,
     tokenProvider: TokenProvider,
+    proxyTokenProvider: StateFlow<String?>,
     transcriptionProvider: TranscriptionProvider
 ): Koin {
     val koin = LibPebbleKoinContext.koin
@@ -276,6 +281,14 @@ fun initKoin(
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 singleOf(::DevConnectionServer)
+                single {
+                    DevConnectionCloudpebbleProxy(
+                        libPebble = get(),
+                        url = "wss://cloudpebble-proxy.repebble.com/device",
+                        scope = get(),
+                        token = proxyTokenProvider
+                    )
+                }
                 single { HttpClient() }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
@@ -388,7 +401,21 @@ fun initKoin(
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
-                    scopedOf(::DevConnectionManager)
+                    scoped {
+                        DevConnectionManager(
+                            transport = get<WatchConfigFlow>().flow.map {
+                                if (it.watchConfig.lanDevConnection) {
+                                    get<DevConnectionServer>()
+                                } else {
+                                    get<DevConnectionCloudpebbleProxy>()
+                                }
+                            },
+                            identifier = get(),
+                            protocolHandler = get(),
+                            pkjsLifecycleManager = get(),
+                            scope = get(),
+                        )
+                    }
                     scopedOf(::VoiceSessionManager)
 
 

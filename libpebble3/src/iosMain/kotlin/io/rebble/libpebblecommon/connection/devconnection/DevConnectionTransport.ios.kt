@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.connection
+package io.rebble.libpebblecommon.connection.devconnection
 
 import kotlinx.io.files.Path
 import platform.Foundation.NSCachesDirectory

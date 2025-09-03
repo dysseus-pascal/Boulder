@@ -309,9 +309,10 @@ class LibPebble3(
             webServices: WebServices,
             appContext: AppContext,
             tokenProvider: TokenProvider,
+            proxyTokenProvider: StateFlow<String?>,
             transcriptionProvider: TranscriptionProvider
         ): LibPebble {
-            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, transcriptionProvider)
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider)
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }

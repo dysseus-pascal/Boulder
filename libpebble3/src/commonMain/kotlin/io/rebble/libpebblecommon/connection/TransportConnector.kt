@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater

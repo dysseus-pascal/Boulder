@@ -133,7 +133,7 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                     }
                 }
             }
-        }.startSuspend(true)
+        }.startSuspend()
     }
 
     override fun stop() {

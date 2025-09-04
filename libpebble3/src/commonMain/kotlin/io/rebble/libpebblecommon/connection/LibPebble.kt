@@ -291,7 +291,7 @@ class LibPebble3(
     }
 
     override fun checkForFirmwareUpdates() {
-        forEachConnectedWatchNonSuspend { checkforFirmwareUpdate() }
+        forEachConnectedWatchInAnyState { checkforFirmwareUpdate() }
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {
@@ -300,8 +300,8 @@ class LibPebble3(
         }
     }
 
-    private fun forEachConnectedWatchNonSuspend(block: ConnectedPebbleDevice.() -> Unit) {
-        watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
+    private fun forEachConnectedWatchInAnyState(block: CommonConnectedDevice.() -> Unit) {
+        watches.value.filterIsInstance<CommonConnectedDevice>().forEach {
             it.block()
         }
     }

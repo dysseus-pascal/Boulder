@@ -4,21 +4,27 @@ import android.bluetooth.BluetoothAdapter
 import android.companion.CompanionDeviceManager
 import android.os.Build
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.LibPebbleAnalytics
+import io.rebble.libpebblecommon.di.logWatchEvent
+import io.rebble.libpebblecommon.metadata.WatchColor
 
 private val logger = Logger.withTag("ConnectionFailureHandler.android")
 
-actual fun AppContext.handleMtuGattError(identifier: PebbleIdentifier) {
+actual fun AppContext.handleMtuGattError(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleMtuGattError: unpair device" }
+    analytics.logWatchEvent(color, "workaround.mtu-gatt-error.unpair")
     unpairDevice(identifier)
 }
 
-actual fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier) {
+actual fun AppContext.handleGattInsufficientAuth(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleGattInsufficientAuth: unpair device" }
+    analytics.logWatchEvent(color, "workaround.gatt-insuff-auth.unpair")
     unpairDevice(identifier)
 }
 
-actual fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier) {
+actual fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color: WatchColor, analytics: LibPebbleAnalytics) {
     logger.i { "handleCreateBondFailed: unpair device" }
+    analytics.logWatchEvent(color, "workaround.create-bond-failed.unpair")
     unpairDevice(identifier)
 }
 

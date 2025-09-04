@@ -251,6 +251,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
         return null
     }
+
+    override val analyticsEvents: Flow<AnalyticsEvent>
+        get() = flow {  }
 }
 
 fun fakeWatches(): List<PebbleDevice> {

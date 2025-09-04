@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
@@ -18,6 +19,7 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.di.logWatchEvent
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -146,6 +148,7 @@ class WatchManager(
     private val clock: Clock,
     private val blePlatformConfig: BlePlatformConfig,
     private val connectionFailureHandler: ConnectionFailureHandler,
+    private val analytics: LibPebbleAnalytics,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
@@ -289,6 +292,7 @@ class WatchManager(
                     // Watch just connected
                     if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Connected) {
+                        device.logAnalyticsEvent("connected")
                         val newProps = states.currentState.connectingPebbleState.watchInfo.asWatchProperties(
                             lastConnected = clock.now().asMillisecond(),
                             name = device.name,
@@ -318,6 +322,7 @@ class WatchManager(
                     // Watch just disconnected
                     if (states.currentState?.connectingPebbleState !is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState is ConnectingPebbleState.Connected) {
+                        device.logAnalyticsEvent("disconnected")
                         val lastFwupState = states.previousState.firmwareUpdateStatus
                         if (device.lastFirmwareUpdateState != lastFwupState) {
                             updateWatch(identifier) {
@@ -331,6 +336,7 @@ class WatchManager(
                     // Connection error
                     if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Failed && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Failed) {
                         val failureReason = states.currentState.connectingPebbleState.reason
+                        device.logAnalyticsEvent("disconnected", mapOf("reason" to failureReason.name))
                         if (failureReason != device.lastConnectionFailureReason) {
                             logger.d { "New failure reason: $failureReason" }
                             updateWatch(identifier) {
@@ -339,7 +345,7 @@ class WatchManager(
                                 )
                             }
                         } else {
-                            connectionFailureHandler.handleRepeatFailure(identifier, failureReason)
+                            connectionFailureHandler.handleRepeatFailure(identifier, device.color(), failureReason)
                         }
                     }
                     pebbleDevice
@@ -494,6 +500,7 @@ class WatchManager(
                         logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
+                    connectionKoinScope.analyticsLogger.logEvent("connection_attempt")
                     pebbleConnector.connect(
                         previouslyConnected = device.knownWatchProps != null,
                         lastError = device.lastConnectionFailureReason,
@@ -582,6 +589,10 @@ class WatchManager(
     override fun forget(identifier: PebbleIdentifier) {
         requestDisconnection(identifier)
         updateWatch(identifier) { it.copy(forget = true) }
+    }
+
+    private fun Watch.logAnalyticsEvent(name: String, props: Map<String, String>? = null) {
+        analytics.logWatchEvent(color(), name, props)
     }
 
     companion object {

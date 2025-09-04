@@ -21,7 +21,6 @@ import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
-import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
@@ -64,7 +63,8 @@ sealed class PebbleConnectionEvent {
 }
 
 @Stable
-interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar, OtherPebbleApps, PKJSToken, Watches, Errors, Contacts {
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
+    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -99,6 +99,15 @@ interface Errors {
      * Errors which should be displayed to the user (e.g. using a snackbar).
      */
     val userFacingErrors: Flow<UserFacingError>
+}
+
+data class AnalyticsEvent(
+    val name: String,
+    val parameters: Map<String, String>,
+)
+
+interface AnalyticsEvents {
+    val analyticsEvents: Flow<AnalyticsEvent>
 }
 
 interface Watches {
@@ -219,10 +228,11 @@ class LibPebble3(
     private val errorTracker: ErrorTracker,
     private val phoneContactsSyncer: PhoneContactsSyncer,
     private val contacts: Contacts,
+    private val analytics: AnalyticsEvents,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
-    Errors by errorTracker, Contacts by contacts {
+    Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

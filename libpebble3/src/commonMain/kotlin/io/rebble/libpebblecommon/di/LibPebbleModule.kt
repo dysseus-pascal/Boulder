@@ -6,19 +6,20 @@ import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
+import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.RealLibPebbleAnalytics
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
+import io.rebble.libpebblecommon.connection.AnalyticsEvents
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
-import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
-import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Negotiator
@@ -63,6 +64,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
@@ -118,7 +121,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.core.component.KoinComponent
@@ -127,8 +129,10 @@ import org.koin.core.module.dsl.scopedOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.scope.Scope
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
+import kotlin.collections.plus
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
@@ -141,6 +145,36 @@ data class ConnectionScopeProperties(
     val color: WatchColor,
 )
 
+interface ConnectionAnalyticsLogger {
+    fun logEvent(name: String, props: Map<String, String>? = null)
+}
+
+class RealConnectionAnalyticsLogger(
+    private val connectionProps: ConnectionScopeProperties,
+    private val analytics: LibPebbleAnalytics,
+) : ConnectionAnalyticsLogger {
+    override fun logEvent(
+        name: String,
+        props: Map<String, String>?,
+    ) {
+        analytics.logWatchEvent(connectionProps.color, "watch.$name", props)
+    }
+}
+
+fun LibPebbleAnalytics.logWatchEvent(
+    color: WatchColor,
+    name: String,
+    props: Map<String, String>? = null,
+) {
+    logEvent(
+        "watch.$name", (props ?: emptyMap()) +
+                mapOf(
+                    "color" to color.jsName,
+                    "platform" to color.platform.name,
+                )
+    )
+}
+
 interface ConnectionScope {
     val identifier: PebbleIdentifier
     val pebbleConnector: PebbleConnector
@@ -149,6 +183,7 @@ interface ConnectionScope {
     val firmwareUpdateManager: FirmwareUpdateManager
     val firmwareUpdater: FirmwareUpdater
     val batteryWatcher: BatteryWatcher
+    val analyticsLogger: ConnectionAnalyticsLogger
 }
 
 class RealConnectionScope(
@@ -162,6 +197,7 @@ class RealConnectionScope(
     override val pebbleConnector: PebbleConnector = koinScope.get()
     override val firmwareUpdater: FirmwareUpdater = koinScope.get()
     override val batteryWatcher: BatteryWatcher = koinScope.get()
+    override val analyticsLogger: ConnectionAnalyticsLogger = koinScope.get()
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -273,7 +309,33 @@ fun initKoin(
                 singleOf(::WebSyncManager) bind RequestSync::class
                 single { WebSyncManagerProvider { get() } }
                 single { createTimeChanged(get()) }
-                singleOf(::LibPebble3) bind LibPebble::class
+                single {
+                    LibPebble3(
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get()
+                    )
+                } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
                 singleOf(::RealCreatePlatformIdentifier) bind CreatePlatformIdentifier::class
                 singleOf(::GattServerManager)
@@ -305,6 +367,10 @@ fun initKoin(
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
                 singleOf(::PhoneContactsSyncer)
                 singleOf(::ContactsApi) bind Contacts::class
+                singleOf(::RealLibPebbleAnalytics) binds arrayOf(
+                    LibPebbleAnalytics::class,
+                    AnalyticsEvents::class
+                )
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will
@@ -324,6 +390,7 @@ fun initKoin(
                     // Connection
                     scopedOf(::KableGattConnector)
                     scopedOf(::PebbleBle)
+                    scopedOf(::RealConnectionAnalyticsLogger) bind ConnectionAnalyticsLogger::class
                     scoped<GattConnector> {
                         when (get<PebbleIdentifier>()) {
                             is PebbleBleIdentifier -> get<KableGattConnector>()

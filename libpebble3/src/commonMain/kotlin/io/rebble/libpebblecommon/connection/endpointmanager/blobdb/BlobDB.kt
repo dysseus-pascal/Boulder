@@ -193,11 +193,12 @@ class BlobDB(
         capabilities: Set<ProtocolCapsFlag>,
     ) {
         val value = item.record.value(watchType, capabilities)
-        if (value == null) {
-            return
-        }
         val key = item.record.key()
         val keyString = key.keyAsString(db.databaseId())
+        if (value == null) {
+            logger.d { "handleInsert: value is null: ${db.databaseId()} $keyString" }
+            return
+        }
         if (notificationConfigFlow.value.obfuscateContent) {
             logger.d("insert: ${db.databaseId()} $key ($keyString) hashcode: ${item.recordHashcode}")
         } else {

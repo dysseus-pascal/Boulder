@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.locker
 
 import androidx.compose.runtime.Immutable
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
@@ -61,6 +63,12 @@ sealed class LockerWrapper {
 }
 
 fun LockerWrapper.findCompatiblePlatform(watchType: WatchType): AppPlatform? {
+    if (properties.version?.isValidAppVersion() != true) {
+        Logger.d { "Invalid app version: ${properties.version} for ${properties.id}: ${properties.title}" }
+        return null
+    }
     return properties.platforms.firstOrNull { it.watchType == watchType } ?:
     properties.platforms.firstOrNull { watchType.getCompatibleAppVariants().contains(it.watchType) }
 }
+
+fun String.isValidAppVersion(): Boolean = APP_VERSION_REGEX.containsMatchIn(this)

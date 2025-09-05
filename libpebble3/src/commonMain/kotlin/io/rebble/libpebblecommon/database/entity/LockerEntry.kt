@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.database.entity
 import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Index
+import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondInstant
@@ -14,6 +15,8 @@ import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
+
+private val logger = Logger.withTag("LockerEntry")
 
 @GenerateRoomEntity(
     primaryKey = "id",
@@ -64,13 +67,28 @@ data class LockerEntry(
 
 fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
     val compatiblePlatforms = platform.getCompatibleAppVariants().map { it.codename }
-    val entryPlatform = platforms.firstOrNull { it.name in compatiblePlatforms } ?: return null
+    val entryPlatform = platforms.firstOrNull { it.name in compatiblePlatforms } ?: run {
+        logger.d { "No compatible platform found for $id" }
+        return null
+    }
     val appVersionMatch = APP_VERSION_REGEX.find(version)
-    val appVersionMajor = appVersionMatch?.groupValues?.getOrNull(1) ?: return null
-    val appVersionMinor = appVersionMatch.groupValues.getOrNull(2) ?: return null
+    val appVersionMajor = appVersionMatch?.groupValues?.getOrNull(1) ?: run {
+        logger.d { "No app version major found for $id ($title)" }
+        return null
+    }
+    val appVersionMinor = appVersionMatch.groupValues.getOrNull(2) ?: run {
+        logger.d { "No app version minor found for $id ($title)" }
+        return null
+    }
     val sdkVersionMatch = APP_VERSION_REGEX.find(entryPlatform.sdkVersion)
-    val sdkVersionMajor = sdkVersionMatch?.groupValues?.getOrNull(1) ?: return null
-    val sdkVersionMinor = sdkVersionMatch.groupValues.getOrNull(2) ?: return null
+    val sdkVersionMajor = sdkVersionMatch?.groupValues?.getOrNull(1) ?: run {
+        logger.d { "No sdk version major found for $id ($title)" }
+        return null
+    }
+    val sdkVersionMinor = sdkVersionMatch.groupValues.getOrNull(2) ?: run {
+        logger.d { "No sdk version minor found for $id ($title)" }
+        return null
+    }
     return AppMetadata(
         uuid = id,
         flags = entryPlatform.processInfoFlags.toUInt(),
@@ -122,5 +140,4 @@ fun List<LockerEntryPlatform>.recordHashCode(): Int {
     return result
 }
 
-private
 val APP_VERSION_REGEX = Regex("(\\d+)\\.(\\d+)(:?-.*)?")

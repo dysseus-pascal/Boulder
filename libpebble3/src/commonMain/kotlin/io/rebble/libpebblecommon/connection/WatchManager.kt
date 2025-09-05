@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
+import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
@@ -149,6 +150,7 @@ class WatchManager(
     private val blePlatformConfig: BlePlatformConfig,
     private val connectionFailureHandler: ConnectionFailureHandler,
     private val analytics: LibPebbleAnalytics,
+    private val blobDbDatabaseManager: BlobDbDatabaseManager,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
@@ -245,6 +247,7 @@ class WatchManager(
                     if (!hasConnectionAttempt && device.forget) {
                         logger.d("removing ${device.identifier} from allWatches")
                         allWatches.update { it.minus(device.identifier) }
+                        blobDbDatabaseManager.deleteSyncRecordsForStaleDevices()
                         return@mapNotNull null
                     }
 

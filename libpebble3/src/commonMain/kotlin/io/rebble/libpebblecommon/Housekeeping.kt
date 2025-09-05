@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon
 
+import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.delay
@@ -13,9 +14,11 @@ class Housekeeping(
     private val notificationsDao: NotificationDao,
     private val notificationConfigFlow: NotificationConfigFlow,
     private val clock: Clock,
+    private val blodDbDatabaseManager: BlobDbDatabaseManager,
 ) {
     fun init() {
         libPebbleCoroutineScope.launch {
+            blodDbDatabaseManager.deleteSyncRecordsForStaleDevices()
             while (true) {
                 doHousekeeping()
                 delay(6.hours)

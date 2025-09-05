@@ -33,6 +33,7 @@ interface BlobDbDao<T : BlobDbRecord> {
     // TODO decide how to handle records which are synced to watches which haven't been connected
     //  for a while (so that we aren't storing them forever if the watch is never connected again).
     suspend fun deleteStaleRecords(timestampMs: Long)
+    suspend fun deleteSyncRecordsForDevicesWhichDontExist()
 }
 
 interface BlobDbRecord {

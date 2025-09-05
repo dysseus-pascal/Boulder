@@ -468,6 +468,24 @@ class BlobDbEntityProcessor(
                     .build()
             )
             daoBuilder.addFunction(
+                FunSpec.builder("deleteSyncRecordsForDevicesWhichDontExist")
+                    .addModifiers(KModifier.OVERRIDE, KModifier.SUSPEND, KModifier.ABSTRACT)
+                    .addAnnotation(
+                        AnnotationSpec.builder(ClassName("androidx.room", "Query"))
+                            .addMember(
+                                "value = %S",
+                                """
+                            DELETE
+                            FROM $syncEntityClassName as s
+                            WHERE NOT EXISTS
+                            (SELECT 1 FROM KnownWatchItem as k WHERE k.transportIdentifier = s.transport)
+                            """.trimIndent()
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            daoBuilder.addFunction(
                 FunSpec.builder("getEntry")
                     .addModifiers(KModifier.SUSPEND, KModifier.ABSTRACT)
                     .addParameter(primaryKey, primaryKeyField.type.resolve().toClassName())

@@ -27,12 +27,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 data class BlobDbDaos(
     private val lockerEntryDao: LockerEntryRealDao,
@@ -82,6 +85,8 @@ class BlobDB(
 
     private val logger = Logger.withTag("BlobDB-$watchIdentifier")
     private val random = Random
+    // To prevent overlapping insert/delete operations
+    private val operationLock = Mutex()
 
     /**
      * Run [query] continually, updating the query timestamp (so that it does not become stale).
@@ -152,12 +157,16 @@ class BlobDB(
                 db.deleteStaleRecords(timeProvider.now().toEpochMilliseconds())
                 dynamicQuery(dao = db, insert = true) { dirty ->
                     dirty.forEach { item ->
-                        handleInsert(db, item, watchType, capabilities)
+                        operationLock.withLock {
+                            handleInsert(db, item, watchType, capabilities)
+                        }
                     }
                 }
                 dynamicQuery(dao = db, insert = false) { dirty ->
                     dirty.forEach { item ->
-                        handleDelete(db, item)
+                        operationLock.withLock {
+                            handleDelete(db, item)
+                        }
                     }
                 }
             }
@@ -187,16 +196,18 @@ class BlobDB(
         if (value == null) {
             return
         }
+        val key = item.record.key()
+        val keyString = key.keyAsString(db.databaseId())
         if (notificationConfigFlow.value.obfuscateContent) {
-            logger.d("insert: ${item.record.key()} hashcode: ${item.recordHashcode}")
+            logger.d("insert: ${db.databaseId()} $key ($keyString) hashcode: ${item.recordHashcode}")
         } else {
-            logger.d("insert: $item")
+            logger.d("insert: ${db.databaseId()} $keyString - $item")
         }
         val result = sendWithTimeout(
             BlobCommand.InsertCommand(
                 token = generateToken(),
                 database = db.databaseId(),
-                key = item.record.key(),
+                key = key,
                 value = value,
             )
         )
@@ -214,16 +225,18 @@ class BlobDB(
         db: BlobDbDao<BlobDbRecord>,
         item: BlobDbRecord,
     ) {
+        val key = item.record.key()
+        val keyString = key.keyAsString(db.databaseId())
         if (notificationConfigFlow.value.obfuscateContent) {
-            logger.d("delete: ${item.record.key()} hashcode: ${item.recordHashcode}")
+            logger.d("delete: ${db.databaseId()} $key ($keyString) hashcode: ${item.recordHashcode}")
         } else {
-            logger.d("delete: $item")
+            logger.d("delete: ${db.databaseId()} $keyString - $item")
         }
         val result = sendWithTimeout(
             BlobCommand.DeleteCommand(
                 token = generateToken(),
                 database = db.databaseId(),
-                key = item.record.key(),
+                key = key,
             )
         )
         logger.d("delete: result = ${result?.responseValue}")
@@ -244,4 +257,18 @@ class BlobDB(
         withTimeoutOrNull(BLOBDB_RESPONSE_TIMEOUT) {
             blobDBService.send(command)
         }
+}
+
+private fun UByteArray.keyAsString(db: BlobDatabase): String = when {
+    db.keyIsUuid() -> try {
+        Uuid.fromUByteArray(this).toString()
+    } catch (_: Exception) {
+        ""
+    }
+    else -> ""
+}
+
+private fun BlobDatabase.keyIsUuid(): Boolean = when (this) {
+    BlobDatabase.Pin, BlobDatabase.App, BlobDatabase.Reminder, BlobDatabase.Notification -> true
+    else -> false
 }

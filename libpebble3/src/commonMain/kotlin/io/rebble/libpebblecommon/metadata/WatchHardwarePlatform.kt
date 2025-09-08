@@ -50,6 +50,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
 
 fun WatchHardwarePlatform.isDevelopmentDeviceWhichMightNotHavePrf(): Boolean = when (this) {
     WatchHardwarePlatform.CORE_OBELIX -> true
+    WatchHardwarePlatform.UNKNOWN -> true
     else -> false
 }
 

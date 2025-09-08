@@ -63,7 +63,7 @@ sealed class LockerWrapper {
 }
 
 fun LockerWrapper.findCompatiblePlatform(watchType: WatchType): AppPlatform? {
-    if (properties.version?.isValidAppVersion() != true) {
+    if (properties.version?.isValidAppVersion() != true && this is LockerWrapper.NormalApp) {
         Logger.d { "Invalid app version: ${properties.version} for ${properties.id}: ${properties.title}" }
         return null
     }

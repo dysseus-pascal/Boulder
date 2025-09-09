@@ -39,6 +39,7 @@ data class AppProperties(
     val category: String?,
     val iosCompanion: CompanionApp?,
     val androidCompanion: CompanionApp?,
+    val order: Int,
 )
 
 data class AppBasicProperties(

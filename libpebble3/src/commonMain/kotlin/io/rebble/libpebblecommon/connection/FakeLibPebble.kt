@@ -535,6 +535,7 @@ fun fakeLockerEntry(): LockerWrapper {
             category = "fun stuff",
             iosCompanion = null,
             androidCompanion = null,
+            order = 0,
         ),
         sideloaded = false,
         configurable = Random.nextBoolean(),

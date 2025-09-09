@@ -85,7 +85,7 @@ class Locker(
             .map { entries ->
                 SystemApps.entries.filter { it.type == type }
                     .map { systemApp ->
-                        systemApp.wrap()
+                        systemApp.wrap(0)
                     } + entries.mapNotNull { app ->
                     app.wrap(config)
                 }
@@ -108,7 +108,7 @@ class Locker(
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         val asSystemApp = findSystemApp(id)
         if (asSystemApp != null) {
-            return flow { emit(asSystemApp.wrap()) }
+            return flow { emit(asSystemApp.wrap(0)) }
         }
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
@@ -234,7 +234,7 @@ class Locker(
     }
 }
 
-fun SystemApps.wrap(): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
+fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
     properties = AppProperties(
         id = uuid,
         type = type,
@@ -253,6 +253,7 @@ fun SystemApps.wrap(): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
         category = null,
         iosCompanion = null,
         androidCompanion = null,
+        order = order,
     ),
     systemApp = this,
 )
@@ -280,6 +281,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
             category = category,
             iosCompanion = iosCompanion,
             androidCompanion = androidCompanion,
+            order = orderIndex,
         ),
         sideloaded = sideloaded,
         configurable = configurable,

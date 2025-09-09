@@ -15,15 +15,15 @@ abstract class JSLocalStorageInterface(
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size
 
-    open fun getItem(key: Any): Any? = settings.get<String>(key.toString())
+    open fun getItem(key: Any?): Any? = settings.get<String>(key?.toString() ?: "null")
 
-    open fun setItem(key: Any, value: Any) {
-        settings.putString(key.toString(), value.toString())
+    open fun setItem(key: Any?, value: Any?) {
+        settings.putString(key?.toString() ?: "null", value?.toString() ?: "null")
         setLength(settings.keys.size)
     }
 
-    open fun removeItem(key: Any) {
-        settings.remove(key.toString())
+    open fun removeItem(key: Any?) {
+        settings.remove(key?.toString() ?: "null")
         setLength(settings.keys.size)
     }
 
@@ -32,5 +32,5 @@ abstract class JSLocalStorageInterface(
         setLength(0)
     }
 
-    open fun key(index: Int): String? = settings.keys.elementAtOrNull(index)
+    open fun key(index: Double): String? = settings.keys.elementAtOrNull(index.toInt())
 }

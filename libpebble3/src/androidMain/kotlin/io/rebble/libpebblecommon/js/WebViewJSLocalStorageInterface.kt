@@ -21,22 +21,22 @@ class WebViewJSLocalStorageInterface(
     }
 
     @JavascriptInterface
-    override fun getItem(key: Any): Any? {
+    override fun getItem(key: Any?): Any? {
         return super.getItem(key)
     }
 
     @JavascriptInterface
-    override fun key(index: Int): String? {
+    override fun key(index: Double): String? {
         return super.key(index)
     }
 
     @JavascriptInterface
-    override fun removeItem(key: Any) {
+    override fun removeItem(key: Any?) {
         super.removeItem(key)
     }
 
     @JavascriptInterface
-    override fun setItem(key: Any, value: Any) {
+    override fun setItem(key: Any?, value: Any?) {
         super.setItem(key, value)
     }
 }

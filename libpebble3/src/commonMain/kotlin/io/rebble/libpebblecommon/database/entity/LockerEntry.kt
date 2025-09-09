@@ -13,6 +13,8 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
@@ -40,6 +42,8 @@ data class LockerEntry(
     @Embedded
     val appstoreData: LockerEntryAppstoreData? = null,
     val platforms: List<LockerEntryPlatform>,
+    val iosCompanion: CompanionApp? = null,
+    val androidCompanion: CompanionApp? = null,
 
     @ColumnInfo(defaultValue = "0")
     val orderIndex: Int = 0,
@@ -109,6 +113,16 @@ data class LockerEntryAppstoreData(
     val shareLink: String,
     val pbwLink: String,
     val userToken: String?,
+)
+
+@Serializable
+data class CompanionApp(
+    val id: Int,
+    val icon: String,
+    val name: String,
+    val url: String,
+    val required: Boolean,
+    @SerialName("pebblekit_version") val pebblekitVersion: String
 )
 
 @Serializable

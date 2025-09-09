@@ -25,7 +25,7 @@ data class LockerEntry(
     val developer: LockerEntryDeveloper,
     @SerialName("hardware_platforms") val hardwarePlatforms: List<LockerEntryPlatform>,
     val compatibility: LockerEntryCompatibility,
-    val companions: Map<String, LockerEntryCompanionApp?>,
+    val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null
 )
 
@@ -87,6 +87,12 @@ data class LockerEntryFirmwareVersion(
     val major: Int,
     val minor: Int? = null,
     val patch: Int? = null
+)
+
+@Serializable
+data class LockerEntryCompanions(
+    val android: LockerEntryCompanionApp?,
+    val ios: LockerEntryCompanionApp?,
 )
 
 @Serializable

@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
@@ -250,6 +251,8 @@ fun SystemApps.wrap(): LockerWrapper.SystemApp = LockerWrapper.SystemApp(
         version = null,
         hearts = null,
         category = null,
+        iosCompanion = null,
+        androidCompanion = null,
     ),
     systemApp = this,
 )
@@ -275,6 +278,8 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
             version = version,
             hearts = appstoreData?.hearts,
             category = category,
+            iosCompanion = iosCompanion,
+            androidCompanion = androidCompanion,
         ),
         sideloaded = sideloaded,
         configurable = configurable,
@@ -316,6 +321,26 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
                 iconImageUrl = platform.images.icon,
                 pbwIconResourceId = pbw?.iconResourceId ?: 0,
                 description = platform.description,
+            )
+        },
+        iosCompanion = companions.ios?.let {
+            CompanionApp(
+                id = it.id,
+                icon = it.icon,
+                name = it.name,
+                url = it.url,
+                required = it.required,
+                pebblekitVersion = it.pebblekitVersion,
+            )
+        },
+        androidCompanion = companions.android?.let {
+            CompanionApp(
+                id = it.id,
+                icon = it.icon,
+                name = it.name,
+                url = it.url,
+                required = it.required,
+                pebblekitVersion = it.pebblekitVersion,
             )
         },
         orderIndex = -1,

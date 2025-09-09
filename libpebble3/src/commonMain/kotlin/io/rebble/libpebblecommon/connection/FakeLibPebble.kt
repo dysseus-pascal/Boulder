@@ -16,7 +16,6 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
-import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
@@ -534,6 +533,8 @@ fun fakeLockerEntry(): LockerWrapper {
             version = "1.0",
             hearts = 50,
             category = "fun stuff",
+            iosCompanion = null,
+            androidCompanion = null,
         ),
         sideloaded = false,
         configurable = Random.nextBoolean(),

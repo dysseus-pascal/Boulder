@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.BaseAttribute
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
+import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
@@ -69,6 +70,16 @@ class RoomTypeConverters {
     @TypeConverter
     fun LockerPlatformListToString(list: List<LockerEntryPlatform>): String {
         return json.encodeToString(list)
+    }
+
+    @TypeConverter
+    fun StringToLockerCompanion(value: String?): CompanionApp? {
+        return value?.let { json.decodeFromString(it) }
+    }
+
+    @TypeConverter
+    fun LockerCompanionListToString(app: CompanionApp?): String? {
+        return app?.let { json.encodeToString(it) }
     }
 
     @TypeConverter

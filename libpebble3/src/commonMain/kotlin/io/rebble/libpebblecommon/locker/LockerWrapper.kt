@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.locker
 import androidx.compose.runtime.Immutable
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
+import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
@@ -36,6 +37,8 @@ data class AppProperties(
     val version: String?,
     val hearts: Int?,
     val category: String?,
+    val iosCompanion: CompanionApp?,
+    val androidCompanion: CompanionApp?,
 )
 
 data class AppBasicProperties(

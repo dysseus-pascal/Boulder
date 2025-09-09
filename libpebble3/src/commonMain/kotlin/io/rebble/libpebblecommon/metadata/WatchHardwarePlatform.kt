@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.metadata
 
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_ASTERIX
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -48,8 +50,13 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     }
 }
 
+fun WatchHardwarePlatform.isCoreDevice(): Boolean = when (this) {
+    CORE_ASTERIX, CORE_OBELIX -> true
+    else -> false
+}
+
 fun WatchHardwarePlatform.isDevelopmentDeviceWhichMightNotHavePrf(): Boolean = when (this) {
-    WatchHardwarePlatform.CORE_OBELIX -> true
+    CORE_OBELIX -> true
     WatchHardwarePlatform.UNKNOWN -> true
     else -> false
 }

@@ -290,6 +290,7 @@ class RealFirmwareUpdater(
             logger.d { "Firmware update completed, waiting for reboot" }
             _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
             systemService.sendFirmwareUpdateComplete()
+            return
         } catch (e: IllegalArgumentException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
         } catch (e: PutBytesService.PutBytesException) {
@@ -300,9 +301,10 @@ class RealFirmwareUpdater(
             logger.e(e) { "Firmware update failed: ${e.message}" }
         } catch (e: Exception) {
             logger.e(e) { "Firmware update failed (unknown): ${e.message}" }
-        } finally {
-            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle
         }
+        // Only if we hit an exception (i.e. we deliverately leave it in WaitingForReboot above if
+        // completed successfully).
+        _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle
     }
 
     private fun sendFirmware(

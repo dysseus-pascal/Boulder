@@ -644,11 +644,6 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
     }
 }
 
-fun ConnectingPebbleState.Connected.firmwareUpdateState(): FirmwareUpdateStatus = when (this) {
-    is ConnectingPebbleState.Connected.ConnectedInPrf -> this.services.firmware.firmwareUpdateState.value
-    is ConnectingPebbleState.Connected.ConnectedNotInPrf -> this.services.firmware.firmwareUpdateState.value
-}
-
 private fun Watch.color(): WatchColor = knownWatchProps?.color ?:
 scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) } ?:
 WatchColor.Unknown

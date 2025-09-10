@@ -87,13 +87,17 @@ class PPoG(
         val ppogVersion = PPoGVersion.ONE
 
         // Send reset request
-        sendPacketImmediately(
-            packet = PPoGPacket.ResetRequest(
-                sequence = 0,
-                ppogVersion = ppogVersion,
-            ),
-            version = ppogVersion,
-        )
+        try {
+            sendPacketImmediately(
+                packet = PPoGPacket.ResetRequest(
+                    sequence = 0,
+                    ppogVersion = ppogVersion,
+                ),
+                version = ppogVersion,
+            )
+        } catch (e: Exception) {
+            logger.e("error sending reset request", e)
+        }
 
         val resetComplete = waitForPacket<PPoGPacket.ResetComplete>()
         logger.d("got $resetComplete")

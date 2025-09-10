@@ -39,29 +39,21 @@ class PhoneControlManager(
         libPebble.currentCall.onEach {
             when (it) {
                 is Call.RingingCall -> {
-                    if (lastCookie != null) {
-                        logger.w { "Ringing call received but last cookie is not null, this should not happen" }
-                    }
-                    val cookie = Random.nextUInt()
-                    lastCookie = cookie
+                    lastCookie = it.cookie
                     phoneControlService.send(PhoneControl.IncomingCall(
-                        cookie = cookie,
+                        cookie = it.cookie,
                         callerNumber = it.contactNumber.take(31),
                         callerName = it.contactName?.take(31) ?: it.contactNumber.take(31)
                     ))
                 }
                 is Call.ActiveCall -> {
-                    if (lastCookie == null) {
-                        logger.w { "Active call received but last cookie is null, this should not happen" }
-                    }
-                    lastCookie?.let {
-                        phoneControlService.send(PhoneControl.Start(cookie = it))
-                    }
+                    lastCookie = it.cookie
+                    phoneControlService.send(PhoneControl.Start(cookie = it.cookie))
                 }
                 is Call.HoldingCall, is Call.DialingCall -> {/* no-op */}
                 null -> {
-                    lastCookie?.let {
-                        phoneControlService.send(PhoneControl.End(cookie = it))
+                    lastCookie?.let { cookie ->
+                        phoneControlService.send(PhoneControl.End(cookie = cookie))
                         lastCookie = null
                     }
                 }

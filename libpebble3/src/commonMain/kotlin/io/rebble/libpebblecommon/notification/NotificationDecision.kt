@@ -14,4 +14,5 @@ enum class NotificationDecision {
     NotSendChannelMuted,
     NotSendContactMuted,
     NotSentDuplicate,
+    NotSentScreenOn,
 }

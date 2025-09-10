@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
+import android.app.KeyguardManager
+import android.content.Context
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.Notification.WearableExtender
@@ -7,6 +9,7 @@ import android.app.Person
 import android.app.RemoteInput
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
@@ -19,6 +22,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
@@ -46,6 +50,7 @@ class NotificationHandler(
     private val notificationConfig: NotificationConfigFlow,
     private val privateLogger: PrivateLogger,
     private val notificationDao: NotificationDao,
+    private val context: Context,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -156,6 +161,7 @@ class NotificationHandler(
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
+            !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
             else -> result.decision
         }
         notificationDao.insert(notification.toEntity(decision, channel?.id))
@@ -164,6 +170,14 @@ class NotificationHandler(
             return null
         }
         return notification
+    }
+
+    private fun screenIsOnAndUnlocked(): Boolean {
+        val powerManager = context.getSystemService(PowerManager::class.java)
+        val keyguardManager = context.getSystemService(KeyguardManager::class.java)
+        val isScreenOn = powerManager.isInteractive
+        val isDeviceLocked = keyguardManager.isKeyguardLocked
+        return isScreenOn && !isDeviceLocked
     }
 
     private fun extractNotification(
@@ -332,6 +346,9 @@ Processed as:
         }
     }
 }
+
+private fun LibPebbleNotification.isPebbleTestNotification(): Boolean = packageName == "coredevices.coreapp" &&
+        title == "Test Notification"
 
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"

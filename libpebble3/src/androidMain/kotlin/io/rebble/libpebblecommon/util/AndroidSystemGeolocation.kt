@@ -1,9 +1,11 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.util
 
 import android.annotation.SuppressLint
+import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Bundle
 import android.os.CancellationSignal
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
@@ -47,18 +49,28 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 return@callbackFlow
             }
             logger.d { "Flow using location provider: $bestProvider" }
-            val locationListener = LocationListener { location ->
-                trySend(
-                    GeolocationPositionResult.Success(
-                        timestamp = Instant.fromEpochMilliseconds(location.time),
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        accuracy = location.accuracy.toDouble(),
-                        altitude = location.altitude,
-                        heading = location.bearing.toDouble(),
-                        speed = location.speed.toDouble()
+            val locationListener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    trySend(
+                        GeolocationPositionResult.Success(
+                            timestamp = Instant.fromEpochMilliseconds(location.time),
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            accuracy = location.accuracy.toDouble(),
+                            altitude = location.altitude,
+                            heading = location.bearing.toDouble(),
+                            speed = location.speed.toDouble()
+                        )
                     )
-                )
+                }
+
+                override fun onStatusChanged(
+                    provider: String?,
+                    status: Int,
+                    extras: Bundle?
+                ) {
+                    // Just here so that we don't crash on <Q
+                }
             }
             withContext(Dispatchers.Main) {
                 // This can crash if done away from main thread

@@ -67,6 +67,7 @@ import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebb
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
@@ -96,6 +97,7 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
+import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
@@ -417,7 +419,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(),
+                            get(), get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -457,6 +459,7 @@ fun initKoin(
                     scopedOf(::ScreenshotService)
                     scopedOf(::VoiceService)
                     scopedOf(::AudioStreamService)
+                    scopedOf(::AppReorderService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)
@@ -469,6 +472,7 @@ fun initKoin(
                     scopedOf(::BlobDB)
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
+                    scopedOf(::AppOrderManager)
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
                     scoped {
                         DevConnectionManager(

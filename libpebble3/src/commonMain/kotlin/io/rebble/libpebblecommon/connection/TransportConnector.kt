@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
+import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
@@ -139,6 +140,7 @@ class RealPebbleConnector(
     private val screenshotService: ScreenshotService,
     private val voiceSessionManager: VoiceSessionManager,
     private val watchConfig: WatchConfigFlow,
+    private val appOrderManager: AppOrderManager,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -245,6 +247,7 @@ class RealPebbleConnector(
         musicControlManager.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
+        appOrderManager.init()
 
         _state.value = Connected.ConnectedNotInPrf(
             identifier = identifier,

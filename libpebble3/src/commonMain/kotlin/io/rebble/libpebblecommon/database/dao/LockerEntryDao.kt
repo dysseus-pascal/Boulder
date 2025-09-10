@@ -22,6 +22,15 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     fun getAllFlow(type: String, searchQuery: String?, limit: Int): Flow<List<LockerEntry>>
 
+    @Query("""
+        SELECT id FROM LockerEntryEntity
+        WHERE deleted = 0
+        AND type = :type
+        ORDER BY orderIndex ASC
+        LIMIT :limit
+    """)
+    fun getAppOrderFlow(type: String, limit: Int): Flow<List<Uuid>>
+
     data class DbAppBasicProperties(
         val id: Uuid,
         val title: String,

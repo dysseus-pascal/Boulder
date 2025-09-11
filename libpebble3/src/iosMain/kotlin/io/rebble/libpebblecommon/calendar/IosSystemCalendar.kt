@@ -30,16 +30,20 @@ import platform.EventKit.EKEventStatusConfirmed
 import platform.EventKit.EKEventStatusNone
 import platform.EventKit.EKEventStatusTentative
 import platform.EventKit.EKEventStore
+import platform.EventKit.EKEventStoreChangedNotification
 import platform.EventKit.EKParticipant
 import platform.Foundation.NSError
 import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIDevice
+import kotlin.math.abs
 
 class IosSystemCalendar(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : SystemCalendar {
     private val logger = Logger.withTag("IosSystemCalendar")
     private var _eventStore: EKEventStore? = null
+    private var calendarChangeObserver: Any? = null
 
     private suspend fun eventStore(): EKEventStore? {
         if (_eventStore != null) {
@@ -143,14 +147,20 @@ class IosSystemCalendar(
     }
 
     override fun registerForCalendarChanges(): Flow<Unit> {
-        val flow = MutableSharedFlow<Unit>()
-        NSNotificationCenter.defaultCenter()
+        val flow = MutableSharedFlow<Unit>(replay = 1) // replay = 1 can be useful if collection starts after an event
+
+        // Remove previous observer if any, to avoid multiple registrations
+        calendarChangeObserver?.let {
+            NSNotificationCenter.defaultCenter().removeObserver(it)
+        }
+
+        calendarChangeObserver = NSNotificationCenter.defaultCenter()
             .addObserverForName(
-                name = "EKEventStoreChanged",
+                name = EKEventStoreChangedNotification,
                 `object` = null,
-                queue = null
-            ) {
-                logger.d("EKEventStoreChanged")
+                queue = NSOperationQueue.mainQueue()
+            ) { notification ->
+                logger.d { "EKEventStoreChanged notification received: $notification" }
                 libPebbleCoroutineScope.launch {
                     flow.emit(Unit)
                 }
@@ -164,7 +174,7 @@ class IosSystemCalendar(
 }
 
 fun EKAlarm.asReminder(): EventReminder = EventReminder(
-    minutesBefore = relativeOffset.toInt() / 60,
+    minutesBefore = abs(relativeOffset.toInt() / 60),
 )
 
 fun EKParticipant.asAttendee(): EventAttendee = EventAttendee(

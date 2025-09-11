@@ -75,6 +75,23 @@ kotlin {
     }
 
     jvm()
+
+    val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
+        project.providers.exec {
+            isIgnoreExitValue = true
+            commandLine("which", "xcode-select")
+        }.result.get().exitValue == 0
+    }
+    val xcodeDir by lazy {
+        if (xcodeExists) {
+            project.providers.exec {
+                commandLine("xcode-select", "-p")
+            }.standardOutput.asText.get().trim()
+        } else {
+            ""
+        }
+    }
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -91,6 +108,16 @@ kotlin {
         }
         target.binaries.all {
             linkerOpts("-framework", "LibPebbleSwift", "-F"+dir.absolutePath)
+            if (xcodeExists) {
+                println("target.name: ${target.name}")
+                val osName = when (target.name) {
+                    "iosX64" -> "macosx"
+                    "iosArm64" -> "iphoneos"
+                    "iosSimulatorArm64" -> "iphonesimulator"
+                    else -> throw IllegalStateException("Unknown target: ${target.name}")
+                }
+                linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
+            }
         }
     }
 
@@ -311,6 +338,13 @@ abstract class BuildSwiftFramework: DefaultTask() {
                 "-scheme", "LibPebbleSwift",
                 "-configuration", "Release",
                 "-sdk", "iphoneos",
+                "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
+            )
+            commandLine(
+                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",
+                "-scheme", "LibPebbleSwift",
+                "-configuration", "Release",
+                "-sdk", "iphonesimulator",
                 "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
             )
             workingDir = project.file("libpebble-swift")

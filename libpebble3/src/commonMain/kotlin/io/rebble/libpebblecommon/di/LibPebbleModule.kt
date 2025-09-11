@@ -85,6 +85,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineAct
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.RealBlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.health.Health
@@ -346,7 +347,7 @@ fun initKoin(
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 singleOf(::DevConnectionServer)
-                singleOf(::BlobDbDatabaseManager)
+                singleOf(::RealBlobDbDatabaseManager) bind BlobDbDatabaseManager::class
                 single {
                     DevConnectionCloudpebbleProxy(
                         libPebble = get(),

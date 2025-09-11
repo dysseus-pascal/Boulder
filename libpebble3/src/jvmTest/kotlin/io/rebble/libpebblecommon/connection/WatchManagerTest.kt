@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
+import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
@@ -7,14 +8,17 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
+import io.rebble.libpebblecommon.di.ConnectionAnalyticsLogger
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.ConnectionScope
 import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
@@ -67,6 +71,7 @@ class WatchManagerTest {
         override val firmwareUpdateManager: FirmwareUpdateManager,
         override val firmwareUpdater: FirmwareUpdater,
         override val batteryWatcher: BatteryWatcher,
+        override val analyticsLogger: ConnectionAnalyticsLogger,
     ) : ConnectionScope {
         override fun close() {
         }
@@ -195,6 +200,13 @@ class WatchManagerTest {
         val libPebbleCoroutineScope = LibPebbleCoroutineScope(scope.coroutineContext)
         val connectionCoroutineScope = ConnectionCoroutineScope(scope.coroutineContext)
         val batteryWatcher = BatteryWatcher(connectionCoroutineScope)
+        val analyticsLogger = object : ConnectionAnalyticsLogger {
+            override fun logEvent(
+                name: String,
+                props: Map<String, String>?
+            ) {
+            }
+        }
         val connectionScopeFactory = object : ConnectionScopeFactory {
             override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
                 return TestConnectionScope(
@@ -203,15 +215,27 @@ class WatchManagerTest {
                     firmwareUpdateManager = firmwareUpdateManager,
                     firmwareUpdater = firmwareUpdater,
                     batteryWatcher = batteryWatcher,
+                    analyticsLogger = analyticsLogger,
                 )
             }
         }
         val connectionFailureHandler = object : ConnectionFailureHandler {
             override suspend fun handleRepeatFailure(
                 identifier: PebbleIdentifier,
+                color: WatchColor,
                 reason: ConnectionFailureReason
             ) {
-
+            }
+        }
+        val analytics = object : LibPebbleAnalytics {
+            override fun logEvent(
+                name: String,
+                parameters: Map<String, String>
+            ) {
+            }
+        }
+        val blobDbManager = object : BlobDbDatabaseManager {
+            override suspend fun deleteSyncRecordsForStaleDevices() {
             }
         }
         return WatchManager(
@@ -226,6 +250,8 @@ class WatchManagerTest {
             clock = Clock.System,
             blePlatformConfig = blePlatformConfig,
             connectionFailureHandler = connectionFailureHandler,
+            analytics = analytics,
+            blobDbDatabaseManager = blobDbManager,
         )
     }
 

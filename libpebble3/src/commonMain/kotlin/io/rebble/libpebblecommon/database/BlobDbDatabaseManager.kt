@@ -1,12 +1,15 @@
 package io.rebble.libpebblecommon.database
 
-import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 
-class BlobDbDatabaseManager(
+interface BlobDbDatabaseManager {
+    suspend fun deleteSyncRecordsForStaleDevices()
+}
+
+class RealBlobDbDatabaseManager(
     private val blobDatabases: BlobDbDaos,
-) {
-    suspend fun deleteSyncRecordsForStaleDevices() {
+) : BlobDbDatabaseManager {
+    override suspend fun deleteSyncRecordsForStaleDevices() {
         blobDatabases.get().forEach { db ->
             db.deleteSyncRecordsForDevicesWhichDontExist()
         }

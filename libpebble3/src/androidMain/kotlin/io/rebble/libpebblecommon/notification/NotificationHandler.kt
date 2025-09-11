@@ -297,7 +297,7 @@ Processed as:
     }
 
     private fun Notification.dumpChannel(): String {
-        return channelId
+        return channelId ?: "<null>"
     }
 
     private fun Notification.dumpGroupAlertBehaviour(): String? {

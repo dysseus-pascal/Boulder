@@ -361,32 +361,36 @@ class StaticLockerPBWCache(
     context: AppContext,
     private val httpClient: HttpClient,
     private val errorTracker: ErrorTracker,
-) :
-    LockerPBWCache(context) {
+) : LockerPBWCache(context) {
+    private val logger = Logger.withTag("StaticLockerPBWCache")
+
     override suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path? {
+        logger.d { "handleCacheMiss: $appId" }
         val pbwPath = pathForApp(appId)
         val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
         return try {
             withTimeout(20.seconds) {
+                logger.d { "get: $pbwUrl" }
                 val response = try {
                     httpClient.get(pbwUrl)
                 } catch (e: IOException) {
-                    Logger.w(e) { "Error fetching pbw: ${e.message}" }
+                    logger.w(e) { "Error fetching pbw: ${e.message}" }
                     errorTracker.reportError(UserFacingError.FailedToDownloadPbw("Error fetching pbw: ${e.message}"))
                     return@withTimeout null
                 }
                 if (!response.status.isSuccess()) {
-                    Logger.i("http call failed: $response")
+                    logger.i("http call failed: $response")
                     errorTracker.reportError(UserFacingError.FailedToDownloadPbw("Error fetching pbw: ${response.status.description}"))
                     return@withTimeout null
                 }
                 SystemFileSystem.sink(pbwPath).use { sink ->
                     response.bodyAsChannel().readRemaining().transferTo(sink)
                 }
+                logger.d { "Successfully fetched pbw to: $pbwPath" }
                 pbwPath
             }
         } catch (_: TimeoutCancellationException) {
-            Logger.w { "Timeout fetching pbw" }
+            logger.w { "Timeout fetching pbw" }
             null
         }
     }

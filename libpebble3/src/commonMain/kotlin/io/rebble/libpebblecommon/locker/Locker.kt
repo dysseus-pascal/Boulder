@@ -70,7 +70,13 @@ class Locker(
     }
 
     override suspend fun sideloadApp(pbwPath: Path): Boolean =
-        sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
+        try {
+            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
+        } catch (e: Exception) {
+            Logger.e(e) { "Error while sideloading app" }
+            errorTracker.reportError(UserFacingError.FailedToSideloadApp("Error while sideloading app"))
+            false
+        }
 
     /**
      * Get the locker contents, filtered by type/search query. Limit this, so that you don't run

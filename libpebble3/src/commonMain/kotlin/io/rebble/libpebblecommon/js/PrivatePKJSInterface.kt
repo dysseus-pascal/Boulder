@@ -99,6 +99,15 @@ abstract class PrivatePKJSInterface(
         }
     }
 
+    private fun buildAppMessageNack(transactionId: Int, error: String): String {
+        return Json.encodeToString(Json.encodeToString(buildJsonObject {
+            put("data", buildJsonObject {
+                put("transactionId", transactionId)
+            })
+            put("error", error)
+        }))
+    }
+
     open fun sendAppMessageString(jsonAppMessage: String): Int {
         logger.v { "sendAppMessageString" }
         val request = AppMessageRequest(jsonAppMessage)
@@ -115,12 +124,7 @@ abstract class PrivatePKJSInterface(
                     jsRunner.eval("signalAppMessageAck(${Json.encodeToString(Json.encodeToString(payload))})")
                 }
                 is AppMessageResult.NACK -> {
-                    val payload = buildJsonObject {
-                        put("data", buildJsonObject {
-                            put("transactionId", result.transactionId.toInt())
-                        })
-                        put("error", "nack")
-                    }
+                    val payload = buildAppMessageNack(result.transactionId.toInt(), "nack")
                     logger.v { "AppMessage NACK: ${result.transactionId}" }
                     jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})")
                 }
@@ -129,7 +133,10 @@ abstract class PrivatePKJSInterface(
         try {
             if (!outgoingAppMessages.tryEmit(request)) {
                 logger.e { "Failed to emit outgoing AppMessage" }
-                error("Failed to emit outgoing AppMessage")
+                job.cancel("Failed to emit outgoing AppMessage")
+                val payload = buildAppMessageNack(-1, "disconnected")
+                scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                return -1
             }
             val transactionId = runBlocking {
                 withTimeoutOrNull(5.seconds) {
@@ -141,24 +148,14 @@ abstract class PrivatePKJSInterface(
             return when (transactionId) {
                 null -> {
                     logger.e { "Timeout while waiting for AppMessage transaction ID" }
-                    val payload = buildJsonObject {
-                        put("data", buildJsonObject {
-                            put("transactionId", -1)
-                        })
-                        put("error", "timeout")
-                    }
+                    val payload = buildAppMessageNack(-1, "timeout")
                     scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
                     job.cancel("Timeout while waiting for AppMessage transaction ID")
                     -1
                 }
                 is AppMessageRequest.State.DataError -> {
                     logger.e { "Data error while sending AppMessage" }
-                    val payload = buildJsonObject {
-                        put("data", buildJsonObject {
-                            put("transactionId", -1)
-                        })
-                        put("error", "data_error")
-                    }
+                    val payload = buildAppMessageNack(-1, "data_error")
                     scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
                     job.cancel("Data error while sending AppMessage")
                     -1

@@ -22,6 +22,9 @@ globalThis.setTimeout = function (callback, delay, ...args) {
     return timeoutId;
 }
 globalThis.clearTimeout = function (timeoutId) {
+    if (timeoutId === undefined || timeoutId === null) {
+        return;
+    }
     if (typeof timeoutId !== 'number') {
         throw new TypeError('First argument must be a number');
     }
@@ -41,6 +44,9 @@ globalThis.setInterval = function (callback, delay, ...args) {
     return intervalId;
 }
 globalThis.clearInterval = function (intervalId) {
+    if (intervalId === undefined || intervalId === null) {
+        return;
+    }
     if (typeof intervalId !== 'number') {
         throw new TypeError('First argument must be a number');
     }

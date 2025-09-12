@@ -43,6 +43,8 @@ private fun peripheralFromUuid(uuid: Uuid): Peripheral? = try {
         logging {
 //            level = Logging.Level.Data
         }
+        // iOS will fail to connect without this
+        forceCharacteristicEqualityByUuid = true
     }.also { Logger.d("peripheralFromUuid: created Peripheral!!") }
 } catch (e: NoSuchElementException) {
     Logger.d("ios peripheral not found: $uuid")

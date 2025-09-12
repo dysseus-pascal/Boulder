@@ -12,3 +12,4 @@ rootProject.name = "libpebbleroot"
 include(":libpebble3")
 include(":blobdbgen")
 include(":blobannotations")
+includeBuild("kable")

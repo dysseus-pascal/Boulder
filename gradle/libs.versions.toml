@@ -18,7 +18,6 @@ koin = "4.1.0"
 atomicfu = "0.27.0"
 compose-multiplatform = "1.8.2"
 settings = "1.3.0"
-kable = "0.40.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -65,4 +64,3 @@ koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = 
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 settings = { group = "com.russhwolf", name = "multiplatform-settings-no-arg", version.ref = "settings" }
 settings-serialization = { group = "com.russhwolf", name = "multiplatform-settings-serialization", version.ref = "settings" }
-kable = { group = "com.juul.kable", name = "kable-core", version.ref = "kable" }

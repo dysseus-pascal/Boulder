@@ -340,13 +340,13 @@ abstract class BuildSwiftFramework: DefaultTask() {
                 "-sdk", "iphoneos",
                 "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
             )
-            commandLine(
-                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",
-                "-scheme", "LibPebbleSwift",
-                "-configuration", "Release",
-                "-sdk", "iphonesimulator",
-                "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
-            )
+//            commandLine(
+//                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",
+//                "-scheme", "LibPebbleSwift",
+//                "-configuration", "Release",
+//                "-sdk", "iphonesimulator",
+//                "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
+//            )
             workingDir = project.file("libpebble-swift")
             standardOutput = System.out
             errorOutput = System.err

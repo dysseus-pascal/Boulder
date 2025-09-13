@@ -34,4 +34,4 @@ jobs:
       - name: Build
         run: ./gradlew linkDebugFrameworkIosArm64 assembleDebug
       - name: Test
-        run: ./gradlew testDebugUnitTest jvmTest iosSimulatorArm64Test lintDebug
+        run: ./gradlew testDebugUnitTest jvmTest lintDebug

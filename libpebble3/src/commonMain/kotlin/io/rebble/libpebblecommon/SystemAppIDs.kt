@@ -18,4 +18,5 @@ object SystemAppIDs {
     val TICTOC_APP_UUID = Uuid.parse("8f3c8686-31a1-4f5f-91f5-01600c9bdc59")
     val KICKSTART_APP_UUID = Uuid.parse("3af858c3-16cb-4561-91e7-f1ad2df8725f")
     val MISSED_CALLS_APP_UUID = Uuid.parse("af760190-bfc0-11e4-bb52-0800200c9a66")
+    val ANDROID_NOTIFICATIONS_UUID = Uuid.parse("ed429c16-f674-4220-95da-454f303f15e2")
 }

@@ -37,7 +37,7 @@ data class LibPebbleNotificationAction(
             return when (this) {
                 Generic -> TimelineItem.Action.Type.Generic
                 OpenOnPhone -> TimelineItem.Action.Type.Generic
-                Dismiss -> TimelineItem.Action.Type.Generic
+                Dismiss -> TimelineItem.Action.Type.Dismiss
                 Reply -> TimelineItem.Action.Type.Response
                 MuteApp -> TimelineItem.Action.Type.Generic
                 MuteChannel -> TimelineItem.Action.Type.Generic

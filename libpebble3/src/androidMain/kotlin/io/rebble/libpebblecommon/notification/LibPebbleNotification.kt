@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 import android.app.Notification.WearableExtender
 import android.service.notification.StatusBarNotification
 import io.rebble.libpebblecommon.NotificationConfig
-import io.rebble.libpebblecommon.SystemAppIDs.NOTIFICATIONS_APP_UUID
+import io.rebble.libpebblecommon.SystemAppIDs.ANDROID_NOTIFICATIONS_UUID
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -82,7 +82,7 @@ data class LibPebbleNotification(
 
     fun toTimelineNotification(): TimelineNotification = buildTimelineNotification(
         timestamp = timestamp,
-        parentId = NOTIFICATIONS_APP_UUID,
+        parentId = ANDROID_NOTIFICATIONS_UUID,
     ) {
         itemID = uuid
 

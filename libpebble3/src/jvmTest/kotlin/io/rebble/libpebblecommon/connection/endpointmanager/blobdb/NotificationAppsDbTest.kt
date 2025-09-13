@@ -12,7 +12,7 @@ import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.StructMapper
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

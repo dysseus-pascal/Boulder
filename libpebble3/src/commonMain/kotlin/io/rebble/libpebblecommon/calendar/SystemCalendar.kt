@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.calendar
 
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 interface SystemCalendar {
     suspend fun getCalendars(): List<CalendarEntity>

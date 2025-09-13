@@ -14,7 +14,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbl
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 data class LibPebbleNotification(

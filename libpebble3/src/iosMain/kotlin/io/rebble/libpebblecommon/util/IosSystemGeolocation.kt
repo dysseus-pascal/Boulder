@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import platform.CoreLocation.CLLocation
 import platform.Foundation.NSError
 import platform.Foundation.timeIntervalSince1970

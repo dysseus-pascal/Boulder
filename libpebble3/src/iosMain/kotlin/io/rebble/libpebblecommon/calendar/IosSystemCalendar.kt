@@ -3,14 +3,17 @@ package io.rebble.libpebblecommon.calendar
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.util.asInstant
+import io.rebble.libpebblecommon.util.asKtxInstant
 import kotlinx.cinterop.get
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
+import kotlinx.datetime.Instant as KtxInstant
 import platform.CoreGraphics.CGColorGetColorSpace
 import platform.CoreGraphics.CGColorGetComponents
 import platform.CoreGraphics.CGColorGetNumberOfComponents
@@ -98,8 +101,8 @@ class IosSystemCalendar(
             return emptyList()
         }
         val predicate = ek.predicateForEventsWithStartDate(
-            startDate.toNSDate(),
-            endDate.toNSDate(),
+            startDate.asKtxInstant().toNSDate(),
+            endDate.asKtxInstant().toNSDate(),
             listOf(cal)
         )
         val events = ek.eventsMatchingPredicate(predicate) as List<EKEvent>
@@ -108,8 +111,8 @@ class IosSystemCalendar(
             val title = it.title ?: return@mapNotNull null
             val description = it.notes ?: ""
             val location = it.location ?: ""
-            val start = it.startDate?.toKotlinInstant() ?: return@mapNotNull null
-            val end = it.endDate?.toKotlinInstant() ?: return@mapNotNull null
+            val start = it.startDate?.toKotlinInstant()?.asInstant() ?: return@mapNotNull null
+            val end = it.endDate?.toKotlinInstant()?.asInstant() ?: return@mapNotNull null
             val attendees = it.attendees as? List<EKParticipant> ?: emptyList()
             val alarms = it.alarms as? List<EKAlarm> ?: emptyList()
             val availability = when (it.availability) {

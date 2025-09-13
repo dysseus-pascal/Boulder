@@ -44,7 +44,7 @@ import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */

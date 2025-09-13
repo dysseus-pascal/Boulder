@@ -19,7 +19,7 @@ import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 
 private val calendarUri: Uri = CalendarContract.Calendars.CONTENT_URI

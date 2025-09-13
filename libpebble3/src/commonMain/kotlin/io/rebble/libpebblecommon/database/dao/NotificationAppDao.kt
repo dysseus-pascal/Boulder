@@ -14,7 +14,7 @@ import io.rebble.libpebblecommon.database.entity.asNotificationAppItem
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 data class AppWithCount(
     @Embedded val app: NotificationAppItem,

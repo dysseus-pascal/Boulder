@@ -8,7 +8,7 @@ import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 class PebbleDeviceFactory {
     internal fun create(

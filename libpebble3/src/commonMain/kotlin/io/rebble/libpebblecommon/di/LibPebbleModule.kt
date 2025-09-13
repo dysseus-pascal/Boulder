@@ -359,7 +359,7 @@ fun initKoin(
                 single { HttpClient() }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
-                factory<kotlinx.datetime.Clock> { kotlinx.datetime.Clock.System }
+                factory<kotlin.time.Clock> { kotlin.time.Clock.System }
                 singleOf(::BlobDbDaos)
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)

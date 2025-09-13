@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.packets.LogDump
 import io.rebble.libpebblecommon.packets.LogDump.ReceivedLogDumpMessage
+import io.rebble.libpebblecommon.util.asKtxInstant
 import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.util.randomCookie
 import kotlinx.coroutines.TimeoutCancellationException
@@ -18,12 +19,12 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.timeout
-import kotlinx.datetime.Instant
 import kotlinx.datetime.format
 import kotlinx.datetime.format.DateTimeComponents
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class LogDumpService(
     private val protocolHandler: PebbleProtocolHandler,
@@ -93,9 +94,10 @@ class LogDumpService(
                 .collect {
                     if (it is LogDump.LogLine) {
                         val level = LogLevel.fromCode(it.level.get()).str
-                        val instant = Instant.fromEpochSeconds(it.timestamp.get().toLong())
+                        val kotlinTimeInstant = Instant.fromEpochSeconds(it.timestamp.get().toLong())
+                        val ktxDateTimeInstant = kotlinTimeInstant.asKtxInstant()
                         val timestamp =
-                            instant.format(DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET)
+                            ktxDateTimeInstant.format(DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET)
                         val filename = it.filename.get()
                         val lineNumber = it.line.get()
                         val message = it.messageText.get()

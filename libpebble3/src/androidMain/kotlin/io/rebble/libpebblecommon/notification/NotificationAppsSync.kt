@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
 class AndroidNotificationAppsSync(

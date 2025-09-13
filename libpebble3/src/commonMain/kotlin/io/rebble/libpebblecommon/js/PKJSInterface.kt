@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 abstract class PKJSInterface(

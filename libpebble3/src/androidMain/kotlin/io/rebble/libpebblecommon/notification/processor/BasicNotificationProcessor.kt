@@ -19,7 +19,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.Notifica
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("BasicNotificationProcessor")

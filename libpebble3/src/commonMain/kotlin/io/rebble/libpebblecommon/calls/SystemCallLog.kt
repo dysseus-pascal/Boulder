@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.calls
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 interface SystemCallLog {
     suspend fun getMissedCalls(start: Instant): List<MissedCall>

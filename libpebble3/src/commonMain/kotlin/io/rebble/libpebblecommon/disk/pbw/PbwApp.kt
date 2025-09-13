@@ -11,7 +11,7 @@ import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwManifest
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwPKJSFile
 import io.rebble.libpebblecommon.metadata.WatchType
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.files.FileSystem

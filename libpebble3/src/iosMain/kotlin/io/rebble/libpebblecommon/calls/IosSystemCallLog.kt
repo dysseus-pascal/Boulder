@@ -4,7 +4,7 @@ import io.rebble.libpebblecommon.calls.MissedCall
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 // Stubbed implementation for iOS, as iOS does not provide a public API to access call logs.
 class IosSystemCallLog: SystemCallLog {

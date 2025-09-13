@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.util
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
 sealed class GeolocationPositionResult {

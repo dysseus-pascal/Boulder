@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.io.files.Path
 import org.junit.Assert.assertFalse
 import org.junit.Test

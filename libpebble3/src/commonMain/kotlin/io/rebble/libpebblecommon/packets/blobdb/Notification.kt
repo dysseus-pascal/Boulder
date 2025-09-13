@@ -2,7 +2,7 @@ package io.rebble.libpebblecommon.packets.blobdb
 
 import coredev.BlobDatabase
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlin.random.Random
 import kotlin.uuid.Uuid
 

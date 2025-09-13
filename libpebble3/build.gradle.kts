@@ -109,7 +109,6 @@ kotlin {
         target.binaries.all {
             linkerOpts("-framework", "LibPebbleSwift", "-F"+dir.absolutePath)
             if (xcodeExists) {
-                println("target.name: ${target.name}")
                 val osName = when (target.name) {
                     "iosX64" -> "macosx"
                     "iosArm64" -> "iphoneos"
@@ -339,6 +338,7 @@ abstract class BuildSwiftFramework: DefaultTask() {
                 "-configuration", "Release",
                 "-sdk", "iphoneos",
                 "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.absolutePath}",
+                "ARCHS=arm64"
             )
 //            commandLine(
 //                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",

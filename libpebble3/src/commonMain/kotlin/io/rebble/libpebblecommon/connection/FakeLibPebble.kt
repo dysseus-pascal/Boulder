@@ -338,7 +338,9 @@ class FakeConnectedDevice(
 
     override suspend fun sendPing(cookie: UInt): UInt = cookie
 
-    override suspend fun resetIntoPrf() {}
+    override fun resetIntoPrf() {}
+
+    override fun createCoreDump() {}
 
     override suspend fun sendPPMessage(bytes: ByteArray) {}
 

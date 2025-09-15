@@ -125,8 +125,16 @@ class SystemService(
         return pong.await().cookie.get()
     }
 
-    override suspend fun resetIntoPrf() {
-        protocolHandler.send(ResetMessage.ResetIntoPrf)
+    override fun resetIntoPrf() {
+        scope.launch {
+            protocolHandler.send(ResetMessage.ResetIntoPrf)
+        }
+    }
+
+    override fun createCoreDump() {
+        scope.launch {
+            protocolHandler.send(ResetMessage.CoreDump)
+        }
     }
 
     fun init() {

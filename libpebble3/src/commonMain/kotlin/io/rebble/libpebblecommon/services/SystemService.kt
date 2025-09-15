@@ -21,7 +21,6 @@ import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
 import io.rebble.libpebblecommon.structmapper.SInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
-import io.rebble.libpebblecommon.util.asKtxInstant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
@@ -181,8 +180,7 @@ class SystemService(
         val time = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
         val timeUtcSeconds = time.epochSeconds
-        val ktxDateTimeInstant = time.asKtxInstant()
-        val tzOffsetMinutes = timeZone.offsetAt(ktxDateTimeInstant).totalSeconds.seconds.inWholeMinutes
+        val tzOffsetMinutes = timeZone.offsetAt(time).totalSeconds.seconds.inWholeMinutes
         logger.v("time=$time timeZone=$timeZone timeUtcSeconds=$timeUtcSeconds tzOffsetMinutes=$tzOffsetMinutes")
         protocolHandler.send(
             TimeMessage.SetUTC(

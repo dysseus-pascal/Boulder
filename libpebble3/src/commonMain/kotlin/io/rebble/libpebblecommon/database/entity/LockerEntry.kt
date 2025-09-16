@@ -76,14 +76,8 @@ fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
         return null
     }
     val appVersionMatch = APP_VERSION_REGEX.find(version)
-    val appVersionMajor = appVersionMatch?.groupValues?.getOrNull(1) ?: run {
-        logger.d { "No app version major found for $id ($title)" }
-        return null
-    }
-    val appVersionMinor = appVersionMatch.groupValues.getOrNull(2) ?: run {
-        logger.d { "No app version minor found for $id ($title)" }
-        return null
-    }
+    val appVersionMajor = appVersionMatch?.groupValues?.getOrNull(1) ?: "0"
+    val appVersionMinor = appVersionMatch?.groupValues?.getOrNull(2) ?: "0"
     val sdkVersionMatch = APP_VERSION_REGEX.find(entryPlatform.sdkVersion)
     val sdkVersionMajor = sdkVersionMatch?.groupValues?.getOrNull(1) ?: run {
         logger.d { "No sdk version major found for $id ($title)" }

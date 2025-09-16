@@ -37,7 +37,7 @@ interface ContactDao {
         FROM ContactEntity
         WHERE lookupKey = :key
     """)
-    suspend fun getContact(key: String): ContactEntity
+    suspend fun getContact(key: String): ContactEntity?
 
     @Query("""
         DELETE FROM ContactEntity

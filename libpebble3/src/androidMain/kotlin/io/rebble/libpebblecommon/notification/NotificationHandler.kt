@@ -149,7 +149,7 @@ class NotificationHandler(
                 return null
             }
         }
-        val contactEntries = notification.people.map {
+        val contactEntries = notification.people.mapNotNull {
             contactDao.getContact(it)
         }
         val anyContactMuted = contactEntries.any { it.muteState == MuteState.Always }

@@ -59,6 +59,9 @@ tasks.register("buildFrameworkLibPebbleSwift", BuildSwiftFramework::class) {
     description = "Builds the Swift framework for libpebble-swift"
 }
 
+// Non-mac machines cannot build iOS targets, so disable them
+val enableIosTarget = System.getProperty("os.name").contains("mac", ignoreCase = true)
+
 kotlin {
     targets.configureEach {
         compilations.configureEach {
@@ -76,49 +79,51 @@ kotlin {
 
     jvm()
 
-    val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
-        project.providers.exec {
-            isIgnoreExitValue = true
-            commandLine("which", "xcode-select")
-        }.result.get().exitValue == 0
-    }
-    val xcodeDir by lazy {
-        if (xcodeExists) {
-            project.providers.exec {
-                commandLine("xcode-select", "-p")
-            }.standardOutput.asText.get().trim()
-        } else {
-            ""
-        }
-    }
+   if (enableIosTarget) {
+       val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
+           project.providers.exec {
+               isIgnoreExitValue = true
+               commandLine("which", "xcode-select")
+           }.result.get().exitValue == 0
+       }
+       val xcodeDir by lazy {
+           if (xcodeExists) {
+               project.providers.exec {
+                   commandLine("xcode-select", "-p")
+               }.standardOutput.asText.get().trim()
+           } else {
+               ""
+           }
+       }
 
-    listOf(
-        iosX64(),
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { target ->
-        val dir = tasks.getByName("buildFrameworkLibPebbleSwift").outputs.files.singleFile
-        target.binaries.framework {
-            baseName = "libpebble3"
-        }
-        target.compilations.getByName("main") {
-            val libPebbleSwift by cinterops.creating {
-                compilerOpts("-framework", "LibPebbleSwift", "-F"+dir.absolutePath)
-            }
-        }
-        target.binaries.all {
-            linkerOpts("-framework", "LibPebbleSwift", "-F"+dir.absolutePath)
-            if (xcodeExists) {
-                val osName = when (target.name) {
-                    "iosX64" -> "macosx"
-                    "iosArm64" -> "iphoneos"
-                    "iosSimulatorArm64" -> "iphonesimulator"
-                    else -> throw IllegalStateException("Unknown target: ${target.name}")
-                }
-                linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
-            }
-        }
-    }
+       listOf(
+           iosX64(),
+           iosArm64(),
+           iosSimulatorArm64()
+       ).forEach { target ->
+           val dir = tasks.getByName("buildFrameworkLibPebbleSwift").outputs.files.singleFile
+           target.binaries.framework {
+               baseName = "libpebble3"
+           }
+           target.compilations.getByName("main") {
+               val libPebbleSwift by cinterops.creating {
+                   compilerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
+               }
+           }
+           target.binaries.all {
+               linkerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
+               if (xcodeExists) {
+                   val osName = when (target.name) {
+                       "iosX64" -> "macosx"
+                       "iosArm64" -> "iphoneos"
+                       "iosSimulatorArm64" -> "iphonesimulator"
+                       else -> throw IllegalStateException("Unknown target: ${target.name}")
+                   }
+                   linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
+               }
+           }
+       }
+   }
 
     sourceSets {
         all {
@@ -204,32 +209,35 @@ afterEvaluate {
     tasks.named("kspReleaseKotlinAndroid") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
-    tasks.named("kspKotlinIosArm64") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
-    tasks.named("kspKotlinIosX64") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
-    tasks.named("kspKotlinIosSimulatorArm64") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
-    tasks.named("cinteropLibPebbleSwiftIosArm64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
-    }
-    tasks.named("cinteropLibPebbleSwiftIosX64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
-    }
-    tasks.named("cinteropLibPebbleSwiftIosSimulatorArm64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
-    }
-    tasks.named("compileKotlinIosArm64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
-    }
-    tasks.named("compileKotlinIosX64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
-    }
-    tasks.named("compileKotlinIosSimulatorArm64") {
-        dependsOn("buildFrameworkLibPebbleSwift")
+
+    if (enableIosTarget) {
+        tasks.named("kspKotlinIosArm64") {
+            dependsOn("kspCommonMainKotlinMetadata")
+        }
+        tasks.named("kspKotlinIosX64") {
+            dependsOn("kspCommonMainKotlinMetadata")
+        }
+        tasks.named("kspKotlinIosSimulatorArm64") {
+            dependsOn("kspCommonMainKotlinMetadata")
+        }
+        tasks.named("cinteropLibPebbleSwiftIosArm64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
+        tasks.named("cinteropLibPebbleSwiftIosX64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
+        tasks.named("cinteropLibPebbleSwiftIosSimulatorArm64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
+        tasks.named("compileKotlinIosArm64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
+        tasks.named("compileKotlinIosX64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
+        tasks.named("compileKotlinIosSimulatorArm64") {
+            dependsOn("buildFrameworkLibPebbleSwift")
+        }
     }
 }
 
@@ -238,9 +246,12 @@ dependencies {
 //    add("kspJvm", libs.room.compiler)
     add("kspCommonMainMetadata", project(":blobdbgen"))
     add("kspAndroid", libs.room.compiler)
-    add("kspIosX64", libs.room.compiler)
-    add("kspIosArm64", libs.room.compiler)
-    add("kspIosSimulatorArm64", libs.room.compiler)
+
+    if (enableIosTarget) {
+        add("kspIosX64", libs.room.compiler)
+        add("kspIosArm64", libs.room.compiler)
+        add("kspIosSimulatorArm64", libs.room.compiler)
+    }
 }
 
 /*

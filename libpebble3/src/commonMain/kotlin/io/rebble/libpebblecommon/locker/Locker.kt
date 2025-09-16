@@ -209,7 +209,7 @@ class Locker(
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val lockerEntry = pbwApp.toLockerEntry(clock.now())
         pbwApp.source().buffered().use {
-            lockerPBWCache.addPBWFileForApp(lockerEntry.id, it)
+            lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)
         }
         val tasks = if (loadOnWatch) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
@@ -364,9 +364,9 @@ class StaticLockerPBWCache(
 ) : LockerPBWCache(context) {
     private val logger = Logger.withTag("StaticLockerPBWCache")
 
-    override suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path? {
+    override suspend fun handleCacheMiss(appId: Uuid, version: String, locker: Locker): Path? {
         logger.d { "handleCacheMiss: $appId" }
-        val pbwPath = pathForApp(appId)
+        val pbwPath = pathForApp(appId, version)
         val pbwUrl = locker.getApp(appId)?.appstoreData?.pbwLink ?: return null
         return try {
             withTimeout(20.seconds) {
@@ -400,27 +400,29 @@ abstract class LockerPBWCache(context: AppContext) {
     private val cacheDir = getLockerPBWCacheDirectory(context)
     private val pkjsCacheDir = Path(getLockerPBWCacheDirectory(context), "pkjs")
 
-    protected fun pathForApp(appId: Uuid): Path {
-        return Path(cacheDir, "$appId.pbw")
+    protected fun pathForApp(appId: Uuid, version: String): Path {
+        return Path(cacheDir, "${appId}_${version}.pbw")
     }
 
     protected fun pkjsPathForApp(appId: Uuid): Path {
         return Path(pkjsCacheDir, "$appId.js")
     }
 
-    protected abstract suspend fun handleCacheMiss(appId: Uuid, locker: Locker): Path?
+    protected abstract suspend fun handleCacheMiss(appId: Uuid, version: String, locker: Locker): Path?
 
-    suspend fun getPBWFileForApp(appId: Uuid, locker: Locker): Path {
-        val pbwPath = pathForApp(appId)
+    suspend fun getPBWFileForApp(appId: Uuid, version: String, locker: Locker): Path {
+        val pbwPath = pathForApp(appId, version)
         return if (SystemFileSystem.exists(pbwPath)) {
             pbwPath
         } else {
-            handleCacheMiss(appId, locker) ?: error("Failed to find PBW file for app $appId")
+            // Delete any other cached versions for this app
+            deleteApp(appId)
+            handleCacheMiss(appId, version, locker) ?: error("Failed to find PBW file for app $appId")
         }
     }
 
-    fun addPBWFileForApp(appId: Uuid, source: Source) {
-        val targetPath = pathForApp(appId)
+    fun addPBWFileForApp(appId: Uuid, version: String, source: Source) {
+        val targetPath = pathForApp(appId, version)
         SystemFileSystem.sink(targetPath).use { sink ->
             source.transferTo(sink)
         }
@@ -431,14 +433,14 @@ abstract class LockerPBWCache(context: AppContext) {
         return js.replace("\u00a0", " ")
     }
 
-    fun getPKJSFileForApp(appId: Uuid): Path {
+    fun getPKJSFileForApp(appId: Uuid, version: String): Path {
         val pkjsPath = pkjsPathForApp(appId)
-        val appPath = pathForApp(appId)
+        val appPath = pathForApp(appId, version)
         return when {
             SystemFileSystem.exists(pkjsPath) -> pkjsPath
             SystemFileSystem.exists(appPath) -> {
                 SystemFileSystem.createDirectories(pkjsCacheDir, false)
-                val pbwApp = PbwApp(pathForApp(appId))
+                val pbwApp = PbwApp(pathForApp(appId, version))
                 pbwApp.getPKJSFile().use { source ->
                     val js = sanitizeJS(source.readString())
                     SystemFileSystem.sink(pkjsPath).buffered().use { sink ->
@@ -461,6 +463,11 @@ abstract class LockerPBWCache(context: AppContext) {
 
     fun deleteApp(appId: Uuid) {
         clearPKJSFileForApp(appId)
-        SystemFileSystem.delete(pathForApp(appId), mustExist = false)
+        SystemFileSystem.list(cacheDir).forEach {
+            // Delete all pbws for this uuid
+            if (it.name.startsWith(appId.toString())) {
+                SystemFileSystem.delete(it)
+            }
+        }
     }
 }

@@ -44,7 +44,7 @@ class PKJSLifecycleManager(
 
     private suspend fun handleNewRunningApp(lockerEntry: LockerEntry, scope: CoroutineScope) {
         try {
-            val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, locker))
+            val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, lockerEntry.version, locker))
             if (runningApp.value != null) {
                 logger.w { "App ${lockerEntry.id} is already running, stopping it before starting a new one" }
                 runningApp.value?.stop()
@@ -55,7 +55,7 @@ class PKJSLifecycleManager(
                 return
             }
 
-            val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id)
+            val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id, lockerEntry.version)
             runningApp.value = PKJSApp(
                 device,
                 jsPath,

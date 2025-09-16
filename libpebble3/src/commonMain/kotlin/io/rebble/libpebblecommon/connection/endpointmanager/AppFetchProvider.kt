@@ -40,7 +40,8 @@ class AppFetchProvider(
                         logger.d { "Got app fetch request for $uuid" }
                         val appId = it.appId.get()
                         val app = try {
-                            PbwApp(pbwCache.getPBWFileForApp(uuid, locker))
+                            val version = locker.getApp(uuid)?.version ?: ""
+                            PbwApp(pbwCache.getPBWFileForApp(uuid, version, locker))
                         } catch (e: Exception) {
                             logger.e(e) { "Failed to get app for uuid $uuid" }
                             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)

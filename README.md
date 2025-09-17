@@ -2,17 +2,11 @@
 
 libpebble3 is a kotlin multiplatform library for interacting with Pebble devices. It is designed to do everything that a Pebble/Core watch companion app needs to do, except for the UI and specific web services.
 
-This includes: connection management/bluetooth on all supported platforms, notification listener/processing, timeline, blobdb storage/management, firmware updating, PebbleKit JS, music control, etc etc. A "host" app using this library will only need to provide a UI and implementations to fetch things like the app locker (likely via web services). The library will do everything else in the background.
-
-It is not yet at feature parity with the original Pebble apps. We have not yet documented which features are complete/missing.
+See https://github.com/coredevices/libpebble3/wiki/Roadmap
 
 # Using libpebble3
 
-libpebble3 is still in development - maybe best described as alpha. The API surface is subject to (large) changes as we develop the library along with CoreApp (which uses the library). There is no documentation (yet) on how to use the library.
-
-No artifacts are published yet (we include libpebble3 as a submodule for CoreApp development).
-
-In the future we envisage supporting more targets, but today only iOS/Android are supported.
+See https://github.com/coredevices/libpebble3/wiki/Roadmap
 
 # Contributing
 

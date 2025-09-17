@@ -4,19 +4,36 @@ import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.metadata.WatchColor
 
 interface ConnectionFailureHandler {
-    suspend fun handleRepeatFailure(identifier: PebbleIdentifier, color: WatchColor, reason: ConnectionFailureReason)
+    suspend fun handleConnectionFailure(identifier: PebbleIdentifier, color: WatchColor, failure: ConnectionFailureInfo)
 }
 
 class RealConnectionFailureHandler(
     private val appContext: AppContext,
     private val analytics: LibPebbleAnalytics,
 ) : ConnectionFailureHandler {
-    override suspend fun handleRepeatFailure(identifier: PebbleIdentifier, color: WatchColor, reason: ConnectionFailureReason) {
-        when (reason) {
-            ConnectionFailureReason.MtuGattError -> appContext.handleMtuGattError(identifier, color, analytics)
-            ConnectionFailureReason.GattInsufficientAuth -> appContext.handleGattInsufficientAuth(identifier, color, analytics)
-            ConnectionFailureReason.CreateBondFailed -> appContext.handleCreateBondFailed(identifier, color, analytics)
-            else -> Unit
+    override suspend fun handleConnectionFailure(identifier: PebbleIdentifier, color: WatchColor, failure: ConnectionFailureInfo) {
+        if (failure.times >= 5) {
+            when (failure.reason) {
+                ConnectionFailureReason.MtuGattError -> appContext.handleMtuGattError(
+                    identifier,
+                    color,
+                    analytics
+                )
+
+                ConnectionFailureReason.GattInsufficientAuth -> appContext.handleGattInsufficientAuth(
+                    identifier,
+                    color,
+                    analytics
+                )
+
+                ConnectionFailureReason.CreateBondFailed -> appContext.handleCreateBondFailed(
+                    identifier,
+                    color,
+                    analytics
+                )
+
+                else -> Unit
+            }
         }
     }
 }

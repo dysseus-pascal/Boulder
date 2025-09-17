@@ -4,6 +4,8 @@ import androidx.compose.ui.util.fastForEachReversed
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.connection.ConnectionException
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -45,7 +47,7 @@ class PPoG(
                 } else {
                     null
                 }
-            } ?: throw IllegalStateException("Timed out initializing PPoG")
+            } ?: throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
             runConnection(params)
         }
     }

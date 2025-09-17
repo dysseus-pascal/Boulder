@@ -295,12 +295,14 @@ fun fakeWatch(): PebbleDevice {
             firmwareUpdateState = fwupState,
             name = name,
             nickname = null,
+            connectionFailureInfo = null,
         )
     } else {
         object : DiscoveredPebbleDevice {
             override val identifier = fakeIdentifier
             override val name: String = "Fake 1234"
             override val nickname: String? = "Faker 1234"
+            override val connectionFailureInfo: ConnectionFailureInfo? = null
 
             override fun connect() {
             }
@@ -325,6 +327,7 @@ class FakeConnectedDevice(
     override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
     override val lastConnected: Instant = Instant.DISTANT_PAST, override val serial: String = "XXXXXXXXXXXX",
     override val runningFwVersion: String = "v1.2.3-core",
+    override val connectionFailureInfo: ConnectionFailureInfo?,
 ) : ConnectedPebbleDevice {
 
     override fun forget() {}

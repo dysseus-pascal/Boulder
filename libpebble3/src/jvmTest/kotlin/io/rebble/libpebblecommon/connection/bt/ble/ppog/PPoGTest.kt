@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.BleConfig
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.asFlow
+import io.rebble.libpebblecommon.connection.ConnectionException
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -96,7 +97,7 @@ class PPoGTest {
 
     @Test
     fun initTimeout() {
-        assertThrows(IllegalStateException::class.java) {
+        assertThrows(ConnectionException::class.java) {
             runTest {
                 val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
                 ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)

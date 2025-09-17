@@ -220,10 +220,10 @@ class WatchManagerTest {
             }
         }
         val connectionFailureHandler = object : ConnectionFailureHandler {
-            override suspend fun handleRepeatFailure(
+            override suspend fun handleConnectionFailure(
                 identifier: PebbleIdentifier,
                 color: WatchColor,
-                reason: ConnectionFailureReason
+                failure: ConnectionFailureInfo
             ) {
             }
         }

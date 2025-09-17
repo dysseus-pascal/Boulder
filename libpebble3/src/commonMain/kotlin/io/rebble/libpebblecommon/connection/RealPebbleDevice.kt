@@ -25,12 +25,14 @@ class PebbleDeviceFactory {
         bluetoothState: BluetoothState,
         lastFirmwareUpdateState: FirmwareUpdateStatus,
         batteryLevel: Int?,
+        connectionFailureInfo: ConnectionFailureInfo?,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(
             identifier = identifier,
             name = name,
             nickname = nickname,
             watchConnector = watchConnector,
+            connectionFailureInfo = connectionFailureInfo,
         )
         val knownDevice = knownWatchProperties?.let {
             RealKnownPebbleDevice(
@@ -139,12 +141,13 @@ internal class RealPebbleDevice(
     override val name: String,
     override val nickname: String?,
     private val watchConnector: WatchConnector,
+    override val connectionFailureInfo: ConnectionFailureInfo?,
 ) : PebbleDevice, DiscoveredPebbleDevice {
     override fun connect() {
         watchConnector.requestConnection(identifier)
     }
 
-    override fun toString(): String = "$identifier - $name"
+    override fun toString(): String = "$identifier - $name ${nickname?.let { "(nickname=$it)" }} connectionFailureInfo=$connectionFailureInfo"
 }
 
 internal class RealBleDiscoveredPebbleDevice(

@@ -113,7 +113,7 @@ private data class Watch(
     val forget: Boolean,
     val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     val lastFirmwareUpdateState: FirmwareUpdateStatus,
-    val lastConnectionFailureReason: ConnectionFailureReason?,
+    val connectionFailureInfo: ConnectionFailureInfo?,
 ) {
     init {
         check(scanResult != null || knownWatchProps != null)
@@ -192,7 +192,7 @@ class WatchManager(
                 firmwareUpdateAvailable = null,
                 lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
                 nickname = it.nickname,
-                lastConnectionFailureReason = null,
+                connectionFailureInfo = null,
             )
         }
     }
@@ -231,7 +231,9 @@ class WatchManager(
             }.map { state ->
                 // State can be null for the first scan emission
                 val (watches, active, previousActive, btstate) = state ?: return@map emptyList()
-                logger.v { "combine: watches=$watches / active=$active / btstate=$btstate / activeConnections=$activeConnections" }
+                if (watchConfig.value.verboseWatchManagerLogging) {
+                    logger.d { "combine: watches=$watches / active=$active / btstate=$btstate / activeConnections=$activeConnections" }
+                }
                 // Update for active connection state
                 watches.values.mapNotNull { device ->
                     val identifier = device.identifier
@@ -288,10 +290,13 @@ class WatchManager(
                         bluetoothState = btstate,
                         lastFirmwareUpdateState = device.lastFirmwareUpdateState,
                         batteryLevel = states.currentState?.batteryLevel,
+                        connectionFailureInfo = device.connectionFailureInfo,
                     )
 
                     // Update persisted props after connection
-                    logger.v { "states=$states" }
+                    if (watchConfig.value.verboseWatchManagerLogging) {
+                        logger.d { "states=$states" }
+                    }
                     // Watch just connected
                     if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Connected) {
@@ -305,7 +310,7 @@ class WatchManager(
                             updateWatch(identifier) {
                                 it.copy(
                                     knownWatchProps = newProps,
-                                    lastConnectionFailureReason = null,
+                                    connectionFailureInfo = null,
                                 )
                             }
                         }
@@ -336,25 +341,10 @@ class WatchManager(
                         _connectionEvents.emit(PebbleConnectionEvent.PebbleDisconnectedEvent(identifier))
                     }
 
-                    // Connection error
-                    if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Failed && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Failed) {
-                        val failureReason = states.currentState.connectingPebbleState.reason
-                        device.logAnalyticsEvent("disconnected", mapOf("reason" to failureReason.name))
-                        if (failureReason != device.lastConnectionFailureReason) {
-                            logger.d { "New failure reason: $failureReason" }
-                            updateWatch(identifier) {
-                                it.copy(
-                                    lastConnectionFailureReason = failureReason,
-                                )
-                            }
-                        } else {
-                            connectionFailureHandler.handleRepeatFailure(identifier, device.color(), failureReason)
-                        }
-                    }
                     pebbleDevice
                 }
             }.collect {
-                _watches.value = it.also { logger.v("watches: $it") }
+                _watches.value = it.also { logger.d("watches: ${it.joinToString(separator = "\n", prefix = "\n")}") }
             }
         }
     }
@@ -379,7 +369,7 @@ class WatchManager(
                         firmwareUpdateAvailable = null,
                         lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
                         nickname = null,
-                        lastConnectionFailureReason = null,
+                        connectionFailureInfo = null,
                     )
                 )
             } else {
@@ -456,6 +446,9 @@ class WatchManager(
                     return@CoroutineExceptionHandler
                 }
                 caughtException = true
+                if (throwable is ConnectionException) {
+                    device.updateFailureReason(throwable.reason)
+                }
                 val connection = allWatches.value[identifier]?.activeConnection
                 connection?.let {
                     libPebbleCoroutineScope.launch {
@@ -506,12 +499,14 @@ class WatchManager(
                     connectionKoinScope.analyticsLogger.logEvent("connection_attempt")
                     pebbleConnector.connect(
                         previouslyConnected = device.knownWatchProps != null,
-                        lastError = device.lastConnectionFailureReason,
+                        lastError = device.connectionFailureInfo?.reason,
                     )
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $identifier")
                     pebbleConnector.disconnected.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)
                     logger.d("watchmanager got disconnection: $identifier")
+                    val connectionFailureReason = (pebbleConnector.state.value as? ConnectingPebbleState.Failed)?.reason
+                    device.updateFailureReason(connectionFailureReason)
                 } catch (e: Exception) {
                     // Because we call cleanup() in the `finally` block, the CoroutineExceptionHandler is not called.
                     // So catch it here just to log it.
@@ -522,6 +517,24 @@ class WatchManager(
                 }
             }
             watch.copy(activeConnection = connectionKoinScope)
+        }
+    }
+
+    private fun Watch.updateFailureReason(newReason: ConnectionFailureReason?) {
+        if (newReason != null) {
+            val failureInfo = ConnectionFailureInfo(
+                reason = newReason,
+                times = if (connectionFailureInfo?.reason == newReason) {
+                    connectionFailureInfo.times + 1
+                } else {
+                    1
+                },
+            )
+            updateWatch(identifier) {
+                it.copy(
+                    connectionFailureInfo = failureInfo,
+                )
+            }
         }
     }
 

@@ -17,8 +17,8 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import kotlin.time.Instant
 import kotlinx.io.files.Path
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 
@@ -26,12 +26,22 @@ interface ActiveDevice {
     fun disconnect()
 }
 
+data class ConnectionFailureInfo(
+    val reason: ConnectionFailureReason,
+    val times: Int,
+)
+
 // <T : Transport> ?
 @Stable
 sealed interface PebbleDevice {
     val identifier: PebbleIdentifier
     val name: String
     val nickname: String?
+
+    /**
+     * Information about previous connection failures (until successfully connected).
+     */
+    val connectionFailureInfo: ConnectionFailureInfo?
 
     fun connect()
     fun displayName(): String {

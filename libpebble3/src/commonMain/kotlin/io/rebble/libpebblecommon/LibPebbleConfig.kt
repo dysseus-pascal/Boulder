@@ -64,6 +64,7 @@ data class WatchConfig(
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val speechRecognitionLanguage: String? = null,
+    val verboseWatchManagerLogging: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

@@ -39,10 +39,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.runningReduce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -153,8 +154,37 @@ class WatchManager(
     private val blobDbDatabaseManager: BlobDbDatabaseManager,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
-    private val allWatches = MutableStateFlow<Map<PebbleIdentifier, Watch>>(emptyMap())
-    private val _watches = MutableStateFlow<List<PebbleDevice>>(emptyList())
+    private val allWatches: MutableStateFlow<Map<PebbleIdentifier, Watch>> = MutableStateFlow(
+        runBlocking {
+            knownWatchDao.knownWatches().associate {
+                val identifier = it.identifier()
+                identifier to Watch(
+                    identifier = identifier,
+                    name = it.name,
+                    scanResult = null,
+                    connectGoal = it.connectGoal,
+                    knownWatchProps = it.asProps(),
+                    activeConnection = null,
+                    asPersisted = it,
+                    forget = false,
+                    firmwareUpdateAvailable = null,
+                    lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
+                    nickname = it.nickname,
+                    connectionFailureInfo = null,
+                )
+            }
+        }
+    )
+    private val _watches = MutableStateFlow<List<PebbleDevice>>(
+        allWatches.value.map {
+            it.value.createPebbleDevice(
+                batteryLevel = null,
+                btState = bluetoothStateProvider.state.value,
+                state = null,
+                firmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
+            )
+        }
+    )
     override val watches: StateFlow<List<PebbleDevice>> = _watches.asStateFlow()
     private val _connectionEvents = MutableSharedFlow<PebbleConnectionEvent>(extraBufferCapacity = 5)
     override val connectionEvents: Flow<PebbleConnectionEvent> = _connectionEvents.asSharedFlow()
@@ -177,26 +207,6 @@ class WatchManager(
         }
     }
 
-    private suspend fun loadKnownWatchesFromDb() {
-        allWatches.value = knownWatchDao.knownWatches().associate {
-            val identifier = it.identifier()
-            identifier to Watch(
-                identifier = identifier,
-                name = it.name,
-                scanResult = null,
-                connectGoal = it.connectGoal,
-                knownWatchProps = it.asProps(),
-                activeConnection = null,
-                asPersisted = it,
-                forget = false,
-                firmwareUpdateAvailable = null,
-                lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle,
-                nickname = it.nickname,
-                connectionFailureInfo = null,
-            )
-        }
-    }
-
     private suspend fun persistIfNeeded(
         watch: Watch,
     ) {
@@ -215,24 +225,46 @@ class WatchManager(
         }
     }
 
+    private fun Watch.createPebbleDevice(
+        batteryLevel: Int?,
+        btState: BluetoothState,
+        state: ConnectingPebbleState?,
+        firmwareUpdateState: FirmwareUpdateStatus,
+    ): PebbleDevice =
+        pebbleDeviceFactory.create(
+            identifier = identifier,
+            name = name,
+            nickname = nickname,
+            state = state,
+            watchConnector = this@WatchManager,
+            scanResult = scanResult,
+            knownWatchProperties = knownWatchProps,
+            connectGoal = connectGoal,
+            firmwareUpdateAvailable = firmwareUpdateAvailable,
+            firmwareUpdateState = firmwareUpdateState,
+            bluetoothState = btState,
+            lastFirmwareUpdateState = lastFirmwareUpdateState,
+            batteryLevel = batteryLevel,
+            connectionFailureInfo = connectionFailureInfo,
+        )
+
     fun init() {
         logger.d("watchmanager init()")
         libPebbleCoroutineScope.launch {
-            loadKnownWatchesFromDb()
             val activeConnectionStates = allWatches.flowOfAllDevices()
             combine(
                 allWatches,
                 activeConnectionStates,
                 bluetoothStateProvider.state,
-            ) { watches, active, btstate ->
-                CombinedState(watches, active, emptyMap(), btstate)
-            }.scan(null as CombinedState?) { previous, current ->
-                current.copy(previousActive = previous?.active ?: emptyMap())
-            }.map { state ->
+            ) { watches, active, btState ->
+                CombinedState(watches, active, emptyMap(), btState)
+            }.runningReduce { previous, current ->
+                current.copy(previousActive = previous.active)
+            }.mapNotNull { state ->
                 // State can be null for the first scan emission
-                val (watches, active, previousActive, btstate) = state ?: return@map emptyList()
+                val (watches, active, previousActive, btState) = state
                 if (watchConfig.value.verboseWatchManagerLogging) {
-                    logger.d { "combine: watches=$watches / active=$active / btstate=$btstate / activeConnections=$activeConnections" }
+                    logger.d { "combine: watches=$watches / active=$active / btstate=$btState / activeConnections=$activeConnections" }
                 }
                 // Update for active connection state
                 watches.values.mapNotNull { device ->
@@ -254,7 +286,7 @@ class WatchManager(
                     }
 
                     // Goals
-                    if (device.connectGoal && !hasConnectionAttempt && btstate.enabled()) {
+                    if (device.connectGoal && !hasConnectionAttempt && btState.enabled()) {
                         if (watchConfig.value.multipleConnectedWatchesSupported) {
                             connectTo(device)
                         } else {
@@ -262,7 +294,7 @@ class WatchManager(
                                 connectTo(device)
                             }
                         }
-                    } else if (hasConnectionAttempt && !btstate.enabled()) {
+                    } else if (hasConnectionAttempt && !btState.enabled()) {
                         disconnectFrom(device.identifier)
                         device.activeConnection?.cleanup()
                     } else if (!device.connectGoal && hasConnectionAttempt) {
@@ -276,21 +308,11 @@ class WatchManager(
                         }
                     }
 
-                    val pebbleDevice = pebbleDeviceFactory.create(
-                        identifier = identifier,
-                        name = device.name,
-                        nickname = device.nickname,
-                        state = states.currentState?.connectingPebbleState,
-                        watchConnector = this@WatchManager,
-                        scanResult = device.scanResult,
-                        knownWatchProperties = device.knownWatchProps,
-                        connectGoal = device.connectGoal,
-                        firmwareUpdateAvailable = device.firmwareUpdateAvailable,
-                        firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
-                        bluetoothState = btstate,
-                        lastFirmwareUpdateState = device.lastFirmwareUpdateState,
+                    val pebbleDevice = device.createPebbleDevice(
                         batteryLevel = states.currentState?.batteryLevel,
-                        connectionFailureInfo = device.connectionFailureInfo,
+                        btState = btState,
+                        state = states.currentState?.connectingPebbleState,
+                        firmwareUpdateState = states.currentState?.firmwareUpdateStatus ?: FirmwareUpdateStatus.NotInProgress.Idle,
                     )
 
                     // Update persisted props after connection

@@ -20,6 +20,7 @@ compose-multiplatform = "1.8.2"
 settings = "1.3.0"
 kable = "0.40.0"
 kmpio = "0.2.3"
+androidx-core = "1.17.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -68,3 +69,4 @@ settings = { group = "com.russhwolf", name = "multiplatform-settings-no-arg", ve
 settings-serialization = { group = "com.russhwolf", name = "multiplatform-settings-serialization", version.ref = "settings" }
 kable = { group = "com.juul.kable", name = "kable-core", version.ref = "kable" }
 kmpio = { module = "io.github.skolson:kmp-io", version.ref = "kmpio" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }

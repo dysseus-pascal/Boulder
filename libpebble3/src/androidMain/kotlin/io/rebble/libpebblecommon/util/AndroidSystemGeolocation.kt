@@ -2,11 +2,13 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.util
 
 import android.annotation.SuppressLint
 import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
-import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.Looper
+import androidx.core.location.LocationListenerCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.location.LocationRequestCompat
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
@@ -22,9 +24,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 import kotlin.time.Clock
 import kotlin.time.Instant
-import kotlin.coroutines.resume
 
 class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
     companion object {
@@ -49,7 +51,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 return@callbackFlow
             }
             logger.d { "Flow using location provider: $bestProvider" }
-            val locationListener = object : LocationListener {
+            val locationListener = object : LocationListenerCompat {
                 override fun onLocationChanged(location: Location) {
                     trySend(
                         GeolocationPositionResult.Success(
@@ -63,26 +65,21 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                         )
                     )
                 }
-
-                override fun onStatusChanged(
-                    provider: String?,
-                    status: Int,
-                    extras: Bundle?
-                ) {
-                    // Just here so that we don't crash on <Q
-                }
             }
             withContext(Dispatchers.Main) {
                 // This can crash if done away from main thread
-                locationManager.requestLocationUpdates(
+                LocationManagerCompat.requestLocationUpdates(
+                    locationManager,
                     bestProvider,
-                    250L,
-                    0f,
-                    locationListener
+                    LocationRequestCompat.Builder(250L)
+                        .setMinUpdateDistanceMeters(0f)
+                        .build(),
+                    locationListener,
+                    Looper.getMainLooper(),
                 )
             }
             awaitClose {
-                locationManager.removeUpdates(locationListener)
+                LocationManagerCompat.removeUpdates(locationManager, locationListener)
             }
         }
     }.shareIn(GlobalScope, SharingStarted.WhileSubscribed(1000))

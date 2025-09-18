@@ -176,6 +176,7 @@ kotlin {
         }
 
         androidMain.dependencies {
+            implementation(libs.androidx.core.ktx)
         }
 
         iosMain.dependencies {

@@ -4,7 +4,6 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
-import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -13,8 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 interface FirmwareUpdateManager {
@@ -34,7 +31,6 @@ class RealFirmwareUpdateManager(
 
     companion object {
         private val INITIAL_DELAY_PERIOD = 1.seconds
-        private val UPDATE_CHECK_PERIOD = 6.hours
     }
 
     override fun init(watchInfo: WatchInfo) {
@@ -46,10 +42,6 @@ class RealFirmwareUpdateManager(
         }
         connectionCoroutineScope.launch {
             delay(INITIAL_DELAY_PERIOD)
-            while (true) {
-                checkForUpdates()
-                delay(UPDATE_CHECK_PERIOD)
-            }
         }
     }
 

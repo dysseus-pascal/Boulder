@@ -106,6 +106,7 @@ class BlobDB(
             }
             tickerFlow
                 .flatMapLatest {
+                    logger.d { "dynamicQuery: refreshing (${dao.databaseId()}" }
                     if (insert) {
                         dao.dirtyRecordsForWatchInsert(
                             transport = identifier.asString,

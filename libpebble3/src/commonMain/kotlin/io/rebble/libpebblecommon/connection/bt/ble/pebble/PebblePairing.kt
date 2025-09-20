@@ -112,7 +112,6 @@ class PebblePairing(
             analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
             return ConnectionFailureReason.PairingTimedOut
         }
-        analytics.logEvent("pairing.success")
         return null
     }
 

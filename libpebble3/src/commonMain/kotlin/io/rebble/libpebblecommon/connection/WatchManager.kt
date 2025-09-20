@@ -322,7 +322,6 @@ class WatchManager(
                     // Watch just connected
                     if (states.currentState?.connectingPebbleState is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState !is ConnectingPebbleState.Connected) {
-                        device.logAnalyticsEvent("connected")
                         val newProps = states.currentState.connectingPebbleState.watchInfo.asWatchProperties(
                             lastConnected = clock.now().asMillisecond(),
                             name = device.name,
@@ -352,7 +351,6 @@ class WatchManager(
                     // Watch just disconnected
                     if (states.currentState?.connectingPebbleState !is ConnectingPebbleState.Connected
                         && states.previousState?.connectingPebbleState is ConnectingPebbleState.Connected) {
-                        device.logAnalyticsEvent("disconnected")
                         val lastFwupState = states.previousState.firmwareUpdateStatus
                         if (device.lastFirmwareUpdateState != lastFwupState) {
                             updateWatch(identifier) {
@@ -518,7 +516,6 @@ class WatchManager(
                         logger.i("Device connecting too soon after init: delaying to make sure we were really disconnected")
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
-                    connectionKoinScope.analyticsLogger.logEvent("connection_attempt")
                     pebbleConnector.connect(
                         previouslyConnected = device.knownWatchProps != null,
                         lastError = device.connectionFailureInfo?.reason,

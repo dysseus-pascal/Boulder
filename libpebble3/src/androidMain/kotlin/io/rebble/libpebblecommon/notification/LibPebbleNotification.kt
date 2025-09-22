@@ -14,6 +14,8 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbl
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.util.PebbleColor
+import io.rebble.libpebblecommon.util.toPebbleColor
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -27,7 +29,8 @@ data class LibPebbleNotification(
     val body: String?,
     val icon: TimelineIcon,
     val actions: List<LibPebbleNotificationAction>,
-    val people: List<String>
+    val people: List<String>,
+    val color: Int? = null, // ARGB
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
@@ -93,6 +96,9 @@ data class LibPebbleNotification(
             }
             body?.let {
                 body { it }
+            }
+            color?.let {
+                primaryColor { it.toPebbleColor() }
             }
             tinyIcon { icon }
         }

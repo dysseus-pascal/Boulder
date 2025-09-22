@@ -23,7 +23,7 @@ object TimelineAttributeFactory {
         return createAttribute(type.id, content)
     }
 
-    private fun createUByteAttribute(type: TimelineAttribute, value: UByte): TimelineItem.Attribute {
+    fun createUByteAttribute(type: TimelineAttribute, value: UByte): TimelineItem.Attribute {
         val content = byteArrayOf(value.toByte()).toUByteArray()
         return createAttribute(type.id, content)
     }

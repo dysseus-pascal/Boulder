@@ -15,9 +15,12 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Action.Type
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createStringListAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createTextAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUByteAttribute
+import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
@@ -101,6 +104,15 @@ sealed class BaseAttribute {
         val icon: TimelineIcon,
     ) : BaseAttribute() {
         override fun asAttribute(): TimelineItem.Attribute = createUIntAttribute(attribute, icon.id)
+    }
+
+    @Serializable
+    data class ColorAttribute(
+        override val attribute: TimelineAttribute,
+        val color: PebbleColor,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUByteAttribute(attribute, color.toProtocolNumber())
     }
 }
 

@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlin.time.Instant
+import io.rebble.libpebblecommon.util.PebbleColor
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
@@ -100,9 +101,9 @@ class AttributesListBuilder internal constructor() {
         string(TimelineAttribute.Sender, block)
     }
 
-//    fun primaryColor(block: () -> PebbleColor) {
-//        attributes.add(TimelineAttributeFactory.primaryColor(block()))
-//    }
+    fun primaryColor(block: () -> PebbleColor) {
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.PrimaryColor, block()))
+    }
 //
 //    fun lastUpdated(block: () -> UInt) {
 //        attributes.add(TimelineAttributeFactory.lastUpdated(block()))

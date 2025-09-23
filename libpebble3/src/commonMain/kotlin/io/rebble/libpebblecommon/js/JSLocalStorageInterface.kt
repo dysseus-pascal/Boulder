@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.js
 
+import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
 import io.rebble.libpebblecommon.connection.AppContext
@@ -7,10 +8,10 @@ import io.rebble.libpebblecommon.connection.AppContext
 internal expect fun createJSSettings(appContext: AppContext, id: String): Settings
 
 abstract class JSLocalStorageInterface(
-    jsRunner: JsRunner,
+    scopedSettingsUuid: String,
     appContext: AppContext,
 ) {
-    private val settings = createJSSettings(appContext, jsRunner.appInfo.uuid)
+    private val settings = createJSSettings(appContext, scopedSettingsUuid)
 
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size

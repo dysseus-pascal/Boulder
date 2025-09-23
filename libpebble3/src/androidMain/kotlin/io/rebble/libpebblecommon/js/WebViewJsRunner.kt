@@ -33,6 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -64,17 +65,19 @@ class WebViewJsRunner(
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages)
-    private val localStorageInterface = WebViewJSLocalStorageInterface(this, appContext) {
-        webView?.evaluateJavascript(
-            it,
-            null
-        )
+    private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
+        runBlocking(Dispatchers.Main) {
+            webView?.evaluateJavascript(
+                it,
+                null
+            )
+        }
     }
     private val geolocationInterface = WebViewGeolocationInterface(scope, this)
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
-            Pair("localStorage", localStorageInterface),
+            Pair("_localStorage", localStorageInterface),
             Pair("_PebbleGeo", geolocationInterface)
     )
 
@@ -210,6 +213,22 @@ class WebViewJsRunner(
         }
     }
 
+    private fun shimLocalStorage() {
+        runBlocking(Dispatchers.Main) {
+            webView?.evaluateJavascript("""
+                localStorage.clear();
+                localStorage = {};
+                localStorage.length = 0;
+                localStorage.clear = function() { _localStorage.clear(); };
+                localStorage.getItem = function(key) { return _localStorage.getItem(key); };
+                localStorage.setItem = function(key, value) { _localStorage.setItem(key, value); };
+                localStorage.removeItem = function(key) { _localStorage.removeItem(key); };
+                localStorage.key = function(index) { return _localStorage.key(index); };
+            """.trimIndent(), null
+            )
+        }
+    }
+
 
     override suspend fun start() {
         synchronized(initializedLock) {
@@ -225,6 +244,7 @@ class WebViewJsRunner(
         }
         check(webView != null) { "WebView not initialized" }
         logger.d { "WebView initialized" }
+        shimLocalStorage()
         loadApp(jsPath.toString())
     }
 

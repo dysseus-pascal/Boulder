@@ -12,10 +12,10 @@ import platform.JavaScriptCore.JSValue
 
 class JSCJSLocalStorageInterface(
     private val jsContext: JSContext,
-    jsRunner: JsRunner,
+    scopedSettingsUuid: String,
     appContext: AppContext,
     private val evalRaw: (String) -> JSValue?
-): JSLocalStorageInterface(jsRunner, appContext), RegisterableJsInterface {
+): JSLocalStorageInterface(scopedSettingsUuid, appContext), RegisterableJsInterface {
     private lateinit var localStorage: JSManagedValue
     override fun register(jsContext: JSContext) {
         jsContext["localStorage"] = mapOf(

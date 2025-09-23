@@ -6,37 +6,38 @@ import io.rebble.libpebblecommon.js.JSLocalStorageInterface
 import io.rebble.libpebblecommon.js.JsRunner
 
 class WebViewJSLocalStorageInterface(
-    jsRunner: JsRunner,
+    scopedSettingsUuid: String,
     appContext: AppContext,
     private val evaluateJavascript: (String) -> Unit
-): JSLocalStorageInterface(jsRunner, appContext) {
-
-    override fun setLength(value: Int) {
-        evaluateJavascript("localStorage.length = $value")
+) {
+    private val iface = object : JSLocalStorageInterface(scopedSettingsUuid, appContext) {
+        override fun setLength(value: Int) {
+            evaluateJavascript("localStorage.length = $value")
+        }
     }
 
     @JavascriptInterface
-    override fun clear() {
-        super.clear()
+    fun clear() {
+        iface.clear()
     }
 
     @JavascriptInterface
-    override fun getItem(key: Any?): Any? {
-        return super.getItem(key)
+    fun getItem(key: String?): String? {
+        return iface.getItem(key)?.toString()
     }
 
     @JavascriptInterface
-    override fun key(index: Double): String? {
-        return super.key(index)
+    fun key(index: Double): String? {
+        return iface.key(index)
     }
 
     @JavascriptInterface
-    override fun removeItem(key: Any?) {
-        super.removeItem(key)
+    fun removeItem(key: String?) {
+        iface.removeItem(key)
     }
 
     @JavascriptInterface
-    override fun setItem(key: Any?, value: Any?) {
-        super.setItem(key, value)
+    fun setItem(key: String?, value: String?) {
+        iface.setItem(key, value)
     }
 }

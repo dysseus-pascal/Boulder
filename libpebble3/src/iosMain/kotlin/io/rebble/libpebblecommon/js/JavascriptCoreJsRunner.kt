@@ -58,7 +58,7 @@ class JavascriptCoreJsRunner(
             JSTimeout(interfacesScope, ::evalRaw),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages),
-            JSCJSLocalStorageInterface(jsContext, this, appContext, ::evalRaw),
+            JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )
         instances.forEach { it.register(jsContext) }

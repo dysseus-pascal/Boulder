@@ -42,6 +42,7 @@ class RealFirmwareUpdateManager(
         }
         connectionCoroutineScope.launch {
             delay(INITIAL_DELAY_PERIOD)
+            checkForUpdates()
         }
     }
 

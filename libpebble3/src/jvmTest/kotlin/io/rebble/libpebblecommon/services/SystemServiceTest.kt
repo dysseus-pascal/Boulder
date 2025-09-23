@@ -50,4 +50,6 @@ private fun fwVersion(
     suffix = suffix,
     gitHash = "",
     isRecovery = false,
+    isDualSlot = false,
+    isSlot0 = false,
 )

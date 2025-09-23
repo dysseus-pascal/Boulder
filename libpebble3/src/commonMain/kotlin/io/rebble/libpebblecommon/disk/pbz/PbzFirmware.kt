@@ -1,9 +1,22 @@
 package io.rebble.libpebblecommon.disk.pbz
 
-import io.rebble.libpebblecommon.disk.pbz.DiskUtil.requirePbzManifest
+import io.rebble.libpebblecommon.disk.pbz.DiskUtil.requirePbzManifests
+import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifest
+import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifestWrapper
 import kotlinx.io.files.Path
 
 class PbzFirmware(private val path: Path) {
-    val manifest by lazy { requirePbzManifest(path) }
-    fun getFile(fileName: String) = DiskUtil.getFile(path, fileName)
+    val manifests by lazy { requirePbzManifests(path) }
+}
+
+fun PbzFirmware.findManifestFor(slot: Int?): PbzManifestWrapper {
+    if (slot == null) {
+        if (manifests.size != 1) {
+            throw IllegalStateException("No slot, but there were ${manifests.size} manifests")
+        }
+        return manifests[0]
+    } else {
+        return manifests.find { it.manifest.firmware.slot == slot }
+            ?: throw IllegalStateException("No manifest for slot $slot")
+    }
 }

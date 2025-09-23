@@ -26,11 +26,13 @@ class FirmwareVersionTest {
             suffix = "tag",
             gitHash = GITHASH,
             isRecovery = RECOVERY,
+            isDualSlot = false,
+            isSlot0 = false,
         ), WatchFirmwareVersion().apply {
             timestamp.set(TIMESTAMP.epochSeconds.toUInt())
             versionTag.set(tag)
             gitHash.set(GITHASH)
-            isRecovery.set(RECOVERY)
+            flags.set(1.toUByte())
             hardwarePlatform.set(HARDWARE_PLATFORM.protocolNumber)
         }.firmwareVersion())
     }
@@ -48,11 +50,13 @@ class FirmwareVersionTest {
                 suffix = "",
                 gitHash = GITHASH,
                 isRecovery = RECOVERY,
+                isDualSlot = false,
+                isSlot0 = false,
             ), actual = WatchFirmwareVersion().apply {
                 timestamp.set(TIMESTAMP.epochSeconds.toUInt())
                 versionTag.set(tag)
                 gitHash.set(GITHASH)
-                isRecovery.set(RECOVERY)
+                flags.set(1.toUByte())
                 hardwarePlatform.set(HARDWARE_PLATFORM.protocolNumber)
             }.firmwareVersion()
         )
@@ -70,11 +74,13 @@ class FirmwareVersionTest {
             suffix = "prf4",
             gitHash = GITHASH,
             isRecovery = RECOVERY,
+            isDualSlot = false,
+            isSlot0 = false,
         ), WatchFirmwareVersion().apply {
             timestamp.set(TIMESTAMP.epochSeconds.toUInt())
             versionTag.set(tag)
             gitHash.set(GITHASH)
-            isRecovery.set(RECOVERY)
+            flags.set(1.toUByte())
             hardwarePlatform.set(HARDWARE_PLATFORM.protocolNumber)
         }.firmwareVersion())
     }

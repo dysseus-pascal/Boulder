@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.metadata
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_ASTERIX
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX
 import kotlinx.serialization.SerializationException
@@ -40,12 +41,16 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
 
     companion object {
         fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
-            return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN
+            return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN.also {
+                Logger.d { "unknown hardware revision: $number" }
+            }
         }
 
         fun fromHWRevision(revision: String?): WatchHardwarePlatform {
             if (revision == "unk") return UNKNOWN
-            return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN
+            return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN.also {
+                Logger.d { "unknown hardware revision: $revision" }
+            }
         }
     }
 }

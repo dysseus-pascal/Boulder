@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.FirmwareVersion.Companion.slot
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
@@ -199,7 +200,7 @@ class RealPebbleConnector(
         }
 
         putBytesService.init()
-        firmwareUpdater.setPlatform(watchInfo.platform)
+        firmwareUpdater.init(watchInfo.platform, watchInfo.runningFwVersion.slot())
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
@@ -280,4 +281,6 @@ private val FW_3_0_0 = FirmwareVersion(
     suffix = null,
     gitHash = "",
     isRecovery = false,
+    isSlot0 = false,
+    isDualSlot = false,
 )

@@ -8,8 +8,10 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.Firm
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbz.PbzFirmware
+import io.rebble.libpebblecommon.disk.pbz.findManifestFor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifest
+import io.rebble.libpebblecommon.metadata.pbz.manifest.PbzManifestWrapper
 import io.rebble.libpebblecommon.packets.ObjectType
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -44,7 +46,7 @@ enum class FirmwareUpdateErrorStarting {
 
 interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
-    fun setPlatform(watchPlatform: WatchHardwarePlatform)
+    fun init(watchPlatform: WatchHardwarePlatform, slot: Int?)
 
     sealed class FirmwareUpdateStatus {
         sealed class NotInProgress : FirmwareUpdateStatus() {
@@ -70,6 +72,11 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     }
 }
 
+private data class FwupProperties(
+    val watchPlatform: WatchHardwarePlatform,
+    val slot: Int?,
+)
+
 class RealFirmwareUpdater(
     identifier: PebbleIdentifier,
     private val systemService: SystemService,
@@ -79,55 +86,62 @@ class RealFirmwareUpdater(
     private val firmwareUpdateManager: FirmwareUpdateManager,
 ) : FirmwareUpdater {
     private val logger = Logger.withTag("FWUpdate-$identifier")
-    private lateinit var watchPlatform: WatchHardwarePlatform
+    private var props: FwupProperties? = null
     private val _firmwareUpdateState =
         MutableStateFlow<FirmwareUpdateStatus>(FirmwareUpdateStatus.NotInProgress.Idle)
     override val firmwareUpdateState: StateFlow<FirmwareUpdateStatus> =
         _firmwareUpdateState.asStateFlow()
 
-    override fun setPlatform(watchPlatform: WatchHardwarePlatform) {
-        this.watchPlatform = watchPlatform
+    override fun init(watchPlatform: WatchHardwarePlatform, slot: Int?) {
+        props = FwupProperties(watchPlatform, slot)
     }
 
-    private fun performSafetyChecks(pbzFw: PbzFirmware) {
-        val manifest = pbzFw.manifest
+    private fun performSafetyChecks(manifest: PbzManifestWrapper, fwupProps: FwupProperties) {
+        val watchPlatform = fwupProps.watchPlatform
+        val firmware = manifest.manifest.firmware
+        val resources = manifest.manifest.resources
         when {
-            manifest.firmware.type != "normal" && manifest.firmware.type != "recovery" ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware type: ${manifest.firmware.type}")
+            firmware.type != "normal" && firmware.type != "recovery" ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware type: ${firmware.type}")
 
-            manifest.firmware.crc <= 0L ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware CRC: ${manifest.firmware.crc}")
+            firmware.crc <= 0L ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware CRC: ${firmware.crc}")
 
-            manifest.firmware.size <= 0 ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware size: ${manifest.firmware.size}")
+            firmware.size <= 0 ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware size: ${firmware.size}")
 
-            manifest.resources != null && manifest.resources.size <= 0 ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources size: ${manifest.resources.size}")
+            resources != null && resources.size <= 0 ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources size: ${resources.size}")
 
-            manifest.resources != null && manifest.resources.crc <= 0L ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources CRC: ${manifest.resources.crc}")
+            resources != null && resources.crc <= 0L ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Invalid resources CRC: ${resources.crc}")
 
-            watchPlatform != pbzFw.manifest.firmware.hwRev ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${pbzFw.manifest.firmware.hwRev} != $watchPlatform")
+            watchPlatform != firmware.hwRev ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${firmware.hwRev} != $watchPlatform")
+
+            fwupProps.slot != null && fwupProps.slot != firmware.slot ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Firmware slot (${firmware.slot}) does not match watch slot: (${fwupProps.slot})")
         }
     }
 
     private suspend fun sendFirmwareParts(
-        pbzFw: PbzFirmware,
+        manifest: PbzManifestWrapper,
         offset: UInt,
         update: FirmwareUpdateCheckResult,
     ) {
         var totalSent = 0u
+        val firmware = manifest.manifest.firmware
+        val resources = manifest.manifest.resources
         check(
-            offset < (pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)).toUInt()
+            offset < (firmware.size + (resources?.size ?: 0)).toUInt()
         ) {
             "Resume offset greater than total transfer size"
         }
         var firmwareCookie: UInt? = null
         val progessFlow = MutableStateFlow(0.0f)
-        if (offset < pbzFw.manifest.firmware.size.toUInt()) {
+        if (offset < firmware.size.toUInt()) {
             try {
-                sendFirmware(pbzFw, offset).collect {
+                sendFirmware(manifest, offset).collect {
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for firmware" }
@@ -138,7 +152,7 @@ class RealFirmwareUpdater(
                         is PutBytesSession.SessionState.Sending -> {
                             totalSent = it.totalSent
                             val progress =
-                                (it.totalSent.toFloat() / pbzFw.manifest.firmware.size) / 2.0f
+                                (it.totalSent.toFloat() / firmware.size) / 2.0f
                             logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
                             progessFlow.emit(progress)
                         }
@@ -165,14 +179,14 @@ class RealFirmwareUpdater(
             logger.d { "Firmware already sent, skipping firmware PutBytes" }
         }
         var resourcesCookie: UInt? = null
-        pbzFw.manifest.resources?.let { res ->
-            val resourcesOffset = if (offset < pbzFw.manifest.firmware.size.toUInt()) {
+        resources?.let { res ->
+            val resourcesOffset = if (offset < firmware.size.toUInt()) {
                 0u
             } else {
-                offset - pbzFw.manifest.firmware.size.toUInt()
+                offset - firmware.size.toUInt()
             }
             try {
-                sendResources(pbzFw, resourcesOffset).collect {
+                sendResources(manifest, resourcesOffset).collect {
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for resources" }
@@ -180,7 +194,7 @@ class RealFirmwareUpdater(
                         }
 
                         is PutBytesSession.SessionState.Sending -> {
-                            totalSent = pbzFw.manifest.firmware.size.toUInt() + it.totalSent
+                            totalSent = firmware.size.toUInt() + it.totalSent
                             val progress =
                                 0.5f + ((it.totalSent.toFloat() / res.size.toFloat()) / 2.0f)
                             logger.i { "Resources update progress: $progress (putbytes cookie: ${it.cookie})" }
@@ -221,10 +235,22 @@ class RealFirmwareUpdater(
 
     override fun sideloadFirmware(path: Path) {
         connectionCoroutineScope.launch {
+            val fwupProps = props
+            if (fwupProps == null) {
+                throw FirmwareUpdateException.SafetyCheckFailed("FirmwareUpdater not initialized")
+            }
             val pbz = PbzFirmware(path)
-            val updateToVersion = pbz.manifest.asFirmwareVersion()
+            val manifest = try {
+                 pbz.findManifestFor(fwupProps.slot)
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to find manifest for slot ${fwupProps.slot}" }
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
+                return@launch
+            }
+            val updateToVersion = manifest.manifest.asFirmwareVersion()
             if (updateToVersion == null) {
-                logger.w { "Failed to parse firmware version to sideload from ${pbz.manifest}" }
+                logger.w { "Failed to parse firmware version to sideload from $manifest" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
                     FirmwareUpdateErrorStarting.ErrorParsingPbz)
                 return@launch
@@ -238,13 +264,17 @@ class RealFirmwareUpdater(
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
-            beginFirmwareUpdate(pbz, 0u, update)
+            beginFirmwareUpdate(pbz, 0u, update, fwupProps)
         }
     }
 
     override fun updateFirmware(update: FirmwareUpdateCheckResult) {
         connectionCoroutineScope.launch {
             logger.d { "updateFirmware: $update" }
+            val fwupProps = props
+            if (fwupProps == null) {
+                throw FirmwareUpdateException.SafetyCheckFailed("FirmwareUpdater not initialized")
+            }
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
@@ -262,7 +292,7 @@ class RealFirmwareUpdater(
                     FirmwareUpdateErrorStarting.ErrorParsingPbz)
                 return@launch
             }
-            beginFirmwareUpdate(pbz, 0u, update)
+            beginFirmwareUpdate(pbz, 0u, update, fwupProps)
         }
     }
 
@@ -276,17 +306,19 @@ class RealFirmwareUpdater(
         pbzFw: PbzFirmware,
         offset: UInt,
         update: FirmwareUpdateCheckResult,
+        fwupProps: FwupProperties,
     ) {
         logger.d { "beginFirmwareUpdate" }
         try {
-            val totalBytes = pbzFw.manifest.firmware.size + (pbzFw.manifest.resources?.size ?: 0)
+            val manifest = pbzFw.findManifestFor(fwupProps.slot)
+            val totalBytes = manifest.manifest.firmware.size + (manifest.manifest.resources?.size ?: 0)
             require(totalBytes > 0) { "Firmware size is 0" }
-            performSafetyChecks(pbzFw)
+            performSafetyChecks(manifest, fwupProps)
             val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
             if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
                 error("Failed to start firmware update: $result")
             }
-            sendFirmwareParts(pbzFw, offset, update)
+            sendFirmwareParts(manifest, offset, update)
             logger.d { "Firmware update completed, waiting for reboot" }
             _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
             systemService.sendFirmwareUpdateComplete()
@@ -308,11 +340,11 @@ class RealFirmwareUpdater(
     }
 
     private fun sendFirmware(
-        pbzFw: PbzFirmware,
+        manifest: PbzManifestWrapper,
         skip: UInt = 0u,
     ): Flow<PutBytesSession.SessionState> {
-        val firmware = pbzFw.manifest.firmware
-        val source = pbzFw.getFile(firmware.name).buffered()
+        val firmware = manifest.manifest.firmware
+        val source = manifest.getFirmware().buffered()
         if (skip > 0u) {
             source.skip(skip.toLong())
         }
@@ -331,13 +363,13 @@ class RealFirmwareUpdater(
     }
 
     private fun sendResources(
-        pbzFw: PbzFirmware,
+        manifest: PbzManifestWrapper,
         skip: UInt = 0u,
     ): Flow<PutBytesSession.SessionState> {
-        val resources = pbzFw.manifest.resources
+        val resources = manifest.manifest.resources
             ?: throw IllegalArgumentException("Resources not found in firmware manifest")
         require(resources.size > 0) { "Resources size is 0" }
-        val source = pbzFw.getFile(resources.name).buffered()
+        val source = manifest.getResources()!!.buffered()
         if (skip > 0u) {
             source.skip(skip.toLong())
         }
@@ -362,6 +394,8 @@ fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
         tag = versionTag,
         isRecovery = firmware.type == "recovery",
         gitHash = "",
-        timestamp = Instant.fromEpochMilliseconds(firmware.timestamp)
+        timestamp = Instant.fromEpochMilliseconds(firmware.timestamp),
+        isDualSlot = firmware.slot != null,
+        isSlot0 = firmware.slot == 0,
     )
 }

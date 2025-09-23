@@ -1,6 +1,9 @@
 package io.rebble.libpebblecommon.metadata.pbz.manifest
 
+import io.rebble.libpebblecommon.disk.pbz.DiskUtil
 import io.rebble.libpebblecommon.metadata.pbw.manifest.Debug
+import kotlinx.io.RawSource
+import kotlinx.io.files.Path
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -16,3 +19,15 @@ data class PbzManifest(
     val jsTooling: JsTooling? = null,
     val type: String
 )
+
+data class PbzManifestWrapper(
+    val manifest: PbzManifest,
+    val zipPath: Path,
+    val manifestPath: Path,
+) {
+    fun getFile(fileName: String): RawSource {
+        return DiskUtil.getFile(zipPath, Path(manifestPath, fileName).toString())
+    }
+    fun getFirmware() = getFile(manifest.firmware.name)
+    fun getResources() = manifest.resources?.let { getFile(it.name) }
+}

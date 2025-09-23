@@ -23,6 +23,7 @@ class LibPebbleInCallService: InCallService(), KoinComponent {
 
     override fun onCreate() {
         super.onCreate()
+        logger.d { "onCreate()" }
         libPebble.currentCall.value = null
     }
 

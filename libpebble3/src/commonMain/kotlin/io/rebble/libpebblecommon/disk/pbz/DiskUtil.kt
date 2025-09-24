@@ -40,9 +40,6 @@ object DiskUtil {
         val zip = openZip(pbzPath)
         val rootManifest = zip.loadManifestFrom("")
         if (rootManifest != null) {
-            if (rootManifest.firmware.slot != null) {
-                throw IllegalStateException("Slot for root manifest was ${rootManifest.firmware.slot}")
-            }
             return listOf(PbzManifestWrapper(
                 manifest = rootManifest,
                 zipPath = pbzPath,

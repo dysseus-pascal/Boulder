@@ -463,10 +463,12 @@ abstract class LockerPBWCache(context: AppContext) {
 
     fun deleteApp(appId: Uuid) {
         clearPKJSFileForApp(appId)
-        SystemFileSystem.list(cacheDir).forEach {
-            // Delete all pbws for this uuid
-            if (it.name.startsWith(appId.toString())) {
-                SystemFileSystem.delete(it)
+        if (SystemFileSystem.exists(cacheDir)) {
+            SystemFileSystem.list(cacheDir).forEach {
+                // Delete all pbws for this uuid
+                if (it.name.startsWith(appId.toString())) {
+                    SystemFileSystem.delete(it)
+                }
             }
         }
     }

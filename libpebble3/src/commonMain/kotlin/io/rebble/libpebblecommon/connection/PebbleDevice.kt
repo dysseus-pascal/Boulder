@@ -92,7 +92,8 @@ interface CommonConnectedDevice : KnownPebbleDevice,
     ConnectedWatchInfo,
     ConnectedPebble.Logs,
     ConnectedPebble.CoreDump,
-    ConnectedPebble.Battery
+    ConnectedPebble.Battery,
+    ConnectedPebble.DevConnection
 
 interface ConnectedPebbleDeviceInRecovery : CommonConnectedDevice
 
@@ -106,7 +107,6 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.AppMessages,
     ConnectedPebble.Music,
     ConnectedPebble.PKJS,
-    ConnectedPebble.DevConnection,
     ConnectedPebble.Screenshot
 
 /**
@@ -218,5 +218,6 @@ object ConnectedPebble {
         val firmware: FirmwareUpdater,
         val logs: Logs,
         val coreDump: CoreDump,
+        val devConnection: DevConnection
     )
 }

@@ -228,6 +228,7 @@ class RealPebbleConnector(
                     firmware = firmwareUpdater,
                     logs = logDumpService,
                     coreDump = getBytesService,
+                    devConnection = devConnectionManager
                 ),
             )
             return

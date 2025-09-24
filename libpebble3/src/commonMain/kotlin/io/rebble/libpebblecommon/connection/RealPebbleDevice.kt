@@ -267,7 +267,8 @@ internal class RealConnectedPebbleDeviceInRecovery(
     ActiveDevice by activeDevice,
     ConnectedPebble.FirmwareUpdate by services.firmware,
     ConnectedPebble.Logs by services.logs,
-    ConnectedPebble.CoreDump by services.coreDump {
+    ConnectedPebble.CoreDump by services.coreDump,
+    ConnectedPebble.DevConnection by services.devConnection {
 
     override fun toString(): String =
         "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"

@@ -312,13 +312,17 @@ Processed as:
     private fun Bundle.dump(indent: Int): String {
         val newlineIndent = "\n${" ".repeat(indent)}"
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
-            val value = get(it)
-            when {
-                value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
-                    value.toString().obfuscate(privateLogger)
-                }"
+            try {
+                val value = get(it)
+                when {
+                    value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                        value.toString().obfuscate(privateLogger)
+                    }"
 
-                else -> "$it = ${get(it)}"
+                    else -> "$it = ${get(it)}"
+                }
+            } catch (_: Exception) {
+                "$it = unknown (crashed)"
             }
         }
     }

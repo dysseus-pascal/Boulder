@@ -272,6 +272,7 @@ data class FirmwareVersion(
 
 fun WatchFirmwareVersion.firmwareVersion(): FirmwareVersion? {
     val properties = FirmwareProperty.fromFlags(flags.get())
+    Logger.d { "WatchFirmwareVersion flags = ${flags.get()}" }
     return FirmwareVersion.from(
         tag = versionTag.get(),
         gitHash = gitHash.get(),

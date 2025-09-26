@@ -46,7 +46,7 @@ enum class FirmwareUpdateErrorStarting {
 
 interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
-    fun init(watchPlatform: WatchHardwarePlatform, slot: Int?)
+    fun init(watchPlatform: WatchHardwarePlatform, runningSlot: Int?)
 
     sealed class FirmwareUpdateStatus {
         sealed class NotInProgress : FirmwareUpdateStatus() {
@@ -74,7 +74,7 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
 
 private data class FwupProperties(
     val watchPlatform: WatchHardwarePlatform,
-    val slot: Int?,
+    val updateToSlot: Int?,
 )
 
 class RealFirmwareUpdater(
@@ -92,8 +92,13 @@ class RealFirmwareUpdater(
     override val firmwareUpdateState: StateFlow<FirmwareUpdateStatus> =
         _firmwareUpdateState.asStateFlow()
 
-    override fun init(watchPlatform: WatchHardwarePlatform, slot: Int?) {
-        props = FwupProperties(watchPlatform, slot)
+    override fun init(watchPlatform: WatchHardwarePlatform, runningSlot: Int?) {
+        val updateToSlot = when (runningSlot) {
+            0 -> 1
+            1 -> 0
+            else -> null
+        }
+        props = FwupProperties(watchPlatform, updateToSlot)
     }
 
     private fun performSafetyChecks(manifest: PbzManifestWrapper, fwupProps: FwupProperties) {
@@ -119,8 +124,8 @@ class RealFirmwareUpdater(
             watchPlatform != firmware.hwRev ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${firmware.hwRev} != $watchPlatform")
 
-            fwupProps.slot != null && fwupProps.slot != firmware.slot ->
-                throw FirmwareUpdateException.SafetyCheckFailed("Firmware slot (${firmware.slot}) does not match watch slot: (${fwupProps.slot})")
+            fwupProps.updateToSlot != null && fwupProps.updateToSlot != firmware.slot ->
+                throw FirmwareUpdateException.SafetyCheckFailed("Firmware slot (${firmware.slot}) does not match watch slot: (${fwupProps.updateToSlot})")
         }
     }
 
@@ -241,9 +246,9 @@ class RealFirmwareUpdater(
             }
             val pbz = PbzFirmware(path)
             val manifest = try {
-                 pbz.findManifestFor(fwupProps.slot)
+                 pbz.findManifestFor(fwupProps.updateToSlot)
             } catch (e: Exception) {
-                logger.w(e) { "Failed to find manifest for slot ${fwupProps.slot}" }
+                logger.w(e) { "Failed to find manifest for slot ${fwupProps.updateToSlot}" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
                     FirmwareUpdateErrorStarting.ErrorParsingPbz)
                 return@launch
@@ -310,8 +315,9 @@ class RealFirmwareUpdater(
     ) {
         logger.d { "beginFirmwareUpdate" }
         try {
-            val manifest = pbzFw.findManifestFor(fwupProps.slot)
+            val manifest = pbzFw.findManifestFor(fwupProps.updateToSlot)
             val totalBytes = manifest.manifest.firmware.size + (manifest.manifest.resources?.size ?: 0)
+            logger.d { "Loading firmware for slot ${fwupProps.updateToSlot}" }
             require(totalBytes > 0) { "Firmware size is 0" }
             performSafetyChecks(manifest, fwupProps)
             val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())

@@ -200,7 +200,10 @@ class RealPebbleConnector(
         }
 
         putBytesService.init()
-        firmwareUpdater.init(watchInfo.platform, watchInfo.runningFwVersion.slot())
+        firmwareUpdater.init(
+            watchPlatform = watchInfo.platform,
+            runningSlot = watchInfo.runningFwVersion.slot(),
+        )
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 

@@ -60,12 +60,6 @@ fun WatchHardwarePlatform.isCoreDevice(): Boolean = when (this) {
     else -> false
 }
 
-fun WatchHardwarePlatform.isDevelopmentDeviceWhichMightNotHavePrf(): Boolean = when (this) {
-    CORE_OBELIX -> true
-    WatchHardwarePlatform.UNKNOWN -> true
-    else -> false
-}
-
 @Serializer(WatchHardwarePlatform::class)
 class WatchHardwarePlatformSerializer {
     override val descriptor: SerialDescriptor

@@ -207,7 +207,7 @@ class RealPebbleConnector(
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
-        val ignoreMissingPrfOnThisDevice = watchConfig.value.ignoreMissingPrf && watchInfo.platform.isDevelopmentDeviceWhichMightNotHavePrf()
+        val ignoreMissingPrfOnThisDevice = watchConfig.value.ignoreMissingPrf
         val recoveryMode = when {
             watchInfo.runningFwVersion.isRecovery -> true.also {
                 logger.i("PRF running; going into recovery mode")

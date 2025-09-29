@@ -16,6 +16,11 @@ fun PbzFirmware.findManifestFor(slot: Int?): PbzManifestWrapper {
         }
         return manifests[0]
     } else {
+        val firstManifest = manifests.firstOrNull()
+        // PRF doesn't have a slot
+        if (firstManifest != null && firstManifest.manifest.firmware.type == "recovery") {
+            return firstManifest
+        }
         return manifests.find { it.manifest.firmware.slot == slot }
             ?: throw IllegalStateException("No manifest for slot $slot")
     }

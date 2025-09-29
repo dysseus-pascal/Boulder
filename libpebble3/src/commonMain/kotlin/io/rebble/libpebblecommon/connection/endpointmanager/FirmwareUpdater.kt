@@ -105,8 +105,9 @@ class RealFirmwareUpdater(
         val watchPlatform = fwupProps.watchPlatform
         val firmware = manifest.manifest.firmware
         val resources = manifest.manifest.resources
+        val isRecoveryFirmware = firmware.type == "recovery"
         when {
-            firmware.type != "normal" && firmware.type != "recovery" ->
+            firmware.type != "normal" && !isRecoveryFirmware ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Invalid firmware type: ${firmware.type}")
 
             firmware.crc <= 0L ->
@@ -124,7 +125,7 @@ class RealFirmwareUpdater(
             watchPlatform != firmware.hwRev ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Firmware board does not match watch board: ${firmware.hwRev} != $watchPlatform")
 
-            fwupProps.updateToSlot != null && fwupProps.updateToSlot != firmware.slot ->
+            fwupProps.updateToSlot != null && fwupProps.updateToSlot != firmware.slot && !isRecoveryFirmware ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Firmware slot (${firmware.slot}) does not match watch slot: (${fwupProps.updateToSlot})")
         }
     }

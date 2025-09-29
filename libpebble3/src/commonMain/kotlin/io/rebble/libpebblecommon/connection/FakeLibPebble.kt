@@ -458,6 +458,10 @@ class FakeConnectedDevice(
         val buffer = IntArray(width * height) { Color(0xFFFA4A36).toArgb() }
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
+
+    override suspend fun installLanguagePack(path: Path): Boolean {
+        return true
+    }
 }
 
 private val fakeNotificationApps by lazy { fakeNotificationApps() }

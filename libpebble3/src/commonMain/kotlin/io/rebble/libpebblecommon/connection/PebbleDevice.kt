@@ -107,7 +107,8 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.AppMessages,
     ConnectedPebble.Music,
     ConnectedPebble.PKJS,
-    ConnectedPebble.Screenshot
+    ConnectedPebble.Screenshot,
+    ConnectedPebble.Language
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -199,6 +200,10 @@ object ConnectedPebble {
         val updateRequestTrigger: Flow<Unit>
     }
 
+    interface Language {
+        suspend fun installLanguagePack(path: Path): Boolean
+    }
+
     class Services(
         val debug: Debug,
         val appRunState: AppRunState,
@@ -212,6 +217,7 @@ object ConnectedPebble {
         val pkjs: PKJS,
         val devConnection: DevConnection,
         val screenshot: Screenshot,
+        val language: Language,
     )
 
     class PrfServices(

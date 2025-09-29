@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.PKJSLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
@@ -142,6 +143,7 @@ class RealPebbleConnector(
     private val voiceSessionManager: VoiceSessionManager,
     private val watchConfig: WatchConfigFlow,
     private val appOrderManager: AppOrderManager,
+    private val languagePackInstaller: LanguagePackInstaller,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -270,6 +272,7 @@ class RealPebbleConnector(
                 pkjs = pkjsLifecycleManager,
                 devConnection = devConnectionManager,
                 screenshot = screenshotService,
+                language = languagePackInstaller,
             )
         )
     }

@@ -270,7 +270,7 @@ class SFixedString(mapper: StructMapper, initialSize: Int, default: String = "")
  */
 class SNullTerminatedString(mapper: StructMapper, default: String = "") :
     StructElement<String>(
-        { buf, el ->
+        putType = { buf, el ->
             val bytes = el.get().encodeToByteArray()
 
             buf.putBytes(
@@ -278,9 +278,9 @@ class SNullTerminatedString(mapper: StructMapper, default: String = "") :
             )
             buf.putUByte(0u)
         },
-        { buf, el ->
+        getType = { buf, el ->
             throw UnsupportedOperationException("SNullTerminatedString is upload-only")
-        }, mapper, 0, default
+        }, mapper = mapper, size = default.length + 1, default = default,
     )
 
 /**

@@ -63,7 +63,6 @@ data class WatchConfig(
     val enableHealth: Boolean = true,
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
-    val speechRecognitionLanguage: String? = null,
     val verboseWatchManagerLogging: Boolean = false,
 )
 

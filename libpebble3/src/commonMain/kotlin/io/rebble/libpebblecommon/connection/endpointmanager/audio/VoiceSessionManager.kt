@@ -35,7 +35,6 @@ class VoiceSessionManager(
     private val audioStreamService: AudioStreamService,
     private val watchScope: ConnectionCoroutineScope,
     private val transcriptionProvider: TranscriptionProvider,
-    private val watchConfig: WatchConfigFlow
 ) {
     companion object Companion {
         private val logger = Logger.withTag("VoiceSession")
@@ -120,8 +119,7 @@ class VoiceSessionManager(
                     ))
                     return@collectLatest
                 }
-                val language = watchConfig.value.speechRecognitionLanguage
-                if (language != null && transcriptionProvider.canServeSession()) {
+                if (transcriptionProvider.canServeSession()) {
                     voiceService.send(makeSetupResult(
                         sessionType = setupRequest.sessionType,
                         result = Result.Success,
@@ -141,7 +139,7 @@ class VoiceSessionManager(
                 _currentSession.value = CurrentSession(setupRequest, resultCompletable)
                 logger.i { "Voice session initialized with ID: ${setupRequest.sessionId}" }
                 val result = try {
-                    transcriptionProvider.transcribe(setupRequest.encoderInfo, language, audioFrameFlow)
+                    transcriptionProvider.transcribe(setupRequest.encoderInfo, audioFrameFlow)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

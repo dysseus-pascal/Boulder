@@ -54,7 +54,7 @@ class PutBytesService(
     var lastCookie: UInt? = null
 
     class PutBytesException(val cookie: UInt?, message: String, cause: Throwable? = null) :
-        Error(message, cause)
+        Exception(message, cause)
 
     suspend fun initSession(
         size: UInt,

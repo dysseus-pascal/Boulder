@@ -208,24 +208,31 @@ class WebViewJsRunner(
             interfaces.forEach { (namespace, jsInterface) ->
                 it.addJavascriptInterface(jsInterface, namespace)
             }
-            webView?.webViewClient = webViewClient
-            webView?.webChromeClient = chromeClient
+            it.webViewClient = webViewClient
+            it.webChromeClient = chromeClient
         }
     }
 
     private fun shimLocalStorage() {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript("""
-                localStorage.clear();
+                if (!localStorage.__override__) {
+                        localStorage.clear();
+                }
+                localStorage.__override__ = true;
                 localStorage = {};
                 localStorage.length = 0;
-                localStorage.clear = function() { _localStorage.clear(); };
-                localStorage.getItem = function(key) { return _localStorage.getItem(key); };
-                localStorage.setItem = function(key, value) { _localStorage.setItem(key, value); };
-                localStorage.removeItem = function(key) { _localStorage.removeItem(key); };
-                localStorage.key = function(index) { return _localStorage.key(index); };
-            """.trimIndent(), null
-            )
+                Object.setPrototypeOf(localStorage, {
+                    clear() { _localStorage.clear(); },
+                    getItem(key) { return JSON.parse(_localStorage.getItem(key)); },
+                    setItem(key, value) { _localStorage.setItem(key, value); },
+                    removeItem(key) { _localStorage.removeItem(key); },
+                    key(index) { return _localStorage.key(index); }
+                });
+            """.trimIndent()
+            ) {
+                logger.d { "localStorage shimmed" }
+            }
         }
     }
 
@@ -244,7 +251,6 @@ class WebViewJsRunner(
         }
         check(webView != null) { "WebView not initialized" }
         logger.d { "WebView initialized" }
-        shimLocalStorage()
         loadApp(jsPath.toString())
     }
 
@@ -307,6 +313,7 @@ class WebViewJsRunner(
     }
 
     override suspend fun signalReady() {
+        shimLocalStorage()
         val readyDeviceIds = listOf(device.identifier.asString)
         val readyJson = Json.encodeToString(readyDeviceIds)
         withContext(Dispatchers.Main) {
@@ -346,7 +353,7 @@ class WebViewJsRunner(
 
     override suspend fun signalWebviewClosed(data: String?) {
         withContext(Dispatchers.Main) {
-            webView?.loadUrl("javascript:signalWebviewClosedEvent(${Uri.encode("'" + (data ?: "null") + "'")})")
+            webView?.evaluateJavascript("window.signalWebviewClosedEvent(${Json.encodeToString(data)})", null)
         }
     }
 

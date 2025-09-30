@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.io.rebble.libpebblecommon.js
 import android.webkit.JavascriptInterface
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.js.JSLocalStorageInterface
-import io.rebble.libpebblecommon.js.JsRunner
+import kotlinx.serialization.json.Json
 
 class WebViewJSLocalStorageInterface(
     scopedSettingsUuid: String,
@@ -22,8 +22,8 @@ class WebViewJSLocalStorageInterface(
     }
 
     @JavascriptInterface
-    fun getItem(key: String?): String? {
-        return iface.getItem(key)?.toString()
+    fun getItem(key: String?): String {
+        return Json.encodeToString<String?>(iface.getItem(key)?.toString())
     }
 
     @JavascriptInterface

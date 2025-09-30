@@ -16,35 +16,38 @@ class LanguagePackInstaller(
 ) : ConnectedPebble.Language {
     private val logger = Logger.withTag("LanguagePackInstaller")
 
-    override suspend fun installLanguagePack(path: Path): Boolean = withContext(connectionCoroutineScope.coroutineContext) {
-        val metadata = SystemFileSystem.metadataOrNull(path)
-        if (metadata == null) {
-            logger.e { "Failed to get metadata for $path" }
-            return@withContext false
-        }
-        val source = SystemFileSystem.source(path).buffered()
-        try {
-            val installFlow = putBytesSession.beginSession(
-                size = metadata.size.toUInt(),
-                type = ObjectType.FILE,
-                bank = 0u,
-                filename = "lang",
-                source = source,
-                sendInstall = true,
-            )
-            installFlow.collect { state ->
-//            when (state) {
-//                is PutBytesSession.SessionState.Finished -> TODO()
-//                is PutBytesSession.SessionState.Open -> TODO()
-//                is PutBytesSession.SessionState.Sending -> TODO()
-//            }
+    override suspend fun installLanguagePack(path: Path): Boolean =
+        withContext(connectionCoroutineScope.coroutineContext) {
+            logger.d { "installLanguagePack() $path" }
+            val metadata = SystemFileSystem.metadataOrNull(path)
+            if (metadata == null) {
+                logger.e { "Failed to get metadata for $path" }
+                return@withContext false
             }
-            return@withContext true
-        } catch (e: Exception) {
-            logger.e(e) { "Error installing language pack" }
-            return@withContext false
-        } finally {
-            source.close()
+            val source = SystemFileSystem.source(path).buffered()
+            try {
+                val installFlow = putBytesSession.beginSession(
+                    size = metadata.size.toUInt(),
+                    type = ObjectType.FILE,
+                    bank = 0u,
+                    filename = "lang",
+                    source = source,
+                    sendInstall = true,
+                )
+                installFlow.collect { state ->
+                    when (state) {
+                        is PutBytesSession.SessionState.Finished -> logger.d { "installLanguagePack finished" }
+                        is PutBytesSession.SessionState.Open -> logger.d { "installLanguagePack opened" }
+                        is PutBytesSession.SessionState.Sending -> logger.d { "installLanguagePack sending: ${state.totalSent}" }
+                    }
+                }
+                logger.d { "installLanguagePack finished" }
+                return@withContext true
+            } catch (e: Exception) {
+                logger.e(e) { "Error installing language pack" }
+                return@withContext false
+            } finally {
+                source.close()
+            }
         }
-    }
 }

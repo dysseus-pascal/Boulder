@@ -61,7 +61,10 @@ class JavascriptCoreJsRunner(
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )
-        instances.forEach { it.register(jsContext) }
+        instances.forEach {
+            jsContext[it.name] = it.interf
+            it.onRegister(jsContext)
+        }
         interfaces = instances
     }
 
@@ -122,11 +125,13 @@ class JavascriptCoreJsRunner(
         evaluateInternalScript("JSTimeout")
     }
 
+    private val navigator = mapOf(
+        "userAgent" to "PKJS",
+        "geolocation" to emptyMap<String, Any>()
+    )
+
     private fun setupNavigator() {
-        jsContext?.set("navigator", mapOf(
-            "userAgent" to "PKJS",
-            "geolocation" to emptyMap<String, Any>()
-        ))
+        jsContext?.set("navigator", navigator)
     }
 
     override suspend fun start() {

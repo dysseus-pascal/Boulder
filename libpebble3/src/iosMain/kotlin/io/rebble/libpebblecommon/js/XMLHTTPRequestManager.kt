@@ -38,16 +38,15 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val eval:
     private val instances = mutableMapOf<Int, XHRInstance>()
     private val client = HttpClient(Darwin)
     private val logger = Logger.withTag("XMLHTTPRequestManager")
+    override val interf = mapOf(
+        "getXHRInstanceID" to this::getXHRInstanceID,
+        "open" to this::open,
+        "setRequestHeader" to this::setRequestHeader,
+        "send" to this::send,
+        "abort" to this::abort,
+    )
 
-    override fun register(jsContext: JSContext) {
-        jsContext["_XMLHTTPRequestManager"] = mapOf(
-            "getXHRInstanceID" to this::getXHRInstanceID,
-            "open" to this::open,
-            "setRequestHeader" to this::setRequestHeader,
-            "send" to this::send,
-            "abort" to this::abort,
-        )
-    }
+    override val name = "_XMLHTTPRequestManager"
 
     private fun getXHRInstanceID(): Int {
         val id = ++lastInstance

@@ -34,9 +34,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 
 class WebViewJsRunner(
@@ -361,6 +364,16 @@ class WebViewJsRunner(
         withContext(Dispatchers.Main) {
             webView?.evaluateJavascript(js, null) ?: run {
                 logger.e { "WebView not initialized, cannot evaluate JS" }
+            }
+        }
+    }
+
+    override suspend fun evalWithResult(js: String): Any? {
+        return withContext(Dispatchers.Main) {
+            return@withContext suspendCancellableCoroutine { cont ->
+                webView?.evaluateJavascript(js) { result ->
+                    cont.resume(result)
+                } ?: cont.resumeWithException(IllegalStateException("WebView not initialized"))
             }
         }
     }

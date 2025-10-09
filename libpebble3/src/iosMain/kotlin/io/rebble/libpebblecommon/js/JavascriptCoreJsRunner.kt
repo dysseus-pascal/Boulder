@@ -41,7 +41,7 @@ class JavascriptCoreJsRunner(
     jsPath: Path,
     urlOpenRequests: Channel<String>,
     private val logMessages: MutableSharedFlow<String>,
-    private val pkjsBundleIdentifier: String = "coredevices.coreapp",
+    private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -69,7 +69,9 @@ class JavascriptCoreJsRunner(
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
-        val bundle = NSBundle.bundleWithIdentifier(pkjsBundleIdentifier) ?: error("Bundle not found")
+        val bundle = pkjsBundleIdentifier
+            ?.let { NSBundle.bundleWithIdentifier(it) ?: error("PKJS bundle with identifier $it not found") }
+            ?: NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
             ?: error("Startup script not found in bundle")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
@@ -217,6 +219,12 @@ class JavascriptCoreJsRunner(
     override suspend fun eval(js: String) {
         withContext(threadContext) {
             jsContext?.evalCatching(js)
+        }
+    }
+
+    override suspend fun evalWithResult(js: String): Any? {
+        return withContext(threadContext) {
+            jsContext?.evalCatching(js)?.toObject()
         }
     }
 }

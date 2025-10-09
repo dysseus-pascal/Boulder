@@ -29,6 +29,7 @@ class JSCJSLocalStorageInterface(
         localStorage = JSManagedValue(jsContext["localStorage"]!!)
         jsContext.virtualMachine!!.addManagedReference(localStorage, this)
         setLength(getLength())
+        localStorage.value?.set("__override__", true)
     }
 
     override fun getItem(key: Any?): Any? {

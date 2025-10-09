@@ -146,10 +146,10 @@ abstract class PKJSRunnerTests(
             val result = runner.evalWithResult("window.readyConfirmed;")
             when (result) {
                 is Boolean -> {
-                    assertTrue(result)
+                    assertTrue(result, "ready event handler should set window.readyConfirmed to true")
                 }
                 is String -> {
-                    assertEquals("true", result)
+                    assertEquals("true", result, "ready event handler should set window.readyConfirmed to true")
                 }
                 else -> {
                     error("Unexpected result type: ${result?.let { it::class }}")
@@ -237,13 +237,17 @@ abstract class PKJSRunnerTests(
      */
     open fun testLocalStorageEarlyExecution() {
         val uuid = Uuid.random()
-        var runner = makeRunner("localStorage.setItem('testKey', 'testValue');", uuid)
+        var runner = makeRunner("""
+            window.overrideAtScriptTime = localStorage.__override__;
+            localStorage.setItem('testKey', 'testValue');
+        """.trimIndent(), uuid)
 
         runBlocking {
             runner.start()
             withTimeout(1.seconds) {
                 runner.readyState.first { it }
             }
+            delay(5)
             val resultEarlySet = runner.evalWithResult("localStorage.getItem('testKey');")
             when (resultEarlySet) {
                 is String -> {
@@ -258,12 +262,28 @@ abstract class PKJSRunnerTests(
                     error("Unexpected result type: ${resultEarlySet?.let { it::class }}")
                 }
             }
-            delay(5)
+            val overrideAtScriptTime = runner.evalWithResult("window.overrideAtScriptTime;")
+            when (overrideAtScriptTime) {
+                is Boolean -> {
+                    assertTrue(overrideAtScriptTime, "localStorage.__override__ should be true at script execution time, indicating shim is in place")
+                }
+                is String -> {
+                    assertEquals("\"true\"", overrideAtScriptTime, "localStorage.__override__ should be true at script execution time, indicating shim is in place")
+                }
+                else -> {
+                    error("Unexpected result type: ${overrideAtScriptTime?.let { it::class }}")
+                }
+            }
+
             runner.stop()
 
-            runner = makeRunner("", uuid)
+            runner = makeRunner("window.result = localStorage.getItem('testKey');", uuid)
             runner.start()
-            val resultEarlyGet = runner.evalWithResult("localStorage.getItem('testKey');")
+            withTimeout(1.seconds) {
+                runner.readyState.first { it }
+            }
+            delay(5)
+            val resultEarlyGet = runner.evalWithResult("window.result;")
             when (resultEarlyGet) {
                 is String -> {
                     val result = Json.decodeFromString<JsonElement>(resultEarlyGet)

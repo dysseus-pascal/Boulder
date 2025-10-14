@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import co.touchlab.kermit.Logger
 import com.juul.kable.ManufacturerData
 import com.oldguy.common.getShortAt
+import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
@@ -36,6 +37,7 @@ class RealScanning(
     private val bleScanner: BleScanner,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
+    private val errorTracker: ErrorTracker,
 ) : Scanning {
     private var bleScanJob: Job? = null
     override val bluetoothEnabled: StateFlow<BluetoothState> = bluetoothStateProvider.state
@@ -53,18 +55,24 @@ class RealScanning(
                 delay(BLE_SCANNING_TIMEOUT)
                 stopBleScan()
             }
-            scanResults.collect {
-                if (it.manufacturerData.code !in VENDOR_IDS) {
-                    return@collect
+            try {
+                scanResults.collect {
+                    if (it.manufacturerData.code !in VENDOR_IDS) {
+                        return@collect
+                    }
+                    val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
+                    val device = PebbleScanResult(
+                        identifier = it.identifier,
+                        name = it.name,
+                        rssi = it.rssi,
+                        leScanRecord = pebbleScanRecord,
+                    )
+                    watchConnector.addScanResult(device)
                 }
-                val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
-                val device = PebbleScanResult(
-                    identifier = it.identifier,
-                    name = it.name,
-                    rssi = it.rssi,
-                    leScanRecord = pebbleScanRecord,
-                )
-                watchConnector.addScanResult(device)
+            } catch (e: Exception) {
+                Logger.e(e) { "Ble scan failed" }
+                errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
+                stopBleScan()
             }
         }
     }

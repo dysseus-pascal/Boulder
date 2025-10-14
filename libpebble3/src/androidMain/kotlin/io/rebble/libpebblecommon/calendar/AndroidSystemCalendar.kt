@@ -340,7 +340,6 @@ class AndroidSystemCalendar(
                                     ?.let { cursor.getString(it) }
                             if (ownerAccount == null) {
                                 logger.w("Calendar has no ownerAccount")
-                                return@generateSequence null
                             }
                             val color =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_COLOR)
@@ -354,7 +353,7 @@ class AndroidSystemCalendar(
                                 platformId = id.toString(),
                                 name = displayName,
                                 ownerName = accountName,
-                                ownerId = ownerAccount,
+                                ownerId = ownerAccount ?: "unknown",
                                 color = color,
                                 enabled = true,
                             )

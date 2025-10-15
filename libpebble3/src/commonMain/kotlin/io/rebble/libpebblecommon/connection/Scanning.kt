@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord.Companion.decodePebbleScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,9 +71,11 @@ class RealScanning(
                     watchConnector.addScanResult(device)
                 }
             } catch (e: Exception) {
-                Logger.e(e) { "Ble scan failed" }
-                errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
-                stopBleScan()
+                if (e !is CancellationException) {
+                    Logger.e(e) { "Ble scan failed" }
+                    errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
+                    stopBleScan()
+                }
             }
         }
     }

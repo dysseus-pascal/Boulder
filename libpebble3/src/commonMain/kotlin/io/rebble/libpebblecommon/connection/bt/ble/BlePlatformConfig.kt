@@ -14,7 +14,7 @@ data class BlePlatformConfig(
     val useNativeMtu: Boolean = true,
     val sendPpogResetOnDisconnection: Boolean = false,
     val delayBleConnectionsAfterAppStart: Boolean = false,
-    val delayBleDisconnections: Boolean = false,
+    val delayBleDisconnections: Boolean = true,
     val fallbackToResetRequest: Boolean = false,
     val closeGattServerWhenBtDisabled: Boolean = true,
 )

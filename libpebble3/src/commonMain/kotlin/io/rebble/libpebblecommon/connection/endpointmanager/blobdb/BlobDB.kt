@@ -79,7 +79,7 @@ class BlobDB(
     protected val watchIdentifier: String = identifier.asString
 
     companion object {
-        private val BLOBDB_RESPONSE_TIMEOUT = 5.seconds
+        private val BLOBDB_RESPONSE_TIMEOUT = 10.seconds
         private val QUERY_REFRESH_PERIOD = 1.hours
     }
 

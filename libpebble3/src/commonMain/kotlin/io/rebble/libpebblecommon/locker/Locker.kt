@@ -66,7 +66,7 @@ class Locker(
     private val lockerEntryDao = database.lockerEntryDao()
 
     companion object {
-        private val logger = Logger.withTag(Locker::class.simpleName!!)
+        private val logger = Logger.withTag("Locker")
     }
 
     override suspend fun sideloadApp(pbwPath: Path): Boolean =

@@ -70,12 +70,12 @@ class RealScanning(
                     )
                     watchConnector.addScanResult(device)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e !is CancellationException) {
-                    Logger.e(e) { "Ble scan failed" }
-                    errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
-                    stopBleScan()
-                }
+                Logger.e(e) { "Ble scan failed" }
+                errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
+                stopBleScan()
             }
         }
     }
@@ -98,5 +98,6 @@ class RealScanning(
         val PEBBLE_VENDOR_ID = byteArrayOf(0x54, 0x01).getShortAt(0).toInt()
         val CORE_VENDOR_ID = byteArrayOf(0xEA.toByte(), 0x0E).getShortAt(0).toInt()
         val VENDOR_IDS = listOf(PEBBLE_VENDOR_ID, CORE_VENDOR_ID)
-        private val BLE_SCANNING_TIMEOUT = 30.seconds    }
+        private val BLE_SCANNING_TIMEOUT = 30.seconds
+    }
 }

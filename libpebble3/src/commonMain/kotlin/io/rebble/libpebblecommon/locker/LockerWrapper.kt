@@ -64,7 +64,7 @@ sealed class LockerWrapper {
     ) : LockerWrapper()
 }
 
-fun LockerWrapper.findCompatiblePlatform(watchType: WatchType): AppPlatform? {
+fun LockerWrapper.findCompatiblePlatform(watchType: WatchType?): AppPlatform? {
     return properties.platforms.firstOrNull { it.watchType == watchType } ?:
-    properties.platforms.firstOrNull { watchType.getCompatibleAppVariants().contains(it.watchType) }
+    properties.platforms.firstOrNull { watchType?.getCompatibleAppVariants()?.contains(it.watchType) == true }
 }

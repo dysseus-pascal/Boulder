@@ -24,6 +24,7 @@ data class KnownWatchItem(
     val watchType: String? = null,
     val color: WatchColor? = null,
     val nickname: String? = null,
+    val btClassicMacAddress: String? = null,
 )
 
 enum class TransportType {

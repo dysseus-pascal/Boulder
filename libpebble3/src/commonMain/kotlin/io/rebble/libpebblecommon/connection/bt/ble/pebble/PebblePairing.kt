@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 import co.touchlab.kermit.Logger
 import com.oldguy.common.io.BitSet
 import io.rebble.libpebblecommon.BleConfigFlow
-import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
@@ -22,21 +21,22 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 
 class PebblePairing(
     private val context: AppContext,
-    private val identifier: PebbleBleIdentifier,
     private val config: BleConfigFlow,
     private val blePlatformConfig: BlePlatformConfig,
     private val scopeProps: ConnectionScopeProperties,
     private val analytics: ConnectionAnalyticsLogger,
 ) {
-    suspend fun requestPairing(
+    suspend fun requestBlePairing(
         device: ConnectedGattClient,
         connectivityRecord: ConnectivityStatus,
         connectivity: Flow<ConnectivityStatus>,
+        identifier: PebbleBleIdentifier,
     ): ConnectionFailureReason? {
         val needsPairingTrigger = scopeProps.color.platform.needsPairingTrigger() || !blePlatformConfig.phoneRequestsPairing
         Logger.d("Requesting pairing: needsPairingTrigger = $needsPairingTrigger")
@@ -99,6 +99,30 @@ class PebblePairing(
                 analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
                 return ConnectionFailureReason.CreateBondFailed
             }
+        }
+        try {
+            Logger.d("waiting for bond state...")
+            withTimeout(PENDING_BOND_TIMEOUT) {
+                bondState.onEach { Logger.v("Bond state: ${it.bondState}") }
+                    .first { it.bondState == BOND_BONDED }
+            }
+            Logger.d("got bond state!")
+        } catch (e: TimeoutCancellationException) {
+            Logger.e("Failed to bond in time")
+            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
+            return ConnectionFailureReason.PairingTimedOut
+        }
+        return null
+    }
+
+    suspend fun requestClassicPairing(
+        identifier: PebbleBleIdentifier,
+    ): ConnectionFailureReason? {
+        val bondState = getBluetoothDevicePairEvents(context, identifier, flow {  })
+        if (!createBond(identifier)) {
+            Logger.e("Failed to request create bond")
+            analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
+            return ConnectionFailureReason.CreateBondFailed
         }
         try {
             Logger.d("waiting for bond state...")

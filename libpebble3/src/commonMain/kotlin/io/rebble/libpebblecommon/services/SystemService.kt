@@ -328,7 +328,7 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
 
 fun ByteArray.toMacAddressString(): String {
     require(size == 6) { "MAC address must be 6 bytes long" }
-    return joinToString(":") { byte ->
+    return reversed().joinToString(":") { byte ->
         val intRepresentation = byte.toInt() and 0xFF
         intRepresentation.toString(16).padStart(2, '0').uppercase()
     }

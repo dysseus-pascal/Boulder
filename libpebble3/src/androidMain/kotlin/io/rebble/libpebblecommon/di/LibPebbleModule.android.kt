@@ -9,10 +9,12 @@ import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.classic.pebble.BtClassicConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.connection.bt.classic.transport.AndroidBtClassicConnector
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.AndroidSystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.AndroidSystemMusicControl
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync
@@ -29,6 +31,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.util.OtherPebbleAndroidApps
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.scopedOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -79,5 +82,10 @@ actual val platformModule: Module = module {
     single { BlePlatformConfig(
         delayBleConnectionsAfterAppStart = true,
         delayBleDisconnections = true,
+        supportsBtClassic = true,
     ) }
+
+    scope<ConnectionScope> {
+        scopedOf(::AndroidBtClassicConnector) bind BtClassicConnector::class
+    }
 }

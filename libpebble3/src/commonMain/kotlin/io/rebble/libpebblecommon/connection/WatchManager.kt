@@ -20,9 +20,11 @@ import io.rebble.libpebblecommon.di.ConnectionScopeFactory
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
 import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.di.UseBtClassicAddress
 import io.rebble.libpebblecommon.di.logWatchEvent
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
@@ -57,6 +59,7 @@ internal data class KnownWatchProperties(
     val lastConnected: MillisecondInstant?,
     val watchType: WatchHardwarePlatform,
     val color: WatchColor?,
+    val btClassicMacAddress: String?,
 )
 
 internal fun WatchInfo.asWatchProperties(lastConnected: MillisecondInstant?, name: String, nickname: String?): KnownWatchProperties =
@@ -68,6 +71,7 @@ internal fun WatchInfo.asWatchProperties(lastConnected: MillisecondInstant?, nam
         lastConnected = lastConnected,
         watchType = platform,
         color = color,
+        btClassicMacAddress = btAddress,
     )
 
 private fun Watch.asKnownWatchItem(): KnownWatchItem? {
@@ -83,6 +87,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
         lastConnected = knownWatchProps.lastConnected,
         watchType = knownWatchProps.watchType.revision,
         color = knownWatchProps.color,
+        btClassicMacAddress = knownWatchProps.btClassicMacAddress,
     )
 }
 
@@ -129,6 +134,7 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
     watchType = WatchHardwarePlatform.fromHWRevision(watchType),
     color = color,
     nickname = nickname,
+    btClassicMacAddress = btClassicMacAddress,
 )
 
 private data class CombinedState(
@@ -334,6 +340,16 @@ class WatchManager(
                                     connectionFailureInfo = null,
                                 )
                             }
+                            if (newProps.btClassicMacAddress != null &&
+                                device.knownWatchProps?.btClassicMacAddress == null &&
+                                blePlatformConfig.supportsBtClassic &&
+                                watchConfig.value.preferBtClassic &&
+                                identifier is PebbleBleIdentifier &&
+                                newProps.color?.platform?.supportsBtClassic() == true)
+                                {
+                                logger.i { "Disconnecting from BLE so that we can connect using BT Classic" }
+                                device.activeConnection?.pebbleConnector?.disconnect()
+                            }
                         }
 
                         // Clear scan results after we connected to one of them
@@ -405,9 +421,10 @@ class WatchManager(
      */
     private fun updateWatch(identifier: PebbleIdentifier, mutation: (Watch) -> Watch?) {
         allWatches.update { watches ->
-            val device = watches[identifier]
+            // Fallback just in case we're using BT classic
+            val device = watches[identifier] ?: watches[identifier.asString.asPebbleBleIdentifier()]
             if (device == null) {
-                logger.w("couldn't mutate device $identifier - not found")
+                logger.w { "couldn't mutate device $identifier - not found" }
                 return@update watches
             }
             val mutated = mutation(device) ?: return@update watches
@@ -476,6 +493,16 @@ class WatchManager(
                     }
                 }
             }
+            val overrideBtClassicAddress = when {
+                blePlatformConfig.supportsBtClassic && watchConfig.value.preferBtClassic &&
+                        identifier is PebbleBleIdentifier && watch.color().platform.supportsBtClassic() &&
+                        watch.knownWatchProps?.btClassicMacAddress != null -> UseBtClassicAddress(watch.knownWatchProps.btClassicMacAddress)
+
+                else -> UseBtClassicAddress(null)
+            }
+            if (overrideBtClassicAddress.address != null) {
+                logger.i { "Connecting using BT Classic: $overrideBtClassicAddress" }
+            }
             val platformIdentifier = createPlatformIdentifier.identifier(identifier, watch.name)
             if (platformIdentifier == null) {
                 // Probably because it couldn't create the device (ios throws on an unknown peristed
@@ -506,6 +533,7 @@ class WatchManager(
                     connectionScope,
                     platformIdentifier,
                     color,
+                    overrideBtClassicAddress,
                 )
             )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
@@ -676,6 +704,14 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
     }
 }
 
-private fun Watch.color(): WatchColor = knownWatchProps?.color ?:
-scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) } ?:
-WatchColor.Unknown
+private fun Watch.color(): WatchColor = knownWatchProps?.color
+    ?: scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }
+    ?: WatchColor.Unknown
+
+fun WatchType.supportsBtClassic(): Boolean = when (this) {
+    WatchType.APLITE -> true
+    WatchType.BASALT -> true
+    WatchType.CHALK -> true
+    WatchType.DIORITE -> false
+    WatchType.EMERY -> false
+}

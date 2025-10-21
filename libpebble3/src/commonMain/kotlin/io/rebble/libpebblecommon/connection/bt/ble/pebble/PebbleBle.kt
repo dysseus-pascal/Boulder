@@ -55,8 +55,9 @@ class PebbleBle(
         val result = gattConnector.connect()
         val device = when (result) {
             is GattConnectionResult.Failure -> {
-                 return PebbleConnectionResult.Failed(result.reason)
+                return PebbleConnectionResult.Failed(result.reason)
             }
+
             is GattConnectionResult.Success -> result.client
         }
         val services = device.discoverServices()
@@ -114,7 +115,8 @@ class PebbleBle(
         }
 
         if (needToPair) {
-            val pairingResult = pairing.requestPairing(device, connectionStatus, connectivity.status)
+            val pairingResult =
+                pairing.requestBlePairing(device, connectionStatus, connectivity.status, identifier)
             if (pairingResult != null) {
                 PebbleConnectionResult.Failed(pairingResult)
             }

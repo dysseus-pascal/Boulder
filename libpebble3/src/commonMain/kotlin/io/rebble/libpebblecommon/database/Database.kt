@@ -60,7 +60,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationEntity::class,
         ContactEntity::class,
     ],
-    version = 22,
+    version = 23,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -74,6 +74,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 19, to = 20),
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22),
+        AutoMigration(from = 22, to = 23),
     ],
     exportSchema = true,
 )

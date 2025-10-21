@@ -63,6 +63,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
+import io.rebble.libpebblecommon.connection.bt.classic.pebble.PebbleBtClassic
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
@@ -143,7 +144,6 @@ import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
-import kotlin.collections.plus
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
@@ -154,7 +154,11 @@ data class ConnectionScopeProperties(
     val scope: ConnectionCoroutineScope,
     val platformIdentifier: PlatformIdentifier,
     val color: WatchColor,
+    val useBtClassic: UseBtClassicAddress,
 )
+
+// TODO Address won't work when/if we add iOS classic support
+data class UseBtClassicAddress(val address: String?)
 
 interface ConnectionAnalyticsLogger {
     fun logEvent(name: String, props: Map<String, String>? = null)
@@ -195,6 +199,7 @@ interface ConnectionScope {
     val firmwareUpdater: FirmwareUpdater
     val batteryWatcher: BatteryWatcher
     val analyticsLogger: ConnectionAnalyticsLogger
+    val usingBtClassic: Boolean
 }
 
 class RealConnectionScope(
@@ -209,6 +214,7 @@ class RealConnectionScope(
     override val firmwareUpdater: FirmwareUpdater = koinScope.get()
     override val batteryWatcher: BatteryWatcher = koinScope.get()
     override val analyticsLogger: ConnectionAnalyticsLogger = koinScope.get()
+    override val usingBtClassic: Boolean = koinScope.get<UseBtClassicAddress>().address != null
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -397,11 +403,13 @@ fun initKoin(
                     scoped { get<ConnectionScopeProperties>().identifier }
                     scoped { get<ConnectionScopeProperties>().identifier as PebbleBleIdentifier }
                     scoped { get<ConnectionScopeProperties>().identifier as PebbleSocketIdentifier }
+                    scoped { get<ConnectionScopeProperties>().useBtClassic }
                     scoped { (get<ConnectionScopeProperties>().platformIdentifier as PlatformIdentifier.BlePlatformIdentifier).peripheral }
 
                     // Connection
                     scopedOf(::KableGattConnector)
                     scopedOf(::PebbleBle)
+                    scopedOf(::PebbleBtClassic)
                     scopedOf(::RealConnectionAnalyticsLogger) bind ConnectionAnalyticsLogger::class
                     scoped<GattConnector> {
                         when (get<PebbleIdentifier>()) {
@@ -410,8 +418,15 @@ fun initKoin(
                         }
                     }
                     scoped<TransportConnector> {
-                        when (get<PebbleIdentifier>()) {
-                            is PebbleBleIdentifier -> get<PebbleBle>()
+                        val identifier = get<PebbleIdentifier>()
+                        val useBtClassic = get<UseBtClassicAddress>()
+                        when (identifier) {
+                            is PebbleBleIdentifier -> {
+                                when {
+                                    useBtClassic.address != null -> get<PebbleBtClassic>()
+                                    else -> get<PebbleBle>()
+                                }
+                            }
                             else -> TODO("not implemented")
                         }
                     }

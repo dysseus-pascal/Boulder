@@ -72,6 +72,7 @@ class WatchManagerTest {
         override val firmwareUpdater: FirmwareUpdater,
         override val batteryWatcher: BatteryWatcher,
         override val analyticsLogger: ConnectionAnalyticsLogger,
+        override val usingBtClassic: Boolean,
     ) : ConnectionScope {
         override fun close() {
         }
@@ -217,6 +218,7 @@ class WatchManagerTest {
                     firmwareUpdater = firmwareUpdater,
                     batteryWatcher = batteryWatcher,
                     analyticsLogger = analyticsLogger,
+                    usingBtClassic = false,
                 )
             }
         }

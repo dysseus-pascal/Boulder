@@ -5,7 +5,6 @@ import android.bluetooth.BluetoothSocket
 import co.touchlab.kermit.Logger
 import io.ktor.utils.io.writeByteArray
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
-import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
 import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebblePairing
@@ -16,8 +15,10 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.UseBtClassicAddress
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class AndroidBtClassicConnector(
@@ -50,17 +51,26 @@ class AndroidBtClassicConnector(
         }
         socket = btSocket
         btSocket.connect()
-        connectionCoroutineScope.launch {
+
+        connectionCoroutineScope.launch(Dispatchers.IO) {
+            val data = ByteArray(500)
             while (true) {
-                val data = ByteArray(100)
                 val bytes = btSocket.inputStream.read(data)
-                pebbleProtocolStreams.inboundPPBytes.writeByteArray(data.copyOf(bytes))
-                pebbleProtocolStreams.inboundPPBytes.flush()
+                if (bytes < 0) {
+                    throw IllegalStateException("Couldn't read from stream")
+                }
+                if (bytes > 0) {
+                    pebbleProtocolStreams.inboundPPBytes.writeByteArray(data.copyOf(bytes))
+                    pebbleProtocolStreams.inboundPPBytes.flush()
+                }
             }
         }
         connectionCoroutineScope.launch {
             pebbleProtocolStreams.outboundPPBytes.consumeAsFlow().collect { bytes ->
-                btSocket.outputStream.write(bytes)
+                withContext(Dispatchers.IO) {
+                    btSocket.outputStream.write(bytes)
+                    btSocket.outputStream.flush()
+                }
             }
         }
         return ClassicConnectionResult.Success

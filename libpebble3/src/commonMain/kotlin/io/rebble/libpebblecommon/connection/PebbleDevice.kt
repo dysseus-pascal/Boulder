@@ -24,6 +24,7 @@ import kotlin.uuid.Uuid
 
 interface ActiveDevice {
     fun disconnect()
+    val usingBtClassic: Boolean
 }
 
 data class ConnectionFailureInfo(

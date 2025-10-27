@@ -353,6 +353,7 @@ class FakeConnectedDevice(
     override val serial: String = "XXXXXXXXXXXX",
     override val runningFwVersion: String = "v1.2.3-core",
     override val connectionFailureInfo: ConnectionFailureInfo?,
+    override val usingBtClassic: Boolean = false,
 ) : ConnectedPebbleDevice {
 
     override fun forget() {}

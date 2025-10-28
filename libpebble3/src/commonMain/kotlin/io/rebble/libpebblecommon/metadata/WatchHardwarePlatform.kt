@@ -31,7 +31,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     PEBBLE_SPALDING_BIGBOARD(251u, WatchType.CHALK, "spalding_bb2"),
     PEBBLE_SILK_EVT(12u, WatchType.DIORITE, "silk_evt"),
     PEBBLE_SILK(14u, WatchType.DIORITE, "silk"),
-    CORE_ASTERIX(15u, WatchType.DIORITE, "asterix"),
+    CORE_ASTERIX(15u, WatchType.FLINT, "asterix"),
     CORE_OBELIX(16u, WatchType.EMERY, "obelix"),
     PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "silk_bb"),
     PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "silk_bb2"),

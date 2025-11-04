@@ -2,7 +2,10 @@ package io.rebble.libpebblecommon.metadata
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_ASTERIX
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_BIGBOARD_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_DVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_EVT
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -60,7 +63,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
 }
 
 fun WatchHardwarePlatform.isCoreDevice(): Boolean = when (this) {
-    CORE_ASTERIX, CORE_OBELIX -> true
+    CORE_ASTERIX, CORE_OBELIX_EVT, CORE_OBELIX_DVT, CORE_OBELIX_BIGBOARD, CORE_OBELIX_BIGBOARD_2 -> true
     else -> false
 }
 

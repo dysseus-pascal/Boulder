@@ -281,12 +281,12 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
     return if (connected) {
         val updating = Random.nextBoolean()
         val fwupState = if (updating) {
-            val fakeUpdate = FirmwareUpdateCheckResult(
+            val fakeUpdate = FirmwareUpdateCheckResult.FoundUpdate(
                 version = FirmwareVersion.from(
                     "v4.9.9-core1",
                     isRecovery = false,
                     gitHash = "",
-                    timestamp = kotlin.time.Instant.DISTANT_PAST,
+                    timestamp = Instant.DISTANT_PAST,
                     isDualSlot = false,
                     isSlot0 = false,
                 )!!,
@@ -298,7 +298,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
             FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle
         }
         val fwupAvailable = if (!updating && Random.nextBoolean()) {
-            FirmwareUpdateCheckResult(
+            FirmwareUpdateCheckResult.FoundUpdate(
                 version = FirmwareVersion.from(
                     "v4.9.9-core2",
                     isRecovery = false,
@@ -379,7 +379,7 @@ class FakeConnectedDevice(
 
     override fun sideloadFirmware(path: Path) {}
 
-    override fun updateFirmware(update: FirmwareUpdateCheckResult) {}
+    override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
 
     override fun checkforFirmwareUpdate() {}
 

@@ -121,7 +121,7 @@ interface Watches {
 interface WebServices {
     suspend fun fetchLocker(): LockerModel?
     suspend fun removeFromLocker(id: Uuid): Boolean
-    suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult?
+    suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult
     suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
 }
 
@@ -129,11 +129,19 @@ interface TokenProvider {
     suspend fun getDevToken(): String?
 }
 
-data class FirmwareUpdateCheckResult(
-    val version: FirmwareVersion,
-    val url: String,
-    val notes: String,
-)
+sealed class FirmwareUpdateCheckResult {
+    data class FoundUpdate(
+        val version: FirmwareVersion,
+        val url: String,
+        val notes: String,
+    ) : FirmwareUpdateCheckResult()
+
+    data object FoundNoUpdate : FirmwareUpdateCheckResult()
+
+    data class UpdateCheckFailed(
+        val error: String,
+    ) : FirmwareUpdateCheckResult()
+}
 
 interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>

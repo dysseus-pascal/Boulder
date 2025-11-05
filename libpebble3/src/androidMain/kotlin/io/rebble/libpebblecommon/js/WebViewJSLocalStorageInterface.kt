@@ -40,4 +40,14 @@ class WebViewJSLocalStorageInterface(
     fun setItem(key: String?, value: String?) {
         iface.setItem(key, value)
     }
+
+    @JavascriptInterface
+    fun saveState(data: String) {
+        iface.saveState(data)
+    }
+
+    @JavascriptInterface
+    fun restoreState(): String {
+        return iface.restoreState()
+    }
 }

@@ -218,22 +218,33 @@ class WebViewJsRunner(
         }
     }
 
-    private fun shimLocalStorage() {
+    private fun restoreLocalStorage() {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript("""
-                if (!localStorage.__override__) {
-                        localStorage.clear();
-                }
-                localStorage.__override__ = true;
-                localStorage = {};
-                localStorage.length = 0;
-                Object.setPrototypeOf(localStorage, {
-                    clear() { _localStorage.clear(); },
-                    getItem(key) { return JSON.parse(_localStorage.getItem(key)); },
-                    setItem(key, value) { _localStorage.setItem(key, value); },
-                    removeItem(key) { _localStorage.removeItem(key); },
-                    key(index) { return _localStorage.key(index); }
-                });
+                (function() {
+                    window.localStorage.clear();
+                    const localStorageData = JSON.parse(window._localStorage.restoreState());
+                    for (const [key, value] of Object.entries(localStorageData)) {
+                        window.localStorage.setItem(key, value);
+                    }
+                    const originalSetItem = window.localStorage.setItem;
+                    const originalRemoveItem = window.localStorage.removeItem;
+                    const originalClear = window.localStorage.clear;
+                    
+                    ${/* Shim to keep _localStorage in sync with localStorage realtime as best we can (can't handle property accessors) */ ""}
+                    window.localStorage.setItem = function(key, value) {
+                        originalSetItem.call(this, key, value);
+                        window._localStorage.setItem(key, value);
+                    };
+                    window.localStorage.removeItem = function(key) {
+                        originalRemoveItem.call(this, key);
+                        window._localStorage.removeItem(key);
+                    };
+                    window.localStorage.clear = function() {
+                        originalClear.call(this);
+                        window._localStorage.clear();
+                    };
+                })();
             """.trimIndent()
             ) {
                 logger.d { "localStorage shimmed" }
@@ -259,10 +270,33 @@ class WebViewJsRunner(
         loadApp(jsPath.toString())
     }
 
+    private suspend fun persistLocalStorage() {
+        suspendCancellableCoroutine { cont ->
+            webView?.evaluateJavascript("""
+                (function() {
+                    const data = {};
+                    for (let i = 0; i < window.localStorage.length; i++) {
+                        const key = window.localStorage.key(i);
+                        const value = window.localStorage.getItem(key);
+                        data[key] = value;
+                    }
+                    window.localStorage.clear();
+                    window._localStorage.saveState(JSON.stringify(data));
+                })();
+                    """.trimIndent()
+            ) {
+                cont.resume(Unit)
+            }
+        }
+    }
+
     override suspend fun stop() {
         //TODO: Close config screens
         _readyState.value = false
         withContext(Dispatchers.Main) {
+            // Save final state of localStorage to our scoped storage, to catch any
+            // property-accessor changes (not caught by our shim)
+            persistLocalStorage()
             interfaces.forEach { (namespace, _) ->
                 webView?.removeJavascriptInterface(namespace)
             }
@@ -292,7 +326,7 @@ class WebViewJsRunner(
 
     override suspend fun loadAppJs(jsUrl: String) {
         webView?.let { webView ->
-            shimLocalStorage()
+            restoreLocalStorage()
 
             if (jsUrl.isBlank() || !jsUrl.endsWith(".js")) {
                 logger.e { "loadUrl passed to loadAppJs empty or invalid" }

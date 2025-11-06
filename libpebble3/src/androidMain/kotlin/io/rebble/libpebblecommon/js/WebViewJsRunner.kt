@@ -245,6 +245,7 @@ class WebViewJsRunner(
                         window._localStorage.clear();
                     };
                 })();
+                window.__localStorageShimmed = true;
             """.trimIndent()
             ) {
                 logger.d { "localStorage shimmed" }

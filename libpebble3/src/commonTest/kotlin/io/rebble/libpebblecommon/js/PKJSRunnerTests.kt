@@ -238,7 +238,8 @@ abstract class PKJSRunnerTests(
     open fun testLocalStorageEarlyExecution() {
         val uuid = Uuid.random()
         var runner = makeRunner("""
-            window.overrideAtScriptTime = localStorage.__override__;
+            console.log(window.__localStorageShimmed);
+            window.overrideAtScriptTime = window.__localStorageShimmed;
             localStorage.setItem('testKey', 'testValue');
         """.trimIndent(), uuid)
 
@@ -265,10 +266,10 @@ abstract class PKJSRunnerTests(
             val overrideAtScriptTime = runner.evalWithResult("window.overrideAtScriptTime;")
             when (overrideAtScriptTime) {
                 is Boolean -> {
-                    assertTrue(overrideAtScriptTime, "localStorage.__override__ should be true at script execution time, indicating shim is in place")
+                    assertTrue(overrideAtScriptTime, "window.__localStorageShimmed should be true at script execution time, indicating shim is in place")
                 }
                 is String -> {
-                    assertEquals("\"true\"", overrideAtScriptTime, "localStorage.__override__ should be true at script execution time, indicating shim is in place")
+                    assertEquals("true", overrideAtScriptTime, "window.__localStorageShimmed should be true at script execution time, indicating shim is in place")
                 }
                 else -> {
                     error("Unexpected result type: ${overrideAtScriptTime?.let { it::class }}")

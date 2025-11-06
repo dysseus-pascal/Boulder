@@ -162,6 +162,7 @@ abstract class PKJSRunnerTests(
         val js = """
             Pebble.addEventListener('ready', function() {
                 localStorage.setItem('testKey', 'testValue');
+                window.localStorage.testPropKey = 'testPropValue';
             });
         """.trimIndent()
         val uuid = Uuid.random()
@@ -181,11 +182,21 @@ abstract class PKJSRunnerTests(
                 runner.readyState.first { it }
             }
             delay(5)
-            val result = runner.evalWithResult("localStorage.getItem('testKey');")
-            when (result) {
+
+            when (val result = runner.evalWithResult("localStorage.getItem('testKey');")) {
                 is String -> {
                     val result = Json.decodeFromString<JsonElement>(result)
                     assertEquals("testValue", result.jsonPrimitive.content)
+                }
+                else -> {
+                    error("Unexpected result type: ${result?.let { it::class }}")
+                }
+            }
+
+            when (val result = runner.evalWithResult("localStorage.testPropKey;")) {
+                is String -> {
+                    val result = Json.decodeFromString<JsonElement>(result)
+                    assertEquals("testPropValue", result.jsonPrimitive.content)
                 }
                 else -> {
                     error("Unexpected result type: ${result?.let { it::class }}")
@@ -198,6 +209,7 @@ abstract class PKJSRunnerTests(
         val js = """
             Pebble.addEventListener('ready', function() {
                 localStorage.setItem('testKey', 'testValue');
+                window.localStorage.testPropKey = 'testPropValue';
             });
         """.trimIndent()
 
@@ -217,8 +229,17 @@ abstract class PKJSRunnerTests(
                 runner.readyState.first { it }
             }
             delay(5)
-            val result = runner.evalWithResult("localStorage.getItem('testKey');")
-            when (result) {
+
+            when (val result = runner.evalWithResult("localStorage.getItem('testKey');")) {
+                is String -> {
+                    val result = Json.decodeFromString<JsonElement>(result)
+                    assertEquals(JsonNull, result.jsonPrimitive)
+                }
+                else -> {
+                    error("Unexpected result type: ${result?.let { it::class }}")
+                }
+            }
+            when (val result = runner.evalWithResult("window.localStorage.testPropKey;")) {
                 is String -> {
                     val result = Json.decodeFromString<JsonElement>(result)
                     assertEquals(JsonNull, result.jsonPrimitive)
@@ -299,5 +320,9 @@ abstract class PKJSRunnerTests(
                 }
             }
         }
+    }
+
+    fun testConsoleLogFromCallbacks() {
+
     }
 }

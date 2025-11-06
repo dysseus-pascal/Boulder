@@ -17,7 +17,7 @@ fun createJsRunner(
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
-    device: PebbleJSDevice,
+    device: CompanionAppDevice,
     urlOpenRequests: Channel<String>,
     logMessages: MutableSharedFlow<String>
 ): JsRunner {

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -33,7 +34,7 @@ class DevConnectionManager(
             false
         )
     override suspend fun startDevConnection() {
-        val inboundPKJSLogs = companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages ?: emptyFlow() }
+        val inboundPKJSLogs = companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() }
         job.value = scope.launch {
             var last: DevConnectionTransport? = null
             transport.onCompletion {

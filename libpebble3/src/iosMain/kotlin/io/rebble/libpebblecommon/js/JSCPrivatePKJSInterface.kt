@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 
@@ -11,18 +12,25 @@ class JSCPrivatePKJSInterface(
     device: CompanionAppDevice,
     scope: CoroutineScope,
     outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
-    logMessages: MutableSharedFlow<String>
+    logMessages: Channel<String>
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(
         "sendAppMessageString" to this::sendAppMessageString,
         "privateLog" to this::privateLog,
-        "onConsoleLog" to { level: String, message: String, source: String? ->
-            val sourceFmt = source?.let {
-                "at ${it.substringAfter("code@")}"
+        "onConsoleLog" to { level: Any?, message: Any?, trace: Any? ->
+            if (level == null) {
+                logger.w { "onConsoleLog called with null level" }
+                return@to
             }
-            this.onConsoleLog(level, message, sourceFmt)
+            val sourceLine = trace
+                ?.toString()
+                ?.split("\n")
+                ?.getOrNull(2)
+                ?.trim()
+                ?.substringAfter("code@")
+            this.onConsoleLog(level.toString(), message.toString(), sourceLine)
         },
         "onError" to this::onError,
         "onUnhandledRejection" to this::onUnhandledRejection,

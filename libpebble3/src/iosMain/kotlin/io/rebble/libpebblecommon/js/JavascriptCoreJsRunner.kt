@@ -40,7 +40,7 @@ class JavascriptCoreJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     urlOpenRequests: Channel<String>,
-    private val logMessages: MutableSharedFlow<String>,
+    private val logMessages: Channel<String>,
     private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null

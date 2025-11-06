@@ -15,9 +15,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -65,8 +65,8 @@ class PKJSApp(
     private var runningScope: CoroutineScope? = null
     private val urlOpenRequests = Channel<String>(Channel.RENDEZVOUS)
 
-    private val _logMessages = MutableSharedFlow<String>(10)
-    val logMessages = _logMessages.asSharedFlow()
+    private val _logMessages = Channel<String>(2, BufferOverflow.DROP_OLDEST)
+    val logMessages: ReceiveChannel<String> = _logMessages
     val sessionIsReady get() = jsRunner?.readyState?.value ?: false
 
     private suspend fun replyNACK(id: UByte) {

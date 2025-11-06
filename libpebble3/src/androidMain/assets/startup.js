@@ -68,8 +68,7 @@ navigator.geolocation.clearWatch = (id) => {
         // build args into a single string
         const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
         const traceback = new Error().stack;
-        const callerLine = traceback ? traceback.split('\n')[3].trim() : null;
-        _Pebble.onConsoleLog(level, message, callerLine);
+        _Pebble.onConsoleLog(level, message, traceback);
     }
     console.log = (...args) => {
         oldConsole.log.apply(console, args);
@@ -102,7 +101,7 @@ navigator.geolocation.clearWatch = (id) => {
         if (!condition) {
             const message = "Assertion failed:" + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
             const traceback = new Error().stack;
-            const caller = traceback ? traceback.split('\n')[2].trim() : null;
+            const caller = traceback;
             _Pebble.onConsoleLog('assert', message, caller);
         }
     }

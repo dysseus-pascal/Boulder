@@ -55,7 +55,7 @@ class WebViewJsRunner(
     lockerEntry: LockerEntry,
     jsPath: Path,
     urlOpenRequests: Channel<String>,
-    private val logMessages: MutableSharedFlow<String>,
+    private val logMessages: Channel<String>,
 
     ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context

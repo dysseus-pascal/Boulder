@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
@@ -26,7 +27,7 @@ abstract class PrivatePKJSInterface(
     private val device: CompanionAppDevice,
     protected val scope: CoroutineScope,
     private val outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
-    private val logMessages: MutableSharedFlow<String>,
+    private val logMessages: Channel<String>,
 ) {
     companion object {
         private val logger = Logger.withTag(PrivatePKJSInterface::class.simpleName!!)
@@ -60,10 +61,8 @@ abstract class PrivatePKJSInterface(
         }
         val lineNumber = source
             ?.substringAfterLast("${jsRunner.appInfo.uuid}.js:", "")
-            ?.ifBlank { null }
-        lineNumber?.let {
-            logMessages.tryEmit("${jsRunner.appInfo.longName}:$lineNumber $message")
-        }
+            ?.ifBlank { "?" }
+        logMessages.trySend("${jsRunner.appInfo.longName}:$lineNumber $message")
     }
 
     open fun onError(message: String?, source: String?, line: Double?, column: Double?) {

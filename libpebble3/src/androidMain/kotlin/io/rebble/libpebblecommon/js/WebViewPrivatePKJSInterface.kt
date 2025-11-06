@@ -8,13 +8,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import androidx.core.net.toUri
+import kotlinx.coroutines.channels.Channel
 
 class WebViewPrivatePKJSInterface(
     jsRunner: WebViewJsRunner,
     device: CompanionAppDevice,
     scope: CoroutineScope,
     outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
-    logMessages: MutableSharedFlow<String>
+    logMessages: Channel<String>
 ): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages) {
 
     companion object {
@@ -68,7 +69,8 @@ class WebViewPrivatePKJSInterface(
 
     @JavascriptInterface
     override fun onConsoleLog(level: String, message: String, source: String?) {
-        super.onConsoleLog(level, message, source)
+        val sourceLine = source?.split("\n")?.getOrNull(3)?.trim()
+        super.onConsoleLog(level, message, sourceLine)
     }
 
     @JavascriptInterface

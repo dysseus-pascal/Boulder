@@ -51,6 +51,16 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
+    suspend fun updateAllAppMuteStates(muteState: MuteState) {
+        insertOrReplace(allApps().map {
+            it.copy(
+                muteState = muteState,
+                stateUpdated = Clock.System.now().asMillisecond(),
+            )
+        })
+    }
+
+    @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus {
         val writeItem = write.asNotificationAppItem()
         if (writeItem == null) {

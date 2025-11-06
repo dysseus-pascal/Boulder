@@ -191,7 +191,11 @@ interface NotificationApps {
     fun notificationApps(): Flow<List<AppWithCount>>
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
     fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
-    fun updateNotificationAppMuteState(packageName: String, muteState: MuteState)
+
+    /**
+     * Update mute state of the specified app. Updates all apps if [packageName] is null.
+     */
+    fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
     fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,

@@ -54,9 +54,13 @@ class NotificationApi(
         limit = limit,
     )
 
-    override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
+    override fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState) {
         libPebbleCoroutineScope.launch {
-            notificationAppDao.updateAppMuteState(packageName, muteState)
+            if (packageName != null) {
+                notificationAppDao.updateAppMuteState(packageName, muteState)
+            } else {
+                notificationAppDao.updateAllAppMuteStates(muteState)
+            }
         }
     }
 

@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfig
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -36,6 +38,7 @@ class AndroidNotificationAppsSync(
     private val androidPackageChangedReceiver: AndroidPackageChangedReceiver,
     private val notificationHandler: NotificationHandler,
     private val privateLogger: PrivateLogger,
+    private val notificationConfigFlow: NotificationConfigFlow,
 ) : NotificationAppsSync {
     private val logger = Logger.withTag("NotificationAppsSync")
     private val syncTrigger = MutableSharedFlow<Unit>()
@@ -86,6 +89,7 @@ class AndroidNotificationAppsSync(
         val existingApps =
             notificationAppDao.allApps().associateBy { it.packageName }.toMutableMap()
         val osApps = pm.getInstalledApplications(0)
+        val notificationConfig = notificationConfigFlow.value
         osApps.onEach { osApp ->
             // null = this is a system app
             pm.getLaunchIntentForPackage(osApp.packageName) ?: return@onEach
@@ -95,7 +99,7 @@ class AndroidNotificationAppsSync(
             val newAppItem = NotificationAppItem(
                 packageName = osApp.packageName,
                 name = name,
-                muteState = defaultMuteStateForPackage(osApp.packageName),
+                muteState = notificationConfig.defaultMuteStateForPackage(osApp.packageName),
                 channelGroups = channels,
                 stateUpdated = timeProvider.now().asMillisecond(),
                 lastNotified = Instant.DISTANT_PAST.asMillisecond(),
@@ -139,7 +143,8 @@ class AndroidNotificationAppsSync(
     }
 
     companion object {
-        private fun defaultMuteStateForPackage(pkg: String) = when {
+        private fun NotificationConfig.defaultMuteStateForPackage(pkg: String) = when {
+            !defaultAppsToEnabled -> MuteState.Always
             pkg in NOTIFICATIONS_DISABLED_BY_DEFAULT_PACKAGES -> MuteState.Always
             else -> MuteState.Never
         }

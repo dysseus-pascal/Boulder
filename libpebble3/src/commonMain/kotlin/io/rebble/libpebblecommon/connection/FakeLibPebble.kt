@@ -205,7 +205,7 @@ class FakeLibPebble : LibPebble {
         )
     }
 
-    override fun updateNotificationAppMuteState(packageName: String, muteState: MuteState) {
+    override fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState) {
         // No-op
     }
 

@@ -107,6 +107,10 @@ data class NotificationConfig(
      * When [true], any notifications muted by the phone's do not disturb will not be forwarded to the watch
      */
     val respectDoNotDisturb: Boolean = false,
+    /**
+     * Default new apps to be enabled (else they will be disabled).
+     */
+    val defaultAppsToEnabled: Boolean = true,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

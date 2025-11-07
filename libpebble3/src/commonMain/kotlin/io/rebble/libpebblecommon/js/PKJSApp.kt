@@ -186,6 +186,11 @@ fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
             when (value) {
                 is String -> put(key.toString(), value)
                 is Number -> put(key.toString(), value)
+                // Unsigned types apparently don't inherit from Number (what??)
+                is ULong -> put(key.toString(), value.toLong())
+                is UInt -> put(key.toString(), value.toLong())
+                is UShort -> put(key.toString(), value.toInt())
+                is UByte -> put(key.toString(), value.toInt())
                 is UByteArray -> {
                     val array = buildJsonArray {
                         for (byte in value) {

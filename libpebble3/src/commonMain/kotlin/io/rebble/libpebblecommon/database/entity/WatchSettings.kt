@@ -1,9 +1,9 @@
 package io.rebble.libpebblecommon.database.entity
 
-import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.structmapper.SByte
@@ -12,6 +12,8 @@ import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 @GenerateRoomEntity(
     primaryKey = "id",
@@ -53,20 +55,18 @@ data class WatchSettings(
     }
 
     override fun recordHashCode(): Int = hashCode()
+}
 
-    companion object {
-        private const val KEY_ACTIVITY_PREFERENCES = "activityPreferences"
-        fun create(healthEnabled: Boolean) = WatchSettings(
-            id = KEY_ACTIVITY_PREFERENCES,
-            heightMm = 165,
-            weightDag = 6500,
-            trackingEnabled = healthEnabled,
-            activityInsightsEnabled = false,
-            sleepInsightsEnabled = false,
-            ageYears = 35,
-            gender = 0,
-        )
-    }
+private const val KEY_ACTIVITY_PREFERENCES = "activityPreferences"
+
+fun WatchSettingsDao.getWatchSettings(): Flow<HealthSettings> =
+    getEntryFlow(KEY_ACTIVITY_PREFERENCES)
+        .map {
+            it?.toHealthSettings() ?: HealthSettings()
+        }
+
+suspend fun WatchSettingsDao.setWatchSettings(healthSettings: HealthSettings) {
+    insertOrReplace(healthSettings.toDbItem())
 }
 
 class WatchSettingsBlobItem(
@@ -86,3 +86,37 @@ class WatchSettingsBlobItem(
     val ageYears = SByte(m, ageYears)
     val gender = SByte(m, gender)
 }
+
+enum class HealthGender(
+    val value: Byte,
+) {
+    Female(0),
+    Male(1),
+    Other(2),
+    ;
+
+    companion object {
+        fun fromInt(value: Byte) = entries.first { it.value == value }
+    }
+}
+
+fun WatchSettings.toHealthSettings() = HealthSettings(
+    heightMm = heightMm,
+    weightDag = weightDag,
+    ageYears = ageYears.toInt(),
+    gender = HealthGender.fromInt(gender),
+    trackingEnabled = trackingEnabled,
+    activityInsightsEnabled = activityInsightsEnabled,
+    sleepInsightsEnabled = sleepInsightsEnabled,
+)
+
+fun HealthSettings.toDbItem() = WatchSettings(
+    id = KEY_ACTIVITY_PREFERENCES,
+    heightMm = heightMm,
+    weightDag = weightDag,
+    ageYears = ageYears.toByte(),
+    gender = gender.value,
+    trackingEnabled = trackingEnabled,
+    activityInsightsEnabled = activityInsightsEnabled,
+    sleepInsightsEnabled = sleepInsightsEnabled,
+)

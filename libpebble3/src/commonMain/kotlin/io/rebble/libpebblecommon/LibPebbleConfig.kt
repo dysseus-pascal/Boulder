@@ -60,7 +60,6 @@ data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimit: Int = 25,
     val calendarReminders: Boolean = true,
-    val enableHealth: Boolean = true,
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val verboseWatchManagerLogging: Boolean = false,

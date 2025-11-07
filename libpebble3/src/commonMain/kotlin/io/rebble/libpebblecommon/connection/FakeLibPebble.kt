@@ -21,6 +21,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -264,6 +265,11 @@ class FakeLibPebble : LibPebble {
 
     override val analyticsEvents: Flow<AnalyticsEvent>
         get() = flow { }
+    override val healthSettings: Flow<HealthSettings>
+        get() = flow { HealthSettings() }
+
+    override fun updateHealthSettings(healthSettings: HealthSettings) {
+    }
 }
 
 fun fakeWatches(): List<PebbleDevice> {

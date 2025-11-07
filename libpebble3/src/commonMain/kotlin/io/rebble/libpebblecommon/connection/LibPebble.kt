@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppType
@@ -65,7 +66,7 @@ sealed class PebbleConnectionEvent {
 
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
-    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents {
+    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -97,6 +98,11 @@ data class OtherPebbleApp(
     val pkg: String,
     val name: String,
 )
+
+interface HealthApi {
+    val healthSettings: Flow<HealthSettings>
+    fun updateHealthSettings(healthSettings: HealthSettings)
+}
 
 interface Errors {
     /**
@@ -248,7 +254,8 @@ class LibPebble3(
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
-    Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics {
+    Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
+    HealthApi by health {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -265,7 +272,6 @@ class LibPebble3(
         missedCallSyncer.init()
         notificationListenerConnection.init(this)
         notificationApi.init()
-        health.init()
         timeChanged.registerForTimeChanges {
             logger.d("Time changed")
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }

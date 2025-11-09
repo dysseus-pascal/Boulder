@@ -172,7 +172,22 @@ abstract class PrivatePKJSInterface(
 
     open fun getActivePebbleWatchInfo(): String {
         val info = device.watchInfo
-        return Json.encodeToString(ActivePebbleWatchInfo.fromWatchInfo(info))
+        val targetPlatforms = jsRunner.appInfo.targetPlatforms
+        val jsInfo = ActivePebbleWatchInfo.fromWatchInfo(info).let {
+            it.copy(
+                platform = if (it.platform in targetPlatforms) {
+                    it.platform
+                } else {
+                    // Use closest old platform if new platform not supported
+                    when (it.platform) {
+                        "flint" -> if ("diorite" in targetPlatforms) "diorite" else "aplite"
+                        "emery" -> "basalt"
+                        else -> "aplite"
+                    }
+                }
+            )
+        }
+        return Json.encodeToString(jsInfo)
     }
 
     open fun privateFnConfirmReadySignal(success: Boolean) {

@@ -360,14 +360,14 @@ class WebViewJsRunner(
     override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
         withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalTimelineTokenSuccess('${Uri.encode(tokenJson)}')", null)
+            webView?.evaluateJavascript("window.signalTimelineTokenSuccess(${Json.encodeToString(tokenJson)})", null)
         }
     }
 
     override suspend fun signalTimelineTokenFail(callId: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to null, "callId" to callId))
         withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalTimelineTokenFailure('${Uri.encode(tokenJson)}')", null)
+            webView?.evaluateJavascript("window.signalTimelineTokenFailure(${Json.encodeToString(tokenJson)})", null)
         }
     }
 
@@ -383,21 +383,21 @@ class WebViewJsRunner(
     override suspend fun signalNewAppMessageData(data: String?): Boolean {
         readyState.first { it }
         withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalNewAppMessageData(${"'" + (data ?: "null") + "'"})", null)
+            webView?.evaluateJavascript("window.signalNewAppMessageData(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
         }
         return true
     }
 
     override suspend fun signalAppMessageAck(data: String?): Boolean {
         withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageAck(${"'" + (data ?: "null") + "'"})", null)
+            webView?.evaluateJavascript("window.signalAppMessageAck(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
         }
         return true
     }
 
     override suspend fun signalAppMessageNack(data: String?): Boolean {
         withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageNack(${"'" + (data ?: "null") + "'"})", null)
+            webView?.evaluateJavascript("window.signalAppMessageNack(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
         }
         return true
     }

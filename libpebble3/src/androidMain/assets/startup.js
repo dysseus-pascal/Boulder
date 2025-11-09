@@ -2,7 +2,7 @@
 const _global = typeof window !== 'undefined' ? window : globalThis;
 window = _global; // For compatibility with existing code that expects `window`
 _global.onerror = (message, source, lineno, colno, error) => {
-    _Pebble.onError(message, source, lineno, colno, error);
+    _Pebble.onError(message, source, lineno, colno);
 };
 _global.onunhandledrejection = (event) => {
     _Pebble.onUnhandledRejection(event.reason);

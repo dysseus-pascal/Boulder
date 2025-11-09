@@ -94,8 +94,8 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         val result = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                     LocationManager.FUSED_PROVIDER in enabledProviders -> LocationManager.FUSED_PROVIDER
-            LocationManager.GPS_PROVIDER in enabledProviders -> LocationManager.GPS_PROVIDER
             LocationManager.NETWORK_PROVIDER in enabledProviders -> LocationManager.NETWORK_PROVIDER
+            LocationManager.GPS_PROVIDER in enabledProviders -> LocationManager.GPS_PROVIDER
             else -> null
         }
         result ?: run {

@@ -348,6 +348,7 @@ class WebViewJsRunner(
                                 script.type = "text/javascript";
                                 script.onreadystatechange = signalLoaded;
                                 script.onload = signalLoaded;
+                                script.charset = "utf-8";
                                 script.src = ${Json.encodeToString(urlAsUri)};
                                 head.appendChild(script);
                             })();

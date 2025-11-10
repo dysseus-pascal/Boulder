@@ -101,7 +101,7 @@ class JavascriptCoreJsRunner(
             jsContext.setName("PKJS: ${appInfo.longName}")
             val selector = NSSelectorFromString("setInspectable:")
             if (jsContext.respondsToSelector(selector)) {
-                jsContext.setInspectable(true)
+                jsContext.setInspectable(libPebble.config.value.watchConfig.pkjsInspectable)
             } else {
                 logger.w { "JSContext.setInspectable not available on this iOS version" }
             }

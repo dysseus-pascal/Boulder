@@ -46,7 +46,7 @@ import java.io.File
 
 class WebViewJsRunner(
     appContext: AppContext,
-    libPebble: LibPebble,
+    private val libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
 
     device: CompanionAppDevice,
@@ -193,6 +193,9 @@ class WebViewJsRunner(
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     private suspend fun init() = withContext(Dispatchers.Main) {
+        if (libPebble.config.value.watchConfig.pkjsInspectable) {
+            WebView.setWebContentsDebuggingEnabled(true) // Sadly sets globally for this process
+        }
         webView = WebView(context).also {
             it.setWillNotDraw(true)
             val settings = it.settings
@@ -354,6 +357,7 @@ class WebViewJsRunner(
                             })();
                             """.trimIndent()
                 ) { value -> logger.d { "added app script tag" } }
+                webView.evaluateJavascript("document.title = ${Json.encodeToString("PKJS: ${appInfo.longName}")};", null)
             }
         } ?: error("WebView not initialized")
     }

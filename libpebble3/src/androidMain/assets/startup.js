@@ -46,7 +46,7 @@ navigator.geolocation.getCurrentPosition = (success, error, options) => {
 navigator.geolocation.watchPosition = (success, error, options) => {
     const id = _PebbleGeo.getWatchCallbackID();
     _PebbleGeoCB._watchCallbacks.set(id, { success, error });
-    _PebbleGeo.watchPosition(id);
+    _PebbleGeo.watchPosition(id, options && options.frequency ? options.frequency : 500);
     return id;
 };
 navigator.geolocation.clearWatch = (id) => {

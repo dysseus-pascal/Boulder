@@ -22,8 +22,11 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSBundle
+import platform.Foundation.NSLocale
 import platform.Foundation.NSSelectorFromString
 import platform.Foundation.NSURL
+import platform.Foundation.currentLocale
+import platform.Foundation.localeIdentifier
 import platform.JavaScriptCore.JSContext
 import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
@@ -129,7 +132,8 @@ class JavascriptCoreJsRunner(
 
     private val navigator = mapOf(
         "userAgent" to "PKJS",
-        "geolocation" to emptyMap<String, Any>()
+        "geolocation" to emptyMap<String, Any>(),
+        "language" to NSLocale.currentLocale.localeIdentifier
     )
 
     private fun setupNavigator() {

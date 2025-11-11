@@ -543,6 +543,15 @@ class WatchManager(
             )
             val pebbleConnector: PebbleConnector = connectionKoinScope.pebbleConnector
 
+            // This is here for scenarios where we have suspended code waiting for something to
+            // happen (e.g. bonding for 60 seconds), which otherwise would wait the entire 60
+            // 60 seconds to finish, even after a disconnection.
+            val disconnectDuringConnectionJob = connectionScope.launch {
+                pebbleConnector.disconnected.disconnected.await()
+                logger.d("got disconnection (before connection)")
+                connectionKoinScope.cleanup()
+            }
+
             connectionScope.launch {
                 try {
                     if (blePlatformConfig.delayBleConnectionsAfterAppStart && (clock.now() - timeInitialized) < APP_START_WAIT_TO_CONNECT) {
@@ -553,6 +562,7 @@ class WatchManager(
                         previouslyConnected = device.knownWatchProps != null,
                         lastError = device.connectionFailureInfo?.reason,
                     )
+                    disconnectDuringConnectionJob.cancel()
                     logger.d("watchmanager connected (or failed..); waiting for disconnect: $identifier")
                     pebbleConnector.disconnected.disconnected.await()
                     // TODO if not know (i.e. if only a scanresult), then don't reconnect (set goal = false)

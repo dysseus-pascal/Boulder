@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import kotlinx.cinterop.objcPtr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -28,6 +29,8 @@ import platform.Foundation.NSURL
 import platform.Foundation.currentLocale
 import platform.Foundation.localeIdentifier
 import platform.JavaScriptCore.JSContext
+import platform.JavaScriptCore.JSGarbageCollect
+import platform.JavaScriptCore.JSGlobalContextRef
 import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
@@ -51,6 +54,12 @@ class JavascriptCoreJsRunner(
     private var interfaces: List<RegisterableJsInterface>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
+
+    override fun debugForceGC() {
+        runBlocking(threadContext) {
+            JSGarbageCollect(jsContext!!.JSGlobalContextRef())
+        }
+    }
 
     private fun initInterfaces(jsContext: JSContext) {
         fun eval(js: String) = this.jsContext?.evalCatching(js)

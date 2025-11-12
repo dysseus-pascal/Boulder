@@ -439,4 +439,8 @@ class WebViewJsRunner(
             }
         }
     }
+
+    override fun debugForceGC() {
+        // No-op on Android
+    }
 }

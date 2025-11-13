@@ -141,7 +141,7 @@ class WatchManagerTest {
     }
     private val firmwareUpdater = object : FirmwareUpdater {
         override val firmwareUpdateState: StateFlow<FirmwareUpdater.FirmwareUpdateStatus>
-            = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle)
+            = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle())
 
         override fun init(watchPlatform: WatchHardwarePlatform, slot: Int?) {
         }

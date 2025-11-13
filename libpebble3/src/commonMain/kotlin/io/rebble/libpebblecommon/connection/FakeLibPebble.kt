@@ -321,7 +321,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
             )
             FirmwareUpdater.FirmwareUpdateStatus.InProgress(fakeUpdate, MutableStateFlow(0.47f))
         } else {
-            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle
+            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
         }
         val fwupAvailable = if (!updating && Random.nextBoolean()) {
             FirmwareUpdateCheckResult.FoundUpdate(
@@ -500,6 +500,89 @@ class FakeConnectedDevice(
     override suspend fun installLanguagePack(path: Path): Boolean {
         return true
     }
+}
+
+class FakeConnectedDeviceInRecovery(
+   override val identifier: PebbleIdentifier,
+   override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+   override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
+   override val name: String,
+   override val nickname: String?,
+   override val color: WatchColor = run {
+      val white = Random.nextBoolean()
+      if (white) {
+         WatchColor.Pebble2DuoWhite
+      } else {
+         WatchColor.Pebble2DuoBlack
+      }
+   },
+   override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+   override val lastConnected: Instant = Instant.DISTANT_PAST,
+   override val serial: String = "XXXXXXXXXXXX",
+   override val runningFwVersion: String = "v1.2.3-core",
+   override val connectionFailureInfo: ConnectionFailureInfo?,
+   override val usingBtClassic: Boolean = false,
+) : ConnectedPebbleDeviceInRecovery {
+
+   override fun forget() {}
+   override fun setNickname(nickname: String?) {
+   }
+
+   override fun connect() {}
+
+   override fun disconnect() {}
+
+   override fun sideloadFirmware(path: Path) {}
+
+   override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
+
+   override fun checkforFirmwareUpdate() {}
+
+   override val watchInfo: WatchInfo = WatchInfo(
+      runningFwVersion = FirmwareVersion.from(
+         runningFwVersion,
+         isRecovery = false,
+         gitHash = "",
+         timestamp = kotlin.time.Instant.DISTANT_PAST,
+         isDualSlot = false,
+         isSlot0 = false,
+      )!!,
+      recoveryFwVersion = FirmwareVersion.from(
+         runningFwVersion,
+         isRecovery = true,
+         gitHash = "",
+         timestamp = kotlin.time.Instant.DISTANT_PAST,
+         isDualSlot = false,
+         isSlot0 = false,
+      )!!,
+      platform = watchType,
+      bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
+      board = "board",
+      serial = serial,
+      btAddress = "11:22:33:44:55:66",
+      resourceCrc = -9999999,
+      resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
+      language = "en-GB",
+      languageVersion = 1,
+      capabilities = emptySet(),
+      isUnfaithful = false,
+      healthInsightsVersion = null,
+      javascriptVersion = null,
+      color = color,
+   )
+
+   override suspend fun startDevConnection() {}
+   override suspend fun stopDevConnection() {}
+   override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+   override val batteryLevel: Int? = 50
+
+   override suspend fun gatherLogs(): Path? {
+      return null
+   }
+
+   override suspend fun getCoreDump(unread: Boolean): Path? {
+      return null
+   }
 }
 
 private val fakeNotificationApps by lazy { fakeNotificationApps() }

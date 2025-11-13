@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
@@ -40,6 +41,7 @@ import io.rebble.libpebblecommon.performPlatformSpecificInit
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
+import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.Deferred
@@ -66,7 +68,8 @@ sealed class PebbleConnectionEvent {
 
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
-    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi {
+    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi,
+    SystemGeolocation, Timeline {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -102,6 +105,11 @@ data class OtherPebbleApp(
 interface HealthApi {
     val healthSettings: Flow<HealthSettings>
     fun updateHealthSettings(healthSettings: HealthSettings)
+}
+
+interface Timeline {
+    fun insertOrReplace(pin: TimelinePin)
+    fun delete(pinUuid: Uuid)
 }
 
 interface Errors {
@@ -251,11 +259,13 @@ class LibPebble3(
     private val phoneContactsSyncer: PhoneContactsSyncer,
     private val contacts: Contacts,
     private val analytics: AnalyticsEvents,
+    private val systemGeolocation: SystemGeolocation,
+    private val timeline: Timeline,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
-    HealthApi by health {
+    HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

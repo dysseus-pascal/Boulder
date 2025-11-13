@@ -114,6 +114,15 @@ sealed class BaseAttribute {
         override fun asAttribute(): TimelineItem.Attribute =
             createUByteAttribute(attribute, color.toProtocolNumber())
     }
+
+    @Serializable
+    data class UIntAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UInt,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUIntAttribute(attribute, value)
+    }
 }
 
 @Serializable

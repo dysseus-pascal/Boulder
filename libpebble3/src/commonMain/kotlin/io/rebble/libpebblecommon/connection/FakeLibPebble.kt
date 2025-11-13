@@ -21,6 +21,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -40,6 +41,7 @@ import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
+import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -269,6 +271,20 @@ class FakeLibPebble : LibPebble {
         get() = flow { HealthSettings() }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
+    }
+
+    override suspend fun getCurrentPosition(): GeolocationPositionResult {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> {
+        TODO("Not yet implemented")
+    }
+
+    override fun insertOrReplace(pin: TimelinePin) {
+    }
+
+    override fun delete(pinUuid: Uuid) {
     }
 }
 

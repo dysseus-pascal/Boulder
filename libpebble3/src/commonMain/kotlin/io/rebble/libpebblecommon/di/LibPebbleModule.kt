@@ -40,6 +40,7 @@ import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
+import io.rebble.libpebblecommon.connection.Timeline
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
@@ -122,6 +123,7 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
+import io.rebble.libpebblecommon.timeline.TimelineApi
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.FirmwareDownloader
@@ -324,6 +326,7 @@ fun initKoin(
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
                 singleOf(::WebSyncManager) bind RequestSync::class
+                singleOf(::TimelineApi) bind Timeline::class
                 single { WebSyncManagerProvider { get() } }
                 single { createTimeChanged(get()) }
                 single {
@@ -350,7 +353,9 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
-                        get()
+                        get(),
+                        get(),
+                        get(),
                     )
                 } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class

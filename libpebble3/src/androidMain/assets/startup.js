@@ -66,7 +66,25 @@ navigator.geolocation.clearWatch = (id) => {
     }
     const sendLog = (level, ...args) => {
         // build args into a single string
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        const message = args.map((arg) => {
+            if (arg instanceof Error) {
+                return "\n" + JSON.stringify({
+                    message: arg.message,
+                    lineNumber: arg.lineNumber,
+                    columnNumber: arg.columnNumber,
+                    name: arg.name,
+                    stack: arg.stack,
+                }, null, 2);
+            } else if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return '[object]';
+                }
+            } else {
+                return String(arg);
+            }
+        }).join(' ');
         const traceback = new Error().stack;
         _Pebble.onConsoleLog(level, message, traceback);
     }

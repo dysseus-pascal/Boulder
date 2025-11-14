@@ -288,7 +288,7 @@ class RealFirmwareUpdater(
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
-            val path = firmwareDownloader.downloadFirmware(update.url)
+            val path = firmwareDownloader.downloadFirmware(update.url, "pbz")
             if (path == null) {
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
                     FirmwareUpdateErrorStarting.ErrorDownloading)

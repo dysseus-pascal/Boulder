@@ -8,6 +8,8 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -497,9 +499,14 @@ class FakeConnectedDevice(
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
 
-    override suspend fun installLanguagePack(path: Path): Boolean {
-        return true
+    override fun installLanguagePack(path: Path, name: String) {
     }
+
+    override fun installLanguagePack(url: String, name: String) {
+    }
+
+    override val languagePackInstallState: LanguagePackInstallState = LanguagePackInstallState.Idle()
+    override val installedLanguagePack: InstalledLanguagePack? = null
 }
 
 class FakeConnectedDeviceInRecovery(

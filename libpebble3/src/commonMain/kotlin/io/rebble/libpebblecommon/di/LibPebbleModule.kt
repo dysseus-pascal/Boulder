@@ -75,6 +75,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
@@ -202,6 +203,7 @@ interface ConnectionScope {
     val batteryWatcher: BatteryWatcher
     val analyticsLogger: ConnectionAnalyticsLogger
     val usingBtClassic: Boolean
+    val languagePackInstaller: LanguagePackInstaller
 }
 
 class RealConnectionScope(
@@ -217,6 +219,7 @@ class RealConnectionScope(
     override val batteryWatcher: BatteryWatcher = koinScope.get()
     override val analyticsLogger: ConnectionAnalyticsLogger = koinScope.get()
     override val usingBtClassic: Boolean = koinScope.get<UseBtClassicAddress>().address != null
+    override val languagePackInstaller: LanguagePackInstaller = koinScope.get()
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -501,7 +504,7 @@ fun initKoin(
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
                     scopedOf(::AppOrderManager)
-                    scopedOf(::LanguagePackInstaller)
+                    scopedOf(::RealLanguagePackInstaller) bind LanguagePackInstaller::class
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
                     scoped {
                         DevConnectionManager(

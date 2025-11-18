@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_BIGB
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_BIGBOARD_2
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_DVT
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_EVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_OBELIX_PVT
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -37,6 +38,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     CORE_ASTERIX(15u, WatchType.FLINT, "asterix"),
     CORE_OBELIX_EVT(16u, WatchType.EMERY, "obelix_evt"),
     CORE_OBELIX_DVT(17u, WatchType.EMERY, "obelix_dvt"),
+    CORE_OBELIX_PVT(18u, WatchType.EMERY, "obelix_pvt"),
     PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "silk_bb"),
     PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "silk_bb2"),
     PEBBLE_ROBERT_EVT(13u, WatchType.EMERY, "robert_evt"),
@@ -63,7 +65,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
 }
 
 fun WatchHardwarePlatform.isCoreDevice(): Boolean = when (this) {
-    CORE_ASTERIX, CORE_OBELIX_EVT, CORE_OBELIX_DVT, CORE_OBELIX_BIGBOARD, CORE_OBELIX_BIGBOARD_2 -> true
+    CORE_ASTERIX, CORE_OBELIX_EVT, CORE_OBELIX_DVT, CORE_OBELIX_PVT, CORE_OBELIX_BIGBOARD, CORE_OBELIX_BIGBOARD_2 -> true
     else -> false
 }
 

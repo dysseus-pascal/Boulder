@@ -345,11 +345,13 @@ class RealFirmwareUpdater(
         } catch (e: FirmwareUpdateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+        } catch (e: CancellationException) {
+           _firmwareUpdateState.value =
+              FirmwareUpdateStatus.NotInProgress.ErrorStarting(FirmwareUpdateErrorStarting.ErrorDownloading)
+           throw e
         } catch (e: IllegalStateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
             logger.e(e) { "Firmware update failed (unknown): ${e.message}" }
            _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)

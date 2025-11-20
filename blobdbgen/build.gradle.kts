@@ -3,11 +3,6 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-repositories {
-    mavenCentral()
-    google()
-}
-
 dependencies {
     implementation(project(":blobannotations"))
     implementation(kotlin("stdlib-jdk8"))

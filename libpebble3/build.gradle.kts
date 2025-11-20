@@ -31,7 +31,6 @@ room {
 }
 
 android {
-    namespace = project.group.toString()
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     namespace = "io.rebble.libpebblecommon"
     defaultConfig {

@@ -28,11 +28,6 @@ android {
     }
 }
 
-repositories {
-    mavenCentral()
-    google()
-}
-
 kotlin {
     androidTarget {
         publishLibraryVariants("release", "debug")

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -53,11 +54,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -442,13 +446,19 @@ fun AppCarousel(
             itemCount = { items.size },
         )
     }
+    var itemWidth by remember { mutableStateOf(0) }
     HorizontalUncontainedCarousel(
         state = state,
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .padding(top = 14.dp, bottom = 14.dp),
-        itemWidth = 132.dp,
+            .padding(top = 14.dp, bottom = 14.dp)
+            .onSizeChanged { (width, height) ->
+                itemWidth = width
+            },
+        itemWidth = with(LocalDensity.current) {
+            ((itemWidth.toDp() / 3.dp).dp - 18.dp).coerceAtMost(132.dp)
+        },
         itemSpacing = 8.dp,
         contentPadding = PaddingValues(horizontal = 10.dp)
     ) { i ->
@@ -462,11 +472,6 @@ fun AppCarousel(
     }
 }
 
-@Preview
-@Composable
-fun LockerPreview() {
-    LockerScreenPreviewWrapper(LockerTab.Watchfaces)
-}
 
 @Composable
 fun LockerScreenPreviewWrapper(tab: LockerTab) {
@@ -476,6 +481,83 @@ fun LockerScreenPreviewWrapper(tab: LockerTab) {
             topBarParams = WrapperTopBarParams,
             tab = tab,
         )
+    }
+}
+
+@Preview
+@Composable
+fun LockerCarouselPreview() {
+    PreviewWrapper {
+        Column(modifier = Modifier.width(700.dp).verticalScroll(rememberScrollState())) {
+            AppCarousel(
+                title = "On My Watch",
+                items = listOf(
+                    CommonApp(
+                        title = "Sample Watchface",
+                        developerName = "Dev Name",
+                        uuid = Uuid.parse("123e4567-e89b-12d3-a456-426614174000"),
+                        androidCompanion = null,
+                        commonAppType = CommonAppType.Locker(
+                            sideloaded = false,
+                            configurable = true,
+                            sync = true,
+                            order = 0,
+                        ),
+                        type = AppType.Watchface,
+                        category = "Fun",
+                        version = "1.0",
+                        listImageUrl = null,
+                        screenshotImageUrl = null,
+                        isCompatible = true,
+                        hearts = 42,
+                        description = "A sample watchface for preview purposes.",
+                    ),
+                    CommonApp(
+                        title = "Another Watchface",
+                        developerName = "Another Dev",
+                        uuid = Uuid.parse("223e4567-e89b-12d3-a456-426614174000"),
+                        androidCompanion = null,
+                        commonAppType = CommonAppType.Locker(
+                            sideloaded = true,
+                            configurable = false,
+                            sync = false,
+                            order = 1,
+                        ),
+                        type = AppType.Watchface,
+                        category = "Utility",
+                        version = "2.1",
+                        listImageUrl = null,
+                        screenshotImageUrl = null,
+                        isCompatible = true,
+                        hearts = 7,
+                        description = "Another sample watchface for preview purposes.",
+                    ),
+                    CommonApp(
+                        title = "Third Watchface",
+                        developerName = "Third Dev",
+                        uuid = Uuid.parse("323e4567-e89b-12d3-a456-426614174000"),
+                        androidCompanion = null,
+                        commonAppType = CommonAppType.Locker(
+                            sideloaded = false,
+                            configurable = true,
+                            sync = true,
+                            order = 2,
+                        ),
+                        type = AppType.Watchface,
+                        category = "Sport",
+                        version = "3.3",
+                        listImageUrl = null,
+                        screenshotImageUrl = null,
+                        isCompatible = false,
+                        hearts = 15,
+                        description = "Yet another sample watchface for preview purposes.",
+                    )
+                ),
+                navBarNav = NoOpNavBarNav,
+                runningApp = null,
+                topBarParams = WrapperTopBarParams,
+            )
+        }
     }
 }
 

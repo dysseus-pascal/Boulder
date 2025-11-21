@@ -214,7 +214,10 @@ fun LockerScreen(
             topBarParams.title(title)
             topBarParams.canGoBack(false)
             if (coreConfig.useNativeAppStore) {
-                viewModel.refreshStore(type, watchType)
+                isRefreshing = true
+                viewModel.refreshStore(type, watchType).invokeOnCompletion {
+                    isRefreshing = false
+                }
             }
         }
         val deepLinkHandler: PebbleDeepLinkHandler = koinInject()
@@ -319,7 +322,19 @@ fun LockerScreen(
                 }) {
                     if (coreConfig.useNativeAppStore) {
                         val scrollState = rememberScrollState()
-                        Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
+                        var itemWidth by remember { mutableStateOf(0.dp) }
+                        val density = LocalDensity.current
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scrollState)
+                                .onSizeChanged { (width, height) ->
+                                    itemWidth = with(density) {
+                                        (width.toDp().coerceAtMost(700.dp) - 32.dp) / 3
+                                    }
+                                }
+                        ) {
+
                             @Composable
                             fun Carousel(
                                 title: String,
@@ -331,6 +346,7 @@ fun LockerScreen(
                                     navBarNav = navBarNav,
                                     runningApp = runningApp,
                                     topBarParams = topBarParams,
+                                    itemWidth = itemWidth
                                 )
                             }
                             Carousel("On My Watch", onWatch)
@@ -432,6 +448,7 @@ fun AppCarousel(
     navBarNav: NavBarNav,
     runningApp: Uuid?,
     topBarParams: TopBarParams,
+    itemWidth: Dp = 132.dp,
 ) {
     if (items.isEmpty()) {
         return
@@ -446,19 +463,13 @@ fun AppCarousel(
             itemCount = { items.size },
         )
     }
-    var itemWidth by remember { mutableStateOf(0) }
     HorizontalUncontainedCarousel(
         state = state,
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .padding(top = 14.dp, bottom = 14.dp)
-            .onSizeChanged { (width, height) ->
-                itemWidth = width
-            },
-        itemWidth = with(LocalDensity.current) {
-            ((itemWidth.toDp() / 3.dp).dp - 18.dp).coerceAtMost(132.dp)
-        },
+            .padding(top = 14.dp, bottom = 14.dp),
+        itemWidth = itemWidth,
         itemSpacing = 8.dp,
         contentPadding = PaddingValues(horizontal = 10.dp)
     ) { i ->

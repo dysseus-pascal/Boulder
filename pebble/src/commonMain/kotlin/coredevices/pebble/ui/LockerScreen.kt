@@ -7,8 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
@@ -53,7 +56,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -294,73 +299,85 @@ fun LockerScreen(
                 }
             },
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (loggedIn == null) {
-                    PebbleElevatedButton(
-                        text = "Login to Rebble to see App Store and Locker",
-                        onClick = {
-                            uriHandler.openUri(REBBLE_LOGIN_URI)
-                        },
-                        primaryColor = true,
-                        modifier = Modifier.padding(5.dp).align(Alignment.CenterHorizontally),
-                    )
+            PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = {
+                isRefreshing = true
+                logger.v { "set isRefreshing to true" }
+                val lockerFinished = libPebble.requestLockerSync()
+                val storeFinished = if (coreConfig.useNativeAppStore) {
+                    viewModel.refreshStore(type, watchType)
+                } else {
+                    CompletableDeferred(Unit)
                 }
-                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = {
-                    isRefreshing = true
-                    logger.v { "set isRefreshing to true" }
-                    val lockerFinished = libPebble.requestLockerSync()
-                    val storeFinished = if (coreConfig.useNativeAppStore) {
-                        viewModel.refreshStore(type, watchType)
-                    } else {
-                        CompletableDeferred(Unit)
-                    }
-                    scope.launch {
-                        awaitAll(lockerFinished, storeFinished)
-                        logger.v { "set isRefreshing to false" }
-                        isRefreshing = false
-                    }
-                }) {
-                    if (coreConfig.useNativeAppStore) {
-                        val scrollState = rememberScrollState()
-                        var itemWidth by remember { mutableStateOf(0.dp) }
-                        val density = LocalDensity.current
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(scrollState)
-                                .onSizeChanged { (width, height) ->
-                                    itemWidth = with(density) {
-                                        (width.toDp().coerceAtMost(700.dp) - 32.dp) / 3
-                                    }
+                scope.launch {
+                    awaitAll(lockerFinished, storeFinished)
+                    logger.v { "set isRefreshing to false" }
+                    isRefreshing = false
+                }
+            }) {
+                if (coreConfig.useNativeAppStore) {
+                    var itemWidth by remember { mutableStateOf(0.dp) }
+                    val density = LocalDensity.current
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 132.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { (width, height) ->
+                                itemWidth = with(density) {
+                                    (width.toDp() / 3).coerceAtMost(132.dp) - 14.dp
                                 }
-                        ) {
-
-                            @Composable
-                            fun Carousel(
-                                title: String,
-                                items: List<CommonApp>,
-                            ) {
-                                AppCarousel(
-                                    title = title,
-                                    items = items,
-                                    navBarNav = navBarNav,
-                                    runningApp = runningApp,
-                                    topBarParams = topBarParams,
-                                    itemWidth = itemWidth
+                            }
+                    ) {
+                        if (loggedIn == null) {
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                PebbleElevatedButton(
+                                    text = "Login to Rebble to see App Store and Locker",
+                                    onClick = {
+                                        uriHandler.openUri(REBBLE_LOGIN_URI)
+                                    },
+                                    primaryColor = true,
+                                    modifier = Modifier.padding(5.dp).align(Alignment.Center),
                                 )
                             }
-                            Carousel("On My Watch", onWatch)
-                            Carousel("Recent", notOnWatch)
-                            if (topBarParams.searchState.query.isNotEmpty() && !viewModel.storeSearchResults.value.isEmpty()) {
-                                Carousel("Search Results", viewModel.storeSearchResults.value)
+                        }
+                        @Composable
+                        fun Carousel(
+                            title: String,
+                            items: List<CommonApp>,
+                        ) {
+                            AppCarousel(
+                                title = title,
+                                items = items,
+                                navBarNav = navBarNav,
+                                runningApp = runningApp,
+                                topBarParams = topBarParams,
+                                itemWidth = itemWidth
+                            )
+                        }
+                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("On My Watch", onWatch) }
+
+                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Recent", notOnWatch) }
+
+                        if (topBarParams.searchState.query.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { SectionHeader("Search Results") }
+                            items(
+                                items = viewModel.storeSearchResults.value,
+                                key = { it.uuid }
+                            ) { entry ->
+                                NativeWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    runningApp == entry.uuid,
+                                    topBarParams,
+                                )
                             }
+                        } else {
                             val storeHome by viewModel.storeHome
                             val home = storeHome
                             // TODO categories
 //                            logger.v { "home.collections (has home = ${home != null}): ${home?.collections}" }
-                            if (topBarParams.searchState.query.isEmpty()) {
-                                home?.collections?.forEach { collection ->
-//                                logger.v { "collection: $collection" }
+                            home?.collections?.forEach { collection ->
+                                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                    logger.v { "collection: $collection" }
                                     val collectionApps =
                                         remember(
                                             home,
@@ -382,56 +399,68 @@ fun LockerScreen(
                                     Carousel(collection.name, collectionApps)
                                 }
                             }
-                            Carousel("Not Compatible", notCompatible)
                         }
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(4.dp),
-                        ) {
-                            val watchName = lastConnectedWatch?.displayName() ?: ""
-                            if (onWatch.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("On Watch $watchName") }
-                                items(
-                                    items = onWatch,
-                                    key = { it.uuid }
-                                ) { entry ->
-                                    LegacyWatchfaceCard(
-                                        entry,
-                                        navBarNav,
-                                        runningApp == entry.uuid,
-                                        topBarParams,
-                                    )
-                                }
+                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Not Compatible", notCompatible) }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(4.dp),
+                    ) {
+                        if (loggedIn == null) {
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                PebbleElevatedButton(
+                                    text = "Login to Rebble to see App Store and Locker",
+                                    onClick = {
+                                        uriHandler.openUri(REBBLE_LOGIN_URI)
+                                    },
+                                    primaryColor = true,
+                                    modifier = Modifier.padding(5.dp).align(Alignment.Center),
+                                )
                             }
-                            if (notOnWatch.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not On Watch $watchName") }
-                                items(
-                                    items = notOnWatch,
-                                    key = { it.uuid }
-                                ) { entry ->
-                                    LegacyWatchfaceCard(
-                                        entry,
-                                        navBarNav,
-                                        runningApp == entry.uuid,
-                                        topBarParams,
-                                    )
-                                }
+                        }
+                        val watchName = lastConnectedWatch?.displayName() ?: ""
+                        if (onWatch.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("On Watch $watchName") }
+                            items(
+                                items = onWatch,
+                                key = { it.uuid }
+                            ) { entry ->
+                                LegacyWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    runningApp == entry.uuid,
+                                    topBarParams,
+                                )
                             }
-                            if (notCompatible.isNotEmpty()) {
-                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not Compatible with $watchName") }
-                                items(
-                                    items = notCompatible,
-                                    key = { it.uuid }
-                                ) { entry ->
-                                    LegacyWatchfaceCard(
-                                        entry,
-                                        navBarNav,
-                                        runningApp == entry.uuid,
-                                        topBarParams,
-                                    )
-                                }
+                        }
+                        if (notOnWatch.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not On Watch $watchName") }
+                            items(
+                                items = notOnWatch,
+                                key = { it.uuid }
+                            ) { entry ->
+                                LegacyWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    runningApp == entry.uuid,
+                                    topBarParams,
+                                )
+                            }
+                        }
+                        if (notCompatible.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not Compatible with $watchName") }
+                            items(
+                                items = notCompatible,
+                                key = { it.uuid }
+                            ) { entry ->
+                                LegacyWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    runningApp == entry.uuid,
+                                    topBarParams,
+                                )
                             }
                         }
                     }
@@ -453,33 +482,35 @@ fun AppCarousel(
     if (items.isEmpty()) {
         return
     }
-    Text(title, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 24.sp)
-    // Do this manually rather than using rememberCarouselState - that breaks when we change the
-    // size.
-    val state = rememberSaveable(items.size, saver = CarouselState.Saver) {
-        CarouselState(
-            currentItem = 0,
-            currentItemOffsetFraction = 0F,
-            itemCount = { items.size },
-        )
-    }
-    HorizontalUncontainedCarousel(
-        state = state,
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight()
-            .padding(top = 14.dp, bottom = 14.dp),
-        itemWidth = itemWidth,
-        itemSpacing = 8.dp,
-        contentPadding = PaddingValues(horizontal = 10.dp)
-    ) { i ->
-        val entry = items.getOrNull(i) ?: return@HorizontalUncontainedCarousel
-        NativeWatchfaceCard(
-            entry,
-            navBarNav,
-            runningApp == entry.uuid,
-            topBarParams,
-        )
+    Column {
+        Text(title, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 24.sp)
+        // Do this manually rather than using rememberCarouselState - that breaks when we change the
+        // size.
+        val state = rememberSaveable(items.size, saver = CarouselState.Saver) {
+            CarouselState(
+                currentItem = 0,
+                currentItemOffsetFraction = 0F,
+                itemCount = { items.size },
+            )
+        }
+        HorizontalUncontainedCarousel(
+            state = state,
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(top = 14.dp, bottom = 14.dp),
+            itemWidth = itemWidth,
+            itemSpacing = 8.dp,
+            contentPadding = PaddingValues(horizontal = 10.dp)
+        ) { i ->
+            val entry = items.getOrNull(i) ?: return@HorizontalUncontainedCarousel
+            NativeWatchfaceCard(
+                entry,
+                navBarNav,
+                runningApp == entry.uuid,
+                topBarParams,
+            )
+        }
     }
 }
 

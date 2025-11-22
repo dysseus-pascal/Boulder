@@ -631,14 +631,15 @@ fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
 fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platform): Boolean {
     if (platform == Platform.IOS && !ios.supported) return false
     if (platform == Platform.Android && !android.supported) return false
-    return when (watchType) {
-        WatchType.APLITE -> aplite.supported
-        WatchType.BASALT -> basalt.supported
-        WatchType.CHALK -> chalk.supported
-        WatchType.DIORITE -> diorite.supported
-        WatchType.EMERY -> emery.supported
-        WatchType.FLINT -> flint?.supported == true
+    val appVariants = buildSet {
+        if (aplite.supported) add(WatchType.APLITE)
+        if (basalt.supported) add(WatchType.BASALT)
+        if (chalk.supported) add(WatchType.CHALK)
+        if (diorite.supported) add(WatchType.DIORITE)
+        if (emery.supported) add(WatchType.EMERY)
+        if (flint?.supported == true) add(WatchType.FLINT)
     }
+    return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
 }
 
 fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform): CommonApp? {

@@ -5,6 +5,8 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.heartbeatWatchConnectGoalName
 import coredevices.analytics.heartbeatWatchConnectedName
 import coredevices.coreapp.util.AppUpdate
+import coredevices.database.AppstoreSource
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
@@ -27,6 +29,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.joinAll
@@ -43,13 +46,30 @@ class PebbleAppDelegate(
     private val appUpdate: AppUpdate,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
+    private val appstoreSourceDao: AppstoreSourceDao
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
+
+    private suspend fun initAppstoreSourcesDB() {
+        val needsInit = appstoreSourceDao.getAllSources().first().isEmpty()
+        if (needsInit) {
+            logger.d { "Initializing appstore sources database" }
+            appstoreSourceDao.insertSource(
+                AppstoreSource(
+                    url = "https://appstore-api.repebble.com/api",
+                    title = "Core Devices"
+                )
+            )
+        } else {
+            logger.d { "Appstore sources database already initialized" }
+        }
+    }
 
     fun init() {
         logger.d { "init()" }
         permissionsRequester.init()
         GlobalScope.launch {
+            initAppstoreSourcesDB()
             // Don't initialize everything if the user just started the app for the first time and
             // hasn't gone through onboarding yet - it would create permission prompts on ios (we
             // want to control when those are shown).

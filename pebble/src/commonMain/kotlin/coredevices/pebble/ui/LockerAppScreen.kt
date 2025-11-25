@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.RealPebbleWebServices
@@ -76,18 +77,18 @@ class LockerAppViewModel(
     var storeEntry by mutableStateOf<CommonApp?>(null)
     var addedToLocker by mutableStateOf(false)
 
-    fun loadAppFromStore(id: String, watchType: WatchType) {
+    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource) {
         viewModelScope.launch {
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType)
+            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
             if (result != null) {
-                storeEntry = result.data.firstOrNull()?.asCommonApp(watchType, platform)
+                storeEntry = result.data.firstOrNull()?.asCommonApp(watchType, platform, source)
             }
         }
     }
 }
 
 @Composable
-fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?) {
+fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?, storeSource: AppstoreSource?) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
@@ -116,9 +117,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
             lockerEntry?.asCommonApp(watchType) ?: viewModel.storeEntry
         }
 
-        if (storeId != null) {
+        if (storeId != null && storeSource != null) {
             LaunchedEffect(Unit) {
-                viewModel.loadAppFromStore(storeId, watchType)
+                viewModel.loadAppFromStore(storeId, watchType, storeSource)
             }
         }
 

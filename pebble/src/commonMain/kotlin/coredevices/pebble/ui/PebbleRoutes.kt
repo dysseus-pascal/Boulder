@@ -11,8 +11,10 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import coredevices.database.AppstoreSource
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
 
 /**
@@ -36,6 +38,9 @@ object PebbleRoutes {
         val title: String,
         val url: String
     ) : CoreRoute
+
+    @Serializable
+    data object AppstoreSettingsRoute : CoreRoute
 }
 
 @Stable
@@ -70,6 +75,7 @@ object PebbleNavBarRoutes {
     data class LockerAppRoute(
         val uuid: String,
         val storedId: String?,
+        val storeSource: String?,
     ) : NavBarRoute
 
     @Serializable
@@ -166,7 +172,13 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.LockerAppRoute>(viewModel) {
         val route: PebbleNavBarRoutes.LockerAppRoute = it.toRoute()
-        LockerAppScreen(topBarParams, Uuid.parse(route.uuid), nav, route.storedId)
+        LockerAppScreen(
+            topBarParams,
+            Uuid.parse(route.uuid),
+            nav,
+            route.storedId,
+            route.storeSource?.let { Json.decodeFromString<AppstoreSource>(route.storeSource) }
+        )
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
@@ -219,5 +231,8 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, experimentalRoute: CoreRou
             title = route.title,
             url = route.url,
         )
+    }
+    composable<PebbleRoutes.AppstoreSettingsRoute> {
+        AppstoreSettingsScreen(coreNav)
     }
 }

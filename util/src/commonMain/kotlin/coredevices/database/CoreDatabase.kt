@@ -1,6 +1,7 @@
 package coredevices.database
 
 import PlatformContext
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -14,15 +15,18 @@ internal const val CORE_DATABASE_FILENAME = "coreapp.db"
 @Database(
     entities = [
         HeartbeatStateEntity::class,
+        AppstoreSource::class,
     ],
-    version = 1,
+    version = 2,
     autoMigrations = [
+        AutoMigration(from = 1, to = 2)
     ],
     exportSchema = true,
 )
 @ConstructedBy(CoreDatabaseConstructor::class)
 abstract class CoreDatabase : RoomDatabase() {
     abstract fun analyticsDao(): HeartbeatStateDao
+    abstract fun appstoreSourceDao(): AppstoreSourceDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

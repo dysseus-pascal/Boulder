@@ -456,6 +456,11 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsActionItem(
+                    title = "Configure Appstore Sources",
+                    section = Section.Default,
+                    action = { navBarNav.navigateTo(PebbleRoutes.AppstoreSettingsRoute) },
+                ),
+                basicSettingsActionItem(
                     title = "Experimental Feed",
                     section = Section.Default,
                     action = { navBarNav.navigateTo(experimentalRoute!!) },

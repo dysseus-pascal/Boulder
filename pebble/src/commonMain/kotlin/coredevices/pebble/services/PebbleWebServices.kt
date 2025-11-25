@@ -5,6 +5,8 @@ import com.algolia.client.api.SearchClient
 import com.algolia.client.exception.AlgoliaApiException
 import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
+import coredevices.database.AppstoreSource
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
@@ -35,6 +37,7 @@ import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.web.LockerEntryCompanions
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerModel
+import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -166,6 +169,7 @@ class RealPebbleWebServices(
     private val memfault: Memfault,
     private val platform: Platform,
     private val searchClient: SearchClient,
+    private val appstoreSourceDao: AppstoreSourceDao
 ) : WebServices {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -212,6 +216,10 @@ class RealPebbleWebServices(
         }
     }
 
+    private suspend fun getAllSources(): List<AppstoreSource> {
+        return appstoreSourceDao.getAllSources().first()
+    }
+
     override suspend fun fetchLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
     override suspend fun removeFromLocker(id: Uuid): Boolean =
@@ -229,7 +237,7 @@ class RealPebbleWebServices(
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType): AppStoreHome? {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType): List<Pair<AppstoreSource, AppStoreHome?>> {
         val typeString = type.storeString()
         val parameters = mapOf(
             "platform" to platform.storeString(),
@@ -237,14 +245,16 @@ class RealPebbleWebServices(
 //            "firmware_version" to "",
             "filter_hardware" to "true",
         )
-        return httpClient.get(
-            url = "https://appstore-api.rebble.io/api/v1/home/$typeString",
-            auth = false,
-            parameters = parameters,
-        )
+        return getAllSources().map {
+            it to httpClient.get<AppStoreHome>(
+                url = "${it.url}/v1/home/$typeString",
+                auth = false,
+                parameters = parameters,
+            )
+        }
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType): StoreAppResponse? {
+    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType, sourceUrl: String): StoreAppResponse? {
         val parameters = mapOf(
             "platform" to platform.storeString(),
             "hardware" to hardwarePlatform.codename,
@@ -252,7 +262,7 @@ class RealPebbleWebServices(
 //            "filter_hardware" to "true",
         )
         return httpClient.get(
-            url = "https://appstore-api.rebble.io/api/v1/apps/id/$id",
+            url = "$sourceUrl/v1/apps/id/$id",
             auth = false,
             parameters = parameters,
         )
@@ -265,6 +275,7 @@ class RealPebbleWebServices(
 
     suspend fun searchAppStore(search: String, type: AppType?): List<StoreSearchResult> {
 //        val params = SearchMethodParams()
+        //TODO: Use sources
         return try {
             searchClient.searchSingleIndex(
                 indexName = "rebble-appstore-production",

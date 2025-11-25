@@ -78,6 +78,7 @@ import coil3.compose.AsyncImage
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.faces
+import coredevices.database.AppstoreSource
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.account.PebbleAccount
@@ -109,6 +110,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.io.files.SystemFileSystem
+import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -130,14 +132,14 @@ private val logger = Logger.withTag("LockerScreen")
 class LockerViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
 ) : ViewModel() {
-    val storeHome = mutableStateOf<AppStoreHome?>(null)
+    val storeHome = mutableStateOf<List<Pair<AppstoreSource, AppStoreHome?>>>(emptyList())
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
 
     fun refreshStore(type: AppType, platform: WatchType): Deferred<Unit> {
         val finished = CompletableDeferred<Unit>()
         viewModelScope.launch {
             val result = pebbleWebServices.fetchAppStoreHome(type, platform)
-            if (result != null) {
+            if (!result.all { it.second == null }) {
                 storeHome.value = result
             }
             finished.complete(Unit)
@@ -149,7 +151,7 @@ class LockerViewModel(
         viewModelScope.launch {
             val result = pebbleWebServices.searchAppStore(search, appType)
             storeSearchResults.value = result.mapNotNull {
-                it.asCommonApp(watchType, platform)
+                it.asCommonApp(watchType, platform, AppstoreSource(0, "https://appstore-api.rebble.io/api", "")) //TODO: Search source support
             }.filter {
                 it.isCompatible && it.type == appType
             }
@@ -305,7 +307,7 @@ fun LockerScreen(
             },
         ) {
             var itemWidth by remember { mutableStateOf(0.dp) } // need to keep this even if we return from search to reduce jank
-            if (topBarParams.searchState.query.isNotEmpty()) {
+            if (topBarParams.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
                 val results by viewModel.storeSearchResults.combine(lockerQuery) { store, locker ->
                     val lockerApps = locker.map { it.asCommonApp(watchType) }
                     if (coreConfig.useNativeAppStore) {
@@ -405,34 +407,43 @@ fun LockerScreen(
 
                             item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Recent", notOnWatch) }
 
-                            val storeHome by viewModel.storeHome
-                            val home = storeHome
+                            val storeHomes by viewModel.storeHome
                             // TODO categories
 //                            logger.v { "home.collections (has home = ${home != null}): ${home?.collections}" }
-                            home?.collections?.forEach { collection ->
-                                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
-                                    logger.v { "collection: $collection" }
-                                    val collectionApps =
-                                        remember(
-                                            home,
-                                            collection,
-                                            watchType,
-                                            filteredLockerEntries
-                                        ) {
-                                            collection.applicationIds.mapNotNull { appId ->
-                                                home.applications.find { app ->
-                                                    app.id == appId && !filteredLockerEntries.any {
-                                                        it.properties.id == Uuid.parse(
-                                                            app.uuid
-                                                        )
-                                                    }
-                                                }?.asCommonApp(watchType, platform)
-                                            }
+                            storeHomes.forEach { (source, home) ->
+                                home?.let {
+                                    if (storeHomes.size > 1) {
+                                        item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                            Text(source.title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium)
                                         }
+                                    }
+                                    home.collections.forEach { collection ->
+                                        item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                            logger.v { "collection: $collection" }
+                                            val collectionApps =
+                                                remember(
+                                                    home,
+                                                    collection,
+                                                    watchType,
+                                                    filteredLockerEntries
+                                                ) {
+                                                    collection.applicationIds.mapNotNull { appId ->
+                                                        home.applications.find { app ->
+                                                            app.id == appId && !filteredLockerEntries.any {
+                                                                it.properties.id == Uuid.parse(
+                                                                    app.uuid
+                                                                )
+                                                            }
+                                                        }?.asCommonApp(watchType, platform, source)
+                                                    }
+                                                }
 //                                logger.v { "collectionApps: $collectionApps" }
-                                    Carousel(collection.name, collectionApps)
+                                            Carousel(collection.name, collectionApps)
+                                        }
+                                    }
                                 }
                             }
+
                             item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Not Compatible", notCompatible) }
                         }
                     } else {
@@ -773,7 +784,7 @@ fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platfo
     return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
 }
 
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform): CommonApp? {
+fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -784,7 +795,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform): Comm
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = companions.android?.asCompanionApp(),
-        commonAppType = CommonAppType.Store(storedId = id),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source),
         type = appType,
         category = category,
         version = latestRelease.version,
@@ -797,7 +808,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform): Comm
     )
 }
 
-fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform): CommonApp? {
+fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -808,7 +819,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform): Com
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storedId = id),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source),
         type = appType,
         category = category,
         version = null,
@@ -861,6 +872,7 @@ sealed class CommonAppType {
 
     data class Store(
         val storedId: String,
+        val storeSource: AppstoreSource
     ) : CommonAppType()//, CommonAppTypeFromStore
 
     data class System(
@@ -883,6 +895,7 @@ fun NativeWatchfaceCard(
                     PebbleNavBarRoutes.LockerAppRoute(
                         uuid = entry.uuid.toString(),
                         storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
+                        storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
                     )
                 )
             }.border(
@@ -972,6 +985,7 @@ private fun LegacyWatchfaceCard(
                     PebbleNavBarRoutes.LockerAppRoute(
                         uuid = entry.uuid.toString(),
                         storedId = null,
+                        storeSource = null
                     )
                 )
             }.border(
@@ -1049,6 +1063,7 @@ fun NativeWatchfaceListItem(
                     PebbleNavBarRoutes.LockerAppRoute(
                         uuid = entry.uuid.toString(),
                         storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
+                        storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
                     )
                 )
             }

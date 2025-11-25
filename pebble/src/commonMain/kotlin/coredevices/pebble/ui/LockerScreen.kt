@@ -655,6 +655,7 @@ val testApps = listOf(
         isCompatible = true,
         hearts = 42,
         description = "A sample watchface for preview purposes.",
+        isNativelyCompatible = true
     ),
     CommonApp(
         title = "Another Watchface",
@@ -675,6 +676,7 @@ val testApps = listOf(
         isCompatible = true,
         hearts = 7,
         description = "Another sample watchface for preview purposes.",
+        isNativelyCompatible = true
     ),
     CommonApp(
         title = "Third Watchface",
@@ -695,6 +697,7 @@ val testApps = listOf(
         isCompatible = false,
         hearts = 15,
         description = "Yet another sample watchface for preview purposes.",
+        isNativelyCompatible = true
     )
 )
 

@@ -263,7 +263,7 @@ class RealPebbleWebServices(
         return httpClient.getWithWeatherAuth(url)
     }
 
-    suspend fun searchAppStore(search: String, type: AppType): List<StoreSearchResult> {
+    suspend fun searchAppStore(search: String, type: AppType?): List<StoreSearchResult> {
 //        val params = SearchMethodParams()
         return try {
             searchClient.searchSingleIndex(
@@ -271,7 +271,7 @@ class RealPebbleWebServices(
 //                searchParams = SearchParams.of(SearchParamsString(search)),
                 searchParams = SearchParamsObject(
                     query = search,
-                    tagFilters = TagFilters.of(type.code),
+                    tagFilters = type?.let { TagFilters.of(type.code) },
                 ),
             ).hits.mapNotNull {
                 it.additionalProperties?.let { props ->

@@ -7,20 +7,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -34,9 +35,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -56,9 +59,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -102,6 +104,8 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.io.files.SystemFileSystem
@@ -127,7 +131,7 @@ class LockerViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
 ) : ViewModel() {
     val storeHome = mutableStateOf<AppStoreHome?>(null)
-    val storeSearchResults = mutableStateOf<List<CommonApp>>(emptyList())
+    val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
 
     fun refreshStore(type: AppType, platform: WatchType): Deferred<Unit> {
         val finished = CompletableDeferred<Unit>()
@@ -141,7 +145,7 @@ class LockerViewModel(
         return finished
     }
 
-    fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType) {
+    fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType?) {
         viewModelScope.launch {
             val result = pebbleWebServices.searchAppStore(search, appType)
             storeSearchResults.value = result.mapNotNull {
@@ -204,6 +208,7 @@ fun LockerScreen(
             LockerTab.Watchfaces -> AppType.Watchface
             LockerTab.Apps -> AppType.Watchapp
         }
+        var searchType by remember { mutableStateOf<AppType?>(type) }
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
 
@@ -246,9 +251,9 @@ fun LockerScreen(
             )
         }
         if (coreConfig.useNativeAppStore) {
-            LaunchedEffect(topBarParams.searchState.query) {
+            LaunchedEffect(topBarParams.searchState.query, searchType) {
                 if (topBarParams.searchState.query.isNotEmpty()) {
-                    viewModel.searchStore(topBarParams.searchState.query, watchType, platform, type)
+                    viewModel.searchStore(topBarParams.searchState.query, watchType, platform, searchType)
                 }
             }
         }
@@ -299,78 +304,107 @@ fun LockerScreen(
                 }
             },
         ) {
-            PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = {
-                isRefreshing = true
-                logger.v { "set isRefreshing to true" }
-                val lockerFinished = libPebble.requestLockerSync()
-                val storeFinished = if (coreConfig.useNativeAppStore) {
-                    viewModel.refreshStore(type, watchType)
-                } else {
-                    CompletableDeferred(Unit)
+            var itemWidth by remember { mutableStateOf(0.dp) } // need to keep this even if we return from search to reduce jank
+            if (topBarParams.searchState.query.isNotEmpty()) {
+                val results by viewModel.storeSearchResults.combine(lockerQuery) { store, locker ->
+                    val lockerApps = locker.map { it.asCommonApp(watchType) }
+                    if (coreConfig.useNativeAppStore) {
+                        lockerApps.filter {
+                            it.type == searchType
+                        } + store.filter { a ->
+                            !lockerApps.any { b -> a.uuid == b.uuid }
+                        }
+                    } else {
+                        lockerApps
+                    }
+                }.collectAsState(initial = emptyList())
+
+                Column {
+                    Row {
+                        FilterChip(
+                            selected = searchType == null,
+                            onClick = { searchType = null },
+                            label = { Text("All") },
+                            modifier = Modifier.padding(4.dp),
+                        )
+                        FilterChip(
+                            selected = searchType == AppType.Watchapp,
+                            onClick = { searchType = AppType.Watchapp },
+                            label = { Text("Apps") },
+                            modifier = Modifier.padding(4.dp),
+                        )
+                        FilterChip(
+                            selected = searchType == AppType.Watchface,
+                            onClick = { searchType = AppType.Watchface },
+                            label = { Text("Faces") },
+                            modifier = Modifier.padding(4.dp),
+                        )
+                    }
+                    SearchResultsList(
+                        results = results,
+                        navBarNav = navBarNav,
+                        topBarParams = topBarParams,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                scope.launch {
-                    awaitAll(lockerFinished, storeFinished)
-                    logger.v { "set isRefreshing to false" }
-                    isRefreshing = false
-                }
-            }) {
-                if (coreConfig.useNativeAppStore) {
-                    var itemWidth by remember { mutableStateOf(0.dp) }
-                    val density = LocalDensity.current
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 132.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged { (width, height) ->
-                                itemWidth = with(density) {
-                                    (width.toDp() / 3).coerceAtMost(132.dp) - 14.dp
+            } else {
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = {
+                    isRefreshing = true
+                    logger.v { "set isRefreshing to true" }
+                    val lockerFinished = libPebble.requestLockerSync()
+                    val storeFinished = if (coreConfig.useNativeAppStore) {
+                        viewModel.refreshStore(type, watchType)
+                    } else {
+                        CompletableDeferred(Unit)
+                    }
+                    scope.launch {
+                        awaitAll(lockerFinished, storeFinished)
+                        logger.v { "set isRefreshing to false" }
+                        isRefreshing = false
+                    }
+                }) {
+                    if (coreConfig.useNativeAppStore) {
+                        val density = LocalDensity.current
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 132.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged { (width, height) ->
+                                    itemWidth = with(density) {
+                                        (width.toDp() / 3).coerceAtMost(132.dp) - 14.dp
+                                    }
+                                }
+                        ) {
+                            if (loggedIn == null) {
+                                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                    PebbleElevatedButton(
+                                        text = "Login to Rebble to see App Store and Locker",
+                                        onClick = {
+                                            uriHandler.openUri(REBBLE_LOGIN_URI)
+                                        },
+                                        primaryColor = true,
+                                        modifier = Modifier.padding(5.dp).align(Alignment.Center),
+                                    )
                                 }
                             }
-                    ) {
-                        if (loggedIn == null) {
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) {
-                                PebbleElevatedButton(
-                                    text = "Login to Rebble to see App Store and Locker",
-                                    onClick = {
-                                        uriHandler.openUri(REBBLE_LOGIN_URI)
-                                    },
-                                    primaryColor = true,
-                                    modifier = Modifier.padding(5.dp).align(Alignment.Center),
+                            @Composable
+                            fun Carousel(
+                                title: String,
+                                items: List<CommonApp>,
+                            ) {
+                                AppCarousel(
+                                    title = title,
+                                    items = items,
+                                    navBarNav = navBarNav,
+                                    runningApp = runningApp,
+                                    topBarParams = topBarParams,
+                                    itemWidth = itemWidth
                                 )
                             }
-                        }
-                        @Composable
-                        fun Carousel(
-                            title: String,
-                            items: List<CommonApp>,
-                        ) {
-                            AppCarousel(
-                                title = title,
-                                items = items,
-                                navBarNav = navBarNav,
-                                runningApp = runningApp,
-                                topBarParams = topBarParams,
-                                itemWidth = itemWidth
-                            )
-                        }
-                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("On My Watch", onWatch) }
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("On My Watch", onWatch) }
 
-                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Recent", notOnWatch) }
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Recent", notOnWatch) }
 
-                        if (topBarParams.searchState.query.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { SectionHeader("Search Results") }
-                            items(
-                                items = viewModel.storeSearchResults.value,
-                                key = { it.uuid }
-                            ) { entry ->
-                                NativeWatchfaceCard(
-                                    entry,
-                                    navBarNav,
-                                    runningApp == entry.uuid,
-                                    topBarParams,
-                                )
-                            }
-                        } else {
                             val storeHome by viewModel.storeHome
                             val home = storeHome
                             // TODO categories
@@ -399,74 +433,138 @@ fun LockerScreen(
                                     Carousel(collection.name, collectionApps)
                                 }
                             }
+                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Not Compatible", notCompatible) }
                         }
-                        item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Not Compatible", notCompatible) }
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(4.dp),
-                    ) {
-                        if (loggedIn == null) {
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) {
-                                PebbleElevatedButton(
-                                    text = "Login to Rebble to see App Store and Locker",
-                                    onClick = {
-                                        uriHandler.openUri(REBBLE_LOGIN_URI)
-                                    },
-                                    primaryColor = true,
-                                    modifier = Modifier.padding(5.dp).align(Alignment.Center),
-                                )
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(4.dp),
+                        ) {
+                            if (loggedIn == null) {
+                                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                    PebbleElevatedButton(
+                                        text = "Login to Rebble to see App Store and Locker",
+                                        onClick = {
+                                            uriHandler.openUri(REBBLE_LOGIN_URI)
+                                        },
+                                        primaryColor = true,
+                                        modifier = Modifier.padding(5.dp).align(Alignment.Center),
+                                    )
+                                }
                             }
-                        }
-                        val watchName = lastConnectedWatch?.displayName() ?: ""
-                        if (onWatch.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("On Watch $watchName") }
-                            items(
-                                items = onWatch,
-                                key = { it.uuid }
-                            ) { entry ->
-                                LegacyWatchfaceCard(
-                                    entry,
-                                    navBarNav,
-                                    runningApp == entry.uuid,
-                                    topBarParams,
-                                )
+                            val watchName = lastConnectedWatch?.displayName() ?: ""
+                            if (onWatch.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("On Watch $watchName") }
+                                items(
+                                    items = onWatch,
+                                    key = { it.uuid }
+                                ) { entry ->
+                                    LegacyWatchfaceCard(
+                                        entry,
+                                        navBarNav,
+                                        runningApp == entry.uuid,
+                                        topBarParams,
+                                    )
+                                }
                             }
-                        }
-                        if (notOnWatch.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not On Watch $watchName") }
-                            items(
-                                items = notOnWatch,
-                                key = { it.uuid }
-                            ) { entry ->
-                                LegacyWatchfaceCard(
-                                    entry,
-                                    navBarNav,
-                                    runningApp == entry.uuid,
-                                    topBarParams,
-                                )
+                            if (notOnWatch.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not On Watch $watchName") }
+                                items(
+                                    items = notOnWatch,
+                                    key = { it.uuid }
+                                ) { entry ->
+                                    LegacyWatchfaceCard(
+                                        entry,
+                                        navBarNav,
+                                        runningApp == entry.uuid,
+                                        topBarParams,
+                                    )
+                                }
                             }
-                        }
-                        if (notCompatible.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not Compatible with $watchName") }
-                            items(
-                                items = notCompatible,
-                                key = { it.uuid }
-                            ) { entry ->
-                                LegacyWatchfaceCard(
-                                    entry,
-                                    navBarNav,
-                                    runningApp == entry.uuid,
-                                    topBarParams,
-                                )
+                            if (notCompatible.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Not Compatible with $watchName") }
+                                items(
+                                    items = notCompatible,
+                                    key = { it.uuid }
+                                ) { entry ->
+                                    LegacyWatchfaceCard(
+                                        entry,
+                                        navBarNav,
+                                        runningApp == entry.uuid,
+                                        topBarParams,
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+
         }
+    }
+}
+
+@Composable
+fun SearchResultsList(
+    results: List<CommonApp>,
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+    modifier: Modifier = Modifier,
+) {
+    val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
+    val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker }
+    LazyColumn(modifier) {
+        if (lockerApps.isNotEmpty()) {
+            items(
+                items = lockerApps,
+                key = { it.uuid }
+            ) { entry ->
+                NativeWatchfaceListItem(
+                    entry,
+                    navBarNav,
+                    topBarParams,
+                )
+            }
+        }
+        if (storeApps.isNotEmpty()) {
+            item {
+                Text(
+                    "From the store",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+            items(
+                items = storeApps,
+                key = { it.uuid }
+            ) { entry ->
+                NativeWatchfaceListItem(
+                    entry,
+                    navBarNav,
+                    topBarParams,
+                )
+            }
+        }
+    }
+}
+
+fun LazyGridScope.nativeAppsGrid(
+    apps: List<CommonApp>,
+    navBarNav: NavBarNav,
+    runningApp: Uuid?,
+    topBarParams: TopBarParams,
+) {
+    items(
+        items = apps,
+        key = { it.uuid }
+    ) { entry ->
+        NativeWatchfaceCard(
+            entry,
+            navBarNav,
+            runningApp == entry.uuid,
+            topBarParams,
+        )
     }
 }
 
@@ -526,6 +624,69 @@ fun LockerScreenPreviewWrapper(tab: LockerTab) {
     }
 }
 
+val testApps = listOf(
+    CommonApp(
+        title = "Sample Watchface",
+        developerName = "Dev Name",
+        uuid = Uuid.parse("123e4567-e89b-12d3-a456-426614174000"),
+        androidCompanion = null,
+        commonAppType = CommonAppType.Locker(
+            sideloaded = false,
+            configurable = true,
+            sync = true,
+            order = 0,
+        ),
+        type = AppType.Watchface,
+        category = "Fun",
+        version = "1.0",
+        listImageUrl = null,
+        screenshotImageUrl = null,
+        isCompatible = true,
+        hearts = 42,
+        description = "A sample watchface for preview purposes.",
+    ),
+    CommonApp(
+        title = "Another Watchface",
+        developerName = "Another Dev",
+        uuid = Uuid.parse("223e4567-e89b-12d3-a456-426614174000"),
+        androidCompanion = null,
+        commonAppType = CommonAppType.Locker(
+            sideloaded = true,
+            configurable = false,
+            sync = false,
+            order = 1,
+        ),
+        type = AppType.Watchface,
+        category = "Utility",
+        version = "2.1",
+        listImageUrl = null,
+        screenshotImageUrl = null,
+        isCompatible = true,
+        hearts = 7,
+        description = "Another sample watchface for preview purposes.",
+    ),
+    CommonApp(
+        title = "Third Watchface",
+        developerName = "Third Dev",
+        uuid = Uuid.parse("323e4567-e89b-12d3-a456-426614174000"),
+        androidCompanion = null,
+        commonAppType = CommonAppType.Locker(
+            sideloaded = false,
+            configurable = true,
+            sync = true,
+            order = 2,
+        ),
+        type = AppType.Watchface,
+        category = "Sport",
+        version = "3.3",
+        listImageUrl = null,
+        screenshotImageUrl = null,
+        isCompatible = false,
+        hearts = 15,
+        description = "Yet another sample watchface for preview purposes.",
+    )
+)
+
 @Preview
 @Composable
 fun LockerCarouselPreview() {
@@ -533,68 +694,7 @@ fun LockerCarouselPreview() {
         Column(modifier = Modifier.width(700.dp).verticalScroll(rememberScrollState())) {
             AppCarousel(
                 title = "On My Watch",
-                items = listOf(
-                    CommonApp(
-                        title = "Sample Watchface",
-                        developerName = "Dev Name",
-                        uuid = Uuid.parse("123e4567-e89b-12d3-a456-426614174000"),
-                        androidCompanion = null,
-                        commonAppType = CommonAppType.Locker(
-                            sideloaded = false,
-                            configurable = true,
-                            sync = true,
-                            order = 0,
-                        ),
-                        type = AppType.Watchface,
-                        category = "Fun",
-                        version = "1.0",
-                        listImageUrl = null,
-                        screenshotImageUrl = null,
-                        isCompatible = true,
-                        hearts = 42,
-                        description = "A sample watchface for preview purposes.",
-                    ),
-                    CommonApp(
-                        title = "Another Watchface",
-                        developerName = "Another Dev",
-                        uuid = Uuid.parse("223e4567-e89b-12d3-a456-426614174000"),
-                        androidCompanion = null,
-                        commonAppType = CommonAppType.Locker(
-                            sideloaded = true,
-                            configurable = false,
-                            sync = false,
-                            order = 1,
-                        ),
-                        type = AppType.Watchface,
-                        category = "Utility",
-                        version = "2.1",
-                        listImageUrl = null,
-                        screenshotImageUrl = null,
-                        isCompatible = true,
-                        hearts = 7,
-                        description = "Another sample watchface for preview purposes.",
-                    ),
-                    CommonApp(
-                        title = "Third Watchface",
-                        developerName = "Third Dev",
-                        uuid = Uuid.parse("323e4567-e89b-12d3-a456-426614174000"),
-                        androidCompanion = null,
-                        commonAppType = CommonAppType.Locker(
-                            sideloaded = false,
-                            configurable = true,
-                            sync = true,
-                            order = 2,
-                        ),
-                        type = AppType.Watchface,
-                        category = "Sport",
-                        version = "3.3",
-                        listImageUrl = null,
-                        screenshotImageUrl = null,
-                        isCompatible = false,
-                        hearts = 15,
-                        description = "Yet another sample watchface for preview purposes.",
-                    )
-                ),
+                items = testApps,
                 navBarNav = NoOpNavBarNav,
                 runningApp = null,
                 topBarParams = WrapperTopBarParams,
@@ -937,6 +1037,39 @@ private fun LegacyWatchfaceCard(
 }
 
 @Composable
+fun NativeWatchfaceListItem(
+    entry: CommonApp,
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+) {
+    ListItem(
+        modifier = Modifier
+            .clickable {
+                navBarNav.navigateTo(
+                    PebbleNavBarRoutes.LockerAppRoute(
+                        uuid = entry.uuid.toString(),
+                        storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
+                    )
+                )
+            }
+            .padding(vertical = 4.dp),
+        headlineContent = {
+            Text(entry.title, fontWeight = FontWeight.Bold)
+        },
+        supportingContent = {
+            Text(entry.developerName, color = Color.Gray)
+        },
+        leadingContent = {
+            AppImage(
+                entry,
+                modifier = Modifier.width(48.dp),
+                size = 48.dp,
+            )
+        },
+    )
+}
+
+@Composable
 private fun SectionHeader(text: String) {
     Text(
         text,
@@ -961,6 +1094,10 @@ fun LockerWrapper.isSynced(): Boolean = when (this) {
 
 @Composable
 fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
+    val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val placeholder = remember {
+        ColorPainter(placeholderColor)
+    }
     when (entry.commonAppType) {
         is CommonAppType.Locker, is CommonAppType.Store -> {
             val url = remember(entry) {
@@ -973,6 +1110,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 model = url,
                 contentDescription = null,
                 modifier = modifier.requiredHeight(size),
+                placeholder = placeholder,
             )
         }
 

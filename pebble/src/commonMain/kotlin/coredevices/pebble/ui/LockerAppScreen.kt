@@ -19,12 +19,17 @@ import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -41,6 +47,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.RealPebbleWebServices
@@ -73,19 +80,46 @@ private val logger = Logger.withTag("LockerAppScreen")
 class LockerAppViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
     private val platform: Platform,
+    private val appstoreSourceDao: AppstoreSourceDao,
 ) : ViewModel() {
-    var storeEntry by mutableStateOf<CommonApp?>(null)
+    var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
+    var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
 
     fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource) {
         viewModelScope.launch {
             val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
             if (result != null) {
-                storeEntry = result.data.firstOrNull()?.asCommonApp(watchType, platform, source)
+                storeEntries = result.data.firstOrNull()?.id?.let { getAppVariants(it, watchType) }
             }
+            selectedStoreEntry = result?.data?.firstOrNull()?.asCommonApp(watchType, platform, source)
         }
     }
+
+    private suspend fun getAppVariants(
+        id: String,
+        watchType: WatchType
+    ): List<AppVariant> {
+        val sources = appstoreSourceDao.getAllSources().first()
+        return sources.flatMap {
+            //TODO: Search by uuid instead of id to get all variants, id is source-specific except for OG apps
+            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, it.url)
+            result?.data?.map { appEntry ->
+                appEntry.asCommonApp(watchType, platform, it)?.let { app ->
+                    AppVariant(
+                        source = it,
+                        app = app
+                    )
+                }
+            } ?: emptyList()
+        }.filterNotNull().sortedBy { it.app.version ?: "0" }.reversed()
+    }
 }
+
+data class AppVariant(
+    val source: AppstoreSource,
+    val app: CommonApp,
+)
 
 @Composable
 fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?, storeSource: AppstoreSource?) {
@@ -113,8 +147,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
 
         val lockerEntryFlow = remember(uuid) { libPebble.getLockerApp(uuid) }
         val lockerEntry by lockerEntryFlow.collectAsState(null)
-        val entry = remember(lockerEntry, viewModel.storeEntry) {
-            lockerEntry?.asCommonApp(watchType) ?: viewModel.storeEntry
+        val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
+            lockerEntry?.asCommonApp(watchType) ?: viewModel.selectedStoreEntry
         }
 
         if (storeId != null && storeSource != null) {
@@ -277,21 +311,77 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                     )
                 }
                 if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
-                    PebbleElevatedButton(
-                        text = "Add To Locker",
-                        onClick = {
-                            // Global scope because it could take a second to download/sync/load app
-                            GlobalScope.launch {
-                                viewModel.addedToLocker = true
-                                webServices.addToLocker(entry.uuid.toString())
-                                libPebble.requestLockerSync()
+                    val hasUuidConflict = remember(viewModel.storeEntries) { // One store has multiple entries with same uuid
+                        viewModel.storeEntries?.let {
+                            it.distinctBy { it.source.url }.size < it.size
+                        } ?: false
+                    }
+                    var variantsExpanded by remember { mutableStateOf(false) }
+                    Row(Modifier.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PebbleElevatedButton(
+                            text = "Add To Locker",
+                            onClick = {
+                                // Global scope because it could take a second to download/sync/load app
+                                GlobalScope.launch {
+                                    viewModel.addedToLocker = true
+                                    webServices.addToLocker(entry.uuid.toString())
+                                    libPebble.requestLockerSync()
+                                }
+                            },
+                            icon = Icons.Default.Add,
+                            contentDescription = "Add To Locker",
+                            primaryColor = true,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        if (viewModel.storeEntries != null && (viewModel.storeEntries?.size ?: 1) > 1) {
+                            ExposedDropdownMenuBox(
+                                expanded = variantsExpanded,
+                                onExpandedChange = { variantsExpanded = it },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                val version = entry.version?.let { "v$it" } ?: "Unknown version"
+                                val textContent = if (hasUuidConflict) {
+                                    "${entry.commonAppType.storeSource.title}: ${entry.title} ($version)"
+                                } else {
+                                    "${entry.commonAppType.storeSource.title} ($version)"
+                                }
+                                TextField(
+                                    value = textContent,
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                            expanded = variantsExpanded
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = variantsExpanded,
+                                    onDismissRequest = { variantsExpanded = false }
+                                ) {
+                                    logger.d { "Showing ${viewModel.storeEntries!!.size} variants in dropdown" }
+                                    viewModel.storeEntries!!.forEach { variant ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                if (hasUuidConflict) {
+                                                    Text("${variant.source.title}: ${variant.app.title} (${variant.app.version?.let { "v$it" } ?: "Unknown version"})")
+                                                } else {
+                                                    Text("${variant.source.title} (${variant.app.version?.let { "v$it" } ?: "Unknown version"})")
+                                                }
+                                            },
+                                            onClick = {
+                                                viewModel.selectedStoreEntry = variant.app
+                                                variantsExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        icon = Icons.Default.Add,
-                        contentDescription = "Add To Locker",
-                        primaryColor = true,
-                        modifier = Modifier.padding(5.dp),
-                    )
+                        }
+                    }
                 }
 
                 Row {

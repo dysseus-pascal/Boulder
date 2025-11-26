@@ -28,9 +28,11 @@ abstract class PrivatePKJSInterface(
     protected val scope: CoroutineScope,
     private val outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
     private val logMessages: Channel<String>,
+    private val jsTokenUtil: JsTokenUtil,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
 ) {
     companion object {
-        private val logger = Logger.withTag(PrivatePKJSInterface::class.simpleName!!)
+        private val logger = Logger.withTag("PrivatePKJSInterface")
         private val sensitiveTerms = setOf(
             "token", "password", "secret", "key", "credentials",
             "auth", "bearer", "lat", "lon", "location"
@@ -77,6 +79,15 @@ abstract class PrivatePKJSInterface(
         logger.v { "logInterceptedSend" }
     }
 
+    open fun shouldIntercept(url: String): Boolean {
+        return remoteTimelineEmulator.shouldIntercept(url)
+    }
+
+    open fun onIntercepted(url: String, method: String, body: String): String {
+        val uuid = Uuid.parse(jsRunner.appInfo.uuid)
+        return runBlocking { remoteTimelineEmulator.onIntercepted(url, method, body, uuid) }
+    }
+
     open fun getVersionCode(): Int {
         logger.v { "getVersionCode" }
         TODO("Not yet implemented")
@@ -86,7 +97,12 @@ abstract class PrivatePKJSInterface(
         val uuid = Uuid.parse(jsRunner.appInfo.uuid)
         //TODO: Get token from locker or sandbox token if app is sideloaded
         scope.launch {
-            jsRunner.signalTimelineTokenFail(uuid.toString())
+            val token = jsTokenUtil.getTimelineToken(uuid)
+            if (token != null) {
+                jsRunner.signalTimelineToken(callId = uuid.toString(), token = token)
+            } else {
+                jsRunner.signalTimelineTokenFail(callId = uuid.toString())
+            }
         }
         return uuid.toString()
     }
@@ -193,5 +209,15 @@ abstract class PrivatePKJSInterface(
     open fun privateFnConfirmReadySignal(success: Boolean) {
         logger.v { "privateFnConfirmReadySignal($success)" }
         jsRunner.onReadyConfirmed(success)
+    }
+
+    open fun insertTimelinePin(pinJson: String) {
+        val uuid = Uuid.parse(jsRunner.appInfo.uuid)
+        runBlocking { remoteTimelineEmulator.insertPin(pinJson = pinJson, appUuid = uuid) }
+    }
+
+    open fun deleteTimelinePin(id: String) {
+        val uuid = Uuid.parse(jsRunner.appInfo.uuid)
+        runBlocking { remoteTimelineEmulator.deletePin(appUuid = uuid, pinIdentifier = id) }
     }
 }

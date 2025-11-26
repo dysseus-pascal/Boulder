@@ -39,7 +39,6 @@ class JavascriptCoreJsRunner(
     private val appContext: AppContext,
     private val libPebble: LibPebble,
     private val jsTokenUtil: JsTokenUtil,
-
     device: CompanionAppDevice,
     private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
@@ -47,6 +46,7 @@ class JavascriptCoreJsRunner(
     jsPath: Path,
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
@@ -66,10 +66,10 @@ class JavascriptCoreJsRunner(
         fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, ::eval),
+            XMLHTTPRequestManager(interfacesScope, ::eval, remoteTimelineEmulator, appInfo),
             JSTimeout(interfacesScope, ::evalRaw),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )

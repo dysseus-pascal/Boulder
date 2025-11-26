@@ -48,16 +48,15 @@ class WebViewJsRunner(
     appContext: AppContext,
     private val libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
-
     device: CompanionAppDevice,
     private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
     lockerEntry: LockerEntry,
     jsPath: Path,
     urlOpenRequests: Channel<String>,
-    private val logMessages: Channel<String>,
-
-    ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
+    logMessages: Channel<String>,
+    remoteTimelineEmulator: RemoteTimelineEmulator,
+): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
         const val API_NAMESPACE = "Pebble"
@@ -68,8 +67,8 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private val initializedLock = Object()
-    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil, remoteTimelineEmulator)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(

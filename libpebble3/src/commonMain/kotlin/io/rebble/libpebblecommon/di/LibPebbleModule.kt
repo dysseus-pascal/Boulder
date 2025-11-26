@@ -100,6 +100,7 @@ import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
+import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
@@ -328,6 +329,7 @@ fun initKoin(
                 singleOf(::Locker)
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
+                singleOf(::RemoteTimelineEmulator)
                 singleOf(::WebSyncManager) bind RequestSync::class
                 singleOf(::TimelineApi) bind Timeline::class
                 single { WebSyncManagerProvider { get() } }

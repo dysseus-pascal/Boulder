@@ -118,6 +118,7 @@ enum class Section(val title: String) {
     Support("Support"),
     Default("Settings"),
     Health("Health"),
+    Apps("Apps"),
     Weather("Weather"),
     Notifications("Notifications"),
     Watch("Watch"),
@@ -946,7 +947,22 @@ please disable the option.""".trimIndent(),
                         }
                     },
                     show = { user != null },
-                )
+                ),
+                basicSettingsToggleItem(
+                    title = "Emulate Timeline Webservice",
+                    description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",
+                    section = Section.Apps,
+                    checked = libPebbleConfig.watchConfig.emulateRemoteTimeline,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    emulateRemoteTimeline = it
+                                )
+                            )
+                        )
+                    },
+                ),
             )
         }
         val filteredItems by remember(settingsItems, topBarParams.searchState.query, user) {

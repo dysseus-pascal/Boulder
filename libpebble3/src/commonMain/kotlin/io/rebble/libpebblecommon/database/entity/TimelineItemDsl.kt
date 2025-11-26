@@ -103,7 +103,15 @@ class AttributesListBuilder internal constructor() {
     }
 
     fun primaryColor(block: () -> PebbleColor) {
-        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.PrimaryColor, block()))
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.ForegroundColor, block()))
+    }
+
+    fun secondaryColor(block: () -> PebbleColor) {
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.SecondaryColor, block()))
+    }
+
+    fun backgroundColor(block: () -> PebbleColor) {
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.BackgroundColor, block()))
     }
 
     fun lastUpdated(block: () -> Instant) {

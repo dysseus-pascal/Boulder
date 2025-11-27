@@ -72,6 +72,24 @@ fun CalendarScreen(coreNav: CoreNav) {
                         }
                     )
                 }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(15.dp),
+                ) {
+                    Text("Show Declined Events")
+                    Checkbox(
+                        checked = config.watchConfig.calendarShowDeclinedEvents,
+                        onCheckedChange = {
+                            libPebble.updateConfig(
+                                config.copy(
+                                    watchConfig = config.watchConfig.copy(
+                                        calendarShowDeclinedEvents = it
+                                    )
+                                )
+                            )
+                        }
+                    )
+                }
                 LazyColumn(modifier = Modifier.padding(8.dp)) {
                     val groupedCalendars = calendars.groupBy { it.ownerName }
                     groupedCalendars.forEach { (ownerName, calendarList) ->

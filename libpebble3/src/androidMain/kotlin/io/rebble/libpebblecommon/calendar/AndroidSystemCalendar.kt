@@ -402,8 +402,7 @@ class AndroidSystemCalendar(
         val result = contentResolver.query(
             builtUri, instanceProjection,
             "${CalendarContract.Instances.CALENDAR_ID} = ?"
-                    + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED
-                    + " AND IFNULL(" + CalendarContract.Instances.SELF_ATTENDEE_STATUS + ", " + CalendarContract.Attendees.ATTENDEE_STATUS_NONE + ") != " + CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED,
+                    + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED,
             arrayOf(calendar.platformId), "BEGIN ASC"
         )?.use { cursor ->
             logger.d("Found ${cursor.count} events for calendar ${calendar.name.obfuscate(privateLogger)}")

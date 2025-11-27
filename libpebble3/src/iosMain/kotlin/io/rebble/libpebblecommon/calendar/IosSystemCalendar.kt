@@ -31,10 +31,10 @@ import platform.EventKit.EKEventStatusTentative
 import platform.EventKit.EKEventStore
 import platform.EventKit.EKEventStoreChangedNotification
 import platform.EventKit.EKParticipant
-import platform.EventKit.EKParticipantStatusAccepted
-import platform.EventKit.EKParticipantStatusDeclined
-import platform.EventKit.EKParticipantStatusPending
-import platform.EventKit.EKParticipantStatusTentative
+import platform.EventKit.EKParticipantStatus.EKParticipantStatusAccepted
+import platform.EventKit.EKParticipantStatus.EKParticipantStatusDeclined
+import platform.EventKit.EKParticipantStatus.EKParticipantStatusPending
+import platform.EventKit.EKParticipantStatus.EKParticipantStatusTentative
 import platform.Foundation.NSError
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
@@ -195,7 +195,7 @@ fun EKParticipant.asAttendee(): EventAttendee {
         email = null,
         role = null, // TODO
         isOrganizer = false, // TODO
-        isCurrentUser = isCurrentUser,
+        isCurrentUser = isCurrentUser(),
         attendanceStatus = status,
     )
 }

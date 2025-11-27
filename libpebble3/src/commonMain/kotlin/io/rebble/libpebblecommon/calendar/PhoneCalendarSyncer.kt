@@ -114,6 +114,10 @@ class PhoneCalendarSyncer(
                 return@flatMap emptyList()
             }
             val events = systemCalendar.getCalendarEvents(calendar, startDate, endDate)
+                .filter { event ->
+                    val currentUserAttendee = event.attendees.find { it.isCurrentUser }
+                    currentUserAttendee?.attendanceStatus != EventAttendee.AttendanceStatus.Declined
+                }
             events.map { event ->
                 EventAndPin(event, event.toTimelinePin(calendar))
             }

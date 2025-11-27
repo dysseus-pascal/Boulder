@@ -31,6 +31,10 @@ import platform.EventKit.EKEventStatusTentative
 import platform.EventKit.EKEventStore
 import platform.EventKit.EKEventStoreChangedNotification
 import platform.EventKit.EKParticipant
+import platform.EventKit.EKParticipantStatusAccepted
+import platform.EventKit.EKParticipantStatusDeclined
+import platform.EventKit.EKParticipantStatusPending
+import platform.EventKit.EKParticipantStatusTentative
 import platform.Foundation.NSError
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
@@ -177,14 +181,24 @@ fun EKAlarm.asReminder(): EventReminder = EventReminder(
     minutesBefore = abs(relativeOffset.toInt() / 60),
 )
 
-fun EKParticipant.asAttendee(): EventAttendee = EventAttendee(
-    name = name,
-    email = null,
-    role = null, // TODO
-    isOrganizer = false, // TODO
-    isCurrentUser = false, // TODO
-    attendanceStatus = null, // TODO
-)
+fun EKParticipant.asAttendee(): EventAttendee {
+    val status = when (participantStatus) {
+        EKParticipantStatusAccepted -> EventAttendee.AttendanceStatus.Accepted
+        EKParticipantStatusDeclined -> EventAttendee.AttendanceStatus.Declined
+        EKParticipantStatusTentative -> EventAttendee.AttendanceStatus.Tentative
+        EKParticipantStatusPending -> EventAttendee.AttendanceStatus.Invited
+        else -> EventAttendee.AttendanceStatus.None
+    }
+    
+    return EventAttendee(
+        name = name,
+        email = null,
+        role = null, // TODO
+        isOrganizer = false, // TODO
+        isCurrentUser = isCurrentUser,
+        attendanceStatus = status,
+    )
+}
 
 fun CGColorRef?.cgColorToInt(): Int {
     if (this == null) return 0 // or handle null case as needed

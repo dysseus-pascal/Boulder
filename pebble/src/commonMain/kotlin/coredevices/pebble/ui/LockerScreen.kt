@@ -75,6 +75,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.faces
@@ -103,7 +106,6 @@ import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -1143,19 +1145,27 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
     val placeholder = remember {
         ColorPainter(placeholderColor)
     }
+    val context = LocalPlatformContext.current
     when (entry.commonAppType) {
         is CommonAppType.Locker, is CommonAppType.Store -> {
-            val url = remember(entry) {
-                when (entry.type) {
+            val req = remember(entry) {
+                val url = when (entry.type) {
                     AppType.Watchapp -> entry.listImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
                 }
+                ImageRequest.Builder(context)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .data(url)
+                    .build()
             }
             AsyncImage(
-                model = url,
+                model = req,
                 contentDescription = null,
                 modifier = modifier.requiredHeight(size),
                 placeholder = placeholder,
+                onError = { e ->
+                    logger.w(e.result.throwable) { "Error loading app image for ${entry.uuid}" }
+                }
             )
         }
 

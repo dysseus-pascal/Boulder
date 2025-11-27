@@ -7,6 +7,10 @@ import co.touchlab.kermit.Severity
 import cocoapods.FirebaseMessaging.FIRMessaging
 import cocoapods.FirebaseMessaging.FIRMessagingAPNSTokenType
 import cocoapods.GoogleSignIn.GIDSignIn
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.memory.MemoryCache
+import coil3.request.crossfade
 import com.eygraber.uri.toUri
 import com.mmk.kmpnotifier.extensions.onApplicationDidReceiveRemoteNotification
 import com.mmk.kmpnotifier.notification.NotifierManager
@@ -105,6 +109,16 @@ object IOSDelegate : KoinComponent {
                 watchModule,
                 analyticsBackendModule,
             )
+        }
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .crossfade(true)
+                .memoryCache {
+                    MemoryCache.Builder()
+                        .maxSizePercent(context, 0.25)
+                        .build()
+                }
+                .build()
         }
         setupCrashlytics()
         initLogging()

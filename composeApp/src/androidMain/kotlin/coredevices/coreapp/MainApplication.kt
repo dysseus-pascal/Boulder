@@ -9,6 +9,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.memory.MemoryCache
+import coil3.request.crossfade
 import com.cactus.CactusContextInitializer
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
@@ -29,7 +34,7 @@ import org.koin.core.context.startKoin
 import org.koin.dsl.module
 import kotlin.time.toJavaDuration
 
-class MainApplication : Application() {
+class MainApplication : Application(), SingletonImageLoader.Factory {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val fileLogWriter: FileLogWriter by inject()
@@ -125,5 +130,16 @@ class MainApplication : Application() {
             // Allow Firebase to also handle the exception
             existingHandler?.uncaughtException(thread, throwable)
         }
+    }
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        return ImageLoader.Builder(context)
+            .crossfade(true)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.25)
+                    .build()
+            }
+            .build()
     }
 }

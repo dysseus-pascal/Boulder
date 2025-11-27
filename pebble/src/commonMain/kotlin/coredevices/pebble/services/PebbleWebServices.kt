@@ -21,6 +21,7 @@ import coredevices.pebble.weather.WeatherResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
+import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -54,11 +55,13 @@ interface PebbleAccountProvider {
 }
 
 class PebbleHttpClient(
-    private val httpClient: HttpClient,
     private val pebbleAccount: PebbleAccountProvider,
+    httpClient: HttpClient = HttpClient(),
 ) : PebbleBootConfigService {
     private val logger = Logger.withTag("PebbleHttpClient")
-
+    private val httpClient = httpClient.config {
+        install(HttpCache)
+    }
     companion object {
         internal suspend fun PebbleHttpClient.put(
             url: String,

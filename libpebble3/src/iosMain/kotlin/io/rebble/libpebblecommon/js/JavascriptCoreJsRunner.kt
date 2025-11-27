@@ -7,12 +7,11 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
-import kotlinx.cinterop.objcPtr
+import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
@@ -51,7 +50,7 @@ class JavascriptCoreJsRunner(
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
-    private var interfaces: List<RegisterableJsInterface>? = null
+    private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
 
@@ -73,11 +72,11 @@ class JavascriptCoreJsRunner(
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )
+        interfacesRef = StableRef.create(instances)
         instances.forEach {
             jsContext[it.name] = it.interf
             it.onRegister(jsContext)
         }
-        interfaces = instances
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
@@ -125,9 +124,11 @@ class JavascriptCoreJsRunner(
         scope.cancel()
         _readyState.value = false
         runBlocking(threadContext) {
-            interfaces?.forEach { it.close() }
-            interfaces = null
-            jsContext?.finalize()
+            interfacesRef?.let {
+                it.get().forEach { iface -> iface.close() }
+                it.dispose()
+            }
+            interfacesRef = null
             jsContext = null
         }
         GC.collect()

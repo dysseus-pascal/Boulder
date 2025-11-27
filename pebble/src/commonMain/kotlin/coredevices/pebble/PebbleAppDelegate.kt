@@ -51,13 +51,29 @@ class PebbleAppDelegate(
     private val logger = Logger.withTag("PebbleAppDelegate")
 
     private suspend fun initAppstoreSourcesDB() {
-        val needsInit = appstoreSourceDao.getAllSources().first().isEmpty()
+        val current = appstoreSourceDao.getAllSources().first()
+        val needsInit = current.isEmpty() || current.any { it.algoliaAppId == null }
         if (needsInit) {
             logger.d { "Initializing appstore sources database" }
+            current.forEach { source ->
+                appstoreSourceDao.deleteSourceById(source.id)
+            }
             appstoreSourceDao.insertSource(
                 AppstoreSource(
                     url = "https://appstore-api.repebble.com/api",
-                    title = "Core Devices"
+                    title = "Core Devices",
+                    algoliaAppId = "GM3S9TRYO4",
+                    algoliaApiKey = "0b83b4f8e4e8e9793d2f1f93c21894aa",
+                    algoliaIndexName = "apps"
+                )
+            )
+            appstoreSourceDao.insertSource(
+                AppstoreSource(
+                    url = "https://appstore-api.rebble.io/api",
+                    title = "Rebble",
+                    algoliaAppId = "7683OW76EQ",
+                    algoliaApiKey = "252f4938082b8693a8a9fc0157d1d24f",
+                    algoliaIndexName = "rebble-appstore-production"
                 )
             )
         } else {

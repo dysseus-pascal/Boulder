@@ -2,6 +2,7 @@ package coredevices.pebble.ui
 
 import CoreNav
 import NoOpCoreNav
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -9,10 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -52,6 +51,12 @@ class AppstoreSettingsScreenViewModel(private val dao: AppstoreSourceDao): ViewM
         }
     }
 
+    fun changeSourceEnabled(sourceId: Int, isEnabled: Boolean) {
+        viewModelScope.launch {
+            dao.setSourceEnabled(sourceId, isEnabled)
+        }
+    }
+
     fun addSource(title: String, url: String) {
         viewModelScope.launch {
             val source = AppstoreSource(
@@ -71,7 +76,8 @@ fun AppstoreSettingsScreen(nav: CoreNav) {
         nav = nav,
         sources = sources,
         onSourceRemoved = viewModel::removeSource,
-        onSourceAdded = viewModel::addSource
+        onSourceAdded = viewModel::addSource,
+        onSourceEnableChange = viewModel::changeSourceEnabled,
     )
 }
 
@@ -81,6 +87,7 @@ fun AppstoreSettingsScreen(
     sources: List<AppstoreSource>,
     onSourceRemoved: (Int) -> Unit,
     onSourceAdded: (title: String, url: String) -> Unit,
+    onSourceEnableChange: (Int, Boolean) -> Unit,
 ) {
     var createSourceOpen by remember { mutableStateOf(false) }
     Scaffold(
@@ -101,7 +108,7 @@ fun AppstoreSettingsScreen(
                 }
             )
         },
-        floatingActionButton = {
+        /*floatingActionButton = {
             FloatingActionButton(
                 onClick = {
                     createSourceOpen = true
@@ -109,7 +116,7 @@ fun AppstoreSettingsScreen(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add Source")
             }
-        }
+        }*/
     ) { insets ->
         if (createSourceOpen) {
             CreateAppstoreSourceDialog(
@@ -128,6 +135,7 @@ fun AppstoreSettingsScreen(
                 AppstoreSourceItem(
                     source = source,
                     onRemove = onSourceRemoved,
+                    onEnableChange = onSourceEnableChange
                 )
             }
         }
@@ -138,6 +146,7 @@ fun AppstoreSettingsScreen(
 fun AppstoreSourceItem(
     source: AppstoreSource,
     onRemove: (Int) -> Unit,
+    onEnableChange: (Int, Boolean) -> Unit,
 ) {
     ListItem(
         headlineContent = {
@@ -147,13 +156,22 @@ fun AppstoreSourceItem(
             Text(text = source.url)
         },
         trailingContent = {
-            IconButton(
+            Checkbox(
+                checked = source.enabled,
+                onCheckedChange = {
+                    onEnableChange(source.id, it)
+                }
+            )
+            /*IconButton(
                 onClick = {
                     onRemove(source.id)
                 }
             ) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete Source")
-            }
+            }*/
+        },
+        modifier = Modifier.clickable {
+            onEnableChange(source.id, !source.enabled)
         }
     )
 }
@@ -210,7 +228,8 @@ fun AppstoreSettingsScreenPreview() {
                 AppstoreSource(id = 2, title = "Source 2", url = "https://example.com/source2"),
             ),
             onSourceRemoved = {},
-            onSourceAdded = { _, _ -> }
+            onSourceAdded = {_, _ -> },
+            onSourceEnableChange = { _, _ -> }
         )
     }
 }

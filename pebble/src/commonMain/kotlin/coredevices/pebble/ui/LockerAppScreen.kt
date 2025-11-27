@@ -52,6 +52,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.PebbleElevatedButton
+import io.ktor.http.parametersOf
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -72,6 +73,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -80,34 +82,34 @@ private val logger = Logger.withTag("LockerAppScreen")
 class LockerAppViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
     private val platform: Platform,
-    private val appstoreSourceDao: AppstoreSourceDao,
 ) : ViewModel() {
     var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
 
-    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource) {
+    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, sources: List<Pair<String, AppstoreSource>>? = null) {
         viewModelScope.launch {
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
+            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)?.data?.firstOrNull()
             if (result != null) {
-                storeEntries = result.data.firstOrNull()?.id?.let { getAppVariants(it, watchType) }
+                storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
             }
-            selectedStoreEntry = result?.data?.firstOrNull()?.asCommonApp(watchType, platform, source)
+            selectedStoreEntry = result?.asCommonApp(watchType, platform, source)
         }
     }
 
     private suspend fun getAppVariants(
-        id: String,
-        watchType: WatchType
+        uuid: Uuid,
+        watchType: WatchType,
+        storeSources: List<Pair<String, AppstoreSource>>? = null,
     ): List<AppVariant> {
-        val sources = appstoreSourceDao.getAllSources().first()
-        return sources.flatMap {
+        val sources = storeSources ?: pebbleWebServices.searchUuidInSources(uuid)
+        return sources.flatMap { (id, source) ->
             //TODO: Search by uuid instead of id to get all variants, id is source-specific except for OG apps
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, it.url)
+            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
             result?.data?.map { appEntry ->
-                appEntry.asCommonApp(watchType, platform, it)?.let { app ->
+                appEntry.asCommonApp(watchType, platform, source)?.let { app ->
                     AppVariant(
-                        source = it,
+                        source = source,
                         app = app
                     )
                 }
@@ -122,7 +124,7 @@ data class AppVariant(
 )
 
 @Composable
-fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?, storeSource: AppstoreSource?) {
+fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?, storeSource: AppstoreSource?, storeSources: List<Pair<String, AppstoreSource>>?) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
@@ -153,7 +155,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
 
         if (storeId != null && storeSource != null) {
             LaunchedEffect(Unit) {
-                viewModel.loadAppFromStore(storeId, watchType, storeSource)
+                viewModel.loadAppFromStore(storeId, watchType, storeSource, storeSources)
             }
         }
 

@@ -176,6 +176,8 @@ class RealPebbleWebServices(
         coerceInputValues = true
     }
 
+    private val searchClients = mutableMapOf<String, SearchClient>()
+
     private val logger = Logger.withTag("PebbleWebServices")
 
     companion object {
@@ -217,7 +219,7 @@ class RealPebbleWebServices(
     }
 
     private suspend fun getAllSources(): List<AppstoreSource> {
-        return appstoreSourceDao.getAllSources().first()
+        return appstoreSourceDao.getAllEnabledSources().first()
     }
 
     override suspend fun fetchLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
@@ -254,13 +256,15 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType, sourceUrl: String): StoreAppResponse? {
-        val parameters = mapOf(
-            "platform" to platform.storeString(),
-            "hardware" to hardwarePlatform.codename,
-//            "firmware_version" to "",
-//            "filter_hardware" to "true",
-        )
+    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, sourceUrl: String): StoreAppResponse? {
+        val parameters = buildMap {
+            put("platform", platform.storeString())
+            if (hardwarePlatform != null) {
+                put("hardware", hardwarePlatform.codename)
+            }
+            //            "firmware_version" to "",
+            //            "filter_hardware" to "true",
+        }
         return httpClient.get(
             url = "$sourceUrl/v1/apps/id/$id",
             auth = false,
@@ -273,39 +277,100 @@ class RealPebbleWebServices(
         return httpClient.getWithWeatherAuth(url)
     }
 
-    suspend fun searchAppStore(search: String, type: AppType?): List<StoreSearchResult> {
-//        val params = SearchMethodParams()
-        //TODO: Use sources
-        return try {
-            searchClient.searchSingleIndex(
-                indexName = "rebble-appstore-production",
-//                searchParams = SearchParams.of(SearchParamsString(search)),
-                searchParams = SearchParamsObject(
-                    query = search,
-                    tagFilters = type?.let { TagFilters.of(type.code) },
-                ),
-            ).hits.mapNotNull {
-                it.additionalProperties?.let { props ->
-                    val jsonText = JsonObject(props)
-//                    logger.v { "jsonText: $jsonText" }
-                    try {
-                        json.decodeFromJsonElement(
-                            StoreSearchResult.serializer(),
-                            jsonText,
-                        )
-                    } catch (e: Exception) {
-                        logger.w(e) { "error decoding search result" }
+    private fun searchClientForSource(source: AppstoreSource): SearchClient {
+        return searchClients.getOrPut(source.url) {
+            SearchClient(
+                appId = source.algoliaAppId!!,
+                apiKey = source.algoliaApiKey!!,
+            )
+        }
+    }
+
+    suspend fun searchUuidInSources(uuid: Uuid): List<Pair<String, AppstoreSource>> {
+        return getAllSources().mapNotNull { source ->
+            val searchClient = searchClientForSource(source)
+            try {
+                if (source.algoliaIndexName == null || source.algoliaAppId == null || source.algoliaApiKey == null) {
+                    null
+                } else {
+                    val response = searchClient.searchSingleIndex(
+                        indexName = source.algoliaIndexName!!,
+                        searchParams = SearchParamsObject(
+                            query = uuid.toString(),
+                        ),
+                    )
+                    val found = response.hits.mapNotNull {
+                        val props = it.additionalProperties ?: return@mapNotNull null
+                        val jsonText = JsonObject(props)
+                        try {
+                            json.decodeFromJsonElement(
+                                StoreSearchResult.serializer(),
+                                jsonText,
+                            )
+                        } catch (e: Exception) {
+                            logger.w(e) { "error decoding search result (source ${source.url})" }
+                            null
+                        }
+                    }.firstOrNull {
+                        it.uuid.lowercase() == uuid.toString()
+                    }
+                    if (found != null) {
+                        Pair(found.id, source)
+                    } else {
                         null
                     }
                 }
+            } catch (e: AlgoliaApiException) {
+                logger.w(e) { "searchSingleIndex" }
+                null
+            } catch (e: IllegalStateException) {
+                logger.w(e) { "searchSingleIndex" }
+                null
             }
-        } catch (e: AlgoliaApiException) {
-            logger.w(e) { "searchSingleIndex" }
-            emptyList()
-        } catch (e: IllegalStateException) {
-            logger.w(e) { "searchSingleIndex" }
-            emptyList()
         }
+    }
+
+    suspend fun searchAppStore(search: String, type: AppType?): List<Pair<AppstoreSource, StoreSearchResult>> {
+//        val params = SearchMethodParams()
+        return getAllSources().flatMap { source ->
+            val searchClient = searchClientForSource(source)
+            try {
+                if (source.algoliaIndexName == null || source.algoliaAppId == null || source.algoliaApiKey == null) {
+                    return emptyList()
+                }
+                searchClient.searchSingleIndex(
+                    indexName = source.algoliaIndexName!!,
+//                searchParams = SearchParams.of(SearchParamsString(search)),
+                    searchParams = SearchParamsObject(
+                        query = search,
+                        tagFilters = type?.let { TagFilters.of(type.code) },
+                    ),
+                ).hits.mapNotNull {
+                    it.additionalProperties?.let { props ->
+                        val jsonText = JsonObject(props)
+//                    logger.v { "jsonText: $jsonText" }
+                        try {
+                            Pair(
+                                source,
+                                json.decodeFromJsonElement(
+                                    StoreSearchResult.serializer(),
+                                    jsonText,
+                                )
+                            )
+                        } catch (e: Exception) {
+                            logger.w(e) { "error decoding search result (source ${source.url})" }
+                            null
+                        }
+                    }
+                }
+            } catch (e: AlgoliaApiException) {
+                logger.w(e) { "searchSingleIndex" }
+                emptyList()
+            } catch (e: IllegalStateException) {
+                logger.w(e) { "searchSingleIndex" }
+                emptyList()
+            }
+        }.distinctBy { it.second.uuid }
 //        logger.v { "search response: $response" }
     }
 }

@@ -103,12 +103,16 @@ import io.rebble.libpebblecommon.util.getTempFilePath
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.StringResource
@@ -138,7 +142,7 @@ class LockerViewModel(
     fun refreshStore(type: AppType, platform: WatchType): Deferred<Unit> {
         val finished = CompletableDeferred<Unit>()
         viewModelScope.launch {
-            val result = pebbleWebServices.fetchAppStoreHome(type, platform)
+            val result = withContext(Dispatchers.IO) { pebbleWebServices.fetchAppStoreHome(type, platform) }
             if (!result.all { it.second == null }) {
                 storeHome.value = result
             }
@@ -149,9 +153,9 @@ class LockerViewModel(
 
     fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType?) {
         viewModelScope.launch {
-            val result = pebbleWebServices.searchAppStore(search, appType)
-            storeSearchResults.value = result.mapNotNull {
-                it.asCommonApp(watchType, platform, AppstoreSource(0, "https://appstore-api.rebble.io/api", "")) //TODO: Search source support
+            val result = withContext(Dispatchers.IO) { pebbleWebServices.searchAppStore(search, appType) }
+            storeSearchResults.value = result.mapNotNull { (source, app) ->
+                app.asCommonApp(watchType, platform, source)
             }.filter {
                 it.isCompatible && it.type == appType
             }
@@ -417,29 +421,26 @@ fun LockerScreen(
                                             Text(source.title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium)
                                         }
                                     }
-                                    home.collections.forEach { collection ->
-                                        item(span = { GridItemSpan(maxCurrentLineSpan) }) {
-                                            logger.v { "collection: $collection" }
-                                            val collectionApps =
-                                                remember(
-                                                    home,
-                                                    collection,
-                                                    watchType,
-                                                    filteredLockerEntries
-                                                ) {
-                                                    collection.applicationIds.mapNotNull { appId ->
-                                                        home.applications.find { app ->
-                                                            app.id == appId && !filteredLockerEntries.any {
-                                                                it.properties.id == Uuid.parse(
-                                                                    app.uuid
-                                                                )
-                                                            }
-                                                        }?.asCommonApp(watchType, platform, source)
-                                                    }
+                                    items(home.collections.size, span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                        val collection = home.collections[it]
+                                        val collectionApps =
+                                            remember(
+                                                home,
+                                                collection,
+                                                watchType,
+                                                filteredLockerEntries
+                                            ) {
+                                                collection.applicationIds.mapNotNull { appId ->
+                                                    home.applications.find { app ->
+                                                        app.id == appId && !filteredLockerEntries.any {
+                                                            it.properties.id == Uuid.parse(
+                                                                app.uuid
+                                                            )
+                                                        }
+                                                    }?.asCommonApp(watchType, platform, source)
                                                 }
-//                                logger.v { "collectionApps: $collectionApps" }
-                                            Carousel(collection.name, collectionApps)
-                                        }
+                                            }
+                                        Carousel(collection.name, collectionApps)
                                     }
                                 }
                             }
@@ -521,10 +522,12 @@ fun SearchResultsList(
     results: List<CommonApp>,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
+    pebbleWebServices: RealPebbleWebServices = koinInject(),
     modifier: Modifier = Modifier,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
     val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker }
+    val scope = rememberCoroutineScope()
     LazyColumn(modifier) {
         if (lockerApps.isNotEmpty()) {
             items(
@@ -535,6 +538,15 @@ fun SearchResultsList(
                     entry,
                     navBarNav,
                     topBarParams,
+                    onClick = {
+                        navBarNav.navigateTo(
+                            PebbleNavBarRoutes.LockerAppRoute(
+                                uuid = entry.uuid.toString(),
+                                storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
+                                storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
+                            )
+                        )
+                    }
                 )
             }
         }
@@ -554,6 +566,28 @@ fun SearchResultsList(
                     entry,
                     navBarNav,
                     topBarParams,
+                    onClick = {
+                        scope.launch {
+                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
+                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
+                                sources.maxByOrNull { (id, source) ->
+                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
+                                        ?.data
+                                        ?.firstOrNull()
+                                        ?.latestRelease?.version ?: "0"
+                                } ?: (null to null)
+                            }
+                            navBarNav.navigateTo(
+                                PebbleNavBarRoutes.LockerAppRoute(
+                                    uuid = entry.uuid.toString(),
+                                    storedId = bestId ?:(entry.commonAppType as? CommonAppType.Store)?.storedId,
+                                    storeSource = (bestSource ?: (entry.commonAppType as? CommonAppType.Store)?.storeSource)
+                                        ?.let { Json.encodeToString(it) },
+                                    storeSources = Json.encodeToString(sources)
+                                )
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -834,9 +868,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         hearts = hearts,
         description = description,
         isNativelyCompatible = true, // TODO
-    ).also {
-        logger.v { "StoreSearchResult.asCommonApp: $title assetCollections=${assetCollections.map { "${it.hardwarePlatform} / ${it.screenshots}" }}          chosen = ${it.screenshotImageUrl}" }
-    }
+    )
 }
 
 data class CommonApp(
@@ -1058,17 +1090,12 @@ fun NativeWatchfaceListItem(
     entry: CommonApp,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
+    onClick: () -> Unit,
 ) {
     ListItem(
         modifier = Modifier
             .clickable {
-                navBarNav.navigateTo(
-                    PebbleNavBarRoutes.LockerAppRoute(
-                        uuid = entry.uuid.toString(),
-                        storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
-                        storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
-                    )
-                )
+                onClick()
             }
             .padding(vertical = 4.dp),
         headlineContent = {

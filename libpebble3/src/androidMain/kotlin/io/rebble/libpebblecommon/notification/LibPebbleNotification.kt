@@ -131,7 +131,6 @@ fun LibPebbleNotification.toEntity(
     decision = decision,
     channelId = channelId,
     people = people,
-    vibrationPattern = vibrationPattern,
 )
 
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {

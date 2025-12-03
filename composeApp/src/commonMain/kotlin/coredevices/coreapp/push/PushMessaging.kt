@@ -9,6 +9,7 @@ import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.api.PushService
 import coredevices.coreapp.api.PushTokenRequest
 import coredevices.pebble.Platform
+import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.GlobalScope
@@ -77,7 +78,7 @@ class PushMessaging(
             null
         }
 
-        val email = Firebase.auth.currentUser?.email
+        val email = Firebase.auth.currentUser?.emailOrNull
         if (userIdToken == null || email == null) {
             logger.e { "Failed to get user id token/email" }
             return

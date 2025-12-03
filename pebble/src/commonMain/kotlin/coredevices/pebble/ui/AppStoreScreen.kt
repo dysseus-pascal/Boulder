@@ -110,7 +110,7 @@ fun AppStoreScreen(
                                         "name" to app.title,
                                     )
                                 )
-                                webServices.addToLocker(app.uuid)
+                                webServices.addToLegacyLocker(app.uuid)
                             } ?: false
                             appStoreLogger.v { "Add to locker: added=$added" }
                             topBarParams.showSnackbar("Syncing Locker")

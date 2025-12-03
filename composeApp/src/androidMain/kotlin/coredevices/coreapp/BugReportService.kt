@@ -79,16 +79,20 @@ class BugReportService : Service(), CoroutineScope {
             COMMAND_START -> {
                 logger.v { "startForeground" }
                 val notification = createNotification("Creating bug report...")
-                ServiceCompat.startForeground(
-                    this,
-                    NOTIFICATION_ID_ONGOING,
-                    notification,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                    } else {
-                        0
-                    }
-                )
+                try {
+                    ServiceCompat.startForeground(
+                        this,
+                        NOTIFICATION_ID_ONGOING,
+                        notification,
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                        } else {
+                            0
+                        }
+                    )
+                } catch (_: SecurityException) {
+                    logger.w { "Failed to start bugreport service in foreground" }
+                }
             }
             COMMAND_MESSAGE -> {
                 updateNotification(intent.getStringExtra(MESSAGE) ?: "")

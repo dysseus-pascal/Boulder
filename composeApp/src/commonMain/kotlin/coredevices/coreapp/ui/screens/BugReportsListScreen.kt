@@ -43,6 +43,7 @@ import coredevices.coreapp.api.AtlasTicketDetails
 import coredevices.coreapp.api.BugReports
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.Platform
+import coredevices.util.emailOrNull
 import coredevices.util.getAndroidActivity
 import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
@@ -76,9 +77,9 @@ fun BugReportsListScreen(
 
         // Get the authenticated user's email
         val user by Firebase.auth.authStateChanged.map {
-            it?.email
+            it?.emailOrNull
         }.distinctUntilChanged()
-            .collectAsState(Firebase.auth.currentUser?.email)
+            .collectAsState(Firebase.auth.currentUser?.emailOrNull)
 
         fun signIn() {
             scope.launch {

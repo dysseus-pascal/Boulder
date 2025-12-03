@@ -146,13 +146,13 @@ object Iso8601InstantSerializer : KSerializer<Instant> {
 
     override fun deserialize(decoder: Decoder): Instant {
         val string = decoder.decodeString()
-        // kotlinx.datetime.Instant.parse can't handle +0000, so we convert it to Z
-        val fixedString = if (string.matches(Regex(".*\\d\\d\\d\\d"))) {
-            string.replaceRange(string.length - 5, string.length, "Z")
-        } else {
-            string
-        }
-        return Instant.parse(fixedString)
+        // The API returns a non-standard ISO-8601 date string.
+        // The timezone offset is missing a colon.
+        // Examples: 2025-12-01T13:37:16+0000 and 2025-12-01T14:17:58-0800
+        // We need to insert the colon to make it parseable by Instant.
+        // i.e. 2025-12-01T13:37:16+00:00
+        val sanitized = string.substring(0, string.length - 2) + ":" + string.substring(string.length - 2)
+        return Instant.parse(sanitized)
     }
 }
 

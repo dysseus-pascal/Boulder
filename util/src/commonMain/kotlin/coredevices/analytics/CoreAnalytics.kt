@@ -3,6 +3,7 @@ package coredevices.analytics
 import co.touchlab.kermit.Logger
 import coredevices.database.HeartbeatStateDao
 import coredevices.database.HeartbeatStateEntity
+import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -48,7 +49,7 @@ class RealCoreAnalytics(
         val heartbeatMetrics = processHeartbeatStates() +
                 HeartbeatMetric("heartbeat_duration_ms", duration.inWholeMilliseconds) +
                 HeartbeatMetric("last_connected_serial", lastConnectedSerial.value ?: "<none>")
-                HeartbeatMetric("core_user_id", Firebase.auth.currentUser?.email ?: "<none>")
+                HeartbeatMetric("core_user_id", Firebase.auth.currentUser?.emailOrNull ?: "<none>")
         logger.d { "processHeartbeat: $heartbeatMetrics" }
         logEvent("heartbeat", heartbeatMetrics.associate { it.name to it.value })
     }

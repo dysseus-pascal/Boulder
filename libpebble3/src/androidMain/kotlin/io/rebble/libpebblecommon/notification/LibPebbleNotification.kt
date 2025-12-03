@@ -99,7 +99,7 @@ data class LibPebbleNotification(
                 body { it }
             }
             color?.let {
-                primaryColor { it.toPebbleColor() }
+                backgroundColor { it.toPebbleColor() }
             }
             tinyIcon { icon }
         }

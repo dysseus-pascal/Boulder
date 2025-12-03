@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Troubleshoot
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.ChipElevation
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,10 +42,10 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.coreapp.api.BugReports
 import coredevices.pebble.Platform
-import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.PebbleWebview
 import coredevices.ui.PebbleWebviewNavigator
 import coredevices.ui.PebbleWebviewUrlInterceptor
+import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.launch
@@ -65,7 +64,7 @@ fun ViewBugReportScreen(
         val bugReports: BugReports = koinInject()
         val tickets = bugReports.ticketDetails.value
         val ticket = tickets?.ticketDetails?.firstOrNull { it.ticketId == conversationId }
-        val userEmail = Firebase.auth.currentUser?.email
+        val userEmail = Firebase.auth.currentUser?.emailOrNull
 
         val url = if (ticket != null && tickets != null && userEmail != null) {
             "https://embed.atlas.so/index.html?appId=${tickets.appId}&userId=$userEmail&userEmail=$userEmail&query=open:ticket;ticketId:${ticket.ticketId};noHeader:1&userHash=${tickets.userHash}"

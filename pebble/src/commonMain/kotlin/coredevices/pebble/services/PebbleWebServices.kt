@@ -1,15 +1,13 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
-import com.algolia.client.api.SearchClient
 import com.algolia.client.exception.AlgoliaApiException
-import com.algolia.client.model.search.SearchParamsObject
-import com.algolia.client.model.search.TagFilters
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
+import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.UsersMeResponse
 import coredevices.pebble.firmware.FirmwareUpdateCheck
@@ -18,6 +16,7 @@ import coredevices.pebble.services.PebbleHttpClient.Companion.get
 import coredevices.pebble.services.PebbleHttpClient.Companion.getWithWeatherAuth
 import coredevices.pebble.services.PebbleHttpClient.Companion.put
 import coredevices.pebble.weather.WeatherResponse
+import coredevices.util.CoreConfigFlow
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
@@ -35,15 +34,27 @@ import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerEntryCompanions
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
+import io.rebble.libpebblecommon.web.LockerEntryDeveloper
+import io.rebble.libpebblecommon.web.LockerEntryLinks
+import io.rebble.libpebblecommon.web.LockerEntryPBW
+import io.rebble.libpebblecommon.web.LockerEntryPlatform
+import io.rebble.libpebblecommon.web.LockerEntryPlatformImages
 import io.rebble.libpebblecommon.web.LockerModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import kotlin.uuid.Uuid
 
 interface PebbleBootConfigService {
@@ -171,15 +182,15 @@ class RealPebbleWebServices(
     private val bootConfig: BootConfigProvider,
     private val memfault: Memfault,
     private val platform: Platform,
-    private val searchClient: SearchClient,
-    private val appstoreSourceDao: AppstoreSourceDao
-) : WebServices {
+    private val appstoreSourceDao: AppstoreSourceDao,
+    private val firestoreLocker: FirestoreLocker,
+    private val coreConfig: CoreConfigFlow
+) : WebServices, KoinComponent {
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
     }
-
-    private val searchClients = mutableMapOf<String, SearchClient>()
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     private val logger = Logger.withTag("PebbleWebServices")
 
@@ -225,10 +236,43 @@ class RealPebbleWebServices(
         return appstoreSourceDao.getAllEnabledSources().first()
     }
 
-    override suspend fun fetchLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
+    private val appstoreServices = mutableMapOf<String, AppstoreService>()
 
-    override suspend fun removeFromLocker(id: Uuid): Boolean =
-        delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
+    private fun appstoreServiceForSource(source: AppstoreSource): AppstoreService {
+        return appstoreServices.getOrPut(source.url) {
+            get {
+                parametersOf(source)
+            }
+        }
+    }
+
+    private fun appstoreServiceForUrl(sourceUrl: String): AppstoreService {
+        return get {
+            parametersOf(AppstoreSource(
+                url = sourceUrl,
+                title = ""
+            ))
+        }
+    }
+
+    suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
+
+    override suspend fun fetchLocker(): LockerModel? {
+        return if (coreConfig.value.useNativeAppStore) {
+            firestoreLocker.fetchLocker()
+        } else {
+            fetchPebbleLocker()
+        }
+    }
+
+    override suspend fun removeFromLocker(id: Uuid): Boolean {
+        if (coreConfig.value.useNativeAppStore) {
+            firestoreLocker.removeApp(id)
+            return true
+        } else {
+            return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
+        }
+    }
 
     override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult =
         firmwareUpdateCheck.checkForUpdates(watch)
@@ -237,8 +281,10 @@ class RealPebbleWebServices(
         memfault.uploadChunk(chunk, watchInfo)
     }
 
-    suspend fun addToLocker(uuid: String): Boolean =
+    suspend fun addToLegacyLocker(uuid: String): Boolean =
         put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)
+
+    suspend fun addToLocker(id: String, sourceUrl: String): Boolean = firestoreLocker.addApp(id, sourceUrl)
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
@@ -259,20 +305,9 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, sourceUrl: String): StoreAppResponse? {
-        val parameters = buildMap {
-            put("platform", platform.storeString())
-            if (hardwarePlatform != null) {
-                put("hardware", hardwarePlatform.codename)
-            }
-            //            "firmware_version" to "",
-            //            "filter_hardware" to "true",
-        }
-        return httpClient.get(
-            url = "$sourceUrl/v1/apps/id/$id",
-            auth = false,
-            parameters = parameters,
-        )
+    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, sourceUrl: String, useCache: Boolean = true): StoreAppResponse? {
+        val appstore = appstoreServiceForUrl(sourceUrl)
+        return appstore.fetchAppStoreApp(id, hardwarePlatform, useCache)
     }
 
     suspend fun getWeather(location: GeolocationPositionResult.Success): WeatherResponse? {
@@ -280,100 +315,32 @@ class RealPebbleWebServices(
         return httpClient.getWithWeatherAuth(url)
     }
 
-    private fun searchClientForSource(source: AppstoreSource): SearchClient {
-        return searchClients.getOrPut(source.url) {
-            SearchClient(
-                appId = source.algoliaAppId!!,
-                apiKey = source.algoliaApiKey!!,
-            )
-        }
-    }
-
     suspend fun searchUuidInSources(uuid: Uuid): List<Pair<String, AppstoreSource>> {
-        return getAllSources().mapNotNull { source ->
-            val searchClient = searchClientForSource(source)
-            try {
-                if (source.algoliaIndexName == null || source.algoliaAppId == null || source.algoliaApiKey == null) {
-                    null
-                } else {
-                    val response = searchClient.searchSingleIndex(
-                        indexName = source.algoliaIndexName!!,
-                        searchParams = SearchParamsObject(
-                            query = uuid.toString(),
-                        ),
-                    )
-                    val found = response.hits.mapNotNull {
-                        val props = it.additionalProperties ?: return@mapNotNull null
-                        val jsonText = JsonObject(props)
-                        try {
-                            json.decodeFromJsonElement(
-                                StoreSearchResult.serializer(),
-                                jsonText,
-                            )
-                        } catch (e: Exception) {
-                            logger.w(e) { "error decoding search result (source ${source.url})" }
-                            null
-                        }
-                    }.firstOrNull {
-                        it.uuid.lowercase() == uuid.toString()
-                    }
-                    if (found != null) {
-                        Pair(found.id, source)
-                    } else {
-                        null
-                    }
-                }
-            } catch (e: AlgoliaApiException) {
-                logger.w(e) { "searchSingleIndex" }
-                null
-            } catch (e: IllegalStateException) {
-                logger.w(e) { "searchSingleIndex" }
-                null
+        return getAllSources().map { source ->
+            scope.async {
+                appstoreServiceForSource(source).searchUuid(uuid.toString())?.let { Pair(it, source) }
             }
-        }
+        }.awaitAll().filterNotNull()
     }
 
     suspend fun searchAppStore(search: String, type: AppType?): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
-        return getAllSources().flatMap { source ->
-            val searchClient = searchClientForSource(source)
-            try {
-                if (source.algoliaIndexName == null || source.algoliaAppId == null || source.algoliaApiKey == null) {
-                    return emptyList()
-                }
-                searchClient.searchSingleIndex(
-                    indexName = source.algoliaIndexName!!,
-//                searchParams = SearchParams.of(SearchParamsString(search)),
-                    searchParams = SearchParamsObject(
-                        query = search,
-                        tagFilters = type?.let { TagFilters.of(type.code) },
-                    ),
-                ).hits.mapNotNull {
-                    it.additionalProperties?.let { props ->
-                        val jsonText = JsonObject(props)
-//                    logger.v { "jsonText: $jsonText" }
-                        try {
-                            Pair(
-                                source,
-                                json.decodeFromJsonElement(
-                                    StoreSearchResult.serializer(),
-                                    jsonText,
-                                )
-                            )
-                        } catch (e: Exception) {
-                            logger.w(e) { "error decoding search result (source ${source.url})" }
-                            null
-                        }
+        return getAllSources().map { source ->
+            scope.async {
+                val appstore = appstoreServiceForSource(source)
+                try {
+                    appstore.search(search, type).map {
+                        Pair(source, it)
                     }
+                } catch (e: AlgoliaApiException) {
+                    logger.w(e) { "searchSingleIndex" }
+                    emptyList()
+                } catch (e: IllegalStateException) {
+                    logger.w(e) { "searchSingleIndex" }
+                    emptyList()
                 }
-            } catch (e: AlgoliaApiException) {
-                logger.w(e) { "searchSingleIndex" }
-                emptyList()
-            } catch (e: IllegalStateException) {
-                logger.w(e) { "searchSingleIndex" }
-                emptyList()
             }
-        }.distinctBy { it.second.uuid }
+        }.awaitAll().flatten().distinctBy { it.second.uuid }
 //        logger.v { "search response: $response" }
     }
 }
@@ -650,3 +617,119 @@ data class StoreChangelogEntry(
 //    val x720: String,
 //    val orig: String,
 //)
+
+fun StoreAppResponse.toLockerEntry(): LockerEntry? {
+    val app = data.firstOrNull() ?: return null
+    return LockerEntry(
+        id = app.id,
+        uuid = app.uuid,
+        hearts = app.hearts,
+        version = app.latestRelease.version,
+        title = app.title,
+        type = app.type,
+        developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
+        isConfigurable = app.capabilities.contains("configurable"),
+        isTimelineEnabled = app.capabilities.contains("timeline"),
+        pbw = LockerEntryPBW(
+            file = app.latestRelease.pbwFile,
+            iconResourceId = 0,
+            releaseId = ""
+        ),
+        links = LockerEntryLinks("", "", ""),
+        compatibility = app.compatibility,
+        companions = app.companions,
+        category = app.category,
+        hardwarePlatforms = buildList {
+            app.compatibility.aplite.takeIf { it.supported }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "aplite",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+            app.compatibility.basalt.takeIf { it.supported }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "basalt",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+            app.compatibility.chalk.takeIf { it.supported }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "chalk",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+            app.compatibility.diorite.takeIf { it.supported }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "diorite",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+            app.compatibility.emery.takeIf { it.supported }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "emery",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+            app.compatibility.flint.takeIf { it?.supported ?: false }?.let {
+                add(
+                    LockerEntryPlatform(
+                        name = "flint",
+                        sdkVersion = it.firmware.major.toString(),
+                        pebbleProcessInfoFlags = 0,
+                        description = app.description,
+                        images = LockerEntryPlatformImages(
+                            icon = app.iconImage["48x48"] ?: "",
+                            list = app.listImage["144x144"] ?: "",
+                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+                        )
+                    )
+                )
+            }
+        }
+    )
+}

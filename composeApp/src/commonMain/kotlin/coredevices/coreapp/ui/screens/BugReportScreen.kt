@@ -73,10 +73,12 @@ import coredevices.analytics.setUser
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.Platform
+import coredevices.util.emailOrNull
 import coredevices.util.getAndroidActivity
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -142,6 +144,7 @@ fun BugReportScreen(
         val (sendingProgress, setSendingProgress) = remember { mutableStateOf<Double?>(null) }
         val scope = rememberCoroutineScope()
         val user by Firebase.auth.authStateChanged.map {
+            it?.emailOrNull ?: return@map null
             it.toUserProps()
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser.toUserProps())
@@ -231,8 +234,15 @@ fun BugReportScreen(
                     setStatus(e.message ?: "Unknown error")
                     return@launch
                 }
+                try {
+                    if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
+                        Logger.i { "Successfully linked anonymous user to account" }
+                    }
+                } catch (_: FirebaseAuthUserCollisionException) {
+                    Logger.i { "User is already created, not linking anonymous user" }
+                }
                 Firebase.auth.signInWithCredential(credential)
-                Firebase.auth.currentUser?.email?.let {
+                Firebase.auth.currentUser?.emailOrNull?.let {
                     analyticsBackend.setUser(email = it)
                 }
                 analyticsBackend.logEvent("signed_in_google")

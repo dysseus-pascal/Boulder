@@ -3,6 +3,8 @@ package coredevices.pebble
 import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
 import coredevices.pebble.account.BootConfigProvider
+import coredevices.pebble.account.FirestoreLocker
+import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.GithubAccount
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
@@ -13,6 +15,7 @@ import coredevices.pebble.firmware.Cohorts
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
+import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.Github
 import coredevices.pebble.services.CactusTranscription
 import coredevices.pebble.services.LanguagePackRepository
@@ -85,6 +88,11 @@ val watchModule = module {
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
     singleOf(::RealGithubAccount) bind GithubAccount::class
+    singleOf(::FirestoreLockerDao)
+    singleOf(::FirestoreLocker)
+    factory { p ->
+        AppstoreService(get(), get(), get(), p.get())
+    }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) bind WebServices::class
     singleOf(::PebbleDeepLinkHandler)

@@ -47,12 +47,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
-import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.PebbleElevatedButton
-import io.ktor.http.parametersOf
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -63,7 +61,10 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -73,7 +74,6 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -103,18 +103,20 @@ class LockerAppViewModel(
         storeSources: List<Pair<String, AppstoreSource>>? = null,
     ): List<AppVariant> {
         val sources = storeSources ?: pebbleWebServices.searchUuidInSources(uuid)
-        return sources.flatMap { (id, source) ->
+        return sources.map { (id, source) ->
             //TODO: Search by uuid instead of id to get all variants, id is source-specific except for OG apps
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
-            result?.data?.map { appEntry ->
-                appEntry.asCommonApp(watchType, platform, source)?.let { app ->
-                    AppVariant(
-                        source = source,
-                        app = app
-                    )
-                }
-            } ?: emptyList()
-        }.filterNotNull().sortedBy { it.app.version ?: "0" }.reversed()
+            viewModelScope.async(Dispatchers.IO) {
+                val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
+                result?.data?.map { appEntry ->
+                    appEntry.asCommonApp(watchType, platform, source)?.let { app ->
+                        AppVariant(
+                            source = source,
+                            app = app
+                        )
+                    }
+                } ?: emptyList()
+            }
+        }.awaitAll().flatten().filterNotNull().sortedBy { it.app.version ?: "0" }.reversed()
     }
 }
 
@@ -326,7 +328,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                                 // Global scope because it could take a second to download/sync/load app
                                 GlobalScope.launch {
                                     viewModel.addedToLocker = true
-                                    webServices.addToLocker(entry.uuid.toString())
+                                    webServices.addToLocker(entry.commonAppType.storedId, entry.commonAppType.storeSource.url)
                                     libPebble.requestLockerSync()
                                 }
                             },

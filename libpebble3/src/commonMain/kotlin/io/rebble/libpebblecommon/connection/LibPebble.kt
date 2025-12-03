@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.Call
+import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
@@ -261,6 +262,7 @@ class LibPebble3(
     private val analytics: AnalyticsEvents,
     private val systemGeolocation: SystemGeolocation,
     private val timeline: Timeline,
+    private val legacyPhoneReceiver: LegacyPhoneReceiver,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
@@ -287,6 +289,7 @@ class LibPebble3(
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
         }
         housekeeping.init()
+        legacyPhoneReceiver.init(currentCall)
 
         performPlatformSpecificInit()
     }

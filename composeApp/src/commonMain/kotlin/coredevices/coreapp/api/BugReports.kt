@@ -3,6 +3,7 @@ package coredevices.coreapp.api
 import PlatformContext
 import co.touchlab.kermit.Logger
 import coredevices.coreapp.push.AtlasPushMessage
+import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +73,7 @@ class BugReports(
     private suspend fun fetchBugReports(idToken: String): BugReportsListResponse? {
         // TODO timeout
         try {
-            val userEmail = Firebase.auth.currentUser?.email
+            val userEmail = Firebase.auth.currentUser?.emailOrNull
             if (userEmail == null) {
                 logger.w { "Not logged in!" }
                 return null

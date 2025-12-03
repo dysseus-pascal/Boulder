@@ -460,6 +460,7 @@ please disable the option.""".trimIndent(),
                     title = "Configure Appstore Sources",
                     section = Section.Default,
                     action = { navBarNav.navigateTo(PebbleRoutes.AppstoreSettingsRoute) },
+                    show = { coreConfig.useNativeAppStore },
                 ),
                 basicSettingsActionItem(
                     title = "Experimental Feed",

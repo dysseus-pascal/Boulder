@@ -19,6 +19,7 @@ import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -69,7 +70,19 @@ class CommonAppDelegate(
     }
 
     fun init() {
-        Firebase.auth.currentUser?.email?.let {
+        GlobalScope.launch(Dispatchers.Default) {
+            if (Firebase.auth.currentUser == null) {
+                logger.i { "Logging into firebase anonymously" }
+                try {
+                    Firebase.auth.signInAnonymously().let {
+                        logger.d { "Firebase anonymous UID: ${it.user?.uid}" }
+                    }
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to sign in anonymously" }
+                }
+            }
+        }
+        Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)
         }
         CactusTelemetry.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")

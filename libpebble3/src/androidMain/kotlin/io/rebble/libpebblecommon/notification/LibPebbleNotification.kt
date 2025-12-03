@@ -30,7 +30,7 @@ data class LibPebbleNotification(
     val icon: TimelineIcon,
     val actions: List<LibPebbleNotificationAction>,
     val people: List<String>,
-    val vibrationPattern: List<UInt>,
+    val vibrationPattern: List<UInt>?,
     val color: Int? = null, // ARGB
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
@@ -84,7 +84,7 @@ data class LibPebbleNotification(
         }
     }
 
-    fun toTimelineNotification(): TimelineNotification = buildTimelineNotification(
+    fun toTimelineNotification(notificationConfig: NotificationConfig): TimelineNotification = buildTimelineNotification(
         timestamp = timestamp,
         parentId = ANDROID_NOTIFICATIONS_UUID,
     ) {
@@ -100,6 +100,11 @@ data class LibPebbleNotification(
             }
             color?.let {
                 backgroundColor { it.toPebbleColor() }
+            }
+            if (notificationConfig.useAndroidVibePatterns) {
+                vibrationPattern?.let {
+                    vibrationPattern { it }
+                }
             }
             tinyIcon { icon }
         }

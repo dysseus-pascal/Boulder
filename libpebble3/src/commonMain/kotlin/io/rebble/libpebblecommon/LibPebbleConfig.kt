@@ -117,6 +117,7 @@ data class NotificationConfig(
      * When [false], no notifications will be sent at all
      */
     val sendNotifications: Boolean = true,
+    val useAndroidVibePatterns: Boolean = false,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

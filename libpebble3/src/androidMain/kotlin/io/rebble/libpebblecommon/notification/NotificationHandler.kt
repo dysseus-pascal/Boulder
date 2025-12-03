@@ -373,9 +373,9 @@ fun Notification.people(): List<Person> = if (Build.VERSION.SDK_INT >= Build.VER
     extras.getParcelableArrayList<Person>("android.people.list")?.toList() ?: emptyList()
 } else emptyList()
 
-fun Notification.vibrationPattern(): List<UInt> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-    extras.getIntArray("android.vibrationPattern.list")?.toList()?.map(Int::toUInt) ?: emptyList()
-} else emptyList()
+fun Notification.vibrationPattern(): List<UInt>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    extras.getIntArray("android.vibrationPattern.list")?.toList()?.map(Int::toUInt)
+} else null
 
 fun Notification.messagingUser(): Person? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
     extras.getParcelable("android.messagingUser")

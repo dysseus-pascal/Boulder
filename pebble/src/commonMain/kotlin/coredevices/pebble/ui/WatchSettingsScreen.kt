@@ -339,9 +339,13 @@ please disable the option.""".trimIndent(),
             val webServices = koinInject<RealPebbleWebServices>()
             LockerImportDialog(
                 onDismissRequest = { showLockerImportDialog = false },
-                onImportFromPebbleAccount = {
+                onImportFromPebbleAccount = { progressUpdate ->
                     try {
-                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api")
+                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api").collect {
+                            progressUpdate(it.first.toFloat() / it.second.toFloat())
+                        }
+                        progressUpdate(-1f)
+                        libPebble.requestLockerSync().await()
                         coreConfigHolder.update(
                             coreConfig.copy(
                                 useNativeAppStore = true

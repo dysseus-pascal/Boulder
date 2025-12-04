@@ -39,7 +39,7 @@ class AppstoreService(
     private val source: AppstoreSource
 ) {
     companion object {
-        private val STORE_APP_CACHE_AGE = 1.hours
+        private val STORE_APP_CACHE_AGE = 4.hours
     }
     private val logger = Logger.withTag("AppstoreService-${parseUrl(source.url)?.host ?: "unknown"}")
     private val httpClient = httpClient.config {

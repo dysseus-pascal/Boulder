@@ -297,11 +297,24 @@ class RealPebbleWebServices(
             "filter_hardware" to "true",
         )
         return getAllSources().map {
-            it to httpClient.get<AppStoreHome>(
+            val home = httpClient.get<AppStoreHome>(
                 url = "${it.url}/v1/home/$typeString",
                 auth = false,
                 parameters = parameters,
             )
+            it to home?.copy(applications = home.applications.filter { app ->
+                try {
+                    if (Uuid.parse(app.uuid) == Uuid.NIL) {
+                        logger.w { "App ${app.title} has NIL UUID, skipping" }
+                        false
+                    } else {
+                        true
+                    }
+                } catch (_: IllegalArgumentException) {
+                    logger.w { "App ${app.title} has invalid UUID ${app.uuid}, skipping" }
+                    false
+                }
+            })
         }
     }
 
@@ -568,7 +581,7 @@ data class StoreApplication(
     val source: String?,
     val title: String,
     val type: String,
-    val uuid: String,
+    val uuid: String = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
 )

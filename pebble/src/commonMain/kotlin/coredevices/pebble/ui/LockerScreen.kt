@@ -81,6 +81,7 @@ import coil3.request.ImageRequest
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.faces
+import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
@@ -112,6 +113,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,6 +139,7 @@ private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
+    private val collectionsDao: AppstoreCollectionDao,
 ) : ViewModel() {
     val storeHome = mutableStateOf<List<Pair<AppstoreSource, AppStoreHome?>>>(emptyList())
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
@@ -146,7 +149,16 @@ class LockerViewModel(
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { pebbleWebServices.fetchAppStoreHome(type, platform) }
             if (!result.all { it.second == null }) {
-                storeHome.value = result
+                val collectionRules = collectionsDao.getAllCollections().first().groupBy { it.sourceId }
+                storeHome.value = result.map { (source, home) ->
+                    val homeFiltered = home?.let {
+                        val default = source.id == result.first().first.id
+                        it.copy(collections = it.collections.filter { col ->
+                            collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == type }?.enabled ?: default
+                        })
+                    }
+                    source to homeFiltered
+                }
             }
             finished.complete(Unit)
         }

@@ -232,8 +232,12 @@ class RealPebbleWebServices(
         }
     }
 
-    private suspend fun getAllSources(): List<AppstoreSource> {
-        return appstoreSourceDao.getAllEnabledSources().first()
+    private suspend fun getAllSources(enabledOnly: Boolean = true): List<AppstoreSource> {
+        return if (enabledOnly) {
+            appstoreSourceDao.getAllEnabledSources().first()
+        } else {
+            appstoreSourceDao.getAllSources().first()
+        }
     }
 
     private val appstoreServices = mutableMapOf<String, AppstoreService>()
@@ -288,15 +292,17 @@ class RealPebbleWebServices(
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType): List<Pair<AppstoreSource, AppStoreHome?>> {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean = true): List<Pair<AppstoreSource, AppStoreHome?>> {
         val typeString = type.storeString()
-        val parameters = mapOf(
-            "platform" to platform.storeString(),
-            "hardware" to hardwarePlatform.codename,
-//            "firmware_version" to "",
-            "filter_hardware" to "true",
-        )
-        return getAllSources().map {
+        val parameters = buildMap {
+            set("platform", platform.storeString())
+            if (hardwarePlatform != null) {
+                set("hardware", hardwarePlatform.codename)
+            }
+//            set("firmware_version", "")
+            set("filter_hardware", "true")
+        }
+        return getAllSources(enabledOnly).map {
             val home = httpClient.get<AppStoreHome>(
                 url = "${it.url}/v1/home/$typeString",
                 auth = false,

@@ -10,4 +10,5 @@ class PebbleFeatures(
     fun supportsDetectingOtherPebbleApps(): Boolean = platform == Platform.Android
     fun supportsBtClassic(): Boolean = platform == Platform.Android
     fun supportsCompanionDeviceManager(): Boolean = platform == Platform.Android
+    fun supportsVibePatterns(): Boolean = platform == Platform.Android
 }

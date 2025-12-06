@@ -40,6 +40,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
+import kotlinx.coroutines.flow.map
 
 private val logger = Logger.withTag("NotificationContactsScreen")
 
@@ -86,6 +87,52 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 }
 
 @Composable
+fun ContactNotificationViewerScreen(
+    topBarParams: TopBarParams,
+    nav: NavBarNav,
+    contactId: String,
+) {
+    LaunchedEffect(Unit) {
+        topBarParams.searchAvailable(false)
+        topBarParams.actions {}
+        topBarParams.title("Contact Notifications")
+        topBarParams.canGoBack(true)
+        topBarParams.goBack.collect {
+            nav.goBack()
+        }
+    }
+    val libPebble = rememberLibPebble()
+    val flow = remember {
+        libPebble.getContactsWithCounts().map { entries ->
+            entries.firstOrNull { it.contact.lookupKey == contactId }
+        }
+    }
+    val contact by flow.collectAsState(null)
+    contact?.let { entry ->
+        Column {
+            ContactCard(entry = entry, nav = nav, firstOrOnlyItem = true)
+            SelectVibePatternOrNone(
+                currentPattern = entry.contact.vibePatternName,
+                onChangePattern = { pattern ->
+                    libPebble.updateContactState(
+                        contactId = entry.contact.lookupKey,
+                        muteState = entry.contact.muteState,
+                        vibePatternName = pattern?.name,
+                    )
+                },
+            )
+            NotificationHistoryList(
+                packageName = null,
+                channelId = null,
+                contactId = contactId,
+                limit = 25,
+                showAppIcon = true,
+            )
+        }
+    }
+}
+
+@Composable
 fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolean) {
     val libPebble = rememberLibPebble()
     val muted = remember(entry.contact.muteState) { entry.contact.muteState == MuteState.Always }
@@ -118,7 +165,11 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
                     checked = !muted,
                     onCheckedChange = {
                         val toggledState = if (muted) MuteState.Never else MuteState.Always
-                        libPebble.updateContactMuteState(entry.contact.lookupKey, toggledState)
+                        libPebble.updateContactState(
+                            contactId = entry.contact.lookupKey,
+                            muteState = toggledState,
+                            vibePatternName = entry.contact.vibePatternName,
+                        )
                     },
                     enabled = !favorite,
                 )
@@ -133,7 +184,11 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
                         onCheckedChange = { checked ->
                             val newState =
                                 if (checked) MuteState.Exempt else MuteState.Never
-                            libPebble.updateContactMuteState(entry.contact.lookupKey, newState)
+                            libPebble.updateContactState(
+                                contactId = entry.contact.lookupKey,
+                                muteState = newState,
+                                vibePatternName = entry.contact.vibePatternName,
+                            )
                         },
                         enabled = !muted,
                     ) {

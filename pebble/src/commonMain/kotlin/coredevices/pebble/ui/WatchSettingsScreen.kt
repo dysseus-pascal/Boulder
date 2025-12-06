@@ -58,9 +58,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
+import com.cactus.TranscriptionProvider
 import com.cactus.VoiceModel
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -236,7 +238,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
         val appVersion = koinInject<CoreAppVersion>()
         val platform = koinInject<Platform>()
         val nextBugReportContext: NextBugReportContext = koinInject()
-        val title = stringResource(coreapp.pebble.generated.resources.Res.string.settings)
+        val title = stringResource(Res.string.settings)
         val appUpdate: AppUpdate = koinInject()
         val updateState by appUpdate.updateAvailable.collectAsState()
         val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
@@ -619,6 +621,42 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                SettingsItem(
+                    title = "Vibration Pattern",
+                    section = Section.Notifications,
+                    show = { pebbleFeatures.supportsVibePatterns() },
+                    item = {
+                        SelectVibePatternOrNone(
+                            currentPattern = libPebbleConfig.notificationConfig.overrideDefaultVibePattern,
+                            onChangePattern = { pattern ->
+                                libPebble.updateConfig(
+                                    libPebbleConfig.copy(
+                                        notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                            overrideDefaultVibePattern = pattern?.name
+                                        )
+                                    )
+                                )
+                            },
+                            subtext = "Override the default on the watch",
+                        )
+                    }
+                ),
+                basicSettingsToggleItem(
+                    title = "Use vibration patterns from OS",
+                    description = "If there is a vibration pattern defined by the app which created a notification, use it on the watch (unless overridden)",
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.useAndroidVibePatterns,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    useAndroidVibePatterns = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsVibePatterns() },
                 ),
                 basicSettingsToggleItem(
                     title = "Send local-only notifications to watch",
@@ -1223,7 +1261,7 @@ fun STTModeDialog(
             if (availableModels == null) {
                 availableModels = withContext(Dispatchers.IO) {
                     val stt = CactusSTT()
-                    listOf(com.cactus.TranscriptionProvider.WHISPER).flatMap {
+                    listOf(TranscriptionProvider.WHISPER).flatMap {
                         stt.getVoiceModels(it)
                     }
                 }

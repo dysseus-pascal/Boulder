@@ -124,6 +124,8 @@ enum class TimelineIcon(val id: UInt, val code: String) {
                 ?: error("Unknown timeline icon id: $id")
         }
 
-        fun fromCode(code: String): TimelineIcon? = entries.firstOrNull { it.code == code }
+        fun TimelineIcon.key() = code.replace("system://images/", "")
+
+        fun fromCode(code: String?): TimelineIcon? = entries.firstOrNull { it.code == code }
     }
 }

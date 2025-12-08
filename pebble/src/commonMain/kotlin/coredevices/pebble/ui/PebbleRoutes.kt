@@ -102,7 +102,7 @@ object PebbleNavBarRoutes {
     data class ContactNotificationViewerRoute(val contactId: String) : NavBarRoute
 
     @Serializable
-    data class AppStoreCollectionRoute(val sourceId: Int, val collectionSlug: String, val collectionTitle: String, val appType: AppType) : NavBarRoute
+    data class AppStoreCollectionRoute(val sourceId: Int, val path: String, val title: String, val appType: AppType? = null) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -223,8 +223,8 @@ fun NavGraphBuilder.addNavBarRoutes(
             navBarNav = nav,
             topBarParams = topBarParams,
             sourceId = route.sourceId,
-            collectionSlug = route.collectionSlug,
-            collectionTitle = route.collectionTitle,
+            path = route.path,
+            title = route.title,
             appType = route.appType,
         )
     }

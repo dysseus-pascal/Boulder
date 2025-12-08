@@ -47,8 +47,8 @@ class AppStoreCollectionScreenViewModel(
     val platform: Platform,
     val appstoreSourceDao: AppstoreSourceDao,
     appstoreSourceId: Int,
-    val slug: String,
-    val appType: AppType,
+    val path: String,
+    val appType: AppType?,
 ): ViewModel(), KoinComponent {
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     val loading = MutableStateFlow(true)
@@ -77,20 +77,20 @@ class AppStoreCollectionScreenViewModel(
             loading.value = true
             val skip = loadedApps.size
             appstoreService.await().fetchAppStoreCollection(
-                slug,
+                path,
                 appType,
                 hardwarePlatform = watchType.await(),
                 offset = skip
             )?.let { newApps ->
                 loading.value = false
-                logger.d { "Fetched ${newApps.data.size} more apps for collection $slug (offset = $skip)" }
+                logger.d { "Fetched ${newApps.data.size} more apps for collection $path (offset = $skip)" }
                 loadedApps.addAll(newApps.data.mapNotNull { it.asCommonApp(watchType.await(), platform, appstoreService.await().source) })
                 if (newApps.data.isEmpty()) {
-                    logger.d { "Reached max apps for collection $slug" }
+                    logger.d { "Reached max apps for collection $path" }
                     reachedMax.value = true
                 }
             } ?: run {
-                logger.e { "Failed to fetch apps for collection $slug" }
+                logger.e { "Failed to fetch apps for collection $path" }
                 loading.value = false
             }
         }
@@ -102,14 +102,14 @@ fun AppStoreCollectionScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     sourceId: Int,
-    collectionSlug: String,
-    collectionTitle: String,
-    appType: AppType,
+    path: String, // e.g. "collection/most-loved"
+    title: String,
+    appType: AppType?,
 ) {
     val viewModel = koinViewModel<AppStoreCollectionScreenViewModel> {
         parametersOf(
             sourceId,
-            collectionSlug,
+            path,
             appType
         )
     }
@@ -119,7 +119,7 @@ fun AppStoreCollectionScreen(
     AppStoreCollectionScreen(
         navBarNav = navBarNav,
         topBarParams = topBarParams,
-        collectionTitle = collectionTitle,
+        collectionTitle = title,
         loading = loading,
         apps = apps,
         reachedMax = reachedMax,

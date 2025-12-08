@@ -460,8 +460,8 @@ fun LockerScreen(
                                             navBarNav.navigateTo(
                                                 PebbleNavBarRoutes.AppStoreCollectionRoute(
                                                     sourceId = source.id,
-                                                    collectionSlug = collection.slug,
-                                                    collectionTitle = collection.name,
+                                                    path = "collection/${collection.slug}",
+                                                    title = collection.name,
                                                     appType = type,
                                                 )
                                             )
@@ -851,7 +851,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = companions.android?.asCompanionApp(),
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = developerId, sourceLink = this.source),
         type = appType,
         category = category,
         version = latestRelease.version,
@@ -875,7 +875,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null),
         type = appType,
         category = category,
         version = null,
@@ -926,7 +926,9 @@ sealed class CommonAppType {
 
     data class Store(
         val storedId: String,
-        val storeSource: AppstoreSource
+        val storeSource: AppstoreSource,
+        val developerId: String?,
+        val sourceLink: String?,
     ) : CommonAppType()//, CommonAppTypeFromStore
 
     data class System(

@@ -113,7 +113,7 @@ class AppstoreService(
         return result
     }
 
-    suspend fun fetchAppStoreCollection(slug: String, type: AppType, hardwarePlatform: WatchType?, offset: Int): StoreAppResponse? {
+    suspend fun fetchAppStoreCollection(path: String, type: AppType?, hardwarePlatform: WatchType?, offset: Int): StoreAppResponse? {
         val parameters = buildMap {
             put("platform", platform.storeString())
             if (hardwarePlatform != null) {
@@ -121,7 +121,12 @@ class AppstoreService(
             }
             put("offset", offset.toString())
         }
-        val url = "${source.url}/v1/apps/collection/$slug/${type.storeString()}"
+        val url = buildString {
+            append("${source.url}/v1/apps/$path")
+            if (type != null) {
+                append("/${type.storeString()}")
+            }
+        }
         logger.v { "get ${url} with parameters $parameters" }
         return httpClient.get(url = Url(url)) {
             parameters.forEach {
@@ -130,7 +135,7 @@ class AppstoreService(
         }.takeIf {
             logger.v { "${it.call.request.url}"}
             if (!it.status.isSuccess()) {
-                logger.w { "Failed to fetch collection $slug of type ${type.code}, status: ${it.status}" }
+                logger.w { "Failed to fetch collection $path of type ${type?.code}, status: ${it.status}" }
                 false
             } else {
                 true

@@ -137,7 +137,16 @@ val watchModule = module {
     viewModelOf(::LockerViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
-    viewModelOf(::AppStoreCollectionScreenViewModel)
+    viewModel { p ->
+        AppStoreCollectionScreenViewModel(
+            get(),
+            get(),
+            get(),
+            p.get(),
+            p.get(),
+            p.getOrNull()
+        )
+    }
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

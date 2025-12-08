@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
@@ -385,8 +386,7 @@ fun LockerScreen(
                 }) {
                     if (coreConfig.useNativeAppStore) {
                         val density = LocalDensity.current
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 132.dp),
+                        LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .onSizeChanged { (width, height) ->
@@ -396,7 +396,7 @@ fun LockerScreen(
                                 }
                         ) {
                             if (loggedIn == null) {
-                                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                item(contentType = "login_button") {
                                     PebbleElevatedButton(
                                         text = "Login to Rebble to see App Store and Locker",
                                         onClick = {
@@ -411,6 +411,7 @@ fun LockerScreen(
                             fun Carousel(
                                 title: String,
                                 items: List<CommonApp>,
+                                onClick: (() -> Unit)? = null
                             ) {
                                 AppCarousel(
                                     title = title,
@@ -418,12 +419,13 @@ fun LockerScreen(
                                     navBarNav = navBarNav,
                                     runningApp = runningApp,
                                     topBarParams = topBarParams,
-                                    itemWidth = itemWidth
+                                    itemWidth = itemWidth,
+                                    onClick = onClick
                                 )
                             }
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("On My Watch", onWatch) }
+                            item(contentType = "app_carousel") { Carousel("On My Watch", onWatch) }
 
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Recent", notOnWatch) }
+                            item(contentType = "app_carousel") { Carousel("Recent", notOnWatch) }
 
                             val storeHomes by viewModel.storeHome
                             // TODO categories
@@ -431,11 +433,11 @@ fun LockerScreen(
                             storeHomes.forEach { (source, home) ->
                                 home?.let {
                                     if (storeHomes.size > 1) {
-                                        item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                        item(contentType = "source_title") {
                                             Text(source.title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium)
                                         }
                                     }
-                                    items(home.collections.size, span = { GridItemSpan(maxCurrentLineSpan) }) {
+                                    items(home.collections.size, contentType = { "app_carousel_collection" }) {
                                         val collection = home.collections[it]
                                         val collectionApps =
                                             remember(
@@ -454,12 +456,21 @@ fun LockerScreen(
                                                     }?.asCommonApp(watchType, platform, source)
                                                 }
                                             }
-                                        Carousel(collection.name, collectionApps)
+                                        Carousel(collection.name, collectionApps, onClick = {
+                                            navBarNav.navigateTo(
+                                                PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                                    sourceId = source.id,
+                                                    collectionSlug = collection.slug,
+                                                    collectionTitle = collection.name,
+                                                    appType = type,
+                                                )
+                                            )
+                                        })
                                     }
                                 }
                             }
 
-                            item(span = { GridItemSpan(maxCurrentLineSpan) }) { Carousel("Not Compatible", notCompatible) }
+                            item(contentType = "app_carousel") { Carousel("Not Compatible", notCompatible) }
                         }
                     } else {
                         LazyVerticalGrid(
@@ -608,25 +619,6 @@ fun SearchResultsList(
     }
 }
 
-fun LazyGridScope.nativeAppsGrid(
-    apps: List<CommonApp>,
-    navBarNav: NavBarNav,
-    runningApp: Uuid?,
-    topBarParams: TopBarParams,
-) {
-    items(
-        items = apps,
-        key = { it.uuid }
-    ) { entry ->
-        NativeWatchfaceCard(
-            entry,
-            navBarNav,
-            runningApp == entry.uuid,
-            topBarParams,
-        )
-    }
-}
-
 @Composable
 fun AppCarousel(
     title: String,
@@ -635,12 +627,25 @@ fun AppCarousel(
     runningApp: Uuid?,
     topBarParams: TopBarParams,
     itemWidth: Dp = 132.dp,
+    onClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) {
         return
     }
     Column {
-        Text(title, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 24.sp)
+        Row(modifier = Modifier.padding(horizontal = 16.dp).let {
+            if (onClick != null) {
+                it.clickable { onClick() }
+            } else {
+                it
+            }
+        }) {
+            Text(title, fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
+            Spacer(modifier = Modifier.weight(1f))
+            if (onClick != null) {
+                Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = "See all", modifier = Modifier)
+            }
+        }
         // Do this manually rather than using rememberCarouselState - that breaks when we change the
         // size.
         val state = rememberSaveable(items.size, saver = CarouselState.Saver) {
@@ -655,7 +660,7 @@ fun AppCarousel(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .padding(top = 14.dp, bottom = 14.dp),
+                .padding(vertical = 6.dp),
             itemWidth = itemWidth,
             itemSpacing = 8.dp,
             contentPadding = PaddingValues(horizontal = 10.dp)

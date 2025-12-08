@@ -25,6 +25,7 @@ import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleBootConfigService
 import coredevices.pebble.services.PebbleHttpClient
 import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
@@ -136,6 +137,7 @@ val watchModule = module {
     viewModelOf(::LockerViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
+    viewModelOf(::AppStoreCollectionScreenViewModel)
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

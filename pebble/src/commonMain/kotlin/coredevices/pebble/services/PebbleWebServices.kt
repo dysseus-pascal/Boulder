@@ -663,8 +663,8 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "aplite",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "3.0", //TODO
+                        pebbleProcessInfoFlags = 0, //TODO
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -678,7 +678,7 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "basalt",
-                        sdkVersion = it.firmware.major.toString(),
+                        sdkVersion = "3.0",
                         pebbleProcessInfoFlags = 0,
                         description = app.description,
                         images = LockerEntryPlatformImages(
@@ -693,7 +693,7 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "chalk",
-                        sdkVersion = it.firmware.major.toString(),
+                        sdkVersion = "3.0",
                         pebbleProcessInfoFlags = 0,
                         description = app.description,
                         images = LockerEntryPlatformImages(
@@ -708,7 +708,7 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "diorite",
-                        sdkVersion = it.firmware.major.toString(),
+                        sdkVersion = "3.0",
                         pebbleProcessInfoFlags = 0,
                         description = app.description,
                         images = LockerEntryPlatformImages(
@@ -723,7 +723,7 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "emery",
-                        sdkVersion = it.firmware.major.toString(),
+                        sdkVersion = "3.0",
                         pebbleProcessInfoFlags = 0,
                         description = app.description,
                         images = LockerEntryPlatformImages(
@@ -738,7 +738,7 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 add(
                     LockerEntryPlatform(
                         name = "flint",
-                        sdkVersion = it.firmware.major.toString(),
+                        sdkVersion = "3.0",
                         pebbleProcessInfoFlags = 0,
                         description = app.description,
                         images = LockerEntryPlatformImages(

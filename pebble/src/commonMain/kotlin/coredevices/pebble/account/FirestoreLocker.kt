@@ -111,7 +111,7 @@ class FirestoreLocker(
         val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = entry.appstoreSource, title = "")) }
         val appstoreApp = appstore.fetchAppStoreApp(entry.appstoreId, null, useCache)
             ?: return null
-        return appstoreApp.toLockerEntry()
+        return appstoreApp.toLockerEntry(entry.appstoreSource)
     }
 
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModel? {
@@ -160,7 +160,7 @@ class FirestoreLocker(
                 logger.e {"Failed to fetch appstore app for id=$id from source=$sourceUrl" }
                 return false
             }
-        val lockerEntry = appstoreApp.toLockerEntry() ?: run {
+        val lockerEntry = appstoreApp.toLockerEntry(sourceUrl) ?: run {
             logger.e { "Failed to convert appstore app to locker entry for id=$id from source=$sourceUrl" }
             return false
         }

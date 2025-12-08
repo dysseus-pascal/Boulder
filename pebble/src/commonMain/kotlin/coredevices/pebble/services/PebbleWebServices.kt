@@ -26,7 +26,10 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.put
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
 import io.ktor.http.isSuccess
+import io.ktor.http.path
 import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.WebServices
@@ -637,7 +640,7 @@ data class StoreChangelogEntry(
 //    val orig: String,
 //)
 
-fun StoreAppResponse.toLockerEntry(): LockerEntry? {
+fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
     val app = data.firstOrNull() ?: return null
     return LockerEntry(
         id = app.id,
@@ -650,7 +653,16 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
         isConfigurable = app.capabilities.contains("configurable"),
         isTimelineEnabled = app.capabilities.contains("timeline"),
         pbw = LockerEntryPBW(
-            file = app.latestRelease.pbwFile,
+            file = app.latestRelease.pbwFile.let {
+                if (!it.startsWith("http") && sourceUrl != null) {
+                    val sourcePrefix = Url(sourceUrl)
+                    URLBuilder(sourcePrefix).apply {
+                        path(it)
+                    }.buildString()
+                } else {
+                    it
+                }
+            },
             iconResourceId = 0,
             releaseId = ""
         ),
@@ -659,12 +671,17 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
         companions = app.companions,
         category = app.category,
         hardwarePlatforms = buildList {
+            var flags = 0
+            if (app.type == AppType.Watchface.code) {
+                flags = flags or (0x1 shl 0)
+            }
             app.compatibility.aplite.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x1 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "aplite",
-                        sdkVersion = "3.0", //TODO
-                        pebbleProcessInfoFlags = 0, //TODO
+                        sdkVersion = "5.86", //TODO: grab from API if we can
+                        pebbleProcessInfoFlags = flagsFinal, //TODO: ditto
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -675,11 +692,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.basalt.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x2 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "basalt",
-                        sdkVersion = "3.0",
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86", //TODO
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -690,11 +708,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.chalk.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x3 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "chalk",
-                        sdkVersion = "3.0",
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -705,11 +724,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.diorite.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x4 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "diorite",
-                        sdkVersion = "3.0",
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -720,11 +740,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.emery.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x5 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "emery",
-                        sdkVersion = "3.0",
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -735,11 +756,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.flint.takeIf { it?.supported ?: false }?.let {
+                val flagsFinal = flags or (0x6 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "flint",
-                        sdkVersion = "3.0",
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",

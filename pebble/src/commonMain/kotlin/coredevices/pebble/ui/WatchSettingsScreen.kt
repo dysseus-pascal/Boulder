@@ -878,6 +878,8 @@ please disable the option.""".trimIndent(),
                                             useNativeAppStore = true,
                                         )
                                     )
+                                    libPebble.requestLockerSync()
+                                    topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                                 }
                             }
                         } else {
@@ -886,6 +888,8 @@ please disable the option.""".trimIndent(),
                                     useNativeAppStore = false,
                                 )
                             )
+                            libPebble.requestLockerSync()
+                            topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                         }
                     },
                     show = { experimentalDevices },

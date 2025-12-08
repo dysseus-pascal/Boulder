@@ -466,9 +466,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                     }
                 }
 
-                if (entry.description != null) {
+                if (viewModel.selectedStoreEntry?.description != null || entry.description != null) {
                     Text(
-                        text = entry.description,
+                        text = viewModel.selectedStoreEntry?.description ?: entry.description ?: "",
                         modifier = Modifier.padding(vertical = 8.dp, horizontal = 5.dp),
                         fontSize = 12.sp
                     )

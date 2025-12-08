@@ -31,6 +31,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 class AppstoreService(
     private val platform: Platform,
@@ -55,7 +56,7 @@ class AppstoreService(
         coerceInputValues = true
     }
 
-    private fun calculateCacheKey(id: String, parameters: Map<String, String>): String {
+    private fun calculateAppCacheKey(id: String, parameters: Map<String, String>): String {
         val data = source.url + id + parameters.entries.sortedBy { it.key }
             .joinToString(separator = "&") { "${it.key}=${it.value}" }
         val hash = sha1(data.encodeToByteArray())
@@ -75,7 +76,7 @@ class AppstoreService(
             //            "filter_hardware" to "true",
         }
 
-        val hash = calculateCacheKey(id, parameters)
+        val hash = calculateAppCacheKey(id, parameters)
         val cacheFile = Path(cacheDir, "$hash.json")
         var result: StoreAppResponse? = null
         if (useCache) {
@@ -111,6 +112,93 @@ class AppstoreService(
             }
         }
         return result
+    }
+
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?): AppStoreHome? {
+        val typeString = type.storeString()
+        val parameters = buildMap {
+            set("platform", platform.storeString())
+            if (hardwarePlatform != null) {
+                set("hardware", hardwarePlatform.codename)
+            }
+//            set("firmware_version", "")
+            set("filter_hardware", "true")
+        }
+        val home = httpClient.get(
+            url = Url("${source.url}/v1/home/$typeString")
+        ) {
+            parameters.forEach {
+                parameter(it.key, it.value)
+            }
+        }.takeIf {
+            logger.v { "${it.call.request.url}"}
+            if (!it.status.isSuccess()) {
+                logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
+                false
+            } else {
+                true
+            }
+        }?.body<AppStoreHome>()
+        home?.let {
+            cacheCategories(home.categories, type)
+        }
+        return home?.copy(applications = home.applications.filter { app ->
+            try {
+                if (Uuid.parse(app.uuid) == Uuid.NIL) {
+                    logger.w { "App ${app.title} has NIL UUID, skipping" }
+                    false
+                } else {
+                    true
+                }
+            } catch (_: IllegalArgumentException) {
+                logger.w { "App ${app.title} has invalid UUID ${app.uuid}, skipping" }
+                false
+            }
+        })
+    }
+
+    private fun calculateCategoryCacheKey(appType: AppType): String {
+        val data = source.url + appType.code
+        val hash = sha1(data.encodeToByteArray())
+        return hash.toHexString()
+    }
+
+    private fun cacheCategories(categories: List<StoreCategory>, type: AppType) {
+        val cacheDir = getTempFilePath(appContext, "category_cache")
+        SystemFileSystem.createDirectories(cacheDir)
+        val hash = calculateCategoryCacheKey(type)
+        val cacheFile = Path(cacheDir, "$hash.json")
+        try {
+            SystemFileSystem.sink(cacheFile).buffered().use {
+                it.writeString(Json.encodeToString(categories))
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to write cached categories for type ${type.code}" }
+        }
+    }
+
+    suspend fun fetchCategories(type: AppType): List<StoreCategory> {
+        val cacheDir = getTempFilePath(appContext, "category_cache")
+        SystemFileSystem.createDirectories(cacheDir)
+        val hash = calculateCategoryCacheKey(type)
+        val cacheFile = Path(cacheDir, "$hash.json")
+        try {
+            if (SystemFileSystem.exists(cacheFile)) {
+                SystemFileSystem.source(cacheFile).buffered().use {
+                    val cachedJson = it.readString()
+                    val cachedCategories: List<StoreCategory> = Json.decodeFromString(cachedJson)
+                    if (cachedCategories.isNotEmpty()) {
+                        return cachedCategories
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to read cached categories for type ${type.code}" }
+        }
+
+        val categories = fetchAppStoreHome(type, null)?.categories ?: emptyList()
+        cacheCategories(categories, type)
+        return categories
     }
 
     suspend fun fetchAppStoreCollection(path: String, type: AppType?, hardwarePlatform: WatchType?, offset: Int): StoreAppResponse? {

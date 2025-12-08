@@ -91,6 +91,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.services.StoreApplication
+import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreSearchResult
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
@@ -453,7 +454,7 @@ fun LockerScreen(
                                                                 app.uuid
                                                             )
                                                         }
-                                                    }?.asCommonApp(watchType, platform, source)
+                                                    }?.asCommonApp(watchType, platform, source, home.categories)
                                                 }
                                             }
                                         Carousel(collection.name, collectionApps, onClick = {
@@ -840,7 +841,7 @@ fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platfo
     return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
 }
 
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
+fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>?): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -851,7 +852,13 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = companions.android?.asCompanionApp(),
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = developerId, sourceLink = this.source),
+        commonAppType = CommonAppType.Store(
+            storedId = id,
+            storeSource = source,
+            developerId = developerId,
+            sourceLink = this.source,
+            categorySlug = categories?.firstOrNull { it.id == categoryId }?.slug
+        ),
         type = appType,
         category = category,
         version = latestRelease.version,
@@ -875,7 +882,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null, categorySlug = null),
         type = appType,
         category = category,
         version = null,
@@ -929,6 +936,7 @@ sealed class CommonAppType {
         val storeSource: AppstoreSource,
         val developerId: String?,
         val sourceLink: String?,
+        val categorySlug: String?
     ) : CommonAppType()//, CommonAppTypeFromStore
 
     data class System(

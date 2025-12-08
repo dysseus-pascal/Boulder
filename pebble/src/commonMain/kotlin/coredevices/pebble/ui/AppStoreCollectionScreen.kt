@@ -65,6 +65,21 @@ class AppStoreCollectionScreenViewModel(
         get<AppstoreService> { parametersOf(source) }
     }
 
+    val categories = viewModelScope.async {
+        appType?.let {
+            appstoreService.await().fetchAppStoreHome(appType, watchType.await())?.categories
+        } ?: run {
+            buildList {
+                addAll(
+                    appstoreService.await().fetchAppStoreHome(AppType.Watchface, watchType.await())?.categories ?: emptyList()
+                )
+                addAll(
+                    appstoreService.await().fetchAppStoreHome(AppType.Watchapp, watchType.await())?.categories ?: emptyList()
+                )
+            }
+        }
+    }
+
     init {
         loadMoreApps()
     }
@@ -84,7 +99,14 @@ class AppStoreCollectionScreenViewModel(
             )?.let { newApps ->
                 loading.value = false
                 logger.d { "Fetched ${newApps.data.size} more apps for collection $path (offset = $skip)" }
-                loadedApps.addAll(newApps.data.mapNotNull { it.asCommonApp(watchType.await(), platform, appstoreService.await().source) })
+                loadedApps.addAll(newApps.data.mapNotNull {
+                    it.asCommonApp(
+                        watchType.await(),
+                        platform,
+                        appstoreService.await().source,
+                        categories.await()
+                    )
+                })
                 if (newApps.data.isEmpty()) {
                     logger.d { "Reached max apps for collection $path" }
                     reachedMax.value = true

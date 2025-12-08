@@ -26,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
@@ -53,6 +54,7 @@ import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -80,6 +82,9 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -88,18 +93,24 @@ private val logger = Logger.withTag("LockerAppScreen")
 class LockerAppViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
     private val platform: Platform,
-) : ViewModel() {
+) : ViewModel(), KoinComponent {
     var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
 
     fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, sources: List<Pair<String, AppstoreSource>>? = null) {
+        val service = get<AppstoreService> { parametersOf(source) }
         viewModelScope.launch {
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)?.data?.firstOrNull()
+            val result = service.fetchAppStoreApp(id, watchType)?.data?.firstOrNull()
             if (result != null) {
                 storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
             }
-            selectedStoreEntry = result?.asCommonApp(watchType, platform, source)
+            selectedStoreEntry = result?.asCommonApp(
+                watchType,
+                platform,
+                source,
+                service.fetchCategories(AppType.fromString(result.type)!!)
+            )
         }
     }
 
@@ -110,11 +121,13 @@ class LockerAppViewModel(
     ): List<AppVariant> {
         val sources = storeSources ?: pebbleWebServices.searchUuidInSources(uuid)
         return sources.map { (id, source) ->
+            val service = get<AppstoreService> { parametersOf(source) }
             //TODO: Search by uuid instead of id to get all variants, id is source-specific except for OG apps
             viewModelScope.async(Dispatchers.IO) {
-                val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
+                val result = service.fetchAppStoreApp(id, watchType)
+                val categories = result?.data?.firstOrNull()?.let { service.fetchCategories(AppType.fromString(it.type)!!) }
                 result?.data?.map { appEntry ->
-                    appEntry.asCommonApp(watchType, platform, source)?.let { app ->
+                    appEntry.asCommonApp(watchType, platform, source, categories)?.let { app ->
                         AppVariant(
                             source = source,
                             app = app
@@ -242,6 +255,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                                     modifier = Modifier.padding(vertical = 5.dp),
                                 )
                             }
+                        }
+                        entry.category?.let {
+                            Spacer(Modifier.height(8.dp))
+                            FilterChip(
+                                true,
+                                onClick = {
+                                    if (entry.commonAppType is CommonAppType.Store && entry.commonAppType.categorySlug != null) {
+                                        val home =
+                                            navBarNav.navigateTo(
+                                                PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                                    sourceId = entry.commonAppType.storeSource.id,
+                                                    path = "category/${entry.commonAppType.categorySlug}",
+                                                    title = entry.category
+                                                )
+                                            )
+                                    }
+                                },
+                                label = { Text(entry.category) }
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         val watchName = lastConnectedWatch?.displayName() ?: ""

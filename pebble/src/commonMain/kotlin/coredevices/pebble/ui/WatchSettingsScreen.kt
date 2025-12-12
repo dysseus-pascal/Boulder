@@ -893,7 +893,6 @@ please disable the option.""".trimIndent(),
                             topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                         }
                     },
-                    show = { experimentalDevices },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",

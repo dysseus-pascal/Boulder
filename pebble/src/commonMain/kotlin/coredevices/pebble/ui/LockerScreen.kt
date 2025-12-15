@@ -463,7 +463,7 @@ fun LockerScreen(
                                                     sourceId = source.id,
                                                     path = "collection/${collection.slug}",
                                                     title = collection.name,
-                                                    appType = type,
+                                                    appType = type.code,
                                                 )
                                             )
                                         })

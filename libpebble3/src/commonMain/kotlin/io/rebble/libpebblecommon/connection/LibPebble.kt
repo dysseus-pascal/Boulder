@@ -311,6 +311,7 @@ class LibPebble3(
         libPebbleCoroutineScope.launch {
             vibePatternDao.ensureAllDefaultsInserted()
         }
+        locker.init()
 
         performPlatformSpecificInit()
     }

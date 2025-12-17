@@ -123,6 +123,7 @@ enum class Section(val title: String) {
     Updates("Updates"),
     Support("Support"),
     Default("Settings"),
+    Calendar("Calendar"),
     Health("Health"),
     Apps("Apps"),
     Weather("Weather"),
@@ -758,6 +759,14 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     show = { false },
+                ),
+                basicSettingsActionItem(
+                    title = "Calendar Settings",
+                    description = "",
+                    section = Section.Calendar,
+                    action = {
+                        navBarNav.navigateTo(PebbleRoutes.CalendarsRoute)
+                    },
                 ),
                 basicSettingsToggleItem(
                     title = "Enable Health",

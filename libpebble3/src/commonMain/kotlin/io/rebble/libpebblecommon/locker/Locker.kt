@@ -200,7 +200,9 @@ class Locker(
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
-        val toDelete = existingApps.mapNotNull { if (!it.value.sideloaded) it.key else null }
+        val toDelete = existingApps.mapNotNull {
+            if (!it.value.sideloaded && !it.value.systemApp) it.key else null
+        }
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
     }

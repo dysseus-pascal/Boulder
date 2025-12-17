@@ -48,7 +48,7 @@ webview = "2.0.3"
 coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.36.0"
-coredevices-speex = "f3b9b07"
+coredevices-speex = "1946c84"
 cactus = "1.0.2-beta"
 paging = "3.4.0-alpha04"
 
@@ -136,4 +136,4 @@ coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coi
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
 algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
-coredevices-speex = { group = "coredevices.speex", name = "speex", version.ref = "coredevices-speex" }
+coredevices-speex = { group = "io.github.coredevices.speex", name = "speex", version.ref = "coredevices-speex" }

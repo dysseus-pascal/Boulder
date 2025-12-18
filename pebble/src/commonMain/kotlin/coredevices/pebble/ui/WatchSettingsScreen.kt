@@ -834,6 +834,16 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    title = "Show debug options",
+                    description = "Show some extra debug options around the app - not useful for most users",
+                    section = Section.Debug,
+                    checked = debugOptionsEnabled,
+                    onCheckChanged = {
+                        settings.set(SHOW_DEBUG_OPTIONS, it)
+                        debugOptionsEnabled = it
+                    },
+                ),
+                basicSettingsToggleItem(
                     title = "PKJS Debugger",
                     description = "Allow connection via the ${if (platform == Platform.Android) "Chrome" else "Safari"} remote inspector to debug PKJS apps. Restart watchapp after changing.",
                     section = Section.Debug,
@@ -998,16 +1008,6 @@ please disable the option.""".trimIndent(),
                         }
                     },
                     show = { debugOptionsEnabled },
-                ),
-                basicSettingsToggleItem(
-                    title = "Show debug options",
-                    description = "Show some extra debug options around the app - not useful for most users",
-                    section = Section.Debug,
-                    checked = debugOptionsEnabled,
-                    onCheckChanged = {
-                        settings.set(SHOW_DEBUG_OPTIONS, it)
-                        debugOptionsEnabled = it
-                    },
                 ),
                 basicSettingsToggleItem(
                     title = "Disable FW update notifications",

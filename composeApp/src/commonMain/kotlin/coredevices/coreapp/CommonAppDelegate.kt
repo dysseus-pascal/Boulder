@@ -2,7 +2,6 @@ package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
-import com.cactus.TranscriptionProvider
 import com.cactus.services.CactusTelemetry
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
@@ -57,7 +56,7 @@ class CommonAppDelegate(
         GlobalScope.launch {
             try {
                 if (!settings.hasKey("cactus_stt_model")) {
-                    val model = CactusSTT().getVoiceModels(TranscriptionProvider.WHISPER)
+                    val model = CactusSTT().getVoiceModels()
                         .firstOrNull { it.isDownloaded }
                     model?.let {
                         settings.putString("cactus_stt_model", it.slug)

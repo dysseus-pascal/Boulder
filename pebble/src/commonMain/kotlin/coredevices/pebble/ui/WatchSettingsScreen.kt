@@ -58,7 +58,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
-import com.cactus.TranscriptionProvider
 import com.cactus.VoiceModel
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
@@ -91,6 +90,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
+import coredevices.util.calculateDefaultSTTModel
 import coredevices.util.deleteRecursive
 import coredevices.util.getModelDirectories
 import coredevices.util.rememberUiContext
@@ -257,8 +257,9 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
         var showSpeechRecognitionModeDialog by remember { mutableStateOf(false) }
         if (showSpeechRecognitionModelDialog != null) {
             check(showSpeechRecognitionModelDialog is RequestedSTTMode.Enabled)
-            val modelName =
+            val modelName = remember {
                 (showSpeechRecognitionModelDialog!! as RequestedSTTMode.Enabled).modelName
+            }
             ModelDownloadDialog(
                 onDismissRequest = { success ->
                     if (success) {
@@ -275,11 +276,15 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
             )
         }
         if (showSpeechRecognitionModeDialog) {
-            val mode = CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
-            val model = settings.getString(
-                SettingsKeys.KEY_CACTUS_STT_MODEL,
-                CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL
-            )
+            val mode = remember {
+                CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
+            }
+            val model = remember {
+                settings.getString(
+                    SettingsKeys.KEY_CACTUS_STT_MODEL,
+                    calculateDefaultSTTModel()
+                )
+            }
             STTModeDialog(
                 onModeSelected = {
                     showSpeechRecognitionModeDialog = false
@@ -1280,25 +1285,23 @@ fun STTModeDialog(
     selectedMode: RequestedSTTMode,
     showModelSelection: Boolean = false,
 ) {
+    val defaultModel = remember { calculateDefaultSTTModel() }
     var targetMode by remember { mutableStateOf(selectedMode.mode) }
     var targetModel by remember {
         val selected = (selectedMode as? RequestedSTTMode.Enabled)?.modelName
-        mutableStateOf<String>(selected ?: CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL)
+        mutableStateOf<String>(selected ?: defaultModel)
     }
     var showModelDropdown by remember { mutableStateOf(false) }
     var availableModels by remember { mutableStateOf<List<VoiceModel>?>(null) }
-    if (showModelSelection) {
-        LaunchedEffect(availableModels) {
-            if (availableModels == null) {
-                availableModels = withContext(Dispatchers.IO) {
-                    val stt = CactusSTT()
-                    listOf(TranscriptionProvider.WHISPER).flatMap {
-                        stt.getVoiceModels(it)
-                    }
-                }
+    LaunchedEffect(availableModels) {
+        if (availableModels == null) {
+            availableModels = withContext(Dispatchers.IO) {
+                val stt = CactusSTT()
+                stt.getVoiceModels()
             }
         }
     }
+
     M3Dialog(
         onDismissRequest = onDismissRequest,
         icon = { Icon(Icons.Default.AppSettingsAlt, contentDescription = null) },
@@ -1423,7 +1426,7 @@ fun STTModeDialog(
                             ) {
                                 availableModels?.forEach { model ->
                                     DropdownMenuItem(
-                                        text = { Text("${model.slug}: ${model.language}") },
+                                        text = { Text("${model.slug} (${model.size_mb} MB)") },
                                         onClick = {
                                             targetModel = model.slug
                                             showModelDropdown = false
@@ -1433,6 +1436,18 @@ fun STTModeDialog(
                                 }
                             }
                         }
+                    }
+                }
+            } else {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                }
+                item {
+                    val modelSize = remember(availableModels) {
+                        availableModels?.firstOrNull {it.slug == defaultModel}?.size_mb
+                    }
+                    modelSize?.let {
+                        Text("Estimated download size: $modelSize MB", fontSize = 12.sp)
                     }
                 }
             }

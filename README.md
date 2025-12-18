@@ -40,8 +40,6 @@ Note that by doing so, your app will not be able to be installed alongside other
 
 The cross-platform Pebble mobile app is located in `composeApp`.
 
-You will need a GitHub username (`github.username`) and token (`github.token`) configured in `local.properties` to fetch the speex module.
-
 Several features (e.g. bug reporting, google login, memfault, online transcription, github developer connection) will not work without tokens configured in `gradle.properties` (but all core features do work).
 
 ### Android

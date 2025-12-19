@@ -31,14 +31,10 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AccessAlarm
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -996,28 +992,6 @@ fun NativeWatchfaceCard(
                         modifier = imageModifier,
                         size = 116.dp,
                     )
-                    val platform: Platform = koinInject()
-                    if (platform == Platform.Android) {
-                        val companionApp = entry.androidCompanion
-                        if (companionApp != null) {
-                            IconButton(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                                    .size(40.dp),
-                                onClick = {
-                                    topBarParams.showSnackbar("Android companions apps not supported yet")
-                                },
-                            ) {
-                                Icon(
-                                    Icons.Filled.Warning,
-                                    contentDescription = "Android companions apps not supported yet",
-                                    modifier = Modifier.fillMaxSize(),
-                                    tint = coreOrange,
-                                )
-                            }
-                        }
-                    }
                 } else {
                     Box(modifier = imageModifier, contentAlignment = Alignment.Center) {
                         Text("Not Compatible", fontSize = 15.sp, textAlign = TextAlign.Center)

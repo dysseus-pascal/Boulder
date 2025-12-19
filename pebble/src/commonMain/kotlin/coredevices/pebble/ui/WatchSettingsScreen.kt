@@ -85,7 +85,6 @@ import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.ModelType
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CactusSTTMode
-import coredevices.util.CommonBuildKonfig
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
@@ -97,6 +96,8 @@ import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
+import dev.gitlive.firebase.firestore.FirebaseFirestoreException
+import dev.gitlive.firebase.firestore.code
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
@@ -358,7 +359,8 @@ please disable the option.""".trimIndent(),
                             )
                         )
                     } catch (e: Exception) {
-                        logger.e(e) { "Error importing locker from pebble account" }
+                        logger.e(e) { "Error importing locker from pebble account: ${e.message}" }
+                        topBarParams.showSnackbar("Error importing locker")
                     }
                     showLockerImportDialog = false
                 },
@@ -893,7 +895,14 @@ please disable the option.""".trimIndent(),
                     onCheckChanged = {
                         if (!coreConfig.useNativeAppStore) {
                             scope.launch {
-                                if (firestoreLocker.isLockerEmpty() && loggedIn != null) {
+                                val lockerEmpty = try {
+                                    firestoreLocker.isLockerEmpty()
+                                } catch (e: FirebaseFirestoreException) {
+                                    logger.e (e) { "Error checking if Firestore locker is empty: code ${e.code.name}" }
+                                    topBarParams.showSnackbar("Please check your internet connection and try again")
+                                    return@launch
+                                }
+                                if (lockerEmpty && loggedIn != null) {
                                     logger.i { "Showing locker import dialog" }
                                     showLockerImportDialog = true
                                 } else {

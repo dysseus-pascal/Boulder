@@ -446,12 +446,12 @@ abstract class LockerPBWCache(context: AppContext) {
     private val pkjsCacheDir = Path(getLockerPBWCacheDirectory(context), "pkjs")
 
     protected fun pathForApp(appId: Uuid, version: String): Path {
-        SystemFileSystem.createDirectories(cacheDir)
+        SystemFileSystem.createDirectories(cacheDir, false)
         return Path(cacheDir, "${appId}_${version}.pbw")
     }
 
     protected fun pkjsPathForApp(appId: Uuid): Path {
-        SystemFileSystem.createDirectories(pkjsCacheDir)
+        SystemFileSystem.createDirectories(pkjsCacheDir, false)
         return Path(pkjsCacheDir, "$appId.js")
     }
 

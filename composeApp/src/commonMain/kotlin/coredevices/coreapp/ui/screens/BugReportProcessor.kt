@@ -239,6 +239,7 @@ class BugReportProcessor(
                     summary = summaryWithAttachmentCount,
                     latestLogs = lastNLines,
                     googleIdToken = userIdToken,
+                    sourceIsExperimentalDevice = params.includeExperimentalDebugInfo
                 )
             } catch (e: Exception) {
                 Logger.e(e) { "Failed to send bug report" }

@@ -1178,7 +1178,8 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
             AsyncImage(
                 model = req,
                 contentDescription = null,
-                modifier = modifier.requiredHeight(size),
+                modifier = modifier.requiredHeight(size)
+                    .widthIn(max = size),
                 placeholder = placeholder,
                 onError = { e ->
                     logger.w(e.result.throwable) { "Error loading app image for ${entry.uuid}" }

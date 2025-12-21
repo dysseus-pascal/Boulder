@@ -247,9 +247,12 @@ fun LockerScreen(
             topBarParams.title(title)
             topBarParams.canGoBack(false)
             if (coreConfig.useNativeAppStore) {
-                isRefreshing = true
-                viewModel.refreshStore(type, watchType).invokeOnCompletion {
-                    isRefreshing = false
+                if (viewModel.storeHome.value.isEmpty()) {
+                    logger.v { "refreshing store" }
+                    isRefreshing = true
+                    viewModel.refreshStore(type, watchType).invokeOnCompletion {
+                        isRefreshing = false
+                    }
                 }
             }
         }

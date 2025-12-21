@@ -166,6 +166,9 @@ fun AppStoreCollectionScreen(
         topBarParams.canGoBack(true)
         topBarParams.actions {}
         topBarParams.searchAvailable(false)
+        topBarParams.goBack.collect {
+            navBarNav.goBack()
+        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
         if (loading && apps.isEmpty()) {

@@ -390,18 +390,6 @@ fun LockerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                         ) {
-                            if (loggedIn == null) {
-                                item(contentType = "login_button") {
-                                    PebbleElevatedButton(
-                                        text = "Login to Rebble to see App Store and Locker",
-                                        onClick = {
-                                            uriHandler.openUri(REBBLE_LOGIN_URI)
-                                        },
-                                        primaryColor = true,
-                                        modifier = Modifier.padding(5.dp).align(Alignment.Center),
-                                    )
-                                }
-                            }
                             @Composable
                             fun Carousel(
                                 title: String,
@@ -466,7 +454,7 @@ fun LockerScreen(
                                 }
                             }
 
-                            item(contentType = "app_carousel") { Carousel("Not Compatible", notCompatible) }
+                            item(contentType = "app_carousel", key = "not_compatible") { Carousel("Not Compatible", notCompatible) }
                         }
                     } else {
                         LazyVerticalGrid(

@@ -118,6 +118,7 @@ kotlin {
                 implementation(libs.coredevices.speex)
                 api(libs.cactus)
                 api(libs.algolia)
+                implementation(libs.reorderable)
             }
         }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -284,36 +285,29 @@ fun LockerScreen(
             }
         }
         val lockerEntries by lockerQuery.collectAsState(emptyList())
-        val filteredLockerEntries by remember(lockerEntries, watchType) {
+        val onWatch by remember(lockerEntries, watchType) {
             derivedStateOf {
                 lockerEntries.filter {
-                    // TODO Include system apps when we support re-ordering
-                    it !is LockerWrapper.SystemApp
-                }
-            }
-        }
-        val onWatch by remember(filteredLockerEntries, watchType) {
-            derivedStateOf {
-                filteredLockerEntries.filter {
-                    it.isSynced() && it.findCompatiblePlatform(
-                        watchType
-                    ).isCompatible()
+                    it.isSynced() &&
+                            it.findCompatiblePlatform(watchType).isCompatible() &&
+                            it.showOnMainLockerScreen()
                 }.map { it.asCommonApp(watchType) }
             }
         }
-        val notOnWatch by remember(filteredLockerEntries, watchType) {
+        val notOnWatch by remember(lockerEntries, watchType) {
             derivedStateOf {
-                filteredLockerEntries.filter {
-                    !it.isSynced() && it.findCompatiblePlatform(
-                        watchType
-                    ).isCompatible()
+                lockerEntries.filter {
+                    !it.isSynced() &&
+                            it.findCompatiblePlatform(watchType).isCompatible() &&
+                            it.showOnMainLockerScreen()
                 }.map { it.asCommonApp(watchType) }
             }
         }
-        val notCompatible by remember(filteredLockerEntries, watchType) {
+        val notCompatible by remember(lockerEntries, watchType) {
             derivedStateOf {
-                filteredLockerEntries.filter {
-                    !it.findCompatiblePlatform(watchType).isCompatible()
+                lockerEntries.filter {
+                    !it.findCompatiblePlatform(watchType).isCompatible() &&
+                            it.showOnMainLockerScreen()
                 }.map { it.asCommonApp(watchType) }
             }
         }
@@ -342,14 +336,10 @@ fun LockerScreen(
             if (topBarParams.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
                 val results by viewModel.storeSearchResults.combine(lockerQuery) { store, locker ->
                     val lockerApps = locker.map { it.asCommonApp(watchType) }
-                    if (coreConfig.useNativeAppStore) {
-                        lockerApps.filter {
-                            it.type == searchType
-                        } + store.filter { a ->
-                            !lockerApps.any { b -> a.uuid == b.uuid }
-                        }
-                    } else {
-                        lockerApps
+                    lockerApps.filter {
+                        it.type == searchType
+                    } + store.filter { a ->
+                        !lockerApps.any { b -> a.uuid == b.uuid }
                     }
                 }.collectAsState(initial = emptyList())
 
@@ -433,12 +423,16 @@ fun LockerScreen(
                                     runningApp = runningApp,
                                     topBarParams = topBarParams,
                                     itemWidth = itemWidth,
-                                    onClick = onClick
+                                    onClick = onClick,
                                 )
                             }
-                            item(contentType = "app_carousel") { Carousel("On My Watch", onWatch) }
+                            item(contentType = "app_carousel", key = "collection_on-my-watch") { Carousel("On My Watch", onWatch, onClick = {
+                                navBarNav.navigateTo(PebbleNavBarRoutes.MyCollectionRoute(appType = type.code, myCollectionType = MyCollectionType.OnWatch.code))
+                            }) }
 
-                            item(contentType = "app_carousel") { Carousel("Recent", notOnWatch) }
+                            item(contentType = "app_carousel", key = "collection_recent") { Carousel("Recent", notOnWatch, onClick = {
+                                navBarNav.navigateTo(PebbleNavBarRoutes.MyCollectionRoute(appType = type.code, myCollectionType = MyCollectionType.Recent.code))
+                            }) }
 
                             val storeHomes by viewModel.storeHome
                             // TODO categories
@@ -446,22 +440,21 @@ fun LockerScreen(
                             storeHomes.forEach { (source, home) ->
                                 home?.let {
                                     if (storeHomes.size > 1) {
-                                        item(contentType = "source_title") {
+                                        item(contentType = "source_title", key = "source_${source.id}") {
                                             Text(source.title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium)
                                         }
                                     }
-                                    items(home.collections.size, contentType = { "app_carousel_collection" }) {
-                                        val collection = home.collections[it]
+                                    items(home.collections, contentType = { "app_carousel_collection" }, key = { "collection_${source.id}_${it.slug}" }) { collection ->
                                         val collectionApps =
                                             remember(
                                                 home,
                                                 collection,
                                                 watchType,
-                                                filteredLockerEntries
+                                                lockerEntries
                                             ) {
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
-                                                        app.id == appId && !filteredLockerEntries.any {
+                                                        app.id == appId && !lockerEntries.any {
                                                             it.properties.id == Uuid.parse(
                                                                 app.uuid
                                                             )
@@ -564,7 +557,7 @@ fun SearchResultsList(
     modifier: Modifier = Modifier,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
-    val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker }
+    val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker || it.commonAppType is CommonAppType.System }
     val scope = rememberCoroutineScope()
     LazyColumn(modifier) {
         if (lockerApps.isNotEmpty()) {
@@ -574,8 +567,6 @@ fun SearchResultsList(
             ) { entry ->
                 NativeWatchfaceListItem(
                     entry,
-                    navBarNav,
-                    topBarParams,
                     onClick = {
                         navBarNav.navigateTo(
                             PebbleNavBarRoutes.LockerAppRoute(
@@ -602,8 +593,6 @@ fun SearchResultsList(
             ) { entry ->
                 NativeWatchfaceListItem(
                     entry,
-                    navBarNav,
-                    topBarParams,
                     onClick = {
                         scope.launch {
                             val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
@@ -630,6 +619,13 @@ fun SearchResultsList(
             }
         }
     }
+}
+
+fun LockerWrapper.showOnMainLockerScreen(): Boolean = when (this) {
+    is LockerWrapper.NormalApp -> true
+    // Don't show system apps here (they'd always take up all the horizontal space). Show system
+    // watchfaces.
+    is LockerWrapper.SystemApp -> properties.type == AppType.Watchface
 }
 
 @Composable
@@ -1107,8 +1103,6 @@ private fun LegacyWatchfaceCard(
 @Composable
 fun NativeWatchfaceListItem(
     entry: CommonApp,
-    navBarNav: NavBarNav,
-    topBarParams: TopBarParams,
     onClick: () -> Unit,
 ) {
     ListItem(

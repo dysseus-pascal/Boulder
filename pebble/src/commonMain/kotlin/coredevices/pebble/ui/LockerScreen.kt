@@ -283,7 +283,13 @@ fun LockerScreen(
                 }
             }
         }
-        val lockerEntries by lockerQuery.collectAsState(emptyList())
+        val le by lockerQuery.collectAsState(null)
+        val lockerEntries = le
+        if (lockerEntries == null) {
+            // Don't render the screen at all until we've read the locker from db
+            // (otherwise scrolling can get really confused while it's momentarily empty)
+            return
+        }
         val onWatch by remember(lockerEntries, watchType) {
             derivedStateOf {
                 lockerEntries.filter {

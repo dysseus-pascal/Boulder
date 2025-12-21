@@ -814,16 +814,15 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Weather Pins",
                     section = Section.Weather,
-                    checked = coreConfig.weatherPins,
+                    checked = coreConfig.weatherPinsV2,
                     onCheckChanged = {
                         coreConfigHolder.update(
                             coreConfig.copy(
-                                weatherPins = it,
+                                weatherPinsV2 = it,
                             )
                         )
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
-                    show = { experimentalDevices },
                 ),
                 basicSettingsToggleItem(
                     title = "Use LAN developer connection",

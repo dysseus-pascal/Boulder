@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -155,9 +156,10 @@ fun MyCollectionScreen(
         AppType.Watchface -> {
             LazyVerticalGrid(
                 state = lazyGridState,
-                columns = GridCells.Fixed(2),
+                columns = GridCells.FixedSize(120.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 items(mutableApps, key = { it.uuid }) { entry ->
                     ReorderableItem(reorderableLazyGridState, key = entry.uuid) { isDragging ->
@@ -171,7 +173,7 @@ fun MyCollectionScreen(
                                 entry,
                                 navBarNav,
                                 runningApp == entry.uuid,
-                                topBarParams,
+                                width = 120.dp,
                             )
                         }
                     }

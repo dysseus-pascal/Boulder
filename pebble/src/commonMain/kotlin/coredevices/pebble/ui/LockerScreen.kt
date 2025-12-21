@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -49,8 +51,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.carousel.CarouselState
-import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,21 +60,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -332,7 +328,6 @@ fun LockerScreen(
                 }
             },
         ) {
-            var itemWidth by remember { mutableStateOf(0.dp) } // need to keep this even if we return from search to reduce jank
             if (topBarParams.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
                 val results by viewModel.storeSearchResults.combine(lockerQuery) { store, locker ->
                     val lockerApps = locker.map { it.asCommonApp(watchType) }
@@ -388,15 +383,9 @@ fun LockerScreen(
                     }
                 }) {
                     if (coreConfig.useNativeAppStore) {
-                        val density = LocalDensity.current
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .onSizeChanged { (width, height) ->
-                                    itemWidth = with(density) {
-                                        (width.toDp() / 3).coerceAtMost(132.dp) - 14.dp
-                                    }
-                                }
                         ) {
                             if (loggedIn == null) {
                                 item(contentType = "login_button") {
@@ -421,8 +410,6 @@ fun LockerScreen(
                                     items = items,
                                     navBarNav = navBarNav,
                                     runningApp = runningApp,
-                                    topBarParams = topBarParams,
-                                    itemWidth = itemWidth,
                                     onClick = onClick,
                                 )
                             }
@@ -634,8 +621,6 @@ fun AppCarousel(
     items: List<CommonApp>,
     navBarNav: NavBarNav,
     runningApp: Uuid?,
-    topBarParams: TopBarParams,
-    itemWidth: Dp = 132.dp,
     onClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) {
@@ -655,32 +640,22 @@ fun AppCarousel(
                 Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = "See all", modifier = Modifier)
             }
         }
-        // Do this manually rather than using rememberCarouselState - that breaks when we change the
-        // size.
-        val state = rememberSaveable(items.size, saver = CarouselState.Saver) {
-            CarouselState(
-                currentItem = 0,
-                currentItemOffsetFraction = 0F,
-                itemCount = { items.size },
-            )
-        }
-        HorizontalUncontainedCarousel(
-            state = state,
+        LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .padding(vertical = 6.dp),
-            itemWidth = itemWidth,
-            itemSpacing = 8.dp,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 10.dp)
-        ) { i ->
-            val entry = items.getOrNull(i) ?: return@HorizontalUncontainedCarousel
-            NativeWatchfaceCard(
-                entry,
-                navBarNav,
-                runningApp == entry.uuid,
-                topBarParams,
-            )
+        ) {
+            items(items, key = { it.uuid } ) { entry ->
+                NativeWatchfaceCard(
+                    entry,
+                    navBarNav,
+                    runningApp == entry.uuid,
+                    width = 100.dp,
+                )
+            }
         }
     }
 }
@@ -773,7 +748,6 @@ fun LockerCarouselPreview() {
                 items = testApps,
                 navBarNav = NoOpNavBarNav,
                 runningApp = null,
-                topBarParams = WrapperTopBarParams,
             )
         }
     }
@@ -958,10 +932,11 @@ fun NativeWatchfaceCard(
     entry: CommonApp,
     navBarNav: NavBarNav,
     running: Boolean,
-    topBarParams: TopBarParams,
+    width: Dp,
 ) {
     Card(
         modifier = Modifier.padding(7.dp)
+            .width(width)
             .clickable {
                 navBarNav.navigateTo(
                     PebbleNavBarRoutes.LockerAppRoute(
@@ -989,7 +964,7 @@ fun NativeWatchfaceCard(
                         size = 116.dp,
                     )
                 } else {
-                    Box(modifier = imageModifier, contentAlignment = Alignment.Center) {
+                    Box(modifier = imageModifier.size(116.dp), contentAlignment = Alignment.Center) {
                         Text("Not Compatible", fontSize = 15.sp, textAlign = TextAlign.Center)
                     }
                 }

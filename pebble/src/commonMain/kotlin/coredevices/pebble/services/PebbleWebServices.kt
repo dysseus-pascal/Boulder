@@ -601,8 +601,8 @@ data class StoreLatestRelease(
     @SerialName("published_date")
     val publishedDate: String,
     @SerialName("release_notes")
-    val releaseNotes: String,
-    val version: String,
+    val releaseNotes: String?,
+    val version: String?,
 )
 
 @Serializable
@@ -612,7 +612,7 @@ data class StoreChangelogEntry(
     @SerialName("release_notes")
     val releaseNotes: String?,
     @SerialName("version")
-    val version: String,
+    val version: String?,
 )
 
 //@Serializable

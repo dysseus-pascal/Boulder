@@ -83,6 +83,9 @@ object PebbleNavBarRoutes {
     data object NotificationsRoute : NavBarRoute
 
     @Serializable
+    data object IndexRoute : NavBarRoute
+
+    @Serializable
     data class NotificationAppRoute(val packageName: String) : NavBarRoute
 
     @Serializable
@@ -150,6 +153,7 @@ fun NavGraphBuilder.addNavBarRoutes(
     nav: NavBarNav,
     topBarParams: TopBarParams,
     experimentalRoute: CoreRoute?,
+    indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit,
     viewModel: WatchHomeViewModel,
 ) {
     composableWithAnimations<PebbleNavBarRoutes.AppStoreRoute>(viewModel) {
@@ -192,6 +196,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
+        indexScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationAppRoute>(viewModel) {
         val route: PebbleNavBarRoutes.NotificationAppRoute = it.toRoute()
@@ -242,9 +249,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
 }
 
-fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, experimentalRoute: CoreRoute?) {
+fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     composable<PebbleRoutes.WatchHomeRoute> {
-        WatchHomeScreen(coreNav, experimentalRoute)
+        WatchHomeScreen(coreNav, experimentalRoute, indexScreen)
     }
     composable<PebbleRoutes.FirmwareSideloadRoute> {
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()

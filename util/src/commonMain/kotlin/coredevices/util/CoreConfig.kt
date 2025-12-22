@@ -54,4 +54,5 @@ data class CoreConfig(
     val disableCompanionDeviceManager: Boolean = false,
     val weatherPinsV2: Boolean = true,
     val disableFirmwareUpdateNotifications: Boolean = false,
+    val enableIndex: Boolean = false,
 )

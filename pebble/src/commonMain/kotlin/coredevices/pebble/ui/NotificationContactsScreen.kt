@@ -47,8 +47,11 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
+import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
+import kotlinx.coroutines.flow.first
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 class ContactsViewModel(
@@ -60,6 +63,7 @@ class ContactsViewModel(
 fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val viewModel = koinViewModel<ContactsViewModel>()
     val libPebble = rememberLibPebble()
+    val coreConfigHolder = koinInject<CoreConfigHolder>()
     val items = remember(
         topBarParams.searchState.query,
         viewModel.onlyNotified.value,
@@ -76,7 +80,10 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             topBarParams.searchAvailable(true)
             topBarParams.actions {
             }
-            topBarParams.canGoBack(false)
+            topBarParams.canGoBack(coreConfigHolder.config.first().enableIndex) // if index enabled we aren't on the navbar
+            topBarParams.goBack.collect {
+                nav.goBack()
+            }
         }
         val contacts = items.collectAsLazyPagingItems()
         Column {

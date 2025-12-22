@@ -3,6 +3,10 @@ package coredevices.coreapp.ui.navigation
 import CommonRoutes
 import CoreNav
 import CoreRoute
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,6 +29,7 @@ import coredevices.coreapp.ui.screens.OnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
+import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ui.GenericWebViewScreen
 import coredevices.util.CommonBuildKonfig
 import kotlinx.coroutines.flow.filterNotNull
@@ -83,7 +88,22 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
     }
     NavHost(navController, startDestination = startDestination) {
         experimentalDevices.addExperimentalRoutes(this, coreNav)
-        addPebbleRoutes(coreNav, experimentalRoute)
+        addPebbleRoutes(coreNav, experimentalRoute, indexScreen = { topBarParams, navBarNav ->
+            //TODO: Common-ify things so we don't have to do this here
+            topBarParams.title("Index")
+            topBarParams.canGoBack(false)
+            topBarParams.searchAvailable(false)
+            topBarParams.actions {
+                IconButton(
+                    onClick = {
+                        coreNav.navigateTo(RingRoutes.Settings)
+                    }
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+            }
+            experimentalDevices.indexScreen(coreNav)
+        })
         if (CommonBuildKonfig.QA) {
             composable<CommonRoutes.BugReport> {
                 val route: CommonRoutes.BugReport = it.toRoute()

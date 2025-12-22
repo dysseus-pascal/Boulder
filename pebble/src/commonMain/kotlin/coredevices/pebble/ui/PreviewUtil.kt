@@ -98,7 +98,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { themeProvider } bind ThemeProvider::class
     single { NotificationScreenViewModel() }
-    single { WatchHomeViewModel() }
+    single { WatchHomeViewModel(get()) }
     single { NotificationAppScreenViewModel() }
     single { NotificationAppsScreenViewModel() }
     single { configProvider } bind BootConfigProvider::class

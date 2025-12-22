@@ -23,6 +23,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,9 +42,11 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.iconUrlFor
+import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
+import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel

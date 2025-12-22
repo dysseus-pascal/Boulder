@@ -91,9 +91,6 @@ class CommonAppDelegate(
         pushMessaging.init()
         bugReports.init()
         GlobalScope.launch(Dispatchers.Default) {
-            // Suspend until we know if experimental devices are enabled,
-            // could never happen if user doesn't have access, or could immediately happen if set locally
-            enableExperimentalDevices.enabled.first { it }
             withContext(Dispatchers.Main) {
                 experimentalDevices.init()
             }

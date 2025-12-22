@@ -514,12 +514,6 @@ please disable the option.""".trimIndent(),
                     action = { navBarNav.navigateTo(PebbleRoutes.AppstoreSettingsRoute) },
                     show = { coreConfig.useNativeAppStore },
                 ),
-                basicSettingsActionItem(
-                    title = "Experimental Feed",
-                    section = Section.Default,
-                    action = { navBarNav.navigateTo(experimentalRoute!!) },
-                    show = { experimentalRoute != null },
-                ),
                 SettingsItem(
                     title = TITLE_APP_THEME,
                     section = Section.Default,
@@ -572,6 +566,19 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    title = "Enable Index Feed",
+                    section = Section.Default,
+                    checked = coreConfig.enableIndex,
+                    show = { experimentalRoute != null },
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                enableIndex = it,
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
                     title = "Dump notifications to logs",
                     description = "Detailed notification logging, to diagnose processing/deduplication issues",
                     section = Section.Logging,
@@ -601,6 +608,15 @@ please disable the option.""".trimIndent(),
                             )
                         )
                     },
+                ),
+                basicSettingsActionItem(
+                    title = "Notification Filtering",
+                    section = Section.Notifications,
+                    keywords = "filter block allow whitelist blacklist mute",
+                    action = {
+                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
+                    },
+                    show = { coreConfig.enableIndex }, // Shown to replace functionality from nav bar now index replaces it
                 ),
                 basicSettingsToggleItem(
                     title = "Always send notifications",

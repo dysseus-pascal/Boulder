@@ -41,9 +41,11 @@ import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.PebbleElevatedButton
+import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.everNotified
+import kotlinx.coroutines.flow.first
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -56,12 +58,17 @@ class NotificationAppsScreenViewModel : ViewModel() {
 fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
+        val coreConfigHolder = koinInject<CoreConfigHolder>()
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(true)
             topBarParams.actions {
             }
             topBarParams.canGoBack(false)
+            topBarParams.canGoBack(coreConfigHolder.config.first().enableIndex) // if index enabled we aren't on the navbar
+            topBarParams.goBack.collect {
+                nav.goBack()
+            }
         }
 
         val notificationApi: NotificationApps = koinInject()

@@ -376,16 +376,19 @@ class BugReportProcessor(
         if (params.includeExperimentalDebugInfo) {
             val experimentalDebugInfoPath = getExperimentalDebugInfoDirectory()
             try {
-                SystemFileSystem.list(Path(experimentalDebugInfoPath)).forEach {
-                    attachments.add(
-                        DocumentAttachment(
-                            fileName = it.name,
-                            mimeType = "application/json",
-                            SystemFileSystem.source(it).buffered(),
-                            size = it.size(),
+                SystemFileSystem.list(Path(experimentalDebugInfoPath))
+                    .sortedByDescending { it.name }
+                    .take(10)
+                    .forEach {
+                        attachments.add(
+                            DocumentAttachment(
+                                fileName = it.name,
+                                mimeType = "application/json",
+                                SystemFileSystem.source(it).buffered(),
+                                size = it.size(),
+                            )
                         )
-                    )
-                }
+                    }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to collect experimental debug info files" }
             }

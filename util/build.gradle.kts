@@ -199,7 +199,7 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "WISPR_KEY", gradleStringPropOrNull("wisprKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_IOS", "whisper-medium")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_IOS", "whisper-medium-pro")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_ANDROID", "whisper-tiny")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_ANDROID_HEAVY", "whisper-small")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "qwen3-0.6")

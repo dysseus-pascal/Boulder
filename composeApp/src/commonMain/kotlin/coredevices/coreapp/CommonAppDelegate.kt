@@ -2,7 +2,7 @@ package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
-import com.cactus.services.CactusTelemetry
+import com.cactus.services.CactusConfig
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -84,7 +84,8 @@ class CommonAppDelegate(
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)
         }
-        CactusTelemetry.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
+        CactusConfig.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
+        CactusConfig.setProKey("6ba4783a-2509-4ef8-a1a6-79374c8dbc31")
         migrateCactusModelSetting()
         pushMessaging.init()
         bugReports.init()

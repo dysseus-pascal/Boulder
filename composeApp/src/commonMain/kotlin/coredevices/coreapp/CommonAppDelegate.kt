@@ -17,6 +17,7 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
@@ -85,7 +86,7 @@ class CommonAppDelegate(
             analyticsBackend.setUser(email = it)
         }
         CactusConfig.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
-        CactusConfig.setProKey("6ba4783a-2509-4ef8-a1a6-79374c8dbc31")
+        CommonBuildKonfig.CACTUS_PRO_KEY?.let { CactusConfig.setProKey(it) }
         migrateCactusModelSetting()
         pushMessaging.init()
         bugReports.init()

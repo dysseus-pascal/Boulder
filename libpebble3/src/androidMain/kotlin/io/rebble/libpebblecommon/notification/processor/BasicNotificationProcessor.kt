@@ -106,6 +106,7 @@ class BasicNotificationProcessor(
     ): TimelineIcon {
         return TimelineIcon.fromCode(app.iconCode)
             ?:appProperties?.icon
+            ?: checkForIndexIcon(sbn, context.context)
             ?: sbn.iconForCategory()
     }
 
@@ -145,6 +146,15 @@ class BasicNotificationProcessor(
             return null
         }
         return vibePatternDao.getVibePattern(name)?.pattern
+    }
+}
+
+const val INDEX_CHANNEL_ID = "ring_debug"
+private fun checkForIndexIcon(sbn: StatusBarNotification, context: Context): TimelineIcon? {
+    return if (sbn.packageName == context.packageName && sbn.notification.channelId == INDEX_CHANNEL_ID) {
+        TimelineIcon.NewsEvent
+    } else {
+        TimelineIcon.NotificationGeneric
     }
 }
 

@@ -91,6 +91,7 @@ class CommonAppDelegate(
         pushMessaging.init()
         bugReports.init()
         GlobalScope.launch(Dispatchers.Default) {
+            weatherFetcher.init()
             withContext(Dispatchers.Main) {
                 experimentalDevices.init()
             }

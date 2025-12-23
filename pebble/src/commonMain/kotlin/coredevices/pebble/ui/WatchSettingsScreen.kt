@@ -830,6 +830,7 @@ please disable the option.""".trimIndent(),
                 ),
                 basicSettingsToggleItem(
                     title = "Weather Pins",
+                    description = "Add weather pins to timeline for the current location (requires location permissions)",
                     section = Section.Weather,
                     checked = coreConfig.weatherPinsV2,
                     onCheckChanged = {

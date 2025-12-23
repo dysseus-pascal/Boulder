@@ -2,6 +2,7 @@ package coredevices.pebble.weather
 
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
@@ -29,8 +30,22 @@ class WeatherFetcher(
     private val pebbleWebServices: RealPebbleWebServices,
     private val libPebble: LibPebble,
     private val clock: Clock,
+    private val settings: Settings,
 ) {
     private val logger = Logger.withTag("WeatherFetcher")
+
+    companion object {
+        private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
+    }
+
+    suspend fun init() {
+        // One-off sync on first launch after this ships
+        if (settings.getBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, false)) {
+            return
+        }
+        settings.putBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, true)
+        fetchWeather()
+    }
 
     suspend fun fetchWeather() {
         if (!coreConfigFlow.value.weatherPinsV2) {

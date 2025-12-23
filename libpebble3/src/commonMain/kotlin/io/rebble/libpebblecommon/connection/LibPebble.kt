@@ -47,7 +47,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
-import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,7 +145,7 @@ interface Watches {
 }
 
 interface WebServices {
-    suspend fun fetchLocker(): LockerModel?
+    suspend fun fetchLocker(): LockerModelWrapper?
     suspend fun removeFromLocker(id: Uuid): Boolean
     suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult
     suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)

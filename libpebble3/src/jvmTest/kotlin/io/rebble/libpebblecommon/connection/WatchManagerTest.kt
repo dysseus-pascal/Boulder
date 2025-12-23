@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -182,7 +183,7 @@ class WatchManagerTest {
     }
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()
     private val webServices = object : WebServices {
-        override suspend fun fetchLocker(): LockerModel? {
+        override suspend fun fetchLocker(): LockerModelWrapper? {
             TODO("Not yet implemented")
         }
 

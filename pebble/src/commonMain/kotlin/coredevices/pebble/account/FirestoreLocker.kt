@@ -14,6 +14,7 @@ import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.code
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -146,7 +147,7 @@ class FirestoreLocker(
         return appstoreApp.toLockerEntry(entry.appstoreSource)
     }
 
-    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModel? {
+    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = try {
             dao.getLockerEntriesForUser(user.uid)
@@ -155,6 +156,7 @@ class FirestoreLocker(
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
+        val failedToFetchUuids = mutableSetOf<Uuid>()
         val applications = fsLocker.chunked(10).also {
             logger.d { "Fetching locker entries in ${it.size} chunks" }
         }.flatMap { lockerEntries ->
@@ -176,8 +178,11 @@ class FirestoreLocker(
             return null
         }
         return try {
-            LockerModel(
-                applications = applications.filterNotNull()
+            LockerModelWrapper(
+                locker = LockerModel(
+                    applications = applications.filterNotNull()
+                ),
+                failedToFetchUuids = failedToFetchUuids.toSet(),
             )
         } catch (e: IllegalStateException) {
             logger.e(e) { "Error fetching locker entries" }

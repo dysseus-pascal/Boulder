@@ -2,6 +2,12 @@ package io.rebble.libpebblecommon.web
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.uuid.Uuid
+
+data class LockerModelWrapper(
+    val locker: LockerModel,
+    val failedToFetchUuids: Set<Uuid>,
+)
 
 @Serializable
 data class LockerModel(

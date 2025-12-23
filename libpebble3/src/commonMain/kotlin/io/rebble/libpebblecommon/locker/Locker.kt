@@ -28,7 +28,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
@@ -185,10 +185,10 @@ class Locker(
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
-    suspend fun update(locker: LockerModel) {
-        logger.d("update: ${locker.applications.size}")
+    suspend fun update(locker: LockerModelWrapper) {
+        logger.d("update: ${locker.locker.applications.size}")
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
-        val toInsert = locker.applications.mapNotNull { new ->
+        val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity()
             val existing = existingApps.remove(newEntity.id)
             if (existing == null) {
@@ -205,7 +205,13 @@ class Locker(
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
         val toDelete = existingApps.mapNotNull {
-            if (!it.value.sideloaded && !it.value.systemApp) it.key else null
+            when {
+                it.value.sideloaded -> null
+                it.value.systemApp -> null
+                // Don't delete from locker if we just failed to fetch updated version
+                it.key in locker.failedToFetchUuids -> null
+                else -> it.key
+            }
         }
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)

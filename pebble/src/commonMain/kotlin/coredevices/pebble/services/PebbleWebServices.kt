@@ -46,6 +46,7 @@ import io.rebble.libpebblecommon.web.LockerEntryPBW
 import io.rebble.libpebblecommon.web.LockerEntryPlatform
 import io.rebble.libpebblecommon.web.LockerEntryPlatformImages
 import io.rebble.libpebblecommon.web.LockerModel
+import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -264,11 +265,11 @@ class RealPebbleWebServices(
 
     suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
-    override suspend fun fetchLocker(): LockerModel? {
+    override suspend fun fetchLocker(): LockerModelWrapper? {
         return if (coreConfig.value.useNativeAppStore) {
             firestoreLocker.fetchLocker()
         } else {
-            fetchPebbleLocker()
+            fetchPebbleLocker()?.let { LockerModelWrapper(it, emptySet()) }
         }
     }
 

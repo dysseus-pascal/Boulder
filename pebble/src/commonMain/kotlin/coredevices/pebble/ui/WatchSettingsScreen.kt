@@ -89,6 +89,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
+import coredevices.util.WeatherUnit
 import coredevices.util.calculateDefaultSTTModel
 import coredevices.util.deleteRecursive
 import coredevices.util.getModelDirectories
@@ -840,6 +841,22 @@ please disable the option.""".trimIndent(),
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
                 ),
+                basicSettingsDropdownItem(
+                    title = "Units",
+                    keywords = "weather degrees",
+                    section = Section.Weather,
+                    items = WeatherUnit.entries,
+                    selectedItem = coreConfig.weatherUnits,
+                    onItemSelected = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                weatherUnits = it,
+                            )
+                        )
+                        GlobalScope.launch { weatherFetcher.fetchWeather() }
+                    },
+                    itemText = { it.name },
+                ),
                 basicSettingsToggleItem(
                     title = "Use LAN developer connection",
                     description = "Allow connecting to developer connection over LAN, this is not secure and should only be used on trusted networks",
@@ -1236,6 +1253,69 @@ fun basicSettingsToggleItem(
             shadowElevation = ELEVATION,
         )
     },
+)
+
+fun <T> basicSettingsDropdownItem(
+    title: String,
+    section: Section,
+    items: List<T>,
+    selectedItem: T,
+    onItemSelected: (T) -> Unit,
+    itemText: (T) -> String,
+    keywords: String = "",
+    show: () -> Boolean = { true },
+) = SettingsItem(
+    title = title,
+    section = section,
+    keywords = keywords,
+    show = show,
+    item = {
+        var expanded by remember { mutableStateOf(false) }
+        ListItem(
+            headlineContent = {
+                Text(title)
+            },
+            supportingContent = {
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it },
+                    modifier = Modifier.padding(5.dp),
+                ) {
+                    TextField(
+                        value = itemText(selectedItem),
+                        onValueChange = { },
+                        readOnly = true,
+                        singleLine = true,
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                expanded = expanded
+                            )
+                        },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        items.forEach { item ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(itemText(item))
+                                },
+                                onClick = {
+                                    onItemSelected(item)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+
+                }
+            },
+            shadowElevation = ELEVATION,
+        )
+    }
 )
 
 private const val TITLE_PKJS_TOKEN = "Copy PKJS account token"

@@ -1,5 +1,6 @@
 package coredevices.pebble.weather
 
+import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.util.CoreConfigFlow
@@ -46,7 +47,9 @@ class WeatherFetcher(
                 return
             }
             is GeolocationPositionResult.Success -> {
-                val response = pebbleWebServices.getWeather(location)
+                val locale = Locale.current.toLanguageTag()
+                val units = coreConfigFlow.value.weatherUnits
+                val response = pebbleWebServices.getWeather(location, units, locale)
                 if (response != null) {
                     createTimelinePins(response)
                 }

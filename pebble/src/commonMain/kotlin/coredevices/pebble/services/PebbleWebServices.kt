@@ -16,6 +16,7 @@ import coredevices.pebble.services.PebbleHttpClient.Companion.get
 import coredevices.pebble.services.PebbleHttpClient.Companion.put
 import coredevices.pebble.weather.WeatherResponse
 import coredevices.util.CoreConfigFlow
+import coredevices.util.WeatherUnit
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
@@ -314,8 +315,8 @@ class RealPebbleWebServices(
         return appstore.fetchAppStoreApp(id, hardwarePlatform, useCache)
     }
 
-    suspend fun getWeather(location: GeolocationPositionResult.Success): WeatherResponse? {
-        val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}/"
+    suspend fun getWeather(location: GeolocationPositionResult.Success, units: WeatherUnit, language: String): WeatherResponse? {
+        val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}?language=$language&units=${units.code}"
         return httpClient.get(url, auth = false)
     }
 

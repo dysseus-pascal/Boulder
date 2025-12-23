@@ -16,6 +16,7 @@ import coredevices.util.AndroidCompanionDevice
 import coredevices.util.AndroidPermissionRequester
 import coredevices.util.AndroidPlatform
 import coredevices.util.CompanionDevice
+import coredevices.util.CoreConfigFlow
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
@@ -23,6 +24,7 @@ import coredevices.util.RequiredPermissions
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -48,10 +50,10 @@ val androidDefaultModule = module {
     singleOf(::AndroidAppUpdate) bind AppUpdate::class
     single {
         val pebbleDelegate = get<PebbleAndroidDelegate>()
-        val experimentsEnabled = get<EnableExperimentalDevices>()
+        val enabledFlow = get<CoreConfigFlow>().flow.map { it.enableIndex }
         val experimentalDevices = get<ExperimentalDevices>()
         RequiredPermissions(
-            pebbleDelegate.requiredPermissions.combine(experimentsEnabled.enabled) { permissions, enabled ->
+            pebbleDelegate.requiredPermissions.combine(enabledFlow) { permissions, enabled ->
                 permissions + if (enabled) experimentalDevices.requiredRuntimePermissions() else emptySet()
             }
         )

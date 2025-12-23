@@ -171,7 +171,10 @@ interface DbTimelineItem : BlobDbItem {
             type = type(),
             flags = TimelineItem.Flag.makeFlags(content.flags),
             layout = content.layout,
-            attributes = content.attributes.map { it.asAttribute() },
+            attributes = content.attributes.filterNot {
+                it.attribute == TimelineAttribute.VibrationPattern && !capabilities.contains(
+                    ProtocolCapsFlag.SupportsCustomVibePatterns)
+            }.map { it.asAttribute() },
             actions = content.actions.map { it.asAction() },
         )
         return item.toBytes()

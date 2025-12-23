@@ -362,6 +362,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsRemindersApp(12),
     SupportsWorkoutApp(13),
     SupportsSmoothFwInstallProgress(14),
+    SupportsCustomVibePatterns(15),
     JavascriptBytecodeVersionAppended(16),
     SupportsFwUpdateAcrossDisconnection(21),
     ;

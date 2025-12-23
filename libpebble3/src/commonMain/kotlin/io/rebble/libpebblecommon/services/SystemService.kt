@@ -302,10 +302,29 @@ data class WatchInfo(
     val color: WatchColor,
 )
 
+private val FwVersionSupportsCustomVibePatterns = FirmwareVersion(
+    stringVersion = "4.9.97",
+    timestamp = Instant.DISTANT_FUTURE,
+    major = 4,
+    minor = 9,
+    patch = 97,
+    suffix = null,
+    gitHash = "",
+    isRecovery = false,
+    isDualSlot = false,
+    isSlot0 = false,
+)
+
 fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
     val runningFwVersion = running.firmwareVersion()
     checkNotNull(runningFwVersion)
     val recoveryFwVersion = recovery.firmwareVersion()
+    val extraCapabilities = buildSet {
+        if (runningFwVersion >= FwVersionSupportsCustomVibePatterns) {
+            // Hack: we should add capability to FW but can't do that instantly
+            add(ProtocolCapsFlag.SupportsCustomVibePatterns)
+        }
+    }
     return WatchInfo(
         runningFwVersion = runningFwVersion,
         recoveryFwVersion = recoveryFwVersion,
@@ -318,7 +337,7 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
         resourceTimestamp = Instant.fromEpochSeconds(resourceTimestamp.get().toLong()),
         language = language.get(),
         languageVersion = languageVersion.get().toInt(),
-        capabilities = ProtocolCapsFlag.fromFlags(capabilities.get()),
+        capabilities = ProtocolCapsFlag.fromFlags(capabilities.get()) + extraCapabilities,
         isUnfaithful = isUnfaithful.get() ?: true,
         healthInsightsVersion = healthInsightsVersion.get()?.toInt(),
         javascriptVersion = javascriptVersion.get()?.toInt(),

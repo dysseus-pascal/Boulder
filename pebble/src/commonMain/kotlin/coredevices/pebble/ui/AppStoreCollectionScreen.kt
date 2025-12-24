@@ -43,6 +43,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
+import kotlin.uuid.Uuid
 
 class AppStoreCollectionScreenViewModel(
     val libPebble: LibPebble,
@@ -101,14 +102,21 @@ class AppStoreCollectionScreenViewModel(
             )?.let { newApps ->
                 loading.value = false
                 logger.d { "Fetched ${newApps.data.size} more apps for collection $path (offset = $skip)" }
-                loadedApps.addAll(newApps.data.mapNotNull {
+
+                // Don't add any apps with duplicate UUIDs
+                val existingUuids = loadedApps.map { it.uuid }.toSet()
+                val newCommonApps = newApps.data.filter {
+                    !existingUuids.contains(Uuid.parse(it.uuid))
+                }.mapNotNull {
                     it.asCommonApp(
                         watchType.await(),
                         platform,
                         appstoreService.await().source,
                         categories.await()
                     )
-                })
+                }
+                loadedApps.addAll(newCommonApps)
+
                 if (newApps.data.isEmpty()) {
                     logger.d { "Reached max apps for collection $path" }
                     reachedMax.value = true

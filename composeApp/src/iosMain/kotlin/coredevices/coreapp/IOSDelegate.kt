@@ -151,13 +151,21 @@ object IOSDelegate : KoinComponent {
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
         logger.i { "didFinishLaunching() appVersion=$appVersion appVersionShort=$appVersionShort" }
         // Can only use Koin after this point
+
+        // Initialize NotifierManager early to prevent crashes when PushMessaging tries to use it
+        NotifierManager.initialize(
+            configuration = NotificationPlatformConfiguration.Ios(
+                showPushNotification = false
+            )
+        )
+
         initPebble()
         GlobalScope.launch(Dispatchers.Main) {
-            // Don't dop this before we request permissions (it requests permissions - we want to
+            // Don't do this before we request permissions (it requests permissions - we want to
             // manage that as part of onboarding).
             doneInitialOnboarding.doneInitialOnboarding.await()
 
-            logger.d { "initializing push.." }
+            logger.d { "registering for push notifications.." }
             application.registerUserNotificationSettings(
                 UIUserNotificationSettings.settingsForTypes(
                     UIUserNotificationTypeAlert or UIUserNotificationTypeBadge or UIUserNotificationTypeSound,
@@ -165,11 +173,6 @@ object IOSDelegate : KoinComponent {
                 )
             )
             application.registerForRemoteNotifications()
-            NotifierManager.initialize(
-                configuration = NotificationPlatformConfiguration.Ios(
-                    showPushNotification = false
-                )
-            )
         }
         commonAppDelegate.init()
         return true

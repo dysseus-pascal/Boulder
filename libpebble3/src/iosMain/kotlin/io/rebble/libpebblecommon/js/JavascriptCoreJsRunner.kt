@@ -51,6 +51,8 @@ class JavascriptCoreJsRunner(
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
+    private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
+    private var navigatorRef: StableRef<Map<String, Any>>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
 
@@ -74,6 +76,10 @@ class JavascriptCoreJsRunner(
         )
         interfacesRef = StableRef.create(instances)
         instances.forEach {
+            // Create a stable reference to prevent Kotlin GC from collecting/moving this map
+            // while JavaScriptCore still has references to it
+            val interfRef = StableRef.create(it.interf)
+            interfaceMapRefs.add(interfRef)
             jsContext[it.name] = it.interf
             it.onRegister(jsContext)
         }
@@ -129,6 +135,12 @@ class JavascriptCoreJsRunner(
                 it.dispose()
             }
             interfacesRef = null
+            // Dispose all interface map references
+            interfaceMapRefs.forEach { it.dispose() }
+            interfaceMapRefs.clear()
+            // Dispose navigator reference
+            navigatorRef?.dispose()
+            navigatorRef = null
             jsContext = null
         }
         GC.collect()
@@ -147,6 +159,8 @@ class JavascriptCoreJsRunner(
     )
 
     private fun setupNavigator() {
+        // Create stable reference to prevent GC from collecting navigator while JS holds references
+        navigatorRef = StableRef.create(navigator)
         jsContext?.set("navigator", navigator)
     }
 

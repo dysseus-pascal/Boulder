@@ -54,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import co.touchlab.kermit.Logger
@@ -117,10 +119,42 @@ private val logger = Logger.withTag("WatchHomeScreen")
 @Composable
 fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        val pebbleNavHostController = rememberNavController()
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
         val indexEnabled = viewModel.indexEnabled.collectAsState()
+
+        // Create a SaveableStateHolder to preserve state for each tab
+        val saveableStateHolder = rememberSaveableStateHolder()
+
+        // Create NavControllers for each tab
+        val watchesNavController = rememberNavController()
+        val watchfacesNavController = rememberNavController()
+        val watchappsNavController = rememberNavController()
+        val notificationsNavController = rememberNavController()
+        val indexNavController = rememberNavController()
+        val settingsNavController = rememberNavController()
+
+        val navControllers = remember(
+            watchesNavController,
+            watchfacesNavController,
+            watchappsNavController,
+            notificationsNavController,
+            indexNavController,
+            settingsNavController
+        ) {
+            mapOf(
+                WatchHomeNavTab.Watches to watchesNavController,
+                WatchHomeNavTab.WatchFaces to watchfacesNavController,
+                WatchHomeNavTab.WatchApps to watchappsNavController,
+                WatchHomeNavTab.Notifications to notificationsNavController,
+                WatchHomeNavTab.Index to indexNavController,
+                WatchHomeNavTab.Settings to settingsNavController,
+            )
+        }
+
+        val currentTab = viewModel.selectedTab.value
+        val pebbleNavHostController = navControllers[currentTab]!!
+
         DisposableEffect(pebbleNavHostController) {
             val listener =
                 NavController.OnDestinationChangedListener { controller, destination, arguments ->
@@ -327,7 +361,7 @@ fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },
                 )
             }
-            val navBarNav = remember {
+            val navBarNav = remember(pebbleNavHostController) {
                 object : NavBarNav {
                     override fun navigateTo(route: CoreRoute) {
                         coreNav.navigateTo(route)
@@ -342,12 +376,16 @@ fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen
                     }
                 }
             }
-            NavHost(
-                pebbleNavHostController,
-                startDestination = viewModel.selectedTab.value.route,
-                modifier = Modifier.padding(windowInsets),
-            ) {
-                addNavBarRoutes(navBarNav, topBarParams, experimentalRoute, indexScreen, viewModel)
+
+            // Wrap each tab's NavHost in SaveableStateHolder to preserve state
+            saveableStateHolder.SaveableStateProvider(key = currentTab) {
+                NavHost(
+                    pebbleNavHostController,
+                    startDestination = currentTab.route,
+                    modifier = Modifier.padding(windowInsets),
+                ) {
+                    addNavBarRoutes(navBarNav, topBarParams, experimentalRoute, indexScreen, viewModel)
+                }
             }
         }
     }

@@ -105,16 +105,19 @@ class AppStoreCollectionScreenViewModel(
 
                 // Don't add any apps with duplicate UUIDs
                 val existingUuids = loadedApps.map { it.uuid }.toSet()
-                val newCommonApps = newApps.data.filter {
-                    !existingUuids.contains(Uuid.parse(it.uuid))
-                }.mapNotNull {
-                    it.asCommonApp(
-                        watchType.await(),
-                        platform,
-                        appstoreService.await().source,
-                        categories.await()
-                    )
-                }
+                // Also deduplicate within the incoming data itself
+                val newCommonApps = newApps.data
+                    .distinctBy { it.uuid } // Remove duplicates within this response
+                    .filter {
+                        !existingUuids.contains(Uuid.parse(it.uuid))
+                    }.mapNotNull {
+                        it.asCommonApp(
+                            watchType.await(),
+                            platform,
+                            appstoreService.await().source,
+                            categories.await()
+                        )
+                    }
                 loadedApps.addAll(newCommonApps)
 
                 if (newApps.data.isEmpty()) {

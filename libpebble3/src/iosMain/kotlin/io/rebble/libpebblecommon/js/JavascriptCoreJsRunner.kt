@@ -68,7 +68,7 @@ class JavascriptCoreJsRunner(
         fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
 
         // Create stable references for the eval/evalRaw functions to prevent GC from moving them
-        val evalFn: (String) -> Unit? = ::eval
+        val evalFn: (String) -> JSValue? = ::eval
         val evalRawFn: (String) -> JSValue? = ::evalRaw
         functionRefs.add(StableRef.create(evalFn))
         functionRefs.add(StableRef.create(evalRawFn))

@@ -112,8 +112,6 @@ class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.enableIndex)
 }
 
-data class SearchState(val query: String, val typing: Boolean)
-
 private val logger = Logger.withTag("WatchHomeScreen")
 
 @Composable
@@ -436,17 +434,6 @@ fun WatchHomePreview() {
         WatchHomeScreen(NoOpCoreNav, null, { _, _ ->})
     }
 }
-
-@Stable
-data class TopBarParams(
-    val searchState: SearchState,
-    val searchAvailable: (Boolean) -> Unit,
-    val actions: (@Composable RowScope.() -> Unit) -> Unit,
-    val title: (String) -> Unit,
-    val canGoBack: (Boolean) -> Unit,
-    val goBack: Flow<Unit>,
-    val showSnackbar: (String) -> Unit,
-)
 
 @Composable
 fun TopBarIconButtonWithToolTip(

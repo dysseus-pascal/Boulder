@@ -23,7 +23,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,11 +41,9 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.iconUrlFor
-import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
-import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -69,7 +66,7 @@ enum class NotificationAppSort {
 }
 
 @Composable
-fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack: Boolean) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationScreenViewModel>()
         val pebbleFeatures = koinInject<PebbleFeatures>()
@@ -100,8 +97,8 @@ fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
             }
             when (viewModel.tab.value) {
-                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav)
-                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav)
+                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav, canGoBack)
+                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav, canGoBack)
 //            NotificationTab.Rules -> NotificationRulesScreen(topBarParams, nav)
 //            NotificationTab.History -> NotificationHistoryScreen(topBarParams, nav)
             }
@@ -116,6 +113,7 @@ fun NotificationsScreenPreview() {
         NotificationsScreen(
             topBarParams = WrapperTopBarParams,
             nav = NoOpNavBarNav,
+            canGoBack = false,
         )
     }
 }

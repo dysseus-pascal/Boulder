@@ -1,9 +1,11 @@
 package coredevices
 
+import androidx.compose.runtime.Composable
 import androidx.navigation.NavGraphBuilder
 import CoreNav
 import CoreRoute
 import DocumentAttachment
+import coredevices.pebble.ui.TopBarParams
 import coredevices.util.Permission
 
 class ExperimentalDevices {
@@ -25,5 +27,10 @@ class ExperimentalDevices {
 
     fun debugSummary(): String? {
         return null
+    }
+
+    @Composable
+    fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
+
     }
 }

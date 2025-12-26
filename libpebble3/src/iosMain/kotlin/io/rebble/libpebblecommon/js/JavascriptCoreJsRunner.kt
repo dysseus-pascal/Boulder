@@ -52,6 +52,7 @@ class JavascriptCoreJsRunner(
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
     private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
+    private val functionRefs = mutableListOf<StableRef<*>>()
     private var navigatorRef: StableRef<Map<String, Any>>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
@@ -65,13 +66,20 @@ class JavascriptCoreJsRunner(
     private fun initInterfaces(jsContext: JSContext) {
         fun eval(js: String) = this.jsContext?.evalCatching(js)
         fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
+
+        // Create stable references for the eval/evalRaw functions to prevent GC from moving them
+        val evalFn: (String) -> Unit? = ::eval
+        val evalRawFn: (String) -> JSValue? = ::evalRaw
+        functionRefs.add(StableRef.create(evalFn))
+        functionRefs.add(StableRef.create(evalRawFn))
+
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, ::eval, remoteTimelineEmulator, appInfo),
-            JSTimeout(interfacesScope, ::evalRaw),
+            XMLHTTPRequestManager(interfacesScope, evalFn, remoteTimelineEmulator, appInfo),
+            JSTimeout(interfacesScope, evalRawFn),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
-            JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
+            JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
         interfacesRef = StableRef.create(instances)
@@ -80,6 +88,14 @@ class JavascriptCoreJsRunner(
             // while JavaScriptCore still has references to it
             val interfRef = StableRef.create(it.interf)
             interfaceMapRefs.add(interfRef)
+
+            // Also create stable references for all functions in the map
+            it.interf.values.forEach { value ->
+                if (value != null) {
+                    functionRefs.add(StableRef.create(value))
+                }
+            }
+
             jsContext[it.name] = it.interf
             it.onRegister(jsContext)
         }
@@ -138,6 +154,9 @@ class JavascriptCoreJsRunner(
             // Dispose all interface map references
             interfaceMapRefs.forEach { it.dispose() }
             interfaceMapRefs.clear()
+            // Dispose all function references
+            functionRefs.forEach { it.dispose() }
+            functionRefs.clear()
             // Dispose navigator reference
             navigatorRef?.dispose()
             navigatorRef = null

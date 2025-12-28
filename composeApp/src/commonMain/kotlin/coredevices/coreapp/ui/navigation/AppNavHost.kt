@@ -1,5 +1,6 @@
 package coredevices.coreapp.ui.navigation
 
+import BugReportButton
 import CommonRoutes
 import CoreNav
 import CoreRoute

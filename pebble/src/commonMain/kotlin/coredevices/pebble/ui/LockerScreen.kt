@@ -444,7 +444,7 @@ fun LockerScreen(
                                                             )
                                                         }
                                                     }?.asCommonApp(watchType, platform, source, home.categories)
-                                                }
+                                                }.distinctBy { it.uuid }
                                             }
                                         Carousel(collection.name, collectionApps, onClick = {
                                             navBarNav.navigateTo(

@@ -77,14 +77,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
         }
     }
     val experimentalDevices: ExperimentalDevices = koinInject()
-    val experimentalRoute = if (experimentsEnabled()) {
-        experimentalDevices.home()
-    } else {
-        null
-    }
     NavHost(navController, startDestination = startDestination) {
         experimentalDevices.addExperimentalRoutes(this, coreNav)
-        addPebbleRoutes(coreNav, experimentalRoute, indexScreen = { topBarParams, navBarNav ->
+        addPebbleRoutes(coreNav, indexScreen = { topBarParams, navBarNav ->
             experimentalDevices.IndexScreen(coreNav, topBarParams)
         })
         if (CommonBuildKonfig.QA) {

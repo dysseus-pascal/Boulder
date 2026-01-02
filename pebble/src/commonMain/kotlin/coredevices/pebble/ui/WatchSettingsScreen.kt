@@ -218,7 +218,7 @@ sealed interface RequestedSTTMode {
 }
 
 @Composable
-fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experimentalRoute: CoreRoute?) {
+fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()
         val libPebbleConfig by libPebble.config.collectAsState()
@@ -570,7 +570,6 @@ please disable the option.""".trimIndent(),
                     title = "Enable Index Feed",
                     section = Section.Default,
                     checked = coreConfig.enableIndex,
-                    show = { experimentalRoute != null },
                     onCheckChanged = {
                         coreConfigHolder.update(
                             coreConfig.copy(

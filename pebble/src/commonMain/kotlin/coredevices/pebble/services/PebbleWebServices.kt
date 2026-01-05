@@ -297,15 +297,6 @@ class RealPebbleWebServices(
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean = true): List<Pair<AppstoreSource, AppStoreHome?>> {
-        val typeString = type.storeString()
-        val parameters = buildMap {
-            set("platform", platform.storeString())
-            if (hardwarePlatform != null) {
-                set("hardware", hardwarePlatform.codename)
-            }
-//            set("firmware_version", "")
-            set("filter_hardware", "true")
-        }
         return getAllSources(enabledOnly).map {
             it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform)
         }

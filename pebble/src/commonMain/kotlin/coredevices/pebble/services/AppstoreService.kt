@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.util.getTempFilePath
+import kotlinx.io.IOException
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -42,7 +43,9 @@ class AppstoreService(
     companion object {
         private val STORE_APP_CACHE_AGE = 4.hours
     }
-    private val logger = Logger.withTag("AppstoreService-${parseUrl(source.url)?.host ?: "unknown"}")
+
+    private val logger =
+        Logger.withTag("AppstoreService-${parseUrl(source.url)?.host ?: "unknown"}")
     private val httpClient = httpClient.config {
         install(HttpCache)
     }
@@ -63,7 +66,11 @@ class AppstoreService(
         return hash.toHexString()
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, useCache: Boolean = true): StoreAppResponse? {
+    suspend fun fetchAppStoreApp(
+        id: String,
+        hardwarePlatform: WatchType?,
+        useCache: Boolean = true
+    ): StoreAppResponse? {
         val cacheDir = getTempFilePath(appContext, "locker_cache")
         try {
             if (!SystemFileSystem.exists(cacheDir)) {
@@ -100,11 +107,16 @@ class AppstoreService(
             }
         }
         if (result == null) {
-            result = httpClient.get(url = Url("${source.url}/v1/apps/id/$id")) {
-                parameters.forEach {
-                    parameter(it.key, it.value)
-                }
-            }.takeIf { it.status.isSuccess() }?.body() ?: return null
+            result = try {
+                httpClient.get(url = Url("${source.url}/v1/apps/id/$id")) {
+                    parameters.forEach {
+                        parameter(it.key, it.value)
+                    }
+                }.takeIf { it.status.isSuccess() }?.body() ?: return null
+            } catch (e: IOException) {
+                logger.w(e) { "Error loading app store app" }
+                return null
+            }
             try {
                 SystemFileSystem.sink(cacheFile).buffered().use {
                     val toCache = CachedStoreAppResponse(
@@ -130,21 +142,27 @@ class AppstoreService(
 //            set("firmware_version", "")
             set("filter_hardware", "true")
         }
-        val home = httpClient.get(
-            url = Url("${source.url}/v1/home/$typeString")
-        ) {
-            parameters.forEach {
-                parameter(it.key, it.value)
+        val home = try {
+            httpClient.get(
+                url = Url("${source.url}/v1/home/$typeString")
+            ) {
+                parameters.forEach {
+                    parameter(it.key, it.value)
+                }
             }
-        }.takeIf {
-            logger.v { "${it.call.request.url}"}
-            if (!it.status.isSuccess()) {
-                logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
-                false
-            } else {
-                true
-            }
-        }?.body<AppStoreHome>()
+        } catch (e: IOException) {
+            logger.w(e) { "Error loading app store home" }
+            return null
+        }
+            .takeIf {
+                logger.v { "${it.call.request.url}" }
+                if (!it.status.isSuccess()) {
+                    logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
+                    false
+                } else {
+                    true
+                }
+            }?.body<AppStoreHome>()
         home?.let {
             cacheCategories(home.categories, type)
         }
@@ -220,7 +238,12 @@ class AppstoreService(
         return categories
     }
 
-    suspend fun fetchAppStoreCollection(path: String, type: AppType?, hardwarePlatform: WatchType?, offset: Int): StoreAppResponse? {
+    suspend fun fetchAppStoreCollection(
+        path: String,
+        type: AppType?,
+        hardwarePlatform: WatchType?,
+        offset: Int
+    ): StoreAppResponse? {
         val parameters = buildMap {
             put("platform", platform.storeString())
             if (hardwarePlatform != null) {
@@ -235,19 +258,24 @@ class AppstoreService(
             }
         }
         logger.v { "get ${url} with parameters $parameters" }
-        return httpClient.get(url = Url(url)) {
-            parameters.forEach {
-                parameter(it.key, it.value)
-            }
-        }.takeIf {
-            logger.v { "${it.call.request.url}"}
-            if (!it.status.isSuccess()) {
-                logger.w { "Failed to fetch collection $path of type ${type?.code}, status: ${it.status}" }
-                false
-            } else {
-                true
-            }
-        }?.body()
+        return try {
+            httpClient.get(url = Url(url)) {
+                parameters.forEach {
+                    parameter(it.key, it.value)
+                }
+            }.takeIf {
+                logger.v { "${it.call.request.url}" }
+                if (!it.status.isSuccess()) {
+                    logger.w { "Failed to fetch collection $path of type ${type?.code}, status: ${it.status}" }
+                    false
+                } else {
+                    true
+                }
+            }?.body()
+        } catch (e: IOException) {
+            logger.w(e) { "Error loading app store collection" }
+            null
+        }
     }
 
     suspend fun searchUuid(uuid: String): String? {

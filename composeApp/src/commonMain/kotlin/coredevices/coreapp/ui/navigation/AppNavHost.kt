@@ -49,10 +49,14 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 scope.launch {
                     deepLinks.navigateToDeepLink.collect { route ->
                         logger.d { "navigateToDeepLink $route" }
-                        if (route is NavUri) {
-                            navController.navigate(route)
-                        } else {
-                            navController.navigate(route)
+                        try {
+                            if (route is NavUri) {
+                                navController.navigate(route)
+                            } else {
+                                navController.navigate(route)
+                            }
+                        } catch (e: IllegalArgumentException) {
+                            logger.w(e) { "Failed to navigate to $route" }
                         }
                     }
                 }

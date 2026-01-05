@@ -321,27 +321,32 @@ class AppstoreService(
             return emptyList()
         }
 
-        return searchClient.searchSingleIndex(
-            indexName = source.algoliaIndexName!!,
+        return try {
+            searchClient.searchSingleIndex(
+                indexName = source.algoliaIndexName!!,
 //                searchParams = SearchParams.of(SearchParamsString(search)),
-            searchParams = SearchParamsObject(
-                query = search,
-                tagFilters = type?.let { TagFilters.of(type.code) },
-            ),
-        ).hits.mapNotNull {
-            it.additionalProperties?.let { props ->
-                val jsonText = JsonObject(props)
+                searchParams = SearchParamsObject(
+                    query = search,
+                    tagFilters = type?.let { TagFilters.of(type.code) },
+                ),
+            ).hits.mapNotNull {
+                it.additionalProperties?.let { props ->
+                    val jsonText = JsonObject(props)
 //                    logger.v { "jsonText: $jsonText" }
-                try {
-                    json.decodeFromJsonElement(
-                        StoreSearchResult.serializer(),
-                        jsonText,
-                    )
-                } catch (e: Exception) {
-                    logger.w(e) { "error decoding search result (source ${source.url})" }
-                    null
+                    try {
+                        json.decodeFromJsonElement(
+                            StoreSearchResult.serializer(),
+                            jsonText,
+                        )
+                    } catch (e: Exception) {
+                        logger.w(e) { "error decoding search result (source ${source.url})" }
+                        null
+                    }
                 }
             }
+        } catch (e: Exception) {
+            logger.w(e) { "error searching for $search" }
+            emptyList()
         }
     }
 

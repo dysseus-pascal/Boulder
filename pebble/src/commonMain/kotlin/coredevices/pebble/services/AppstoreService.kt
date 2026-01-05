@@ -65,7 +65,13 @@ class AppstoreService(
 
     suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, useCache: Boolean = true): StoreAppResponse? {
         val cacheDir = getTempFilePath(appContext, "locker_cache")
-        SystemFileSystem.createDirectories(cacheDir, false)
+        try {
+            if (!SystemFileSystem.exists(cacheDir)) {
+                SystemFileSystem.createDirectories(cacheDir, false)
+            }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to create cache directory: $cacheDir" }
+        }
 
         val parameters = buildMap {
             put("platform", platform.storeString())
@@ -165,7 +171,14 @@ class AppstoreService(
 
     private fun cacheCategories(categories: List<StoreCategory>, type: AppType) {
         val cacheDir = getTempFilePath(appContext, "category_cache")
-        SystemFileSystem.createDirectories(cacheDir, false)
+        try {
+            if (!SystemFileSystem.exists(cacheDir)) {
+                SystemFileSystem.createDirectories(cacheDir, false)
+            }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to create category cache directory: $cacheDir" }
+            return
+        }
         val hash = calculateCategoryCacheKey(type)
         val cacheFile = Path(cacheDir, "$hash.json")
         try {
@@ -179,7 +192,13 @@ class AppstoreService(
 
     suspend fun fetchCategories(type: AppType): List<StoreCategory> {
         val cacheDir = getTempFilePath(appContext, "category_cache")
-        SystemFileSystem.createDirectories(cacheDir, false)
+        try {
+            if (!SystemFileSystem.exists(cacheDir)) {
+                SystemFileSystem.createDirectories(cacheDir, false)
+            }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to create category cache directory: $cacheDir" }
+        }
         val hash = calculateCategoryCacheKey(type)
         val cacheFile = Path(cacheDir, "$hash.json")
         try {

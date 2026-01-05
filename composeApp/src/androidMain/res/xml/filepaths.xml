@@ -9,4 +9,7 @@
     <cache-path
         name="logs"
         path="logs/" />
+    <cache-path
+        name="screenshots"
+        path="screenshots/" />
 </paths>

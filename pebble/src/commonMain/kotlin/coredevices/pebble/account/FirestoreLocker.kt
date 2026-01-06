@@ -90,27 +90,6 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
             throw FirestoreDaoException.fromFirebaseException(e)
         }
     }
-
-    suspend fun getLockerEntryForUser(
-        uid: String,
-        appstoreId: String,
-        uuid: Uuid
-    ): FirestoreLockerEntry? {
-        try {
-            val document = firestore.collection("locker")
-                .document(uid)
-                .collection("entries")
-                .document("${appstoreId}-${uuid}")
-                .get()
-            return if (document.exists) {
-                document.data()
-            } else {
-                null
-            }
-        } catch (e: FirebaseFirestoreException) {
-            throw FirestoreDaoException.fromFirebaseException(e)
-        }
-    }
 }
 
 class FirestoreLocker(
@@ -134,7 +113,8 @@ class FirestoreLocker(
             val firestoreEntry = FirestoreLockerEntry(
                 uuid = Uuid.parse(entry.uuid),
                 appstoreId = entry.id,
-                appstoreSource = equivalentSourceUrl
+                appstoreSource = equivalentSourceUrl,
+                timelineToken = entry.userToken,
             )
             dao.addLockerEntryForUser(user.uid, firestoreEntry)
             emit((i + 1) to size)
@@ -145,7 +125,10 @@ class FirestoreLocker(
         val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = entry.appstoreSource, title = "")) }
         val appstoreApp = appstore.fetchAppStoreApp(entry.appstoreId, null, useCache)
             ?: return null
-        return appstoreApp.data.firstOrNull()?.toLockerEntry(entry.appstoreSource)
+        return appstoreApp.data.firstOrNull()?.toLockerEntry(
+            sourceUrl = entry.appstoreSource,
+            timelineToken = entry.timelineToken,
+        )
     }
 
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
@@ -196,7 +179,7 @@ class FirestoreLocker(
         return dao.isLockerEntriesEmptyForUser(user.uid)
     }
 
-    suspend fun addApp(entry: CommonAppType.Store): Boolean {
+    suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false
@@ -208,6 +191,7 @@ class FirestoreLocker(
             uuid = Uuid.parse(entry.storeApp.uuid),
             appstoreId = entry.storeApp.id,
             appstoreSource = entry.storeSource.url,
+            timelineToken = timelineToken,
         )
         return try {
             dao.addLockerEntryForUser(user.uid, firestoreEntry)
@@ -255,4 +239,5 @@ data class FirestoreLockerEntry(
     val uuid: Uuid,
     val appstoreId: String,
     val appstoreSource: String,
+    val timelineToken: String?,
 )

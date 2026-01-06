@@ -272,6 +272,6 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (
         )
     }
     composable<PebbleRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(coreNav)
+        AppstoreSettingsScreen(coreNav, topBarParams = null)
     }
 }

@@ -344,7 +344,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                             onClick = {
                                 // Global scope because it could take a second to download/sync/load app
                                 GlobalScope.launch {
-                                    val lockerEntry = storeApp?.toLockerEntry(entry.commonAppType.storeSource.url)
+                                    val lockerEntry = storeApp?.toLockerEntry(entry.commonAppType.storeSource.url, timelineToken = null) // TODO timeline token
                                     val watch = lastConnectedWatch as? ConnectedPebbleDevice
                                     if (lockerEntry != null) {
                                         viewModel.addedToLocker = true
@@ -356,7 +356,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                                                 watch.identifier
                                             )
                                         }
-                                        webServices.addToLocker(entry.commonAppType)
+                                        webServices.addToLocker(entry.commonAppType, timelineToken = lockerEntry.userToken)
                                     }
                                 }
                             },

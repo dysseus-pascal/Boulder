@@ -293,7 +293,7 @@ class RealPebbleWebServices(
     suspend fun addToLegacyLocker(uuid: String): Boolean =
         put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)
 
-    suspend fun addToLocker(entry: CommonAppType.Store): Boolean = firestoreLocker.addApp(entry)
+    suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
@@ -616,7 +616,7 @@ data class StoreChangelogEntry(
 //    val orig: String,
 //)
 
-fun StoreApplication.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
+fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
     val app = this
     return LockerEntry(
         id = app.id,
@@ -630,7 +630,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
         isTimelineEnabled = app.capabilities.contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
-                if (!it.startsWith("http") && sourceUrl != null) {
+                if (!it.startsWith("http")) {
                     val sourcePrefix = Url(sourceUrl)
                     URLBuilder(sourcePrefix).apply {
                         path(it)
@@ -646,6 +646,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
         compatibility = app.compatibility,
         companions = app.companions,
         category = app.category,
+        userToken = timelineToken,
         hardwarePlatforms = buildList {
             var flags = 0
             if (app.type == AppType.Watchface.code) {

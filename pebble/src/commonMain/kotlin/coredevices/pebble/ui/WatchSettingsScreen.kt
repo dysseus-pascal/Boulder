@@ -3,7 +3,6 @@ package coredevices.pebble.ui
 import AppUpdateTracker
 import CommonRoutes
 import CoreAppVersion
-import CoreRoute
 import NextBugReportContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,7 +74,6 @@ import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
-import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
@@ -344,36 +342,11 @@ please disable the option.""".trimIndent(),
             val isRebble = remember {
                 parseUrl(bootConfig.getUrl() ?: "")?.host?.endsWith("rebble.io") == true
             }
-            val webServices = koinInject<RealPebbleWebServices>()
             LockerImportDialog(
                 onDismissRequest = { showLockerImportDialog = false },
-                onImportFromPebbleAccount = { progressUpdate ->
-                    try {
-                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api").collect {
-                            progressUpdate(it.first.toFloat() / it.second.toFloat())
-                        }
-                        progressUpdate(-1f)
-                        libPebble.requestLockerSync().await()
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                useNativeAppStore = true
-                            )
-                        )
-                    } catch (e: Exception) {
-                        logger.e(e) { "Error importing locker from pebble account: ${e.message}" }
-                        topBarParams.showSnackbar("Error importing locker")
-                    }
-                    showLockerImportDialog = false
-                },
-                onStartFresh = {
-                    coreConfigHolder.update(
-                        coreConfig.copy(
-                            useNativeAppStore = true
-                        )
-                    )
-                    showLockerImportDialog = false
-                },
-                isRebble = isRebble
+                isRebble = isRebble,
+                onEnabled = {},
+                topBarParams = topBarParams,
             )
         }
 
@@ -413,7 +386,8 @@ please disable the option.""".trimIndent(),
             enableMemfault,
             enableMixpanel,
             coreConfig,
-            experimentalDevices
+            experimentalDevices,
+            loggedIn,
         ) {
             listOf(
                 basicSettingsActionItem(
@@ -937,6 +911,11 @@ please disable the option.""".trimIndent(),
                                 if (lockerEmpty && loggedIn != null) {
                                     logger.i { "Showing locker import dialog" }
                                     showLockerImportDialog = true
+                                    coreConfigHolder.update(
+                                        coreConfig.copy(
+                                            useNativeAppStore = true,
+                                        )
+                                    )
                                 } else {
                                     logger.i { "Skipping locker import dialog" }
                                     coreConfigHolder.update(
@@ -1102,7 +1081,7 @@ please disable the option.""".trimIndent(),
                     show = { debugOptionsEnabled },
                 ),
                 basicSettingsActionItem(
-                    title = "Sign Out",
+                    title = "Sign Out - Core Devices Account",
                     description = "Sign out of your Google account",
                     section = Section.Default,
                     action = {
@@ -1117,6 +1096,17 @@ please disable the option.""".trimIndent(),
                         }
                     },
                     show = { user != null },
+                ),
+                basicSettingsActionItem(
+                    title = "Sign Out - Rebble",
+                    description = "Sign out of your Rebble account",
+                    section = Section.Default,
+                    action = {
+                        scope.launch {
+                            pebbleAccount.setToken(null, null)
+                        }
+                    },
+                    show = { loggedIn != null },
                 ),
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",

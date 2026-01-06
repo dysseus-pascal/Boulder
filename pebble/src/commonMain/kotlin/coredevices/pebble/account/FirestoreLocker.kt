@@ -5,6 +5,7 @@ import coredevices.database.AppstoreSource
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.services.toLockerEntry
+import coredevices.pebble.ui.CommonAppType
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FieldPath
@@ -144,7 +145,7 @@ class FirestoreLocker(
         val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = entry.appstoreSource, title = "")) }
         val appstoreApp = appstore.fetchAppStoreApp(entry.appstoreId, null, useCache)
             ?: return null
-        return appstoreApp.toLockerEntry(entry.appstoreSource)
+        return appstoreApp.data.firstOrNull()?.toLockerEntry(entry.appstoreSource)
     }
 
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
@@ -195,31 +196,24 @@ class FirestoreLocker(
         return dao.isLockerEntriesEmptyForUser(user.uid)
     }
 
-    suspend fun addApp(id: String, sourceUrl: String): Boolean {
+    suspend fun addApp(entry: CommonAppType.Store): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false
         }
-        val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = sourceUrl, title = "")) }
-        val appstoreApp = appstore.fetchAppStoreApp(id, null, useCache = false)
-            ?: run {
-                logger.e {"Failed to fetch appstore app for id=$id from source=$sourceUrl" }
-                return false
-            }
-        val lockerEntry = appstoreApp.toLockerEntry(sourceUrl) ?: run {
-            logger.e { "Failed to convert appstore app to locker entry for id=$id from source=$sourceUrl" }
+        if (entry.storeApp == null) {
             return false
         }
         val firestoreEntry = FirestoreLockerEntry(
-            uuid = Uuid.parse(lockerEntry.uuid),
-            appstoreId = lockerEntry.id,
-            appstoreSource = sourceUrl
+            uuid = Uuid.parse(entry.storeApp.uuid),
+            appstoreId = entry.storeApp.id,
+            appstoreSource = entry.storeSource.url,
         )
         return try {
             dao.addLockerEntryForUser(user.uid, firestoreEntry)
             true
         } catch (e: FirestoreDaoException) {
-            logger.e(e) { "Error adding locker entry to Firestore for user ${user.uid}, appstoreId=$id: ${e.message}" }
+            logger.e(e) { "Error adding locker entry to Firestore for user ${user.uid}, appstoreId=${entry.storeApp.id}: ${e.message}" }
             false
         }
     }

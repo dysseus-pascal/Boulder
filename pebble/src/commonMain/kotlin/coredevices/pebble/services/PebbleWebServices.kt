@@ -14,6 +14,7 @@ import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.services.PebbleHttpClient.Companion.delete
 import coredevices.pebble.services.PebbleHttpClient.Companion.get
 import coredevices.pebble.services.PebbleHttpClient.Companion.put
+import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.weather.WeatherResponse
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
@@ -292,7 +293,7 @@ class RealPebbleWebServices(
     suspend fun addToLegacyLocker(uuid: String): Boolean =
         put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)
 
-    suspend fun addToLocker(id: String, sourceUrl: String): Boolean = firestoreLocker.addApp(id, sourceUrl)
+    suspend fun addToLocker(entry: CommonAppType.Store): Boolean = firestoreLocker.addApp(entry)
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
@@ -615,8 +616,8 @@ data class StoreChangelogEntry(
 //    val orig: String,
 //)
 
-fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
-    val app = data.firstOrNull() ?: return null
+fun StoreApplication.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
+    val app = this
     return LockerEntry(
         id = app.id,
         uuid = app.uuid,

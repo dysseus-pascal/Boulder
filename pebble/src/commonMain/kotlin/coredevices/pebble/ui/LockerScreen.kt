@@ -836,7 +836,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
             storeSource = source,
             developerId = developerId,
             sourceLink = this.source,
-            categorySlug = categories?.firstOrNull { it.id == categoryId }?.slug
+            categorySlug = categories?.firstOrNull { it.id == categoryId }?.slug,
+            storeApp = this,
         ),
         type = appType,
         category = category,
@@ -861,7 +862,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null, categorySlug = null),
+        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null, categorySlug = null, storeApp = null),
         type = appType,
         category = category,
         version = null,
@@ -911,6 +912,7 @@ sealed class CommonAppType {
     ) : CommonAppType(), CommonAppTypeLocal//, CommonAppTypeFromStore
 
     data class Store(
+        val storeApp: StoreApplication?,
         val storedId: String,
         val storeSource: AppstoreSource,
         val developerId: String?,

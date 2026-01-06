@@ -77,7 +77,7 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
         uuid: Uuid
     ) {
         try {
-            firestore.collection("locker")
+            firestore.collection("lockers")
                 .document(uid)
                 .collection("entries")
                 .where {

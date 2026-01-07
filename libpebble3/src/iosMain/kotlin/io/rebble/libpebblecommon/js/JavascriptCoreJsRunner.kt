@@ -10,7 +10,6 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.newSingleThreadContext
@@ -226,20 +225,6 @@ class JavascriptCoreJsRunner(
             jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
         }
         return true
-    }
-
-    override suspend fun signalAppMessageAck(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
-    }
-
-    override suspend fun signalAppMessageNack(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {

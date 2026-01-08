@@ -61,4 +61,5 @@ data class CoreConfig(
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val weatherUnits: WeatherUnit = WeatherUnit.Metric,
+    val showAllSettingsTab: Boolean = false,
 )

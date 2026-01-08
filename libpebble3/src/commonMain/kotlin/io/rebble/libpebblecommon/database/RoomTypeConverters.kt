@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
@@ -133,6 +134,16 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringListToString(list: List<String>): String {
+        return json.encodeToString(list)
+    }
+
+    @TypeConverter
+    fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
+        return json.decodeFromString(value)
+    }
+
+    @TypeConverter
+    fun CapabilitySetToString(list: Set<ProtocolCapsFlag>): String {
         return json.encodeToString(list)
     }
 }

@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -72,6 +73,7 @@ interface KnownPebbleDevice : PebbleDevice {
     val lastConnected: Instant
     val watchType: WatchHardwarePlatform
     val color: WatchColor?
+    val capabilities: Set<ProtocolCapsFlag>
     fun forget()
     fun setNickname(nickname: String?)
 }

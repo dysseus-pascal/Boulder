@@ -137,7 +137,7 @@ enum class LockerTab(val title: StringResource) {
 }
 
 const val REBBLE_LOGIN_URI = "https://boot.rebble.io"
-private const val LOCKER_UI_LOAD_LIMIT = 100
+const val LOCKER_UI_LOAD_LIMIT = 100
 private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(

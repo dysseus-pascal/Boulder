@@ -58,7 +58,7 @@ class ContactsViewModel(
 }
 
 @Composable
-fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack: Boolean) {
+fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val viewModel = koinViewModel<ContactsViewModel>()
     val libPebble = rememberLibPebble()
     val items = remember(
@@ -73,15 +73,6 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGo
         ).flow
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(true)
-            topBarParams.actions {
-            }
-            topBarParams.canGoBack(canGoBack)
-            topBarParams.goBack.collect {
-                nav.goBack()
-            }
-        }
         val contacts = items.collectAsLazyPagingItems()
         Column {
             Row(

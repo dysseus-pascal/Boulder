@@ -12,11 +12,9 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import coredevices.database.AppstoreSource
-import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 /**
@@ -196,8 +194,7 @@ fun NavGraphBuilder.addNavBarRoutes(
         )
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
-        val coreConfigHolder = koinInject<CoreConfigHolder>()
-        NotificationsScreen(topBarParams, nav, coreConfigHolder.config.value.enableIndex)
+        NotificationsScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav)

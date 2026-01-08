@@ -81,7 +81,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
-    override suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus {
+    override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         val writeItem = write.asNotificationAppItem()
         if (writeItem == null) {
             logger.e { "Couldn't decode app notification item from write: $write" }

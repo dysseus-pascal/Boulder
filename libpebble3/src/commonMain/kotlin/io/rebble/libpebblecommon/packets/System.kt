@@ -365,6 +365,8 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsCustomVibePatterns(15),
     JavascriptBytecodeVersionAppended(16),
     SupportsFwUpdateAcrossDisconnection(21),
+    SupportsBlobDbVersion(22),
+    SupportsSettingsSync(23),
     ;
 
     companion object {

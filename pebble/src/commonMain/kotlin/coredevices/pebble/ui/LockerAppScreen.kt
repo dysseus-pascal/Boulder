@@ -62,6 +62,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -445,7 +446,11 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                             text = "Move To Top",
                             onClick = {
                                 scope.launch {
-                                    libPebble.setAppOrder(entry.uuid, -1)
+                                    val index = when (entry.type) {
+                                        AppType.Watchface -> -1
+                                        AppType.Watchapp -> SystemApps.entries.size
+                                    }
+                                    libPebble.setAppOrder(entry.uuid, index)
                                 }
                             },
                             icon = Icons.Default.VerticalAlignTop,

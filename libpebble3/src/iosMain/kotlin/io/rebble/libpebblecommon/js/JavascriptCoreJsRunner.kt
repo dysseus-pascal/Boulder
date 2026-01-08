@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
@@ -199,6 +200,8 @@ class JavascriptCoreJsRunner(
         evaluateInternalScript("startup")
         logger.d { "Startup script evaluated" }
         loadAppJs(jsPath.toString())
+        // Uncomment to reproduce JSCore crash
+//        reproduceProductionCrash(scope, this)
     }
 
     override suspend fun stop() {

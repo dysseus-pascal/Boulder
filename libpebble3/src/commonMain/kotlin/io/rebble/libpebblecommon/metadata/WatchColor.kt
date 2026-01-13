@@ -27,6 +27,10 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     TimeRoundRoseGold14(21, "pebble_time_round_rose_gold", "Pebble Time Round - Rose Gold", WatchType.CHALK),
     TimeRoundRainbowSilver14(22, "pebble_time_round_silver_rainbow", "Pebble Time Round - Silver Rainbow", WatchType.CHALK),
     TimeRoundRainbowBlack20(23, "pebble_time_round_black_rainbow", "Pebble Time Round - Black Rainbow", WatchType.CHALK),
+    // Was: 34
+    TimeRoundBlackSilverPolish20(-999, "pebble_time_round_polished_silver", "Pebble Time Round - Polished Silver", WatchType.CHALK),
+    // Was: 35
+    TimeRoundBlackGoldPolish20(-999, "pebble_time_round_polished_gold", "Pebble Time Round - Polished Gold", WatchType.CHALK),
     Pebble2SEBlack(24, "pebble_2_se_black_charcoal", "Pebble 2 SE - Black Charcoal", WatchType.DIORITE),
     Pebble2HRBlack(25, "pebble_2_hr_black_charcoal", "Pebble 2 HR - Black Charcoal", WatchType.DIORITE),
     Pebble2SEWhite(26, "pebble_2_se_white_gray", "Pebble 2 SE - White/Gray", WatchType.DIORITE, color = Color.White),

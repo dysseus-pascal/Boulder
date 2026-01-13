@@ -7,7 +7,12 @@ import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.metadata.WatchColor.Pebble2DuoBlack
+import io.rebble.libpebblecommon.metadata.WatchColor.Pebble2DuoWhite
+import io.rebble.libpebblecommon.metadata.WatchColor.TimeRoundBlackGoldPolish20
+import io.rebble.libpebblecommon.metadata.WatchColor.TimeRoundBlackSilverPolish20
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.metadata.WatchType.CHALK
 import io.rebble.libpebblecommon.packets.FirmwareProperty
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.PingPong
@@ -336,6 +341,13 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
                 else -> platform
             }
         }
+    val actualColor = when {
+        // Polished PTR color codes were re-used for Asterix - but we can report the correct color
+        // if it was a Chalk.
+        color == Pebble2DuoBlack && platform.watchType == CHALK -> TimeRoundBlackSilverPolish20
+        color == Pebble2DuoWhite && platform.watchType == CHALK -> TimeRoundBlackGoldPolish20
+        else -> color
+    }
     return WatchInfo(
         runningFwVersion = runningFwVersion,
         recoveryFwVersion = recoveryFwVersion,
@@ -352,7 +364,7 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
         isUnfaithful = isUnfaithful.get() ?: true,
         healthInsightsVersion = healthInsightsVersion.get()?.toInt(),
         javascriptVersion = javascriptVersion.get()?.toInt(),
-        color = color
+        color = actualColor,
     )
 }
 

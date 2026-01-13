@@ -407,6 +407,7 @@ fun LockerScreen(
                                     items = items,
                                     navBarNav = navBarNav,
                                     runningApp = runningApp,
+                                    topBarParams = topBarParams,
                                     onClick = onClick,
                                 )
                             }
@@ -618,6 +619,7 @@ fun AppCarousel(
     items: List<CommonApp>,
     navBarNav: NavBarNav,
     runningApp: Uuid?,
+    topBarParams: TopBarParams,
     onClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) {
@@ -651,6 +653,7 @@ fun AppCarousel(
                     navBarNav,
                     runningApp == entry.uuid,
                     width = 100.dp,
+                    topBarParams = topBarParams,
                 )
             }
         }
@@ -745,6 +748,7 @@ fun LockerCarouselPreview() {
                 items = testApps,
                 navBarNav = NoOpNavBarNav,
                 runningApp = null,
+                topBarParams = WrapperTopBarParams,
             )
         }
     }
@@ -847,7 +851,19 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
-        isNativelyCompatible = true, // TODO
+        isNativelyCompatible = when (watchType) {
+            // Emery is the only platform where "compatible" apps can be used but are
+            // "suboptimal" (need scaling). Enable flagging that.
+            WatchType.EMERY -> {
+                when {
+                    // If store doesn't report binary info, mark as compatible
+                    hardwarePlatforms == null -> true
+                    // If store has binary info, only natively compatible if there is a matching binary
+                    else ->hardwarePlatforms.any { it.name == watchType.codename && it.pebbleProcessInfoFlags != null }
+                }
+            }
+            else -> true
+        },
     )
 }
 
@@ -873,7 +889,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
-        isNativelyCompatible = true, // TODO
+        isNativelyCompatible = true, // TODO (but OK for now)
     )
 }
 
@@ -932,6 +948,7 @@ fun NativeWatchfaceCard(
     navBarNav: NavBarNav,
     running: Boolean,
     width: Dp,
+    topBarParams: TopBarParams,
 ) {
     Card(
         modifier = Modifier.padding(7.dp)
@@ -962,6 +979,24 @@ fun NativeWatchfaceCard(
                         modifier = imageModifier,
                         size = 116.dp,
                     )
+                    if (!entry.isNativelyCompatible) {
+                        IconButton(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(7.dp)
+                                .size(30.dp),
+                            onClick = {
+                                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
+                            },
+                        ) {
+                            Icon(
+                                Icons.Filled.Info,
+                                contentDescription = "Not natively compatible, but can be scaled",
+                                modifier = Modifier.fillMaxSize(),
+                                tint = coreOrange,
+                            )
+                        }
+                    }
                 } else {
                     Box(modifier = imageModifier.size(116.dp), contentAlignment = Alignment.Center) {
                         Text("Not Compatible", fontSize = 15.sp, textAlign = TextAlign.Center)

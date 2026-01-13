@@ -321,14 +321,25 @@ fun WatchVersionResponse.watchInfo(color: WatchColor): WatchInfo {
     val recoveryFwVersion = recovery.firmwareVersion()
     val extraCapabilities = buildSet {
         if (runningFwVersion >= FwVersionSupportsCustomVibePatterns) {
-            // Hack: we should add capability to FW but can't do that instantly
+            // This capability was added to firmware later - keeping the hack in here for now
             add(ProtocolCapsFlag.SupportsCustomVibePatterns)
         }
     }
+    val platform =
+        WatchHardwarePlatform.fromProtocolNumber(running.hardwarePlatform.get()).let { platform ->
+            when {
+                // Hack: Obelix PVT reports platform code 0
+                running.hardwarePlatform.get() == 0u.toUByte() &&
+                        serial.get().startsWith("C111") &&
+                        running.versionTag.get() == "v4.9.100" -> WatchHardwarePlatform.CORE_OBELIX_PVT
+
+                else -> platform
+            }
+        }
     return WatchInfo(
         runningFwVersion = runningFwVersion,
         recoveryFwVersion = recoveryFwVersion,
-        platform = WatchHardwarePlatform.fromProtocolNumber(running.hardwarePlatform.get()),
+        platform = platform,
         bootloaderTimestamp = Instant.fromEpochSeconds(bootloaderTimestamp.get().toLong()),
         board = board.get(),
         serial = serial.get(),

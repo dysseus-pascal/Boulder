@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.metadata
 
 import androidx.compose.ui.graphics.Color
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_GETAFIX_EVT
 
 enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescription: String, val platform: WatchType, val color: Color = Color.Black) {
     ClassicBlack(1, "pebble_black", "Pebble Classic - Black", WatchType.APLITE),
@@ -42,6 +43,9 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     PebbleTime2BlackRed(37, "pebble_time_2_black_red", "Pebble Time 2 - Black/Red", WatchType.EMERY),
     PebbleTime2SilverBlue(38, "pebble_time_2_silver_blue", "Pebble Time 2 - Silver/Blue", WatchType.EMERY),
     PebbleTime2SilverGray(39, "pebble_time_2_silver_gray", "Pebble Time 2 - Silver/Gray", WatchType.EMERY),
+    PebbleRound2Black(40, "pebble_round_2_black", "Pebble Round 2 - Black", CORE_GETAFIX_EVT.watchType),
+    PebbleRound2Silver(41, "pebble_round_2_silver", "Pebble Round 2 - Silver", CORE_GETAFIX_EVT.watchType),
+    PebbleRound2Gold(42, "pebble_round_2_gold", "Pebble Round 2 - Gold", CORE_GETAFIX_EVT.watchType),
     Unknown(-1, "unknown_unknown", "Unknown Watch!", WatchType.APLITE);
 
     companion object {

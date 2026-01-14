@@ -6,7 +6,7 @@ import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondDuration
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
-import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
@@ -170,7 +170,7 @@ interface DbTimelineItem : BlobDbItem {
 
     override fun recordHashCode(): Int = content.hashCode()
     override fun key(): UByteArray = SUUID(StructMapper(), itemId).toBytes()
-    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
+    override fun value(params: ValueParams): UByteArray? {
         val item = TimelineItem(
             itemId = itemId,
             parentId = content.parentId,
@@ -180,7 +180,7 @@ interface DbTimelineItem : BlobDbItem {
             flags = TimelineItem.Flag.makeFlags(content.flags),
             layout = content.layout,
             attributes = content.attributes.filterNot {
-                it.attribute == TimelineAttribute.VibrationPattern && !capabilities.contains(
+                it.attribute == TimelineAttribute.VibrationPattern && !params.capabilities.contains(
                     ProtocolCapsFlag.SupportsCustomVibePatterns)
             }.map { it.asAttribute() },
             actions = content.actions.map { it.asAction() },

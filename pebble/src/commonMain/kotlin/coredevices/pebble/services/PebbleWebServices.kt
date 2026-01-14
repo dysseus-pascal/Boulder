@@ -531,6 +531,11 @@ data class StoreCollection(
 )
 
 @Serializable
+data class BulkStoreResponse(
+    val data: List<StoreApplication>
+)
+
+@Serializable
 data class StoreApplication(
     val author: String,
     val capabilities: List<String>,

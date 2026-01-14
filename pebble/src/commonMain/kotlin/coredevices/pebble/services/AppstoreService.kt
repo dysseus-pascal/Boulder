@@ -7,11 +7,16 @@ import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
 import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
+import coredevices.pebble.account.FirestoreLockerEntry
+import coredevices.pebble.services.AppstoreService.BulkFetchParams.Companion.encodeToJson
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.ktor.http.parseUrl
@@ -20,6 +25,12 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.util.getTempFilePath
+import io.rebble.libpebblecommon.web.LockerEntry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.io.IOException
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -43,6 +54,7 @@ class AppstoreService(
     companion object {
         private val STORE_APP_CACHE_AGE = 4.hours
     }
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     private val logger =
         Logger.withTag("AppstoreService-${parseUrl(source.url)?.host ?: "unknown"}")
@@ -66,10 +78,86 @@ class AppstoreService(
         return hash.toHexString()
     }
 
+    private fun supportsBulkFetch(): Boolean = source.url.startsWith("https://appstore-api.repebble.com/")
+
+    suspend fun fetchAppStoreApps(
+        entries: List<FirestoreLockerEntry>,
+        useCache: Boolean = true,
+    ): List<LockerEntry> {
+        return if (!supportsBulkFetch()) {
+            fetchAppStoreAppsOneByOne(entries, useCache)
+        } else {
+            fetchAppStoreAppsInBulk(entries)
+        }
+    }
+
+    @Serializable
+    data class BulkFetchParams(
+        val ids: List<String>,
+//        val hardware: String? = null,
+    ) {
+        companion object {
+            fun BulkFetchParams.encodeToJson(): String = Json.encodeToString(this)
+        }
+    }
+
+    private suspend fun fetchAppStoreAppsInBulk(
+        entries: List<FirestoreLockerEntry>,
+    ): List<LockerEntry> {
+        return entries.chunked(500).also {
+            logger.d { "Bulk fetching locker entries in ${it.size} chunks" }
+        }.flatMap { lockerEntries ->
+            val result = lockerEntries.flatMap { lockerEntry ->
+                try {
+                    httpClient.post(url = Url("${source.url}/v1/apps/bulk")) {
+                        header("Content-Type", "application/json")
+                        setBody(BulkFetchParams(entries.map { it.appstoreId }).encodeToJson())
+                    }.takeIf { it.status.isSuccess() }?.body<BulkStoreResponse>()
+                        ?.data?.map {
+                            it.toLockerEntry(
+                                sourceUrl = lockerEntry.appstoreSource,
+                                timelineToken = lockerEntry.timelineToken,
+                            )
+                        } ?: emptyList()
+                } catch (e: IOException) {
+                    logger.w(e) { "Error loading app store app" }
+                    emptyList()
+                }
+            }
+            result
+        }.filterNotNull()
+    }
+
+    private suspend fun fetchAppStoreAppsOneByOne(
+        entries: List<FirestoreLockerEntry>,
+        useCache: Boolean = true,
+    ): List<LockerEntry> {
+        return entries.chunked(10).also {
+           logger.d { "Fetching locker entries in ${it.size} chunks" }
+        }.flatMap { lockerEntries ->
+            val result = lockerEntries.map { lockerEntry ->
+                scope.async {
+                    fetchAppStoreApp(
+                        lockerEntry.appstoreId,
+                        hardwarePlatform = null,
+                        useCache = useCache
+                    )?.data?.firstOrNull()?.toLockerEntry(
+                        sourceUrl = lockerEntry.appstoreSource,
+                        timelineToken = lockerEntry.timelineToken,
+                    )
+                }
+            }.awaitAll()
+            if (entries.size > 20) {
+                delay(50)
+            }
+            result
+        }.filterNotNull()
+    }
+
     suspend fun fetchAppStoreApp(
         id: String,
         hardwarePlatform: WatchType?,
-        useCache: Boolean = true
+        useCache: Boolean = true,
     ): StoreAppResponse? {
         val cacheDir = getTempFilePath(appContext, "locker_cache")
         try {

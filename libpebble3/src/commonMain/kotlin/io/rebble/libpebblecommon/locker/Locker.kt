@@ -214,6 +214,7 @@ class Locker(
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
+        logger.v { "Failed to fetch: ${locker.failedToFetchUuids}" }
         val toDelete = existingApps.mapNotNull {
             when {
                 it.value.sideloaded -> null

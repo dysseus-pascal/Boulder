@@ -95,7 +95,6 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
 class FirestoreLocker(
     private val dao: FirestoreLockerDao,
 ): KoinComponent {
-    private val scope = CoroutineScope(Dispatchers.Default)
     companion object {
         private val logger = Logger.withTag("FirestoreLocker")
     }
@@ -121,16 +120,6 @@ class FirestoreLocker(
         }
     }
 
-    private suspend fun getLockerEntryFromStore(entry: FirestoreLockerEntry, useCache: Boolean = true): LockerEntry? {
-        val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = entry.appstoreSource, title = "")) }
-        val appstoreApp = appstore.fetchAppStoreApp(entry.appstoreId, null, useCache)
-            ?: return null
-        return appstoreApp.data.firstOrNull()?.toLockerEntry(
-            sourceUrl = entry.appstoreSource,
-            timelineToken = entry.timelineToken,
-        )
-    }
-
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = try {
@@ -140,38 +129,17 @@ class FirestoreLocker(
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
-        val failedToFetchUuids = mutableSetOf<Uuid>()
-        val applications = fsLocker.chunked(10).also {
-            logger.d { "Fetching locker entries in ${it.size} chunks" }
-        }.flatMap { lockerEntries ->
-            val result = lockerEntries.map { lockerEntry ->
-                scope.async {
-                    getLockerEntryFromStore(lockerEntry, useCache = !forceRefresh) ?: run {
-                        logger.w { "Failed to fetch locker entry for appstoreId=${lockerEntry.appstoreId}, uuid=${lockerEntry.uuid}" }
-                        null
-                    }
-                }
-            }.awaitAll()
-            if (fsLocker.size > 20) {
-                delay(50)
-            }
-            result
+        val appsBySource = fsLocker.groupBy { it.appstoreSource }
+        val apps = appsBySource.flatMap { (source, entries) ->
+            val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = source, title = "")) }
+            appstore.fetchAppStoreApps(entries, useCache = !forceRefresh)
         }
-        if (applications.all { it == null }) {
-            logger.e { "Failed to fetch any locker entries from appstores" }
-            return null
-        }
-        return try {
-            LockerModelWrapper(
-                locker = LockerModel(
-                    applications = applications.filterNotNull()
-                ),
-                failedToFetchUuids = failedToFetchUuids.toSet(),
-            )
-        } catch (e: IllegalStateException) {
-            logger.e(e) { "Error fetching locker entries" }
-            null
-        }
+        return LockerModelWrapper(
+            locker = LockerModel(
+                applications = apps
+            ),
+            failedToFetchUuids = fsLocker.map { it.uuid }.toSet().minus(apps.map { Uuid.parse(it.uuid) }.toSet()),
+        )
     }
 
     suspend fun isLockerEmpty(): Boolean {

@@ -12,4 +12,7 @@
     <cache-path
         name="screenshots"
         path="screenshots/" />
+    <cache-path
+        name="bugreports"
+        path="bugreports/" />
 </paths>

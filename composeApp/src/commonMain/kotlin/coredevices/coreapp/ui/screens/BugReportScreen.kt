@@ -4,6 +4,7 @@ import CommonRoutes
 import CoreNav
 import DocumentAttachment
 import NextBugReportContext
+import PlatformShareLauncher
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -156,12 +157,13 @@ fun BugReportScreen(
 
         val keyboardController = LocalSoftwareKeyboardController.current
         val canSendReports = bugReportProcessor.canSendReports()
+        val platformShareLauncher: PlatformShareLauncher = koinInject()
 
-        fun sendLogs() {
+        fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
 
             // Check if user is signed in before proceeding
-            if (user == null) {
+            if (user == null && !shareLocally) {
                 setStatus("Please sign in with Google before submitting a bug report")
                 return
             }
@@ -172,7 +174,7 @@ fun BugReportScreen(
             scope.launch {
                 // Extract Google ID token from current user
                 val currentUser = user
-                if (currentUser == null) {
+                if (currentUser == null && !shareLocally) {
                     setStatus("Please sign in with Google before submitting a bug report")
                     setSending(false)
                     return@launch
@@ -180,8 +182,8 @@ fun BugReportScreen(
 
                 val params = BugReportGenerationParams(
                     userMessage = userMessage,
-                    userName = currentUser.userName,
-                    userEmail = currentUser.userEmail,
+                    userName = currentUser?.userName,
+                    userEmail = currentUser?.userEmail,
                     screenContext = nextBugReportContext.nextContext ?: "",
                     attachments = attachments ?: emptyList(),
                     sendRecording = sendRecording,
@@ -189,7 +191,8 @@ fun BugReportScreen(
                     imageAttachments = imageAttachments ?: emptyList(),
                     fetchPebbleLogs = pebble,
                     fetchPebbleCoreDump = pebble,
-                    includeExperimentalDebugInfo = !pebble
+                    includeExperimentalDebugInfo = !pebble,
+                    shareLocally = shareLocally,
                 )
 
                 // Process bug report directly in all cases for Phase 1
@@ -208,10 +211,20 @@ fun BugReportScreen(
                         }
 
                         BugReportState.GatheringWatchLogs -> {
-                            coreNav.goBack()
+                            if (!shareLocally) {
+                                coreNav.goBack()
+                            } else {
+                                setStatus("Gathering Watch Logs")
+                            }
                         }
 
                         BugReportState.UploadingAttachments -> Unit
+                        is BugReportState.ReadyToShare -> {
+                            platformShareLauncher.share(it.name, it.file)
+                            setSending(false)
+                            setStatus("")
+                            setSendingProgress(null)
+                        }
                     }
                 }
             }
@@ -238,7 +251,16 @@ fun BugReportScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    actions = {
+                        TopBarIconButtonWithToolTip(
+                            onClick = {
+                                sendLogs(shareLocally = true)
+                            },
+                            icon = Icons.Filled.Share,
+                            description = "Share",
+                        )
+                    },
                 )
             },
             bottomBar = {
@@ -264,7 +286,7 @@ fun BugReportScreen(
                             enabled = !sending && !showSuccess && user != null && canSendReports,
                             onClick = {
                                 keyboardController?.hide()
-                                sendLogs()
+                                sendLogs(shareLocally = false)
                             },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                         ) {

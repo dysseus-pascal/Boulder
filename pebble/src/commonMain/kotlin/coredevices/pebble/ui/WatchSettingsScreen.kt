@@ -82,6 +82,7 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.ModelType
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.SignInButton
 import coredevices.util.CactusSTTMode
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -90,6 +91,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.WeatherUnit
 import coredevices.util.calculateDefaultSTTModel
 import coredevices.util.deleteRecursive
+import coredevices.util.emailOrNull
 import coredevices.util.getModelDirectories
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
@@ -229,10 +231,10 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val pebbleAccount = koinInject<PebbleAccount>()
         val bootConfig = koinInject<BootConfigProvider>()
         val loggedIn by pebbleAccount.loggedIn.collectAsState()
-        val user by Firebase.auth.authStateChanged.map {
-            it?.email
+        val coreUser by Firebase.auth.authStateChanged.map {
+            it?.emailOrNull
         }.distinctUntilChanged()
-            .collectAsState(Firebase.auth.currentUser)
+            .collectAsState(Firebase.auth.currentUser?.emailOrNull)
         val firestoreLocker = koinInject<FirestoreLocker>()
         val scope = rememberCoroutineScope()
         val appContext = koinInject<AppContext>()
@@ -1095,7 +1097,14 @@ please disable the option.""".trimIndent(),
                             }
                         }
                     },
-                    show = { user != null },
+                    show = { coreUser != null },
+                ),
+                basicSettingsActionItem(
+                    title = "Sign In - Core Devices Account",
+                    description = "Sign in to Core account to backup settings, apps, etc",
+                    section = Section.Default,
+                    button = { SignInButton() },
+                    show = { coreUser == null },
                 ),
                 basicSettingsActionItem(
                     title = "Sign Out - Rebble",
@@ -1125,7 +1134,7 @@ please disable the option.""".trimIndent(),
                 ),
             )
         }
-        val filteredItems by remember(settingsItems, topBarParams.searchState.query, user) {
+        val filteredItems by remember(settingsItems, topBarParams.searchState.query, coreUser) {
             derivedStateOf {
                 val query = topBarParams.searchState.query
                 if (query.isEmpty()) {
@@ -1169,7 +1178,8 @@ please disable the option.""".trimIndent(),
 fun basicSettingsActionItem(
     title: String,
     section: Section,
-    action: (() -> Unit)?,
+    button: @Composable (() -> Unit)? = null,
+    action: (() -> Unit)? = null,
     description: String? = null,
     keywords: String = "",
     show: () -> Boolean = { true },
@@ -1189,7 +1199,9 @@ fun basicSettingsActionItem(
                         }
                     }
                     Spacer(modifier = Modifier.width(5.dp))
-                    if (action != null) {
+                    if (button != null) {
+                        button()
+                    } else if (action != null) {
                         PebbleElevatedButton(
                             onClick = { action() },
                             text = title,

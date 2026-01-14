@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.InsertPhoto
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.BottomAppBarDefaults
@@ -70,7 +72,9 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.setUser
+import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.ui.SignInButton
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.Platform
 import coredevices.util.emailOrNull
@@ -81,6 +85,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -148,14 +153,8 @@ fun BugReportScreen(
             it.toUserProps()
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser.toUserProps())
-        val googleAuthUtil = if (platform.isAndroid) {
-            val context = getAndroidActivity()
-            koinInject<GoogleAuthUtil> { parametersOf(context) }
-        } else {
-            koinInject<GoogleAuthUtil>()
-        }
+
         val keyboardController = LocalSoftwareKeyboardController.current
-        val analyticsBackend: AnalyticsBackend = koinInject()
         val canSendReports = bugReportProcessor.canSendReports()
 
         fun sendLogs() {
@@ -224,29 +223,6 @@ fun BugReportScreen(
 
         fun openImageAttachmentScreen() {
             imageAttachmentScreenLauncher?.invoke()
-        }
-
-        fun signIn() {
-            scope.launch {
-                val credential = try {
-                    googleAuthUtil.signInGoogle() ?: return@launch
-                } catch (e: Exception) {
-                    setStatus(e.message ?: "Unknown error")
-                    return@launch
-                }
-                try {
-                    if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
-                        Logger.i { "Successfully linked anonymous user to account" }
-                    }
-                } catch (_: FirebaseAuthUserCollisionException) {
-                    Logger.i { "User is already created, not linking anonymous user" }
-                }
-                Firebase.auth.signInWithCredential(credential)
-                Firebase.auth.currentUser?.emailOrNull?.let {
-                    analyticsBackend.setUser(email = it)
-                }
-                analyticsBackend.logEvent("signed_in_google")
-            }
         }
 
         Scaffold(
@@ -351,12 +327,7 @@ fun BugReportScreen(
                         modifier = Modifier.padding(4.dp),
                         color = MaterialTheme.colorScheme.error
                     )
-                    Button(
-                        onClick = { signIn() },
-                        enabled = !sending
-                    ) {
-                        Text("Sign in with Google")
-                    }
+                    SignInButton(onError = setStatus, enabled = !sending)
                     Spacer(Modifier.height(8.dp))
                 }
                 if (recordingPath != null) {

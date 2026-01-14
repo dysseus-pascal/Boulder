@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
 import androidx.room.Embedded
-import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondDuration
@@ -18,8 +17,8 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createStringListAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createTextAttribute
-import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUByteAttribute
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntListAttribute
 import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.serialization.Serializable
@@ -132,6 +131,15 @@ sealed class BaseAttribute {
     ) : BaseAttribute() {
         override fun asAttribute(): TimelineItem.Attribute =
             createUIntAttribute(attribute, value)
+    }
+
+    @Serializable
+    data class UByteAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UByte,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUByteAttribute(attribute, value)
     }
 }
 

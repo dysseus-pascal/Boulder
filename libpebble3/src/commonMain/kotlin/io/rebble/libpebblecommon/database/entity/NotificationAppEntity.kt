@@ -58,21 +58,11 @@ data class NotificationAppItem(
     override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
         val m = StructMapper()
         val entity = NotificationAppBlobItem(
-            attributes = listOf(
-                Attribute(
-                    TimelineAttribute.AppName.id,
-                    SFixedString(m, name.length, name).toBytes()
-                ),
-                Attribute(TimelineAttribute.MuteDayOfWeek.id, SUByte(m, muteState.value).toBytes()),
-                Attribute(
-                    TimelineAttribute.LastUpdated.id,
-                    SUInt(
-                        m,
-                        stateUpdated.instant.epochSeconds.toUInt(),
-                        endianness = Endian.Little
-                    ).toBytes()
-                ),
-            )
+            attributes = attributes {
+                appName { name }
+                muteDayOfWeek { muteState.value }
+                lastUpdated { stateUpdated.instant }
+            }.map { it.asAttribute() }
         )
         return entity.toBytes()
     }

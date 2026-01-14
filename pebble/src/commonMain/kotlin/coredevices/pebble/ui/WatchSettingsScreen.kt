@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -44,6 +45,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -119,6 +122,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import theme.CoreAppTheme
 import theme.ThemeProvider
+import kotlin.math.roundToInt
 
 enum class Section(val title: String) {
     Permissions("Permissions"),
@@ -593,6 +597,40 @@ please disable the option.""".trimIndent(),
                         navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
                     },
                     show = { coreConfig.enableIndex }, // Shown to replace functionality from nav bar now index replaces it
+                ),
+                basicSettingsNumberItem(
+                    title = "Store notifications for",
+                    section = Section.Notifications,
+                    description = "How long notifications are stored for (days). This enabled better deduplicating, and powers the notification history view",
+                    value = libPebbleConfig.notificationConfig.storeNotifiationsForDays,
+                    onValueChange = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeNotifiationsForDays = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                    min = 0,
+                    max = 7,
+                ),
+                basicSettingsToggleItem(
+                    title = "Store disabled notifications",
+                    description = "Store notifications from disabled apps/channels, to allow viewing them in history",
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeDisabledNotifications = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
                 basicSettingsToggleItem(
                     title = "Always send notifications",
@@ -1250,6 +1288,49 @@ fun basicSettingsToggleItem(
             supportingContent = {
                 if (description != null) {
                     Text(description, fontSize = 11.sp)
+                }
+            },
+            shadowElevation = ELEVATION,
+        )
+    },
+)
+
+fun basicSettingsNumberItem(
+    title: String,
+    section: Section,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    min: Int,
+    max: Int,
+    description: String? = null,
+    keywords: String = "",
+    show: () -> Boolean = { true },
+) = SettingsItem(
+    title = title,
+    section = section,
+    keywords = keywords,
+    show = show,
+    item = {
+        ListItem(
+            headlineContent = {
+                Text(title)
+            },
+            supportingContent = {
+                var sliderPosition by remember { mutableIntStateOf(value) }
+                Column {
+                    if (description != null) {
+                        Text(description, fontSize = 11.sp)
+                    }
+                    Slider(
+                        value = sliderPosition.toFloat(),
+                        onValueChange = { sliderPosition = it.roundToInt() },
+                        valueRange = min.toFloat()..max.toFloat(),
+                        steps = max - min - 1,
+                        onValueChangeFinished = {
+                            onValueChange(sliderPosition)
+                        },
+                    )
+                    Text(text = sliderPosition.toString())
                 }
             },
             shadowElevation = ELEVATION,

@@ -439,6 +439,7 @@ class FakeConnectedDevice(
     override fun resetIntoPrf() {}
 
     override fun createCoreDump() {}
+    override fun factoryReset() {}
 
     override suspend fun sendPPMessage(bytes: ByteArray) {}
 

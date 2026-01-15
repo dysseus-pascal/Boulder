@@ -132,6 +132,7 @@ object ConnectedPebble {
         suspend fun sendPing(cookie: UInt): UInt
         fun resetIntoPrf()
         fun createCoreDump()
+        fun factoryReset()
     }
 
     interface DevConnection {

@@ -273,9 +273,23 @@ private fun WatchScreenContent(
                     text = "Reset into PRF",
                     description = "This will reset the watch into recovery mode. Not for general public use.",
                     action = {
-                        watch.resetIntoPrf()
+                        if (watch.watchInfo.recoveryFwVersion != null) {
+                            watch.resetIntoPrf()
+                        }
                     },
                     icon = Icons.Default.Warning,
+                    enabled = watch.watchInfo.recoveryFwVersion != null,
+                )
+                ConfirmDumpButton(
+                    text = "Factory reset",
+                    description = "This will wipe the watch completely",
+                    action = {
+                        if (watch.watchInfo.recoveryFwVersion != null) {
+                            watch.factoryReset()
+                        }
+                    },
+                    icon = Icons.Default.Warning,
+                    enabled = watch.watchInfo.recoveryFwVersion != null,
                 )
             }
         }
@@ -386,7 +400,8 @@ private fun ConfirmDumpButton(
     text: String,
     description: String,
     action: () -> Unit,
-    icon: ImageVector
+    icon: ImageVector,
+    enabled: Boolean = true,
 ) {
     var showConfirmationDialog by remember { mutableStateOf(false) }
 
@@ -396,6 +411,7 @@ private fun ConfirmDumpButton(
         primaryColor = false,
         icon = icon,
         modifier = Modifier.padding(vertical = 5.dp),
+        enabled = enabled,
     )
 
     if (showConfirmationDialog) {

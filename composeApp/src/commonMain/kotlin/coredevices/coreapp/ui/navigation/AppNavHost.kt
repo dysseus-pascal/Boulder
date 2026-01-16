@@ -87,7 +87,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             experimentalDevices.IndexScreen(coreNav, topBarParams)
         })
         if (CommonBuildKonfig.QA) {
-            composable<CommonRoutes.BugReport> {
+            composable<CommonRoutes.BugReport>(
+                deepLinks = listOf(
+                    NavDeepLink("pebblecore://deep-link/bug-report?pebble={pebble}")
+                )
+            ) {
                 val route: CommonRoutes.BugReport = it.toRoute()
                 BugReportScreen(
                     coreNav = coreNav,

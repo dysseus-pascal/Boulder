@@ -3,7 +3,7 @@ package coredevices.pebble.services
 import co.touchlab.kermit.Logger
 import com.cactus.CactusInitParams
 import com.cactus.CactusSTT
-import com.cactus.SpeechRecognitionParams
+import com.cactus.CactusTranscriptionParams
 import com.russhwolf.settings.Settings
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
@@ -168,6 +168,7 @@ class CactusTranscription(private val settings: Settings): TranscriptionProvider
 
                     val transcription = sttModel.transcribe(
                         tempFile.toString(),
+                        params = CactusTranscriptionParams(maxTokens = 384),
                         mode = sttMode.cactusValue,
                         apiKey = CommonBuildKonfig.WISPR_KEY
                     )

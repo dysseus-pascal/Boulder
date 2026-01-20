@@ -364,7 +364,7 @@ class LibPebble3(
     }
 
     override fun doStuffAfterPermissionsGranted() {
-        phoneCalendarSyncer.init()
+        phoneCalendarSyncer.handlePermissionsGranted()
         missedCallSyncer.init()
         phoneContactsSyncer.init()
     }

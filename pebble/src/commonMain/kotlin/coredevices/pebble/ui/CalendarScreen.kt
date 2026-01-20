@@ -58,6 +58,27 @@ fun CalendarScreen(coreNav: CoreNav) {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(15.dp),
                 ) {
+                    Text("Enable Calendar Pins")
+                    Checkbox(
+                        checked = config.watchConfig.calendarPins,
+                        onCheckedChange = {
+                            libPebble.updateConfig(
+                                config.copy(
+                                    watchConfig = config.watchConfig.copy(
+                                        calendarPins = it
+                                    )
+                                )
+                            )
+                        }
+                    )
+                }
+                if (!config.watchConfig.calendarPins) {
+                    return@Column
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(15.dp),
+                ) {
                     Text("Enable Calendar Reminders")
                     Checkbox(
                         checked = config.watchConfig.calendarReminders,

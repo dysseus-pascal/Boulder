@@ -570,6 +570,15 @@ please disable the option.""".trimIndent(),
                         stringResource(it.resource)
                     },
                 ),
+                basicSettingsActionItem(
+                    title = "Restore System app positions",
+                    description = "Restore system apps to their usual position at the top of the menu",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Display,
+                    action = {
+                        libPebble.restoreSystemAppOrder()
+                    },
+                ),
                 basicSettingsToggleItem(
                     title = "Enable Index Feed",
                     topLevelType = TopLevelType.Phone,

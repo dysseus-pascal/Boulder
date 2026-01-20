@@ -73,7 +73,7 @@ class Locker(
 
     companion object {
         private val logger = Logger.withTag("Locker")
-        private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v2"
+        private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v3"
     }
 
     override suspend fun sideloadApp(pbwPath: Path): Boolean =
@@ -271,13 +271,19 @@ class Locker(
 
     fun init() {
         coroutineScope.launch {
-            val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
-                .first()
-                .map { it.properties.id }
-            val needToInsertAllSystemApps = !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
+            val needToInsertAllSystemApps =
+                !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
             settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
+            insertSystemApps(force = needToInsertAllSystemApps)
+        }
+    }
 
-            val systemAppsToInsert = SystemApps.entries.filter { needToInsertAllSystemApps || !lockerApps.contains(it.uuid) }
+    private suspend fun insertSystemApps(force: Boolean) {
+        val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
+            .first()
+            .map { it.properties.id }
+        val systemAppsToInsert =
+            SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->
                     LockerEntry(
                         id = systemApp.uuid,
@@ -301,9 +307,14 @@ class Locker(
                     )
                 }
 
-            if (systemAppsToInsert.isNotEmpty()) {
-                lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimit)
-            }
+        if (systemAppsToInsert.isNotEmpty()) {
+            lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimit)
+        }
+    }
+
+    override fun restoreSystemAppOrder() {
+        libPebbleCoroutineScope.launch {
+            insertSystemApps(force = true)
         }
     }
 }

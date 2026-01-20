@@ -184,6 +184,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun addAppToLocker(app: LockerEntry) {
     }
 
+    override fun restoreSystemAppOrder() {
+    }
+
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
     override fun notificationApps(): Flow<List<AppWithCount>> =

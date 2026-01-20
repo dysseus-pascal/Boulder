@@ -210,6 +210,7 @@ interface LockerApi {
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry)
+    fun restoreSystemAppOrder()
 }
 
 interface Contacts {

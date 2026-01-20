@@ -1242,11 +1242,6 @@ please disable the option.""".trimIndent(),
             topBarParams.title(selectedTopLevelType.displayName)
         }
 
-        if (selectedTopLevelType == TopLevelType.Notifications) {
-            NotificationsScreenContent(topBarParams, navBarNav)
-            return
-        }
-
         val validSettingsItems =
             remember(rawSettingsItems, selectedTopLevelType, debugOptionsEnabled) {
                 rawSettingsItems.filter {
@@ -1299,6 +1294,9 @@ please disable the option.""".trimIndent(),
 
         Scaffold(
             floatingActionButton = {
+                if (selectedTopLevelType == TopLevelType.Notifications) {
+                    return@Scaffold
+                }
                 var showSectionsMenu by remember { mutableStateOf(false) }
                 FloatingActionButton(
                     onClick = { showSectionsMenu = true }
@@ -1351,6 +1349,11 @@ please disable the option.""".trimIndent(),
                             }
                         }
                     }
+                }
+
+                if (selectedTopLevelType == TopLevelType.Notifications) {
+                    NotificationsScreenContent(topBarParams, navBarNav)
+                    return@Column
                 }
 
                 LazyColumn(state = listState) {

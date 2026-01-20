@@ -269,7 +269,7 @@ fun SelectColorOrNone(
                         .background(bgColor, shape = RoundedCornerShape(8.dp))
                 ) {
                     Text(
-                        text = color?.displayName ?: "",
+                        text = color?.displayName ?: "Default",
                         color = textColor,
                         modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
                     )

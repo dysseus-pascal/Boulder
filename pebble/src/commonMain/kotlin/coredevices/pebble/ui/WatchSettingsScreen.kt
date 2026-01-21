@@ -294,9 +294,6 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
         var showLockerImportDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
-        var speechRecognitionEnabled by mutableStateOf(
-            CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
-        )
         var showSpeechRecognitionModelDialog by remember { mutableStateOf<RequestedSTTMode?>(null) }
         var showSpeechRecognitionModeDialog by remember { mutableStateOf(false) }
         if (showSpeechRecognitionModelDialog != null) {
@@ -312,7 +309,6 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         if (showSpeechRecognitionModelDialog is RequestedSTTMode.Enabled) {
                             settings[SettingsKeys.KEY_CACTUS_STT_MODEL] = modelName
                         }
-                        speechRecognitionEnabled = showSpeechRecognitionModelDialog!!.mode
                     }
                     showSpeechRecognitionModelDialog = null
                 },
@@ -332,11 +328,29 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             STTModeDialog(
                 onModeSelected = {
                     showSpeechRecognitionModeDialog = false
-                    if (it != RequestedSTTMode.Disabled) {
-                        showSpeechRecognitionModelDialog = it
-                    } else {
-                        speechRecognitionEnabled = it.mode
-                        settings[SettingsKeys.KEY_CACTUS_MODE] = it.mode
+                    when (it) {
+                        RequestedSTTMode.Disabled -> scope.launch {
+                            withContext(Dispatchers.IO) {
+                                getModelDirectories().forEach {
+                                    deleteRecursive(Path(it))
+                                }
+                            }
+                            settings[SettingsKeys.KEY_CACTUS_MODE] =
+                                CactusSTTMode.Disabled.id
+                        }
+                        is RequestedSTTMode.Enabled -> {
+                            val name = it.modelName
+                            scope.launch {
+                                val needsDownload = withContext(Dispatchers.IO) {
+                                    !CactusSTT().isModelDownloaded(name)
+                                }
+                                if (needsDownload) {
+                                    showSpeechRecognitionModelDialog = it
+                                } else {
+                                    logger.i { "Model $name already downloaded, not showing download dialog" }
+                                }
+                            }
+                        }
                     }
                 },
                 onDismissRequest = { showSpeechRecognitionModeDialog = false },
@@ -961,27 +975,13 @@ please disable the option.""".trimIndent(),
                     },
                     isDebugSetting = true,
                 ),
-                basicSettingsToggleItem(
-                    title = "Enable speech recognition (preview)",
+                basicSettingsActionItem(
+                    title = "Configure speech recognition",
                     description = "Enable text replies/input via the watch microphone, using a local model. Requires a download",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Default,
-                    checked = speechRecognitionEnabled != CactusSTTMode.Disabled,
-                    onCheckChanged = {
-                        if (it) {
-                            showSpeechRecognitionModeDialog = true
-                        } else {
-                            scope.launch {
-                                withContext(Dispatchers.IO) {
-                                    getModelDirectories().forEach {
-                                        deleteRecursive(Path(it))
-                                    }
-                                }
-                                settings[SettingsKeys.KEY_CACTUS_MODE] =
-                                    CactusSTTMode.Disabled.id
-                                speechRecognitionEnabled = CactusSTTMode.Disabled
-                            }
-                        }
+                    action = {
+                        showSpeechRecognitionModeDialog = true
                     },
                 ),
                 basicSettingsToggleItem(

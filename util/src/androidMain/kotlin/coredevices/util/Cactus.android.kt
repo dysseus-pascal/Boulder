@@ -25,6 +25,8 @@ actual fun getModelDirectories(): List<String> {
 
 private val HEAVY_MODELS = listOf(
     "Tensor G4",
+    "Tensor G5",
+    "Tensor G6",
     "SM8750", // Snapdragon 8 Elite
     "SM8850", // Snapdragon 8 Elite Gen 5
 )
@@ -34,11 +36,14 @@ actual fun calculateDefaultSTTModel(): String {
         return CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_ANDROID
     }
     val soc = Build.SOC_MODEL
-    return if (HEAVY_MODELS.any { soc.contains(it, ignoreCase = true) }) {
-        Logger.d("calculateDefaultSTTModel") { "Using heavy STT model for SOC: $soc" }
-        CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_ANDROID_HEAVY
-    } else {
-        Logger.d("calculateDefaultSTTModel") { "Using normal STT model for SOC: $soc" }
-        CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_ANDROID
+    return when {
+        HEAVY_MODELS.any { soc.contains(it, ignoreCase = true) } -> {
+            Logger.d("calculateDefaultSTTModel") { "Using heavy STT model for SOC: $soc" }
+            CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_ANDROID_HEAVY
+        }
+        else -> {
+            Logger.d("calculateDefaultSTTModel") { "Using normal STT model for SOC: $soc" }
+            CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_ANDROID
+        }
     }
 }

@@ -121,11 +121,11 @@ kotlin {
                 implementation(libs.webview)
                 implementation(compose.components.uiToolingPreview)
                 implementation(libs.cactus)
-                api(libs.settings)
                 implementation(project(":libpebble3"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
+                api(libs.settings)
             }
         }
 

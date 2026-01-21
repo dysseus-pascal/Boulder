@@ -64,7 +64,7 @@ class RealCoreAnalytics(
                 HeartbeatMetric("last_connected_serial", lastConnectedSerial.value ?: "<none>") +
                 HeartbeatMetric("core_user_id", Firebase.auth.currentUser?.emailOrNull ?: "<none>") +
                 HeartbeatMetric(
-                    "ring_transfer_duration_total_ms",
+                    "ring.transfer_duration_total_ms",
                     withContext(Dispatchers.IO) {
                         cache.getLong(KEY_RING_TRANSFER_DURATION_TOTAL_MS, 0L)
                     }

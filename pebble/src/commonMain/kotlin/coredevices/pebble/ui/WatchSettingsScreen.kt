@@ -348,6 +348,9 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     showSpeechRecognitionModelDialog = it
                                 } else {
                                     logger.i { "Model $name already downloaded, not showing download dialog" }
+                                    settings[SettingsKeys.KEY_CACTUS_MODE] =
+                                        it.mode.id
+                                    settings[SettingsKeys.KEY_CACTUS_STT_MODEL] = name
                                 }
                             }
                         }

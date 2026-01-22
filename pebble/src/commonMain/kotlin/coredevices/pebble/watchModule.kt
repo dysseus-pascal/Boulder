@@ -15,6 +15,7 @@ import coredevices.pebble.firmware.Cohorts
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
+import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.Github
 import coredevices.pebble.services.CactusTranscription
@@ -92,8 +93,9 @@ val watchModule = module {
     singleOf(::RealGithubAccount) bind GithubAccount::class
     singleOf(::FirestoreLockerDao)
     singleOf(::FirestoreLocker)
+    singleOf(::AppstoreCache)
     factory { p ->
-        AppstoreService(get(), get(), get(), p.get())
+        AppstoreService(get(), get(), p.get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) bind WebServices::class

@@ -304,11 +304,6 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, sourceUrl: String, useCache: Boolean = true): StoreAppResponse? {
-        val appstore = appstoreServiceForUrl(sourceUrl)
-        return appstore.fetchAppStoreApp(id, hardwarePlatform, useCache)
-    }
-
     suspend fun getWeather(location: GeolocationPositionResult.Success, units: WeatherUnit, language: String): WeatherResponse? {
         val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}?language=$language&units=${units.code}"
         return httpClient.get(url, auth = false)
@@ -718,6 +713,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
                 val fallbackFlagsFinal = fallbackFlags or (0x6 shl 6)
                 add(app.asLockerEntryPlatform("flint", fallbackFlagsFinal))
             }
-        }
+        },
+        source = sourceUrl,
     )
 }

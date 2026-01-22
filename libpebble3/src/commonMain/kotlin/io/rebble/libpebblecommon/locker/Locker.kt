@@ -339,6 +339,9 @@ fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemA
         iosCompanion = null,
         androidCompanion = null,
         order = order,
+        developerId = null,
+        storeId = null,
+        sourceLink = null,
     ),
     systemApp = this,
 )
@@ -367,6 +370,9 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
             iosCompanion = iosCompanion,
             androidCompanion = androidCompanion,
             order = orderIndex,
+            developerId = appstoreData?.developerId,
+            storeId = appstoreData?.storeId,
+            sourceLink = appstoreData?.sourceLink,
         ),
         sideloaded = sideloaded,
         configurable = configurable,
@@ -396,6 +402,8 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
             shareLink = links.share,
             pbwLink = pbw?.file ?: "", // FIXME
             userToken = userToken,
+            sourceLink = source,
+            storeId = id,
         ),
         platforms = hardwarePlatforms.map { platform ->
             LockerEntryPlatform(

@@ -120,6 +120,16 @@ class FirestoreLocker(
         }
     }
 
+    suspend fun readLocker(): List<FirestoreLockerEntry>? {
+        val user = Firebase.auth.currentUser ?: return null
+        return try {
+            dao.getLockerEntriesForUser(user.uid)
+        } catch (e: FirestoreDaoException) {
+            logger.e(e) { "Error fetching locker entries from Firestore (uid ${user.uid}): ${e.message}" }
+            null
+        }
+    }
+
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = try {

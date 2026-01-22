@@ -92,25 +92,17 @@ fun MyCollectionScreen(
         }
         topBarParams.actions {}
     }
-    val lockerQuery = remember(
-        type,
-        topBarParams.searchState.query
-    ) {
-        libPebble.getLocker(
-            type = appType,
-            searchQuery = topBarParams.searchState.query,
-            limit = 100,
-        )
+    val lockerEntries = loadLockerEntries(appType, topBarParams.searchState.query, watchType)
+    if (lockerEntries == null) {
+        return
     }
-    val lockerEntries by lockerQuery.collectAsState(emptyList())
     val syncLimit = remember { libPebble.config.value.watchConfig.lockerSyncLimit }
-    val filteredEntries by remember(lockerEntries, ) {
+    val filteredEntries by remember(lockerEntries, syncLimit) {
         derivedStateOf {
-            val truncated = when (type) {
+            when (type) {
                 MyCollectionType.OnWatch -> lockerEntries.take(syncLimit)
                 MyCollectionType.Recent -> lockerEntries.drop(syncLimit)
             }
-            truncated.map { it.asCommonApp(watchType) }
         }
     }
     val indexOffset = when (type) {
@@ -204,12 +196,8 @@ fun MyCollectionScreen(
                                         navBarNav.navigateTo(
                                             PebbleNavBarRoutes.LockerAppRoute(
                                                 uuid = entry.uuid.toString(),
-                                                storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
-                                                storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let {
-                                                    Json.encodeToString(
-                                                        it
-                                                    )
-                                                },
+                                                storedId = entry.storeId,
+                                                storeSource = entry.appstoreSource?.id,
                                             )
                                         )
                                     },

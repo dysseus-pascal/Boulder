@@ -68,7 +68,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         WatchPrefItemEntity::class,
         WatchPrefItemSyncEntity::class,
     ],
-    version = 28,
+    version = 29,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -88,6 +88,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 25, to = 26),
         AutoMigration(from = 26, to = 27),
         AutoMigration(from = 27, to = 28),
+        AutoMigration(from = 28, to = 29),
     ],
     exportSchema = true,
 )

@@ -75,8 +75,7 @@ object PebbleNavBarRoutes {
     data class LockerAppRoute(
         val uuid: String,
         val storedId: String?,
-        val storeSource: String?,
-        val storeSources: String? = null,
+        val storeSource: Int?,
     ) : NavBarRoute
 
     @Serializable
@@ -187,10 +186,7 @@ fun NavGraphBuilder.addNavBarRoutes(
             Uuid.parse(route.uuid),
             nav,
             route.storedId,
-            route.storeSource?.let { Json.decodeFromString<AppstoreSource>(route.storeSource) },
-            route.storeSources?.let {
-                Json.decodeFromString<List<Pair<String, AppstoreSource>>>(route.storeSources)
-            },
+            route.storeSource,
         )
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {

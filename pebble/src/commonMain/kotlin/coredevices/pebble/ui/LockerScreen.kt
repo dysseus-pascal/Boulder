@@ -92,37 +92,26 @@ import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.RealPebbleWebServices
-import coredevices.pebble.services.StoreApplication
-import coredevices.pebble.services.StoreCategory
-import coredevices.pebble.services.StoreSearchResult
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
-import io.rebble.libpebblecommon.database.entity.CompanionApp
-import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppType
-import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.locker.SystemApps
-import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.util.getTempFilePath
-import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
-import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.SystemFileSystem
-import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -138,7 +127,7 @@ enum class LockerTab(val title: StringResource) {
 }
 
 const val REBBLE_LOGIN_URI = "https://boot.rebble.io"
-const val LOCKER_UI_LOAD_LIMIT = 100
+
 private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(
@@ -181,6 +170,7 @@ class LockerViewModel(
         }
     }
 }
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -267,16 +257,6 @@ fun LockerScreen(
 
         val uriHandler = LocalUriHandler.current
 
-        val lockerQuery = remember(
-            type,
-            topBarParams.searchState.query
-        ) {
-            libPebble.getLocker(
-                type = type,
-                searchQuery = topBarParams.searchState.query,
-                limit = LOCKER_UI_LOAD_LIMIT,
-            )
-        }
         if (coreConfig.useNativeAppStore) {
             LaunchedEffect(topBarParams.searchState.query, searchType) {
                 if (topBarParams.searchState.query.isNotEmpty()) {
@@ -284,37 +264,31 @@ fun LockerScreen(
                 }
             }
         }
-        val le by lockerQuery.collectAsState(null)
-        val lockerEntries = le
+        val lockerEntries = loadLockerEntries(type, topBarParams.searchState.query, watchType)
         if (lockerEntries == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
             return
         }
-        val onWatch by remember(lockerEntries, watchType) {
+        val onWatch by remember(lockerEntries) {
             derivedStateOf {
                 lockerEntries.filter {
-                    it.isSynced() &&
-                            it.findCompatiblePlatform(watchType).isCompatible() &&
-                            it.showOnMainLockerScreen()
-                }.map { it.asCommonApp(watchType) }
+                    it.isSynced() && it.isCompatible && it.showOnMainLockerScreen()
+                }
             }
         }
-        val notOnWatch by remember(lockerEntries, watchType) {
+        val notOnWatch by remember(lockerEntries) {
             derivedStateOf {
                 lockerEntries.filter {
-                    !it.isSynced() &&
-                            it.findCompatiblePlatform(watchType).isCompatible() &&
-                            it.showOnMainLockerScreen()
-                }.map { it.asCommonApp(watchType) }
+                    !it.isSynced() && it.isCompatible && it.showOnMainLockerScreen()
+                }
             }
         }
-        val notCompatible by remember(lockerEntries, watchType) {
+        val notCompatible by remember(lockerEntries) {
             derivedStateOf {
                 lockerEntries.filter {
-                    !it.findCompatiblePlatform(watchType).isCompatible() &&
-                            it.showOnMainLockerScreen()
-                }.map { it.asCommonApp(watchType) }
+                    !it.isCompatible && it.showOnMainLockerScreen()
+                }
             }
         }
 
@@ -339,14 +313,14 @@ fun LockerScreen(
             },
         ) {
             if (topBarParams.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
-                val results by viewModel.storeSearchResults.combine(lockerQuery) { store, locker ->
-                    val lockerApps = locker.map { it.asCommonApp(watchType) }
-                    lockerApps.filter {
-                        it.type == searchType
-                    } + store.filter { a ->
-                        !lockerApps.any { b -> a.uuid == b.uuid }
+                val resultQuery = remember(lockerEntries) {
+                    viewModel.storeSearchResults.map { searchResults ->
+                        lockerEntries + searchResults.filter { searchResult ->
+                            !lockerEntries.any { lockerEntry -> searchResult.uuid == lockerEntry.uuid }
+                        }
                     }
-                }.collectAsState(initial = emptyList())
+                }
+                val results by resultQuery.collectAsState(initial = emptyList())
 
                 Column {
                     Row {
@@ -441,9 +415,7 @@ fun LockerScreen(
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
                                                         app.id == appId && !lockerEntries.any {
-                                                            it.properties.id == Uuid.parse(
-                                                                app.uuid
-                                                            )
+                                                            it.uuid == Uuid.parse(app.uuid)
                                                         }
                                                     }?.asCommonApp(watchType, platform, source, home.categories)
                                                 }.distinctBy { it.uuid }
@@ -557,8 +529,8 @@ fun SearchResultsList(
                         navBarNav.navigateTo(
                             PebbleNavBarRoutes.LockerAppRoute(
                                 uuid = entry.uuid.toString(),
-                                storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
-                                storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
+                                storedId = entry.storeId,
+                                storeSource = entry.appstoreSource?.id,
                             )
                         )
                     }
@@ -581,22 +553,21 @@ fun SearchResultsList(
                     entry,
                     onClick = {
                         scope.launch {
-                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
-                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
-                                sources.maxByOrNull { (id, source) ->
-                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
-                                        ?.data
-                                        ?.firstOrNull()
-                                        ?.latestRelease?.version ?: "0"
-                                } ?: (null to null)
-                            }
+//                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
+//                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
+//                                sources.maxByOrNull { (id, source) ->
+//                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
+//                                        ?.data
+//                                        ?.firstOrNull()
+//                                        ?.latestRelease?.version ?: "0"
+//                                } ?: (null to null)
+//                            }
                             navBarNav.navigateTo(
                                 PebbleNavBarRoutes.LockerAppRoute(
                                     uuid = entry.uuid.toString(),
-                                    storedId = bestId ?:(entry.commonAppType as? CommonAppType.Store)?.storedId,
-                                    storeSource = (bestSource ?: (entry.commonAppType as? CommonAppType.Store)?.storeSource)
-                                        ?.let { Json.encodeToString(it) },
-                                    storeSources = Json.encodeToString(sources)
+                                    storedId = entry.storeId,
+                                    storeSource = entry.appstoreSource?.id,
+//                                    storeSources = Json.encodeToString(sources)
                                 )
                             )
                         }
@@ -605,13 +576,6 @@ fun SearchResultsList(
             }
         }
     }
-}
-
-fun LockerWrapper.showOnMainLockerScreen(): Boolean = when (this) {
-    is LockerWrapper.NormalApp -> true
-    // Don't show system apps here (they'd always take up all the horizontal space). Show system
-    // watchfaces.
-    is LockerWrapper.SystemApp -> properties.type == AppType.Watchface
 }
 
 @Composable
@@ -693,7 +657,12 @@ val testApps = listOf(
         isCompatible = true,
         hearts = 42,
         description = "A sample watchface for preview purposes.",
-        isNativelyCompatible = true
+        isNativelyCompatible = true,
+        developerId = "123",
+        categorySlug = "fun",
+        storeId = "6962e51d29173c0009b18f8e",
+        sourceLink = "https://example.com",
+        appstoreSource = null,
     ),
     CommonApp(
         title = "Another Watchface",
@@ -714,7 +683,12 @@ val testApps = listOf(
         isCompatible = true,
         hearts = 7,
         description = "Another sample watchface for preview purposes.",
-        isNativelyCompatible = true
+        isNativelyCompatible = true,
+        developerId = "123",
+        categorySlug = "fun",
+        storeId = "6962e51d29173c0009b18f8f",
+        sourceLink = "https://example.com",
+        appstoreSource = null,
     ),
     CommonApp(
         title = "Third Watchface",
@@ -735,7 +709,12 @@ val testApps = listOf(
         isCompatible = false,
         hearts = 15,
         description = "Yet another sample watchface for preview purposes.",
-        isNativelyCompatible = true
+        isNativelyCompatible = true,
+        developerId = "123",
+        categorySlug = "fun",
+        storeId = "6962e51d29173c0009b18f8d",
+        sourceLink = "https://example.com",
+        appstoreSource = null,
     )
 )
 
@@ -755,194 +734,6 @@ fun LockerCarouselPreview() {
     }
 }
 
-fun LockerWrapper.asCommonApp(watchType: WatchType?): CommonApp {
-    val compatiblePlatfom = findCompatiblePlatform(watchType)
-    return CommonApp(
-        title = properties.title,
-        developerName = properties.developerName,
-        uuid = properties.id,
-        androidCompanion = properties.androidCompanion,
-        commonAppType = when (this) {
-            is LockerWrapper.NormalApp -> CommonAppType.Locker(
-                sideloaded = sideloaded,
-                configurable = configurable,
-                sync = sync,
-                order = properties.order,
-            )
-
-            is LockerWrapper.SystemApp -> CommonAppType.System(
-                app = systemApp,
-                order = properties.order,
-            )
-        },
-        type = properties.type,
-        category = properties.category,
-        version = properties.version,
-        listImageUrl = compatiblePlatfom?.listImageUrl,
-        screenshotImageUrl = compatiblePlatfom?.screenshotImageUrl,
-        isCompatible = compatiblePlatfom.isCompatible(),
-        hearts = when (this) {
-            is LockerWrapper.NormalApp -> properties.hearts
-            is LockerWrapper.SystemApp -> null
-        },
-        description = compatiblePlatfom?.description,
-        isNativelyCompatible = when (this) {
-            is LockerWrapper.NormalApp -> {
-                val nativelyCompatible = when (watchType) {
-                    // Emery is the only platform where "compatible" apps can be used but are
-                    // "suboptimal" (need scaling). Enable flagging that.
-                    WatchType.EMERY -> properties.platforms.any { it.watchType == watchType }
-                    else -> true
-                }
-                nativelyCompatible
-            }
-
-            is LockerWrapper.SystemApp -> true
-        },
-    )
-}
-
-fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
-    id = id,
-    icon = icon,
-    name = name,
-    url = url,
-    required = required,
-    pebblekitVersion = pebblekitVersion,
-)
-
-fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platform): Boolean {
-    if (platform == Platform.IOS && !ios.supported) return false
-    if (platform == Platform.Android && !android.supported) return false
-    val appVariants = buildSet {
-        if (aplite.supported) add(WatchType.APLITE)
-        if (basalt.supported) add(WatchType.BASALT)
-        if (chalk.supported) add(WatchType.CHALK)
-        if (diorite.supported) add(WatchType.DIORITE)
-        if (emery.supported) add(WatchType.EMERY)
-        if (flint?.supported == true) add(WatchType.FLINT)
-    }
-    return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
-}
-
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>?): CommonApp? {
-    val appType = AppType.fromString(type)
-    if (appType == null) {
-        logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
-        return null
-    }
-    return CommonApp(
-        title = title,
-        developerName = author,
-        uuid = Uuid.parse(uuid),
-        androidCompanion = companions.android?.asCompanionApp(),
-        commonAppType = CommonAppType.Store(
-            storedId = id,
-            storeSource = source,
-            developerId = developerId,
-            sourceLink = this.source,
-            categorySlug = categories?.firstOrNull { it.id == categoryId }?.slug,
-            storeApp = this,
-        ),
-        type = appType,
-        category = category,
-        version = latestRelease.version,
-        listImageUrl = listImage.values.firstOrNull(),
-        screenshotImageUrl = screenshotImages.firstOrNull()?.values?.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
-        hearts = hearts,
-        description = description,
-        isNativelyCompatible = when (watchType) {
-            // Emery is the only platform where "compatible" apps can be used but are
-            // "suboptimal" (need scaling). Enable flagging that.
-            WatchType.EMERY -> {
-                when {
-                    // If store doesn't report binary info, mark as compatible
-                    hardwarePlatforms == null -> true
-                    // If store has binary info, only natively compatible if there is a matching binary
-                    else ->hardwarePlatforms.any { it.name == watchType.codename && it.pebbleProcessInfoFlags != null }
-                }
-            }
-            else -> true
-        },
-    )
-}
-
-fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
-    val appType = AppType.fromString(type)
-    if (appType == null) {
-        logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
-        return null
-    }
-    return CommonApp(
-        title = title,
-        developerName = author,
-        uuid = Uuid.parse(uuid),
-        androidCompanion = null,
-        commonAppType = CommonAppType.Store(storedId = id, storeSource = source, developerId = null, sourceLink = null, categorySlug = null, storeApp = null),
-        type = appType,
-        category = category,
-        version = null,
-        listImageUrl = listImage,
-        // TODO add fallback hardwarePlatforms
-//        screenshotImageUrl = assetCollections.find { it.hardwarePlatform == watchType.codename }?.screenshots?.firstOrNull() ?: screenshotImages.firstOrNull(),
-        screenshotImageUrl = screenshotImages.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
-        hearts = hearts,
-        description = description,
-        isNativelyCompatible = true, // TODO (but OK for now)
-    )
-}
-
-data class CommonApp(
-    val title: String,
-    val developerName: String,
-    val uuid: Uuid,
-    val androidCompanion: CompanionApp?,
-    val commonAppType: CommonAppType,
-    val type: AppType,
-    val category: String?,
-    val version: String?,
-    val listImageUrl: String?,
-    val screenshotImageUrl: String?,
-    val isCompatible: Boolean,
-    val isNativelyCompatible: Boolean,
-    val hearts: Int?,
-    val description: String?,
-)
-
-interface CommonAppTypeLocal {
-    val order: Int
-}
-
-//interface CommonAppTypeFromStore {
-//    val storedId: String
-//}
-
-sealed class CommonAppType {
-    data class Locker(
-        val sideloaded: Boolean,
-        val configurable: Boolean,
-        val sync: Boolean,
-        override val order: Int,
-//        override val storedId: String,
-    ) : CommonAppType(), CommonAppTypeLocal//, CommonAppTypeFromStore
-
-    data class Store(
-        val storeApp: StoreApplication?,
-        val storedId: String,
-        val storeSource: AppstoreSource,
-        val developerId: String?,
-        val sourceLink: String?,
-        val categorySlug: String?
-    ) : CommonAppType()//, CommonAppTypeFromStore
-
-    data class System(
-        val app: SystemApps,
-        override val order: Int,
-    ) : CommonAppType(), CommonAppTypeLocal
-}
-
 @Composable
 fun NativeWatchfaceCard(
     entry: CommonApp,
@@ -958,8 +749,8 @@ fun NativeWatchfaceCard(
                 navBarNav.navigateTo(
                     PebbleNavBarRoutes.LockerAppRoute(
                         uuid = entry.uuid.toString(),
-                        storedId = (entry.commonAppType as? CommonAppType.Store)?.storedId,
-                        storeSource = (entry.commonAppType as? CommonAppType.Store)?.storeSource?.let { Json.encodeToString(it) },
+                        storedId = entry.storeId,
+                        storeSource = entry.appstoreSource?.id,
                     )
                 )
             }.border(
@@ -1145,19 +936,6 @@ private fun SectionHeader(text: String) {
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
     )
-}
-
-fun AppPlatform?.isCompatible(): Boolean = this != null
-
-fun CommonApp.isSynced(): Boolean = when (commonAppType) {
-    is CommonAppType.Locker -> commonAppType.sync
-    is CommonAppType.Store -> false
-    is CommonAppType.System -> true
-}
-
-fun LockerWrapper.isSynced(): Boolean = when (this) {
-    is LockerWrapper.NormalApp -> sync
-    is LockerWrapper.SystemApp -> true
 }
 
 @Composable

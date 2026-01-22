@@ -107,6 +107,8 @@ data class LockerEntryAppstoreData(
     val shareLink: String,
     val pbwLink: String,
     val userToken: String?,
+    val sourceLink: String? = null,
+    val storeId: String? = null,
 )
 
 @Serializable

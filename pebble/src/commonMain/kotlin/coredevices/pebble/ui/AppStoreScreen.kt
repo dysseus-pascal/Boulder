@@ -130,7 +130,11 @@ fun AppStoreScreen(
                                     return@launch
                                 }
                                 appStoreLogger.v { "Launch app" }
-                                val commonEntry = entry.asCommonApp(watch.watchType.watchType)
+                                val commonEntry = entry.asCommonApp(
+                                    watchType = watch.watchType.watchType,
+                                    appstoreSource = null,
+                                    categories = null,
+                                )
                                 if (!libPebble.launchApp(
                                         commonEntry,
                                         topBarParams,

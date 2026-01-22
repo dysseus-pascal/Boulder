@@ -31,6 +31,7 @@ data class AppProperties(
     val type: AppType,
     val title: String,
     val developerName: String,
+    val developerId: String?,
     val platforms: List<AppPlatform>,
     val version: String?,
     val hearts: Int?,
@@ -38,6 +39,8 @@ data class AppProperties(
     val iosCompanion: CompanionApp?,
     val androidCompanion: CompanionApp?,
     val order: Int,
+    val sourceLink: String?,
+    val storeId: String?,
 )
 
 data class AppBasicProperties(

@@ -12,6 +12,7 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.ring.service.RingSync
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -34,6 +35,8 @@ import kotlinx.io.readByteArray
 import kotlinx.io.readString
 import kotlinx.io.writeString
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import size
 import kotlin.time.Clock
 
@@ -293,12 +296,14 @@ class BugReportProcessor(
                 bugReportId
             } else null
 
-            val attachments = gatherAttachments(params, state) + DocumentAttachment(
-                fileName = "full_logs.txt",
-                mimeType = "text/plain",
-                source = SystemFileSystem.source(logs).buffered(),
-                size = logs.size(),
-            )
+            val attachments = withContext(Dispatchers.IO) {
+                gatherAttachments(params, state) + DocumentAttachment(
+                    fileName = "full_logs.txt",
+                    mimeType = "text/plain",
+                    source = SystemFileSystem.source(logs).buffered(),
+                    size = logs.size(),
+                )
+            }
 
             if (!params.shareLocally) {
                 val uploadResult = uploadAttachments(
@@ -418,16 +423,38 @@ class BugReportProcessor(
         if (params.includeExperimentalDebugInfo) {
             val experimentalDebugInfoPath = getExperimentalDebugInfoDirectory()
             try {
-                SystemFileSystem.list(Path(experimentalDebugInfoPath))
+                if (SystemFileSystem.exists(Path(experimentalDebugInfoPath))) {
+                    val experimentalDebugDumps = Json.encodeToString(
+                        SystemFileSystem.list(Path(experimentalDebugInfoPath))
+                            .sortedByDescending { it.name }
+                            .take(10)
+                            .fold(mutableListOf<JsonObject>()) { list, filePath ->
+                                list.add(SystemFileSystem.source(filePath).buffered().use {
+                                    Json.decodeFromString(it.readString())
+                                })
+                                list
+                            }
+                    )
+                    val buffer = Buffer().apply { writeString(experimentalDebugDumps) }
+                    attachments.add(
+                        DocumentAttachment(
+                            fileName = "combined_experimental_debug_info.json",
+                            mimeType = "application/json",
+                            buffer,
+                            size = buffer.size,
+                        )
+                    )
+                }
+                SystemFileSystem.list(RingSync.badCollectionsDir)
                     .sortedByDescending { it.name }
-                    .take(10)
-                    .forEach {
+                    .take(4)
+                    .forEach { filePath ->
                         attachments.add(
                             DocumentAttachment(
-                                fileName = it.name,
-                                mimeType = "application/json",
-                                SystemFileSystem.source(it).buffered(),
-                                size = it.size(),
+                                fileName = filePath.name,
+                                mimeType = "application/octet-stream",
+                                source = SystemFileSystem.source(filePath).buffered(),
+                                size = filePath.size(),
                             )
                         )
                     }

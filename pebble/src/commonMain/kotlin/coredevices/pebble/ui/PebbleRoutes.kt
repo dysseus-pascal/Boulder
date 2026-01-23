@@ -73,7 +73,7 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data class LockerAppRoute(
-        val uuid: String,
+        val uuid: String?,
         val storedId: String?,
         val storeSource: Int?,
     ) : NavBarRoute
@@ -94,7 +94,7 @@ object PebbleNavBarRoutes {
     data object PermissionsRoute : NavBarRoute
 
     @Serializable
-    data class AppStoreRoute(val appType: String) : NavBarRoute
+    data class AppStoreRoute(val appType: String?, val deepLinkId: String?) : NavBarRoute
 
     @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
@@ -156,7 +156,7 @@ fun NavGraphBuilder.addNavBarRoutes(
 ) {
     composableWithAnimations<PebbleNavBarRoutes.AppStoreRoute>(viewModel) {
         val route: PebbleNavBarRoutes.AppStoreRoute = it.toRoute()
-        AppStoreScreen(nav, AppType.fromString(route.appType)!!, topBarParams)
+        AppStoreScreen(nav, route.appType?.let { AppType.fromString(it) }, topBarParams, route.deepLinkId)
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchesRoute>(viewModel) {
         WatchesScreen(nav, topBarParams)
@@ -183,7 +183,7 @@ fun NavGraphBuilder.addNavBarRoutes(
         val route: PebbleNavBarRoutes.LockerAppRoute = it.toRoute()
         LockerAppScreen(
             topBarParams,
-            Uuid.parse(route.uuid),
+            route.uuid?.let { Uuid.parse(it) },
             nav,
             route.storedId,
             route.storeSource,

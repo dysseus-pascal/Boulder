@@ -55,6 +55,7 @@ private val bootConfig = BootConfig.Config(
     webViews = BootConfig.Config.Webviews(
         appStoreWatchApps = "",
         appStoreWatchFaces = "",
+        appStoreApplication = "",
     ),
     notifications = BootConfig.Config.Notifications(
         iosAppIcons = "",

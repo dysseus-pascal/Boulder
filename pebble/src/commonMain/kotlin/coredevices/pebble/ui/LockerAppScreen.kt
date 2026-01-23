@@ -146,7 +146,7 @@ private fun appstoreSourceFromId(id: Int?): AppstoreSource? {
 }
 
 @Composable
-fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav, storeId: String?, storeSourceId: Int?) {
+fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNav, storeId: String?, storeSourceId: Int?) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()

@@ -96,7 +96,10 @@ fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType):
 }
 
 @Composable
-fun loadLockerEntry(uuid: Uuid, watchType: WatchType): CommonApp? {
+fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
+    if (uuid == null) {
+        return null
+    }
     val libPebble = rememberLibPebble()
     val lockerEntry by libPebble.getLockerApp(uuid).collectAsState(null)
     val coreConfigFlow: CoreConfigFlow = koinInject()

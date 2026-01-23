@@ -3,8 +3,12 @@ package coredevices.pebble
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import coredevices.analytics.CoreAnalytics
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.Github
+import coredevices.pebble.ui.NavBarRoute
+import coredevices.pebble.ui.PebbleNavBarRoutes
+import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 
@@ -29,12 +34,21 @@ class PebbleDeepLinkHandler(
     private val github: Github,
     private val analytics: CoreAnalytics,
     private val context: AppContext,
+    private val appstoreSourceDao: AppstoreSourceDao,
+    private val coreConfigFlow: CoreConfigFlow,
 ) {
     private val logger = Logger.withTag("PebbleDeepLinkHandler")
     private val _initialLockerSync = MutableStateFlow(false)
     val initialLockerSync: StateFlow<Boolean> = _initialLockerSync.asStateFlow()
     private val _snackBarMessages = MutableSharedFlow<String>(extraBufferCapacity = 5)
     val snackBarMessages: SharedFlow<String> = _snackBarMessages.asSharedFlow()
+    private val _navigateToPebbleDeepLink = MutableStateFlow<PebbleDeepLink?>(null)
+    val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
+
+    data class PebbleDeepLink(
+        val route: NavBarRoute,
+        var consumed: Boolean = false,
+    )
 
     fun handle(uri: Uri?): Boolean {
         uri ?: return false
@@ -42,6 +56,7 @@ class PebbleDeepLinkHandler(
             uri.scheme == "pebble" -> {
                 when (uri.host) {
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
+                    STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
                     else -> false
                 }
             }
@@ -159,6 +174,38 @@ class PebbleDeepLinkHandler(
         return true
     }
 
+    private fun handleAppstore(storeUrl: String, path: String?): Boolean {
+        if (path == null) {
+            return false
+        }
+        logger.v { "handleAppstore: $path" }
+        GlobalScope.launch {
+            val appId = path.removePrefix("/").removeSuffix("/")
+            if (coreConfigFlow.value.useNativeAppStore) {
+                val store = appstoreSourceDao.getAllEnabledSources().firstOrNull()?.find {
+                    it.url == storeUrl
+                }
+                if (store == null) {
+                    _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
+                    return@launch
+                }
+                val route = PebbleNavBarRoutes.LockerAppRoute(
+                    uuid = null,
+                    storedId = appId,
+                    storeSource = store.id,
+                )
+                _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+            } else {
+                val route = PebbleNavBarRoutes.AppStoreRoute(
+                    appType = null,
+                    deepLinkId = appId,
+                )
+                _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+            }
+        }
+        return true
+    }
+
     private fun handleGithubAuth(uri: Uri): Boolean {
         val code = uri.getQueryParameter("code")
         val state = uri.getQueryParameter("state")
@@ -175,6 +222,7 @@ class PebbleDeepLinkHandler(
 
     companion object {
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
+        private const val STORE_URL: String = "appstore"
         private const val GITHUB_OAUTH_CALLBACK_HOST: String = "cloud.repebble.com"
         private const val GITHUB_OAUTH_CALLBACK_PATH: String = "githubAuth"
         private val TOKEN_REGEX = Regex("access_token=(.*)&t=")

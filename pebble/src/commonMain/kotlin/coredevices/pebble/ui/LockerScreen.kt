@@ -299,10 +299,11 @@ fun LockerScreen(
                         onClick = {
                             navBarNav.navigateTo(
                                 PebbleNavBarRoutes.AppStoreRoute(
-                                    when (tab) {
+                                    appType = when (tab) {
                                         LockerTab.Watchfaces -> AppType.Watchface
                                         LockerTab.Apps -> AppType.Watchapp
-                                    }.code
+                                    }.code,
+                                    deepLinkId = null,
                                 )
                             )
                         }

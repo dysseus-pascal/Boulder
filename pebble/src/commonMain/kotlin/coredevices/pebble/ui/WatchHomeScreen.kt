@@ -49,7 +49,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,20 +82,21 @@ import coreapp.util.generated.resources.back
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
-import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
@@ -199,8 +199,29 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     snackbarHostState.showSnackbar(scope, message)
                 }
             }
+            scope.launch {
+                deepLinkHandler.navigateToPebbleDeepLink.collect {
+                    if (it == null || it.consumed) {
+                        return@collect
+                    }
+                    it.consumed = true
+                    logger.v { "navigateToPebbleDeepLink: $it" }
+                    val tab = when (it.route) {
+                        is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchApps
+                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchApps
+                        else -> null
+                    }
+                    if (tab != null) {
+                        val controller = navControllers[tab]!!
+                        viewModel.selectedTab.value = tab
+                        if (controller.waitUntilReady(1.seconds)) {
+                            logger.v { "Deep link route: ${it.route}" }
+                            controller.navigate(it.route)
+                        }
+                    }
+                }
+            }
         }
-        val companionDevice: CompanionDevice = koinInject()
 
         Scaffold(
             topBar = {
@@ -387,6 +408,26 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
     }
+}
+
+/**
+ * NavController crashes if we navigate before it is ready
+ */
+suspend fun NavHostController.waitUntilReady(timeout: Duration): Boolean {
+    return withTimeoutOrNull(timeout) {
+        while (true) {
+            val hasGraph = try {
+                graph != null
+            } catch (_: IllegalStateException) {
+                false
+            }
+            if (hasGraph) {
+                return@withTimeoutOrNull true
+            }
+            delay(25)
+        }
+        false
+    } ?: false
 }
 
 enum class WatchHomeNavTab(

@@ -55,8 +55,9 @@ val appStoreLogger = Logger.withTag("AppStoreScreen")
 @Composable
 fun AppStoreScreen(
     nav: NavBarNav,
-    type: AppType,
+    type: AppType?,
     topBarParams: TopBarParams,
+    deepLinkId: String?,
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val bootConfigProvider = koinInject<BootConfigProvider>()
@@ -78,9 +79,16 @@ fun AppStoreScreen(
                 .firstOrNull()
             val watchType = watch?.watchType ?: WatchHardwarePlatform.CORE_ASTERIX
             (bootConfig?.let {
-                when (type) {
-                    AppType.Watchface -> it.config.webViews.appStoreWatchFaces
-                    AppType.Watchapp -> it.config.webViews.appStoreWatchApps
+                when {
+                    deepLinkId != null -> {
+                        it.config.webViews.appStoreApplication.replace("\$\$id\$\$", deepLinkId)
+                    }
+                    type != null -> {
+                        when (type) {
+                            AppType.Watchface -> it.config.webViews.appStoreWatchFaces
+                            AppType.Watchapp -> it.config.webViews.appStoreWatchApps
+                        }
+                    } else -> null
                 }
             } ?: "about:blank").replace("\$\$hardware\$\$", watchType.watchType.codename)
         }

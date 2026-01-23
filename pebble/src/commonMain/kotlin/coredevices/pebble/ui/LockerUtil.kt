@@ -197,7 +197,7 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
                 val nativelyCompatible = when (watchType) {
                     // Emery is the only platform where "compatible" apps can be used but are
                     // "suboptimal" (need scaling). Enable flagging that.
-                    WatchType.EMERY -> properties.platforms.any { it.watchType == watchType }
+                    WatchType.EMERY, WatchType.GABBRO -> properties.platforms.any { it.watchType == watchType }
                     else -> true
                 }
                 nativelyCompatible
@@ -239,7 +239,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         isNativelyCompatible = when (watchType) {
             // Emery is the only platform where "compatible" apps can be used but are
             // "suboptimal" (need scaling). Enable flagging that.
-            WatchType.EMERY -> {
+            WatchType.EMERY, WatchType.GABBRO -> {
                 when {
                     // If store doesn't report binary info, mark as compatible
                     hardwarePlatforms == null -> true

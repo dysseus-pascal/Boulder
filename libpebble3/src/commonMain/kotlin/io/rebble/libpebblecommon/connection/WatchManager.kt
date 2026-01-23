@@ -744,4 +744,5 @@ fun WatchType.supportsBtClassic(): Boolean = when (this) {
     WatchType.DIORITE -> false
     WatchType.EMERY -> false
     WatchType.FLINT -> false
+    WatchType.GABBRO -> false
 }

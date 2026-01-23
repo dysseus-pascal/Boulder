@@ -324,6 +324,7 @@ fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platfo
         if (diorite.supported) add(WatchType.DIORITE)
         if (emery.supported) add(WatchType.EMERY)
         if (flint?.supported == true) add(WatchType.FLINT)
+        if (gabbro?.supported == true) add(WatchType.GABBRO)
     }
     return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
 }

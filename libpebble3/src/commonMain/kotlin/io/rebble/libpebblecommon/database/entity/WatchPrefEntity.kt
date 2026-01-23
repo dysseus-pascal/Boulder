@@ -268,7 +268,7 @@ fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): 
 // can use the same enum and map to all watch models, we offset them when writing to/from the watch.
 fun WatchType.textSizeOffset(): UByte = when (this) {
     WatchType.EMERY -> 1u
-    // TODO WatchType.GABBRO -> 1u
+    WatchType.GABBRO -> 1u
     else -> 0u
 }
 

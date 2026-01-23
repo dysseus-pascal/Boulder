@@ -713,6 +713,10 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
                 val fallbackFlagsFinal = fallbackFlags or (0x6 shl 6)
                 add(app.asLockerEntryPlatform("flint", fallbackFlagsFinal))
             }
+            app.compatibility.gabbro.takeIf { it?.supported ?: false }?.let {
+                val fallbackFlagsFinal = fallbackFlags or (0x6 shl 7)
+                add(app.asLockerEntryPlatform("gabbro", fallbackFlagsFinal))
+            }
         },
         source = sourceUrl,
     )

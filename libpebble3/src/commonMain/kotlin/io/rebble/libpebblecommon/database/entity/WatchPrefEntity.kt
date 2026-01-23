@@ -334,7 +334,7 @@ enum class EnumWatchPref(
     ),
     QuietTimeShowNotifications(
         "dndShowNotifications",
-        "",
+        "Quiet Time - Show Notifications",
         QuietTimeShowNotificationsMode.Show,
         QuietTimeShowNotificationsMode.entries
     ),

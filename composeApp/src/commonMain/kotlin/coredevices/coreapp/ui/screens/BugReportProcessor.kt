@@ -12,7 +12,6 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
-import coredevices.ring.service.RingSync
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -445,19 +444,21 @@ class BugReportProcessor(
                         )
                     )
                 }
-                SystemFileSystem.list(RingSync.badCollectionsDir)
-                    .sortedByDescending { it.name }
-                    .take(4)
-                    .forEach { filePath ->
-                        attachments.add(
-                            DocumentAttachment(
-                                fileName = filePath.name,
-                                mimeType = "application/octet-stream",
-                                source = SystemFileSystem.source(filePath).buffered(),
-                                size = filePath.size(),
+                experimentalDevices.badCollectionsDir()?.let {
+                    SystemFileSystem.list(it)
+                        .sortedByDescending { it.name }
+                        .take(4)
+                        .forEach { filePath ->
+                            attachments.add(
+                                DocumentAttachment(
+                                    fileName = filePath.name,
+                                    mimeType = "application/octet-stream",
+                                    source = SystemFileSystem.source(filePath).buffered(),
+                                    size = filePath.size(),
+                                )
                             )
-                        )
-                    }
+                        }
+                }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to collect experimental debug info files" }
             }

@@ -33,4 +33,6 @@ class ExperimentalDevices {
     fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
 
     }
+
+    fun badCollectionsDir(): Path? = null
 }

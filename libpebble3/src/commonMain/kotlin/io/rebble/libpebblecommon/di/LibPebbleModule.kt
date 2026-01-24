@@ -100,6 +100,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
+import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
@@ -115,6 +116,7 @@ import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
+import io.rebble.libpebblecommon.services.HealthService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PhoneControlService
@@ -320,11 +322,14 @@ fun initKoin(
                 single { get<Database>().timelinePinDao() }
                 single { get<Database>().timelineReminderDao() }
                 single { get<Database>().calendarDao() }
-                single { get<Database>().watchSettingsDao() }
+                single { get<Database>().healthSettingsDao() }
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
                 single { get<Database>().vibePatternDao() }
+                single { get<Database>().healthDao() }
+                single { get<Database>().healthStatDao() }
+                singleOf(::HealthDataProcessor)
                 single { get<Database>().watchPrefDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
@@ -460,7 +465,7 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(), get(), get(),
+                            get(), get(), get(), get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -501,6 +506,7 @@ fun initKoin(
                     scopedOf(::VoiceService)
                     scopedOf(::AudioStreamService)
                     scopedOf(::AppReorderService)
+                    scopedOf(::HealthService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)

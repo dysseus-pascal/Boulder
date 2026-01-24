@@ -15,10 +15,11 @@ import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.dao.ValueParams
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
-import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -55,7 +56,8 @@ data class BlobDbDaos(
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
-    private val watchSettingsDao: WatchSettingsDao,
+    private val healthSettingsDao: HealthSettingsEntryDao,
+    private val healthStatDao: HealthStatDao,
     private val vibePatternDao: VibePatternDao,
     private val platformConfig: PlatformConfig,
     private val watchPrefDao: WatchPrefRealDao,
@@ -65,7 +67,8 @@ data class BlobDbDaos(
         add(notificationsDao)
         add(timelinePinDao)
         add(timelineReminderDao)
-        add(watchSettingsDao)
+        add(healthSettingsDao)
+        add(healthStatDao)
         if (platformConfig.syncNotificationApps) {
             add(notificationAppRealDao)
         }

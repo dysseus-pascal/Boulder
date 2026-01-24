@@ -293,6 +293,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
         var showLockerImportDialog by remember { mutableStateOf(false) }
+        var showHealthStatsDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
         var showSpeechRecognitionModelDialog by remember { mutableStateOf<RequestedSTTMode?>(null) }
         var showSpeechRecognitionModeDialog by remember { mutableStateOf(false) }
@@ -362,6 +363,12 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     else -> RequestedSTTMode.Enabled(mode, model)
                 },
                 debugOptionsEnabled
+            )
+        }
+        if (showHealthStatsDialog) {
+            HealthStatsDialog(
+                libPebble = libPebble,
+                onDismissRequest = { showHealthStatsDialog = false },
             )
         }
         if (showBtClassicInfoDialog) {
@@ -434,7 +441,11 @@ please disable the option.""".trimIndent(),
         LaunchedEffect(Unit) {
             appUpdateTracker.acknowledgeCurrentVersion()
         }
-        val healthSettings by libPebble.healthSettings.collectAsState(HealthSettings())
+        val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
+        val healthSettings = healthSettingsNullable
+        if (healthSettings == null) {
+            return
+        }
         val weatherFetcher: WeatherFetcher = koinInject()
         val watches by libPebble.watches.collectAsState(null)
         val watchesCastable = watches
@@ -901,6 +912,17 @@ please disable the option.""".trimIndent(),
                             )
                         )
                     },
+                ),
+                basicSettingsActionItem(
+                    title = "View debug stats",
+                    description = "Health statistics and averages",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    keywords = "health steps sleep stats debug",
+                    action = {
+                        showHealthStatsDialog = true
+                    },
+                    show = { debugOptionsEnabled },
                 ),
                 basicSettingsToggleItem(
                     title = "Weather Pins",

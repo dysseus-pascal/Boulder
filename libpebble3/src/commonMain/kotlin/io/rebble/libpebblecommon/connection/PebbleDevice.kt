@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.files.Path
 import kotlin.time.Instant
@@ -114,7 +115,8 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.PKJS,
     ConnectedPebble.CompanionAppControl,
     ConnectedPebble.Screenshot,
-    ConnectedPebble.Language
+    ConnectedPebble.Language,
+    ConnectedPebble.Health
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -225,6 +227,10 @@ object ConnectedPebble {
 
     interface Language : LanguageInstall, LanguageState
 
+    interface Health {
+        suspend fun requestHealthData(fullSync: Boolean): Boolean
+    }
+
     class Services(
         val debug: Debug,
         val appRunState: AppRunState,
@@ -240,6 +246,7 @@ object ConnectedPebble {
         val devConnection: DevConnection,
         val screenshot: Screenshot,
         val language: LanguageInstall,
+        val health: Health,
     )
 
     class PrfServices(

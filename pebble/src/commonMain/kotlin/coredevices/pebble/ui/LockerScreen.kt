@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AccessAlarm
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -979,6 +980,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 SystemApps.Workout -> Icons.AutoMirrored.Filled.DirectionsRun
                 SystemApps.Watchfaces -> Icons.Default.Watch
                 SystemApps.Health -> Icons.Default.MonitorHeart
+                SystemApps.Weather -> Icons.Default.Cloud
             }
             Icon(icon, contentDescription = null, modifier = modifier.size(size))
         }

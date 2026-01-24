@@ -925,8 +925,23 @@ please disable the option.""".trimIndent(),
                     show = { debugOptionsEnabled },
                 ),
                 basicSettingsToggleItem(
+                    title = "Enable Weather",
+                    description = "Fetch weather for the current location, for the Weather App (requires location permission)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Weather,
+                    checked = coreConfig.fetchWeather,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                fetchWeather = it,
+                            )
+                        )
+                        GlobalScope.launch { weatherFetcher.fetchWeather() }
+                    },
+                ),
+                basicSettingsToggleItem(
                     title = "Weather Pins",
-                    description = "Add weather pins to timeline for the current location (requires location permissions)",
+                    description = "Add weather pins to timeline",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Weather,
                     checked = coreConfig.weatherPinsV2,
@@ -938,6 +953,7 @@ please disable the option.""".trimIndent(),
                         )
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
+                    show = { coreConfig.fetchWeather }
                 ),
                 basicSettingsDropdownItem(
                     title = "Units",
@@ -955,6 +971,7 @@ please disable the option.""".trimIndent(),
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
                     itemText = { it.name },
+                    show = { coreConfig.fetchWeather }
                 ),
                 basicSettingsToggleItem(
                     title = "Use LAN developer connection",

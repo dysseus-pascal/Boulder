@@ -15,7 +15,8 @@ enum class SystemApps(
     Music(SystemAppIDs.MUSIC_APP_UUID, "Music", AppType.Watchapp, WatchType.entries, defaultOrder = -9),
     Notifications(SystemAppIDs.NOTIFICATIONS_APP_UUID, "Notifications", AppType.Watchapp, WatchType.entries, defaultOrder = -8),
     Alarms(SystemAppIDs.ALARMS_APP_UUID, "Alarms", AppType.Watchapp, WatchType.entries, defaultOrder = -7),
-    Health(SystemAppIDs.HEALTH_APP_UUID, "Health", AppType.Watchapp, WatchType.entries, defaultOrder = -6),
-    Workout(SystemAppIDs.WORKOUT_APP_UUID, "Workout", AppType.Watchapp, WatchType.entries, defaultOrder = -5),
-    Watchfaces(SystemAppIDs.WATCHFACES_APP_UUID, "Watchfaces", AppType.Watchapp, WatchType.entries, defaultOrder = -4),
+    Weather(SystemAppIDs.WEATHER_APP_UUID, "Weather", AppType.Watchapp, WatchType.entries, defaultOrder = -6),
+    Health(SystemAppIDs.HEALTH_APP_UUID, "Health", AppType.Watchapp, WatchType.entries, defaultOrder = -5),
+    Workout(SystemAppIDs.WORKOUT_APP_UUID, "Workout", AppType.Watchapp, WatchType.entries, defaultOrder = -4),
+    Watchfaces(SystemAppIDs.WATCHFACES_APP_UUID, "Watchfaces", AppType.Watchapp, WatchType.entries, defaultOrder = -3),
 }

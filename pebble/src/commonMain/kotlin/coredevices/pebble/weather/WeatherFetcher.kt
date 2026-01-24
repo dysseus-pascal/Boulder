@@ -5,6 +5,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.util.CoreConfigFlow
+import coredevices.util.WeatherUnit
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
@@ -12,6 +13,8 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
+import io.rebble.libpebblecommon.weather.WeatherLocationData
+import io.rebble.libpebblecommon.weather.WeatherType
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -48,11 +51,17 @@ class WeatherFetcher(
     }
 
     suspend fun fetchWeather() {
-        if (!coreConfigFlow.value.weatherPinsV2) {
+        val weatherEnabled = coreConfigFlow.value.fetchWeather
+        val pinsEnabled = coreConfigFlow.value.weatherPinsV2
+        val units = coreConfigFlow.value.weatherUnits
+        if (!pinsEnabled || !weatherEnabled) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)
                 libPebble.delete(it.nightUuid)
             }
+        }
+        if (!weatherEnabled) {
+            libPebble.updateWeatherData(emptyList())
             return
         }
         val location = systemGeolocation.getCurrentPosition()
@@ -63,10 +72,12 @@ class WeatherFetcher(
             }
             is GeolocationPositionResult.Success -> {
                 val locale = Locale.current.toLanguageTag()
-                val units = coreConfigFlow.value.weatherUnits
                 val response = pebbleWebServices.getWeather(location, units, locale)
                 if (response != null) {
-                    createTimelinePins(response)
+                    if (pinsEnabled) {
+                        createTimelinePins(response)
+                    }
+                    populateWeatherApp(response, units)
                 }
             }
         }
@@ -79,6 +90,36 @@ class WeatherFetcher(
         createTimelinePins(today, Day.Today)
         createTimelinePins(tomorrow, Day.Tomorrow)
         createTimelinePins(dayAfterTomorrow, Day.DayAfterTomorrow)
+    }
+
+    private fun populateWeatherApp(weather: WeatherResponse, units: WeatherUnit) {
+        val current = weather.conditions.data.observation
+        val currentTemps = current.tempsFor(units)
+        if (currentTemps == null) {
+            logger.w { "Couldn't find temps for units: $units" }
+            return
+        }
+        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(0)
+        if (tomorrow == null || tomorrow.day == null) {
+            logger.w { "Couldn't find forcast for tomorrow" }
+            return
+        }
+        val currentLocation = WeatherLocationData(
+            key = WeatherAppCurrentLocationUuid,
+            currentTemp = currentTemps.temp.toShort(),
+            currentWeatherType = current.iconCode.toWeatherType(),
+            todayHighTemp = currentTemps.max24Hour.toShort(),
+            todayLowTemp = currentTemps.min24Hour.toShort(),
+            tomorrowWeatherType = tomorrow.day.iconCode.toWeatherType(),
+            tomorrowHighTemp = tomorrow.maxTemp?.toShort() ?: TEMP_NO_VALUE,
+            tomorrowLowTemp = tomorrow.minTemp.toShort(),
+            lastUpdateTimeUtcSecs = clock.now().epochSeconds,
+            isCurrentLocation = true,
+            locationName = "Current Location",
+            forecastShort = current.phrase32Char,
+            locationNameStartCase = "Current Location",
+        )
+        libPebble.updateWeatherData(listOf(currentLocation))
     }
 
     private fun createTimelinePins(dailyForecast: DailyForecast?, day: Day) {
@@ -130,10 +171,15 @@ class WeatherFetcher(
                 title { title }
                 subtitle { subtitle }
                 body { dayOrNight.narrative }
-                tinyIcon { dayOrNight.iconCode.toWeatherIcon() }
-                largeIcon { dayOrNight.iconCode.toWeatherIcon() }
+                tinyIcon { dayOrNight.iconCode.toWeatherType().toWeatherIcon() }
+                largeIcon { dayOrNight.iconCode.toWeatherType().toWeatherIcon() }
                 lastUpdated { clock.now() }
                 location { location }
+            }
+            actions {
+                action(TimelineItem.Action.Type.OpenWatchapp) {
+                    attributes { title { "More" } }
+                }
             }
         }
         libPebble.insertOrReplace(pin)
@@ -155,6 +201,9 @@ private val TomorrowDayUuid = Uuid.parse("2834d0c8-85bc-45bd-b2b7-d0f026098d28")
 private val TomorrowNightUuid = Uuid.parse("2f363ad4-bc5d-455a-a445-4e00ec07417e")
 private val DayAfterTomorrowDayUuid = Uuid.parse("3233984e-2dc9-4469-8a9a-46f91d81b7fc")
 private val DayAfterTomorrowNightUuid = Uuid.parse("fd97c081-9970-436b-aa87-9c55232bce35")
+// This will become configured in db table, later, for multiple locations
+private val WeatherAppCurrentLocationUuid = Uuid.parse("d9540f35-733d-4dcc-80d1-8cfe7c197067")
+private const val TEMP_NO_VALUE = Short.MAX_VALUE
 
 object Iso8601InstantSerializer : KSerializer<Instant> {
     override val descriptor = PrimitiveSerialDescriptor("Instant", PrimitiveKind.STRING)
@@ -175,40 +224,93 @@ object Iso8601InstantSerializer : KSerializer<Instant> {
     }
 }
 
-fun Int.toWeatherIcon(): TimelineIcon = when (this) {
-    in 0..4 -> TimelineIcon.HeavyRain
-    in 5..8 -> TimelineIcon.LightSnow
-    9 -> TimelineIcon.LightRain
-    10 -> TimelineIcon.LightSnow
-    11 -> TimelineIcon.LightRain
-    12 -> TimelineIcon.HeavyRain
-    in 13..14 -> TimelineIcon.LightSnow
-    in 15..17 -> TimelineIcon.HeavySnow
-    18 -> TimelineIcon.LightSnow
-    in 19..22 -> TimelineIcon.CloudyDay
-    in 23..25 -> TimelineIcon.TimelineWeather
-    in 26..28 -> TimelineIcon.CloudyDay
-    in 29..30 -> TimelineIcon.PartlyCloudy
-    in 31..34 -> TimelineIcon.TimelineSun
-    35 -> TimelineIcon.LightSnow
-    36 -> TimelineIcon.TimelineSun
-    in 37..40 -> TimelineIcon.HeavyRain
-    in 41..43 -> TimelineIcon.HeavySnow
-    44 -> TimelineIcon.TimelineWeather
-    45 -> TimelineIcon.LightRain
-    46 -> TimelineIcon.LightSnow
-    47 -> TimelineIcon.HeavyRain
-    else -> TimelineIcon.TimelineWeather
+fun Int.toWeatherType(): WeatherType = when (this) {
+    in 0..4 -> WeatherType.HeavyRain
+    in 5..8 -> WeatherType.LightSnow
+    9 -> WeatherType.LightRain
+    10 -> WeatherType.LightSnow
+    11 -> WeatherType.LightRain
+    12 -> WeatherType.HeavyRain
+    in 13..14 -> WeatherType.LightSnow
+    in 15..17 -> WeatherType.HeavySnow
+    18 -> WeatherType.LightSnow
+    in 19..22 -> WeatherType.CloudyDay
+    in 23..25 -> WeatherType.Generic
+    in 26..28 -> WeatherType.CloudyDay
+    in 29..30 -> WeatherType.PartlyCloudy
+    in 31..34 -> WeatherType.Sun
+    35 -> WeatherType.LightSnow
+    36 -> WeatherType.Sun
+    in 37..40 -> WeatherType.HeavyRain
+    in 41..43 -> WeatherType.HeavySnow
+    44 -> WeatherType.Generic
+    45 -> WeatherType.LightRain
+    46 -> WeatherType.LightSnow
+    47 -> WeatherType.HeavyRain
+    else -> WeatherType.Generic
+}
+
+fun WeatherType.toWeatherIcon(): TimelineIcon = when (this) {
+    WeatherType.PartlyCloudy -> TimelineIcon.PartlyCloudy
+    WeatherType.CloudyDay -> TimelineIcon.CloudyDay
+    WeatherType.LightSnow -> TimelineIcon.LightSnow
+    WeatherType.LightRain -> TimelineIcon.LightRain
+    WeatherType.HeavyRain -> TimelineIcon.HeavyRain
+    WeatherType.HeavySnow -> TimelineIcon.HeavySnow
+    WeatherType.Generic -> TimelineIcon.TimelineWeather
+    WeatherType.Sun -> TimelineIcon.TimelineSun
+    WeatherType.RainAndSnow -> TimelineIcon.RainingAndSnowing
+    WeatherType.Unknown -> TimelineIcon.TimelineWeather
 }
 
 @Serializable
 data class WeatherResponse(
-    val fcstdaily7: DailyForecasts
+    val fcstdaily7: DailyForecasts,
+    val conditions: Conditions,
 )
 
 @Serializable
 data class DailyForecasts(
     val data: DailyForecastData
+)
+
+@Serializable
+data class Conditions(
+    val data: ConditionsData,
+)
+
+@Serializable
+data class ConditionsData(
+    val observation: ConditionsObservation,
+)
+
+@Serializable
+data class ConditionsObservation(
+    val metric: ConditionTemps? = null,
+    val imperial: ConditionTemps? = null,
+    @SerialName("uk_hybrid")
+    val ukHybrid: ConditionTemps? = null,
+    @SerialName("phrase_32char")
+    val phrase32Char: String,
+    @SerialName("icon_code")
+    val iconCode: Int,
+)
+
+fun ConditionsObservation.tempsFor(units: WeatherUnit): ConditionTemps? = when (units) {
+    WeatherUnit.Metric -> metric
+    WeatherUnit.Imperial -> imperial
+    WeatherUnit.UkHybrid -> ukHybrid
+}
+
+@Serializable
+data class ConditionTemps(
+    @SerialName("feels_like")
+    val feelsLike: Int,
+    val temp: Int,
+    @SerialName("temp_max_24hour")
+    val max24Hour: Int,
+    @SerialName("temp_min_24hour")
+    val min24Hour: Int,
 )
 
 @Serializable
@@ -224,6 +326,10 @@ data class DailyForecast(
     val sunset: Instant,
     val day: DailyDayNight? = null,
     val night: DailyDayNight,
+    @SerialName("max_temp")
+    val maxTemp: Int?,
+    @SerialName("min_temp")
+    val minTemp: Int,
 )
 
 @Serializable

@@ -51,6 +51,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -385,6 +386,9 @@ class FakeLibPebble : LibPebble {
                 current + watchPref
             }
         }
+    }
+
+    override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
     }
 }
 

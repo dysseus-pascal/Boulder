@@ -47,9 +47,10 @@ class CoreConfigFlow(val flow: StateFlow<CoreConfig>) {
 
 private const val SETTINGS_KEY = "coreapp.config"
 
-enum class WeatherUnit(val code: String) {
-    Metric("m"),
-    Imperial("e"),
+enum class WeatherUnit(val code: String, val displayName: String) {
+    Metric("m", "Metric"),
+    Imperial("e", "Imperial"),
+    UkHybrid("h", "Mixed (UK)"),
 }
 
 @Serializable
@@ -58,6 +59,7 @@ data class CoreConfig(
     val ignoreOtherPebbleApps: Boolean = false,
     val disableCompanionDeviceManager: Boolean = false,
     val weatherPinsV2: Boolean = true,
+    val fetchWeather: Boolean = true,
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val weatherUnits: WeatherUnit = WeatherUnit.Metric,

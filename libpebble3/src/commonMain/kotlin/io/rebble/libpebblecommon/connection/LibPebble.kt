@@ -49,6 +49,8 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.weather.WeatherLocationData
+import io.rebble.libpebblecommon.weather.WeatherManager
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.Deferred
@@ -76,7 +78,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations {
+    SystemGeolocation, Timeline, Vibrations, Weather {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -121,6 +123,10 @@ interface HealthApi {
     suspend fun getHealthDebugStats(): HealthDebugStats
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()
+}
+
+interface Weather {
+    fun updateWeatherData(weatherData: List<WeatherLocationData>)
 }
 
 interface Timeline {
@@ -300,12 +306,13 @@ class LibPebble3(
     private val legacyPhoneReceiver: LegacyPhoneReceiver,
     private val vibePatternDao: VibePatternDao,
     private val watchPreferences: WatchPrefs,
+    private val weatherManager: WeatherManager,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
-    Vibrations by notificationApi, WatchPrefs by watchPreferences {
+    Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

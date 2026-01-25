@@ -3,9 +3,14 @@ package coredevices.pebble.weather
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.database.WeatherLocationDao
+import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
+import dev.jordond.compass.Place
+import dev.jordond.compass.geocoder.Geocoder
+import dev.jordond.compass.geocoder.GeocoderResult
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
@@ -27,6 +32,13 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
+data class LocationWithData(
+    val location: WeatherLocationEntity,
+    val data: WeatherResponse?,
+)
+
+private val logger = Logger.withTag("WeatherFetcher")
+
 class WeatherFetcher(
     private val systemGeolocation: SystemGeolocation,
     private val coreConfigFlow: CoreConfigFlow,
@@ -34,9 +46,9 @@ class WeatherFetcher(
     private val libPebble: LibPebble,
     private val clock: Clock,
     private val settings: Settings,
+    private val weatherLocationDao: WeatherLocationDao,
+    private val geocoder: Geocoder,
 ) {
-    private val logger = Logger.withTag("WeatherFetcher")
-
     companion object {
         private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
     }
@@ -64,48 +76,88 @@ class WeatherFetcher(
             libPebble.updateWeatherData(emptyList())
             return
         }
-        val location = systemGeolocation.getCurrentPosition()
-        when (location) {
+        val locations = getLocationsAndUpdateCurrentLocation()
+        val locale = Locale.current.toLanguageTag()
+        val fetchedData = locations.map { location ->
+            val lat = location.latitude
+            val lon = location.longitude
+            val response = if (lat == null || lon == null) {
+                null
+            } else {
+                pebbleWebServices.getWeather(lat, lon, units, locale)
+            }
+            LocationWithData(location, response)
+        }
+        val weatherAppData = fetchedData.map { location ->
+            weatherAppData(location, units)
+                ?: WeatherLocationData.WeatherLocationDataFailed(location.location.key)
+        }
+        if (pinsEnabled) {
+            createTimelinePins(fetchedData)
+        }
+        libPebble.updateWeatherData(weatherAppData)
+    }
+
+    private suspend fun getLocationsAndUpdateCurrentLocation(): List<WeatherLocationEntity> {
+        val locations = weatherLocationDao.getAllLocations()
+        val currentLocationRecord = locations.firstOrNull { it.currentLocation }
+        if (currentLocationRecord == null) {
+            return locations
+        }
+        val geolocation = systemGeolocation.getCurrentPosition()
+        return when (geolocation) {
             is GeolocationPositionResult.Error -> {
-                logger.i { "Couldn't get location: ${location.message}" }
-                return
+                logger.i { "Couldn't get location: ${geolocation.message}" }
+                locations
             }
             is GeolocationPositionResult.Success -> {
-                val locale = Locale.current.toLanguageTag()
-                val response = pebbleWebServices.getWeather(location, units, locale)
-                if (response != null) {
-                    if (pinsEnabled) {
-                        createTimelinePins(response)
-                    }
-                    populateWeatherApp(response, units)
+                val updatedName = geocoder.reverse(
+                    latitude = geolocation.latitude,
+                    longitude = geolocation.longitude,
+                ).usefulName() ?: currentLocationRecord.name
+                val updatedRecord = currentLocationRecord.copy(
+                    latitude = geolocation.latitude,
+                    longitude = geolocation.longitude,
+                    name = updatedName,
+                )
+                weatherLocationDao.upsert(updatedRecord)
+                locations.map {
+                    if (it.currentLocation) updatedRecord else it
                 }
             }
         }
     }
 
-    private fun createTimelinePins(weather: WeatherResponse) {
-        val today = weather.fcstdaily7.data.forecasts.getOrNull(0)
-        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(1)
-        val dayAfterTomorrow = weather.fcstdaily7.data.forecasts.getOrNull(2)
+    data class PinData(
+        val location: WeatherLocationEntity,
+        val forecast: DailyForecast?,
+    )
+
+    private fun createTimelinePins(weather: List<LocationWithData>) {
+        val today = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(0)) }
+        val tomorrow = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(1)) }
+        val dayAfterTomorrow = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(2)) }
         createTimelinePins(today, Day.Today)
         createTimelinePins(tomorrow, Day.Tomorrow)
         createTimelinePins(dayAfterTomorrow, Day.DayAfterTomorrow)
     }
 
-    private fun populateWeatherApp(weather: WeatherResponse, units: WeatherUnit) {
+    private fun weatherAppData(locationWithData: LocationWithData, units: WeatherUnit): WeatherLocationData? {
+        val weather = locationWithData.data ?: return null
+        val location = locationWithData.location
         val current = weather.conditions.data.observation
         val currentTemps = current.tempsFor(units)
         if (currentTemps == null) {
             logger.w { "Couldn't find temps for units: $units" }
-            return
+            return null
         }
         val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(0)
         if (tomorrow == null || tomorrow.day == null) {
             logger.w { "Couldn't find forcast for tomorrow" }
-            return
+            return null
         }
-        val currentLocation = WeatherLocationData(
-            key = WeatherAppCurrentLocationUuid,
+        return WeatherLocationData.WeatherLocationDataPopulated(
+            key = location.key,
             currentTemp = currentTemps.temp.toShort(),
             currentWeatherType = current.iconCode.toWeatherType(),
             todayHighTemp = currentTemps.max24Hour.toShort(),
@@ -115,40 +167,60 @@ class WeatherFetcher(
             tomorrowLowTemp = tomorrow.minTemp.toShort(),
             lastUpdateTimeUtcSecs = clock.now().epochSeconds,
             isCurrentLocation = true,
-            locationName = "Current Location",
+            locationName = location.name,
             forecastShort = current.phrase32Char,
-            locationNameStartCase = "Current Location",
         )
-        libPebble.updateWeatherData(listOf(currentLocation))
     }
 
-    private fun createTimelinePins(dailyForecast: DailyForecast?, day: Day) {
-        if (dailyForecast == null) {
+    private fun createTimelinePins(dailyForecast: List<PinData>, day: Day) {
+        // Primary location not populated - don't update pins
+        val primaryLocation = dailyForecast.firstOrNull()
+        val primaryForecast = primaryLocation?.forecast
+        if (primaryForecast == null) {
             libPebble.delete(day.dayUuid)
             libPebble.delete(day.nightUuid)
             return
         }
-        if (dailyForecast.day != null) {
+        if (primaryForecast.day != null) {
+            val otherLocationsDay = dailyForecast.drop(1).mapNotNull {
+                val dayForecast = it.forecast?.day
+                if (dayForecast == null) {
+                    null
+                } else {
+                    "${it.location.name}\n${dayForecast.temp}/${it.forecast.night}, ${dayForecast.phrase12Char}"
+                }
+            }.ifEmpty { null }?.joinToString("\n—\n")
             createTimelinePin(
                 title = "Sunrise",
-                subtitle = "${dailyForecast.day.temp}°/${dailyForecast.night.temp}°",
-                dayOrNight = dailyForecast.day,
-                timestamp = dailyForecast.sunrise,
+                subtitle = "${primaryForecast.day.temp}°/${primaryForecast.night.temp}°",
+                dayOrNight = primaryForecast.day,
+                timestamp = primaryForecast.sunrise,
                 uuid = day.dayUuid,
-                location = "Current Location",
+                location = primaryLocation.location.name,
+                otherLocationsString = otherLocationsDay,
             )
         } else {
             libPebble.delete(day.dayUuid)
         }
 
-        val dayTempString = dailyForecast.day?.temp ?: "-"
+        val dayTempString = primaryForecast.day?.temp ?: "-"
+        val otherLocationsNight = dailyForecast.drop(1).mapNotNull {
+            val nightForecast = it.forecast?.night
+            val otherDayTempString = it.forecast?.day?.temp ?: "-"
+            if (nightForecast == null) {
+                null
+            } else {
+                "${it.location.name}\n$otherDayTempString/${it.forecast.night.temp}, ${nightForecast.phrase12Char}"
+            }
+        }.ifEmpty { null }?.joinToString("\n—\n")
         createTimelinePin(
             title = "Sunset",
-            subtitle = "$dayTempString/${dailyForecast.night.temp}°",
-            dayOrNight = dailyForecast.night,
-            timestamp = dailyForecast.sunset,
+            subtitle = "$dayTempString/${primaryForecast.night.temp}°",
+            dayOrNight = primaryForecast.night,
+            timestamp = primaryForecast.sunset,
             uuid = day.nightUuid,
-            location = "Current Location",
+            location = primaryLocation.location.name,
+            otherLocationsString = otherLocationsNight,
         )
     }
 
@@ -159,6 +231,7 @@ class WeatherFetcher(
         dayOrNight: DailyDayNight,
         timestamp: Instant,
         location: String,
+        otherLocationsString: String?,
     ) {
         val pin = buildTimelinePin(
             parentId = WEATHER_APP_UUID,
@@ -175,6 +248,10 @@ class WeatherFetcher(
                 largeIcon { dayOrNight.iconCode.toWeatherType().toWeatherIcon() }
                 lastUpdated { clock.now() }
                 location { location }
+                otherLocationsString?.let {
+                    headings { listOf(" ") }
+                    paragraphs { listOf(it) }
+                }
             }
             actions {
                 action(TimelineItem.Action.Type.OpenWatchapp) {
@@ -184,6 +261,18 @@ class WeatherFetcher(
         }
         libPebble.insertOrReplace(pin)
     }
+}
+
+fun GeocoderResult<Place>.usefulName(): String? {
+    val place = getOrNull()?.firstOrNull()
+    return place?.usefulName()
+}
+
+fun Place.usefulName(): String? {
+//    logger.v { "usefulName: name=$name street=$street isoCountryCode=$isoCountryCode country=$country " +
+//            "postalCode=$postalCode administrativeArea=$administrativeArea subAdministrativeArea=$subAdministrativeArea " +
+//            "locality=$locality subLocality=$subLocality thoroughfare=$thoroughfare subThoroughfare=$subThoroughfare" }
+    return locality ?: street
 }
 
 enum class Day(
@@ -201,8 +290,6 @@ private val TomorrowDayUuid = Uuid.parse("2834d0c8-85bc-45bd-b2b7-d0f026098d28")
 private val TomorrowNightUuid = Uuid.parse("2f363ad4-bc5d-455a-a445-4e00ec07417e")
 private val DayAfterTomorrowDayUuid = Uuid.parse("3233984e-2dc9-4469-8a9a-46f91d81b7fc")
 private val DayAfterTomorrowNightUuid = Uuid.parse("fd97c081-9970-436b-aa87-9c55232bce35")
-// This will become configured in db table, later, for multiple locations
-private val WeatherAppCurrentLocationUuid = Uuid.parse("d9540f35-733d-4dcc-80d1-8cfe7c197067")
 private const val TEMP_NO_VALUE = Short.MAX_VALUE
 
 object Iso8601InstantSerializer : KSerializer<Instant> {
@@ -338,4 +425,6 @@ data class DailyDayNight(
     val temp: Int,
     @SerialName("icon_code")
     val iconCode: Int,
+    @SerialName("phrase_12char")
+    val phrase12Char: String,
 )

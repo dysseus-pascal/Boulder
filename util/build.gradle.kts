@@ -95,6 +95,7 @@ kotlin {
                 optIn("kotlinx.cinterop.ExperimentalForeignApi")
                 optIn("androidx.compose.material3.ExperimentalMaterial3Api")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlin.uuid.ExperimentalUuidApi")
             }
         }
         commonMain {

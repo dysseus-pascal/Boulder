@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.algolia.client.exception.AlgoliaApiException
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
@@ -304,8 +305,8 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun getWeather(location: GeolocationPositionResult.Success, units: WeatherUnit, language: String): WeatherResponse? {
-        val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}?language=$language&units=${units.code}"
+    suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
+        val url = "https://weather-api.repebble.com/api/v1/geocode/$latitude/$longitude?language=$language&units=${units.code}"
         return httpClient.get(url, auth = false)
     }
 

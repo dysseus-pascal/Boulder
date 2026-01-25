@@ -53,6 +53,7 @@ coredevices-speex = "1946c84"
 cactus = "1.4.0-beta"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
+compass = "3.0.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -141,3 +142,7 @@ uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
 algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
 coredevices-speex = { group = "io.github.coredevices.speex", name = "speex", version.ref = "coredevices-speex" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
+compass-geocoder = { module = "dev.jordond.compass:geocoder", version.ref = "compass" }
+compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", version.ref = "compass" }
+compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.ref = "compass" }
+compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }

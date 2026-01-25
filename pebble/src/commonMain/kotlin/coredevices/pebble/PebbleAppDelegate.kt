@@ -1,12 +1,15 @@
 package coredevices.pebble
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.heartbeatWatchConnectGoalName
 import coredevices.analytics.heartbeatWatchConnectedName
 import coredevices.coreapp.util.AppUpdate
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.WeatherLocationDao
+import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.util.AppResumed
@@ -37,6 +40,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 class PebbleAppDelegate(
     private val libPebble: LibPebble,
@@ -44,11 +48,12 @@ class PebbleAppDelegate(
     private val permissionsRequester: PermissionRequester,
     private val appResumed: AppResumed,
     private val doneInitialOnboarding: DoneInitialOnboarding,
-    private val appUpdate: AppUpdate,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
     private val appstoreSourceDao: AppstoreSourceDao,
-    private val pebbleAccount: PebbleAccountProvider
+    private val pebbleAccount: PebbleAccountProvider,
+    private val weatherLocationDao: WeatherLocationDao,
+    private val settings: Settings,
 ) {
     companion object {
         private val INITIAL_APPSTORE_SOURCES = listOf(
@@ -68,6 +73,7 @@ class PebbleAppDelegate(
                 enabled = false
             )
         )
+        private const val HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY = "have_inserted_default_weather_location"
     }
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -103,11 +109,35 @@ class PebbleAppDelegate(
         }
     }
 
+    private suspend fun insertDefaultWeatherLocationOnce() {
+        GlobalScope.launch {
+            if (settings.getBoolean(HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY, false)) {
+                return@launch
+            }
+            settings.putBoolean(HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY, true)
+            if (weatherLocationDao.getAllLocations().isNotEmpty()) {
+                return@launch
+            }
+            logger.d { "Inserting default weather location" }
+            weatherLocationDao.upsert(
+                WeatherLocationEntity(
+                    key = Uuid.random(),
+                    name = "Current Location",
+                    latitude = null,
+                    longitude = null,
+                    currentLocation = true,
+                    orderIndex = 0
+                )
+            )
+        }
+    }
+
     fun init() {
         logger.d { "init()" }
         permissionsRequester.init()
         GlobalScope.launch {
             initAppstoreSourcesDB()
+            insertDefaultWeatherLocationOnce()
             // Don't initialize everything if the user just started the app for the first time and
             // hasn't gone through onboarding yet - it would create permission prompts on ios (we
             // want to control when those are shown).

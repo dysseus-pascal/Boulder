@@ -24,13 +24,15 @@ class WeatherManager(
             toDelete.forEach {
                 weatherAppEntryDao.markForDeletion(it.key)
             }
-            weatherAppEntryDao.insertOrReplace(weatherData.map { it.toWeatherAppEntry() })
+            weatherAppEntryDao.insertOrReplace(weatherData.mapNotNull {
+                (it as? WeatherLocationData.WeatherLocationDataPopulated)?.toWeatherAppEntry()
+            })
             appPrefsEntryDao.setWeatherSettings(WeatherPrefsValue(weatherData.map { it.key }))
         }
     }
 }
 
-fun WeatherLocationData.toWeatherAppEntry() = WeatherAppEntry(
+fun WeatherLocationData.WeatherLocationDataPopulated.toWeatherAppEntry() = WeatherAppEntry(
     key = key,
     currentTemp = currentTemp,
     currentWeatherType = currentWeatherType.code,
@@ -58,18 +60,23 @@ enum class WeatherType(val code: Byte) {
     Unknown(255u.toByte()),
 }
 
-data class WeatherLocationData(
-    val key: Uuid,
-    val currentTemp: Short,
-    val currentWeatherType: WeatherType,
-    val todayHighTemp: Short,
-    val todayLowTemp: Short,
-    val tomorrowWeatherType: WeatherType,
-    val tomorrowHighTemp: Short,
-    val tomorrowLowTemp: Short,
-    val lastUpdateTimeUtcSecs: Long,
-    val isCurrentLocation: Boolean,
-    val locationName: String,
-    val forecastShort: String,
-    val locationNameStartCase: String,
-)
+sealed class WeatherLocationData {
+    abstract val key: Uuid
+    data class WeatherLocationDataFailed(
+        override val key: Uuid,
+    ) : WeatherLocationData()
+    data class WeatherLocationDataPopulated(
+        override val key: Uuid,
+        val currentTemp: Short,
+        val currentWeatherType: WeatherType,
+        val todayHighTemp: Short,
+        val todayLowTemp: Short,
+        val tomorrowWeatherType: WeatherType,
+        val tomorrowHighTemp: Short,
+        val tomorrowLowTemp: Short,
+        val lastUpdateTimeUtcSecs: Long,
+        val isCurrentLocation: Boolean,
+        val locationName: String,
+        val forecastShort: String,
+    ) : WeatherLocationData()
+}

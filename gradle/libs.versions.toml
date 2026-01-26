@@ -53,7 +53,7 @@ coredevices-speex = "1946c84"
 cactus = "1.4.0-beta"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
-compass = "3.0.0"
+compass = "2.4.1"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }

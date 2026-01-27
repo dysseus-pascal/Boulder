@@ -1,0 +1,276 @@
+package coredevices.util.transcription
+
+import co.touchlab.kermit.Logger
+import com.cactus.CactusInitParams
+import com.cactus.CactusSTT
+import com.cactus.CactusTranscriptionParams
+import com.cactus.CactusTranscriptionResult
+import com.cactus.TranscriptionMode
+import com.russhwolf.settings.Settings
+import coredevices.util.AudioEncoding
+import coredevices.util.CactusSTTMode
+import coredevices.util.CommonBuildKonfig
+import coredevices.util.calculateDefaultSTTModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.io.Buffer
+import kotlinx.io.Sink
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.files.SystemTemporaryDirectory
+import kotlinx.io.readByteArray
+import kotlinx.io.writeIntLe
+import kotlinx.io.writeShortLe
+import kotlinx.io.writeString
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
+
+class CactusTranscriptionService(private val settings: Settings): TranscriptionService {
+    companion object {
+        private val logger = Logger.Companion.withTag("CactusTranscriptionService")
+        private var sttModel = CactusSTT()
+        private var initJob: Job? = null
+        private var lastInitedModel: String? = null
+        private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
+
+    }
+
+    private fun writeWavHeader(sink: Sink, sampleRate: Int, audioSize: Int) {
+        val chunkSize = audioSize + 36
+        sink.writeString("RIFF")
+        sink.writeIntLe(chunkSize)
+        sink.writeString("WAVE")
+        sink.writeString("fmt ")
+        sink.writeIntLe(16) // fmt chunk size
+        sink.writeShortLe(1) // PCM format
+        sink.writeShortLe(1) // Mono
+        sink.writeIntLe(sampleRate) // Sample rate
+        sink.writeIntLe(sampleRate * 2) // Byte rate
+        sink.writeShortLe(2) // Block align
+        sink.writeShortLe(16) // Bits per sample
+        sink.writeString("data")
+        sink.writeIntLe(audioSize)
+    }
+
+    private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
+
+    private fun getCacheFilePath(): Path {
+        SystemFileSystem.createDirectories(cacheDir, mustCreate = false)
+        val fileName = "cactus_stt_${Uuid.random()}.wav"
+        return Path(cacheDir, fileName)
+    }
+
+    private val sttMode get() = CactusSTTMode.Companion.fromId(settings.getInt("cactus_mode", 0))
+    private val sttModelName get() = settings.getString(
+        "cactus_stt_model",
+        calculateDefaultSTTModel()
+    )
+    private val scope = CoroutineScope(Dispatchers.Default)
+
+    private suspend fun initIfNeeded() {
+        when (sttMode) {
+            CactusSTTMode.Disabled -> {}
+            CactusSTTMode.Local, CactusSTTMode.RemoteFirst -> {
+                val start = Clock.System.now()
+                if (sttModelName != lastInitedModel) {
+                    sttModel = CactusSTT()
+                }
+                if (!sttModel.isReady()) {
+                    sttModel.initializeModel(CactusInitParams(model = sttModelName))
+                    val initDuration = Clock.System.now() - start
+                    logger.d { "Cactus STT model initialized successfully in $initDuration" }
+                    lastInitedModel = sttModelName
+                }
+                if (sttMode == CactusSTTMode.RemoteFirst) {
+                    CommonBuildKonfig.WISPR_KEY?.let {
+                        sttModel.warmUpWispr(it)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun performInit(): Job {
+        return scope.launch(Dispatchers.IO) {
+            try {
+                initIfNeeded()
+            } catch (e: Exception) {
+                logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
+            }
+            if (!sttModel.isReady()) {
+                logger.e { "Cactus STT model is not ready after initialization" }
+            }
+        }
+    }
+
+    override suspend fun isAvailable(): Boolean = sttModel.isReady()
+
+    override fun earlyInit() {
+        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttModelName) {
+            initJob = performInit()
+        }
+    }
+
+    private suspend fun cactusTranscribe(
+        audio: ByteArray,
+        sampleRate: Int,
+        timeout: Duration = 30.seconds
+    ): CactusTranscriptionResult? {
+        val params = CactusTranscriptionParams(maxTokens = 384)
+        val path = getCacheFilePath()
+        withContext(Dispatchers.IO) {
+            SystemFileSystem.sink(path).buffered().use { sink ->
+                writeWavHeader(sink, sampleRate, audioSize = audio.size)
+                sink.write(audio)
+            }
+        }
+        try {
+            return when (sttMode) {
+                CactusSTTMode.Disabled -> return null
+                CactusSTTMode.Local -> {
+                    sttModel.transcribe(
+                        filePath = path.toString(),
+                        params = params,
+                        mode = sttMode.cactusValue,
+                        apiKey = null
+                    )
+                }
+                CactusSTTMode.RemoteFirst -> {
+                    try {
+                        withTimeout(timeout) {
+                            val result = sttModel.transcribe(
+                                filePath = path.toString(),
+                                params = params,
+                                mode = TranscriptionMode.REMOTE,
+                                apiKey = CommonBuildKonfig.WISPR_KEY
+                            )
+                            if (result == null) {
+                                error("Remote transcription returned null")
+                            }
+                            result
+                        }
+                    } catch (e: Exception) {
+                        logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
+                        sttModel.transcribe(
+                            filePath = path.toString(),
+                            params = params,
+                            mode = TranscriptionMode.LOCAL,
+                            apiKey = null
+                        )
+                    }
+                }
+            }
+        } finally {
+            try {
+                SystemFileSystem.delete(path)
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to delete temp file $path: ${e.message}" }
+            }
+        }
+    }
+
+    override suspend fun transcribe(
+        audioStreamFrames: Flow<ByteArray>?,
+        sampleRate: Int,
+        encoding: AudioEncoding,
+    ): Flow<TranscriptionSessionStatus> = flow {
+        logger.d { "CactusTranscriptionService.transcribe() called" }
+        logger.i { "Transcribing with model $sttModelName" }
+        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttModelName) { // Ensure model is initialized
+            initJob = performInit()
+        }
+        emit(TranscriptionSessionStatus.Open)
+
+        if (audioStreamFrames == null) {
+            return@flow
+        }
+
+        // Collect audio and save to temp WAV file
+        logger.d { "Starting audio collection..." }
+        val buffer = Buffer()
+        var audioSize = 0
+        var chunkCount = 0
+        audioStreamFrames.collect { chunk ->
+            buffer.write(chunk)
+            audioSize += chunk.size
+            chunkCount++
+        }
+        logger.d { "Audio collection complete: $chunkCount chunks, $audioSize total bytes" }
+        logger.d { "Sample rate: $sampleRate Hz, encoding: $encoding" }
+        logger.d { "Duration: ${audioSize / (sampleRate * 2.0)}s (assuming 16-bit mono)" }
+
+        try {
+            withTimeout(20.seconds) {
+                initJob?.join()
+            }
+            val start = Clock.System.now()
+            sttModel.reset()
+
+            logger.d { "Model ready state: ${sttModel.isReady()}" }
+            val result = cactusTranscribe(audio = buffer.readByteArray(), sampleRate = sampleRate)
+            val duration = Clock.System.now() - start
+            logger.d { "Transcription call completed in $duration" }
+
+            if (result != null && result.success) {
+                val text = result.text
+                when {
+                    text.isNullOrBlank() -> {
+                        logger.w { "Transcription returned empty text" }
+                        throw TranscriptionException.NoSpeechDetected("empty_result")
+                    }
+
+                    text.length < 2 -> {
+                        logger.w { "Transcription result too short: '${result.text}'" }
+                        throw TranscriptionException.NoSpeechDetected("too_short")
+                    }
+
+                    text.replace(nonSpeechRegex, "").isBlank() -> {
+                        logger.w { "Transcription result only contains non-speech tokens: '${result.text}'" }
+                        throw TranscriptionException.NoSpeechDetected("non_speech_tokens")
+                    }
+
+                    text == "File processed offline" -> {
+                        logger.w { "Transcription returned placeholder text indicating demo mode" }
+                        throw TranscriptionException.TranscriptionServiceError("Model may be in demo mode")
+                    }
+                }
+                logger.d { "=== TRANSCRIPTION SUCCESS ===" }
+                logger.d { "Text: '${result.text}'" } //TODO: Remove for privacy
+                logger.d { "Text length: ${result.text?.length} chars" }
+
+                emit(
+                    TranscriptionSessionStatus.Transcription(
+                        result.text?.ifBlank { null }
+                            ?: throw TranscriptionException.NoSpeechDetected("Failed to understand audio")
+                    )
+                )
+            } else if (result != null) {
+                logger.e { "Transcription failed with cactus success=false" }
+                throw TranscriptionException.TranscriptionServiceError("Transcription failed: ${result.errorMessage ?: "unknown error"}")
+            } else {
+                logger.e { "transcribeFile returned null" }
+                throw TranscriptionException.TranscriptionServiceError("Transcription failed: null result")
+            }
+        } catch (e: TimeoutCancellationException) {
+            logger.e(e) { "Timeout during model init: ${e.message}" }
+            error("Transcription timed out waiting for model initialization")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Transcription failed: ${e.message}" }
+            throw e
+        }
+    }
+}

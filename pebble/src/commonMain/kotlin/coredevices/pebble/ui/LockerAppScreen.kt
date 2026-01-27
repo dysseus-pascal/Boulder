@@ -101,7 +101,7 @@ class LockerAppViewModel(
                 watchType,
                 platform,
                 source,
-                service.fetchCategories(AppType.fromString(result.type)!!)
+                service.cachedCategoriesOrDefaults(AppType.fromString(result.type))
             )
         }
     }

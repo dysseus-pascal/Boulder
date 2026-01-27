@@ -12,6 +12,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreSearchResult
@@ -67,6 +68,18 @@ private fun LockerWrapper.findStoreSource(
 }
 
 @Composable
+fun appstoreCategories(appType: AppType?, sources: List<AppstoreSource>?): Map<AppstoreSource, List<StoreCategory>>? {
+    val cache: AppstoreCache = koinInject()
+    if (sources == null || appType == null) {
+        return null
+    }
+    val categories by produceState<Map<AppstoreSource, List<StoreCategory>>?>(null) {
+        value = sources.associateWith { it.cachedCategoriesOrDefaults(appType, cache) }
+    }
+    return categories
+}
+
+@Composable
 fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -84,13 +97,14 @@ fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType):
     val coreConfig by coreConfigFlow.flow.collectAsState()
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents(coreConfig)
-    if (entries == null || appstoreSources == null) {
+    val categories = appstoreCategories(type, appstoreSources)
+    if (entries == null || appstoreSources == null || categories == null) {
         return null
     }
     return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
         entries?.map {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
-            it.asCommonApp(watchType, appstoreSource, null)
+            it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
         }
     }
 }
@@ -106,13 +120,28 @@ fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
     val coreConfig by coreConfigFlow.flow.collectAsState()
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents(coreConfig)
-    if (lockerEntry == null || appstoreSources == null) {
+    val categories = appstoreCategories(lockerEntry?.properties?.type, appstoreSources)
+    if (lockerEntry == null || appstoreSources == null || categories == null) {
         return null
     }
     return remember(lockerEntry, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
         val appstoreSource = lockerEntry?.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
         logger.v { "appstoreSource = $appstoreSource" }
-        lockerEntry?.asCommonApp(watchType, appstoreSource, null)
+        lockerEntry?.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+    }
+}
+
+private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(appType: AppType, cache: AppstoreCache): List<StoreCategory> {
+    return cache.readCategories(appType, this) ?: when (appType) {
+        AppType.Watchface -> DEFAULT_CATEGORIES_FACES
+        AppType.Watchapp -> DEFAULT_CATEGORIES_APPS
+    }
+}
+
+suspend fun AppstoreSource.cachedCategoriesOrDefaults(appType: AppType?, cache: AppstoreCache): List<StoreCategory> {
+    return when (appType) {
+        null -> cachedCategoriesOrDefaultsForType(AppType.Watchapp, cache) + cachedCategoriesOrDefaultsForType(AppType.Watchface, cache)
+        else -> cachedCategoriesOrDefaultsForType(appType, cache)
     }
 }
 
@@ -213,7 +242,7 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
     )
 }
 
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>?): CommonApp? {
+fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -252,7 +281,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         storeId = id,
         developerId = developerId,
         sourceLink = this.source,
-        categorySlug = categories?.firstOrNull { it.id == categoryId }?.slug,
+        categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
     )
 }
@@ -331,3 +360,72 @@ fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platfo
     }
     return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
 }
+
+val DEFAULT_CATEGORIES_FACES = listOf(
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "ffffff",
+        icon = emptyMap(),
+        id = "528d3ef2dc7b5f580700000a",
+        links = mapOf("apps" to "/api/v1/apps/category/faces"),
+        name = "Faces",
+        slug = "faces"
+    ),
+)
+
+val DEFAULT_CATEGORIES_APPS = listOf(
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "3db9e6",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/0QTBuPgXR8GAOMW0fJaA"),
+        id = "5261a8fb3b773043d500000c",
+        links = mapOf("apps" to "/api/v1/apps/category/daily"),
+        name = "Daily",
+        slug = "daily"
+    ),
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "fdbf37",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/Lhxn2MNYQruUOPNkreOs"),
+        id = "5261a8fb3b773043d500000f",
+        links = mapOf("apps" to "/api/v1/apps/category/tools-and-utilities"),
+        name = "Tools & Utilities",
+        slug = "tools-and-utilities"
+    ),
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "FF9000",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/WLi53fwzS2CKqMOAytF7"),
+        id = "5261a8fb3b773043d5000001",
+        links = mapOf("apps" to "/api/v1/apps/category/notifications"),
+        name = "Notifications",
+        slug = "notifications"
+    ),
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "fc4b4b",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/TpLgG0W6TT6Pt6Nm3t91"),
+        id = "5261a8fb3b773043d5000008",
+        links = mapOf("apps" to "/api/v1/apps/category/remotes"),
+        name = "Remotes",
+        slug = "remotes"
+    ),
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "98D500",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/xeW2tf3BSmWWBRyfmCZn"),
+        id = "5261a8fb3b773043d5000004",
+        links = mapOf("apps" to "/api/v1/apps/category/health-and-fitness"),
+        name = "Health & Fitness",
+        slug = "health-and-fitness"
+    ),
+    StoreCategory(
+        applicationIds = emptyList(),
+        color = "b57ad3",
+        icon = mapOf("88x88" to "https://assets2.rebble.io/88x88/Xji7xwyYSzqR1ANNhTyi"),
+        id = "5261a8fb3b773043d5000012",
+        links = mapOf("apps" to "/api/v1/apps/category/games"),
+        name = "Games",
+        slug = "games"
+    ),
+)

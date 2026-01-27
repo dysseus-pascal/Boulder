@@ -299,9 +299,9 @@ class RealPebbleWebServices(
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean = true): List<Pair<AppstoreSource, AppStoreHome?>> {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<Pair<AppstoreSource, AppStoreHome?>> {
         return getAllSources(enabledOnly).map {
-            it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform)
+            it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
         }
     }
 

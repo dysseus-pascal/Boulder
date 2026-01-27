@@ -7,6 +7,8 @@ import com.algolia.client.api.SearchClient
 import com.algolia.client.exception.AlgoliaApiException
 import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
+import coredevices.database.AppstoreCollection
+import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLockerEntry
@@ -47,6 +49,7 @@ class AppstoreService(
     httpClient: HttpClient,
     val source: AppstoreSource,
     private val cache: AppstoreCache,
+    private val appstoreCollectionDao: AppstoreCollectionDao,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -181,7 +184,7 @@ class AppstoreService(
         return result
     }
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?): AppStoreHome? {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, useCache: Boolean): AppStoreHome? {
         val typeString = type.storeString()
         val parameters = buildMap {
             set("platform", platform.storeString())
@@ -190,6 +193,12 @@ class AppstoreService(
             }
 //            set("firmware_version", "")
             set("filter_hardware", "true")
+        }
+        if (useCache) {
+            val cacheHit = cache.readHome(type, source, parameters)
+            if (cacheHit != null) {
+                return cacheHit
+            }
         }
         val home = try {
             httpClient.get(
@@ -214,6 +223,16 @@ class AppstoreService(
             }?.body<AppStoreHome>()
         home?.let {
             cache.writeCategories(home.categories, type, source)
+            appstoreCollectionDao.updateListOfCollections(type, home.collections.map {
+                AppstoreCollection(
+                    sourceId = source.id,
+                    title = it.name,
+                    slug = it.slug,
+                    type = type,
+                    enabled = true,
+                )
+            }, sourceId = source.id)
+            cache.writeHome(home, type, source, parameters)
         }
         return home?.copy(applications = home.applications.filter { app ->
             try {

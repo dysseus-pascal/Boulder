@@ -580,7 +580,7 @@ please disable the option.""".trimIndent(),
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Default,
-                    action = { navBarNav.navigateTo(PebbleRoutes.AppstoreSettingsRoute) },
+                    action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
                     show = { coreConfig.useNativeAppStore },
                 ),
                 basicSettingsDropdownItem(

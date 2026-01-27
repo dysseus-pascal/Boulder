@@ -35,9 +35,6 @@ object PebbleRoutes {
         val title: String,
         val url: String
     ) : CoreRoute
-
-    @Serializable
-    data object AppstoreSettingsRoute : CoreRoute
 }
 
 @Stable
@@ -80,6 +77,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data object IndexRoute : NavBarRoute
+
+    @Serializable
+    data object AppstoreSettingsRoute : NavBarRoute
 
     @Serializable
     data class NotificationAppRoute(val packageName: String) : NavBarRoute
@@ -251,6 +251,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
     }
+    composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
+        AppstoreSettingsScreen(nav, topBarParams)
+    }
 }
 
 fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
@@ -269,8 +272,5 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (
             title = route.title,
             url = route.url,
         )
-    }
-    composable<PebbleRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(coreNav, topBarParams = null)
     }
 }

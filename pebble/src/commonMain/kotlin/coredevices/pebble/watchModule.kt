@@ -98,7 +98,7 @@ val watchModule = module {
     singleOf(::AppstoreCache)
     single { MobileGeocoder() } bind Geocoder::class
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) bind WebServices::class

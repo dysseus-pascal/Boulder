@@ -309,6 +309,11 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         if (showSpeechRecognitionModelDialog is RequestedSTTMode.Enabled) {
                             settings[SettingsKeys.KEY_CACTUS_STT_MODEL] = modelName
                         }
+                        topBarParams.showSnackbar("Successfuly set up speech recognition")
+                    } else {
+                        settings.remove(SettingsKeys.KEY_CACTUS_MODE)
+                        settings.remove(SettingsKeys.KEY_CACTUS_STT_MODEL)
+                        topBarParams.showSnackbar("Failed to download speech recognition model, please try again")
                     }
                     showSpeechRecognitionModelDialog = null
                 },
@@ -337,6 +342,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             }
                             settings[SettingsKeys.KEY_CACTUS_MODE] =
                                 CactusSTTMode.Disabled.id
+                            settings.remove(SettingsKeys.KEY_CACTUS_STT_MODEL)
                         }
                         is RequestedSTTMode.Enabled -> {
                             val name = it.modelName
@@ -1784,7 +1790,12 @@ fun STTModeDialog(
             }
             TextButton(
                 onClick = {
-                    onModeSelected(RequestedSTTMode.Enabled(targetMode, targetModel))
+                    if (targetMode == CactusSTTMode.Disabled) {
+                        onModeSelected(RequestedSTTMode.Disabled)
+                        return@TextButton
+                    } else {
+                        onModeSelected(RequestedSTTMode.Enabled(targetMode, targetModel))
+                    }
                 }
             ) {
                 Text("OK")

@@ -58,7 +58,7 @@ class Memfault(
             }
         }  catch (e: IOException) {
             logger.w(e) { "Error checking for updates from memfault: ${e.message}" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         return when (response.status) {
             HttpStatusCode.OK -> try {
@@ -74,7 +74,7 @@ class Memfault(
                 )
                 logger.d { "fwVersion=$fwVersion" }
                 if (fwVersion == null) {
-                    FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                    FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
                 } else {
                     FirmwareUpdateCheckResult.FoundUpdate(
                         version = fwVersion,
@@ -84,10 +84,10 @@ class Memfault(
                 }
             } catch (e: NoTransformationFoundException) {
                 logger.e("error: ${e.message}", e)
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             } catch (e: ContentConvertException) {
                 logger.e("error: ${e.message}", e)
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             }
 
             HttpStatusCode.NoContent -> {
@@ -97,7 +97,7 @@ class Memfault(
 
             else -> {
                 logger.e { "Error fetching latest FW: ${response.status}" }
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             }
         }
     }

@@ -13,11 +13,17 @@ import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.PebbleAccountProvider
+import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreSearchResult
+import coredevices.pebble.services.isLoggedIn
+import coredevices.pebble.services.isRebbleFeed
+import coredevices.pebble.services.toLockerEntry
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppType
@@ -27,6 +33,8 @@ import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
@@ -315,6 +323,42 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         categorySlug = null,
         appstoreSource = source,
     )
+}
+
+class NativeLockerAddUtil(
+    private val libPebble: LibPebble,
+    private val pebbleAccountProvider: PebbleAccountProvider,
+    private val webServices: RealPebbleWebServices,
+) {
+    suspend fun addAppToLocker(
+        app: CommonAppType.Store,
+        source: AppstoreSource
+    ): Boolean {
+        val storeApp = app.storeApp
+        if (storeApp == null) {
+            logger.w { "storeApp is null" }
+            return false
+        }
+        val useLockerApiToAdd = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
+        val lockerEntry = if (useLockerApiToAdd) {
+            webServices.addToLegacyLockerWithResponse(storeApp.uuid)?.application
+        } else {
+            storeApp.toLockerEntry(source.url, timelineToken = null)
+        }
+        if (lockerEntry == null) {
+            logger.w { "failed to add to locker" }
+            return false
+        }
+        libPebble.addAppToLocker(lockerEntry)
+        // Don't delay return for this
+        GlobalScope.launch {
+            webServices.addToLocker(
+                app,
+                timelineToken = lockerEntry.userToken,
+            )
+        }
+        return true
+    }
 }
 
 fun CommonApp.showOnMainLockerScreen(): Boolean = when (commonAppType) {

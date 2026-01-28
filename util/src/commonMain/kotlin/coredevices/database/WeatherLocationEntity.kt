@@ -6,9 +6,15 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Upsert
+import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
+
+private val logger = Logger.withTag("WeatherLocationEntity")
 
 @Entity
 @Serializable
@@ -37,4 +43,29 @@ interface WeatherLocationDao {
 
     @Query("SELECT * FROM WeatherLocationEntity ORDER BY orderIndex ASC")
     suspend fun getAllLocations(): List<WeatherLocationEntity>
+}
+
+private const val HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY = "have_inserted_default_weather_location"
+
+fun WeatherLocationDao.insertDefaultWeatherLocationOnce(settings: Settings) {
+    GlobalScope.launch {
+        if (settings.getBoolean(HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY, false)) {
+            return@launch
+        }
+        settings.putBoolean(HAVE_INSERTED_DEFAULT_WEATHER_LOCATION_KEY, true)
+        if (getAllLocations().isNotEmpty()) {
+            return@launch
+        }
+        logger.d { "Inserting default weather location" }
+        upsert(
+            WeatherLocationEntity(
+                key = Uuid.random(),
+                name = "Current Location",
+                latitude = null,
+                longitude = null,
+                currentLocation = true,
+                orderIndex = 0
+            )
+        )
+    }
 }

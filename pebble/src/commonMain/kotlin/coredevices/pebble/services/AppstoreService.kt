@@ -14,8 +14,6 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.services.AppstoreService.BulkFetchParams.Companion.encodeToJson
 import coredevices.pebble.ui.CommonApp
-import coredevices.pebble.ui.DEFAULT_CATEGORIES_APPS
-import coredevices.pebble.ui.DEFAULT_CATEGORIES_FACES
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.cachedCategoriesOrDefaults
 import io.ktor.client.HttpClient
@@ -50,6 +48,8 @@ class AppstoreService(
     val source: AppstoreSource,
     private val cache: AppstoreCache,
     private val appstoreCollectionDao: AppstoreCollectionDao,
+    private val pebbleAccountProvider: PebbleAccountProvider,
+    private val realPebbleWebServices: RealPebbleWebServices,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -73,16 +73,28 @@ class AppstoreService(
         coerceInputValues = true
     }
 
-    private fun supportsBulkFetch(): Boolean = source.url.startsWith("https://appstore-api.repebble.com/")
+    private fun supportsBulkFetch(): Boolean = !source.isRebbleFeed()
 
     suspend fun fetchAppStoreApps(
         entries: List<FirestoreLockerEntry>,
         useCache: Boolean = true,
     ): List<LockerEntry> {
-        return if (!supportsBulkFetch()) {
+        return if (pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()) {
+            fetchAppStoreAppsFromPwsLocker()
+        } else if (!supportsBulkFetch()) {
             fetchAppStoreAppsOneByOne(entries, useCache)
         } else {
             fetchAppStoreAppsInBulk(entries)
+        }
+    }
+
+    private suspend fun fetchAppStoreAppsFromPwsLocker(): List<LockerEntry> {
+        val locker = realPebbleWebServices.fetchPebbleLocker()
+        if (locker == null) {
+            logger.w { "Failed to fetch Pebble locker" }
+            return emptyList()
+        } else {
+            return locker.applications
         }
     }
 

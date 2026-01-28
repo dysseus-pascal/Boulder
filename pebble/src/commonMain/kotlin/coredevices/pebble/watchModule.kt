@@ -31,6 +31,7 @@ import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
 import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
+import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
@@ -98,7 +99,7 @@ val watchModule = module {
     singleOf(::AppstoreCache)
     single { MobileGeocoder() } bind Geocoder::class
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get(), get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) bind WebServices::class
@@ -112,6 +113,7 @@ val watchModule = module {
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
     factoryOf(::LanguagePackRepository)
+    factoryOf(::NativeLockerAddUtil)
     factoryOf(::PebbleTokenProvider) bind TokenProvider::class
     factoryOf(::NullTranscriptionProvider) bind TranscriptionProvider::class
     factory {

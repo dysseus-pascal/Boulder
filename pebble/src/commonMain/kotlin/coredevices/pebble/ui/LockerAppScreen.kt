@@ -49,8 +49,6 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
-import coredevices.pebble.services.RealPebbleWebServices
-import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
@@ -164,7 +162,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val connected = lastConnectedWatch is ConnectedPebbleDevice
         val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val viewModel = koinViewModel<LockerAppViewModel>()
-        val webServices = koinInject<RealPebbleWebServices>()
         var showRemoveConfirmDialog by remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
@@ -175,6 +172,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val storeSource = appstoreSourceFromId(storeSourceId)
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
+        val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
 
         LaunchedEffect(storeId, storeSource) {
             if (storeId != null && storeSource != null) {
@@ -341,7 +339,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 //                            it.distinctBy { it.source.url }.size < it.size
 //                        } ?: false
 //                    }
-                    val storeApp = entry.commonAppType.storeApp
 //                    var variantsExpanded by remember { mutableStateOf(false) }
                     Row(Modifier.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                         PebbleElevatedButton(
@@ -349,19 +346,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             onClick = {
                                 // Global scope because it could take a second to download/sync/load app
                                 GlobalScope.launch {
-                                    val lockerEntry = storeApp?.toLockerEntry(entry.commonAppType.storeSource.url, timelineToken = null) // TODO timeline token
                                     val watch = lastConnectedWatch as? ConnectedPebbleDevice
-                                    if (lockerEntry != null) {
-                                        viewModel.addedToLocker = true
-                                        libPebble.addAppToLocker(lockerEntry)
-                                        if (watch != null) {
-                                            libPebble.launchApp(
-                                                entry,
-                                                topBarParams,
-                                                watch.identifier
-                                            )
-                                        }
-                                        webServices.addToLocker(entry.commonAppType, timelineToken = lockerEntry.userToken)
+                                    viewModel.addedToLocker = true
+                                    val addResult = nativeLockerAddUtil.addAppToLocker(entry.commonAppType, entry.commonAppType.storeSource)
+                                    if (!addResult) {
+                                        topBarParams.showSnackbar("Failed to add app")
+                                        return@launch
+                                    }
+                                    if (watch != null) {
+                                        libPebble.launchApp(
+                                            entry = entry,
+                                            topBarParams = topBarParams,
+                                            connectedIdentifier = watch.identifier,
+                                        )
                                     }
                                 }
                             },

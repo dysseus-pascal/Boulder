@@ -110,9 +110,6 @@ import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
-import dev.gitlive.firebase.firestore.FirebaseFirestoreException
-import dev.gitlive.firebase.firestore.code
-import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -291,7 +288,6 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
         }
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
-        var showLockerImportDialog by remember { mutableStateOf(false) }
         var showHealthStatsDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
         var showSpeechRecognitionModelDialog by remember { mutableStateOf<RequestedSTTMode?>(null) }
@@ -410,17 +406,6 @@ please disable the option.""".trimIndent(),
                     }
                 }
             }
-        }
-        if (showLockerImportDialog) {
-            val isRebble = remember {
-                parseUrl(bootConfig.getUrl() ?: "")?.host?.endsWith("rebble.io") == true
-            }
-            LockerImportDialog(
-                onDismissRequest = { showLockerImportDialog = false },
-                isRebble = isRebble,
-                onEnabled = {},
-                topBarParams = topBarParams,
-            )
         }
 
         LaunchedEffect(Unit) {
@@ -1099,43 +1084,13 @@ please disable the option.""".trimIndent(),
                     section = Section.Default,
                     checked = coreConfig.useNativeAppStore,
                     onCheckChanged = {
-                        if (!coreConfig.useNativeAppStore) {
-                            scope.launch {
-                                val lockerEmpty = try {
-                                    firestoreLocker.isLockerEmpty()
-                                } catch (e: FirebaseFirestoreException) {
-                                    logger.e(e) { "Error checking if Firestore locker is empty: code ${e.code.name}" }
-                                    topBarParams.showSnackbar("Please check your internet connection and try again")
-                                    return@launch
-                                }
-                                if (lockerEmpty && loggedIn != null) {
-                                    logger.i { "Showing locker import dialog" }
-                                    showLockerImportDialog = true
-                                    coreConfigHolder.update(
-                                        coreConfig.copy(
-                                            useNativeAppStore = true,
-                                        )
-                                    )
-                                } else {
-                                    logger.i { "Skipping locker import dialog" }
-                                    coreConfigHolder.update(
-                                        coreConfig.copy(
-                                            useNativeAppStore = true,
-                                        )
-                                    )
-                                    libPebble.requestLockerSync()
-                                    topBarParams.showSnackbar("Please wait while your locker syncs in the background")
-                                }
-                            }
-                        } else {
-                            coreConfigHolder.update(
-                                coreConfig.copy(
-                                    useNativeAppStore = false,
-                                )
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                useNativeAppStore = true,
                             )
-                            libPebble.requestLockerSync()
-                            topBarParams.showSnackbar("Please wait while your locker syncs in the background")
-                        }
+                        )
+                        libPebble.requestLockerSync()
+                        topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                     },
                 ),
                 basicSettingsToggleItem(

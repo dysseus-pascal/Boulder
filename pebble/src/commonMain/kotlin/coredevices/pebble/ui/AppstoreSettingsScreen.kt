@@ -134,26 +134,6 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             nav.goBack()
         }
     }
-    var showLockerImportDialog by remember { mutableStateOf<Int?>(null) }
-
-    if (showLockerImportDialog != null) {
-        val isRebble = remember {
-            parseUrl(bootConfig.getUrl() ?: "")?.host?.endsWith("rebble.io") == true
-        }
-        val sourceId = showLockerImportDialog
-        if (sourceId != null) {
-            LockerImportDialog(
-                onDismissRequest = { showLockerImportDialog = null },
-                isRebble = isRebble,
-                topBarParams = topBarParams,
-                onEnabled = {
-                    scope.launch {
-                        sourceDao.setSourceEnabled(sourceId, true)
-                    }
-                },
-            )
-        }
-    }
 
     AppstoreSettingsScreen(
         sources = sources,
@@ -167,8 +147,6 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                     }?.id == sourceId && isEnabled) {
                     if (pebbleLoggedIn.value == null) {
                         uriHandler.openUri(REBBLE_LOGIN_URI)
-                    } else {
-                        showLockerImportDialog = sourceId
                     }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)

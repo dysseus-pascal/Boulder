@@ -4,7 +4,6 @@ import co.touchlab.kermit.Logger
 import com.algolia.client.exception.AlgoliaApiException
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
@@ -28,6 +27,8 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.put
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
@@ -38,11 +39,10 @@ import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.services.WatchInfo
-import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.web.LockerAddResponse
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerEntryCompanions
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
-import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import io.rebble.libpebblecommon.web.LockerEntryDeveloper
 import io.rebble.libpebblecommon.web.LockerEntryLinks
 import io.rebble.libpebblecommon.web.LockerEntryPBW
@@ -58,7 +58,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -72,6 +71,8 @@ interface PebbleAccountProvider {
     fun get(): PebbleAccount
 }
 
+fun PebbleAccountProvider.isLoggedIn(): Boolean = get().loggedIn.value != null
+
 class PebbleHttpClient(
     private val pebbleAccount: PebbleAccountProvider,
     httpClient: HttpClient = HttpClient(),
@@ -84,11 +85,11 @@ class PebbleHttpClient(
         internal suspend fun PebbleHttpClient.put(
             url: String,
             auth: Boolean,
-        ): Boolean {
+        ): HttpResponse? {
             val token = pebbleAccount.get().loggedIn.value
             if (auth && token == null) {
                 logger.i("not logged in")
-                return false
+                return null
             }
             val response = try {
                 httpClient.put(url) {
@@ -98,10 +99,10 @@ class PebbleHttpClient(
                 }
             } catch (e: IOException) {
                 logger.w(e) { "Error doing put: ${e.message}" }
-                return false
+                return null
             }
             logger.v { "post url=$url result=${response.status}" }
-            return response.status.isSuccess()
+            return response
         }
 
         internal suspend fun PebbleHttpClient.delete(
@@ -125,19 +126,6 @@ class PebbleHttpClient(
             }
             logger.v { "delete url=$url result=${response.status}" }
             return response.status.isSuccess()
-        }
-
-        internal suspend inline fun <reified T> PebbleHttpClient.getWithWeatherAuth(
-            url: String,
-        ): T? {
-            val token = pebbleAccount.get().loggedIn.value
-            if (token == null) {
-                logger.i("not logged in")
-                return null
-            }
-            return get(url = url, auth = false, parameters = mapOf(
-                "access_token" to token
-            ))
         }
 
         internal suspend inline fun <reified T> PebbleHttpClient.get(
@@ -188,15 +176,10 @@ class RealPebbleWebServices(
     private val firmwareUpdateCheck: FirmwareUpdateCheck,
     private val bootConfig: BootConfigProvider,
     private val memfault: Memfault,
-    private val platform: Platform,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
     private val coreConfig: CoreConfigFlow
 ) : WebServices, KoinComponent {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-    }
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val logger = Logger.withTag("PebbleWebServices")
@@ -217,11 +200,11 @@ class RealPebbleWebServices(
         private suspend fun RealPebbleWebServices.put(
             url: BootConfig.Config.() -> String,
             auth: Boolean,
-        ): Boolean {
+        ): HttpResponse? {
             val bootConfig = bootConfig.getBootConfig()
             if (bootConfig == null) {
                 logger.i("No bootconfig!")
-                return false
+                return null
             }
             return httpClient.put(url(bootConfig.config), auth)
         }
@@ -257,15 +240,6 @@ class RealPebbleWebServices(
         }
     }
 
-    private fun appstoreServiceForUrl(sourceUrl: String): AppstoreService {
-        return get {
-            parametersOf(AppstoreSource(
-                url = sourceUrl,
-                title = ""
-            ))
-        }
-    }
-
     suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
@@ -293,7 +267,11 @@ class RealPebbleWebServices(
     }
 
     suspend fun addToLegacyLocker(uuid: String): Boolean =
-        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)
+        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.status?.isSuccess() == true
+
+    suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? {
+        return put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.body()
+    }
 
     suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
 

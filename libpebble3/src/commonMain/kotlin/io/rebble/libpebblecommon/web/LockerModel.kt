@@ -16,6 +16,11 @@ data class LockerModel(
 )
 
 @Serializable
+data class LockerAddResponse(
+    val application: LockerEntry,
+)
+
+@Serializable
 data class LockerEntry(
     val id: String,
     val uuid: String,

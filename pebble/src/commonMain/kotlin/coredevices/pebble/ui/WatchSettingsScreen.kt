@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -1624,7 +1625,11 @@ fun <T> basicSettingsDropdownItem(
                 var expanded by remember { mutableStateOf(false) }
                 Box {
                     TextButton(onClick = { expanded = true }) {
-                        Text(itemText(selectedItem))
+                        Text(
+                            text = itemText(selectedItem),
+                            modifier = Modifier.widthIn(max = 150.dp),
+                            maxLines = 1,
+                        )
                     }
                     DropdownMenu(
                         expanded = expanded,

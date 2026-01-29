@@ -1087,7 +1087,7 @@ please disable the option.""".trimIndent(),
                     onCheckChanged = {
                         coreConfigHolder.update(
                             coreConfig.copy(
-                                useNativeAppStore = true,
+                                useNativeAppStore = it,
                             )
                         )
                         libPebble.requestLockerSync()

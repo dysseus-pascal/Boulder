@@ -1012,7 +1012,7 @@ please disable the option.""".trimIndent(),
                         )
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
-                    itemText = { it.name },
+                    itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
                 ),
                 basicSettingsActionItem(

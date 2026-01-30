@@ -341,7 +341,6 @@ class BlobDB(
             return
         }
         val bytes = command.serialize().asByteArray()
-        logger.v { "bytes for insert: ${bytes.joinToString()}" }
         val result = sendWithTimeout(command)
         logger.d("insert: result = ${result?.responseValue}")
         when (result?.responseValue) {

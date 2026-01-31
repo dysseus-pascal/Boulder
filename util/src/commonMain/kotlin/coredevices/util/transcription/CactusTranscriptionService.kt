@@ -76,7 +76,6 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         return Path(cacheDir, fileName)
     }
 
-    //TODO: react to settings changes
     private val sttConfig = coreConfigFlow.flow.map { it.sttConfig }.stateIn(
         scope,
         started = kotlinx.coroutines.flow.SharingStarted.Lazily,

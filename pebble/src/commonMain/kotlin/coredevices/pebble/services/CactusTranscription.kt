@@ -3,6 +3,7 @@ package coredevices.pebble.services
 import com.russhwolf.settings.Settings
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
+import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
@@ -24,8 +25,7 @@ import kotlinx.io.files.Path
 import kotlinx.io.readByteArray
 
 internal expect fun tempTranscriptionDirectory(): Path
-class CactusTranscription(private val settings: Settings): TranscriptionProvider {
-    val service = CactusTranscriptionService(settings)
+class CactusTranscription(private val service: CactusTranscriptionService): TranscriptionProvider {
     override suspend fun canServeSession(): Boolean {
         service.earlyInit()
         return true
@@ -87,6 +87,8 @@ class CactusTranscription(private val settings: Settings): TranscriptionProvider
             TranscriptionResult.Error("No transcription result received")
         } catch (_: TranscriptionException.NoSpeechDetected) {
             TranscriptionResult.Success(emptyList())
+        } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
+            TranscriptionResult.Disabled
         } catch (e: TranscriptionException) {
             TranscriptionResult.Error("Transcription failed: ${e.message}")
         } finally {

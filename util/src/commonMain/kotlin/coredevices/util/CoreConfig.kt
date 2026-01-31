@@ -3,6 +3,7 @@ package coredevices.util
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coredevices.util.models.CactusSTTMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +20,27 @@ class CoreConfigHolder(
         return loadFromStorage() ?: defaultValue.also { saveToStorage(it) }
     }
 
+    private fun migrateCactusSettings(oldConfig: CoreConfig): CoreConfig {
+        val mode = settings.getIntOrNull("cactus_mode")
+        val model = settings.getStringOrNull("cactus_stt_model")
+        if (mode != null) {
+            Logger.i("CoreConfigHolder") { "Migrating old Cactus STT settings: mode=$mode, model=$model" }
+            settings.remove("cactus_mode")
+            settings.remove("cactus_stt_model")
+            return oldConfig.copy(
+                sttConfig = STTConfig(
+                    mode = CactusSTTMode.fromId(mode),
+                    modelName = model,
+                )
+            )
+        } else {
+            return oldConfig
+        }
+    }
+
     private fun loadFromStorage(): CoreConfig? = settings.getStringOrNull(SETTINGS_KEY)?.let { string ->
         try {
-            json.decodeFromString(string)
+            migrateCactusSettings(json.decodeFromString(string))
         } catch (e: SerializationException) {
             Logger.w("Error loading settings", e)
             null
@@ -64,4 +83,11 @@ data class CoreConfig(
     val enableIndex: Boolean = false,
     val weatherUnits: WeatherUnit = WeatherUnit.Metric,
     val showAllSettingsTab: Boolean = false,
+    val sttConfig: STTConfig = STTConfig(),
+)
+
+@Serializable
+data class STTConfig(
+    val mode: CactusSTTMode = CactusSTTMode.RemoteFirst,
+    val modelName: String? = null,
 )

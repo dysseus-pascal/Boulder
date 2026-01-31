@@ -15,6 +15,7 @@ import coredevices.util.IosPermissionRequester
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
+import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
 import io.rebble.libpebblecommon.connection.AppContext
@@ -55,4 +56,5 @@ val iosDefaultModule = module {
             }
         )
     }
+    singleOf(::ModelDownloadManager)
 }

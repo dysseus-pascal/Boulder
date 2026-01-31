@@ -111,6 +111,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data class MyCollectionRoute(val appType: String, val myCollectionType: String) : NavBarRoute
+
+    @Serializable
+    data class OfflineModelsRoute(val openSttDialog: Boolean = false) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -253,6 +256,10 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
         AppstoreSettingsScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.OfflineModelsRoute> {
+        val route: PebbleNavBarRoutes.OfflineModelsRoute = it.toRoute()
+        ModelManagementScreen(nav, topBarParams, route.openSttDialog)
     }
 }
 

@@ -31,6 +31,7 @@ import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
 import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
+import coredevices.pebble.ui.ModelManagementScreenViewModel
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
@@ -156,6 +157,7 @@ val watchModule = module {
             p.getOrNull()
         )
     }
+    viewModelOf(::ModelManagementScreenViewModel)
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

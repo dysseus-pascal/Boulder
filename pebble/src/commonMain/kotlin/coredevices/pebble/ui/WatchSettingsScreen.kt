@@ -6,7 +6,6 @@ import CoreAppVersion
 import NextBugReportContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AppSettingsAlt
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
@@ -34,18 +32,13 @@ import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -53,7 +46,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,8 +65,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
-import com.cactus.VoiceModel
 import com.russhwolf.settings.Settings
+import com.russhwolf.settings.get
 import com.russhwolf.settings.set
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -97,16 +89,15 @@ import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.ModelType
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButton
-import coredevices.util.CactusSTTMode
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.WeatherUnit
-import coredevices.util.calculateDefaultSTTModel
 import coredevices.util.deleteRecursive
 import coredevices.util.emailOrNull
-import coredevices.util.getModelDirectories
+import coredevices.util.models.ModelManager
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -126,7 +117,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import theme.CoreAppTheme
 import theme.ThemeProvider
@@ -161,6 +151,7 @@ enum class Section(val title: String /*val type: TopLevelType*/) {
     Default("Settings"),
     Calendar("Calendar"),
     Health("Health"),
+    Speech("Speech Recognition"),
     Time("Time"),
     Display("Display"),
     Timeline("Timeline"),
@@ -244,17 +235,17 @@ fun pebbleScreenContext(
 
 private val logger = Logger.withTag("WatchSettingsScreen")
 
-sealed interface RequestedSTTMode {
+sealed interface RequestedLocalSTTMode {
     val mode: CactusSTTMode
 
-    object Disabled : RequestedSTTMode {
-        override val mode = CactusSTTMode.Disabled
+    object Disabled : RequestedLocalSTTMode {
+        override val mode = CactusSTTMode.RemoteOnly
     }
 
     data class Enabled(
         override val mode: CactusSTTMode,
         val modelName: String
-    ) : RequestedSTTMode
+    ) : RequestedLocalSTTMode
 }
 
 @Composable
@@ -291,82 +282,6 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
         var showHealthStatsDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
-        var showSpeechRecognitionModelDialog by remember { mutableStateOf<RequestedSTTMode?>(null) }
-        var showSpeechRecognitionModeDialog by remember { mutableStateOf(false) }
-        if (showSpeechRecognitionModelDialog != null) {
-            check(showSpeechRecognitionModelDialog is RequestedSTTMode.Enabled)
-            val modelName = remember {
-                (showSpeechRecognitionModelDialog!! as RequestedSTTMode.Enabled).modelName
-            }
-            ModelDownloadDialog(
-                onDismissRequest = { success ->
-                    if (success) {
-                        settings[SettingsKeys.KEY_CACTUS_MODE] =
-                            showSpeechRecognitionModelDialog!!.mode.id
-                        if (showSpeechRecognitionModelDialog is RequestedSTTMode.Enabled) {
-                            settings[SettingsKeys.KEY_CACTUS_STT_MODEL] = modelName
-                        }
-                        topBarParams.showSnackbar("Successfuly set up speech recognition")
-                    } else {
-                        settings.remove(SettingsKeys.KEY_CACTUS_MODE)
-                        settings.remove(SettingsKeys.KEY_CACTUS_STT_MODEL)
-                        topBarParams.showSnackbar("Failed to download speech recognition model, please try again")
-                    }
-                    showSpeechRecognitionModelDialog = null
-                },
-                models = setOf(ModelType.STT(modelName = modelName))
-            )
-        }
-        if (showSpeechRecognitionModeDialog) {
-            val mode = remember {
-                CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
-            }
-            val model = remember {
-                settings.getString(
-                    SettingsKeys.KEY_CACTUS_STT_MODEL,
-                    calculateDefaultSTTModel()
-                )
-            }
-            STTModeDialog(
-                onModeSelected = {
-                    showSpeechRecognitionModeDialog = false
-                    when (it) {
-                        RequestedSTTMode.Disabled -> scope.launch {
-                            withContext(Dispatchers.IO) {
-                                getModelDirectories().forEach {
-                                    deleteRecursive(Path(it))
-                                }
-                            }
-                            settings[SettingsKeys.KEY_CACTUS_MODE] =
-                                CactusSTTMode.Disabled.id
-                            settings.remove(SettingsKeys.KEY_CACTUS_STT_MODEL)
-                        }
-                        is RequestedSTTMode.Enabled -> {
-                            val name = it.modelName
-                            scope.launch {
-                                val needsDownload = withContext(Dispatchers.IO) {
-                                    !CactusSTT().isModelDownloaded(name)
-                                }
-                                if (needsDownload) {
-                                    showSpeechRecognitionModelDialog = it
-                                } else {
-                                    logger.i { "Model $name already downloaded, not showing download dialog" }
-                                    settings[SettingsKeys.KEY_CACTUS_MODE] =
-                                        it.mode.id
-                                    settings[SettingsKeys.KEY_CACTUS_STT_MODEL] = name
-                                }
-                            }
-                        }
-                    }
-                },
-                onDismissRequest = { showSpeechRecognitionModeDialog = false },
-                selectedMode = when (mode) {
-                    CactusSTTMode.Disabled -> RequestedSTTMode.Disabled
-                    else -> RequestedSTTMode.Enabled(mode, model)
-                },
-                debugOptionsEnabled
-            )
-        }
         if (showHealthStatsDialog) {
             HealthStatsDialog(
                 libPebble = libPebble,
@@ -429,6 +344,10 @@ please disable the option.""".trimIndent(),
         val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
         val appUpdateTracker: AppUpdateTracker = koinInject()
         val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
+        val modelManager: ModelManager = koinInject()
+        val hasOfflineModels = remember {
+            modelManager.getDownloadedModelSlugs().any { it.startsWith("whisper", false) }
+        }
         LaunchedEffect(Unit) {
             appUpdateTracker.acknowledgeCurrentVersion()
         }
@@ -1069,13 +988,48 @@ please disable the option.""".trimIndent(),
                     },
                     isDebugSetting = true,
                 ),
-                basicSettingsActionItem(
-                    title = "Configure speech recognition",
-                    description = "Enable text replies/input via the watch microphone, using a local model. Requires a download",
+                basicSettingsDropdownItem(
+                    title = "Offline Speech Recognition",
+                    keywords = "cactus stt speech recognition offline",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Speech,
+                    items = CactusSTTMode.entries,
+                    selectedItem = coreConfig.sttConfig.mode,
+                    onItemSelected = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                sttConfig = coreConfig.sttConfig.copy(
+                                    mode = it
+                                )
+                            )
+                        )
+                        if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
+                            topBarParams.showSnackbar("Please download a model for speech recognition to work offline")
+                            navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute(true))
+                        }
+                    },
+                    itemText = { mode ->
+                        when (mode) {
+                            CactusSTTMode.RemoteOnly -> "Disabled"
+                            CactusSTTMode.RemoteFirst -> "Fallback only"
+                            CactusSTTMode.LocalOnly -> "Forced"
+                        }
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "Manage Offline Models",
+                    description = if (coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly) {
+                        "Note: Offline speech recognition is lower accuracy, consider using" +
+                                "'Fallback only' mode to improve results when online"
+                    } else {
+                        null
+                    },
+                    keywords = "cactus stt speech recognition offline",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
                     action = {
-                        showSpeechRecognitionModeDialog = true
+                        navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute())
                     },
                 ),
                 basicSettingsToggleItem(
@@ -1715,188 +1669,6 @@ fun PKJSCopyTokenDialog(onDismissRequest: () -> Unit) {
 expect fun getPlatformSTTLanguages(): List<Pair<String, String>>
 
 @Composable
-fun STTModeDialog(
-    onModeSelected: (RequestedSTTMode) -> Unit,
-    onDismissRequest: () -> Unit,
-    selectedMode: RequestedSTTMode,
-    showModelSelection: Boolean = false,
-) {
-    val defaultModel = remember { calculateDefaultSTTModel() }
-    var targetMode by remember { mutableStateOf(selectedMode.mode) }
-    var targetModel by remember {
-        val selected = (selectedMode as? RequestedSTTMode.Enabled)?.modelName
-        mutableStateOf<String>(selected ?: defaultModel)
-    }
-    var showModelDropdown by remember { mutableStateOf(false) }
-    var availableModels by remember { mutableStateOf<List<VoiceModel>?>(null) }
-    LaunchedEffect(availableModels) {
-        if (availableModels == null) {
-            availableModels = withContext(Dispatchers.IO) {
-                val stt = CactusSTT()
-                stt.getVoiceModels()
-            }
-        }
-    }
-
-    M3Dialog(
-        onDismissRequest = onDismissRequest,
-        icon = { Icon(Icons.Default.AppSettingsAlt, contentDescription = null) },
-        title = { Text("Select speech recognition mode") },
-        buttons = {
-            TextButton(
-                onClick = onDismissRequest
-            ) {
-                Text("Cancel")
-            }
-            TextButton(
-                onClick = {
-                    if (targetMode == CactusSTTMode.Disabled) {
-                        onModeSelected(RequestedSTTMode.Disabled)
-                        return@TextButton
-                    } else {
-                        onModeSelected(RequestedSTTMode.Enabled(targetMode, targetModel))
-                    }
-                }
-            ) {
-                Text("OK")
-            }
-        }
-    ) {
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item(CactusSTTMode.Disabled) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            targetMode = CactusSTTMode.Disabled
-                        }
-                ) {
-                    RadioButton(
-                        selected = targetMode == CactusSTTMode.Disabled,
-                        onClick = {
-                            targetMode = CactusSTTMode.Disabled
-                        }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Disabled (no speech recognition)")
-                }
-            }
-            item(CactusSTTMode.Local) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            targetMode = CactusSTTMode.Local
-                        }
-                ) {
-                    RadioButton(
-                        selected = targetMode == CactusSTTMode.Local,
-                        onClick = {
-                            targetMode = CactusSTTMode.Local
-                        }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("On-device")
-                        Text(
-                            "Speech recognition is performed on the device, using a downloaded model. (Lower accuracy)",
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-            }
-            item(CactusSTTMode.RemoteFirst) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            targetMode = CactusSTTMode.RemoteFirst
-                        }
-                ) {
-                    RadioButton(
-                        selected = targetMode == CactusSTTMode.RemoteFirst,
-                        onClick = {
-                            targetMode = CactusSTTMode.RemoteFirst
-                        }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Remote first")
-                        Text(
-                            "Speech recognition is performed using an online service, with a local fallback.",
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-            }
-            if (showModelSelection) {
-                if (availableModels == null) {
-                    item {
-                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                    }
-                } else {
-                    item {
-                        Spacer(Modifier.height(16.dp))
-                    }
-                    item {
-                        ExposedDropdownMenuBox(
-                            expanded = showModelDropdown,
-                            onExpandedChange = { showModelDropdown = it }
-                        ) {
-                            TextField(
-                                value = targetModel,
-                                onValueChange = {},
-                                readOnly = true,
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = showModelDropdown)
-                                },
-                                colors = ExposedDropdownMenuDefaults.textFieldColors(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = showModelDropdown,
-                                onDismissRequest = { showModelDropdown = false }
-                            ) {
-                                availableModels?.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = { Text("${model.slug} (${model.size_mb} MB)") },
-                                        onClick = {
-                                            targetModel = model.slug
-                                            showModelDropdown = false
-                                        },
-                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                }
-                item {
-                    val modelSize = remember(availableModels) {
-                        availableModels?.firstOrNull {it.slug == defaultModel}?.size_mb
-                    }
-                    modelSize?.let {
-                        Text("Estimated download size: $modelSize MB", fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun STTLanguageDialog(
     onLanguageSelected: (String?) -> Unit,
     onDismissRequest: () -> Unit,
@@ -1957,29 +1729,10 @@ fun STTLanguageDialog(
     }
 }
 
-
-@Preview
-@Composable
-fun STTModeDialogPreview() {
-    PreviewWrapper {
-        STTModeDialog(
-            onModeSelected = {},
-            onDismissRequest = {},
-            selectedMode = RequestedSTTMode.Enabled(
-                mode = CactusSTTMode.Local,
-                modelName = "en-us-vosk-small",
-            ),
-            showModelSelection = true,
-        )
-    }
-}
-
 expect fun makeTokenClipEntry(token: String): ClipEntry
 
 object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"
     const val KEY_ENABLE_FIREBASE_UPLOADS = "enable_firebase_uploads"
     const val KEY_ENABLE_MIXPANEL_UPLOADS = "enable_mixpanel_uploads"
-    const val KEY_CACTUS_MODE = "cactus_mode"
-    const val KEY_CACTUS_STT_MODEL = "cactus_stt_model"
 }

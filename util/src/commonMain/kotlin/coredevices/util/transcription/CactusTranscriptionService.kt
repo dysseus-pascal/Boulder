@@ -8,16 +8,20 @@ import com.cactus.CactusTranscriptionResult
 import com.cactus.TranscriptionMode
 import com.russhwolf.settings.Settings
 import coredevices.util.AudioEncoding
-import coredevices.util.CactusSTTMode
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.CommonBuildKonfig
-import coredevices.util.calculateDefaultSTTModel
+import coredevices.util.CoreConfigFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -37,15 +41,15 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class CactusTranscriptionService(private val settings: Settings): TranscriptionService {
+class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): TranscriptionService {
     companion object {
         private val logger = Logger.Companion.withTag("CactusTranscriptionService")
-        private var sttModel = CactusSTT()
-        private var initJob: Job? = null
-        private var lastInitedModel: String? = null
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
-
     }
+    private var sttModel = CactusSTT()
+    private var initJob: Job? = null
+    private var lastInitedModel: String? = null
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     private fun writeWavHeader(sink: Sink, sampleRate: Int, audioSize: Int) {
         val chunkSize = audioSize + 36
@@ -72,28 +76,46 @@ class CactusTranscriptionService(private val settings: Settings): TranscriptionS
         return Path(cacheDir, fileName)
     }
 
-    private val sttMode get() = CactusSTTMode.Companion.fromId(settings.getInt("cactus_mode", 0))
-    private val sttModelName get() = settings.getString(
-        "cactus_stt_model",
-        calculateDefaultSTTModel()
+    //TODO: react to settings changes
+    private val sttConfig = coreConfigFlow.flow.map { it.sttConfig }.stateIn(
+        scope,
+        started = kotlinx.coroutines.flow.SharingStarted.Lazily,
+        initialValue = coreConfigFlow.value.sttConfig
     )
-    private val scope = CoroutineScope(Dispatchers.Default)
+
+    init {
+        sttConfig.onEach {
+            logger.i { "Cactus STT config changed: $it" }
+            if (it.modelName != lastInitedModel) {
+                initJob = performInit()
+            }
+        }
+    }
 
     private suspend fun initIfNeeded() {
-        when (sttMode) {
-            CactusSTTMode.Disabled -> {}
-            CactusSTTMode.Local, CactusSTTMode.RemoteFirst -> {
+        val config = sttConfig.value
+        when (config.mode) {
+            CactusSTTMode.RemoteOnly -> {
+                CommonBuildKonfig.WISPR_KEY?.let {
+                    sttModel.warmUpWispr(it)
+                } ?: logger.e { "WISPR API key is not set, cannot use RemoteOnly mode" }
+            }
+            CactusSTTMode.LocalOnly, CactusSTTMode.RemoteFirst -> {
+                if (!(config.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {
+                    logger.e { "Cactus STT model '${config.modelName}' is not downloaded, cannot initialize local model" }
+                    return
+                }
                 val start = Clock.System.now()
-                if (sttModelName != lastInitedModel) {
+                if (config.modelName != lastInitedModel) {
                     sttModel = CactusSTT()
                 }
                 if (!sttModel.isReady()) {
-                    sttModel.initializeModel(CactusInitParams(model = sttModelName))
+                    sttModel.initializeModel(CactusInitParams(model = config.modelName))
                     val initDuration = Clock.System.now() - start
                     logger.d { "Cactus STT model initialized successfully in $initDuration" }
-                    lastInitedModel = sttModelName
+                    lastInitedModel = config.modelName
                 }
-                if (sttMode == CactusSTTMode.RemoteFirst) {
+                if (config.mode == CactusSTTMode.RemoteFirst) {
                     CommonBuildKonfig.WISPR_KEY?.let {
                         sttModel.warmUpWispr(it)
                     }
@@ -118,7 +140,11 @@ class CactusTranscriptionService(private val settings: Settings): TranscriptionS
     override suspend fun isAvailable(): Boolean = sttModel.isReady()
 
     override fun earlyInit() {
-        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttModelName) {
+        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttConfig.value.modelName) {
+            if (initJob?.isActive == true) {
+                logger.d { "Cactus STT model initialization already in progress" }
+                return
+            }
             initJob = performInit()
         }
     }
@@ -137,9 +163,18 @@ class CactusTranscriptionService(private val settings: Settings): TranscriptionS
             }
         }
         try {
-            return when (sttMode) {
-                CactusSTTMode.Disabled -> return null
-                CactusSTTMode.Local -> {
+            return when (val sttMode = sttConfig.value.mode) {
+                CactusSTTMode.RemoteOnly -> sttModel.transcribe(
+                    filePath = path.toString(),
+                    params = params,
+                    mode = sttMode.cactusValue,
+                    apiKey = CommonBuildKonfig.WISPR_KEY
+                )
+                CactusSTTMode.LocalOnly -> {
+                    if (!(sttConfig.value.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {
+                        logger.e { "Cactus STT model '${sttConfig.value.modelName}' is not downloaded" }
+                        throw TranscriptionException.TranscriptionRequiresDownload("Model not downloaded")
+                    }
                     sttModel.transcribe(
                         filePath = path.toString(),
                         params = params,
@@ -187,9 +222,13 @@ class CactusTranscriptionService(private val settings: Settings): TranscriptionS
         encoding: AudioEncoding,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "CactusTranscriptionService.transcribe() called" }
-        logger.i { "Transcribing with model $sttModelName" }
-        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttModelName) { // Ensure model is initialized
-            initJob = performInit()
+        logger.i { "Transcribing with model ${sttConfig.value.modelName}" }
+        if (initJob == null || !sttModel.isReady() || lastInitedModel != sttConfig.value.modelName) { // Ensure model is initialized
+            if (initJob?.isActive == true) {
+                logger.d { "Cactus STT model initialization already in progress" }
+            } else {
+                initJob = performInit()
+            }
         }
         emit(TranscriptionSessionStatus.Open)
 

@@ -329,18 +329,19 @@ class NativeLockerAddUtil(
     private val libPebble: LibPebble,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val webServices: RealPebbleWebServices,
+    private val coreConfig: CoreConfigFlow,
 ) {
     suspend fun addAppToLocker(
         app: CommonAppType.Store,
-        source: AppstoreSource
+        source: AppstoreSource,
     ): Boolean {
         val storeApp = app.storeApp
         if (storeApp == null) {
             logger.w { "storeApp is null" }
             return false
         }
-        val useLockerApiToAdd = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
-        val lockerEntry = if (useLockerApiToAdd) {
+        val useLegacyLockerApiToAdd = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
+        val lockerEntry = if (useLegacyLockerApiToAdd) {
             webServices.addToLegacyLockerWithResponse(storeApp.uuid)?.application
         } else {
             storeApp.toLockerEntry(source.url, timelineToken = null)
@@ -358,6 +359,20 @@ class NativeLockerAddUtil(
             )
         }
         return true
+    }
+
+    suspend fun removeFromLocker(
+        source: AppstoreSource?,
+        uuid: Uuid,
+    ) {
+        if (!coreConfig.value.useNativeAppStore) {
+            return
+        }
+        if (source == null) {
+            return
+        }
+        val useLockerApiToRemove = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
+        webServices.removeFromLegacyLocker(uuid)
     }
 }
 

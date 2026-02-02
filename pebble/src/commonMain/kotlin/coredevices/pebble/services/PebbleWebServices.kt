@@ -255,8 +255,12 @@ class RealPebbleWebServices(
             firestoreLocker.removeApp(id)
             return true
         } else {
-            return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
+            return removeFromLegacyLocker(id)
         }
+    }
+
+    suspend fun removeFromLegacyLocker(id: Uuid): Boolean {
+        return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
     }
 
     override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult =

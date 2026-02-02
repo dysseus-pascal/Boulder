@@ -145,11 +145,6 @@ class FirestoreLocker(
         )
     }
 
-    suspend fun isLockerEmpty(): Boolean {
-        val user = Firebase.auth.currentUser ?: return true
-        return dao.isLockerEntriesEmptyForUser(user.uid)
-    }
-
     suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }

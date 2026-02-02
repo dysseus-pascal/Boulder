@@ -199,6 +199,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                         navBarNav.goBack()
                                     }
                                     val removed = libPebble.removeApp(entry.uuid)
+                                    nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
                                     logger.d { "removed = $removed" }
                                     topBarParams.showSnackbar("Removed ${entry.title}")
                                 }

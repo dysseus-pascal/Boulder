@@ -199,6 +199,9 @@ private fun AddWeatherLocationDialog(
         if (addressQuery.length >= 3) {
             delay(300)
             val result = autoComplete.search(addressQuery)
+            if (result.isError) {
+                logger.e { "Error searching for places: ${result.errorOrNull()}" }
+            }
             suggestions = result.getOrNull() ?: emptyList()
         } else {
             suggestions = emptyList()

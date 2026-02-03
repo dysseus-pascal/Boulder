@@ -481,8 +481,7 @@ fun LockerScreen(
                         val legacyOnWatch by remember(lockerEntries) {
                             derivedStateOf {
                                 lockerEntries.filter {
-                                    !it.isSynced() && it.isCompatible && it.showOnMainLockerScreen()
-                                    it.isCompatible && it.showOnMainLockerScreen()
+                                    it.isSynced() && it.isCompatible && it.showOnMainLockerScreen()
                                 }
                             }
                         }
@@ -490,7 +489,6 @@ fun LockerScreen(
                             derivedStateOf {
                                 lockerEntries.filter {
                                     !it.isSynced() && it.isCompatible && it.showOnMainLockerScreen()
-                                    it.isCompatible && it.showOnMainLockerScreen()
                                 }
                             }
                         }

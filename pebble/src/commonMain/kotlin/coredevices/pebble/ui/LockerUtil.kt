@@ -372,7 +372,9 @@ class NativeLockerAddUtil(
             return
         }
         val useLockerApiToRemove = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
-        webServices.removeFromLegacyLocker(uuid)
+        if (useLockerApiToRemove) {
+            webServices.removeFromLegacyLocker(uuid)
+        }
     }
 }
 

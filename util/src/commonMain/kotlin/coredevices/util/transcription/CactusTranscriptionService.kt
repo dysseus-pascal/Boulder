@@ -163,6 +163,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
             }
         }
         try {
+            logger.d { "Using transcription mode ${sttConfig.value.mode}" }
             return when (val sttMode = sttConfig.value.mode) {
                 CactusSTTMode.RemoteOnly -> sttModel.transcribe(
                     filePath = path.toString(),

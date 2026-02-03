@@ -216,13 +216,14 @@ fun LockerScreen(
                 }
             }
         }
+        val openInstallAppDialog = remember(launchInstallAppDialog) {
+            {
+                launchInstallAppDialog(listOf("*/*"))
+            }
+        }
         val platform: Platform = koinInject()
         var isRefreshing by remember { mutableStateOf(false) }
         val title = stringResource(tab.title)
-
-        fun openInstallAppDialog() {
-            launchInstallAppDialog(listOf("*/*"))
-        }
 
         val type = when (tab) {
             LockerTab.Watchfaces -> AppType.Watchface
@@ -236,7 +237,7 @@ fun LockerScreen(
             topBarParams.searchAvailable(true)
             topBarParams.actions {
                 TopBarIconButtonWithToolTip(
-                    onClick = ::openInstallAppDialog,
+                    onClick = openInstallAppDialog,
                     icon = Icons.Filled.UploadFile,
                     description = "Sideload App",
                 )

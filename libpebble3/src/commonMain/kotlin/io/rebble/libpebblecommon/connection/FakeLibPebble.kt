@@ -186,6 +186,9 @@ class FakeLibPebble : LibPebble {
     override fun restoreSystemAppOrder() {
     }
 
+    override val activeWatchface: StateFlow<LockerWrapper?>
+        get() = MutableStateFlow(null)
+
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
     override fun notificationApps(): Flow<List<AppWithCount>> =

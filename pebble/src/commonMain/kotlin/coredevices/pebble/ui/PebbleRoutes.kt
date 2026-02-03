@@ -11,10 +11,8 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import coredevices.database.AppstoreSource
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
 
 /**
@@ -110,7 +108,7 @@ object PebbleNavBarRoutes {
     data class AppStoreCollectionRoute(val sourceId: Int, val path: String, val title: String, val appType: String? = null) : NavBarRoute
 
     @Serializable
-    data class MyCollectionRoute(val appType: String, val myCollectionType: String) : NavBarRoute
+    data class MyCollectionRoute(val appType: String) : NavBarRoute
 
     @Serializable
     data class OfflineModelsRoute(val openSttDialog: Boolean = false) : NavBarRoute
@@ -245,7 +243,6 @@ fun NavGraphBuilder.addNavBarRoutes(
             navBarNav = nav,
             topBarParams = topBarParams,
             appType = AppType.fromString(route.appType)!!,
-            type = MyCollectionType.fromCode(route.myCollectionType)!!,
         )
     }
     composable<PebbleNavBarRoutes.CalendarsRoute> {

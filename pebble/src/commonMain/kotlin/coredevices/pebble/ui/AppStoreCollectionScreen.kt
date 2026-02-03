@@ -146,7 +146,6 @@ fun AppStoreCollectionScreen(
                     NativeWatchfaceCard(
                         entry,
                         navBarNav,
-                        false,
                         width = 120.dp,
                         topBarParams = topBarParams,
                     )

@@ -1,10 +1,17 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
@@ -21,8 +28,10 @@ import coredevices.pebble.services.StoreSearchResult
 import coredevices.pebble.services.isLoggedIn
 import coredevices.pebble.services.isRebbleFeed
 import coredevices.pebble.services.toLockerEntry
+import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
+import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -118,24 +127,68 @@ fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType):
 }
 
 @Composable
+fun CommonApp.SettingsButton(
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+    connected: Boolean,
+) {
+    if (hasSettings()) {
+        val libPebble = rememberLibPebble()
+        val scope = rememberCoroutineScope()
+        val settingsEnabled =
+            remember(
+                this,
+                connected
+            ) { isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System) }
+
+        PebbleElevatedButton(
+            text = "Settings",
+            onClick = {
+                scope.launch {
+                    showSettings(navBarNav, libPebble, topBarParams)
+                }
+            },
+            enabled = settingsEnabled,
+            icon = Icons.Default.Settings,
+            contentDescription = "Settings",
+            primaryColor = false,
+            modifier = Modifier.padding(5.dp),
+        )
+    }
+}
+
+@Composable
+fun loadActiveWatchface(watchType: WatchType): CommonApp? {
+    val libPebble = rememberLibPebble()
+    val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType)
+    val lockerEntry by libPebble.activeWatchface.collectAsState()
+    return lockerEntry?.load(watchType) ?: fallback
+}
+
+@Composable
 fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
     if (uuid == null) {
         return null
     }
     val libPebble = rememberLibPebble()
     val lockerEntry by libPebble.getLockerApp(uuid).collectAsState(null)
+    return lockerEntry?.load(watchType)
+}
+
+@Composable
+private fun LockerWrapper.load(watchType: WatchType): CommonApp? {
     val coreConfigFlow: CoreConfigFlow = koinInject()
     val coreConfig by coreConfigFlow.flow.collectAsState()
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents(coreConfig)
-    val categories = appstoreCategories(lockerEntry?.properties?.type, appstoreSources)
-    if (lockerEntry == null || appstoreSources == null || categories == null) {
+    val categories = appstoreCategories(properties.type, appstoreSources)
+    if (appstoreSources == null || categories == null) {
         return null
     }
-    return remember(lockerEntry, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
-        val appstoreSource = lockerEntry?.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
+    return remember(this, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
+        val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
         logger.v { "appstoreSource = $appstoreSource" }
-        lockerEntry?.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+        asCommonApp(watchType, appstoreSource, categories[appstoreSource])
     }
 }
 
@@ -406,6 +459,11 @@ fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
     required = required,
     pebblekitVersion = pebblekitVersion,
 )
+
+fun AppType.myCollectionName(): String = when (this) {
+    AppType.Watchface -> "My Watchfaces"
+    AppType.Watchapp -> "My Apps"
+}
 
 fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platform): Boolean {
     if (platform == Platform.IOS && !ios.supported) return false

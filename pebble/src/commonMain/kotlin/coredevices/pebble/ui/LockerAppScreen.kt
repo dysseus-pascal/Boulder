@@ -420,29 +420,11 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
 
                 Row {
-                    if (entry.hasSettings()) {
-                        val settingsEnabled =
-                            remember(
-                                entry,
-                                connected
-                            ) { entry.isCompatible && entry.isSynced() && (connected || entry.commonAppType is CommonAppType.System) }
-
-                        PebbleElevatedButton(
-                            text = "Settings",
-                            onClick = {
-                                scope.launch {
-                                    loadingToWatch = true
-                                    entry.showSettings(navBarNav, libPebble, topBarParams)
-                                    loadingToWatch = false
-                                }
-                            },
-                            enabled = settingsEnabled && !loadingToWatch,
-                            icon = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            primaryColor = false,
-                            modifier = Modifier.padding(5.dp),
-                        )
-                    }
+                    entry.SettingsButton(
+                        navBarNav = navBarNav,
+                        topBarParams = topBarParams,
+                        connected = connected,
+                    )
                     if (entry.commonAppType is CommonAppTypeLocal && entry.commonAppType.order > 0) {
                         PebbleElevatedButton(
                             text = "Move To Top",

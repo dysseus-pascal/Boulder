@@ -32,8 +32,8 @@ import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
-import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.health.HealthDebugStats
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppType
@@ -221,6 +221,7 @@ interface LockerApi {
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry)
     fun restoreSystemAppOrder()
+    val activeWatchface: StateFlow<LockerWrapper?>
 }
 
 interface Contacts {
@@ -339,7 +340,7 @@ class LibPebble3(
         libPebbleCoroutineScope.launch {
             vibePatternDao.ensureAllDefaultsInserted()
         }
-        locker.init()
+        locker.init(this)
 
         performPlatformSpecificInit()
     }
@@ -368,6 +369,7 @@ class LibPebble3(
     }
 
     override suspend fun launchApp(uuid: Uuid) {
+        locker.maybeSetActiveWatchface(uuid, onlyIfNotAlreadySet = false)
         forEachConnectedWatch { launchApp(uuid) }
     }
 

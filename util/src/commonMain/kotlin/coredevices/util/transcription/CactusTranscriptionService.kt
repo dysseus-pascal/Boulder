@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -88,7 +89,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
             if (it.modelName != lastInitedModel) {
                 initJob = performInit()
             }
-        }
+        }.launchIn(scope)
     }
 
     private suspend fun initIfNeeded() {

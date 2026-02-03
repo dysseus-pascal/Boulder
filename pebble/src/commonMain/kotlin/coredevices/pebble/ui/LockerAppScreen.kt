@@ -298,7 +298,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 
                 val connectedIdentifier = lastConnectedWatch?.identifier
                 val showStartApp =
-                    entry.isCompatible && entry.commonAppType is CommonAppType.Locker && !appIsRunning
+                    entry.isCompatible && entry.commonAppType.canStartApp() && !appIsRunning
                             && !viewModel.addedToLocker
                 if (showStartApp) {
                     val loadToWatchText = if (entry.isSynced()) {

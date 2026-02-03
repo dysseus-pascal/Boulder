@@ -3,7 +3,6 @@ package coredevices.pebble.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -376,6 +375,12 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         categorySlug = null,
         appstoreSource = source,
     )
+}
+
+fun CommonAppType.canStartApp(): Boolean = when (this) {
+    is CommonAppType.Locker -> true
+    is CommonAppType.Store -> false
+    is CommonAppType.System -> true
 }
 
 class NativeLockerAddUtil(

@@ -576,6 +576,13 @@ fun SearchResultsList(
     val scope = rememberCoroutineScope()
     LazyColumn(modifier) {
         if (lockerApps.isNotEmpty()) {
+            item {
+                Text(
+                    "From my apps",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
             items(
                 items = lockerApps,
                 key = { it.uuid }

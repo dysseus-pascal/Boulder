@@ -119,7 +119,14 @@ class FirestoreLocker(
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
-        val appsBySource = fsLocker.groupBy { it.appstoreSource }
+        val appsBySource = fsLocker.groupBy { it.appstoreSource }.let {
+            if (REBBLE_FEED_URL in it) {
+                it
+            } else {
+                // Force it to at least maybe call rebble sync
+                it + (REBBLE_FEED_URL to emptyList())
+            }
+        }
         val apps = appsBySource.flatMap { (source, entries) ->
             val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = source, title = "")) }
             val appsForSource = appstore.fetchAppStoreApps(entries, useCache = !forceRefresh)

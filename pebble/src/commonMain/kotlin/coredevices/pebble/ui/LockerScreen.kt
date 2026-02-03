@@ -385,7 +385,7 @@ fun LockerScreen(
                             if (type == AppType.Watchface) {
                                 item(contentType = "active_watchface", key = "active_watchface") {
                                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                        Text("Active", fontSize = 24.sp, modifier = Modifier.padding(vertical = 8.dp))
+                                        Text("Active", fontSize = 24.sp, modifier = Modifier.padding(vertical = 10.dp))
                                         Spacer(modifier = Modifier.width(7.dp))
                                         Row(
                                             modifier = Modifier
@@ -407,7 +407,7 @@ fun LockerScreen(
                                             )
                                             Column(
                                                 verticalArrangement = Arrangement.Center,
-                                                modifier = Modifier.fillMaxHeight().padding(start = 5.dp),
+                                                modifier = Modifier.fillMaxHeight().padding(start = 8.dp),
                                             ) {
                                                 Text(
                                                     activeWatchface.title,

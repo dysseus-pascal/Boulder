@@ -224,7 +224,29 @@ class AppstoreCache(
         return@withContext null
     }
 
-    // TODO cleanup stale cached files
+    // Maintainence
+
+    suspend fun clearCache() = withContext(Dispatchers.Default) {
+        logger.i { "Clearing cache!" }
+        homeCacheDir.clear()
+        categoryCacheDir.clear()
+        appCacheDir.clear()
+    }
+}
+
+private suspend fun Path.clear() {
+    try {
+        if (SystemFileSystem.exists(this@clear)) {
+            // list handles getting all children in the directory
+            SystemFileSystem.list(this@clear).forEach { child ->
+                // Use SystemFileSystem.delete to remove each file or directory
+                // mustSetDeleteOnExit is usually false for immediate deletion
+                SystemFileSystem.delete(child, mustExist = false)
+            }
+        }
+    } catch (e: Exception) {
+        Logger.withTag("AppstoreCache").e(e) { "Failed to clear directory: ${this@clear}" }
+    }
 }
 
 @Serializable

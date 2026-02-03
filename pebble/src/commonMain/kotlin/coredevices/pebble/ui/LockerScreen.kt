@@ -1,7 +1,6 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -33,8 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,7 +42,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -78,18 +75,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coreapp.pebble.generated.resources.Res
-import coreapp.pebble.generated.resources.alarms
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.faces
-import coreapp.pebble.generated.resources.health
-import coreapp.pebble.generated.resources.kickstart
-import coreapp.pebble.generated.resources.music
-import coreapp.pebble.generated.resources.notifications
-import coreapp.pebble.generated.resources.settings
-import coreapp.pebble.generated.resources.tictoc
-import coreapp.pebble.generated.resources.watchfaces
-import coreapp.pebble.generated.resources.weather
-import coreapp.pebble.generated.resources.workout
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.pebble.PebbleDeepLinkHandler
@@ -118,7 +105,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.SystemFileSystem
 import org.jetbrains.compose.resources.StringResource
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -399,21 +385,27 @@ fun LockerScreen(
                                                             storeSource = activeWatchface.appstoreSource?.id,
                                                         )
                                                     )
-                                                },
+                                                }.padding(vertical = 8.dp),
                                         ) {
                                             AppImage(
                                                 activeWatchface,
-                                                modifier = Modifier.clip(RoundedCornerShape(15.dp)),
+                                                modifier = Modifier.clip(RoundedCornerShape(10.dp)),
                                                 size = NATIVE_SCREENSHOT_HEIGHT,
                                             )
                                             Column(
-                                                verticalArrangement = Arrangement.Center,
+//                                                verticalArrangement = Arrangement.Center,
                                                 modifier = Modifier.fillMaxHeight().padding(start = 8.dp),
                                             ) {
                                                 Text(
                                                     activeWatchface.title,
                                                     fontSize = 20.sp,
-                                                    modifier = Modifier.padding(5.dp)
+                                                    modifier = Modifier.padding(0.dp)
+                                                )
+                                                Text(
+                                                    activeWatchface.developerName,
+                                                    fontSize = 12.sp,
+                                                    color = Color.Gray,
+                                                    modifier = Modifier.padding(0.dp).weight(1f)
                                                 )
                                                 if (activeWatchface.hasSettings()) {
                                                     activeWatchface.SettingsButton(
@@ -436,9 +428,23 @@ fun LockerScreen(
 //                            logger.v { "home.collections (has home = ${home != null}): ${home?.collections}" }
                             storeHomes.forEach { (source, home) ->
                                 home?.let {
-                                    if (storeHomes.size > 1) {
-                                        item(contentType = "source_title", key = "source_${source.id}") {
-                                            Text(source.title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium)
+                                    item(contentType = "source_title", key = "source_${source.id}") {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                source.title,
+                                                modifier = Modifier.padding(
+                                                    horizontal = 16.dp,
+                                                    vertical = 16.dp
+                                                ).weight(1f),
+                                                style = MaterialTheme.typography.headlineMedium,
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute)
+                                                },
+                                            ) {
+                                                Icon(Icons.Default.Tune, contentDescription = "Configure Feeds")
+                                            }
                                         }
                                     }
                                     items(home.collections, contentType = { "app_carousel_collection" }, key = { "collection_${source.id}_${it.slug}" }) { collection ->
@@ -581,7 +587,8 @@ fun SearchResultsList(
                 Text(
                     "From my apps",
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
             items(
@@ -598,7 +605,8 @@ fun SearchResultsList(
                                 storeSource = entry.appstoreSource?.id,
                             )
                         )
-                    }
+                    },
+                    topBarParams = topBarParams,
                 )
             }
         }
@@ -607,7 +615,8 @@ fun SearchResultsList(
                 Text(
                     "From the store",
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
             items(
@@ -636,7 +645,8 @@ fun SearchResultsList(
                                 )
                             )
                         }
-                    }
+                    },
+                    topBarParams = topBarParams,
                 )
             }
         }
@@ -652,6 +662,7 @@ fun AppCarousel(
     onClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) {
+        logger.d { "Not showing collection $title as it has no items" }
         return
     }
     Column {
@@ -811,17 +822,11 @@ fun NativeWatchfaceCard(
                     Modifier.padding(6.dp)
                         .align(Alignment.Center)
                         .clip(RoundedCornerShape(9.dp))
-                if (entry.isCompatible) {
-                    AppImage(
-                        entry,
-                        modifier = imageModifier,
-                        size = NATIVE_SCREENSHOT_HEIGHT,
-                    )
-                } else {
-                    Box(modifier = imageModifier.size(NATIVE_SCREENSHOT_HEIGHT), contentAlignment = Alignment.Center) {
-                        Text("Not Compatible", fontSize = 15.sp, textAlign = TextAlign.Center)
-                    }
-                }
+                AppImage(
+                    entry,
+                    modifier = imageModifier,
+                    size = NATIVE_SCREENSHOT_HEIGHT,
+                )
             }
             Text(
                 entry.title,
@@ -843,21 +848,7 @@ fun NativeWatchfaceCard(
                     modifier = Modifier.padding(start = 5.dp, end = 5.dp, bottom = 7.dp)
                         .weight(1f),
                 )
-                if (!entry.isNativelyCompatible) {
-                    IconButton(
-                            modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
-                            onClick = {
-                                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
-                            },
-                        ) {
-                            Icon(
-                                Icons.Filled.AspectRatio,
-                                contentDescription = "Not natively compatible, but can be scaled",
-                                modifier = Modifier.fillMaxSize(),
-                                tint = coreOrange,
-                            )
-                        }
-                }
+                entry.CompatibilityWarning(topBarParams)
             }
         }
     }
@@ -950,27 +941,50 @@ private fun LegacyWatchfaceCard(
 fun NativeWatchfaceListItem(
     entry: CommonApp,
     onClick: () -> Unit,
+    topBarParams: TopBarParams,
 ) {
-    ListItem(
-        modifier = Modifier
+    Row(
+        modifier = Modifier.fillMaxWidth()
             .clickable {
                 onClick()
             }
-            .padding(vertical = 4.dp),
-        headlineContent = {
-            Text(entry.title, fontWeight = FontWeight.Bold)
-        },
-        supportingContent = {
-            Text(entry.developerName, color = Color.Gray)
-        },
-        leadingContent = {
-            AppImage(
-                entry,
-                modifier = Modifier.width(48.dp),
-                size = 48.dp,
+            .padding(vertical = 8.dp, horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val size = remember(entry) {
+            when (entry.type) {
+                AppType.Watchapp -> 48.dp
+                AppType.Watchface -> 55.dp
+            }
+        }
+        AppImage(
+            entry,
+            modifier = Modifier.width(48.dp).clip(RoundedCornerShape(7.dp)),
+            size = size,
+        )
+        Column(
+            modifier = Modifier.padding(start = 12.dp)
+        ) {
+            Text(
+                entry.title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                maxLines = 1,
             )
-        },
-    )
+            Row {
+                entry.CompatibilityWarning(topBarParams)
+                if (entry.description != null) {
+                    Text(
+                        text = entry.description,
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        lineHeight = 11.sp,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -990,9 +1004,9 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
         ColorPainter(placeholderColor)
     }
     val context = LocalPlatformContext.current
-    when (entry.commonAppType) {
-        is CommonAppType.Locker, is CommonAppType.Store -> {
-            val req = remember(entry) {
+    val model = remember(entry) {
+        when (entry.commonAppType) {
+            is CommonAppType.Locker, is CommonAppType.Store -> {
                 val url = when (entry.type) {
                     AppType.Watchapp -> entry.listImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
@@ -1002,36 +1016,35 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     .data(url)
                     .build()
             }
-            AsyncImage(
-                model = req,
-                contentDescription = null,
-                modifier = modifier.requiredHeight(size)
-                    .widthIn(max = size),
-                placeholder = placeholder,
-                onError = { e ->
-                    logger.w(e.result.throwable) { "Error loading app image for ${entry.uuid}" }
-                }
-            )
-        }
 
-        is CommonAppType.System -> {
-            val resource = when (entry.commonAppType.app) {
-                SystemApps.Settings -> Res.drawable.settings
-                SystemApps.Music -> Res.drawable.music
-                SystemApps.Notifications -> Res.drawable.notifications
-                SystemApps.Alarms -> Res.drawable.alarms
-                SystemApps.Workout -> Res.drawable.workout
-                SystemApps.Watchfaces -> Res.drawable.watchfaces
-                SystemApps.Health -> Res.drawable.health
-                SystemApps.Weather -> Res.drawable.weather
-                SystemApps.Tictoc -> Res.drawable.tictoc
-                SystemApps.Kickstart -> Res.drawable.kickstart
+            is CommonAppType.System -> {
+                val resUri = when (entry.commonAppType.app) {
+                    SystemApps.Settings -> "drawable/settings.png"
+                    SystemApps.Music -> "drawable/music.png"
+                    SystemApps.Notifications -> "drawable/notifications.png"
+                    SystemApps.Alarms -> "drawable/alarms.png"
+                    SystemApps.Workout -> "drawable/workout.png"
+                    SystemApps.Watchfaces -> "drawable/watchfaces.png"
+                    SystemApps.Health -> "drawable/health.png"
+                    SystemApps.Weather -> "drawable/weather.png"
+                    SystemApps.Tictoc -> "drawable/tictoc.png"
+                    SystemApps.Kickstart -> "drawable/kickstart.png"
+                }
+                Res.getUri(resUri)
             }
-            Image(
-                painter = painterResource(resource),
-                contentDescription = null,
-                modifier = modifier.size(size),
-            )
         }
     }
+
+    AsyncImage(
+        model = model,
+        contentDescription = null,
+        modifier = modifier.height(size)
+            .widthIn(max = size),
+//            .background(Color.Green),
+        placeholder = placeholder,
+        onError = { e ->
+            logger.w(e.result.throwable) { "Error loading app image for ${entry.uuid}" }
+        },
+//                contentScale = ContentScale.Fit,
+    )
 }

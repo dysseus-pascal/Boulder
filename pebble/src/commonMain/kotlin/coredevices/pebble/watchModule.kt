@@ -17,6 +17,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
+import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.Github
 import coredevices.pebble.services.CactusTranscription
 import coredevices.pebble.services.LanguagePackRepository
@@ -115,6 +116,7 @@ val watchModule = module {
     factoryOf(::WeatherFetcher)
     factoryOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
+    factoryOf(::AppstoreSourceInitializer)
     factoryOf(::PebbleTokenProvider) bind TokenProvider::class
     factoryOf(::NullTranscriptionProvider) bind TranscriptionProvider::class
     factory {

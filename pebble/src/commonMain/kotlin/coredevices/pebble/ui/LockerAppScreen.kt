@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Launch
@@ -37,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -235,7 +237,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 Row {
                     AppImage(
                         entry = entry,
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(10.dp).clip(RoundedCornerShape(12.dp)),
                         size = 140.dp,
                     )
                     Column(modifier = Modifier.padding(horizontal = 5.dp)) {
@@ -245,20 +247,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             modifier = Modifier.padding(vertical = 5.dp),
                         )
                         if (entry.hearts != null) {
-                            Row {
+                            Row(modifier = Modifier.padding(vertical = 5.dp)) {
                                 Icon(
                                     Icons.Outlined.Favorite,
                                     contentDescription = "Hearts",
-                                    modifier = Modifier.padding(vertical = 5.dp),
                                 )
                                 Text(
                                     text = "${entry.hearts}",
-                                    modifier = Modifier.padding(vertical = 5.dp),
+                                    modifier = Modifier.padding(start = 5.dp),
                                 )
                             }
                         }
                         entry.category?.let {
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(5.dp))
                             FilterChip(
                                 true,
                                 onClick = {
@@ -275,7 +276,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 label = { Text(entry.category) }
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(5.dp))
                         val watchName = lastConnectedWatch?.displayName() ?: ""
                         val onWatchText = if (entry.isCompatible && entry.isSynced()) {
                             if (appIsRunning) {

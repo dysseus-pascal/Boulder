@@ -127,7 +127,7 @@ fun AppStoreCollectionScreen(
         }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
-        if (apps == null) {
+        if (apps == null || apps.itemCount == 0) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center)
             )

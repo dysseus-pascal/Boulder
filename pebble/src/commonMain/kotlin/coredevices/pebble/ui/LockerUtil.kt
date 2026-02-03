@@ -1,8 +1,14 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,6 +50,7 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import theme.coreOrange
 import kotlin.uuid.Uuid
 
 const val LOCKER_UI_LOAD_LIMIT = 100
@@ -126,37 +133,6 @@ fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType):
 }
 
 @Composable
-fun CommonApp.SettingsButton(
-    navBarNav: NavBarNav,
-    topBarParams: TopBarParams,
-    connected: Boolean,
-) {
-    if (hasSettings()) {
-        val libPebble = rememberLibPebble()
-        val scope = rememberCoroutineScope()
-        val settingsEnabled =
-            remember(
-                this,
-                connected
-            ) { isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System) }
-
-        PebbleElevatedButton(
-            text = "Settings",
-            onClick = {
-                scope.launch {
-                    showSettings(navBarNav, libPebble, topBarParams)
-                }
-            },
-            enabled = settingsEnabled,
-            icon = Icons.Default.Settings,
-            contentDescription = "Settings",
-            primaryColor = false,
-            modifier = Modifier.padding(5.dp),
-        )
-    }
-}
-
-@Composable
 fun loadActiveWatchface(watchType: WatchType): CommonApp? {
     val libPebble = rememberLibPebble()
     val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType)
@@ -188,6 +164,70 @@ private fun LockerWrapper.load(watchType: WatchType): CommonApp? {
         val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
         logger.v { "appstoreSource = $appstoreSource" }
         asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+    }
+}
+
+@Composable
+fun CommonApp.SettingsButton(
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+    connected: Boolean,
+) {
+    if (hasSettings()) {
+        val libPebble = rememberLibPebble()
+        val scope = rememberCoroutineScope()
+        val settingsEnabled =
+            remember(
+                this,
+                connected
+            ) { isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System) }
+
+        PebbleElevatedButton(
+            text = "Settings",
+            onClick = {
+                scope.launch {
+                    showSettings(navBarNav, libPebble, topBarParams)
+                }
+            },
+            enabled = settingsEnabled,
+            icon = Icons.Default.Settings,
+            contentDescription = "Settings",
+            primaryColor = false,
+            modifier = Modifier.padding(5.dp),
+        )
+    }
+}
+
+@Composable
+fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
+    if (!isCompatible) {
+        IconButton(
+            modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
+            onClick = {
+                topBarParams.showSnackbar("Not compatible with this watch")
+            },
+        ) {
+            Icon(
+                Icons.Filled.Block,
+                contentDescription = "Not compatible with this watch",
+                modifier = Modifier.fillMaxSize(),
+                tint = coreOrange,
+            )
+        }
+    } else if (!isNativelyCompatible) {
+        IconButton(
+            modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
+            onClick = {
+                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
+            },
+        ) {
+            Icon(
+                Icons.Filled.AspectRatio,
+                contentDescription = "Not natively compatible, but can be scaled",
+                modifier = Modifier.fillMaxSize(),
+                tint = coreOrange,
+            )
+        }
     }
 }
 

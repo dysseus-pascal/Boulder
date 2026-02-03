@@ -135,14 +135,14 @@ interface LockerEntryRealDao : LockerEntryDao {
         UPDATE LockerEntryEntity
         SET active = 1
         WHERE id = :uuid
-        AND NOT active = 1
+        AND active != 1
     """)
     suspend fun _setActiveForUuid(uuid: String)
 
     @Query("""
         UPDATE LockerEntryEntity
         SET active = 0
-        WHERE NOT id = :uuid
+        WHERE id != :uuid
         AND active = 1
     """)
     suspend fun _setNonActiveExceptUuid(uuid: String)

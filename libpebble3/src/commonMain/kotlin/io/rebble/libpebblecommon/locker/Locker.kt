@@ -202,7 +202,10 @@ class Locker(
             if (existing == null) {
                 newEntity
             } else {
-                val newWithExistingOrder = newEntity.copy(orderIndex = existing.orderIndex)
+                val newWithExistingOrder = newEntity.copy(
+                    orderIndex = existing.orderIndex,
+                    active = existing.active,
+                )
                 if (newWithExistingOrder != existing && !existing.sideloaded) {
                     newWithExistingOrder
                 } else {
@@ -282,8 +285,7 @@ class Locker(
                 .distinctUntilChanged()
                 .collect {
                     if (it != null) {
-                        // This is only really for the migration case (else it would be set in the UI)
-                        maybeSetActiveWatchface(it, onlyIfNotAlreadySet = true)
+                        maybeSetActiveWatchface(it, onlyIfNotAlreadySet = false)
                     }
                 }
         }
@@ -334,7 +336,7 @@ class Locker(
 
     fun maybeSetActiveWatchface(uuid: Uuid, onlyIfNotAlreadySet: Boolean) {
         libPebbleCoroutineScope.launch {
-            val currentActive = activeWatchface.first()
+            val currentActive = activeWatchface.value
             if (currentActive != null && onlyIfNotAlreadySet) {
                 return@launch
             }

@@ -241,7 +241,7 @@ class AppstoreService(
                     title = it.name,
                     slug = it.slug,
                     type = type,
-                    enabled = true,
+                    enabled = enableByDefault(source, type, it.slug),
                 )
             }, sourceId = source.id)
             cache.writeHome(home, type, source, parameters)
@@ -402,5 +402,14 @@ class AppstoreService(
             logger.w(e) { "error searching for $search" }
             emptyList()
         }
+    }
+}
+
+fun enableByDefault(source: AppstoreSource, type: AppType, slug: String): Boolean {
+    val isFirstSource = INITIAL_APPSTORE_SOURCES.first().url == source.url
+    return when (slug) {
+        "all-generated" -> false
+        "all" -> true
+        else -> isFirstSource
     }
 }

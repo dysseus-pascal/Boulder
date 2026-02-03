@@ -171,6 +171,7 @@ fun MyCollectionScreen(
                                             )
                                         )
                                     },
+                                    topBarParams = topBarParams,
                                 )
                             }
                         }

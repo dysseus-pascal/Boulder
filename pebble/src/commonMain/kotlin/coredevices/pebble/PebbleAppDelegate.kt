@@ -5,12 +5,10 @@ import com.russhwolf.settings.Settings
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.heartbeatWatchConnectGoalName
 import coredevices.analytics.heartbeatWatchConnectedName
-import coredevices.database.AppstoreSourceDao
 import coredevices.database.WeatherLocationDao
 import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
-import coredevices.pebble.services.PebbleAccountProvider
-import coredevices.pebble.services.initAppstoreSourcesDB
+import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
@@ -47,10 +45,9 @@ class PebbleAppDelegate(
     private val doneInitialOnboarding: DoneInitialOnboarding,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
-    private val appstoreSourceDao: AppstoreSourceDao,
-    private val pebbleAccount: PebbleAccountProvider,
     private val weatherLocationDao: WeatherLocationDao,
     private val settings: Settings,
+    private val appstoreSourceInitializer: AppstoreSourceInitializer,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -58,7 +55,7 @@ class PebbleAppDelegate(
         logger.d { "init()" }
         permissionsRequester.init()
         GlobalScope.launch {
-            appstoreSourceDao.initAppstoreSourcesDB(pebbleAccount)
+            appstoreSourceInitializer.initAppstoreSourcesDB()
             weatherLocationDao.insertDefaultWeatherLocationOnce(settings)
             // Don't initialize everything if the user just started the app for the first time and
             // hasn't gone through onboarding yet - it would create permission prompts on ios (we

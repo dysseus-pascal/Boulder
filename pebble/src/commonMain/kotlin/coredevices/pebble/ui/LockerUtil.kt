@@ -348,6 +348,10 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
         return null
     }
+    if (latestRelease == null) {
+        logger.w { "StoreApplication.asCommonApp() missing latestRelease" }
+        return null
+    }
     return CommonApp(
         title = title,
         developerName = author,

@@ -73,11 +73,12 @@ interface PebbleAccountProvider {
 
 fun PebbleAccountProvider.isLoggedIn(): Boolean = get().loggedIn.value != null
 
+private val logger = Logger.withTag("PebbleHttpClient")
+
 class PebbleHttpClient(
     private val pebbleAccount: PebbleAccountProvider,
     httpClient: HttpClient = HttpClient(),
 ) : PebbleBootConfigService {
-    private val logger = Logger.withTag("PebbleHttpClient")
     private val httpClient = httpClient.config {
         install(HttpCache)
     }
@@ -541,7 +542,7 @@ data class StoreApplication(
     val iconResourceId: Int? = null,
     val id: String,
     @SerialName("latest_release")
-    val latestRelease: StoreLatestRelease,
+    val latestRelease: StoreLatestRelease? = null,
 //    val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
@@ -638,6 +639,10 @@ fun StoreApplication.asLockerEntryPlatform(
 
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
     val app = this
+    if (app.latestRelease == null) {
+        logger.w { "no latest release" }
+        return null
+    }
     return LockerEntry(
         id = app.id,
         uuid = app.uuid,

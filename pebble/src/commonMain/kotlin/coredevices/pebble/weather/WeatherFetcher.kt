@@ -187,7 +187,7 @@ class WeatherFetcher(
                 if (dayForecast == null) {
                     null
                 } else {
-                    "${it.location.name}\n${dayForecast.temp}/${it.forecast.night}, ${dayForecast.phrase12Char}"
+                    "${it.location.name}\n${dayForecast.temp}/${it.forecast.night.temp}, ${dayForecast.phrase12Char}"
                 }
             }.ifEmpty { null }?.joinToString("\n—\n")
             createTimelinePin(

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -49,7 +50,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 class ContactsViewModel(
@@ -73,8 +74,14 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             }
         ).flow
     }
+    val listState = rememberLazyListState()
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(viewModel.searchState)
+        launch {
+            topBarParams.scrollToTop.collect {
+                listState.animateScrollToItem(0)
+            }
+        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val contacts = items.collectAsLazyPagingItems()
@@ -118,7 +125,7 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
             }
 
-            LazyColumn {
+            LazyColumn(state = listState) {
                 items(
                     count = contacts.itemCount,
                     key = contacts.itemKey { it.contact.lookupKey }

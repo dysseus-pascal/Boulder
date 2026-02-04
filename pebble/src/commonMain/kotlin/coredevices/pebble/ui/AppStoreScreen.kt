@@ -65,13 +65,6 @@ fun AppStoreScreen(
         val libPebble = rememberLibPebble()
         val searchState = rememberSearchState()
 
-        LaunchedEffect(Unit) {
-            bootConfig = bootConfigProvider.getBootConfig()
-            topBarParams.searchAvailable(searchState)
-            topBarParams.actions { }
-            topBarParams.title("")
-        }
-
         val url = remember(bootConfig) {
             val watch = libPebble.watches.value
                 .sortedWith(PebbleDeviceComparator)
@@ -175,10 +168,16 @@ fun AppStoreScreen(
             }
         }
 
-        LaunchedEffect(searchState.typing) {
-            topBarParams.overrideGoBack.collect {
-                if (interceptor.navigator?.goBack() != true) {
-                    nav.goBack()
+        LaunchedEffect(Unit) {
+            bootConfig = bootConfigProvider.getBootConfig()
+            topBarParams.searchAvailable(searchState)
+            topBarParams.actions { }
+            topBarParams.title("")
+            launch {
+                topBarParams.overrideGoBack.collect {
+                    if (interceptor.navigator?.goBack() != true) {
+                        nav.goBack()
+                    }
                 }
             }
         }

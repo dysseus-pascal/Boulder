@@ -173,6 +173,7 @@ val WrapperTopBarParams = TopBarParams(
     title = {},
     overrideGoBack = MutableStateFlow(Unit),
     showSnackbar = { },
+    scrollToTop = MutableStateFlow(Unit),
 )
 
 @Composable

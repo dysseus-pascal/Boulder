@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Battery0Bar
@@ -139,6 +140,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
 
         val title = stringResource(Res.string.devices)
+        val listState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(null)
@@ -163,6 +165,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             }
             topBarParams.title(title)
+            launch {
+                topBarParams.scrollToTop.collect {
+                    listState.animateScrollToItem(0)
+                }
+            }
 
             if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
                 firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
@@ -300,7 +307,8 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                state = listState,
             ) {
                 items(
                     items = watches,

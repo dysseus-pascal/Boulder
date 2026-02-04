@@ -16,6 +16,7 @@ data class TopBarParams(
     val title: (String) -> Unit,
     val overrideGoBack: Flow<Unit>,
     val showSnackbar: (String) -> Unit,
+    val scrollToTop: Flow<Unit>,
 )
 
 @Composable

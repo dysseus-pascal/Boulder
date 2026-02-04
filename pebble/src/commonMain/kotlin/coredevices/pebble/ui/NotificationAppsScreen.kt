@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Done
@@ -44,6 +45,7 @@ import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.everNotified
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -57,8 +59,14 @@ class NotificationAppsScreenViewModel : ViewModel() {
 fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
+        val listState = rememberLazyListState()
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
+            launch {
+                topBarParams.scrollToTop.collect {
+                    listState.animateScrollToItem(0)
+                }
+            }
         }
         val notificationApi: NotificationApps = koinInject()
         val platform = koinInject<Platform>()
@@ -200,7 +208,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            LazyColumn {
+            LazyColumn(state = listState) {
                 item(key = "toggle_all") {
                     ListItem(
                         headlineContent = {

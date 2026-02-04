@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -219,6 +220,7 @@ fun LockerScreen(
         var searchType by remember { mutableStateOf<AppType?>(type) }
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
+        val listState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
@@ -237,6 +239,11 @@ fun LockerScreen(
                     viewModel.refreshStore(type, watchType, useCache = true).invokeOnCompletion {
                         isRefreshing = false
                     }
+                }
+            }
+            launch {
+                topBarParams.scrollToTop.collect {
+                    listState.animateScrollToItem(0)
                 }
             }
         }
@@ -352,8 +359,8 @@ fun LockerScreen(
                         }
 
                         LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            state = listState,
                         ) {
                             @Composable
                             fun Carousel(

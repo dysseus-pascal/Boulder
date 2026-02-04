@@ -324,10 +324,15 @@ please disable the option.""".trimIndent(),
             }
         }
         val searchState = rememberSearchState()
+        val listState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(searchState)
-            topBarParams.actions {
+            topBarParams.actions {}
+            launch {
+                topBarParams.scrollToTop.collect {
+                    listState.animateScrollToItem(0)
+                }
             }
         }
         var themeDropdownExpanded by remember { mutableStateOf(false) }
@@ -1298,7 +1303,6 @@ please disable the option.""".trimIndent(),
         val groupedItemsToDisplay = remember(filteredItems) {
             filteredItems.groupBy { it.section }.entries.sortedBy { it.key.ordinal }
         }
-        val listState = rememberLazyListState()
         val indexForSection = remember(groupedItemsToDisplay) {
             val map = mutableMapOf<Section, Int>()
             var currentIndex = 0

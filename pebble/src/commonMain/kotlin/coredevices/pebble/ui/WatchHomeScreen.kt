@@ -168,6 +168,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
         val overrideGoBack = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+        val scrollToTopFlow = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val systemNavBarBottomHeight =
             WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val platform = koinInject<Platform>()
@@ -325,7 +326,10 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                             selected = viewModel.selectedTab.value == route,
                             onClick = {
                                 if (viewModel.selectedTab.value == route) {
-                                    pebbleNavHostController.popBackStack(route.route::class, false)
+                                    val popped = pebbleNavHostController.popBackStack(route.route::class, false)
+                                    if (!popped) {
+                                        scrollToTopFlow.tryEmit(Unit)
+                                    }
                                 } else {
                                     // Disable animations when switching between tabs
                                     viewModel.disableNextTransitionAnimation.value = true
@@ -382,6 +386,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     },
                     overrideGoBack = overrideGoBack,
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },
+                    scrollToTop = scrollToTopFlow,
                 )
             }
             val navBarNav = remember(pebbleNavHostController) {

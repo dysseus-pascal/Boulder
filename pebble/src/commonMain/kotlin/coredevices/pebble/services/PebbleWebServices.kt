@@ -622,12 +622,26 @@ private const val FALLBACK_ICON_RESOURCE_ID = 0
 fun StoreApplication.asLockerEntryPlatform(
     platformName: String,
     fallbackFlags: Int,
-): LockerEntryPlatform {
+): LockerEntryPlatform? {
     val lockerEntryPlatform = hardwarePlatforms?.firstOrNull { it.name == platformName }
+    val sdkVersion = if (hardwarePlatforms != null) {
+        lockerEntryPlatform?.sdkVersion
+    } else {
+        FALLBACK_SDK_VERSION
+    }
+    val pebbleProcessInfoFlags = if (hardwarePlatforms != null) {
+        lockerEntryPlatform?.pebbleProcessInfoFlags
+    } else {
+        fallbackFlags
+    }
+    if (sdkVersion == null || pebbleProcessInfoFlags == null) {
+        logger.w { "Can't add app without sdkVersion or pebbleProcessInfoFlags" }
+        return null
+    }
     return LockerEntryPlatform(
         name = platformName,
-        sdkVersion = lockerEntryPlatform?.sdkVersion ?: FALLBACK_SDK_VERSION,
-        pebbleProcessInfoFlags = lockerEntryPlatform?.pebbleProcessInfoFlags ?: fallbackFlags,
+        sdkVersion = sdkVersion,
+        pebbleProcessInfoFlags = pebbleProcessInfoFlags,
         description = description,
         images = LockerEntryPlatformImages(
             icon = iconImage["48x48"] ?: "",
@@ -679,31 +693,31 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
             }
             app.compatibility.aplite.takeIf { it.supported }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x1 shl 6)
-                add(app.asLockerEntryPlatform("aplite", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("aplite", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.basalt.takeIf { it.supported }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x2 shl 6)
-                add(app.asLockerEntryPlatform("basalt", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("basalt", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.chalk.takeIf { it.supported }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x3 shl 6)
-                add(app.asLockerEntryPlatform("chalk", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("chalk", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.diorite.takeIf { it.supported }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x4 shl 6)
-                add(app.asLockerEntryPlatform("diorite", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("diorite", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.emery.takeIf { it.supported }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x5 shl 6)
-                add(app.asLockerEntryPlatform("emery", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("emery", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.flint.takeIf { it?.supported ?: false }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x6 shl 6)
-                add(app.asLockerEntryPlatform("flint", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("flint", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.gabbro.takeIf { it?.supported ?: false }?.let {
                 val fallbackFlagsFinal = fallbackFlags or (0x6 shl 7)
-                add(app.asLockerEntryPlatform("gabbro", fallbackFlagsFinal))
+                app.asLockerEntryPlatform("gabbro", fallbackFlagsFinal)?.let { add(it) }
             }
         },
         source = sourceUrl,

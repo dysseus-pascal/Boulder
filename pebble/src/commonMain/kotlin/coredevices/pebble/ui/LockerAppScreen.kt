@@ -289,11 +289,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         } else {
                             "Not Compatible with $watchName"
                         }
-                        Text(
-                            onWatchText,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(vertical = 5.dp),
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            entry.CompatibilityWarning(topBarParams)
+                            Text(
+                                onWatchText,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 5.dp),
+                            )
+                        }
                     }
                 }
 

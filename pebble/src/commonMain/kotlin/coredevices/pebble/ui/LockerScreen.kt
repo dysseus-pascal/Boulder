@@ -401,12 +401,15 @@ fun LockerScreen(
                                                     fontSize = 20.sp,
                                                     modifier = Modifier.padding(0.dp)
                                                 )
-                                                Text(
-                                                    activeWatchface.developerName,
-                                                    fontSize = 12.sp,
-                                                    color = Color.Gray,
-                                                    modifier = Modifier.padding(0.dp).weight(1f)
-                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    activeWatchface.CompatibilityWarning(topBarParams)
+                                                    Text(
+                                                        activeWatchface.developerName,
+                                                        fontSize = 12.sp,
+                                                        color = Color.Gray,
+                                                        modifier = Modifier.padding(0.dp).weight(1f)
+                                                    )
+                                                }
                                                 if (activeWatchface.hasSettings()) {
                                                     activeWatchface.SettingsButton(
                                                         navBarNav,

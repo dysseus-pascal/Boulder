@@ -50,13 +50,16 @@ import org.koin.compose.viewmodel.koinViewModel
 class NotificationAppsScreenViewModel : ViewModel() {
     val onlyNotified = mutableStateOf(false)
     val sortBy = mutableStateOf(NotificationAppSort.Recent)
+    val searchState = SearchState()
 }
 
 @Composable
 fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
-
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(viewModel.searchState)
+        }
         val notificationApi: NotificationApps = koinInject()
         val platform = koinInject<Platform>()
         val appsFlow = remember { notificationApi.notificationApps() }
@@ -67,14 +70,14 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         val libPebbleConfig by libPebble.config.collectAsState()
         val filteredAndSortedApps by remember(
             apps,
-            topBarParams.searchState,
+            viewModel.searchState,
             viewModel.onlyNotified.value,
             viewModel.sortBy.value
         ) {
             derivedStateOf {
                 val filtered = apps.asSequence().filter { app ->
-                    if (topBarParams.searchState.query.isNotEmpty()) {
-                        app.app.name.contains(topBarParams.searchState.query, ignoreCase = true)
+                    if (viewModel.searchState.query.isNotEmpty()) {
+                        app.app.name.contains(viewModel.searchState.query, ignoreCase = true)
                     } else {
                         app.app.everNotified() || !viewModel.onlyNotified.value
                     }

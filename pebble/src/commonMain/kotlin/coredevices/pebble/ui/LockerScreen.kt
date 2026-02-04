@@ -128,6 +128,7 @@ class LockerViewModel(
 ) : ViewModel() {
     val storeHome = mutableStateOf<List<Pair<AppstoreSource, AppStoreHome?>>>(emptyList())
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
+    val searchState = SearchState()
 
     fun refreshStore(type: AppType, platform: WatchType, useCache: Boolean): Deferred<Unit> {
         val finished = CompletableDeferred<Unit>()
@@ -220,7 +221,7 @@ fun LockerScreen(
         val coreConfig by coreConfigFlow.flow.collectAsState()
 
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(true)
+            topBarParams.searchAvailable(viewModel.searchState)
             topBarParams.actions {
                 TopBarIconButtonWithToolTip(
                     onClick = openInstallAppDialog,
@@ -229,7 +230,6 @@ fun LockerScreen(
                 )
             }
             topBarParams.title(title)
-            topBarParams.canGoBack(false)
             if (coreConfig.useNativeAppStore) {
                 if (viewModel.storeHome.value.isEmpty()) {
                     logger.v { "refreshing store" }
@@ -251,13 +251,13 @@ fun LockerScreen(
         val uriHandler = LocalUriHandler.current
 
         if (coreConfig.useNativeAppStore) {
-            LaunchedEffect(topBarParams.searchState.query, searchType) {
-                if (topBarParams.searchState.query.isNotEmpty()) {
-                    viewModel.searchStore(topBarParams.searchState.query, watchType, platform, searchType)
+            LaunchedEffect(viewModel.searchState.query, searchType) {
+                if (viewModel.searchState.query.isNotEmpty()) {
+                    viewModel.searchStore(viewModel.searchState.query, watchType, platform, searchType)
                 }
             }
         }
-        val lockerEntries = loadLockerEntries(type, topBarParams.searchState.query, watchType)
+        val lockerEntries = loadLockerEntries(type, viewModel.searchState.query, watchType)
         val activeWatchface = loadActiveWatchface(watchType)
         if (lockerEntries == null || activeWatchface == null) {
             // Don't render the screen at all until we've read the locker from db
@@ -286,7 +286,7 @@ fun LockerScreen(
                 }
             },
         ) {
-            if (topBarParams.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
+            if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
                 val resultQuery = remember(lockerEntries) {
                     viewModel.storeSearchResults.map { searchResults ->
                         lockerEntries + searchResults.filter { searchResult ->

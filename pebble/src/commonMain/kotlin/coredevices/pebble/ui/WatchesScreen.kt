@@ -141,7 +141,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val title = stringResource(Res.string.devices)
 
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {
                 if (isScanningBle) {
                     TopBarIconButtonWithToolTip(
@@ -163,7 +163,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             }
             topBarParams.title(title)
-            topBarParams.canGoBack(false)
 
             if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
                 firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()

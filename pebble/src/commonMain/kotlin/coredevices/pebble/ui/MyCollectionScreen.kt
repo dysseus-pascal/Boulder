@@ -66,16 +66,13 @@ fun MyCollectionScreen(
         null
     ) ?: mutableStateOf(null)
     val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
+    val searchState = rememberSearchState()
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(true)
+        topBarParams.searchAvailable(searchState)
         topBarParams.title(appType.myCollectionName())
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            navBarNav.goBack()
-        }
         topBarParams.actions {}
     }
-    val lockerEntries = loadLockerEntries(appType, topBarParams.searchState.query, watchType)
+    val lockerEntries = loadLockerEntries(appType, searchState.query, watchType)
     if (lockerEntries == null) {
         return
     }

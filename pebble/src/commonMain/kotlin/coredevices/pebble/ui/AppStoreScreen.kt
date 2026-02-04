@@ -63,13 +63,13 @@ fun AppStoreScreen(
         val bootConfigProvider = koinInject<BootConfigProvider>()
         var bootConfig by remember { mutableStateOf<BootConfig?>(null) }
         val libPebble = rememberLibPebble()
+        val searchState = rememberSearchState()
 
         LaunchedEffect(Unit) {
             bootConfig = bootConfigProvider.getBootConfig()
-            topBarParams.searchAvailable(true)
+            topBarParams.searchAvailable(searchState)
             topBarParams.actions { }
             topBarParams.title("")
-            topBarParams.canGoBack(true)
         }
 
         val url = remember(bootConfig) {
@@ -175,19 +175,19 @@ fun AppStoreScreen(
             }
         }
 
-        LaunchedEffect(topBarParams.searchState.typing) {
-            topBarParams.goBack.collect {
+        LaunchedEffect(searchState.typing) {
+            topBarParams.overrideGoBack.collect {
                 if (interceptor.navigator?.goBack() != true) {
                     nav.goBack()
                 }
             }
         }
 
-        LaunchedEffect(topBarParams.searchState.typing) {
-            if (!topBarParams.searchState.typing && topBarParams.searchState.query.isNotEmpty()) {
-                appStoreLogger.d { "Search: ${topBarParams.searchState.query}" }
+        LaunchedEffect(searchState.typing) {
+            if (!searchState.typing && searchState.query.isNotEmpty()) {
+                appStoreLogger.d { "Search: ${searchState.query}" }
                 val args = buildJsonObject {
-                    put(ARGS_QUERY, JsonPrimitive(topBarParams.searchState.query))
+                    put(ARGS_QUERY, JsonPrimitive(searchState.query))
                 }
                 interceptor.invokeMethod(method = SEARCH, args = args)
             }

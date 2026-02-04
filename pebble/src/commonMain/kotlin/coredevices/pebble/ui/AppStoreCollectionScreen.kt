@@ -119,12 +119,8 @@ fun AppStoreCollectionScreen(
 ) {
     LaunchedEffect(collectionTitle) {
         topBarParams.title(collectionTitle)
-        topBarParams.canGoBack(true)
         topBarParams.actions {}
-        topBarParams.searchAvailable(false)
-        topBarParams.goBack.collect {
-            navBarNav.goBack()
-        }
+        topBarParams.searchAvailable(null)
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
         if (apps == null || apps.itemCount == 0) {

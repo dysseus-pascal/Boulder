@@ -183,7 +183,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         }
 
         LaunchedEffect(entry) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {
                 if (showRemoveConfirmDialog && entry != null) {
                     AlertDialog(
@@ -225,10 +225,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
             }
             topBarParams.title(entry?.type?.name ?: "")
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                navBarNav.goBack()
-            }
         }
         Column(
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)

@@ -323,12 +323,12 @@ please disable the option.""".trimIndent(),
                 }
             }
         }
+        val searchState = rememberSearchState()
 
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(true)
+            topBarParams.searchAvailable(searchState)
             topBarParams.actions {
             }
-            topBarParams.canGoBack(false)
         }
         var themeDropdownExpanded by remember { mutableStateOf(false) }
         val permissionRequester: PermissionRequester = koinInject()
@@ -1268,11 +1268,11 @@ please disable the option.""".trimIndent(),
                 }
             }
 
-        val searchQuery = topBarParams.searchState.query
+        val searchQuery = searchState.query
 
         val filteredItems by remember(
             validSettingsItems,
-            topBarParams.searchState.query,
+            searchState.query,
             coreUser,
         ) {
             derivedStateOf {

@@ -234,12 +234,8 @@ fun ModelManagementScreen(
 ) {
     LaunchedEffect(Unit) {
         topBarParams.title("Manage Models")
-        topBarParams.canGoBack(true)
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {}
-        topBarParams.goBack.collect {
-            navBarNav.goBack()
-        }
     }
     val downloadingModelSlug by remember {
         derivedStateOf {

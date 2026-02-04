@@ -66,7 +66,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val weatherFetcher: WeatherFetcher = koinInject()
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {
             TopBarIconButtonWithToolTip(
                 onClick = { scope.launch { weatherFetcher.fetchWeather() } },
@@ -75,10 +75,6 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             )
         }
         topBarParams.title("Weather Locations")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            navBarNav.goBack()
-        }
     }
     val weatherLocationDao: WeatherLocationDao = koinInject()
     val locations by weatherLocationDao.getAllLocationsFlow().collectAsState(emptyList())

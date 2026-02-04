@@ -69,8 +69,6 @@ enum class NotificationAppSort {
 fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     LaunchedEffect(Unit) {
         topBarParams.title("Notifications")
-        topBarParams.canGoBack(false)
-        topBarParams.searchAvailable(true)
         topBarParams.actions {}
     }
 

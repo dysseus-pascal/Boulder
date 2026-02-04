@@ -55,6 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 class ContactsViewModel(
 ) : ViewModel() {
     val onlyNotified = mutableStateOf(false)
+    val searchState = SearchState()
 }
 
 @Composable
@@ -62,15 +63,18 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val viewModel = koinViewModel<ContactsViewModel>()
     val libPebble = rememberLibPebble()
     val items = remember(
-        topBarParams.searchState.query,
+        viewModel.searchState.query,
         viewModel.onlyNotified.value,
     ) {
         Pager(
             config = PagingConfig(pageSize = 20, enablePlaceholders = true),
             pagingSourceFactory = {
-                libPebble.getContactsWithCounts(topBarParams.searchState.query, viewModel.onlyNotified.value)
+                libPebble.getContactsWithCounts(viewModel.searchState.query, viewModel.onlyNotified.value)
             }
         ).flow
+    }
+    LaunchedEffect(Unit) {
+        topBarParams.searchAvailable(viewModel.searchState)
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val contacts = items.collectAsLazyPagingItems()
@@ -136,13 +140,9 @@ fun ContactNotificationViewerScreen(
     contactId: String,
 ) {
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {}
         topBarParams.title("Contact Notifications")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            nav.goBack()
-        }
     }
     val libPebble = rememberLibPebble()
     val flow = remember {

@@ -24,13 +24,9 @@ import coredevices.pebble.rememberLibPebble
 @Composable
 fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {}
         topBarParams.title("Calendar Settings")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            navBarNav.goBack()
-        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()

@@ -118,7 +118,7 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     val pebbleLoggedIn = pebbleAccount.loggedIn
     val bootConfig = koinInject<BootConfigProvider>()
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {
             TopBarIconButtonWithToolTip(
                 onClick = {
@@ -129,10 +129,6 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             )
         }
         topBarParams.title("Appstore Sources")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            nav.goBack()
-        }
     }
 
     AppstoreSettingsScreen(

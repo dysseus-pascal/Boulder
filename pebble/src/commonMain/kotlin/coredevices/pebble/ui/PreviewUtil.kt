@@ -168,12 +168,10 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 fun fakePebbleModule() = fakePebbleModule(fakeAppContext())
 
 val WrapperTopBarParams = TopBarParams(
-    searchState = SearchState(query = "", typing = false),
     searchAvailable = {},
     actions = {},
     title = {},
-    canGoBack = { false },
-    goBack = MutableStateFlow(Unit),
+    overrideGoBack = MutableStateFlow(Unit),
     showSnackbar = { },
 )
 

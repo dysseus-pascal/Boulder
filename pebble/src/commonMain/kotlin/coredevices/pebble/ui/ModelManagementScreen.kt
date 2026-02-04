@@ -237,6 +237,9 @@ fun ModelManagementScreen(
         topBarParams.canGoBack(true)
         topBarParams.searchAvailable(false)
         topBarParams.actions {}
+        topBarParams.goBack.collect {
+            navBarNav.goBack()
+        }
     }
     val downloadingModelSlug by remember {
         derivedStateOf {

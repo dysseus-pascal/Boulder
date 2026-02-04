@@ -284,18 +284,22 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             } else {
                                 "On Watch $watchName"
                             }
-                        } else if (entry.isCompatible) {
+                        } else if (!entry.isCompatible) {
+                            "Not Compatible with $watchName"
+                        } else if (entry.commonAppType !is CommonAppType.Store) {
                             "Not On Watch $watchName"
                         } else {
-                            "Not Compatible with $watchName"
+                            null
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             entry.CompatibilityWarning(topBarParams)
-                            Text(
-                                onWatchText,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(vertical = 5.dp),
-                            )
+                            if (onWatchText != null) {
+                                Text(
+                                    onWatchText,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(vertical = 5.dp),
+                                )
+                            }
                         }
                     }
                 }

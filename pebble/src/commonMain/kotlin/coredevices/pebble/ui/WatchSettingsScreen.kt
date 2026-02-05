@@ -8,12 +8,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -114,10 +117,10 @@ import theme.ThemeProvider
 import kotlin.math.roundToLong
 
 enum class TopLevelType(val displayName: String) {
-    Phone("Phone Settings"),
-    Watch("Watch Settings"),
-    All("All Settings"),
-    Notifications("Notification Settings"),
+    Phone("Phone"),
+    Watch("Watch"),
+    All("All"),
+    Notifications("Notifications"),
     ;
 
     fun icon(platform: Platform) = when (this) {
@@ -323,6 +326,7 @@ please disable the option.""".trimIndent(),
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
             topBarParams.actions {}
+            topBarParams.title("Settings")
             launch {
                 topBarParams.scrollToTop.collect {
                     listState.animateScrollToItem(0)
@@ -1254,9 +1258,6 @@ please disable the option.""".trimIndent(),
                 }
             }
         }
-        LaunchedEffect(viewModel.selectedTopLevelType) {
-            topBarParams.title(viewModel.selectedTopLevelType.displayName)
-        }
 
         val validSettingsItems =
             remember(rawSettingsItems, viewModel.selectedTopLevelType, debugOptionsEnabled) {
@@ -1344,8 +1345,8 @@ please disable the option.""".trimIndent(),
                 // Only show tab buttons at top of there is more than one
                 if (availableTopLevelTypes.size > 1) {
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         SingleChoiceSegmentedButtonRow {
                             availableTopLevelTypes.forEachIndexed { index, type ->
@@ -1358,8 +1359,22 @@ please disable the option.""".trimIndent(),
                                     onClick = { viewModel.selectedTopLevelType = type },
                                     icon = { },
                                     label = {
-                                        Icon(type.icon(platform), contentDescription = type.name)
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                type.icon(platform),
+                                                contentDescription = type.name,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                type.displayName,
+                                                fontSize = 10.sp,
+                                                lineHeight = 13.sp,
+                                                modifier = Modifier.padding(top = 3.dp).widthIn(min = 55.dp),
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
                                     },
+                                    contentPadding = PaddingValues(horizontal = 5.dp, vertical = 8.dp)
                                 )
                             }
                         }

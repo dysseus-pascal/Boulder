@@ -3,16 +3,13 @@ package coredevices.pebble.ui
 import CoreNav
 import CoreRoute
 import NoOpCoreNav
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
@@ -72,9 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -117,10 +112,10 @@ import kotlin.time.Duration.Companion.seconds
 
 class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
-    val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
-    val searchStateFlow = MutableStateFlow<SearchState?>(null)
-    val titleFlow = MutableStateFlow("")
-    val canGoBackFlow = MutableStateFlow(false)
+    private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
+    private val searchStateFlow = MutableStateFlow<SearchState?>(null)
+    private val titleFlow = MutableStateFlow("")
+    private val canGoBackFlow = MutableStateFlow(false)
     val disableNextTransitionAnimation = mutableStateOf(false)
     val indexEnabled = coreConfig.flow.map {
         it.enableIndex
@@ -128,6 +123,19 @@ class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow) { actions, searchState, title, canGoBack ->
         Params(actions, searchState, title, canGoBack)
     }.debounce(50.milliseconds)
+
+    fun setActions(actions: @Composable RowScope.() -> Unit) {
+        actionsFlow.value = actions
+    }
+    fun setTitle(title: String) {
+        titleFlow.value = title
+    }
+    fun setSearchState(searchState: SearchState?) {
+        searchStateFlow.value = searchState
+    }
+    fun setCanGoBack(canGoBack: Boolean) {
+        canGoBackFlow.value = canGoBack
+    }
 }
 
 data class Params(
@@ -189,7 +197,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         delay(50)
                         viewModel.disableNextTransitionAnimation.value = false
                     }
-                    viewModel.canGoBackFlow.value = pebbleNavHostController.previousBackStackEntry != null
+                    viewModel.setCanGoBack(pebbleNavHostController.previousBackStackEntry != null)
                 }
             pebbleNavHostController.addOnDestinationChangedListener(listener)
             onDispose {
@@ -251,12 +259,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
         val params by viewModel.paramsFlow.collectAsState(Params())
-
-        // Handle back button when search bar is visible
-        BackHandler(enabled = params.searchState?.show == true) {
-            params.searchState?.show = false
-            params.searchState?.query = ""
-        }
 
         Scaffold(
             topBar = {
@@ -413,13 +415,9 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         ) { windowInsets ->
             val topBarParams = remember(pebbleNavHostController) {
                 TopBarParams(
-                    searchAvailable = {
-                        viewModel.searchStateFlow.value = it
-                    },
-                    actions = { viewModel.actionsFlow.value = it },
-                    title = {
-                        viewModel.titleFlow.value = it
-                    },
+                    searchAvailable = { viewModel.setSearchState(it) },
+                    actions = { viewModel.setActions(it) },
+                    title = { viewModel.setTitle(it) },
                     overrideGoBack = overrideGoBack,
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },
                     scrollToTop = scrollToTopFlow,
@@ -449,6 +447,12 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     modifier = Modifier.padding(windowInsets),
                 ) {
                     addNavBarRoutes(navBarNav, topBarParams, indexScreen, viewModel)
+                }
+                // Handle back button when search bar is visible
+                // Placed AFTER NavHost so it registers later and takes priority
+                BackHandler(enabled = params.searchState?.show == true) {
+                    params.searchState?.show = false
+                    params.searchState?.query = ""
                 }
             }
         }

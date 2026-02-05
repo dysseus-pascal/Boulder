@@ -1,13 +1,13 @@
 package coredevices.pebble.services
 
-import com.russhwolf.settings.Settings
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
-import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.STTLanguage
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
 import io.ktor.utils.io.CancellationException
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.TranscriptionWord
@@ -25,7 +25,10 @@ import kotlinx.io.files.Path
 import kotlinx.io.readByteArray
 
 internal expect fun tempTranscriptionDirectory(): Path
-class CactusTranscription(private val service: CactusTranscriptionService): TranscriptionProvider {
+class CactusTranscription(
+    private val service: CactusTranscriptionService,
+    private val libPebbleLazy: Lazy<LibPebble>
+): TranscriptionProvider {
     override suspend fun canServeSession(): Boolean {
         service.earlyInit()
         return true
@@ -34,7 +37,8 @@ class CactusTranscription(private val service: CactusTranscriptionService): Tran
     @OptIn(ExperimentalUnsignedTypes::class)
     override suspend fun transcribe(
         encoderInfo: VoiceEncoderInfo,
-        audioFrames: Flow<UByteArray>
+        audioFrames: Flow<UByteArray>,
+        isNotificationReply: Boolean
     ): TranscriptionResult {
         require(encoderInfo is VoiceEncoderInfo.Speex) {
             "Cactus transcription only supports Speex encoding, got ${encoderInfo::class.simpleName}"
@@ -58,6 +62,11 @@ class CactusTranscription(private val service: CactusTranscriptionService): Tran
             }
         }
         return try {
+            val recentContacts = if (isNotificationReply) {
+                libPebbleLazy.value.mostRecentNotificationParticipants(limit = 10).first().takeIf { it.isNotEmpty() }?.flatMap {
+                    it.split(" ", limit = 2)
+                }
+            } else null
             val result = service.transcribe(
                 audioStreamFrames = flow {
                     val totalBytes = decodedBuffer.size.toInt()
@@ -70,8 +79,11 @@ class CactusTranscription(private val service: CactusTranscriptionService): Tran
                         bytesRead += bytesToRead
                     }
                 }.flowOn(Dispatchers.IO),
+                language = STTLanguage.Automatic, //TODO: Allow language selection based on user preference
+                contentContext = if (isNotificationReply) "Reply to Instant Message" else null,
+                dictionaryContext = recentContacts,
                 sampleRate = encoderInfo.sampleRate.toInt(),
-                encoding = coredevices.util.AudioEncoding.PCM_16BIT
+                encoding = coredevices.util.AudioEncoding.PCM_16BIT,
             ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
             TranscriptionResult.Success(
                 words = result.text.trim().split(" ").map {

@@ -206,6 +206,20 @@ class FakeLibPebble : LibPebble {
         emit(fakeNotifications)
     }
 
+    override fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>> {
+        return flow {
+            emit(
+                listOf(
+                    "Alice",
+                    "Bob Smith",
+                    "Charlie Johnson",
+                    "David Williams",
+                    "Eve Jones",
+                )
+            )
+        }
+    }
+
     private val fakeNotifications by lazy { fakeNotifications() }
 
     private fun fakeNotifications(): List<NotificationEntity> {

@@ -6,11 +6,16 @@ import com.cactus.CactusSTT
 import com.cactus.CactusTranscriptionParams
 import com.cactus.CactusTranscriptionResult
 import com.cactus.TranscriptionMode
+import com.cactus.WisprConversationContext
+import com.cactus.WisprConversationMessage
+import com.cactus.WisprFlowConfig
 import com.russhwolf.settings.Settings
 import coredevices.util.AudioEncoding
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -44,7 +49,7 @@ import kotlin.uuid.Uuid
 
 class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): TranscriptionService {
     companion object {
-        private val logger = Logger.Companion.withTag("CactusTranscriptionService")
+        private val logger = Logger.withTag("CactusTranscriptionService")
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
     }
     private var sttModel = CactusSTT()
@@ -139,6 +144,45 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
 
     override suspend fun isAvailable(): Boolean = sttModel.isReady()
 
+    private fun makeWisprConfig(
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?
+    ): WisprFlowConfig {
+        checkNotNull(CommonBuildKonfig.WISPR_KEY) { "WISPR API key is not set, cannot use Wispr" }
+        val nameSplit = Firebase.auth.currentUser?.displayName?.split(" ", limit = 2)
+        return WisprFlowConfig(
+            apiKey = CommonBuildKonfig.WISPR_KEY,
+            languages = when (language) {
+                is STTLanguage.Automatic -> null
+                is STTLanguage.Specific -> language.languageCodes.toList()
+            },
+            appName = "Core Devices",
+            appType = "other",
+            dictionaryContext = dictionaryContext ?: emptyList(),
+            userFirstName = nameSplit?.firstOrNull(),
+            userLastName = nameSplit?.lastOrNull(),
+            contentsContext = contentContext,
+            conversationContext = conversationContext?.let {
+                WisprConversationContext(
+                    id = it.id,
+                    participants = it.participants,
+                    messages = it.messages.map { msg ->
+                        WisprConversationMessage(
+                            role = when (msg.role) {
+                                STTConvoRole.User -> "user"
+                                STTConvoRole.Human -> "human"
+                                STTConvoRole.Assistant -> "assistant"
+                            },
+                            content = msg.content
+                        )
+                    }
+                )
+            }.takeIf { !it?.messages.isNullOrEmpty() || !it?.participants.isNullOrEmpty() }
+        )
+    }
+
     override fun earlyInit() {
         if (initJob == null || !sttModel.isReady() || lastInitedModel != sttConfig.value.modelName) {
             if (initJob?.isActive == true) {
@@ -152,6 +196,10 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     private suspend fun cactusTranscribe(
         audio: ByteArray,
         sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
         timeout: Duration = 30.seconds
     ): CactusTranscriptionResult? {
         val params = CactusTranscriptionParams(maxTokens = 384)
@@ -169,7 +217,12 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                     filePath = path.toString(),
                     params = params,
                     mode = sttMode.cactusValue,
-                    apiKey = CommonBuildKonfig.WISPR_KEY
+                    wisprConfig = makeWisprConfig(
+                        language,
+                        conversationContext,
+                        dictionaryContext,
+                        contentContext
+                    )
                 )
                 CactusSTTMode.LocalOnly -> {
                     if (!(sttConfig.value.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {
@@ -179,8 +232,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                     sttModel.transcribe(
                         filePath = path.toString(),
                         params = params,
-                        mode = sttMode.cactusValue,
-                        apiKey = null
+                        mode = sttMode.cactusValue
                     )
                 }
                 CactusSTTMode.RemoteFirst -> {
@@ -190,7 +242,12 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                                 filePath = path.toString(),
                                 params = params,
                                 mode = TranscriptionMode.REMOTE,
-                                apiKey = CommonBuildKonfig.WISPR_KEY
+                                wisprConfig = makeWisprConfig(
+                                    language,
+                                    conversationContext,
+                                    dictionaryContext,
+                                    contentContext
+                                )
                             )
                             if (result == null) {
                                 error("Remote transcription returned null")
@@ -202,8 +259,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                         sttModel.transcribe(
                             filePath = path.toString(),
                             params = params,
-                            mode = TranscriptionMode.LOCAL,
-                            apiKey = null
+                            mode = TranscriptionMode.LOCAL
                         )
                     }
                 }
@@ -220,7 +276,11 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
         sampleRate: Int,
-        encoding: AudioEncoding,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        encoding: AudioEncoding
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "CactusTranscriptionService.transcribe() called" }
         logger.i { "Transcribing with model ${sttConfig.value.modelName}" }
@@ -259,7 +319,14 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
             sttModel.reset()
 
             logger.d { "Model ready state: ${sttModel.isReady()}" }
-            val result = cactusTranscribe(audio = buffer.readByteArray(), sampleRate = sampleRate)
+            val result = cactusTranscribe(
+                audio = buffer.readByteArray(),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext
+            )
             val duration = Clock.System.now() - start
             logger.d { "Transcription call completed in $duration" }
 

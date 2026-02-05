@@ -140,7 +140,12 @@ val watchModule = module {
             }
         }
     }
-    singleOf(::CactusTranscription) bind TranscriptionProvider::class
+    single {
+        CactusTranscription(
+            get(),
+            lazy { get<LibPebble3>() }
+        )
+    } bind TranscriptionProvider::class
 
     viewModelOf(::WatchHomeViewModel)
     viewModelOf(::NotificationScreenViewModel)

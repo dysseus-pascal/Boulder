@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.flow
 
 class NullTranscriptionService: TranscriptionService {
     companion object {
-        private val logger = Logger.Companion.withTag(NullTranscriptionService::class.simpleName!!)
+        private val logger = Logger.withTag(NullTranscriptionService::class.simpleName!!)
     }
     override suspend fun isAvailable(): Boolean = true
 
@@ -16,6 +16,10 @@ class NullTranscriptionService: TranscriptionService {
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
         sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
         encoding: AudioEncoding
     ): Flow<TranscriptionSessionStatus> = flow {
         emit(TranscriptionSessionStatus.Open)
@@ -23,16 +27,6 @@ class NullTranscriptionService: TranscriptionService {
         audioStreamFrames?.collect {
             // Do nothing
         }
-        /*emit(TranscriptionSessionStatus.Partial("This"))
-        delay(300)
-        emit(TranscriptionSessionStatus.Partial("This is"))
-        delay(300)
-        emit(TranscriptionSessionStatus.Partial("This is a"))
-        delay(600)
-        emit(TranscriptionSessionStatus.Partial("This is a transcription"))
-        delay(1000)
-        emit(TranscriptionSessionStatus.Transcription("This is a transcription"))*/
-        delay(100)
-        emit(TranscriptionSessionStatus.Transcription("Create a note: I need to buy some milk"))
+        throw TranscriptionException.TranscriptionServiceUnavailable()
     }
 }

@@ -3,8 +3,16 @@ package coredevices.pebble.ui
 import CoreNav
 import CoreRoute
 import NoOpCoreNav
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
@@ -50,6 +58,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,7 +72,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -87,7 +98,10 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.util.CoreConfigFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -98,19 +112,30 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
-    val actions = mutableStateOf<@Composable RowScope.() -> Unit>({})
-    val searchState = mutableStateOf<SearchState?>(null)
-    val title = mutableStateOf("")
-    val canGoBack = mutableStateOf(false)
+    val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
+    val searchStateFlow = MutableStateFlow<SearchState?>(null)
+    val titleFlow = MutableStateFlow("")
+    val canGoBackFlow = MutableStateFlow(false)
     val disableNextTransitionAnimation = mutableStateOf(false)
     val indexEnabled = coreConfig.flow.map {
         it.enableIndex
     }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.enableIndex)
+    val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow) { actions, searchState, title, canGoBack ->
+        Params(actions, searchState, title, canGoBack)
+    }.debounce(50.milliseconds)
 }
+
+data class Params(
+    val actions: @Composable RowScope.() -> Unit = {},
+    val searchState: SearchState? = null,
+    val title: String = "",
+    val canGoBack: Boolean = false,
+)
 
 private val logger = Logger.withTag("WatchHomeScreen")
 
@@ -164,6 +189,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         delay(50)
                         viewModel.disableNextTransitionAnimation.value = false
                     }
+                    viewModel.canGoBackFlow.value = pebbleNavHostController.previousBackStackEntry != null
                 }
             pebbleNavHostController.addOnDestinationChangedListener(listener)
             onDispose {
@@ -224,25 +250,26 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                 }
             }
         }
+        val params by viewModel.paramsFlow.collectAsState(Params())
 
         // Handle back button when search bar is visible
-        BackHandler(enabled = viewModel.searchState.value?.show == true) {
-            viewModel.searchState.value?.show = false
-            viewModel.searchState.value?.query = ""
+        BackHandler(enabled = params.searchState?.show == true) {
+            params.searchState?.show = false
+            params.searchState?.query = ""
         }
 
         Scaffold(
             topBar = {
                 Crossfade(
                     modifier = Modifier.animateContentSize(),
-                    targetState = viewModel.searchState.value?.show == true,
+                    targetState = params.searchState?.show == true,
                     label = "Search"
                 ) { showSearch ->
                     val focusRequester = remember { FocusRequester() }
                     val focusManager = LocalFocusManager.current
                     val keyboardController = LocalSoftwareKeyboardController.current
                     val onSearchDone = {
-                        viewModel.searchState.value?.typing = false
+                        params.searchState?.typing = false
                         keyboardController?.hide()
                         focusManager.clearFocus()
                     }
@@ -252,16 +279,16 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         }
                         // TODO SearchBar
                         OutlinedTextField(
-                            value = viewModel.searchState.value?.query ?: "",
+                            value = params.searchState?.query ?: "",
                             onValueChange = {
-                                viewModel.searchState.value?.query = it
-                                viewModel.searchState.value?.typing = true
+                                params.searchState?.query = it
+                                params.searchState?.typing = true
                             },
                             label = { Text("Search") },
                             trailingIcon = {
                                 IconButton(onClick = {
-                                    viewModel.searchState.value?.show = false
-                                    viewModel.searchState.value?.query = ""
+                                    params.searchState?.show = false
+                                    params.searchState?.query = ""
                                 }) {
                                     Icon(
                                         Icons.Outlined.Close,
@@ -287,13 +314,15 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     } else {
                         TopAppBar(
                             navigationIcon = {
-                                if (viewModel.canGoBack.value) {
+                                AnimatedVisibility(
+                                    visible = params.canGoBack,
+                                    enter = fadeIn() + expandHorizontally(),
+                                    exit = fadeOut() + shrinkHorizontally()
+                                ) {
                                     IconButton(onClick = {
-                                        // Check if anyone is currently collecting from the flow
                                         if (overrideGoBack.subscriptionCount.value > 0) {
                                             overrideGoBack.tryEmit(Unit)
                                         } else {
-                                            // No subscribers, perform the default action
                                             pebbleNavHostController.popBackStack()
                                         }
                                     }) {
@@ -306,17 +335,17 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                             },
                             title = {
                                 Text(
-                                    text = viewModel.title.value,
+                                    text = params.title,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontSize = 28.sp,
                                     maxLines = 1,
                                 )
                             },
                             actions = {
-                                viewModel.actions.value(this)
-                                if (viewModel.searchState.value != null) {
+                                params.actions(this)
+                                if (params.searchState != null) {
                                     TopBarIconButtonWithToolTip(
-                                        onClick = { viewModel.searchState.value?.show = true },
+                                        onClick = { params.searchState?.show = true },
                                         icon = Icons.Filled.Search,
                                         description = "Search",
                                     )
@@ -385,13 +414,11 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             val topBarParams = remember(pebbleNavHostController) {
                 TopBarParams(
                     searchAvailable = {
-                        viewModel.searchState.value = it
+                        viewModel.searchStateFlow.value = it
                     },
-                    actions = { viewModel.actions.value = it },
+                    actions = { viewModel.actionsFlow.value = it },
                     title = {
-                        viewModel.title.value = it
-                        // Doing this here so that the UI doesn't glitch if we do it in the navigation listener
-                        viewModel.canGoBack.value = pebbleNavHostController.previousBackStackEntry != null
+                        viewModel.titleFlow.value = it
                     },
                     overrideGoBack = overrideGoBack,
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },

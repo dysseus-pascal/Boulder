@@ -102,6 +102,7 @@ import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
@@ -360,6 +361,7 @@ fun initKoin(
                 singleOf(::Housekeeping)
                 singleOf(::RemoteTimelineEmulator)
                 singleOf(::WeatherManager)
+                singleOf(::HttpInterceptorManager)
                 singleOf(::RealWatchPrefs) bind WatchPrefs::class
                 singleOf(::WebSyncManager) bind RequestSync::class
                 singleOf(::TimelineApi) bind Timeline::class

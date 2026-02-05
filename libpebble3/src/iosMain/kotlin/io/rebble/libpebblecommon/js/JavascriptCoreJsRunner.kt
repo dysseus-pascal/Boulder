@@ -47,6 +47,7 @@ class JavascriptCoreJsRunner(
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val httpInterceptorManager: HttpInterceptorManager,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -77,10 +78,10 @@ class JavascriptCoreJsRunner(
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, evalFn, remoteTimelineEmulator, appInfo),
+            XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
             JSTimeout(interfacesScope, evalRawFn),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
@@ -218,6 +219,13 @@ class JavascriptCoreJsRunner(
             }
         }
         signalReady()
+    }
+
+    override suspend fun signalInterceptResponse(
+        callbackId: String,
+        result: InterceptResponse
+    ) {
+        TODO("Not supported")
     }
 
     override suspend fun signalNewAppMessageData(data: String?): Boolean {

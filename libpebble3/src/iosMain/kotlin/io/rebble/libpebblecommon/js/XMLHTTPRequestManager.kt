@@ -38,7 +38,7 @@ private const val DONE = 4
 class XMLHTTPRequestManager(
     private val scope: CoroutineScope,
     private val eval: (String) -> JSValue?,
-    private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val httpInterceptorManager: HttpInterceptorManager,
     private val appInfo: PbwAppInfo,
 ): RegisterableJsInterface {
     private var lastInstance = 0
@@ -140,9 +140,9 @@ class XMLHTTPRequestManager(
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
                 }
-                if (remoteTimelineEmulator.shouldIntercept(url!!)) {
+                if (httpInterceptorManager.shouldIntercept(url!!)) {
                     val appUuid = Uuid.parse(appInfo.uuid)
-                    val result = remoteTimelineEmulator.onIntercepted(url!!, method!!.value, data!!.decodeToString(), appUuid)
+                    val result = httpInterceptorManager.onIntercepted(url!!, method!!.value, data!!.decodeToString(), appUuid)
                     scope.launch {
                         eval("$jsInstance._onResponseComplete({}, 200, \"OK\", \"$result\")")
                         changeReadyState(DONE)

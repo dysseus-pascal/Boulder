@@ -54,7 +54,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -112,6 +114,7 @@ class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
 
 private val logger = Logger.withTag("WatchHomeScreen")
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
@@ -220,6 +223,12 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     }
                 }
             }
+        }
+
+        // Handle back button when search bar is visible
+        BackHandler(enabled = viewModel.searchState.value?.show == true) {
+            viewModel.searchState.value?.show = false
+            viewModel.searchState.value?.query = ""
         }
 
         Scaffold(

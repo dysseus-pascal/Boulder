@@ -112,6 +112,7 @@ kotlin {
                 implementation(libs.coil)
                 implementation(libs.coil.ktor)
                 implementation(libs.webview)
+                implementation(libs.backhandler)
                 api(libs.uri)
                 implementation(libs.firebase.crashlytics)
                 implementation(libs.firebase.auth)

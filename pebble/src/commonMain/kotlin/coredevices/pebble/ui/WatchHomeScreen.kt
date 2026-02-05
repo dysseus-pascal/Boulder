@@ -15,12 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Notes
@@ -40,9 +37,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -50,7 +47,8 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TooltipState
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopSearchBar
+import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -69,7 +67,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -279,39 +276,43 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         LaunchedEffect(focusRequester) {
                             focusRequester.requestFocus()
                         }
-                        // TODO SearchBar
-                        OutlinedTextField(
-                            value = params.searchState?.query ?: "",
-                            onValueChange = {
-                                params.searchState?.query = it
-                                params.searchState?.typing = true
+                        TopSearchBar(
+                            state = rememberSearchBarState(),
+                            inputField = {
+                                SearchBarDefaults.InputField(
+                                    query = params.searchState?.query ?: "",
+                                    onQueryChange = {
+                                        params.searchState?.query = it
+                                        params.searchState?.typing = true
+                                    },
+                                    onSearch = {
+                                        onSearchDone()
+                                    },
+                                    expanded = false,
+                                    onExpandedChange = { },
+                                    placeholder = { Text("Search") },
+                                    modifier = Modifier.focusRequester(focusRequester),
+                                    trailingIcon = {
+                                        IconButton(onClick = {
+                                            params.searchState?.show = false
+                                            params.searchState?.query = ""
+                                        }) {
+                                            Icon(
+                                                Icons.Outlined.Close,
+                                                contentDescription = "Clear search"
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        IconButton(onClick = onSearchDone) {
+                                            Icon(
+                                                Icons.Outlined.Search,
+                                                contentDescription = "Search"
+                                            )
+                                        }
+                                    },
+                                )
                             },
-                            label = { Text("Search") },
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    params.searchState?.show = false
-                                    params.searchState?.query = ""
-                                }) {
-                                    Icon(
-                                        Icons.Outlined.Close,
-                                        contentDescription = "Clear search"
-                                    )
-                                }
-                            },
-                            leadingIcon = {
-                                IconButton(onClick = onSearchDone) {
-                                    Icon(
-                                        Icons.Outlined.Search,
-                                        contentDescription = "Search"
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(TopAppBarDefaults.windowInsets.asPaddingValues())
-                                .focusRequester(focusRequester),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { onSearchDone() }),
                         )
                     } else {
                         TopAppBar(

@@ -63,10 +63,9 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
-import com.cactus.CactusSTT
 import com.russhwolf.settings.Settings
-import com.russhwolf.settings.get
 import com.russhwolf.settings.set
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -76,8 +75,6 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
-import coredevices.pebble.account.BootConfigProvider
-import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
@@ -85,18 +82,15 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
-import coredevices.ui.ModelDownloadDialog
-import coredevices.ui.ModelType
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButton
-import coredevices.util.models.CactusSTTMode
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.WeatherUnit
-import coredevices.util.deleteRecursive
 import coredevices.util.emailOrNull
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelManager
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
@@ -108,16 +102,13 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.io.files.Path
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import kotlin.math.roundToLong
@@ -248,9 +239,15 @@ sealed interface RequestedLocalSTTMode {
     ) : RequestedLocalSTTMode
 }
 
+class WatchSettingsScreenViewModel : ViewModel() {
+    val searchState = SearchState()
+    var selectedTopLevelType by mutableStateOf(TopLevelType.Phone)
+}
+
 @Composable
 fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        val viewModel = koinViewModel<WatchSettingsScreenViewModel>()
         val libPebble = rememberLibPebble()
         val libPebbleConfig by libPebble.config.collectAsState()
         val coreConfigHolder: CoreConfigHolder = koinInject()
@@ -260,13 +257,11 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val currentTheme by themeProvider.theme.collectAsState()
         val pebbleFeatures = koinInject<PebbleFeatures>()
         val pebbleAccount = koinInject<PebbleAccount>()
-        val bootConfig = koinInject<BootConfigProvider>()
         val loggedIn by pebbleAccount.loggedIn.collectAsState()
         val coreUser by Firebase.auth.authStateChanged.map {
             it?.emailOrNull
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser?.emailOrNull)
-        val firestoreLocker = koinInject<FirestoreLocker>()
         val scope = rememberCoroutineScope()
         val appContext = koinInject<AppContext>()
         val appVersion = koinInject<CoreAppVersion>()
@@ -323,11 +318,10 @@ please disable the option.""".trimIndent(),
                 }
             }
         }
-        val searchState = rememberSearchState()
         val listState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(searchState)
+            topBarParams.searchAvailable(viewModel.searchState)
             topBarParams.actions {}
             launch {
                 topBarParams.scrollToTop.collect {
@@ -1260,24 +1254,23 @@ please disable the option.""".trimIndent(),
                 }
             }
         }
-        var selectedTopLevelType by remember { mutableStateOf(TopLevelType.Phone) }
-        LaunchedEffect(selectedTopLevelType) {
-            topBarParams.title(selectedTopLevelType.displayName)
+        LaunchedEffect(viewModel.selectedTopLevelType) {
+            topBarParams.title(viewModel.selectedTopLevelType.displayName)
         }
 
         val validSettingsItems =
-            remember(rawSettingsItems, selectedTopLevelType, debugOptionsEnabled) {
+            remember(rawSettingsItems, viewModel.selectedTopLevelType, debugOptionsEnabled) {
                 rawSettingsItems.filter {
-                    selectedTopLevelType.show(it.topLevelType) &&
+                    viewModel.selectedTopLevelType.show(it.topLevelType) &&
                             (debugOptionsEnabled || !it.isDebugSetting)
                 }
             }
 
-        val searchQuery = searchState.query
+        val searchQuery = viewModel.searchState.query
 
         val filteredItems by remember(
             validSettingsItems,
-            searchState.query,
+            viewModel.searchState.query,
             coreUser,
         ) {
             derivedStateOf {
@@ -1316,7 +1309,7 @@ please disable the option.""".trimIndent(),
 
         Scaffold(
             floatingActionButton = {
-                if (selectedTopLevelType == TopLevelType.Notifications) {
+                if (viewModel.selectedTopLevelType == TopLevelType.Notifications) {
                     return@Scaffold
                 }
                 var showSectionsMenu by remember { mutableStateOf(false) }
@@ -1361,8 +1354,8 @@ please disable the option.""".trimIndent(),
                                         index = index,
                                         count = availableTopLevelTypes.size
                                     ),
-                                    selected = selectedTopLevelType == type,
-                                    onClick = { selectedTopLevelType = type },
+                                    selected = viewModel.selectedTopLevelType == type,
+                                    onClick = { viewModel.selectedTopLevelType = type },
                                     icon = { },
                                     label = {
                                         Icon(type.icon(platform), contentDescription = type.name)
@@ -1373,7 +1366,7 @@ please disable the option.""".trimIndent(),
                     }
                 }
 
-                if (selectedTopLevelType == TopLevelType.Notifications) {
+                if (viewModel.selectedTopLevelType == TopLevelType.Notifications) {
                     NotificationsScreenContent(topBarParams, navBarNav)
                     return@Column
                 }

@@ -38,6 +38,7 @@ import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
+import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.WeatherFetcher
 import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.MobileGeocoder
@@ -149,6 +150,7 @@ val watchModule = module {
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
     viewModelOf(::ContactsViewModel)
+    viewModelOf(::WatchSettingsScreenViewModel)
     viewModel { p ->
         AppStoreCollectionScreenViewModel(
             get(),

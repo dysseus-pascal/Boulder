@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Language
@@ -60,6 +62,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.style.TextAlign
@@ -85,7 +88,6 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
-import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButton
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -140,15 +142,16 @@ enum class TopLevelType(val displayName: String) {
 }
 
 enum class Section(val title: String /*val type: TopLevelType*/) {
-    App("App"),
+    About("About"),
     Support("Support"),
     Default("Settings"),
+    Apps("Apps"),
     Calendar("Calendar"),
     Health("Health"),
     Speech("Speech Recognition"),
-    Time("Time"),
-    Display("Display"),
-    Timeline("Timeline"),
+    Time("Time"), // watch only
+    Timeline("Timeline"), // watch only
+    Display("Display"), // watch only
     Weather("Weather"),
     Notifications("Notifications"),
     QuietTime("Quiet Time"),
@@ -392,7 +395,7 @@ please disable the option.""".trimIndent(),
                     title = "App Update Available",
                     description = "Please update the Pebble App!",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.App,
+                    section = Section.About,
                     action = {
                         val update = updateState as? AppUpdateState.UpdateAvailable
                         if (uiContext != null && update != null) {
@@ -415,7 +418,7 @@ please disable the option.""".trimIndent(),
                         "${missingPermissions.size} permissions missing!"
                     },
                     topLevelType = TopLevelType.Phone,
-                    section = Section.App,
+                    section = Section.About,
                     action = if (missingPermissions.isNotEmpty()) {
                         {
                             navBarNav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
@@ -426,7 +429,7 @@ please disable the option.""".trimIndent(),
                 SettingsItem(
                     title = "App Version",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.App,
+                    section = Section.About,
                     item = {
                         ListItem(
                             headlineContent = {
@@ -440,19 +443,21 @@ please disable the option.""".trimIndent(),
                 basicSettingsActionItem(
                     title = "What's new in the app",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.App,
+                    section = Section.About,
                     action = {
                         navBarNav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
+                    actionIcon = Icons.AutoMirrored.Default.Launch,
                     badge = if (showChangelogBadge) "1" else null
                 ),
                 basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.App,
+                    section = Section.About,
                     action = {
                         navBarNav.navigateTo(CommonRoutes.PebbleOsChangelogRoute)
                     },
+                    actionIcon = Icons.AutoMirrored.Default.Launch,
                 ),
                 basicSettingsActionItem(
                     title = "Getting Started & Troubleshooting",
@@ -461,6 +466,7 @@ please disable the option.""".trimIndent(),
                     action = {
                         navBarNav.navigateTo(CommonRoutes.TroubleshootingRoute)
                     },
+                    actionIcon = Icons.AutoMirrored.Default.Launch,
                 ),
                 basicSettingsActionItem(
                     title = "New Bug Report",
@@ -493,14 +499,14 @@ please disable the option.""".trimIndent(),
                 basicSettingsActionItem(
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Apps,
                     action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
                     show = { coreConfig.useNativeAppStore },
                 ),
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Display,
+                    section = Section.Default,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -515,7 +521,7 @@ please disable the option.""".trimIndent(),
                     title = "Restore System app positions",
                     description = "Restore system apps to their usual position at the top of the menu",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Display,
+                    section = Section.Apps,
                     action = {
                         libPebble.restoreSystemAppOrder()
                     },
@@ -951,7 +957,7 @@ please disable the option.""".trimIndent(),
                     title = "Use LAN developer connection",
                     description = "Allow connecting to developer connection over LAN, this is not secure and should only be used on trusted networks",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Connectivity,
                     checked = libPebbleConfig.watchConfig.lanDevConnection,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1055,7 +1061,7 @@ please disable the option.""".trimIndent(),
                     title = "Ignore other Pebble apps",
                     description = "Allow connection even when there are other Pebble apps installed on this phone. Warning: this will likely make the connection unreliable if you are using BLE! We don't recommend enabling this",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Connectivity,
                     checked = coreConfig.ignoreOtherPebbleApps,
                     onCheckChanged = {
                         coreConfigHolder.update(
@@ -1233,7 +1239,7 @@ please disable the option.""".trimIndent(),
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Timeline,
+                    section = Section.Apps,
                     checked = libPebbleConfig.watchConfig.emulateRemoteTimeline,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1426,6 +1432,7 @@ fun basicSettingsActionItem(
     section: Section,
     button: @Composable (() -> Unit)? = null,
     action: (() -> Unit)? = null,
+    actionIcon: ImageVector? = null,
     description: String? = null,
     keywords: String = "",
     show: () -> Boolean = { true },
@@ -1450,13 +1457,6 @@ fun basicSettingsActionItem(
                     Spacer(modifier = Modifier.width(5.dp))
                     if (button != null) {
                         button()
-                    } else if (action != null) {
-                        PebbleElevatedButton(
-                            onClick = { action() },
-                            text = title,
-                            primaryColor = false,
-                            modifier = Modifier.padding(bottom = 5.dp)
-                        )
                     } else {
                         Text(title)
                     }
@@ -1467,7 +1467,21 @@ fun basicSettingsActionItem(
                     Text(description, fontSize = 12.sp)
                 }
             },
+            trailingContent = {
+                if (action != null) {
+                    Icon(
+                        imageVector = actionIcon ?: Icons.AutoMirrored.Default.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            },
             shadowElevation = ELEVATION,
+            modifier = Modifier.run() {
+                if (action != null) {
+                    clickable { action() }
+                } else this
+            },
         )
     }
 )

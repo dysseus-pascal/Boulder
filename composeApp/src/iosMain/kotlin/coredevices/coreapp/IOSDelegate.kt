@@ -28,6 +28,8 @@ import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.watchModule
 import coredevices.util.DoneInitialOnboarding
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -132,6 +134,10 @@ object IOSDelegate : KoinComponent {
         }
         setupCrashlytics()
         initLogging()
+        val crashedPreviously = Firebase.crashlytics.didCrashOnPreviousExecution()
+        if (crashedPreviously) {
+            logger.e { "Previous app crash detected!" }
+        }
         BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
             identifier = REFRESH_TASK_IDENTIFIER,
             usingQueue = null,

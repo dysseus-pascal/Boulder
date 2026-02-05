@@ -217,6 +217,9 @@ fun pebbleScreenContext(
         appendLine("lastConnectedFirmwareVersion: ${lastConnectedWatch?.runningFwVersion}")
         appendLine("lastConnectedSerial: ${lastConnectedWatch?.serial}")
         appendLine("lastConnectedWatchType: ${lastConnectedWatch?.watchType}")
+        appendLine("activeWatchface: ${libPebble.activeWatchface.value?.let { 
+            "${it.properties.id} / ${it.properties.title}"
+        }}")
         appendLine("otherPebbleApps: ${libPebble.otherPebbleCompanionAppsInstalled().value}")
         appendLine("libPebbleConfig: ${libPebble.config.value}")
         appendLine("coreConfig: ${coreConfigFlow.value}")

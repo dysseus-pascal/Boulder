@@ -41,6 +41,7 @@ import coredevices.pebble.ui.WatchHomeViewModel
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.weather.YahooWeatherInterceptor
 import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.MobileGeocoder
 import io.ktor.client.HttpClient
@@ -107,6 +108,7 @@ val watchModule = module {
     single { InjectedPKJSHttpInterceptors(
         listOf(
             get<OpenWeather25Interceptor>(),
+            get<YahooWeatherInterceptor>(),
         )
     ) }
     factory { p ->
@@ -127,6 +129,7 @@ val watchModule = module {
     factoryOf(::NativeLockerAddUtil)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)
+    factoryOf(::YahooWeatherInterceptor)
     factoryOf(::PebbleTokenProvider) bind TokenProvider::class
     factoryOf(::NullTranscriptionProvider) bind TranscriptionProvider::class
     factory {

@@ -292,24 +292,24 @@ private val DayAfterTomorrowDayUuid = Uuid.parse("3233984e-2dc9-4469-8a9a-46f91d
 private val DayAfterTomorrowNightUuid = Uuid.parse("fd97c081-9970-436b-aa87-9c55232bce35")
 private const val TEMP_NO_VALUE = Short.MAX_VALUE
 
-object Iso8601InstantSerializer : KSerializer<Instant> {
-    override val descriptor = PrimitiveSerialDescriptor("Instant", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: Instant) {
-        encoder.encodeString(value.toString())
-    }
-
-    override fun deserialize(decoder: Decoder): Instant {
-        val string = decoder.decodeString()
-        // The API returns a non-standard ISO-8601 date string.
-        // The timezone offset is missing a colon.
-        // Examples: 2025-12-01T13:37:16+0000 and 2025-12-01T14:17:58-0800
-        // We need to insert the colon to make it parseable by Instant.
-        // i.e. 2025-12-01T13:37:16+00:00
-        val sanitized = string.substring(0, string.length - 2) + ":" + string.substring(string.length - 2)
-        return Instant.parse(sanitized)
-    }
-}
+//object Iso8601InstantSerializer : KSerializer<Instant> {
+//    override val descriptor = PrimitiveSerialDescriptor("Instant", PrimitiveKind.STRING)
+//
+//    override fun serialize(encoder: Encoder, value: Instant) {
+//        encoder.encodeString(value.toString())
+//    }
+//
+//    override fun deserialize(decoder: Decoder): Instant {
+//        val string = decoder.decodeString()
+//        // The API returns a non-standard ISO-8601 date string.
+//        // The timezone offset is missing a colon.
+//        // Examples: 2025-12-01T13:37:16+0000 and 2025-12-01T14:17:58-0800
+//        // We need to insert the colon to make it parseable by Instant.
+//        // i.e. 2025-12-01T13:37:16+00:00
+//        val sanitized = string.substring(0, string.length - 2) + ":" + string.substring(string.length - 2)
+//        return Instant.parse(sanitized)
+//    }
+//}
 
 fun Int.toWeatherType(): WeatherType = when (this) {
     in 0..4 -> WeatherType.HeavyRain
@@ -385,6 +385,7 @@ data class ConditionsObservation(
     val phrase32Char: String,
     @SerialName("icon_code")
     val iconCode: Int,
+    val obs_time: Long,
 )
 
 fun ConditionsObservation.tempsFor(units: WeatherUnit): ConditionTemps? = when (units) {
@@ -411,17 +412,33 @@ data class DailyForecastData(
 
 @Serializable
 data class DailyForecast(
-    @Serializable(with = Iso8601InstantSerializer::class)
-    val sunrise: Instant,
-    @Serializable(with = Iso8601InstantSerializer::class)
-    val sunset: Instant,
+//    @Serializable(with = Iso8601InstantSerializer::class)
+//    val sunrise: Instant,
+    @SerialName("sunrise")
+    val sunriseRaw: String,
+//    @Serializable(with = Iso8601InstantSerializer::class)
+//    val sunset: Instant,
+    @SerialName("sunset")
+    val sunsetRaw: String,
     val day: DailyDayNight? = null,
     val night: DailyDayNight,
     @SerialName("max_temp")
     val maxTemp: Int?,
     @SerialName("min_temp")
     val minTemp: Int,
+    val dow: String,
 )
+
+private fun String.asInstantFromIso8601(): Instant {
+    val sanitized = substring(0, length - 2) + ":" + substring(length - 2)
+    return Instant.parse(sanitized)
+}
+
+
+val DailyForecast.sunrise: Instant
+    get() = sunriseRaw.asInstantFromIso8601()
+val DailyForecast.sunset: Instant
+    get() = sunsetRaw.asInstantFromIso8601()
 
 @Serializable
 data class DailyDayNight(
@@ -431,4 +448,8 @@ data class DailyDayNight(
     val iconCode: Int,
     @SerialName("phrase_12char")
     val phrase12Char: String,
+    @SerialName("phrase_22char")
+    val phrase22Char: String,
+    @SerialName("phrase_32char")
+    val phrase32Char: String,
 )

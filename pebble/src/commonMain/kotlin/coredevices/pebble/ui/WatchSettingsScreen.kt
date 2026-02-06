@@ -1254,6 +1254,16 @@ please disable the option.""".trimIndent(),
                         )
                     },
                 ),
+                basicSettingsToggleItem(
+                    title = "Use Pebble Weather Service when apps are broken",
+                    description = "If old apps are using a broken weather API, attempt to use the Pebble Weather Service instead (will only work for some apps which use OpenWeather API)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    checked = coreConfig.interceptPKJSWeather,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(interceptPKJSWeather = it))
+                    },
+                ),
             ) + watchPrefs
         }
 

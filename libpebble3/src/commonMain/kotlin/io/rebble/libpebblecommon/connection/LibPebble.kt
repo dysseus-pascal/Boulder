@@ -34,6 +34,7 @@ import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppType
@@ -414,9 +415,10 @@ class LibPebble3(
             appContext: AppContext,
             tokenProvider: TokenProvider,
             proxyTokenProvider: StateFlow<String?>,
-            transcriptionProvider: TranscriptionProvider
+            transcriptionProvider: TranscriptionProvider,
+            injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors = InjectedPKJSHttpInterceptors(emptyList()),
         ): LibPebble {
-            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider)
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider, injectedPKJSHttpInterceptors)
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }

@@ -39,6 +39,7 @@ import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
+import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
 import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.MobileGeocoder
@@ -53,6 +54,7 @@ import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import kotlinx.coroutines.GlobalScope
@@ -81,7 +83,8 @@ val watchModule = module {
             get<GithubAccount>().loggedIn
                 .map { it?.response?.accessToken }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
-            get()
+            get(),
+            get(),
         )
     } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
 
@@ -101,6 +104,11 @@ val watchModule = module {
     singleOf(::FirestoreLocker)
     singleOf(::AppstoreCache)
     single { MobileGeocoder() } bind Geocoder::class
+    single { InjectedPKJSHttpInterceptors(
+        listOf(
+            get<OpenWeather25Interceptor>(),
+        )
+    ) }
     factory { p ->
         AppstoreService(get(), get(), p.get(), get(), get(), get(), get())
     }
@@ -118,6 +126,7 @@ val watchModule = module {
     factoryOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
     factoryOf(::AppstoreSourceInitializer)
+    factoryOf(::OpenWeather25Interceptor)
     factoryOf(::PebbleTokenProvider) bind TokenProvider::class
     factoryOf(::NullTranscriptionProvider) bind TranscriptionProvider::class
     factory {

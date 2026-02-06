@@ -48,13 +48,13 @@ class RemoteTimelineEmulator(
                 && uri.path?.toLowerCase(Locale.current)?.startsWith("/v1/user/pins") == true
     }
 
-    override suspend fun onIntercepted(url: String, method: String, body: String, appUuid: Uuid): InterceptResponse {
+    override suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
             logger.w { "Shouldn't have received onIntercepted if we aren't configured to intercept?" }
             return ERROR
         }
         val uri = Uri.parseOrNull(url)
-        if (uri?.authority == null) {
+        if (uri?.authority == null || body == null) {
             return ERROR
         }
 //        logger.v { "onIntercepted: uri=$uri method=$method body=$body" }

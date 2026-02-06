@@ -103,6 +103,7 @@ import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
+import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
@@ -311,7 +312,8 @@ fun initKoin(
     appContext: AppContext,
     tokenProvider: TokenProvider,
     proxyTokenProvider: StateFlow<String?>,
-    transcriptionProvider: TranscriptionProvider
+    transcriptionProvider: TranscriptionProvider,
+    injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -331,6 +333,7 @@ fun initKoin(
                 single { webServices }
                 single { tokenProvider }
                 single { transcriptionProvider }
+                single { injectedPKJSHttpInterceptors }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)

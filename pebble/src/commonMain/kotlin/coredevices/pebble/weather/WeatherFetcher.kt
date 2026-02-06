@@ -377,6 +377,10 @@ data class ConditionsObservation(
     val imperial: ConditionTemps? = null,
     @SerialName("uk_hybrid")
     val ukHybrid: ConditionTemps? = null,
+    @SerialName("phrase_12char")
+    val phrase12Char: String,
+    @SerialName("phrase_22char")
+    val phrase22Char: String,
     @SerialName("phrase_32char")
     val phrase32Char: String,
     @SerialName("icon_code")

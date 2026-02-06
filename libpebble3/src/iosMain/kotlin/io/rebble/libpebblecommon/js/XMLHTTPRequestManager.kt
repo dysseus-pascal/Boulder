@@ -142,9 +142,13 @@ class XMLHTTPRequestManager(
                 }
                 if (httpInterceptorManager.shouldIntercept(url!!)) {
                     val appUuid = Uuid.parse(appInfo.uuid)
-                    val result = httpInterceptorManager.onIntercepted(url!!, method!!.value, data!!.decodeToString(), appUuid)
+                    val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)
                     scope.launch {
-                        eval("$jsInstance._onResponseComplete({}, 200, \"OK\", \"$result\")")
+                        val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
+                        val status = Json.encodeToString(response.status)
+                        val statusText = Json.encodeToString(if (response.status == 200) "OK" else "Error")
+                        val body = Json.encodeToString(response.result)
+                        eval("$jsInstance._onResponseComplete($responseHeaders, $status, $statusText, $body)")
                         changeReadyState(DONE)
                         dispatchEvent(XHREvent.Load)
                         dispatchEvent(XHREvent.LoadEnd)

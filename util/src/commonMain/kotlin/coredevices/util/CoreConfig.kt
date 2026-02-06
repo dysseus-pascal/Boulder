@@ -84,6 +84,7 @@ data class CoreConfig(
     val weatherUnits: WeatherUnit = WeatherUnit.Metric,
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
+    val interceptPKJSWeather: Boolean = true,
 )
 
 @Serializable

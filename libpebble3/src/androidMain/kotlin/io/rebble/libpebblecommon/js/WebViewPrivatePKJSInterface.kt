@@ -107,7 +107,7 @@ class WebViewPrivatePKJSInterface(
     }
 
     @JavascriptInterface
-    override fun onIntercepted(callbackId: String, url: String, method: String, body: String) {
+    override fun onIntercepted(callbackId: String, url: String, method: String, body: String?) {
         return super.onIntercepted(callbackId, url, method, body)
     }
 

@@ -84,7 +84,7 @@ abstract class PrivatePKJSInterface(
         return httpInterceptorManager.shouldIntercept(url)
     }
 
-    open fun onIntercepted(callbackId: String, url: String, method: String, body: String) {
+    open fun onIntercepted(callbackId: String, url: String, method: String, body: String?) {
         val uuid = Uuid.parse(jsRunner.appInfo.uuid)
         scope.launch {
             val result = httpInterceptorManager.onIntercepted(url, method, body, uuid)

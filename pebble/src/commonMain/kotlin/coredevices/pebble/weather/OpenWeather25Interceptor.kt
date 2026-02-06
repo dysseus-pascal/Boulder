@@ -76,7 +76,7 @@ class OpenWeather25Interceptor(
     }
 
     private fun String.asOpenWeather25Request(): OpenWeather25Request? {
-        val uri = Uri.parseOrNull(this)
+        val uri = Uri.parseOrNull(this.lowercase())
         if (uri?.authority == null) {
             return null
         }

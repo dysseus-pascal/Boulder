@@ -13,11 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material3.AlertDialog
@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -480,7 +481,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                     } else {
                         null
-                    }
+                    },
+                    onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                 )
                 entry.category?.let { category ->
                     PropertyRow(name = "CATEGORY", value = category)
@@ -513,7 +515,13 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 }
 
 @Composable
-private fun PropertyRow(name: String, value: String, onClick: (() -> Unit)? = null, multiRow: Boolean = false) {
+private fun PropertyRow(
+    name: String,
+    value: String,
+    onClick: (() -> Unit)? = null,
+    onClickIcon: ImageVector = Icons.AutoMirrored.Default.Launch,
+    multiRow: Boolean = false,
+) {
     Row(modifier = Modifier.padding(5.dp).let{
         if (onClick != null) {
             it.then(Modifier.clickable(onClick = onClick))
@@ -532,7 +540,7 @@ private fun PropertyRow(name: String, value: String, onClick: (() -> Unit)? = nu
         }
         if (onClick != null) {
             Icon(
-                imageVector = Icons.AutoMirrored.Default.Launch,
+                imageVector = onClickIcon,
                 contentDescription = null,
                 modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterVertically)
             )

@@ -88,7 +88,7 @@ class OpenWeather25Interceptor(
         }
         val lat = uri.getQueryParameter("lat")?.toDoubleOrNull() ?: return null
         val lon = uri.getQueryParameter("lon")?.toDoubleOrNull() ?: return null
-        val appId = uri.getQueryParameter("appid") ?: return null
+        val appId = uri.getQueryParameter("appid") ?: "invalid"
         val mode = uri.getQueryParameter("mode")
         if (mode != null && mode != "json") {
             return null
@@ -130,7 +130,7 @@ class OpenWeather25Interceptor(
         }
         val location = geocoder.reverse(request.lat, request.lon).getOrNull()?.firstOrNull()
         val placeName = location?.usefulName() ?: "Unknown location"
-        val country = location?.country ?: "Unknown"
+        val country = location?.isoCountryCode ?: ""
         val temps = weather.conditions.data.observation.tempsFor(units)
         val firstDay = weather.fcstdaily7.data.forecasts.firstOrNull()
         val weatherType = weather.conditions.data.observation.iconCode.toWeatherType()
@@ -155,10 +155,10 @@ class OpenWeather25Interceptor(
             ),
             base = "stations",
             main = OpenWeather25Response.Main(
-                temp = temps.temp.toDouble(),
-                feels_like = temps.feelsLike.toDouble(),
-                temp_min = temps.min24Hour.toDouble(),
-                temp_max = temps.max24Hour.toDouble(),
+                temp = temps.temp.toDouble().maybeKelvin(request.isKelvin),
+                feels_like = temps.feelsLike.toDouble().maybeKelvin(request.isKelvin),
+                temp_min = temps.min24Hour.toDouble().maybeKelvin(request.isKelvin),
+                temp_max = temps.max24Hour.toDouble().maybeKelvin(request.isKelvin),
                 pressure = 0, // TODO
                 humidity = 0, // TODO
                 sea_level = 0, // TODO
@@ -194,6 +194,12 @@ class OpenWeather25Interceptor(
     }
 }
 
+private fun Double.maybeKelvin(kelvin: Boolean) = if (kelvin) {
+    this + 273.15
+} else {
+    this
+}
+
 // https://openweathermap.org/weather-conditions?collection=other
 private fun WeatherType.toOpenWeatherCode(): Int = when (this) {
     WeatherType.PartlyCloudy -> 802
@@ -227,7 +233,9 @@ private data class OpenWeather25Request(
     val appId: String,
     val units: String? = null,
     val lang: String? = null,
-)
+) {
+    val isKelvin: Boolean = units == null || units == "standard"
+}
 
 private fun String?.asUnits(): WeatherUnit = when (this) {
     "imperial" -> WeatherUnit.Imperial
@@ -235,7 +243,7 @@ private fun String?.asUnits(): WeatherUnit = when (this) {
 }
 
 @Serializable
-data class OpenWeather25Response(
+private data class OpenWeather25Response(
     val coord: Coord,
     val weather: List<Weather>,
     val base: String,

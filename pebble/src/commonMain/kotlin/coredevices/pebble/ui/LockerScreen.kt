@@ -582,7 +582,8 @@ fun LockerScreen(
                                                         source,
                                                         home.categories
                                                     )
-                                                }.distinctBy { it.uuid }
+                                                }.filter { it.type == viewModel.type }
+                                                    .distinctBy { it.uuid }
                                             }
                                         Carousel(
                                             collection.name,

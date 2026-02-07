@@ -144,6 +144,7 @@ fun AppStoreCollectionScreen(
                         navBarNav,
                         width = 120.dp,
                         topBarParams = topBarParams,
+                        highlightInLocker = true,
                     )
                 }
             }

@@ -155,6 +155,10 @@ class FakeLibPebble : LibPebble {
         return flow { emit(emptyList()) }
     }
 
+    override fun getAllLockerUuids(): Flow<List<Uuid>> {
+        return flow { emit(emptyList()) }
+    }
+
     val locker = MutableStateFlow(fakeLockerEntries)
 
     override fun getLocker(

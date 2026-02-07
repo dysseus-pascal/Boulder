@@ -134,6 +134,7 @@ fun MyCollectionScreen(
                                 navBarNav,
                                 width = 120.dp,
                                 topBarParams = topBarParams,
+                                highlightInLocker = false,
                             )
                         }
                     }

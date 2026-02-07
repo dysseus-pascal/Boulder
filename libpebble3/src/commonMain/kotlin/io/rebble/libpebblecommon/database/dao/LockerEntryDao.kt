@@ -24,6 +24,12 @@ interface LockerEntryRealDao : LockerEntryDao {
     @Query("""
         SELECT id FROM LockerEntryEntity
         WHERE deleted = 0
+    """)
+    fun getAllUuidsFlow(): Flow<List<Uuid>>
+
+    @Query("""
+        SELECT id FROM LockerEntryEntity
+        WHERE deleted = 0
         AND type = :type
         ORDER BY orderIndex ASC
         LIMIT :limit

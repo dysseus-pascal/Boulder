@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tune
@@ -96,7 +97,6 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.metadata.pbw.appinfo.Watchapp
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -375,6 +375,7 @@ fun LockerScreen(
                             fun Carousel(
                                 title: String,
                                 items: List<CommonApp>,
+                                highlightInLocker: Boolean,
                                 onClick: (() -> Unit)? = null
                             ) {
                                 AppCarousel(
@@ -382,6 +383,7 @@ fun LockerScreen(
                                     items = items,
                                     navBarNav = navBarNav,
                                     topBarParams = topBarParams,
+                                    highlightInLocker = highlightInLocker,
                                     onClick = onClick,
                                 )
                             }
@@ -438,12 +440,20 @@ fun LockerScreen(
                                     }
                                 }
                             }
-                            item(contentType = "app_carousel", key = "collection_my-apps") { Carousel(type.myCollectionName(), myApps, onClick = {
-                                navBarNav.navigateTo(PebbleNavBarRoutes.MyCollectionRoute(appType = type.code))
-                            }) }
+                            item(contentType = "app_carousel", key = "collection_my-apps") {
+                                Carousel(
+                                    type.myCollectionName(),
+                                    myApps,
+                                    highlightInLocker = false,
+                                    onClick = {
+                                        navBarNav.navigateTo(
+                                            PebbleNavBarRoutes.MyCollectionRoute(
+                                                appType = type.code
+                                            )
+                                        )
+                                    })
+                            }
 
-                            // TODO categories
-//                            logger.v { "home.collections (has home = ${home != null}): ${home?.collections}" }
                             storeHome.forEach { (source, home) ->
                                 home?.let {
                                     item(contentType = "source_title", key = "source_${source.id}") {
@@ -508,16 +518,20 @@ fun LockerScreen(
                                                     }?.asCommonApp(watchType, platform, source, home.categories)
                                                 }.distinctBy { it.uuid }
                                             }
-                                        Carousel(collection.name, collectionApps, onClick = {
-                                            navBarNav.navigateTo(
-                                                PebbleNavBarRoutes.AppStoreCollectionRoute(
-                                                    sourceId = source.id,
-                                                    path = "collection/${collection.slug}",
-                                                    title = collection.name,
-                                                    appType = type.code,
+                                        Carousel(
+                                            collection.name,
+                                            collectionApps,
+                                            highlightInLocker = true,
+                                            onClick = {
+                                                navBarNav.navigateTo(
+                                                    PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                                        sourceId = source.id,
+                                                        path = "collection/${collection.slug}",
+                                                        title = collection.name,
+                                                        appType = type.code,
+                                                    )
                                                 )
-                                            )
-                                        })
+                                            })
                                     }
                                 }
                             }
@@ -743,6 +757,7 @@ fun AppCarousel(
     items: List<CommonApp>,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
+    highlightInLocker: Boolean,
     onClick: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) {
@@ -778,6 +793,7 @@ fun AppCarousel(
                     navBarNav,
                     width = 100.dp,
                     topBarParams = topBarParams,
+                    highlightInLocker = highlightInLocker,
                 )
             }
         }
@@ -886,6 +902,7 @@ fun NativeWatchfaceCard(
     navBarNav: NavBarNav,
     width: Dp,
     topBarParams: TopBarParams,
+    highlightInLocker: Boolean,
 ) {
     Card(
         modifier = Modifier.padding(3.dp)
@@ -923,13 +940,24 @@ fun NativeWatchfaceCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                if (highlightInLocker) {
+                    val inMyCollection = entry.inMyCollection()
+                    if (inMyCollection) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.PlaylistAddCheck,
+                            contentDescription = "In My Collection",
+                            modifier = Modifier.size(19.dp)
+                                .padding(start = 5.dp, top = 1.dp, end = 0.dp, bottom = 5.dp),
+                        )
+                    }
+                }
                 Text(
                     entry.developerName,
                     color = Color.Gray,
                     fontSize = 10.sp,
                     lineHeight = 10.sp,
                     maxLines = 1,
-                    modifier = Modifier.padding(start = 5.dp, end = 5.dp, bottom = 7.dp)
+                    modifier = Modifier.padding(start = 3.dp, end = 5.dp, bottom = 7.dp)
                         .weight(1f),
                 )
                 entry.CompatibilityWarning(topBarParams)

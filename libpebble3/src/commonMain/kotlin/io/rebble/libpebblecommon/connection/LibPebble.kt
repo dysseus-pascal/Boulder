@@ -215,6 +215,7 @@ interface LockerApi {
      */
     suspend fun sideloadApp(pbwPath: Path): Boolean
     fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
+    fun getAllLockerUuids(): Flow<List<Uuid>>
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
     fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
     suspend fun setAppOrder(id: Uuid, order: Int)

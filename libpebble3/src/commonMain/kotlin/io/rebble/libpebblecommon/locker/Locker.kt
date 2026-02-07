@@ -123,6 +123,10 @@ class Locker(
         }
     }
 
+    override fun getAllLockerUuids(): Flow<List<Uuid>> {
+        return lockerEntryDao.getAllUuidsFlow()
+    }
+
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }

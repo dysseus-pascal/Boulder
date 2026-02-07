@@ -151,6 +151,27 @@ fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
 }
 
 @Composable
+fun allCollectionUuids(): List<Uuid> {
+    val libPebble = rememberLibPebble()
+    val allCollectionUuids by libPebble.getAllLockerUuids().collectAsState(emptyList())
+    return allCollectionUuids
+}
+
+@Composable
+fun CommonApp.inMyCollection(): Boolean {
+    val collectionUuids  = allCollectionUuids()
+    return remember(this, collectionUuids) {
+        when (commonAppType) {
+            is CommonAppType.Locker -> true
+            is CommonAppType.System -> true
+            is CommonAppType.Store -> {
+                uuid in collectionUuids
+            }
+        }
+    }
+}
+
+@Composable
 private fun LockerWrapper.load(watchType: WatchType): CommonApp? {
     val coreConfigFlow: CoreConfigFlow = koinInject()
     val coreConfig by coreConfigFlow.flow.collectAsState()

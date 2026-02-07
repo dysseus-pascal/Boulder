@@ -504,9 +504,7 @@ fun LockerScreen(
                                             ) {
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
-                                                        app.id == appId && !lockerEntries.any {
-                                                            it.uuid == app.uuid?.let { Uuid.parse(it) }
-                                                        }
+                                                        app.id == appId
                                                     }?.asCommonApp(watchType, platform, source, home.categories)
                                                 }.distinctBy { it.uuid }
                                             }

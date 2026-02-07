@@ -441,9 +441,12 @@ fun LockerScreen(
                                 }
                             }
                             item(contentType = "app_carousel", key = "collection_my-apps") {
+                                val myAppsToDisplay = remember(myApps) {
+                                    myApps.take(20)
+                                }
                                 Carousel(
                                     type.myCollectionName(),
-                                    myApps,
+                                    myAppsToDisplay,
                                     highlightInLocker = false,
                                     onClick = {
                                         navBarNav.navigateTo(

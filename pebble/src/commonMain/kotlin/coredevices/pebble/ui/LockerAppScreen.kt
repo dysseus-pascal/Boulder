@@ -2,14 +2,20 @@ package coredevices.pebble.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -154,13 +160,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
-        val watchesFiltered = remember {
-            libPebble.watches.map {
-                it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
-                    .firstOrNull()
-            }
-        }
-        val lastConnectedWatch by watchesFiltered.collectAsState(null)
+        val lastConnectedWatch = lastConnectedWatch()
         val runningApp by (lastConnectedWatch as? ConnectedPebbleDevice)?.runningApp?.collectAsState(
             null
         ) ?: mutableStateOf(null)
@@ -180,7 +180,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
 
-        LaunchedEffect(storeId, storeSource) {
+        LaunchedEffect(storeId, storeSource, watchType) {
             if (storeId != null && storeSource != null) {
                 viewModel.loadAppFromStore(storeId, watchType, storeSource)
             }
@@ -458,6 +458,35 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             primaryColor = false,
                             modifier = Modifier.padding(5.dp),
                         )
+                    }
+                }
+                val screenshotsToDisplay = remember(entry) {
+                    when (entry.commonAppType) {
+                        is CommonAppType.Store -> {
+                            when (entry.type) {
+                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
+                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
+                            }
+                        }
+                        else -> emptyList()
+                    }
+                }
+                if (screenshotsToDisplay.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                    ) {
+                        items(screenshotsToDisplay, key = { it } ) { screenshotUrl ->
+                            AsyncImage(
+                                model = screenshotUrl,
+                                contentDescription = "Screenshot",
+                                modifier = Modifier.size(100.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(5.dp))

@@ -331,6 +331,7 @@ sealed class CommonAppType {
         val storeApp: StoreApplication?,
         val storeSource: AppstoreSource,
         val headerImageUrl: String?,
+        val allScreenshotUrls: List<String>,
     ) : CommonAppType()
 
     data class System(
@@ -413,7 +414,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         commonAppType = CommonAppType.Store(
             storeSource = source,
             storeApp = this,
-            headerImageUrl = headerImages?.firstOrNull()?.values?.firstOrNull(),
+            headerImageUrl = headerImage,
+            allScreenshotUrls = screenshotImages.mapNotNull { it.values.firstOrNull() },
         ),
         type = appType,
         category = category,
@@ -455,7 +457,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList()),
         type = appType,
         category = category,
         version = null,

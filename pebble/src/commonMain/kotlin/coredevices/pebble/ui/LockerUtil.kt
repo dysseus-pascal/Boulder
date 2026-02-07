@@ -37,6 +37,7 @@ import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -48,6 +49,7 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
@@ -103,7 +105,13 @@ fun appstoreCategories(appType: AppType?, sources: List<AppstoreSource>?): Map<A
 }
 
 @Composable
-fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType): List<CommonApp>? {
+fun loadLockerEntries(
+    type: AppType,
+    searchQuery: String,
+    watchType: WatchType,
+    filterCompatible: Boolean,
+    filterScaled: Boolean,
+): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
         type,
@@ -124,10 +132,17 @@ fun loadLockerEntries(type: AppType, searchQuery: String, watchType: WatchType):
     if (entries == null || appstoreSources == null || categories == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
-        entries?.map {
+    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, filterCompatible, filterScaled) {
+        entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
-            it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+            val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+            if (filterCompatible && !app.isCompatible) {
+                return@mapNotNull null
+            }
+            if (!filterScaled && !app.isNativelyCompatible) {
+                return@mapNotNull null
+            }
+            app
         }
     }
 }
@@ -246,10 +261,22 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
                 Icons.Filled.AspectRatio,
                 contentDescription = "Not natively compatible, but can be scaled",
                 modifier = Modifier.fillMaxSize(),
-                tint = coreOrange,
             )
         }
     }
+}
+
+@Composable
+fun lastConnectedWatch(): KnownPebbleDevice? {
+    val libPebble = rememberLibPebble()
+    val watchesFiltered = remember {
+        libPebble.watches.map {
+            it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
+                .firstOrNull()
+        }
+    }
+    val lastConnectedWatch by watchesFiltered.collectAsState(null)
+    return lastConnectedWatch
 }
 
 private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(appType: AppType, cache: AppstoreCache): List<StoreCategory> {
@@ -344,10 +371,8 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
         description = compatiblePlatform?.description,
         isNativelyCompatible = when (this) {
             is LockerWrapper.NormalApp -> {
-                val nativelyCompatible = when (watchType) {
-                    // Emery is the only platform where "compatible" apps can be used but are
-                    // "suboptimal" (need scaling). Enable flagging that.
-                    WatchType.EMERY, WatchType.GABBRO -> properties.platforms.any { it.watchType == watchType }
+                val nativelyCompatible = when {
+                    watchType != null && watchType.performsScaling() -> properties.platforms.any { it.watchType == watchType }
                     else -> true
                 }
                 nativelyCompatible
@@ -361,6 +386,11 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
     )
+}
+
+fun WatchType.performsScaling(): Boolean = when (this) {
+    WatchType.EMERY, WatchType.GABBRO -> true
+    else -> false
 }
 
 fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>): CommonApp? {

@@ -18,8 +18,8 @@ import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
-import coredevices.pebble.services.Github
 import coredevices.pebble.services.CactusTranscription
+import coredevices.pebble.services.Github
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
 import coredevices.pebble.services.NullTranscriptionProvider
@@ -33,6 +33,7 @@ import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.ModelManagementScreenViewModel
+import coredevices.pebble.ui.MyCollectionViewModel
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
@@ -168,6 +169,7 @@ val watchModule = module {
     viewModelOf(::AppstoreSettingsScreenViewModel)
     viewModelOf(::ContactsViewModel)
     viewModelOf(::WatchSettingsScreenViewModel)
+    viewModelOf(::MyCollectionViewModel)
     viewModel { p ->
         AppStoreCollectionScreenViewModel(
             get(),

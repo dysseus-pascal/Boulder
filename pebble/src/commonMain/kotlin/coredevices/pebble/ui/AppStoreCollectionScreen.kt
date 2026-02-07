@@ -1,14 +1,26 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,21 +34,21 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
-import androidx.paging.compose.LazyPagingItems
+import androidx.paging.cachedIn
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import androidx.paging.filter
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.services.AppstoreService
-import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.component.KoinComponent
@@ -51,24 +63,18 @@ class AppStoreCollectionScreenViewModel(
     val path: String,
     val appType: AppType?,
 ): ViewModel(), KoinComponent {
+    val filterScaled = MutableStateFlow(true)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
-    val watchType = viewModelScope.async {
-        libPebble.watches.map {
-            it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
-                .firstOrNull()
-        }.map { it?.watchType?.watchType}.firstOrNull() ?: WatchType.DIORITE
-    }
     val appstoreService = viewModelScope.async {
         val source = appstoreSourceDao.getSourceById(appstoreSourceId)!!
         get<AppstoreService> { parametersOf(source) }
     }
 
-    fun load() {
+    fun load(watchType: WatchType) {
         viewModelScope.launch {
             val service = appstoreService.await()
-            val watchType = watchType.await()
-            loadedApps = Pager(
+            val pagerFlow = Pager(
                 config = PagingConfig(pageSize = 20, enablePlaceholders = false),
                 pagingSourceFactory = {
                     service.fetchAppStoreCollection(
@@ -77,7 +83,16 @@ class AppStoreCollectionScreenViewModel(
                         watchType,
                     )
                 },
-            ).flow
+            ).flow.cachedIn(viewModelScope)
+            loadedApps = combine(pagerFlow, filterScaled) { pagingData, scaled ->
+                pagingData.filter { app ->
+                    if (!scaled && !app.isNativelyCompatible) {
+                        false
+                    } else {
+                        true
+                    }
+                }
+            }
         }
     }
 }
@@ -98,54 +113,64 @@ fun AppStoreCollectionScreen(
             appType
         )
     }
-    LaunchedEffect(Unit) {
-        viewModel.load()
+    val lastConnectedWatch = lastConnectedWatch()
+    val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
+    LaunchedEffect(watchType) {
+        viewModel.load(watchType)
     }
-    val apps = viewModel.loadedApps
-    AppStoreCollectionScreen(
-        navBarNav = navBarNav,
-        topBarParams = topBarParams,
-        collectionTitle = title,
-        apps = apps?.collectAsLazyPagingItems(),
-    )
-}
-
-@Composable
-fun AppStoreCollectionScreen(
-    navBarNav: NavBarNav,
-    topBarParams: TopBarParams,
-    collectionTitle: String,
-    apps: LazyPagingItems<CommonApp>?,
-) {
-    LaunchedEffect(collectionTitle) {
-        topBarParams.title(collectionTitle)
+    val apps = viewModel.loadedApps?.collectAsLazyPagingItems()
+    LaunchedEffect(title) {
+        topBarParams.title(title)
         topBarParams.actions {}
         topBarParams.searchAvailable(null)
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
-        if (apps == null || apps.itemCount == 0) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center)
-            )
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.FixedSize(120.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                items(
-                    count = apps.itemCount,
-                    key = apps.itemKey{ it.storeId ?: it.uuid }
-                ) { index ->
-                    val entry = apps[index]!!
-                    NativeWatchfaceCard(
-                        entry,
-                        navBarNav,
-                        width = 120.dp,
-                        topBarParams = topBarParams,
-                        highlightInLocker = true,
+        Column {
+            Row(modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp).horizontalScroll(rememberScrollState())) {
+                if (watchType.performsScaling()) {
+                    FilterChip(
+                        selected = viewModel.filterScaled.value,
+                        onClick = { viewModel.filterScaled.value = !viewModel.filterScaled.value },
+                        label = { Text("Scaled") },
+                        modifier = Modifier.padding(4.dp),
+                        leadingIcon = if (viewModel.filterScaled.value) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Done,
+                                    contentDescription = "Filter compatible",
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
+                }
+            }
+            if (apps == null || apps.itemCount == 0) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.FixedSize(120.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    items(
+                        count = apps.itemCount,
+                        key = apps.itemKey { it.storeId ?: it.uuid }
+                    ) { index ->
+                        val entry = apps[index]!!
+                        NativeWatchfaceCard(
+                            entry,
+                            navBarNav,
+                            width = 120.dp,
+                            topBarParams = topBarParams,
+                            highlightInLocker = true,
+                        )
+                    }
                 }
             }
         }

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Notes
-import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Close
@@ -79,7 +78,6 @@ import co.touchlab.kermit.Logger
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
-import coreapp.pebble.generated.resources.faces
 import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
 import coreapp.pebble.generated.resources.settings
@@ -158,7 +156,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         // Create NavControllers for each tab
         val watchesNavController = rememberNavController()
         val watchfacesNavController = rememberNavController()
-        val watchappsNavController = rememberNavController()
         val notificationsNavController = rememberNavController()
         val indexNavController = rememberNavController()
         val settingsNavController = rememberNavController()
@@ -166,7 +163,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val navControllers = remember(
             watchesNavController,
             watchfacesNavController,
-            watchappsNavController,
             notificationsNavController,
             indexNavController,
             settingsNavController
@@ -174,7 +170,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             mapOf(
                 WatchHomeNavTab.Watches to watchesNavController,
                 WatchHomeNavTab.WatchFaces to watchfacesNavController,
-                WatchHomeNavTab.WatchApps to watchappsNavController,
                 WatchHomeNavTab.Notifications to notificationsNavController,
                 WatchHomeNavTab.Index to indexNavController,
                 WatchHomeNavTab.Settings to settingsNavController,
@@ -240,8 +235,8 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     it.consumed = true
                     logger.v { "navigateToPebbleDeepLink: $it" }
                     val tab = when (it.route) {
-                        is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchApps
-                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchApps
+                        is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchFaces
+                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchFaces
                         else -> null
                     }
                     if (tab != null) {
@@ -486,18 +481,17 @@ enum class WatchHomeNavTab(
     val route: NavBarRoute,
     val badge: (@Composable () -> Int)? = null,
 ) {
-    WatchFaces(Res.string.faces, Icons.Filled.BrowseGallery, PebbleNavBarRoutes.WatchfacesRoute),
-    WatchApps(Res.string.apps, Icons.Filled.AutoAwesomeMotion, PebbleNavBarRoutes.WatchappsRoute),
+    WatchFaces(Res.string.apps, Icons.Filled.BrowseGallery, PebbleNavBarRoutes.WatchfacesRoute),
+    Index(
+        Res.string.index,
+        Icons.AutoMirrored.Outlined.Notes,
+        PebbleNavBarRoutes.IndexRoute
+    ),
     Watches(Res.string.devices, Icons.Outlined.Watch, PebbleNavBarRoutes.WatchesRoute),
     Notifications(
         Res.string.notifications,
         Icons.Outlined.Notifications,
         PebbleNavBarRoutes.NotificationsRoute
-    ),
-    Index(
-        Res.string.index,
-        Icons.AutoMirrored.Outlined.Notes,
-        PebbleNavBarRoutes.IndexRoute
     ),
     Settings(
         Res.string.settings,
@@ -508,7 +502,7 @@ enum class WatchHomeNavTab(
     companion object {
         fun navBarEntries(indexEnabled: Boolean): List<WatchHomeNavTab> {
             return if (indexEnabled) {
-                entries.filter { it != Notifications }
+                entries
             } else {
                 entries.filter { it != Index }
             }

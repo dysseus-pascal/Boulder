@@ -6,12 +6,16 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -19,6 +23,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,14 +44,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
 import coredevices.pebble.rememberLibPebble
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -48,12 +60,18 @@ import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("MyCollectionScreen")
 
+class MyCollectionViewModel: ViewModel() {
+    var filterCompatible by mutableStateOf(true)
+    var filterScaled by mutableStateOf(true)
+}
+
 @Composable
 fun MyCollectionScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     appType: AppType,
 ) {
+    val viewModel = koinViewModel<MyCollectionViewModel>()
     val libPebble = rememberLibPebble()
     val watchesFiltered = remember {
         libPebble.watches.map {
@@ -62,9 +80,6 @@ fun MyCollectionScreen(
         }
     }
     val lastConnectedWatch by watchesFiltered.collectAsState(null)
-    val runningApp by (lastConnectedWatch as? ConnectedPebbleDevice)?.runningApp?.collectAsState(
-        null
-    ) ?: mutableStateOf(null)
     val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
     val searchState = rememberSearchState()
     LaunchedEffect(Unit) {
@@ -72,11 +87,16 @@ fun MyCollectionScreen(
         topBarParams.title(appType.myCollectionName())
         topBarParams.actions {}
     }
-    val lockerEntries = loadLockerEntries(appType, searchState.query, watchType)
+    val lockerEntries = loadLockerEntries(
+        type = appType,
+        searchQuery = searchState.query,
+        watchType = watchType,
+        filterCompatible = viewModel.filterCompatible,
+        filterScaled = viewModel.filterScaled,
+    )
     if (lockerEntries == null) {
         return
     }
-    val syncLimit = remember { libPebble.config.value.watchConfig.lockerSyncLimit }
 
     // Mutable copy which we will mutate during drag operations
     var mutableApps by remember(lockerEntries) { mutableStateOf(lockerEntries) }
@@ -112,44 +132,84 @@ fun MyCollectionScreen(
             libPebble.setAppOrder(uuid, newPosition)
         }
     }
-    when (appType) {
-        AppType.Watchface -> {
-            LazyVerticalGrid(
-                state = lazyGridState,
-                columns = GridCells.FixedSize(120.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                items(mutableApps, key = { it.uuid }) { entry ->
-                    ReorderableItem(reorderableLazyGridState, key = entry.uuid) { isDragging ->
-                        Box(
-                            modifier = Modifier.longPressDraggableHandle(
-                                onDragStarted = { onDragStarted() },
-                                onDragStopped = { onDragStopped(entry.uuid) },
-                            ).shake(isDragging)
-                        ) {
-                            NativeWatchfaceCard(
-                                entry,
-                                navBarNav,
-                                width = 120.dp,
-                                topBarParams = topBarParams,
-                                highlightInLocker = false,
+
+    Column {
+        Row(modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp).horizontalScroll(rememberScrollState())) {
+            FilterChip(
+                selected = viewModel.filterCompatible,
+                onClick = { viewModel.filterCompatible = !viewModel.filterCompatible },
+                label = { Text("Compatible") },
+                modifier = Modifier.padding(4.dp),
+                leadingIcon = if (viewModel.filterCompatible) {
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Done,
+                            contentDescription = "Filter compatible",
+                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+            if (watchType.performsScaling()) {
+                FilterChip(
+                    selected = viewModel.filterScaled,
+                    onClick = { viewModel.filterScaled = !viewModel.filterScaled },
+                    label = { Text("Scaled") },
+                    modifier = Modifier.padding(4.dp),
+                    leadingIcon = if (viewModel.filterScaled) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Done,
+                                contentDescription = "Filter compatible",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+        when (appType) {
+            AppType.Watchface -> {
+                LazyVerticalGrid(
+                    state = lazyGridState,
+                    columns = GridCells.FixedSize(120.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    items(mutableApps, key = { it.uuid }) { entry ->
+                        ReorderableItem(reorderableLazyGridState, key = entry.uuid) { isDragging ->
+                            Box(
+                                modifier = Modifier.longPressDraggableHandle(
+                                    onDragStarted = { onDragStarted() },
+                                    onDragStopped = { onDragStopped(entry.uuid) },
+                                ).shake(isDragging)
+                            ) {
+                                NativeWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    width = 120.dp,
+                                    topBarParams = topBarParams,
+                                    highlightInLocker = false,
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        AppType.Watchapp -> {
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(4.dp),
-            ) {
-                items(mutableApps, key = { it.uuid }) { entry ->
-                    ReorderableItem(reorderableLazyListState, key = entry.uuid) { isDragging ->
+            AppType.Watchapp -> {
+                LazyColumn(
+                    state = lazyListState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(4.dp),
+                ) {
+                    items(mutableApps, key = { it.uuid }) { entry ->
+                        ReorderableItem(reorderableLazyListState, key = entry.uuid) { isDragging ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.longPressDraggableHandle(
@@ -173,6 +233,7 @@ fun MyCollectionScreen(
                                 )
                             }
                         }
+                    }
                 }
             }
         }

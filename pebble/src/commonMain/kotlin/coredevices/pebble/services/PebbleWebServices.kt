@@ -282,9 +282,11 @@ class RealPebbleWebServices(
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<Pair<AppstoreSource, AppStoreHome?>> {
-        return getAllSources(enabledOnly).map {
-            it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
+        return getAllSources(enabledOnly).mapNotNull {
+            val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
+            if (home == null) return@mapNotNull null
+            AppStoreHomeResult(it, home)
         }
     }
 
@@ -322,6 +324,11 @@ class RealPebbleWebServices(
 //        logger.v { "search response: $response" }
     }
 }
+
+data class AppStoreHomeResult(
+    val source: AppstoreSource,
+    val result: AppStoreHome,
+)
 
 fun AppType.storeString() = when (this) {
     AppType.Watchapp -> "apps"
@@ -635,7 +642,6 @@ fun StoreApplication.asLockerEntryPlatform(
         fallbackFlags
     }
     if (sdkVersion == null || pebbleProcessInfoFlags == null) {
-        logger.w { "Can't add app without sdkVersion or pebbleProcessInfoFlags" }
         return null
     }
     return LockerEntryPlatform(

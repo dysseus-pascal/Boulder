@@ -61,9 +61,6 @@ object PebbleNavBarRoutes {
     data object WatchfacesRoute : NavBarRoute
 
     @Serializable
-    data object WatchappsRoute : NavBarRoute
-
-    @Serializable
     data class LockerAppRoute(
         val uuid: String?,
         val storedId: String?,
@@ -169,18 +166,10 @@ fun NavGraphBuilder.addNavBarRoutes(
         val route: PebbleNavBarRoutes.WatchRoute = it.toRoute()
         WatchScreen(nav, topBarParams, route.identifier)
     }
-    composableWithAnimations<PebbleNavBarRoutes.WatchappsRoute>(viewModel) {
-        LockerScreen(
-            nav,
-            topBarParams,
-            LockerTab.Apps
-        )
-    }
     composableWithAnimations<PebbleNavBarRoutes.WatchfacesRoute>(viewModel) {
         LockerScreen(
             nav,
             topBarParams,
-            LockerTab.Watchfaces
         )
     }
     composableWithAnimations<PebbleNavBarRoutes.LockerAppRoute>(viewModel) {

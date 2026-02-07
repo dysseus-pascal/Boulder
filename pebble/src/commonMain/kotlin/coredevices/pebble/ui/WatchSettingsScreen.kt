@@ -1273,7 +1273,7 @@ please disable the option.""".trimIndent(),
                     TopLevelType.Phone -> true
                     TopLevelType.Watch -> anyWatchSupportsSettingsSync
                     TopLevelType.All -> coreConfig.showAllSettingsTab
-                    TopLevelType.Notifications -> coreConfig.enableIndex
+                    TopLevelType.Notifications -> false
                 }
             }
         }

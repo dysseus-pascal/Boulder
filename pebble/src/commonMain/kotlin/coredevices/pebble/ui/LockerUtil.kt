@@ -340,6 +340,7 @@ sealed class CommonAppType {
 
 fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSource?, categories: List<StoreCategory>?): CommonApp {
     val compatiblePlatform = findCompatiblePlatform(watchType)
+    val anyPlatform = properties.platforms.firstOrNull()
     return CommonApp(
         title = properties.title,
         developerName = properties.developerName,
@@ -361,8 +362,8 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
         type = properties.type,
         category = properties.category,
         version = properties.version,
-        listImageUrl = compatiblePlatform?.listImageUrl,
-        screenshotImageUrl = compatiblePlatform?.screenshotImageUrl,
+        listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
+        screenshotImageUrl = compatiblePlatform?.screenshotImageUrl ?: anyPlatform?.screenshotImageUrl,
         isCompatible = compatiblePlatform.isCompatible(),
         hearts = when (this) {
             is LockerWrapper.NormalApp -> properties.hearts

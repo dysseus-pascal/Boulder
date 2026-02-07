@@ -362,7 +362,7 @@ fun LockerScreen(
                                 lockerEntries.filter {
                                     it.isCompatible &&
                                             it.showOnMainLockerScreen() &&
-                                            it.uuid != activeWatchface.uuid
+                                            (it.uuid != activeWatchface.uuid || it.uuid != lockerEntries.first().uuid)
                                 }
                             }
                         }

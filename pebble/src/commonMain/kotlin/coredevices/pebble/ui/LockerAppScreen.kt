@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -41,12 +42,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import coil3.compose.AsyncImage
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
@@ -231,6 +234,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
         ) {
             entry?.let { entry ->
+                if (entry.commonAppType is CommonAppType.Store && entry.commonAppType.headerImageUrl != null) {
+                    AsyncImage(
+                        model = entry.commonAppType.headerImageUrl,
+                        contentDescription = "banner",
+                        modifier = Modifier.fillMaxWidth().padding(5.dp),
+                        contentScale = ContentScale.FillWidth,
+                    )
+                }
                 Row {
                     AppImage(
                         entry = entry,
@@ -449,6 +460,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         )
                     }
                 }
+                Spacer(Modifier.height(5.dp))
                 if (platform == Platform.Android && entry.androidCompanion != null) {
                     PropertyRow(
                         name = "COMPANION",

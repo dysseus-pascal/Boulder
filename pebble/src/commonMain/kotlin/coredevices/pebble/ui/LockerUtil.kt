@@ -330,6 +330,7 @@ sealed class CommonAppType {
     data class Store(
         val storeApp: StoreApplication?,
         val storeSource: AppstoreSource,
+        val headerImageUrl: String?,
     ) : CommonAppType()
 
     data class System(
@@ -412,6 +413,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         commonAppType = CommonAppType.Store(
             storeSource = source,
             storeApp = this,
+            headerImageUrl = headerImages?.firstOrNull()?.values?.firstOrNull(),
         ),
         type = appType,
         category = category,
@@ -453,7 +455,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null),
         type = appType,
         category = category,
         version = null,

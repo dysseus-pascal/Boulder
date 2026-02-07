@@ -540,8 +540,8 @@ data class StoreApplication(
     val developerId: String,
     @SerialName("hardware_platforms")
     val hardwarePlatforms: List<StoreHardwarePlatform>? = null,
-//    @SerialName("header_images")
-//    val headerImages: List<Map<String, String>>,
+    @SerialName("header_images")
+    val headerImages: List<Map<String, String>>? = null,
     val hearts: Int,
     @SerialName("icon_image")
     val iconImage: Map<String, String>,

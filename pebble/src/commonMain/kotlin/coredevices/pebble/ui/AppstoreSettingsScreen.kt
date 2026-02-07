@@ -36,7 +36,6 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.M3Dialog
@@ -81,7 +80,6 @@ class AppstoreSettingsScreenViewModel(
     fun removeSource(sourceId: Int) {
         viewModelScope.launch {
             sourceDao.deleteSourceById(sourceId)
-            updateCollections()
         }
     }
 
@@ -90,7 +88,6 @@ class AppstoreSettingsScreenViewModel(
             collectionDao.insertOrUpdateCollection(
                 collection.copy(enabled = isEnabled)
             )
-            updateCollections()
         }
     }
 
@@ -101,7 +98,6 @@ class AppstoreSettingsScreenViewModel(
                 url = url
             )
             sourceDao.insertSource(source)
-            updateCollections()
         }
     }
 }
@@ -116,7 +112,6 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()
     val pebbleLoggedIn = pebbleAccount.loggedIn
-    val bootConfig = koinInject<BootConfigProvider>()
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {
@@ -140,10 +135,8 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             scope.launch {
                 if (sources.firstOrNull {
                         parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false
-                    }?.id == sourceId && isEnabled) {
-                    if (pebbleLoggedIn.value == null) {
+                    }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
                         uriHandler.openUri(REBBLE_LOGIN_URI)
-                    }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
                 }

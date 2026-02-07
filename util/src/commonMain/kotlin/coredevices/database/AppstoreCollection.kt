@@ -48,7 +48,7 @@ interface AppstoreCollectionDao {
             val existingEntry = existing.firstOrNull {  it.slug == collection.slug }
             val toInsert = when {
                 existingEntry == null -> collection
-                else -> collection.copy(id = existingEntry.id, enabled = collection.enabled)
+                else -> collection.copy(id = existingEntry.id, enabled = existingEntry.enabled)
             }
             insertOrUpdateCollection(toInsert)
         }

@@ -125,9 +125,8 @@ private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
-    private val collectionsDao: AppstoreCollectionDao,
 ) : ViewModel() {
-    val storeHome = mutableStateOf<List<Pair<AppstoreSource, AppStoreHome?>>>(emptyList())
+    val storeHomeAllFeeds = mutableStateOf<List<Pair<AppstoreSource, AppStoreHome?>>>(emptyList())
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
     val searchState = SearchState()
 
@@ -136,16 +135,7 @@ class LockerViewModel(
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { pebbleWebServices.fetchAppStoreHome(type, platform, enabledOnly = true, useCache = useCache) }
             if (!result.all { it.second == null }) {
-                val collectionRules = collectionsDao.getAllCollections().groupBy { it.sourceId }
-                storeHome.value = result.map { (source, home) ->
-                    val homeFiltered = home?.let {
-                        val default = source.id == result.first().first.id
-                        it.copy(collections = it.collections.filter { col ->
-                            collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == type }?.enabled ?: default
-                        })
-                    }
-                    source to homeFiltered
-                }
+                storeHomeAllFeeds.value = result
             }
             finished.complete(Unit)
         }
@@ -221,6 +211,22 @@ fun LockerScreen(
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
         val listState = rememberLazyListState()
+        val collectionsDao: AppstoreCollectionDao = koinInject()
+        val collections by collectionsDao.getAllCollectionsFlow().collectAsState(null)
+        if (collections == null) {
+            return
+        }
+        val storeHome = remember(viewModel.storeHomeAllFeeds.value, collections) {
+            val collectionRules = collections!!.groupBy { it.sourceId }
+            viewModel.storeHomeAllFeeds.value.map { (source, home) ->
+                val homeFiltered = home?.let {
+                    it.copy(collections = it.collections.filter { col ->
+                        collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == type }?.enabled ?: false
+                    })
+                }
+                source to homeFiltered
+            }
+        }
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
@@ -233,7 +239,7 @@ fun LockerScreen(
             }
             topBarParams.title(title)
             if (coreConfig.useNativeAppStore) {
-                if (viewModel.storeHome.value.isEmpty()) {
+                if (storeHome.isEmpty()) {
                     logger.v { "refreshing store" }
                     isRefreshing = true
                     viewModel.refreshStore(type, watchType, useCache = true).invokeOnCompletion {
@@ -433,10 +439,9 @@ fun LockerScreen(
                                 navBarNav.navigateTo(PebbleNavBarRoutes.MyCollectionRoute(appType = type.code))
                             }) }
 
-                            val storeHomes by viewModel.storeHome
                             // TODO categories
 //                            logger.v { "home.collections (has home = ${home != null}): ${home?.collections}" }
-                            storeHomes.forEach { (source, home) ->
+                            storeHome.forEach { (source, home) ->
                                 home?.let {
                                     item(contentType = "source_title", key = "source_${source.id}") {
                                         Row(verticalAlignment = Alignment.CenterVertically) {

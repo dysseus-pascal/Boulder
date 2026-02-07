@@ -28,7 +28,6 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.put
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
@@ -56,8 +55,20 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -521,6 +532,31 @@ data class BulkStoreResponse(
     val data: List<StoreApplication>
 )
 
+object HeaderImageSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("HeaderImage", PrimitiveKind.STRING).nullable
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return null
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonArray -> {
+                val firstMap = element.firstOrNull() as? JsonObject
+                val firstValue = firstMap?.values?.firstOrNull() as? JsonPrimitive
+                firstValue?.contentOrNull
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+}
+
 @Serializable
 data class StoreApplication(
     val author: String,
@@ -541,7 +577,8 @@ data class StoreApplication(
     @SerialName("hardware_platforms")
     val hardwarePlatforms: List<StoreHardwarePlatform>? = null,
     @SerialName("header_images")
-    val headerImages: List<Map<String, String>>? = null,
+    @Serializable(with = HeaderImageSerializer::class)
+    val headerImage: String?,
     val hearts: Int,
     @SerialName("icon_image")
     val iconImage: Map<String, String>,

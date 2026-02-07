@@ -247,6 +247,7 @@ class AppstoreService(
             cache.writeHome(home, type, source, parameters)
         }
         return home?.copy(applications = home.applications.filter { app ->
+            if (app.uuid == null) return@filter false
             try {
                 if (Uuid.parse(app.uuid) == Uuid.NIL) {
                     logger.w { "App ${app.title} has NIL UUID, skipping" }

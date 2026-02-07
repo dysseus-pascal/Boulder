@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -86,6 +87,7 @@ import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.StoreCategory
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
@@ -94,6 +96,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.Watchapp
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -462,6 +465,35 @@ fun LockerScreen(
                                             }
                                         }
                                     }
+                                    if (home.categories.isNotEmpty() && type == AppType.Watchapp) {
+                                        val chunks = home.categories.chunked(2)
+                                        chunks.forEachIndexed { i, categories ->
+                                            item(
+                                                contentType = "categories",
+                                                key = "collection_${source.id}_categories_$i",
+                                            ) {
+                                                Column {
+                                                    Row(modifier = Modifier.padding(horizontal = 8.dp)) {
+                                                        CategoryItem(
+                                                            source = source,
+                                                            category = categories.first(),
+                                                            navBarNav = navBarNav,
+                                                        )
+                                                        categories.getOrNull(1)?.let {
+                                                            CategoryItem(
+                                                                source = source,
+                                                                category = it,
+                                                                navBarNav = navBarNav,
+                                                            )
+                                                        }
+                                                    }
+                                                    if (i == chunks.lastIndex) {
+                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     items(home.collections, contentType = { "app_carousel_collection" }, key = { "collection_${source.id}_${it.slug}" }) { collection ->
                                         val collectionApps =
                                             remember(
@@ -473,7 +505,7 @@ fun LockerScreen(
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
                                                         app.id == appId && !lockerEntries.any {
-                                                            it.uuid == Uuid.parse(app.uuid)
+                                                            it.uuid == app.uuid?.let { Uuid.parse(it) }
                                                         }
                                                     }?.asCommonApp(watchType, platform, source, home.categories)
                                                 }.distinctBy { it.uuid }
@@ -584,11 +616,52 @@ fun LockerScreen(
 }
 
 @Composable
+fun RowScope.CategoryItem(
+    source: AppstoreSource,
+    category: StoreCategory,
+    navBarNav: NavBarNav,
+) {
+    val color = category.color.toColorKmp()
+    Box(
+        modifier = Modifier.padding(2.dp)
+            .weight(1f)
+            .clickable {
+                navBarNav.navigateTo(
+                    PebbleNavBarRoutes.AppStoreCollectionRoute(
+                        sourceId = source.id,
+                        path = "category/${category.slug}",
+                        title = category.name,
+                    )
+                )
+            }.background(color)
+            .clip(RoundedCornerShape(6.dp)),
+    ) {
+        Text(
+            category.name,
+            modifier = Modifier.padding(9.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.Black,
+        )
+    }
+}
+
+fun String.toColorKmp(): Color {
+    val hex = this.replace("#", "")
+    val colorLong = hex.toLong(16)
+
+    return if (hex.length == 6) {
+        // Prepend FF for Alpha
+        Color(colorLong or 0xFF000000)
+    } else {
+        Color(colorLong)
+    }
+}
+
+@Composable
 fun SearchResultsList(
     results: List<CommonApp>,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
-    pebbleWebServices: RealPebbleWebServices = koinInject(),
     modifier: Modifier = Modifier,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }

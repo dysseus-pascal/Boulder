@@ -157,7 +157,7 @@ class FirestoreLocker(
             logger.e { "No authenticated user" }
             return false
         }
-        if (entry.storeApp == null) {
+        if (entry.storeApp?.uuid == null) {
             return false
         }
         val firestoreEntry = FirestoreLockerEntry(

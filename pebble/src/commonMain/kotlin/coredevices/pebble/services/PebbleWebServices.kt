@@ -555,7 +555,7 @@ data class StoreApplication(
     val source: String?,
     val title: String,
     val type: String,
-    val uuid: String = Uuid.NIL.toString(),
+    val uuid: String? = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
 )
@@ -655,6 +655,10 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
     val app = this
     if (app.latestRelease == null) {
         logger.w { "no latest release" }
+        return null
+    }
+    if (app.uuid == null) {
+        logger.w { "no uuid" }
         return null
     }
     return LockerEntry(

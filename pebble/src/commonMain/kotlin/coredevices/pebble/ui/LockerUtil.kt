@@ -355,7 +355,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
     return CommonApp(
         title = title,
         developerName = author,
-        uuid = Uuid.parse(uuid),
+        uuid = Uuid.parse(uuid ?: return null),
         androidCompanion = companions.android?.asCompanionApp(),
         commonAppType = CommonAppType.Store(
             storeSource = source,
@@ -438,8 +438,8 @@ class NativeLockerAddUtil(
         source: AppstoreSource,
     ): Boolean {
         val storeApp = app.storeApp
-        if (storeApp == null) {
-            logger.w { "storeApp is null" }
+        if (storeApp == null || storeApp.uuid == null) {
+            logger.w { "storeApp is null or has no uuid" }
             return false
         }
         val useLegacyLockerApiToAdd = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()

@@ -369,7 +369,7 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
             is LockerWrapper.NormalApp -> properties.hearts
             is LockerWrapper.SystemApp -> null
         },
-        description = compatiblePlatform?.description,
+        description = compatiblePlatform?.description ?: anyPlatform?.description,
         isNativelyCompatible = when (this) {
             is LockerWrapper.NormalApp -> {
                 val nativelyCompatible = when {

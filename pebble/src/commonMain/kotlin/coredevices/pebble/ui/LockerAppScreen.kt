@@ -238,7 +238,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     AsyncImage(
                         model = entry.commonAppType.headerImageUrl,
                         contentDescription = "banner",
-                        modifier = Modifier.fillMaxWidth().padding(5.dp),
+                        modifier = Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.FillWidth,
                     )
                 }
@@ -266,23 +266,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 )
                             }
                         }
-                        entry.category?.let {
-                            Spacer(Modifier.height(5.dp))
-                            FilterChip(
-                                true,
-                                onClick = {
-                                    if (entry.categorySlug != null && storeSource != null) {
-                                        navBarNav.navigateTo(
+                        if (entry.type == AppType.Watchapp) {
+                            entry.category?.let {
+                                Spacer(Modifier.height(5.dp))
+                                FilterChip(
+                                    true,
+                                    onClick = {
+                                        if (entry.categorySlug != null && storeSource != null) {
+                                            navBarNav.navigateTo(
                                                 PebbleNavBarRoutes.AppStoreCollectionRoute(
                                                     sourceId = storeSource.id,
                                                     path = "category/${entry.categorySlug}",
                                                     title = entry.category
                                                 )
                                             )
-                                    }
-                                },
-                                label = { Text(entry.category) }
-                            )
+                                        }
+                                    },
+                                    label = { Text(entry.category) }
+                                )
+                            }
                         }
                         Spacer(Modifier.height(5.dp))
                         val watchName = lastConnectedWatch?.displayName() ?: ""
@@ -484,7 +486,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             AsyncImage(
                                 model = screenshotUrl,
                                 contentDescription = "Screenshot",
-                                modifier = Modifier.size(100.dp),
+                                modifier = Modifier.size(110.dp).clip(RoundedCornerShape(7.dp)),
                             )
                         }
                     }

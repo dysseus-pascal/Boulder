@@ -308,24 +308,24 @@ fun LockerScreen(
             },
         ) {
             Column {
-                Row(modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp).horizontalScroll(rememberScrollState())) {
+                Row(modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 8.dp, end = 8.dp).horizontalScroll(rememberScrollState())) {
                     FilterChip(
                         selected = viewModel.type == AppType.Watchface,
                         onClick = { viewModel.type = AppType.Watchface },
                         label = { Text("Faces") },
-                        modifier = Modifier.padding(4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
                     FilterChip(
                         selected = viewModel.type == AppType.Watchapp,
                         onClick = { viewModel.type = AppType.Watchapp },
                         label = { Text("Apps") },
-                        modifier = Modifier.padding(4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
                     FilterChip(
                         selected = viewModel.filterCompatible,
                         onClick = { viewModel.filterCompatible = !viewModel.filterCompatible },
                         label = { Text("Compatible") },
-                        modifier = Modifier.padding(4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
                         leadingIcon = if (viewModel.filterCompatible) {
                             {
                                 Icon(
@@ -343,7 +343,7 @@ fun LockerScreen(
                             selected = viewModel.filterScaled,
                             onClick = { viewModel.filterScaled = !viewModel.filterScaled },
                             label = { Text("Scaled") },
-                            modifier = Modifier.padding(4.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp),
                             leadingIcon = if (viewModel.filterScaled) {
                                 {
                                     Icon(

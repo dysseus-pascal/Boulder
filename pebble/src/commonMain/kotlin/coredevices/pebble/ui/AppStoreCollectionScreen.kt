@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,12 +64,16 @@ class AppStoreCollectionScreenViewModel(
     fun load(watchType: WatchType) {
         viewModelScope.launch {
             val service = appstoreService.await()
+            val appTypeForFetch = when {
+                path.contains("category") -> null
+                else -> appType
+            }
             loadedApps = Pager(
                 config = PagingConfig(pageSize = 20, enablePlaceholders = false),
                 pagingSourceFactory = {
                     service.fetchAppStoreCollection(
                         path,
-                        appType,
+                        appTypeForFetch,
                         watchType,
                     )
                 },
@@ -82,7 +87,7 @@ fun AppStoreCollectionScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     sourceId: Int,
-    path: String, // e.g. "collection/most-loved"
+    path: String,
     title: String,
     appType: AppType?,
 ) {
@@ -127,24 +132,54 @@ fun AppStoreCollectionScreen(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.FixedSize(120.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    items(
-                        count = apps.itemCount,
-                        key = apps.itemKey { it.storeId ?: it.uuid }
-                    ) { index ->
-                        val entry = apps[index]!!
-                        NativeWatchfaceCard(
-                            entry,
-                            navBarNav,
-                            width = 120.dp,
-                            topBarParams = topBarParams,
-                            highlightInLocker = true,
-                        )
+                when (appType) {
+                    AppType.Watchface, null -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.FixedSize(120.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            items(
+                                count = apps.itemCount,
+                                key = apps.itemKey { it.storeId ?: it.uuid }
+                            ) { index ->
+                                val entry = apps[index]!!
+                                NativeWatchfaceCard(
+                                    entry,
+                                    navBarNav,
+                                    width = 120.dp,
+                                    topBarParams = topBarParams,
+                                    highlightInLocker = true,
+                                )
+                            }
+                        }
+                    }
+                    AppType.Watchapp -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(4.dp),
+                        ) {
+                            items(
+                                count = apps.itemCount,
+                                key = apps.itemKey { it.storeId ?: it.uuid }
+                            ) { index ->
+                                val entry = apps[index]!!
+                                NativeWatchfaceListItem(
+                                    entry,
+                                    onClick = {
+                                        navBarNav.navigateTo(
+                                            PebbleNavBarRoutes.LockerAppRoute(
+                                                uuid = entry.uuid.toString(),
+                                                storedId = entry.storeId,
+                                                storeSource = entry.appstoreSource?.id,
+                                            )
+                                        )
+                                    },
+                                    topBarParams = topBarParams,
+                                )
+                            }
+                        }
                     }
                 }
             }

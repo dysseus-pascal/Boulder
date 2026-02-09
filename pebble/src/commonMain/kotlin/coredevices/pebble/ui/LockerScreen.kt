@@ -645,6 +645,7 @@ fun RowScope.CategoryItem(
                         sourceId = source.id,
                         path = "category/${category.slug}",
                         title = category.name,
+                        appType = AppType.Watchapp.code,
                     )
                 )
             }.background(color)
@@ -930,17 +931,27 @@ fun NativeWatchfaceCard(
                     size = NATIVE_SCREENSHOT_HEIGHT,
                 )
             }
-            Text(
-                entry.title,
-                fontSize = 12.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                modifier = Modifier.align(Alignment.Start)
-                    .padding(top = 0.dp, start = 5.dp, end = 5.dp),
-                fontWeight = FontWeight.Bold,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 5.dp, end = 5.dp),
+            ) {
+                if (entry.type == AppType.Watchapp) {
+                    AsyncImage(
+                        model = entry.listImageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp).padding(end = 3.dp)
+                    )
+                }
+                Text(
+                    entry.title,
+                    fontSize = 12.sp,
+                    lineHeight = 12.sp,
+                    maxLines = 1,
+                    fontWeight = FontWeight.Bold,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 5.dp, end = 5.dp)) {
                 if (highlightInLocker) {
                     val inMyCollection = entry.inMyCollection()
                     if (inMyCollection) {
@@ -948,7 +959,7 @@ fun NativeWatchfaceCard(
                             Icons.AutoMirrored.Filled.PlaylistAddCheck,
                             contentDescription = "In My Collection",
                             modifier = Modifier.size(19.dp)
-                                .padding(start = 5.dp, top = 1.dp, end = 0.dp, bottom = 5.dp),
+                                .padding(top = 1.dp, bottom = 5.dp),
                             tint = coreDarkGreen,
                         )
                     }
@@ -959,7 +970,7 @@ fun NativeWatchfaceCard(
                     fontSize = 10.sp,
                     lineHeight = 10.sp,
                     maxLines = 1,
-                    modifier = Modifier.padding(start = 3.dp, end = 5.dp, bottom = 7.dp)
+                    modifier = Modifier.padding(bottom = 7.dp)
                         .weight(1f),
                 )
                 entry.CompatibilityWarning(topBarParams)
@@ -1066,10 +1077,11 @@ fun NativeWatchfaceListItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val size = remember(entry) {
-            when (entry.type) {
-                AppType.Watchapp -> 48.dp
-                AppType.Watchface -> 55.dp
-            }
+//            when (entry.type) {
+//                AppType.Watchapp -> 48.dp
+//                AppType.Watchface -> 55.dp
+//            }
+            55.dp
         }
         AppImage(
             entry,
@@ -1079,12 +1091,18 @@ fun NativeWatchfaceListItem(
         Column(
             modifier = Modifier.padding(start = 12.dp)
         ) {
-            Text(
-                entry.title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                maxLines = 1,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (entry.type == AppType.Watchapp) {
+                    AsyncImage(model = entry.listImageUrl, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                }
+                Text(
+                    entry.title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                )
+            }
             Row {
                 entry.CompatibilityWarning(topBarParams)
                 if (entry.description != null) {
@@ -1122,7 +1140,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
         when (entry.commonAppType) {
             is CommonAppType.Locker, is CommonAppType.Store -> {
                 val url = when (entry.type) {
-                    AppType.Watchapp -> entry.listImageUrl
+                    AppType.Watchapp -> entry.screenshotImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
                 }
                 ImageRequest.Builder(context)

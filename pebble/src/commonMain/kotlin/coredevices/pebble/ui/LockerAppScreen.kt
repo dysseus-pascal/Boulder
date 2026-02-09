@@ -249,11 +249,21 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         size = 140.dp,
                     )
                     Column(modifier = Modifier.padding(horizontal = 5.dp)) {
-                        Text(
-                            text = entry.title,
-                            fontSize = 22.sp,
-                            modifier = Modifier.padding(vertical = 5.dp),
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (entry.type == AppType.Watchapp) {
+                                AsyncImage(
+                                    model = entry.listImageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                            }
+                            Text(
+                                text = entry.title,
+                                fontSize = 22.sp,
+                                modifier = Modifier.padding(vertical = 5.dp),
+                            )
+                        }
                         if (entry.hearts != null) {
                             Row(modifier = Modifier.padding(vertical = 5.dp)) {
                                 Icon(
@@ -465,10 +475,11 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 val screenshotsToDisplay = remember(entry) {
                     when (entry.commonAppType) {
                         is CommonAppType.Store -> {
-                            when (entry.type) {
-                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
-                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
-                            }
+//                            when (entry.type) {
+//                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
+//                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
+//                            }
+                            entry.commonAppType.allScreenshotUrls.drop(1)
                         }
                         else -> emptyList()
                     }

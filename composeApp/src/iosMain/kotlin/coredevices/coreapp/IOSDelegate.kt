@@ -253,10 +253,24 @@ object IOSDelegate : KoinComponent {
     }
 
     private fun requestBgRefresh() {
-        val request = BGAppRefreshTaskRequest(REFRESH_TASK_IDENTIFIER)
-        request.earliestBeginDate = (Clock.System.now() + BACKGROUND_REFRESH_PERIOD).toNSDate()
-        val result = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
-        logger.d { "requestBgRefresh result = $result" }
+        BGTaskScheduler.sharedScheduler.getPendingTaskRequestsWithCompletionHandler { tasks ->
+            val alreadyScheduled = (tasks as? List<BGAppRefreshTaskRequest>)?.any {
+                it.identifier == REFRESH_TASK_IDENTIFIER
+            } ?: false
+
+            if (alreadyScheduled) {
+                logger.d { "requestBgRefresh: Task already scheduled, skipping submission to avoid delaying sync." }
+            } else {
+                val request = BGAppRefreshTaskRequest(REFRESH_TASK_IDENTIFIER)
+                request.earliestBeginDate = (Clock.System.now() + BACKGROUND_REFRESH_PERIOD).toNSDate()
+                try {
+                    val success = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
+                    logger.d { "requestBgRefresh: Scheduled new task. Success = $success" }
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to submit task request" }
+                }
+            }
+        }
     }
 }
 

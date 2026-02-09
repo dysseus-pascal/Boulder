@@ -101,6 +101,7 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.coroutines)
                 implementation(compose.runtime)
                 implementation(compose.ui)
                 implementation(compose.foundation)

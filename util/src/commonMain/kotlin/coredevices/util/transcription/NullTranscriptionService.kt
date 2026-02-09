@@ -5,6 +5,7 @@ import coredevices.util.AudioEncoding
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlin.time.Duration.Companion.seconds
 
 class NullTranscriptionService: TranscriptionService {
     companion object {
@@ -27,6 +28,7 @@ class NullTranscriptionService: TranscriptionService {
         audioStreamFrames?.collect {
             // Do nothing
         }
-        throw TranscriptionException.TranscriptionServiceUnavailable()
+        delay(3.seconds)
+        emit(TranscriptionSessionStatus.Transcription("This is a placeholder transcription result."))
     }
 }

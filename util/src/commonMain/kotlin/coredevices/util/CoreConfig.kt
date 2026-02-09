@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 class CoreConfigHolder(
     private val defaultValue: CoreConfig,
@@ -85,6 +87,8 @@ data class CoreConfig(
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
     val interceptPKJSWeather: Boolean = true,
+    val regularSyncInterval: Duration = 6.hours,
+    val weatherSyncInterval: Duration = 1.hours,
 )
 
 @Serializable

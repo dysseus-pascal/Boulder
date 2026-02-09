@@ -24,9 +24,12 @@ import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
+import coredevices.haversine.toKotlinInstant
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.watchModule
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -34,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
 import org.koin.core.component.KoinComponent
@@ -46,6 +50,7 @@ import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSData
+import platform.Foundation.NSDate
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
@@ -59,13 +64,16 @@ import platform.UIKit.UIUserNotificationTypeSound
 import platform.UIKit.registerForRemoteNotifications
 import platform.UIKit.registerUserNotificationSettings
 import kotlin.time.Clock
+import kotlin.time.Instant
+
+private val logger = Logger.withTag("IOSDelegate")
 
 object IOSDelegate : KoinComponent {
-    private val logger = Logger.withTag("IOSDelegate")
     private val fileLogWriter: FileLogWriter by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val doneInitialOnboarding: DoneInitialOnboarding by inject()
+    private val coreConfigHolder: CoreConfigHolder by inject()
 
     fun handleOpenUrl(url: NSURL): Boolean {
         logger.d("IOSDelegate handleOpenUrl $url")
@@ -147,12 +155,12 @@ object IOSDelegate : KoinComponent {
                 return@registerForTaskWithIdentifier
             }
             runBlocking {
-                commonAppDelegate.doBackgroundSync()
+                commonAppDelegate.doBackgroundSync(force = false)
             }
             task.setTaskCompletedWithSuccess(true)
-            requestBgRefresh()
+            requestBgRefresh(force = false, coreConfigHolder.config.value)
         }
-        requestBgRefresh()
+        requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
         logger.i { "didFinishLaunching() appVersion=$appVersion appVersionShort=$appVersionShort" }
@@ -252,26 +260,46 @@ object IOSDelegate : KoinComponent {
         return data.contains("<key>aps-environment</key>\n<string>development</string>")
     }
 
-    private fun requestBgRefresh() {
-        BGTaskScheduler.sharedScheduler.getPendingTaskRequestsWithCompletionHandler { tasks ->
-            val alreadyScheduled = (tasks as? List<BGAppRefreshTaskRequest>)?.any {
-                it.identifier == REFRESH_TASK_IDENTIFIER
-            } ?: false
 
-            if (alreadyScheduled) {
-                logger.d { "requestBgRefresh: Task already scheduled, skipping submission to avoid delaying sync." }
-            } else {
-                val request = BGAppRefreshTaskRequest(REFRESH_TASK_IDENTIFIER)
-                request.earliestBeginDate = (Clock.System.now() + BACKGROUND_REFRESH_PERIOD).toNSDate()
-                try {
-                    val success = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
-                    logger.d { "requestBgRefresh: Scheduled new task. Success = $success" }
-                } catch (e: Exception) {
-                    logger.e(e) { "Failed to submit task request" }
-                }
-            }
-        }
-    }
 }
 
 private const val REFRESH_TASK_IDENTIFIER = "coredevices.coreapp.sync"
+
+fun requestBgRefresh(force: Boolean, coreConfig: CoreConfig) {
+    val interval = coreConfig.weatherSyncInterval
+    BGTaskScheduler.sharedScheduler.getPendingTaskRequestsWithCompletionHandler { tasks ->
+        val alreadyScheduledTask = (tasks as? List<BGAppRefreshTaskRequest>)?.find {
+            it.identifier == REFRESH_TASK_IDENTIFIER
+        }
+        val alreadyScheduledNext = alreadyScheduledTask?.earliestBeginDate?.toKotlinInstant()
+        val hasValidAlreadyScheduledTask = if (alreadyScheduledNext == null) {
+            logger.d { "No existing scheduled task" }
+            false
+        } else {
+            val timeToEarliestBegin = alreadyScheduledNext - Clock.System.now()
+            if (timeToEarliestBegin > interval) {
+                logger.d { "Existing scheduled task is too far in the future" }
+                false
+            } else {
+                logger.d { "Existing valid task" }
+                true
+            }
+        }
+
+        if (hasValidAlreadyScheduledTask && !force) {
+            return@getPendingTaskRequestsWithCompletionHandler
+        }
+        if (force) {
+            logger.d { "Forcing reschedule because force=true" }
+        }
+
+        val request = BGAppRefreshTaskRequest(REFRESH_TASK_IDENTIFIER)
+        request.earliestBeginDate = (Clock.System.now() + interval).toNSDate()
+        try {
+            val success = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
+            logger.d { "requestBgRefresh: Scheduled new task (interval=$interval). Success = $success" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to submit task request" }
+        }
+    }
+}

@@ -117,6 +117,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import kotlin.math.roundToLong
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 enum class TopLevelType(val displayName: String) {
     Phone("Phone"),
@@ -529,6 +532,20 @@ please disable the option.""".trimIndent(),
                         libPebble.restoreSystemAppOrder()
                     },
                 ),
+                basicSettingsDropdownItem(
+                    title = "Background Refresh Interval",
+                    description = "How often to check for updates, update apps from store, etc",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Default,
+                    selectedItem = RegularSyncInterval.from(coreConfig.regularSyncInterval),
+                    items = RegularSyncInterval.entries,
+                    onItemSelected = {
+                        coreBackgroundSync.updateFullSyncPeriod(it.period)
+                    },
+                    itemText = {
+                        it.displayName
+                    },
+                ),
                 basicSettingsToggleItem(
                     title = "Enable Index Feed",
                     topLevelType = TopLevelType.Phone,
@@ -912,6 +929,20 @@ please disable the option.""".trimIndent(),
                         GlobalScope.launch { weatherFetcher.fetchWeather() }
                     },
                 ),
+                basicSettingsDropdownItem(
+                    title = "Weather Refresh Interval",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Weather,
+                    selectedItem = WeatherSyncInterval.from(coreConfig.weatherSyncInterval),
+                    items = WeatherSyncInterval.entries,
+                    onItemSelected = {
+                        coreBackgroundSync.updateWeatherSyncPeriod(it.period)
+                    },
+                    itemText = {
+                        it.displayName
+                    },
+                    show = { coreConfig.fetchWeather }
+                ),
                 basicSettingsToggleItem(
                     title = "Weather Pins",
                     description = "Add weather pins to timeline",
@@ -1187,7 +1218,7 @@ please disable the option.""".trimIndent(),
                     section = Section.Debug,
                     action = {
                         GlobalScope.launch {
-                            coreBackgroundSync.doBackgroundSync()
+                            coreBackgroundSync.doBackgroundSync(force = true)
                         }
                     },
                     isDebugSetting = true,
@@ -1593,6 +1624,7 @@ fun basicSettingsNumberItem(
 
 fun <T> basicSettingsDropdownItem(
     title: String,
+    description: String? = null,
     topLevelType: TopLevelType,
     section: Section,
     items: List<T>,
@@ -1638,6 +1670,11 @@ fun <T> basicSettingsDropdownItem(
                             )
                         }
                     }
+                }
+            },
+            supportingContent = {
+                if (description != null) {
+                    Text(description, fontSize = 11.sp)
                 }
             },
             shadowElevation = ELEVATION,
@@ -1774,4 +1811,33 @@ object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"
     const val KEY_ENABLE_FIREBASE_UPLOADS = "enable_firebase_uploads"
     const val KEY_ENABLE_MIXPANEL_UPLOADS = "enable_mixpanel_uploads"
+}
+
+enum class RegularSyncInterval(
+    val period: Duration,
+    val displayName: String,
+) {
+    SixHours(6.hours, "6 hours"),
+    TwelveHours(12.hours, "12 hours"),
+    TwentyFourHours(24.hours, "24 hours"),
+    ;
+
+    companion object {
+        fun from(period: Duration): RegularSyncInterval = entries.find { it.period == period } ?: SixHours
+    }
+}
+
+enum class WeatherSyncInterval(
+    val period: Duration,
+    val displayName: String,
+) {
+    FifteenMinutes(15.minutes, "15 minutes"),
+    ThirtyMinutes(30.minutes, "30 minutes"),
+    OneHour(1.hours, "1 hour"),
+    SixHours(6.hours, "6 hours"),
+    ;
+
+    companion object {
+        fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
+    }
 }

@@ -6,6 +6,7 @@ import com.oldguy.common.io.File
 import com.oldguy.common.io.FileMode
 import com.oldguy.common.io.ZipEntry
 import com.oldguy.common.io.ZipFile
+import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
 import coredevices.coreapp.util.FileLogWriter
@@ -103,6 +104,7 @@ class BugReportProcessor(
     private val pebbleAppDelegate: PebbleAppDelegate,
     private val clock: Clock,
     private val appContext: AppContext,
+    private val coreBackgroundSync: CoreBackgroundSync,
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
 
@@ -151,7 +153,7 @@ class BugReportProcessor(
         }
     }
 
-    private fun createSummaryAttachment(attachments: List<DocumentAttachment>): DocumentAttachment {
+    private suspend fun createSummaryAttachment(attachments: List<DocumentAttachment>): DocumentAttachment {
         val summaryWithAttachmentCount =
             createSummary("", attachments)
         val summaryFile = Path(getLogsCacheDir() + "/summary.txt")
@@ -215,7 +217,7 @@ class BugReportProcessor(
         }
     }
 
-    private fun createSummary(
+    private suspend fun createSummary(
         screenContext: String,
         attachments: List<DocumentAttachment>
     ): String {
@@ -230,6 +232,7 @@ class BugReportProcessor(
             attachments.onEach {
                 append("\nAttachment: ${it.fileName}")
             }
+            append("Time since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
         }
         return summaryWithAttachmentCount
     }

@@ -618,26 +618,23 @@ fun AppsFilterRow(
 ) {
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
-        if (!hasShownScrollHint) {
+        if (!hasShownScrollHint && scrollState.maxValue > 0 && selectedType != null && showIncompatible != null && showScaled != null) {
             hasShownScrollHint = true
             // Wait a small bit for the layout to settle and user to focus
             delay(500.milliseconds)
 
-            // Only nudge if there is actually content to scroll to
-            if (scrollState.maxValue > 0) {
-                // Scroll right 60dp (approximate)
-                scrollState.animateScrollTo(
-                    value = 150,
-                    animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
-                )
-                // Wait a moment at the "peek" position
-                delay(200)
-                // Scroll back to start
-                scrollState.animateScrollTo(
-                    value = 0,
-                    animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
-                )
-            }
+            // Scroll right 60dp (approximate)
+            scrollState.animateScrollTo(
+                value = 150,
+                animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+            )
+            // Wait a moment at the "peek" position
+            delay(200)
+            // Scroll back to start
+            scrollState.animateScrollTo(
+                value = 0,
+                animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+            )
         }
     }
     Box(

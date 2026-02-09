@@ -212,7 +212,7 @@ fun LockerScreen(
             return
         }
         val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type.value]
-        val storeHome = remember(storeHomeForType, collections, viewModel.type) {
+        val storeHome = remember(storeHomeForType, collections, viewModel.type.value) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
                 val homeFiltered = home.let {
@@ -263,7 +263,7 @@ fun LockerScreen(
         val uriHandler = LocalUriHandler.current
 
         if (coreConfig.useNativeAppStore) {
-            LaunchedEffect(viewModel.searchState.query, viewModel.type) {
+            LaunchedEffect(viewModel.searchState.query, viewModel.type.value) {
                 if (viewModel.searchState.query.isNotEmpty()) {
                     viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type.value)
                 }

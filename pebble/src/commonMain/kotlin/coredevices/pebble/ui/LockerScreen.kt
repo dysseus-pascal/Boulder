@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,13 +29,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
@@ -44,8 +41,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -98,7 +93,6 @@ import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -133,9 +127,9 @@ class LockerViewModel(
     val storeHomeAllFeeds = mutableStateMapOf<AppType, List<AppStoreHomeResult>>()
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
     val searchState = SearchState()
-    var type by mutableStateOf(AppType.Watchface)
-    var filterCompatible by mutableStateOf(true)
-    var filterScaled by mutableStateOf(true)
+    val type = mutableStateOf(AppType.Watchface)
+    val showIncompatible = mutableStateOf(false)
+    val showScaled = mutableStateOf(true)
 
     fun refreshStore(platform: WatchType, useCache: Boolean): Deferred<Unit> {
         val finishedAll: List<Deferred<Unit>> = AppType.entries.map {
@@ -217,13 +211,13 @@ fun LockerScreen(
         if (collections == null) {
             return
         }
-        val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type]
+        val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type.value]
         val storeHome = remember(storeHomeForType, collections, viewModel.type) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
                 val homeFiltered = home.let {
                     it.copy(collections = it.collections.filter { col ->
-                        collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == viewModel.type }?.enabled ?: false
+                        collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == viewModel.type.value }?.enabled ?: false
                     })
                 }
                 val categories = homeFiltered.categories.filter{
@@ -271,16 +265,16 @@ fun LockerScreen(
         if (coreConfig.useNativeAppStore) {
             LaunchedEffect(viewModel.searchState.query, viewModel.type) {
                 if (viewModel.searchState.query.isNotEmpty()) {
-                    viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type)
+                    viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type.value)
                 }
             }
         }
         val lockerEntries = loadLockerEntries(
-            type = viewModel.type,
+            type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
             watchType = watchType,
-            filterCompatible = viewModel.filterCompatible,
-            filterScaled = viewModel.filterScaled,
+            showIncompatible = viewModel.showIncompatible.value,
+            showScaled = viewModel.showScaled.value,
         )
         val activeWatchface = loadActiveWatchface(watchType)
         if (lockerEntries == null || activeWatchface == null) {
@@ -296,7 +290,7 @@ fun LockerScreen(
                         onClick = {
                             navBarNav.navigateTo(
                                 PebbleNavBarRoutes.AppStoreRoute(
-                                    appType = viewModel.type.code,
+                                    appType = viewModel.type.value.code,
                                     deepLinkId = null,
                                 )
                             )
@@ -308,56 +302,12 @@ fun LockerScreen(
             },
         ) {
             Column {
-                Row(modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 8.dp, end = 8.dp).horizontalScroll(rememberScrollState())) {
-                    FilterChip(
-                        selected = viewModel.type == AppType.Watchface,
-                        onClick = { viewModel.type = AppType.Watchface },
-                        label = { Text("Faces") },
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                    FilterChip(
-                        selected = viewModel.type == AppType.Watchapp,
-                        onClick = { viewModel.type = AppType.Watchapp },
-                        label = { Text("Apps") },
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                    FilterChip(
-                        selected = viewModel.filterCompatible,
-                        onClick = { viewModel.filterCompatible = !viewModel.filterCompatible },
-                        label = { Text("Compatible") },
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                        leadingIcon = if (viewModel.filterCompatible) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Filled.Done,
-                                    contentDescription = "Filter compatible",
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                    )
-                    if (watchType.performsScaling()) {
-                        FilterChip(
-                            selected = viewModel.filterScaled,
-                            onClick = { viewModel.filterScaled = !viewModel.filterScaled },
-                            label = { Text("Scaled") },
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                            leadingIcon = if (viewModel.filterScaled) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Filled.Done,
-                                        contentDescription = "Filter scaled",
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                        )
-                    }
-                }
+                AppsFilterRow(
+                    watchType = watchType,
+                    selectedType = viewModel.type,
+                    showIncompatible = viewModel.showIncompatible,
+                    showScaled = viewModel.showScaled,
+                )
                 if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
                     val resultQuery = remember(lockerEntries) {
                         viewModel.storeSearchResults.map { searchResults ->
@@ -422,7 +372,7 @@ fun LockerScreen(
                                         onClick = onClick,
                                     )
                                 }
-                                if (viewModel.type == AppType.Watchface) {
+                                if (viewModel.type.value == AppType.Watchface) {
                                     item(
                                         contentType = "active_watchface",
                                         key = "active_watchface"
@@ -494,13 +444,13 @@ fun LockerScreen(
                                         myApps.take(20)
                                     }
                                     Carousel(
-                                        viewModel.type.myCollectionName(),
+                                        viewModel.type.value.myCollectionName(),
                                         myAppsToDisplay,
                                         highlightInLocker = false,
                                         onClick = {
                                             navBarNav.navigateTo(
                                                 PebbleNavBarRoutes.MyCollectionRoute(
-                                                    appType = viewModel.type.code,
+                                                    appType = viewModel.type.value.code,
                                                 )
                                             )
                                         })
@@ -534,7 +484,7 @@ fun LockerScreen(
                                             }
                                         }
                                     }
-                                    if (viewModel.type == AppType.Watchapp) {
+                                    if (viewModel.type.value == AppType.Watchapp) {
                                         it.categories.forEachIndexed { i, categories ->
                                             item(
                                                 contentType = "categories",
@@ -582,7 +532,7 @@ fun LockerScreen(
                                                         source,
                                                         home.categories
                                                     )
-                                                }.filter { it.type == viewModel.type }
+                                                }.filter { it.type == viewModel.type.value }
                                                     .distinctBy { it.uuid }
                                             }
                                         Carousel(
@@ -595,7 +545,7 @@ fun LockerScreen(
                                                         sourceId = source.id,
                                                         path = "collection/${collection.slug}",
                                                         title = collection.name,
-                                                        appType = viewModel.type.code,
+                                                        appType = viewModel.type.value.code,
                                                     )
                                                 )
                                             })

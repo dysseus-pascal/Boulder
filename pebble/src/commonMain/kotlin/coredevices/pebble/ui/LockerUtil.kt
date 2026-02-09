@@ -1,22 +1,47 @@
 package coredevices.pebble.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.BrowseGallery
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
@@ -49,10 +74,12 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
 const val LOCKER_UI_LOAD_LIMIT = 100
@@ -109,8 +136,8 @@ fun loadLockerEntries(
     type: AppType,
     searchQuery: String,
     watchType: WatchType,
-    filterCompatible: Boolean,
-    filterScaled: Boolean,
+    showIncompatible: Boolean,
+    showScaled: Boolean,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -132,14 +159,14 @@ fun loadLockerEntries(
     if (entries == null || appstoreSources == null || categories == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, filterCompatible, filterScaled) {
+    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
-            if (filterCompatible && !app.isCompatible) {
+            if (!showIncompatible && !app.isCompatible) {
                 return@mapNotNull null
             }
-            if (!filterScaled && !app.isNativelyCompatible) {
+            if (!showScaled && !app.isNativelyCompatible) {
                 return@mapNotNull null
             }
             app
@@ -477,6 +504,11 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
     )
 }
 
+fun AppType.icon(): ImageVector = when (this) {
+    AppType.Watchface -> Icons.Filled.BrowseGallery
+    AppType.Watchapp -> Icons.Filled.AutoAwesomeMotion
+}
+
 fun CommonAppType.canStartApp(): Boolean = when (this) {
     is CommonAppType.Locker -> true
     is CommonAppType.Store -> false
@@ -568,6 +600,133 @@ fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
 fun AppType.myCollectionName(): String = when (this) {
     AppType.Watchface -> "My Watchfaces"
     AppType.Watchapp -> "My Apps"
+}
+
+fun AppType.shortName(): String = when (this) {
+    AppType.Watchface -> "Faces"
+    AppType.Watchapp -> "Apps"
+}
+
+private var hasShownScrollHint = false
+
+@Composable
+fun AppsFilterRow(
+    watchType: WatchType,
+    selectedType: MutableState<AppType>?,
+    showIncompatible: MutableState<Boolean>?,
+    showScaled: MutableState<Boolean>?,
+) {
+    val scrollState = rememberScrollState()
+    LaunchedEffect(hasShownScrollHint) {
+        if (!hasShownScrollHint) {
+            hasShownScrollHint = true
+            // Wait a small bit for the layout to settle and user to focus
+            delay(500.milliseconds)
+
+            // Only nudge if there is actually content to scroll to
+            if (scrollState.maxValue > 0) {
+                // Scroll right 60dp (approximate)
+                scrollState.animateScrollTo(
+                    value = 150,
+                    animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                )
+                // Wait a moment at the "peek" position
+                delay(200)
+                // Scroll back to start
+                scrollState.animateScrollTo(
+                    value = 0,
+                    animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                )
+            }
+        }
+    }
+    Box(
+        modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 12.dp, end = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.horizontalScroll(scrollState),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val height = 37.dp
+            if (selectedType != null) {
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.height(height).padding(0.dp),
+                ) {
+                    AppType.entries.forEachIndexed { index, appType ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = AppType.entries.size
+                            ),
+                            selected = selectedType.value == appType,
+                            onClick = { selectedType.value = appType },
+                            icon = { },
+                            label = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(0.dp)
+                                ) {
+                                    Icon(
+                                        appType.icon(),
+                                        contentDescription = appType.shortName(),
+                                        modifier = Modifier.size(22.dp).padding(0.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(7.dp))
+                                    Text(
+                                        appType.shortName(),
+                                        lineHeight = 13.sp,
+                                        modifier = Modifier.padding(0.dp),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                            modifier = Modifier.padding(0.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            if (showIncompatible != null) {
+                FilterChip(
+                    selected = showIncompatible.value,
+                    onClick = { showIncompatible.value = !showIncompatible.value },
+                    label = { Text("Show Incompatible") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (showIncompatible.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Done,
+                                contentDescription = "Show Incompatible",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (watchType.performsScaling() && showScaled != null) {
+                FilterChip(
+                    selected = showScaled.value,
+                    onClick = { showScaled.value = !showScaled.value },
+                    label = { Text("Show Scaled") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (showScaled.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Done,
+                                contentDescription = "Show Scaled",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+    }
 }
 
 fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platform): Boolean {

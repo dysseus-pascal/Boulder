@@ -17,10 +17,14 @@ enum class SystemApps(
     Notifications(SystemAppIDs.NOTIFICATIONS_APP_UUID, "Notifications", AppType.Watchapp, WatchType.entries, defaultOrder = -8),
     Alarms(SystemAppIDs.ALARMS_APP_UUID, "Alarms", AppType.Watchapp, WatchType.entries, defaultOrder = -7),
     Weather(SystemAppIDs.WEATHER_APP_UUID, "Weather", AppType.Watchapp, WatchType.entries, defaultOrder = -6),
-    Health(SystemAppIDs.HEALTH_APP_UUID, "Health", AppType.Watchapp, WatchType.entries, defaultOrder = -5),
-    Workout(SystemAppIDs.WORKOUT_APP_UUID, "Workout", AppType.Watchapp, WatchType.entries, defaultOrder = -4),
+    Health(SystemAppIDs.HEALTH_APP_UUID, "Health", AppType.Watchapp, ALL_EXCEPT_APLITE, defaultOrder = -5),
+    Workout(SystemAppIDs.WORKOUT_APP_UUID, "Workout", AppType.Watchapp, ALL_EXCEPT_APLITE, defaultOrder = -4),
     Watchfaces(SystemAppIDs.WATCHFACES_APP_UUID, "Watchfaces", AppType.Watchapp, WatchType.entries, defaultOrder = -3),
     // Faces
     Tictoc(SystemAppIDs.TICTOC_APP_UUID, "Tictoc", AppType.Watchface, WatchType.entries, defaultOrder = -2),
-    Kickstart(SystemAppIDs.KICKSTART_APP_UUID, "Kickstart", AppType.Watchface, WatchType.entries, defaultOrder = -1),
+    Kickstart(SystemAppIDs.KICKSTART_APP_UUID, "Kickstart", AppType.Watchface, ALL_EXCEPT_APLITE, defaultOrder = -1),
+}
+
+private val ALL_EXCEPT_APLITE = WatchType.entries.filter {
+    it != WatchType.APLITE
 }

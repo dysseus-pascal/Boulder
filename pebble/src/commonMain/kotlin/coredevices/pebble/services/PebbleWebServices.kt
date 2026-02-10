@@ -236,7 +236,7 @@ class RealPebbleWebServices(
 
     private suspend fun getAllSources(enabledOnly: Boolean = true): List<AppstoreSource> {
         return if (enabledOnly) {
-            appstoreSourceDao.getAllEnabledSources().first()
+            appstoreSourceDao.getAllEnabledSourcesFlow().first()
         } else {
             appstoreSourceDao.getAllSources().first()
         }

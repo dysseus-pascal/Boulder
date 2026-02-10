@@ -81,6 +81,7 @@ import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.account.PebbleAccount
@@ -123,6 +124,7 @@ private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
+    private val storeSourceDao: AppstoreSourceDao,
 ) : ViewModel() {
     val storeHomeAllFeeds = mutableStateMapOf<AppType, List<AppStoreHomeResult>>()
     val storeSearchResults = MutableStateFlow<List<CommonApp>>(emptyList())
@@ -130,8 +132,11 @@ class LockerViewModel(
     val type = mutableStateOf(AppType.Watchface)
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
+    var storeIsRefreshing by mutableStateOf(false)
+    var lockerIsRefreshing by mutableStateOf(false)
 
     fun refreshStore(platform: WatchType, useCache: Boolean): Deferred<Unit> {
+        storeIsRefreshing = true
         val finishedAll: List<Deferred<Unit>> = AppType.entries.map {
             val finished = CompletableDeferred<Unit>()
             viewModelScope.launch {
@@ -147,6 +152,18 @@ class LockerViewModel(
         }
         return viewModelScope.async {
             finishedAll.awaitAll()
+            storeIsRefreshing = false
+        }
+    }
+
+    fun maybeRefreshStore(watchType: WatchType) {
+        viewModelScope.launch {
+            val currentEnabledStores = storeSourceDao.getAllEnabledSources().map { it.id }
+            val loadedStores = storeHomeAllFeeds.values.firstOrNull()?.map { it.source.id }
+            if (loadedStores == null || loadedStores != currentEnabledStores) {
+                logger.v { "refreshing store" }
+                refreshStore(watchType, useCache = true)
+            }
         }
     }
 
@@ -201,7 +218,6 @@ fun LockerScreen(
             }
         }
         val platform: Platform = koinInject()
-        var isRefreshing by remember { mutableStateOf(false) }
         val title = stringResource(Res.string.apps)
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
@@ -238,13 +254,7 @@ fun LockerScreen(
             }
             topBarParams.title(title)
             if (coreConfig.useNativeAppStore) {
-                if (storeHome.isEmpty()) {
-                    logger.v { "refreshing store" }
-                    isRefreshing = true
-                    viewModel.refreshStore(watchType, useCache = true).invokeOnCompletion {
-                        isRefreshing = false
-                    }
-                }
+                viewModel.maybeRefreshStore(watchType)
             }
             launch {
                 topBarParams.scrollToTop.collect {
@@ -327,19 +337,14 @@ fun LockerScreen(
                         )
                     }
                 } else {
-                    PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = {
-                        isRefreshing = true
+                    PullToRefreshBox(isRefreshing = viewModel.storeIsRefreshing || viewModel.lockerIsRefreshing, onRefresh = {
+                        viewModel.lockerIsRefreshing = true
                         logger.v { "set isRefreshing to true" }
                         val lockerFinished = libPebble.requestLockerSync()
-                        val storeFinished = if (coreConfig.useNativeAppStore) {
-                            viewModel.refreshStore(watchType, useCache = false)
-                        } else {
-                            CompletableDeferred(Unit)
-                        }
+                        viewModel.refreshStore(watchType, useCache = false)
                         scope.launch {
-                            awaitAll(lockerFinished, storeFinished)
-                            logger.v { "set isRefreshing to false" }
-                            isRefreshing = false
+                            lockerFinished.await()
+                            viewModel.lockerIsRefreshing = false
                         }
                     }) {
                         if (coreConfig.useNativeAppStore) {

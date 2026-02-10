@@ -48,6 +48,7 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
+import coredevices.pebble.isConnected
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PebbleAccountProvider
@@ -297,12 +298,13 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
 fun lastConnectedWatch(): KnownPebbleDevice? {
     val libPebble = rememberLibPebble()
     val watchesFiltered = remember {
-        libPebble.watches.map {
-            it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
-                .firstOrNull()
-        }
+        libPebble.watches
     }
-    val lastConnectedWatch by watchesFiltered.collectAsState(null)
+    val watches by watchesFiltered.collectAsState()
+    val lastConnectedWatch = remember(watches) {
+        watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
+                .firstOrNull()
+    }
     return lastConnectedWatch
 }
 

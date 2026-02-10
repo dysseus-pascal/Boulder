@@ -56,12 +56,13 @@ class AppStoreCollectionScreenViewModel(
     val showScaled = mutableStateOf(true)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
+    private var loadedAppsWatchType: WatchType? = null
     val appstoreService = viewModelScope.async {
         val source = appstoreSourceDao.getSourceById(appstoreSourceId)!!
         get<AppstoreService> { parametersOf(source) }
     }
 
-    fun load(watchType: WatchType) {
+    private fun load(watchType: WatchType) {
         viewModelScope.launch {
             val service = appstoreService.await()
             val appTypeForFetch = when {
@@ -78,6 +79,13 @@ class AppStoreCollectionScreenViewModel(
                     )
                 },
             ).flow.cachedIn(viewModelScope)
+        }
+    }
+
+    fun maybeLoad(watchType: WatchType) {
+        if (loadedApps == null || loadedAppsWatchType != watchType) {
+            loadedAppsWatchType = watchType
+            load(watchType)
         }
     }
 }
@@ -101,7 +109,7 @@ fun AppStoreCollectionScreen(
     val lastConnectedWatch = lastConnectedWatch()
     val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
     LaunchedEffect(watchType) {
-        viewModel.load(watchType)
+        viewModel.maybeLoad(watchType)
     }
     val apps = remember(viewModel.loadedApps, viewModel.showScaled.value) {
         viewModel.loadedApps?.map {

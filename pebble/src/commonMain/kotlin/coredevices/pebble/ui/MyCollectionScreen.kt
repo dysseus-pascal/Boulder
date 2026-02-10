@@ -188,6 +188,7 @@ fun MyCollectionScreen(
                                         )
                                     },
                                     topBarParams = topBarParams,
+                                    highlightInLocker = false,
                                 )
                             }
                         }

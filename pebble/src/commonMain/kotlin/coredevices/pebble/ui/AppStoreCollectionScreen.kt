@@ -188,6 +188,7 @@ fun AppStoreCollectionScreen(
                                         )
                                     },
                                     topBarParams = topBarParams,
+                                    highlightInLocker = true,
                                 )
                             }
                         }

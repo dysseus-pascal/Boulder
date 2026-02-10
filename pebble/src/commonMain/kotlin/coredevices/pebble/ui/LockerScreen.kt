@@ -720,6 +720,7 @@ fun SearchResultsList(
                         )
                     },
                     topBarParams = topBarParams,
+                    highlightInLocker = false,
                 )
             }
         }
@@ -760,6 +761,7 @@ fun SearchResultsList(
                         }
                     },
                     topBarParams = topBarParams,
+                    highlightInLocker = false,
                 )
             }
         }
@@ -1079,6 +1081,7 @@ fun NativeWatchfaceListItem(
     entry: CommonApp,
     onClick: () -> Unit,
     topBarParams: TopBarParams,
+    highlightInLocker: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -1088,41 +1091,48 @@ fun NativeWatchfaceListItem(
             .padding(vertical = 8.dp, horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val size = remember(entry) {
-//            when (entry.type) {
-//                AppType.Watchapp -> 48.dp
-//                AppType.Watchface -> 55.dp
-//            }
-            55.dp
-        }
         AppImage(
             entry,
-            modifier = Modifier.width(48.dp).clip(RoundedCornerShape(7.dp)),
-            size = size,
+            modifier = Modifier.width(62.dp).clip(RoundedCornerShape(8.dp)),
+            size = 74.dp,
         )
         Column(
             modifier = Modifier.padding(start = 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (entry.type == AppType.Watchapp) {
-                    AsyncImage(model = entry.listImageUrl, contentDescription = null, modifier = Modifier.size(20.dp))
+                    AsyncImage(model = entry.listImageUrl, contentDescription = null, modifier = Modifier.size(21.dp))
                     Spacer(modifier = Modifier.width(5.dp))
                 }
                 Text(
                     entry.title,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
                     maxLines = 1,
                 )
             }
             Row {
-                entry.CompatibilityWarning(topBarParams)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (highlightInLocker) {
+                        val inMyCollection = entry.inMyCollection()
+                        if (inMyCollection) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.PlaylistAddCheck,
+                                contentDescription = "In My Collection",
+                                modifier = Modifier.size(16.dp)
+                                    .padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
+                                tint = coreDarkGreen,
+                            )
+                        }
+                    }
+                    entry.CompatibilityWarning(topBarParams)
+                }
                 if (entry.description != null) {
                     Text(
                         text = entry.description,
                         color = Color.Gray,
                         fontSize = 11.sp,
-                        maxLines = 2,
+                        maxLines = 3,
                         lineHeight = 11.sp,
                     )
                 }

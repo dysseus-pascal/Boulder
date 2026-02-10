@@ -9,16 +9,15 @@ import com.cactus.TranscriptionMode
 import com.cactus.WisprConversationContext
 import com.cactus.WisprConversationMessage
 import com.cactus.WisprFlowConfig
-import com.russhwolf.settings.Settings
 import coredevices.util.AudioEncoding
-import coredevices.util.models.CactusSTTMode
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
+import coredevices.util.models.CactusSTTMode
+import coredevices.util.writeWavHeader
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
@@ -32,15 +31,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
-import kotlinx.io.Sink
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
 import kotlinx.io.readByteArray
-import kotlinx.io.writeIntLe
-import kotlinx.io.writeShortLe
-import kotlinx.io.writeString
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -56,23 +51,6 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     private var initJob: Job? = null
     private var lastInitedModel: String? = null
     private val scope = CoroutineScope(Dispatchers.Default)
-
-    private fun writeWavHeader(sink: Sink, sampleRate: Int, audioSize: Int) {
-        val chunkSize = audioSize + 36
-        sink.writeString("RIFF")
-        sink.writeIntLe(chunkSize)
-        sink.writeString("WAVE")
-        sink.writeString("fmt ")
-        sink.writeIntLe(16) // fmt chunk size
-        sink.writeShortLe(1) // PCM format
-        sink.writeShortLe(1) // Mono
-        sink.writeIntLe(sampleRate) // Sample rate
-        sink.writeIntLe(sampleRate * 2) // Byte rate
-        sink.writeShortLe(2) // Block align
-        sink.writeShortLe(16) // Bits per sample
-        sink.writeString("data")
-        sink.writeIntLe(audioSize)
-    }
 
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
 
@@ -206,7 +184,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         val path = getCacheFilePath()
         withContext(Dispatchers.IO) {
             SystemFileSystem.sink(path).buffered().use { sink ->
-                writeWavHeader(sink, sampleRate, audioSize = audio.size)
+                sink.writeWavHeader(sampleRate, audioSize = audio.size)
                 sink.write(audio)
             }
         }

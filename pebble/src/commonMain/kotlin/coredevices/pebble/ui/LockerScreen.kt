@@ -526,7 +526,8 @@ fun LockerScreen(
                                                 home,
                                                 collection,
                                                 watchType,
-                                                lockerEntries
+                                                lockerEntries,
+                                                viewModel.showScaled,
                                             ) {
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
@@ -537,7 +538,10 @@ fun LockerScreen(
                                                         source,
                                                         home.categories
                                                     )
-                                                }.filter { it.type == viewModel.type.value }
+                                                }.filter {
+                                                    it.type == viewModel.type.value &&
+                                                            (viewModel.showScaled.value || it.isNativelyCompatible)
+                                                }
                                                     .distinctBy { it.uuid }
                                             }
                                         Carousel(

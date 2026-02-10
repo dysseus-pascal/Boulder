@@ -169,11 +169,13 @@ class LockerViewModel(
 
     fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType?) {
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { pebbleWebServices.searchAppStore(search, appType) }
+            val result = withContext(Dispatchers.IO) {
+                pebbleWebServices.searchAppStore(search, appType)
+            }
             storeSearchResults.value = result.mapNotNull { (source, app) ->
                 app.asCommonApp(watchType, platform, source)
             }.filter {
-                it.isCompatible && it.type == appType
+                it.type == appType
             }
 //            logger.v { "result: $result" }
         }
@@ -319,10 +321,11 @@ fun LockerScreen(
                     showScaled = viewModel.showScaled,
                 )
                 if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
-                    val resultQuery = remember(lockerEntries) {
+                    val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value) {
                         viewModel.storeSearchResults.map { searchResults ->
                             lockerEntries + searchResults.filter { searchResult ->
                                 !lockerEntries.any { lockerEntry -> searchResult.uuid == lockerEntry.uuid }
+                                        && (viewModel.showIncompatible.value || searchResult.isCompatible)
                             }
                         }
                     }

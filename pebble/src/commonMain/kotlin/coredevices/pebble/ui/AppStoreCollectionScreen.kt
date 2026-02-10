@@ -53,6 +53,7 @@ class AppStoreCollectionScreenViewModel(
     val path: String,
     val appType: AppType?,
 ): ViewModel(), KoinComponent {
+    val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
@@ -111,10 +112,12 @@ fun AppStoreCollectionScreen(
     LaunchedEffect(watchType) {
         viewModel.maybeLoad(watchType)
     }
-    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value) {
+    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value, viewModel.showIncompatible.value) {
         viewModel.loadedApps?.map {
             it.filter { app ->
                 if (!viewModel.showScaled.value && !app.isNativelyCompatible) {
+                    false
+                } else if (!viewModel.showIncompatible.value && !app.isCompatible) {
                     false
                 } else {
                     true
@@ -132,7 +135,7 @@ fun AppStoreCollectionScreen(
             AppsFilterRow(
                 watchType = watchType,
                 selectedType = null,
-                showIncompatible = null,
+                showIncompatible = viewModel.showIncompatible,
                 showScaled = viewModel.showScaled,
             )
             if (apps == null || apps.itemCount == 0) {

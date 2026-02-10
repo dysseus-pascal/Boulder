@@ -57,6 +57,7 @@ class PebbleDeepLinkHandler(
                 when (uri.host) {
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
                     STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
+                    NAVBAR_URL -> handleNavbar(uri.path)
                     else -> false
                 }
             }
@@ -206,6 +207,21 @@ class PebbleDeepLinkHandler(
         return true
     }
 
+    private fun handleNavbar(path: String?): Boolean {
+        if (path == null) {
+            return false
+        }
+        logger.v { "handleNavbar: $path" }
+        return when (path.removePrefix("/").removeSuffix("/")) {
+            "index" -> {
+                _navigateToPebbleDeepLink.value = PebbleDeepLink(PebbleNavBarRoutes.IndexRoute)
+                true
+            }
+
+            else -> false
+        }
+    }
+
     private fun handleGithubAuth(uri: Uri): Boolean {
         val code = uri.getQueryParameter("code")
         val state = uri.getQueryParameter("state")
@@ -223,6 +239,7 @@ class PebbleDeepLinkHandler(
     companion object {
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
+        private const val NAVBAR_URL: String = "navbar"
         private const val GITHUB_OAUTH_CALLBACK_HOST: String = "cloud.repebble.com"
         private const val GITHUB_OAUTH_CALLBACK_PATH: String = "githubAuth"
         private val TOKEN_REGEX = Regex("access_token=(.*)&t=")

@@ -237,6 +237,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     val tab = when (it.route) {
                         is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchFaces
                         is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchFaces
+                        is PebbleNavBarRoutes.IndexRoute -> WatchHomeNavTab.Index
                         else -> null
                     }
                     if (tab != null) {

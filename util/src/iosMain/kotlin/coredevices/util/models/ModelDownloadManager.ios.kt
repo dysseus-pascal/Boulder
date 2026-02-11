@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.io.files.Path as IoPath
+import kotlinx.io.files.SystemFileSystem
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
@@ -178,17 +180,17 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
     }
 
     override fun URLSession(session: NSURLSession, task: NSURLSessionTask, didCompleteWithError: NSError?) {
-        val modelsPath = CactusModelManager.getModelsDirectory()
-        val fileManager = NSFileManager.defaultManager
-        // Clean up any partially extracted data
-        val (_, slug) = task.taskDescription?.split(":", limit = 2) ?: return
-        val outputDir = modelsPath.toPath() / slug.toPath()
-        if (fileManager.fileExistsAtPath(outputDir.toString())) {
-            fileManager.removeItemAtPath(outputDir.toString(), null)
-        }
         if (didCompleteWithError != null) {
-            val (_, slug) = task.taskDescription?.split(":", limit = 2) ?: listOf("unknown", "unknown")
+            val (_, slug) = task.taskDescription?.split(":", limit = 2) ?: return
             logger.e {"Download failed for model $slug: ${didCompleteWithError.localizedDescription}"}
+
+            // Clean up any partially extracted data
+            val modelsPath = CactusModelManager.getModelsDirectory()
+            val fileManager = NSFileManager.defaultManager
+            val outputDir = modelsPath.toPath() / slug.toPath()
+            if (fileManager.fileExistsAtPath(outputDir.toString())) {
+                fileManager.removeItemAtPath(outputDir.toString(), null)
+            }
 
             if (didCompleteWithError.domain == "NSURLErrorDomain" && didCompleteWithError.code == -999L) {
                 // Download was cancelled. This is not an error.

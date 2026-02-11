@@ -54,6 +54,12 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
 
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
 
+    // Expose some internal state for debugging
+    val lastModelUsed get() = lastInitedModel
+    val isModelReady get() = sttModel.isReady()
+    val configuredMode get() = sttConfig.value.mode
+    val configuredModel get() = sttConfig.value.modelName
+
     private fun getCacheFilePath(): Path {
         SystemFileSystem.createDirectories(cacheDir, mustCreate = false)
         val fileName = "cactus_stt_${Uuid.random()}.wav"

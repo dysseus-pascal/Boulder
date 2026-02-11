@@ -13,6 +13,7 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -37,6 +38,7 @@ import kotlinx.io.writeString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
 
@@ -114,6 +116,25 @@ class BugReportProcessor(
         } catch (e: Exception) {
             logger.e(e) { "Error grabbing PKJS sessions: ${e.message}" }
             "Error grabbing PKJS sessions\n"
+        }
+    }
+
+    private fun getSTTSummary(): String {
+        return try {
+            // Lazy grab in case of init issues
+            val transcriptionService = KoinPlatform.getKoin().get<CactusTranscriptionService>()
+            val lastModel = transcriptionService.lastModelUsed
+            val isModelReady = transcriptionService.isModelReady
+            val configuredModel = transcriptionService.configuredModel
+            val configuredMode = transcriptionService.configuredMode
+            "\nSTT Summary\n" +
+                    "Configured mode: $configuredMode\n" +
+                    "Configured model: $configuredModel\n" +
+                    "Is model ready: $isModelReady\n" +
+                    "Last model used: $lastModel\n"
+        } catch (e: Exception) {
+            logger.e(e) { "Error grabbing STT sessions: ${e.message}" }
+            "Error grabbing STT sessions\n"
         }
     }
 
@@ -223,16 +244,18 @@ class BugReportProcessor(
     ): String {
         val deviceSummary = generateDeviceSummary(experimentalDevices)
         val pkjsSummary = getPKJSSummary()
+        val sttSummary = getSTTSummary()
         val summaryWithAttachmentCount = buildString {
             append(deviceSummary)
             append(pkjsSummary)
+            append(sttSummary)
             if (screenContext.isNotEmpty()) {
                 append("\n${screenContext}")
             }
             attachments.onEach {
                 append("\nAttachment: ${it.fileName}")
             }
-            append("Time since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
+            append("\nTime since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
         }
         return summaryWithAttachmentCount
     }

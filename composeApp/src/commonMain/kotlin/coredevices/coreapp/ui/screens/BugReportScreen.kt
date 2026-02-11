@@ -369,7 +369,7 @@ fun BugReportScreen(
                 PebbleElevatedButton(
                     onClick = {
                         scope.launch {
-                            platform.openUrl("https://help.repebble.com/articles/988518-submitting-a-great-bug-report")
+                            platform.openUrl("https://pbl.zip/bugs")
                         }
                     },
                     modifier = Modifier.padding(8.dp),

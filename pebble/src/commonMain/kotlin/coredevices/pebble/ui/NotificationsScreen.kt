@@ -80,6 +80,9 @@ fun NotificationsScreenContent(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationScreenViewModel>()
         val pebbleFeatures = koinInject<PebbleFeatures>()
+        fun gotoDefaultTab() {
+            viewModel.tab.value = NotificationTab.Apps
+        }
 
         Column {
             if (pebbleFeatures.supportsNotificationFiltering()) {
@@ -103,8 +106,8 @@ fun NotificationsScreenContent(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
             }
             when (viewModel.tab.value) {
-                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav)
-                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav)
+                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav, ::gotoDefaultTab)
+                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav, ::gotoDefaultTab)
 //            NotificationTab.Rules -> NotificationRulesScreen(topBarParams, nav)
 //            NotificationTab.History -> NotificationHistoryScreen(topBarParams, nav)
             }

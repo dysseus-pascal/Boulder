@@ -338,7 +338,11 @@ please disable the option.""".trimIndent(),
             topBarParams.title("Settings")
             launch {
                 topBarParams.scrollToTop.collect {
-                    listState.animateScrollToItem(0)
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else {
+                        viewModel.selectedTopLevelType = TopLevelType.Phone
+                    }
                 }
             }
         }

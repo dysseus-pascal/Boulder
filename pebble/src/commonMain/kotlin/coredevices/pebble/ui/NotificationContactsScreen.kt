@@ -60,7 +60,7 @@ class ContactsViewModel(
 }
 
 @Composable
-fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefaultTab: () -> Unit) {
     val viewModel = koinViewModel<ContactsViewModel>()
     val libPebble = rememberLibPebble()
     val items = remember(
@@ -79,7 +79,11 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         topBarParams.searchAvailable(viewModel.searchState)
         launch {
             topBarParams.scrollToTop.collect {
-                listState.animateScrollToItem(0)
+                if (listState.firstVisibleItemIndex > 0) {
+                    listState.animateScrollToItem(0)
+                } else {
+                    gotoDefaultTab()
+                }
             }
         }
     }

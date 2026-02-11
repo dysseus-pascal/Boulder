@@ -56,7 +56,7 @@ class NotificationAppsScreenViewModel : ViewModel() {
 }
 
 @Composable
-fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefaultTab: () -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
         val listState = rememberLazyListState()
@@ -64,7 +64,11 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             topBarParams.searchAvailable(viewModel.searchState)
             launch {
                 topBarParams.scrollToTop.collect {
-                    listState.animateScrollToItem(0)
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else {
+                        gotoDefaultTab()
+                    }
                 }
             }
         }

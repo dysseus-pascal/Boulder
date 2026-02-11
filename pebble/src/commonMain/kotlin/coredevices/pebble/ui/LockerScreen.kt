@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -223,7 +224,8 @@ fun LockerScreen(
         val title = stringResource(Res.string.apps)
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
-        val listState = rememberLazyListState()
+        val mainListState = rememberLazyListState()
+        val searchListState = rememberLazyListState()
         val collectionsDao: AppstoreCollectionDao = koinInject()
         val collections by collectionsDao.getAllCollectionsFlow().collectAsState(null)
         if (collections == null) {
@@ -260,7 +262,20 @@ fun LockerScreen(
             }
             launch {
                 topBarParams.scrollToTop.collect {
-                    listState.animateScrollToItem(0)
+                    val listState = if (viewModel.searchState.query.isNotEmpty()) {
+                        searchListState
+                    } else {
+                        mainListState
+                    }
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else if (viewModel.searchState.show) {
+                        viewModel.searchState.show = false
+                        viewModel.searchState.typing = false
+                        viewModel.searchState.query = ""
+                    } else {
+                        viewModel.type.value = AppType.Watchface
+                    }
                 }
             }
         }
@@ -336,6 +351,7 @@ fun LockerScreen(
                             results = results,
                             navBarNav = navBarNav,
                             topBarParams = topBarParams,
+                            lazyListState = searchListState,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -362,7 +378,7 @@ fun LockerScreen(
 
                             LazyColumn(
                                 modifier = Modifier.fillMaxWidth(),
-                                state = listState,
+                                state = mainListState,
                             ) {
                                 @Composable
                                 fun Carousel(
@@ -689,12 +705,13 @@ fun SearchResultsList(
     results: List<CommonApp>,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
+    lazyListState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
     val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker || it.commonAppType is CommonAppType.System }
     val scope = rememberCoroutineScope()
-    LazyColumn(modifier) {
+    LazyColumn(modifier, lazyListState) {
         if (lockerApps.isNotEmpty()) {
             item {
                 Text(

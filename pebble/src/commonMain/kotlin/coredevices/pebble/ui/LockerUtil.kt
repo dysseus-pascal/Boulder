@@ -481,6 +481,11 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
         return null
     }
+    val screenshotPlatform = assetCollections.find {
+        it.hardwarePlatform == watchType.codename
+    } ?: assetCollections.find {
+        watchType.getCompatibleAppVariants().any { plat -> plat.codename == it.hardwarePlatform }
+    }
     return CommonApp(
         title = title,
         developerName = author,
@@ -491,9 +496,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         category = category,
         version = null,
         listImageUrl = listImage,
-        // TODO add fallback hardwarePlatforms
-//        screenshotImageUrl = assetCollections.find { it.hardwarePlatform == watchType.codename }?.screenshots?.firstOrNull() ?: screenshotImages.firstOrNull(),
-        screenshotImageUrl = screenshotImages.firstOrNull(),
+        screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull() ?: screenshotImages.firstOrNull(),
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,

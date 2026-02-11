@@ -167,10 +167,10 @@ class LockerViewModel(
         }
     }
 
-    fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType?) {
+    fun searchStore(search: String, watchType: WatchType, platform: Platform, appType: AppType) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                pebbleWebServices.searchAppStore(search, appType)
+                pebbleWebServices.searchAppStore(search, appType, watchType)
             }
             storeSearchResults.value = result.mapNotNull { (source, app) ->
                 app.asCommonApp(watchType, platform, source)

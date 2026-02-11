@@ -370,7 +370,7 @@ class AppstoreService(
         }
     }
 
-    suspend fun search(search: String, type: AppType? = null): List<StoreSearchResult> {
+    suspend fun search(search: String, appType: AppType, watchType: WatchType): List<StoreSearchResult> {
         if (searchClient == null) {
             logger.w { "searchClient is null, cannot search" }
             return emptyList()
@@ -382,7 +382,13 @@ class AppstoreService(
 //                searchParams = SearchParams.of(SearchParamsString(search)),
                 searchParams = SearchParamsObject(
                     query = search,
-                    tagFilters = type?.let { TagFilters.of(type.code) },
+                    tagFilters = TagFilters.of(
+                        listOf(
+                            TagFilters.of(appType.code),
+                            TagFilters.of(platform.storeString()),
+                            TagFilters.of(watchType.codename),
+                        )
+                    ),
                 ),
             ).hits.mapNotNull {
                 it.additionalProperties?.let { props ->

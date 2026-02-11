@@ -314,13 +314,13 @@ class RealPebbleWebServices(
         }.awaitAll().filterNotNull()
     }
 
-    suspend fun searchAppStore(search: String, type: AppType?): List<Pair<AppstoreSource, StoreSearchResult>> {
+    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
         return getAllSources().map { source ->
             scope.async {
                 val appstore = appstoreServiceForSource(source)
                 try {
-                    appstore.search(search, type).map {
+                    appstore.search(search, appType, watchType).map {
                         Pair(source, it)
                     }
                 } catch (e: AlgoliaApiException) {

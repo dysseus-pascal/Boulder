@@ -74,6 +74,7 @@ import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
+import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
@@ -454,10 +455,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
-        isNativelyCompatible = when (watchType) {
-            // Emery is the only platform where "compatible" apps can be used but are
-            // "suboptimal" (need scaling). Enable flagging that.
-            WatchType.EMERY, WatchType.GABBRO -> {
+        isNativelyCompatible = when {
+            watchType.performsScaling() -> {
                 when {
                     // If store doesn't report binary info, mark as compatible
                     hardwarePlatforms == null -> true
@@ -474,6 +473,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         appstoreSource = source,
     )
 }
+
+
 
 fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
     val appType = AppType.fromString(type)
@@ -500,7 +501,14 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
-        isNativelyCompatible = true, // TODO (but OK for now)
+        isNativelyCompatible = when {
+            watchType.performsScaling() -> {
+                val platformCompatibility = compatibility.findPlatform(watchType)
+                // Mark as compatible if API doesn't set the field
+                platformCompatibility?.hasBinary == null || platformCompatibility.hasBinary == true
+            }
+            else -> true
+        },
         storeId = id,
         developerId = null,
         sourceLink = null,
@@ -744,6 +752,18 @@ fun LockerEntryCompatibility.isCompatible(watchType: WatchType, platform: Platfo
         if (gabbro?.supported == true) add(WatchType.GABBRO)
     }
     return watchType.getCompatibleAppVariants().intersect(appVariants).isNotEmpty()
+}
+
+fun LockerEntryCompatibility.findPlatform(watchType: WatchType): LockerEntryCompatibilityWatchPlatformDetails? {
+    return when (watchType) {
+        WatchType.APLITE -> aplite
+        WatchType.BASALT -> basalt
+        WatchType.CHALK -> chalk
+        WatchType.DIORITE -> diorite
+        WatchType.EMERY -> emery
+        WatchType.FLINT -> flint
+        WatchType.GABBRO -> gabbro
+    }
 }
 
 val DEFAULT_CATEGORIES_FACES = listOf(

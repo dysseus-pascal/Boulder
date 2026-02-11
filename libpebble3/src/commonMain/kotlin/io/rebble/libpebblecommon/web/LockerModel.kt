@@ -93,7 +93,9 @@ data class LockerEntryCompatibilityPhonePlatformDetails(
 @Serializable
 data class LockerEntryCompatibilityWatchPlatformDetails(
     val supported: Boolean,
-    val firmware: LockerEntryFirmwareVersion
+    val firmware: LockerEntryFirmwareVersion,
+    @SerialName("has_binary")
+    val hasBinary: Boolean? = null,
 )
 
 @Serializable

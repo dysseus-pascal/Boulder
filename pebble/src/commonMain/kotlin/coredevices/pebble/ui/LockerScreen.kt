@@ -341,6 +341,7 @@ fun LockerScreen(
                             lockerEntries + searchResults.filter { searchResult ->
                                 !lockerEntries.any { lockerEntry -> searchResult.uuid == lockerEntry.uuid }
                                         && (viewModel.showIncompatible.value || searchResult.isCompatible)
+                                        && (viewModel.showScaled.value || searchResult.isNativelyCompatible)
                             }
                         }
                     }

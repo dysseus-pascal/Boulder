@@ -1,7 +1,9 @@
 package coredevices.coreapp
 
 import android.app.Application
+import android.os.Build.VERSION.SDK_INT
 import android.os.StrictMode
+import androidx.compose.foundation.layout.add
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -12,6 +14,8 @@ import co.touchlab.kermit.Severity
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
@@ -137,6 +141,11 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
             }
             .components {
                 add(SvgDecoder.Factory())
+                if (SDK_INT >= 28) {
+                    add(AnimatedImageDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
             }
             .build()
     }

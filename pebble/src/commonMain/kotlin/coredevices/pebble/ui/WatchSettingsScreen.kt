@@ -109,6 +109,7 @@ import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -1195,7 +1196,7 @@ please disable the option.""".trimIndent(),
                     action = {
                         libPebble.watches.value.filterIsInstance<ConnectedPebble.CompanionAppControl>()
                             .forEach {
-                                (it.currentCompanionAppSession.value as? PKJSApp)?.debugForceGC()
+                                it.currentCompanionAppSessions.value.filterIsInstance<PKJSApp>().firstOrNull()?.debugForceGC()
                             }
                     },
                     isDebugSetting = true,

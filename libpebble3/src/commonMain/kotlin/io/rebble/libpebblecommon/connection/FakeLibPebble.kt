@@ -611,7 +611,7 @@ class FakeConnectedDevice(
 
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
-    override val currentCompanionAppSession: StateFlow<CompanionApp?> = MutableStateFlow(null)
+    override val currentCompanionAppSessions: StateFlow<List<CompanionApp>> = MutableStateFlow(emptyList())
 
     override suspend fun startDevConnection() {}
     override suspend fun stopDevConnection() {}

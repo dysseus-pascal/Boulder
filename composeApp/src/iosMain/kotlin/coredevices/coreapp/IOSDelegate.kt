@@ -24,7 +24,6 @@ import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
-import coredevices.haversine.toKotlinInstant
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.watchModule

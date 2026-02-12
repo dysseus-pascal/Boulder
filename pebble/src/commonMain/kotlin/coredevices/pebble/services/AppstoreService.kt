@@ -316,7 +316,7 @@ class AppstoreService(
                         LoadResult.Page(
                             data = apps,
                             prevKey = if (offset > 0) (offset - params.loadSize).coerceAtLeast(0) else null,
-                            nextKey = if (response.data.size == params.loadSize) offset + params.loadSize else null,
+                            nextKey = if (response.links.nextPage != null) offset + params.loadSize else null,
                         )
                     } else {
                         LoadResult.Error(IllegalStateException("Null response"))

@@ -52,6 +52,7 @@ class JavascriptCoreJsRunner(
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
+    private val interfaceInstanceRefs = mutableListOf<StableRef<RegisterableJsInterface>>()
     private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
     private val functionRefs = mutableListOf<StableRef<*>>()
     private var navigatorRef: StableRef<JSValue>? = null
@@ -87,6 +88,12 @@ class JavascriptCoreJsRunner(
         )
         interfacesRef = StableRef.create(instances)
         instances.forEach {
+            // Pin each interface instance individually to prevent K/N GC from moving
+            // the receiver object that bound function references (this::method) point to.
+            // Without this, JSC can call an ObjC block whose captured receiver pointer
+            // has been invalidated by K/N GC compaction.
+            interfaceInstanceRefs.add(StableRef.create(it))
+
             // Create a JavaScript object and set properties individually to avoid passing
             // Kotlin Map objects which can be moved by GC
             val jsObject = jsContext.evaluateScript("({})")!!
@@ -158,6 +165,9 @@ class JavascriptCoreJsRunner(
                 it.dispose()
             }
             interfacesRef = null
+            // Dispose all interface instance references
+            interfaceInstanceRefs.forEach { it.dispose() }
+            interfaceInstanceRefs.clear()
             // Dispose all interface map references
             interfaceMapRefs.forEach { it.dispose() }
             interfaceMapRefs.clear()

@@ -19,9 +19,49 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-class AppstoreCache(
+interface AppstoreCache {
+    suspend fun readApp(
+        id: String,
+        parameters: Map<String, String>,
+        source: AppstoreSource,
+    ): StoreAppResponse?
+
+    suspend fun writeApp(
+        app: StoreAppResponse,
+        parameters: Map<String, String>,
+        source: AppstoreSource,
+    )
+
+    suspend fun writeCategories(
+        categories: List<StoreCategory>,
+        type: AppType,
+        source: AppstoreSource,
+    )
+
+    suspend fun readCategories(
+        type: AppType,
+        source: AppstoreSource,
+    ): List<StoreCategory>?
+
+    suspend fun writeHome(
+        home: AppStoreHome,
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    )
+
+    suspend fun readHome(
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ): AppStoreHome?
+
+    suspend fun clearCache()
+}
+
+class RealAppstoreCache(
     appContext: AppContext,
-) {
+) : AppstoreCache {
     private val appCacheDir by lazy { getTempFilePath(appContext, "locker_cache") }
     private val categoryCacheDir by lazy {  getTempFilePath(appContext, "category_cache") }
     private val homeCacheDir by lazy {  getTempFilePath(appContext, "home_cache") }
@@ -38,7 +78,7 @@ class AppstoreCache(
 
     // Apps
 
-    suspend fun readApp(
+    override suspend fun readApp(
         id: String,
         parameters: Map<String, String>,
         source: AppstoreSource,
@@ -59,7 +99,7 @@ class AppstoreCache(
         return@withContext null
     }
 
-    suspend fun writeApp(
+    override suspend fun writeApp(
         app: StoreAppResponse,
         parameters: Map<String, String>,
         source: AppstoreSource,
@@ -112,7 +152,7 @@ class AppstoreCache(
 
     // Categories
 
-    suspend fun writeCategories(
+    override suspend fun writeCategories(
         categories: List<StoreCategory>,
         type: AppType,
         source: AppstoreSource,
@@ -127,7 +167,7 @@ class AppstoreCache(
         }
     }
 
-    suspend fun readCategories(
+    override suspend fun readCategories(
         type: AppType,
         source: AppstoreSource,
     ): List<StoreCategory>? = withContext(Dispatchers.Default) {
@@ -182,7 +222,7 @@ class AppstoreCache(
         return hash.toHexString()
     }
 
-    suspend fun writeHome(
+    override suspend fun writeHome(
         home: AppStoreHome,
         type: AppType,
         source: AppstoreSource,
@@ -202,7 +242,7 @@ class AppstoreCache(
         }
     }
 
-    suspend fun readHome(
+    override suspend fun readHome(
         type: AppType,
         source: AppstoreSource,
         parameters: Map<String, String>,
@@ -226,7 +266,7 @@ class AppstoreCache(
 
     // Maintainence
 
-    suspend fun clearCache() = withContext(Dispatchers.Default) {
+    override suspend fun clearCache() = withContext(Dispatchers.Default) {
         logger.i { "Clearing cache!" }
         homeCacheDir.clear()
         categoryCacheDir.clear()

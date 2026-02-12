@@ -4,7 +4,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.util.CoreConfigHolder
 import coredevices.util.WeatherUnit
 import dev.jordond.compass.Coordinates
@@ -21,7 +21,7 @@ import kotlin.uuid.Uuid
 private val logger = Logger.withTag("YahooWeatherInterceptor")
 
 class YahooWeatherInterceptor(
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
     private val geocoder: Geocoder,
     private val coreConfigHolder: CoreConfigHolder,
 ) : HttpInterceptor {

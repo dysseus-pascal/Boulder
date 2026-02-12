@@ -18,7 +18,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.rememberLibPebble
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_ADD_TO_LOCKER_RESULT
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_LOAD_TO_DEVICE_RESULT
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_QUERY
@@ -87,7 +87,7 @@ fun AppStoreScreen(
         }
 
         val scope = rememberCoroutineScope()
-        val webServices = koinInject<RealPebbleWebServices>()
+        val webServices = koinInject<PebbleWebServices>()
         val watchesFiltered = remember {
             libPebble.watches.map {
                 it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()

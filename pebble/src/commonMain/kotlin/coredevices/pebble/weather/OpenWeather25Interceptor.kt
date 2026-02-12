@@ -3,7 +3,7 @@ package coredevices.pebble.weather
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.util.CoreConfigHolder
 import coredevices.util.WeatherUnit
 import dev.jordond.compass.geocoder.Geocoder
@@ -22,7 +22,7 @@ import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class OpenWeather25Interceptor(
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
     private val clock: Clock,
     private val geocoder: Geocoder,
     private val coreConfigHolder: CoreConfigHolder,

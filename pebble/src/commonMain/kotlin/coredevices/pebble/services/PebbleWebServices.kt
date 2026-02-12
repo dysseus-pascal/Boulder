@@ -183,6 +183,18 @@ class PebbleHttpClient(
     override suspend fun getBootConfig(url: String): BootConfig? = get(url, auth = false)
 }
 
+interface PebbleWebServices {
+    suspend fun fetchUsersMe(): UsersMeResponse?
+    suspend fun fetchPebbleLocker(): LockerModel?
+    suspend fun addToLegacyLocker(uuid: String): Boolean
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
+    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>>
+    suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
+    suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
+    suspend fun removeFromLegacyLocker(id: Uuid): Boolean
+    suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse?
+}
+
 class RealPebbleWebServices(
     private val httpClient: PebbleHttpClient,
     private val firmwareUpdateCheck: FirmwareUpdateCheck,
@@ -191,7 +203,7 @@ class RealPebbleWebServices(
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
     private val coreConfig: CoreConfigFlow
-) : WebServices, KoinComponent {
+) : WebServices, PebbleWebServices, KoinComponent {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val logger = Logger.withTag("PebbleWebServices")
@@ -252,7 +264,7 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
+    override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
         return if (coreConfig.value.useNativeAppStore) {
@@ -271,7 +283,7 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun removeFromLegacyLocker(id: Uuid): Boolean {
+    override suspend fun removeFromLegacyLocker(id: Uuid): Boolean {
         return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
     }
 
@@ -282,18 +294,18 @@ class RealPebbleWebServices(
         memfault.uploadChunk(chunk, watchInfo)
     }
 
-    suspend fun addToLegacyLocker(uuid: String): Boolean =
+    override suspend fun addToLegacyLocker(uuid: String): Boolean =
         put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.status?.isSuccess() == true
 
-    suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? {
+    override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? {
         return put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.body()
     }
 
-    suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
+    override suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
 
-    suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
+    override suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
+    override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
         return getAllSources(enabledOnly).mapNotNull {
             val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
             if (home == null) return@mapNotNull null
@@ -301,7 +313,7 @@ class RealPebbleWebServices(
         }
     }
 
-    suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
+    override suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
         val url = "https://weather-api.repebble.com/api/v1/geocode/$latitude/$longitude?language=$language&units=${units.code}"
         return httpClient.get(url, auth = false)
     }
@@ -314,7 +326,7 @@ class RealPebbleWebServices(
         }.awaitAll().filterNotNull()
     }
 
-    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
+    override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
         return getAllSources().map { source ->
             scope.async {

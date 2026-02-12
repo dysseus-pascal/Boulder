@@ -48,11 +48,10 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
-import coredevices.pebble.isConnected
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PebbleAccountProvider
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreSearchResult
@@ -77,7 +76,6 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
@@ -531,7 +529,7 @@ fun CommonAppType.canStartApp(): Boolean = when (this) {
 class NativeLockerAddUtil(
     private val libPebble: LibPebble,
     private val pebbleAccountProvider: PebbleAccountProvider,
-    private val webServices: RealPebbleWebServices,
+    private val webServices: PebbleWebServices,
     private val coreConfig: CoreConfigFlow,
 ) {
     suspend fun addAppToLocker(

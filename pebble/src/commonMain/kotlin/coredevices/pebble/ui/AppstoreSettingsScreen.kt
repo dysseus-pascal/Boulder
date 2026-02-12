@@ -37,7 +37,7 @@ import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.account.PebbleAccount
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.ui.M3Dialog
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
@@ -55,7 +55,7 @@ import org.koin.core.parameter.parametersOf
 class AppstoreSettingsScreenViewModel(
     private val sourceDao: AppstoreSourceDao,
     private val collectionDao: AppstoreCollectionDao,
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
 ) : ViewModel() {
     val sources = sourceDao.getAllSources()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())

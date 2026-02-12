@@ -9,6 +9,7 @@ import coredevices.pebble.account.GithubAccount
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
 import coredevices.pebble.account.RealBootConfigProvider
+import coredevices.pebble.account.RealFirestoreLocker
 import coredevices.pebble.account.RealGithubAccount
 import coredevices.pebble.account.RealPebbleAccount
 import coredevices.pebble.firmware.Cohorts
@@ -26,6 +27,8 @@ import coredevices.pebble.services.NullTranscriptionProvider
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleBootConfigService
 import coredevices.pebble.services.PebbleHttpClient
+import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.RealAppstoreCache
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
@@ -103,8 +106,8 @@ val watchModule = module {
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
     singleOf(::RealGithubAccount) bind GithubAccount::class
     singleOf(::FirestoreLockerDao)
-    singleOf(::FirestoreLocker)
-    singleOf(::AppstoreCache)
+    singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
+    singleOf(::RealAppstoreCache) bind AppstoreCache::class
     single { MobileGeocoder() } bind Geocoder::class
     single { InjectedPKJSHttpInterceptors(
         listOf(
@@ -116,8 +119,8 @@ val watchModule = module {
         AppstoreService(get(), get(), p.get(), get(), get(), get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
-    factoryOf(::RealPebbleWebServices) bind WebServices::class
-    singleOf(::PebbleDeepLinkHandler)
+    factoryOf(::RealPebbleWebServices) binds arrayOf(WebServices::class, PebbleWebServices::class)
+    singleOf(::RealPebbleDeepLinkHandler) bind PebbleDeepLinkHandler::class
     factoryOf(::PebbleHttpClient) bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
     factoryOf(::Memfault)

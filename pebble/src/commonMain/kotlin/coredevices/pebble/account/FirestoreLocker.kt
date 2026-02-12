@@ -4,8 +4,6 @@ import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.REBBLE_FEED_URL
-import coredevices.pebble.services.RealPebbleWebServices
-import coredevices.pebble.services.toLockerEntry
 import coredevices.pebble.ui.CommonAppType
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -14,15 +12,8 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreException
 import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.code
-import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -93,14 +84,21 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
     }
 }
 
-class FirestoreLocker(
+interface FirestoreLocker {
+    suspend fun readLocker(): List<FirestoreLockerEntry>?
+    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper?
+    suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean
+    suspend fun removeApp(uuid: Uuid): Boolean
+}
+
+class RealFirestoreLocker(
     private val dao: FirestoreLockerDao,
-): KoinComponent {
+): KoinComponent, FirestoreLocker {
     companion object {
         private val logger = Logger.withTag("FirestoreLocker")
     }
 
-    suspend fun readLocker(): List<FirestoreLockerEntry>? {
+    override suspend fun readLocker(): List<FirestoreLockerEntry>? {
         val user = Firebase.auth.currentUser ?: return null
         return try {
             dao.getLockerEntriesForUser(user.uid)
@@ -110,7 +108,7 @@ class FirestoreLocker(
         }
     }
 
-    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
+    override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = try {
             dao.getLockerEntriesForUser(user.uid)
@@ -152,7 +150,7 @@ class FirestoreLocker(
         )
     }
 
-    suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
+    override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false
@@ -175,7 +173,7 @@ class FirestoreLocker(
         }
     }
 
-    suspend fun removeApp(uuid: Uuid): Boolean {
+    override suspend fun removeApp(uuid: Uuid): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false

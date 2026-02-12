@@ -191,7 +191,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override val activeWatchface: StateFlow<LockerWrapper?>
-        get() = MutableStateFlow(null)
+        get() = MutableStateFlow(fakeLockerEntry())
 
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 

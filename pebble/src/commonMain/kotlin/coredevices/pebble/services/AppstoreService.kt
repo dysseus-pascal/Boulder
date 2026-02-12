@@ -49,7 +49,7 @@ class AppstoreService(
     private val cache: AppstoreCache,
     private val appstoreCollectionDao: AppstoreCollectionDao,
     private val pebbleAccountProvider: PebbleAccountProvider,
-    private val realPebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -89,7 +89,7 @@ class AppstoreService(
     }
 
     private suspend fun fetchAppStoreAppsFromPwsLocker(): List<LockerEntry> {
-        val locker = realPebbleWebServices.fetchPebbleLocker()
+        val locker = pebbleWebServices.fetchPebbleLocker()
         if (locker == null) {
             logger.w { "Failed to fetch Pebble locker" }
             return emptyList()

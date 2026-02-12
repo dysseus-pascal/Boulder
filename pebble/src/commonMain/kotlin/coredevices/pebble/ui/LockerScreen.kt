@@ -89,7 +89,7 @@ import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreCategory
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
@@ -124,7 +124,7 @@ const val REBBLE_LOGIN_URI = "https://boot.rebble.io"
 private val logger = Logger.withTag("LockerScreen")
 
 class LockerViewModel(
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
     private val storeSourceDao: AppstoreSourceDao,
 ) : ViewModel() {
     val storeHomeAllFeeds = mutableStateMapOf<AppType, List<AppStoreHomeResult>>()
@@ -279,8 +279,8 @@ fun LockerScreen(
                 }
             }
         }
-        val deepLinkHandler: PebbleDeepLinkHandler = koinInject()
-        val initialLockerSyncInProgress by deepLinkHandler.initialLockerSync.collectAsState()
+        val initialLockerSync: PebbleDeepLinkHandler = koinInject()
+        val initialLockerSyncInProgress by initialLockerSync.initialLockerSync.collectAsState()
         LaunchedEffect(initialLockerSyncInProgress) {
             if (initialLockerSyncInProgress) {
                 topBarParams.showSnackbar("Loading Locker")

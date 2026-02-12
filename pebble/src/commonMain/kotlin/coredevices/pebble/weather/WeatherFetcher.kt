@@ -5,7 +5,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.database.WeatherLocationDao
 import coredevices.database.WeatherLocationEntity
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
 import dev.jordond.compass.Place
@@ -20,13 +20,8 @@ import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherType
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -42,7 +37,7 @@ private val logger = Logger.withTag("WeatherFetcher")
 class WeatherFetcher(
     private val systemGeolocation: SystemGeolocation,
     private val coreConfigFlow: CoreConfigFlow,
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
     private val libPebble: LibPebble,
     private val clock: Clock,
     private val settings: Settings,

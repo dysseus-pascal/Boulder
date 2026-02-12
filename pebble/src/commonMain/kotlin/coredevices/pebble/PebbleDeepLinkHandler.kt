@@ -28,7 +28,14 @@ expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
 
 expect fun writeFile(appContext: AppContext, uri: Uri): Path?
 
-class PebbleDeepLinkHandler(
+interface PebbleDeepLinkHandler {
+    val initialLockerSync: StateFlow<Boolean>
+    val snackBarMessages: SharedFlow<String>
+    val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?>
+    fun handle(uri: Uri?): Boolean
+}
+
+class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
     private val libPebble: LibPebble,
     private val github: Github,
@@ -36,21 +43,21 @@ class PebbleDeepLinkHandler(
     private val context: AppContext,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val coreConfigFlow: CoreConfigFlow,
-) {
+) : PebbleDeepLinkHandler {
     private val logger = Logger.withTag("PebbleDeepLinkHandler")
     private val _initialLockerSync = MutableStateFlow(false)
-    val initialLockerSync: StateFlow<Boolean> = _initialLockerSync.asStateFlow()
+    override val initialLockerSync: StateFlow<Boolean> = _initialLockerSync.asStateFlow()
     private val _snackBarMessages = MutableSharedFlow<String>(extraBufferCapacity = 5)
-    val snackBarMessages: SharedFlow<String> = _snackBarMessages.asSharedFlow()
+    override val snackBarMessages: SharedFlow<String> = _snackBarMessages.asSharedFlow()
     private val _navigateToPebbleDeepLink = MutableStateFlow<PebbleDeepLink?>(null)
-    val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
+    override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
 
     data class PebbleDeepLink(
         val route: NavBarRoute,
         var consumed: Boolean = false,
     )
 
-    fun handle(uri: Uri?): Boolean {
+    override fun handle(uri: Uri?): Boolean {
         uri ?: return false
         return when {
             uri.scheme == "pebble" -> {

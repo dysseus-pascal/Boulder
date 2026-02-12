@@ -846,6 +846,7 @@ fun fakeLockerEntry(): LockerWrapper {
             developerId = "123",
             sourceLink = "https://example.com",
             storeId = "6962e51d29173c0009b18f8e",
+            capabilities = emptyList(),
         ),
         sideloaded = false,
         configurable = Random.nextBoolean(),

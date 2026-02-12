@@ -65,6 +65,7 @@ import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
+import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.LockerWrapper
@@ -341,6 +342,7 @@ data class CommonApp(
     val storeId: String?,
     val sourceLink: String?,
     val appstoreSource: AppstoreSource?,
+    val capabilities: List<AppCapability>,
 )
 
 interface CommonAppTypeLocal {
@@ -416,6 +418,7 @@ fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSou
         storeId = properties.storeId,
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
+        capabilities = properties.capabilities,
     )
 }
 
@@ -469,6 +472,7 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
         sourceLink = this.source,
         categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
+        capabilities = AppCapability.fromString(capabilities),
     )
 }
 
@@ -512,6 +516,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         sourceLink = null,
         categorySlug = null,
         appstoreSource = source,
+        capabilities = emptyList(),
     )
 }
 

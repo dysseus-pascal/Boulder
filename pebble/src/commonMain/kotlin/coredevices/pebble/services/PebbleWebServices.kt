@@ -741,6 +741,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
             releaseId = ""
         ),
         links = LockerEntryLinks("", "", ""),
+        capabilities = app.capabilities,
         compatibility = app.compatibility,
         companions = app.companions,
         category = app.category,

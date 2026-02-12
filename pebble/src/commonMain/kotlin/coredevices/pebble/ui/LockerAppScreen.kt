@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,10 +25,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +73,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -362,6 +368,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         modifier = Modifier.padding(5.dp),
                     )
                 }
+                // Only show for store, right now (until we figure out populating data or locker)
+                if (entry.capabilities.isNotEmpty() && entry.commonAppType is CommonAppType.Store) {
+                    FlowRow(modifier = Modifier.padding(5.dp)) {
+                        entry.capabilities.forEach { permission ->
+                            PermissionItem(permission, entry, topBarParams)
+                        }
+                    }
+                }
                 if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
 //                    val hasUuidConflict = remember(viewModel.storeEntries) { // One store has multiple entries with same uuid
 //                        viewModel.storeEntries?.let {
@@ -603,6 +617,40 @@ private fun PropertyRow(
     if (multiRow) {
         Text(text = value, modifier = Modifier.padding(start = 8.dp))
     }
+}
+
+@Composable
+fun PermissionItem(permission: AppCapability, entry: CommonApp, topBarParams: TopBarParams) {
+    if (entry.commonAppType is CommonAppType.Locker) {
+        // TODO
+    } else {
+        AssistChip(
+            onClick = {
+                topBarParams.showSnackbar(permission.description())
+            },
+            label = { Text(permission.name()) },
+            leadingIcon = { Icon(permission.icon(), null) },
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+    }
+}
+
+fun AppCapability.icon(): ImageVector = when (this) {
+    AppCapability.Health -> Icons.Default.HealthAndSafety
+    AppCapability.Location -> Icons.Default.LocationSearching
+    AppCapability.Timeline -> Icons.Default.LocationOn
+}
+
+fun AppCapability.name(): String = when (this) {
+    AppCapability.Health -> "Health"
+    AppCapability.Location -> "Location"
+    AppCapability.Timeline -> "Timeline"
+}
+
+fun AppCapability.description(): String = when (this) {
+    AppCapability.Health -> "Can access health data"
+    AppCapability.Location -> "Can access location"
+    AppCapability.Timeline -> "Can create timeline pins"
 }
 
 suspend fun LibPebble.launchApp(

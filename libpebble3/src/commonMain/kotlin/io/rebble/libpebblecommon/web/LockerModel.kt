@@ -36,6 +36,7 @@ data class LockerEntry(
     val developer: LockerEntryDeveloper,
     @SerialName("hardware_platforms") val hardwarePlatforms: List<LockerEntryPlatform>,
     val compatibility: LockerEntryCompatibility,
+    val capabilities: List<String>? = null,
     val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null,
     val source: String? = null,

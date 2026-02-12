@@ -321,6 +321,7 @@ class Locker(
                         },
                         systemApp = true,
                         orderIndex = systemApp.defaultOrder,
+                        capabilities = emptyList(),
                     )
                 }
 
@@ -375,6 +376,7 @@ fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemA
         developerId = null,
         storeId = null,
         sourceLink = null,
+        capabilities = emptyList(),
     ),
     systemApp = this,
 )
@@ -409,6 +411,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
             developerId = appstoreData?.developerId,
             storeId = appstoreData?.storeId,
             sourceLink = appstoreData?.sourceLink,
+            capabilities = AppCapability.fromString(capabilities),
         ),
         sideloaded = sideloaded,
         configurable = configurable,
@@ -475,6 +478,10 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
             )
         },
         orderIndex = orderIndex,
+        capabilities = buildList {
+            capabilities?.let { addAll(it) }
+            if (isTimelineEnabled == true) { add(AppCapability.Timeline.code) }
+        },
     )
 }
 

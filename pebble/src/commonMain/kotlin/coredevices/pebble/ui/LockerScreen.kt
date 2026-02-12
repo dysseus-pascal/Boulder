@@ -873,6 +873,7 @@ val testApps = listOf(
         storeId = "6962e51d29173c0009b18f8e",
         sourceLink = "https://example.com",
         appstoreSource = null,
+        capabilities = emptyList(),
     ),
     CommonApp(
         title = "Another Watchface",
@@ -899,6 +900,7 @@ val testApps = listOf(
         storeId = "6962e51d29173c0009b18f8f",
         sourceLink = "https://example.com",
         appstoreSource = null,
+        capabilities = emptyList(),
     ),
     CommonApp(
         title = "Third Watchface",
@@ -925,6 +927,7 @@ val testApps = listOf(
         storeId = "6962e51d29173c0009b18f8d",
         sourceLink = "https://example.com",
         appstoreSource = null,
+        capabilities = emptyList(),
     )
 )
 

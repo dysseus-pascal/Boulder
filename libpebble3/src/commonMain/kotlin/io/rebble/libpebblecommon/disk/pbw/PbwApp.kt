@@ -79,5 +79,6 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         platforms = platforms,
         appstoreData = null,
         orderIndex = orderIndex,
+        capabilities = info.capabilities,
     )
 }

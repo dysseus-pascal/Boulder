@@ -67,6 +67,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
 import coredevices.ui.PebbleElevatedButton
+import coredevices.util.CoreConfigFlow
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -185,6 +186,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
+        val coreConfigFlow: CoreConfigFlow = koinInject()
+        val coreConfig by coreConfigFlow.flow.collectAsState()
 
         LaunchedEffect(storeId, storeSource, watchType) {
             if (storeId != null && storeSource != null) {
@@ -207,8 +210,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     showRemoveConfirmDialog = false
                                     logger.d { "removing app ${entry.uuid}" }
                                     topBarParams.showSnackbar("Removing ${entry.title}")
-                                    withContext(Dispatchers.Main) {
-                                        navBarNav.goBack()
+                                    if (!coreConfig.useNativeAppStore) {
+                                        withContext(Dispatchers.Main) {
+                                            navBarNav.goBack()
+                                        }
                                     }
                                     val removed = libPebble.removeApp(entry.uuid)
                                     nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)

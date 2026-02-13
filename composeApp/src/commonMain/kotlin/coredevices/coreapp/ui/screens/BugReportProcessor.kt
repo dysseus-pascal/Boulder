@@ -177,6 +177,10 @@ class BugReportProcessor(
     private suspend fun createSummaryAttachment(attachments: List<DocumentAttachment>): DocumentAttachment {
         val summaryWithAttachmentCount =
             createSummary("", attachments)
+        val logsDir = Path(getLogsCacheDir())
+        if (!SystemFileSystem.exists(logsDir)) {
+            SystemFileSystem.createDirectories(logsDir)
+        }
         val summaryFile = Path(getLogsCacheDir() + "/summary.txt")
         SystemFileSystem.sink(summaryFile, append = false).buffered().use { sink ->
             sink.writeString(summaryWithAttachmentCount)

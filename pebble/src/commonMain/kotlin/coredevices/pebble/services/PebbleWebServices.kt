@@ -693,15 +693,18 @@ fun StoreApplication.asLockerEntryPlatform(
     if (sdkVersion == null || pebbleProcessInfoFlags == null) {
         return null
     }
+    val iconImage = lockerEntryPlatform?.images?.get("icon")?.ifEmpty { null } ?: iconImage.values.firstOrNull()
+    val listImage = lockerEntryPlatform?.images?.get("list")?.ifEmpty { null } ?: listImage.values.firstOrNull()
+    val screenshotImage = lockerEntryPlatform?.images?.get("screenshot")?.ifEmpty { null } ?: screenshotImages.firstOrNull()?.values?.firstOrNull()
     return LockerEntryPlatform(
         name = platformName,
         sdkVersion = sdkVersion,
         pebbleProcessInfoFlags = pebbleProcessInfoFlags,
         description = description,
         images = LockerEntryPlatformImages(
-            icon = iconImage["48x48"] ?: "",
-            list = listImage["144x144"] ?: "",
-            screenshot = screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+            icon = iconImage ?: "",
+            list = listImage ?: "",
+            screenshot = screenshotImage ?: "",
         )
     )
 }

@@ -247,7 +247,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" != \"Debug\" ]; then\n  ${PODS_ROOT}/FirebaseCrashlytics/upload-symbols -gsp \"${PROJECT_DIR}/iosApp/GoogleService-Info.plist\" -p ios \"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}\" \"${PROJECT_DIR}/../composeApp/build/cocoapods/framework/ComposeApp.framework.dSYM\" \nfi\n";
+			shellScript = "if [ \"${CONFIGURATION}\" != \"Debug\" ]; then\n  ${PODS_ROOT}/FirebaseCrashlytics/upload-symbols -gsp \"${PROJECT_DIR}/iosApp/GoogleService-Info.plist\" -p ios \"${DWARF_DSYM_FOLDER_PATH}\" \"${PROJECT_DIR}/../composeApp/build/cocoapods/framework/ComposeApp.framework.dSYM\" \nfi\n";
 		};
 		3D6A68E62E60BEF300FD27DF /* Set versions */ = {
 			isa = PBXShellScriptBuildPhase;

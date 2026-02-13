@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.io.IOException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -220,19 +221,21 @@ class AppstoreService(
                     parameter(it.key, it.value)
                 }
             }
-        } catch (e: IOException) {
+                .takeIf {
+                    logger.v { "${it.call.request.url}" }
+                    if (!it.status.isSuccess()) {
+                        logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
+                        false
+                    } else {
+                        true
+                    }
+                }?.body<AppStoreHome>()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             logger.w(e) { "Error loading app store home" }
             return null
         }
-            .takeIf {
-                logger.v { "${it.call.request.url}" }
-                if (!it.status.isSuccess()) {
-                    logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
-                    false
-                } else {
-                    true
-                }
-            }?.body<AppStoreHome>()
         home?.let {
             cache.writeCategories(home.categories, type, source)
             appstoreCollectionDao.updateListOfCollections(type, home.collections.map {

@@ -13,6 +13,7 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -127,11 +128,17 @@ class BugReportProcessor(
             val isModelReady = transcriptionService.isModelReady
             val configuredModel = transcriptionService.configuredModel
             val configuredMode = transcriptionService.configuredMode
+            val lastSuccessfulMode = when (transcriptionService.lastSuccessfulMode) {
+                CactusSTTMode.LocalOnly -> "Local"
+                CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
+                null -> "None"
+            }
             "\nSTT Summary\n" +
                     "Configured mode: $configuredMode\n" +
                     "Configured model: $configuredModel\n" +
                     "Is model ready: $isModelReady\n" +
                     "Last model used: $lastModel\n"
+                    "Last successful mode: $lastSuccessfulMode\n"
         } catch (e: Exception) {
             logger.e(e) { "Error grabbing STT sessions: ${e.message}" }
             "Error grabbing STT sessions\n"

@@ -59,6 +59,8 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     val isModelReady get() = sttModel.isReady()
     val configuredMode get() = sttConfig.value.mode
     val configuredModel get() = sttConfig.value.modelName
+    private var _lastSuccessfulMode: CactusSTTMode? = null
+    val lastSuccessfulMode get() = _lastSuccessfulMode
 
     private fun getCacheFilePath(): Path {
         SystemFileSystem.createDirectories(cacheDir, mustCreate = false)
@@ -188,6 +190,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     ): CactusTranscriptionResult? {
         val params = CactusTranscriptionParams(maxTokens = 384)
         val path = getCacheFilePath()
+        var modeUsed: CactusSTTMode = sttConfig.value.mode
         withContext(Dispatchers.IO) {
             SystemFileSystem.sink(path).buffered().use { sink ->
                 sink.writeWavHeader(sampleRate, audioSize = audio.size)
@@ -244,8 +247,14 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                             filePath = path.toString(),
                             params = params,
                             mode = TranscriptionMode.LOCAL
-                        )
+                        ).also {
+                            modeUsed = CactusSTTMode.LocalOnly
+                        }
                     }
+                }
+            }.also {
+                if (it != null && it.success) {
+                    _lastSuccessfulMode = modeUsed
                 }
             }
         } finally {

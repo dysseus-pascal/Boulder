@@ -605,7 +605,7 @@ private fun PropertyRow(
         Text(
             text = name,
             color = Color.Gray,
-            modifier = Modifier.width(120.dp),
+            modifier = Modifier.width(130.dp),
             maxLines = 1
         )
         if (!multiRow) {

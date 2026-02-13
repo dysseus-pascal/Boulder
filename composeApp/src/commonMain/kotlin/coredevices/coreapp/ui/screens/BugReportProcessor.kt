@@ -137,7 +137,7 @@ class BugReportProcessor(
                     "Configured mode: $configuredMode\n" +
                     "Configured model: $configuredModel\n" +
                     "Is model ready: $isModelReady\n" +
-                    "Last model used: $lastModel\n"
+                    "Last model used: $lastModel\n" +
                     "Last successful mode: $lastSuccessfulMode\n"
         } catch (e: Exception) {
             logger.e(e) { "Error grabbing STT sessions: ${e.message}" }

@@ -6,6 +6,7 @@ import com.oldguy.common.io.File
 import com.oldguy.common.io.FileMode
 import com.oldguy.common.io.ZipEntry
 import com.oldguy.common.io.ZipFile
+import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
@@ -13,6 +14,9 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
@@ -108,6 +112,7 @@ class BugReportProcessor(
     private val clock: Clock,
     private val appContext: AppContext,
     private val coreBackgroundSync: CoreBackgroundSync,
+    private val settings: Settings,
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
 
@@ -267,6 +272,9 @@ class BugReportProcessor(
                 append("\nAttachment: ${it.fileName}")
             }
             append("\nTime since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
+            append("Firebase uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_FIREBASE_UPLOADS)}")
+            append("Memfault uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MEMFAULT_UPLOADS)}")
+            append("Mixpanel uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MIXPANEL_UPLOADS)}")
         }
         return summaryWithAttachmentCount
     }

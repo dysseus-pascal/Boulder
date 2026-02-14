@@ -23,7 +23,6 @@ import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
-import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -101,9 +100,6 @@ class CommonAppDelegate(
         }
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
-        }
-        if (!settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) {
-            Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
         }
     }
 

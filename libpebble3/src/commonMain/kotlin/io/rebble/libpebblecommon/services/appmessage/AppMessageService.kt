@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.packets.AppMessageTuple
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,7 +30,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-private const val APPMESSAGE_BUFFER_SIZE = 16
+private const val APPMESSAGE_BUFFER_SIZE = 32
 private val APPMESSAGE_TIMEOUT = 10.seconds
 
 class AppMessageService(
@@ -103,7 +104,12 @@ class AppMessageService(
         receivedMessages[appUuid]?.let { return it }
 
         return mapAccessMutex.withLock {
-            receivedMessages.getOrPut(appUuid) { MutableSharedFlow() }
+            receivedMessages.getOrPut(appUuid) {
+                MutableSharedFlow(
+                    replay = 0,
+                    extraBufferCapacity = APPMESSAGE_BUFFER_SIZE,
+                )
+            }
         }
     }
 }

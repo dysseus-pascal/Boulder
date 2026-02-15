@@ -14,6 +14,8 @@ import io.rebble.libpebblecommon.js.HttpInterceptor
 import io.rebble.libpebblecommon.js.InterceptResponse
 import io.rebble.libpebblecommon.weather.WeatherType
 import kotlinx.atomicfu.atomic
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
@@ -27,6 +29,7 @@ class YahooWeatherInterceptor(
 ) : HttpInterceptor {
     private val woeidCache = mutableMapOf<Int, YahooLocation>()
     private val woeidSequence = atomic(0)
+    private val cacheMutex = Mutex()
 
     override fun shouldIntercept(url: String): Boolean {
         if (!coreConfigHolder.config.value.interceptPKJSWeather) {
@@ -54,7 +57,7 @@ class YahooWeatherInterceptor(
         return callPebbleService(request)
     }
 
-    private suspend fun lookupLocation(params: YahooWeatherParams): YahooLocation? {
+    private suspend fun lookupLocation(params: YahooWeatherParams): YahooLocation? = cacheMutex.withLock {
         val location = when (params) {
             is YahooWeatherParams.LatLon -> {
                 val cached = woeidCache.entries.firstOrNull {

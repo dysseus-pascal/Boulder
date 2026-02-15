@@ -353,7 +353,8 @@ fun LockerScreen(
                             navBarNav = navBarNav,
                             topBarParams = topBarParams,
                             lazyListState = searchListState,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            appType = viewModel.type.value,
                         )
                     }
                 } else {
@@ -708,15 +709,20 @@ fun SearchResultsList(
     topBarParams: TopBarParams,
     lazyListState: LazyListState,
     modifier: Modifier = Modifier,
+    appType: AppType,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
     val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker || it.commonAppType is CommonAppType.System }
     val scope = rememberCoroutineScope()
     LazyColumn(modifier, lazyListState) {
         if (lockerApps.isNotEmpty()) {
+            val text = when (appType) {
+                AppType.Watchface -> "From my watchfaces"
+                AppType.Watchapp -> "From my apps"
+            }
             item {
                 Text(
-                    "From my apps",
+                    text,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,

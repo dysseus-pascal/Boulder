@@ -145,7 +145,7 @@ class PebbleHttpClient(
             auth: Boolean,
             parameters: Map<String, String> = emptyMap(),
         ): T? {
-            logger.v("get: $url auth=$auth")
+            logger.v("get: ${url.sanitizeUrl()} auth=$auth")
             val token = pebbleAccount.get().loggedIn.value
             if (auth && token == null) {
                 logger.i("not logged in")
@@ -181,6 +181,13 @@ class PebbleHttpClient(
     }
 
     override suspend fun getBootConfig(url: String): BootConfig? = get(url, auth = false)
+}
+
+private val COORDINATE_REGEX = Regex("""/(-?\d+\.\d+)/(-?\d+\.\d+)""")
+
+private fun String.sanitizeUrl(): String {
+    // Replaces /37.756/-122.419 with /xx.xxxxxx/yy.yyyyyy
+    return this.replace(COORDINATE_REGEX, "/xx.xxxxxx/yy.yyyyyy")
 }
 
 interface PebbleWebServices {

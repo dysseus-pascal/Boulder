@@ -74,6 +74,7 @@ class JavascriptCoreJsRunner(
         val instances = listOf(
             XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
             JSTimeout(interfacesScope, evalRawFn),
+            WebSocketManager(interfacesScope, evalFn),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
@@ -114,7 +115,7 @@ class JavascriptCoreJsRunner(
     private fun evaluateInternalScript(filenameNoExt: String) {
         val bundle = NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
-            ?: error("Startup script not found in bundle")
+            ?: error("Startup script not found in bundle: $filenameNoExt")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
             it.readString()
         }
@@ -172,6 +173,7 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         evaluateInternalScript("XMLHTTPRequest")
         evaluateInternalScript("JSTimeout")
+        evaluateInternalScript("WebSocket")
     }
 
     private fun setupNavigator() {

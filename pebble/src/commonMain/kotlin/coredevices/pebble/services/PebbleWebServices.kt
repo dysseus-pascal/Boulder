@@ -274,7 +274,7 @@ class RealPebbleWebServices(
     override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
-        return if (coreConfig.value.useNativeAppStore) {
+        return if (coreConfig.value.useNativeAppStoreV2) {
             firestoreLocker.fetchLocker()
         } else {
             fetchPebbleLocker()?.let { LockerModelWrapper(it, emptySet()) }
@@ -282,7 +282,7 @@ class RealPebbleWebServices(
     }
 
     override suspend fun removeFromLocker(id: Uuid): Boolean {
-        if (coreConfig.value.useNativeAppStore) {
+        if (coreConfig.value.useNativeAppStoreV2) {
             firestoreLocker.removeApp(id)
             return true
         } else {

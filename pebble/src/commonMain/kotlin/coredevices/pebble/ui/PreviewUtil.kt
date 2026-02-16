@@ -266,7 +266,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { firestoreLocker } bind FirestoreLocker::class
     val coreConfig = CoreConfig(
-        useNativeAppStore = true
+        useNativeAppStoreV2 = true
     )
     single { CoreConfigFlow(MutableStateFlow(coreConfig)) }
     val requiredPermissions = RequiredPermissions(

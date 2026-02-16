@@ -257,7 +257,7 @@ fun LockerScreen(
                 )
             }
             topBarParams.title(title)
-            if (coreConfig.useNativeAppStore) {
+            if (coreConfig.useNativeAppStoreV2) {
                 viewModel.maybeRefreshStore(watchType)
             }
             launch {
@@ -289,7 +289,7 @@ fun LockerScreen(
 
         val uriHandler = LocalUriHandler.current
 
-        if (coreConfig.useNativeAppStore) {
+        if (coreConfig.useNativeAppStoreV2) {
             LaunchedEffect(viewModel.searchState.query, viewModel.type.value) {
                 if (viewModel.searchState.query.isNotEmpty()) {
                     viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type.value)
@@ -312,7 +312,7 @@ fun LockerScreen(
 
         Scaffold(
             floatingActionButton = {
-                if (loggedIn != null && !coreConfig.useNativeAppStore) {
+                if (loggedIn != null && !coreConfig.useNativeAppStoreV2) {
                     FloatingActionButton(
                         onClick = {
                             navBarNav.navigateTo(
@@ -335,7 +335,7 @@ fun LockerScreen(
                     showIncompatible = viewModel.showIncompatible,
                     showScaled = viewModel.showScaled,
                 )
-                if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
+                if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStoreV2) {
                     val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value, viewModel.showScaled.value) {
                         viewModel.storeSearchResults.map { searchResults ->
                             lockerEntries + searchResults.filter { searchResult ->
@@ -368,7 +368,7 @@ fun LockerScreen(
                             viewModel.lockerIsRefreshing = false
                         }
                     }) {
-                        if (coreConfig.useNativeAppStore) {
+                        if (coreConfig.useNativeAppStoreV2) {
                             val myApps by remember(lockerEntries) {
                                 derivedStateOf {
                                     lockerEntries.filter {

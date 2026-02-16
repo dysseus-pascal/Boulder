@@ -109,7 +109,6 @@ import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -512,7 +511,7 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
                     action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
-                    show = { coreConfig.useNativeAppStore },
+                    show = { coreConfig.useNativeAppStoreV2 },
                 ),
                 basicSettingsDropdownItem(
                     title = "App Theme",
@@ -1078,22 +1077,6 @@ please disable the option.""".trimIndent(),
                     show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
                     action = {
                         navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute())
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Use Native App Store",
-                    description = "Preview",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
-                    checked = coreConfig.useNativeAppStore,
-                    onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                useNativeAppStore = it,
-                            )
-                        )
-                        libPebble.requestLockerSync()
-                        topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                     },
                 ),
                 basicSettingsToggleItem(

@@ -71,7 +71,6 @@ import coredevices.util.CoreConfigFlow
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.locker.AppCapability
@@ -84,7 +83,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -210,7 +208,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     showRemoveConfirmDialog = false
                                     logger.d { "removing app ${entry.uuid}" }
                                     topBarParams.showSnackbar("Removing ${entry.title}")
-                                    if (!coreConfig.useNativeAppStore) {
+                                    if (!coreConfig.useNativeAppStoreV2) {
                                         withContext(Dispatchers.Main) {
                                             navBarNav.goBack()
                                         }

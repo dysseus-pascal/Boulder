@@ -88,6 +88,8 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
+    BoolWatchPref.MenuScrollWrapAround -> Section.Display
+    EnumWatchPref.MenuScrollVibe -> Section.Display
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {

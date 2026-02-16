@@ -204,6 +204,7 @@ enum class BoolWatchPref(
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
+    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
     ;
 
     override val type = WatchPrefType.TypeBoolean
@@ -312,6 +313,12 @@ enum class VibeScore(override val code: UByte, override val displayName: String)
     AlarmsLPM(13u, "ALARMS LPM"),
 }
 
+enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    NoVibe(0u, "No Vibe"),
+    VibeOnWrapAround(1u, "Vibe On Wrap Around"),
+    VibeOnLocked(2u, "Vibe On Locked"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -383,6 +390,10 @@ enum class EnumWatchPref(
             VibeScore.Reveille,
             VibeScore.Mario,
         ),
+    ),
+    MenuScrollVibe(
+        "menuScrollVibeBehavior", "Menu Scrolling - Vibration", MenuScrollVibeBehaviour.NoVibe,
+        MenuScrollVibeBehaviour.entries
     ),
     ;
 

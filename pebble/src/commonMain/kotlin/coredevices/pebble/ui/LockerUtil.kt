@@ -700,25 +700,6 @@ fun AppsFilterRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            if (showIncompatible != null) {
-                FilterChip(
-                    selected = showIncompatible.value,
-                    onClick = { showIncompatible.value = !showIncompatible.value },
-                    label = { Text("Show Incompatible") },
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (showIncompatible.value) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Done,
-                                contentDescription = "Show Incompatible",
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
             if (watchType.performsScaling() && showScaled != null) {
                 FilterChip(
                     selected = showScaled.value,
@@ -730,6 +711,25 @@ fun AppsFilterRow(
                             Icon(
                                 imageVector = Icons.Filled.Done,
                                 contentDescription = "Show Scaled",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (showIncompatible != null) {
+                FilterChip(
+                    selected = showIncompatible.value,
+                    onClick = { showIncompatible.value = !showIncompatible.value },
+                    label = { Text("Show Incompatible") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (showIncompatible.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Done,
+                                contentDescription = "Show Incompatible",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }

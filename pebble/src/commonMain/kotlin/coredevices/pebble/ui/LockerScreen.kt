@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.compose.itemKey
 import co.touchlab.kermit.Logger
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -714,79 +715,115 @@ fun SearchResultsList(
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
     val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker || it.commonAppType is CommonAppType.System }
     val scope = rememberCoroutineScope()
-    LazyColumn(modifier, lazyListState) {
-        if (lockerApps.isNotEmpty()) {
-            val text = when (appType) {
-                AppType.Watchface -> "From my watchfaces"
-                AppType.Watchapp -> "From my apps"
+    if (appType == AppType.Watchface) {
+        LazyVerticalGrid(
+            columns = GridCells.FixedSize(120.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            if (lockerApps.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
+                items(
+                    items = lockerApps,
+                    key = { it.storeId ?: it.uuid },
+                ) { entry ->
+                    NativeWatchfaceCard(
+                        entry,
+                        navBarNav,
+                        width = 120.dp,
+                        topBarParams = topBarParams,
+                        highlightInLocker = true,
+                    )
+                }
             }
-            item {
-                Text(
-                    text,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            items(
-                items = lockerApps,
-                key = { it.uuid }
-            ) { entry ->
-                NativeWatchfaceListItem(
-                    entry,
-                    onClick = {
-                        navBarNav.navigateTo(
-                            PebbleNavBarRoutes.LockerAppRoute(
-                                uuid = entry.uuid.toString(),
-                                storedId = entry.storeId,
-                                storeSource = entry.appstoreSource?.id,
-                            )
-                        )
-                    },
-                    topBarParams = topBarParams,
-                    highlightInLocker = false,
-                )
+            if (storeApps.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
+                items(
+                    items = storeApps,
+                    key = { it.storeId ?: it.uuid },
+                ) { entry ->
+                    NativeWatchfaceCard(
+                        entry,
+                        navBarNav,
+                        width = 120.dp,
+                        topBarParams = topBarParams,
+                        highlightInLocker = true,
+                    )
+                }
             }
         }
-        if (storeApps.isNotEmpty()) {
-            item {
-                Text(
-                    "From the store",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            items(
-                items = storeApps,
-                key = { it.uuid }
-            ) { entry ->
-                NativeWatchfaceListItem(
-                    entry,
-                    onClick = {
-                        scope.launch {
-//                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
-//                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
-//                                sources.maxByOrNull { (id, source) ->
-//                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
-//                                        ?.data
-//                                        ?.firstOrNull()
-//                                        ?.latestRelease?.version ?: "0"
-//                                } ?: (null to null)
-//                            }
+    } else {
+        LazyColumn(modifier, lazyListState) {
+            if (lockerApps.isNotEmpty()) {
+                item {
+                    Text(
+                        "From my apps",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                items(
+                    items = lockerApps,
+                    key = { it.uuid }
+                ) { entry ->
+                    NativeWatchfaceListItem(
+                        entry,
+                        onClick = {
                             navBarNav.navigateTo(
                                 PebbleNavBarRoutes.LockerAppRoute(
                                     uuid = entry.uuid.toString(),
                                     storedId = entry.storeId,
                                     storeSource = entry.appstoreSource?.id,
-//                                    storeSources = Json.encodeToString(sources)
                                 )
                             )
-                        }
-                    },
-                    topBarParams = topBarParams,
-                    highlightInLocker = false,
-                )
+                        },
+                        topBarParams = topBarParams,
+                        highlightInLocker = false,
+                    )
+                }
+            }
+            if (storeApps.isNotEmpty()) {
+                item {
+                    Text(
+                        "From the store",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                items(
+                    items = storeApps,
+                    key = { it.uuid }
+                ) { entry ->
+                    NativeWatchfaceListItem(
+                        entry,
+                        onClick = {
+                            scope.launch {
+    //                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
+    //                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
+    //                                sources.maxByOrNull { (id, source) ->
+    //                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
+    //                                        ?.data
+    //                                        ?.firstOrNull()
+    //                                        ?.latestRelease?.version ?: "0"
+    //                                } ?: (null to null)
+    //                            }
+                                navBarNav.navigateTo(
+                                    PebbleNavBarRoutes.LockerAppRoute(
+                                        uuid = entry.uuid.toString(),
+                                        storedId = entry.storeId,
+                                        storeSource = entry.appstoreSource?.id,
+    //                                    storeSources = Json.encodeToString(sources)
+                                    )
+                                )
+                            }
+                        },
+                        topBarParams = topBarParams,
+                        highlightInLocker = false,
+                    )
+                }
             }
         }
     }

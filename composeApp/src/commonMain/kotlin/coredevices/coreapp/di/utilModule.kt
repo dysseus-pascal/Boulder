@@ -21,6 +21,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelDownloadManager
 import coredevices.util.models.ModelManager
 import dev.gitlive.firebase.Firebase
@@ -70,4 +71,5 @@ val utilModule = module {
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     singleOf(::ModelManager)
+    singleOf(::OAuthRedirectHandler)
 }

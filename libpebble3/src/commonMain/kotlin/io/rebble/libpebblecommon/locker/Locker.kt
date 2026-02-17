@@ -24,7 +24,6 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
-import io.rebble.libpebblecommon.database.entity.diffFrom
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp

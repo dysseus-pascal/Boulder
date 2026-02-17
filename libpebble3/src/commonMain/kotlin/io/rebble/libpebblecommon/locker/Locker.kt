@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
+import io.rebble.libpebblecommon.database.entity.diffFrom
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
@@ -206,12 +207,13 @@ class Locker(
             if (existing == null) {
                 newEntity
             } else {
-                val newWithExistingOrder = newEntity.copy(
+                val newWithExistingLocalProps = newEntity.copy(
                     orderIndex = existing.orderIndex,
                     active = existing.active,
+                    grantedPermissions = existing.grantedPermissions,
                 )
-                if (newWithExistingOrder != existing && !existing.sideloaded) {
-                    newWithExistingOrder
+                if (newWithExistingLocalProps != existing && !existing.sideloaded) {
+                    newWithExistingLocalProps
                 } else {
                     null
                 }

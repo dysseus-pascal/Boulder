@@ -36,11 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.io.IOException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
 
 class AppstoreService(
@@ -112,28 +112,28 @@ class AppstoreService(
     private suspend fun fetchAppStoreAppsInBulk(
         entries: List<FirestoreLockerEntry>,
     ): List<LockerEntry> {
+        val entriesByAppstoreId = entries.associateBy { it.appstoreId }
         return entries.chunked(500).also {
             logger.d { "Bulk fetching locker entries in ${it.size} chunks" }
         }.flatMap { lockerEntries ->
-            val result = lockerEntries.flatMap { lockerEntry ->
-                try {
-                    httpClient.post(url = Url("${source.url}/v1/apps/bulk")) {
-                        header("Content-Type", "application/json")
-                        setBody(BulkFetchParams(entries.map { it.appstoreId }).encodeToJson())
-                    }.takeIf { it.status.isSuccess() }?.body<BulkStoreResponse>()
-                        ?.data?.map {
-                            it.toLockerEntry(
-                                sourceUrl = lockerEntry.appstoreSource,
-                                timelineToken = lockerEntry.timelineToken,
-                            )
-                        } ?: emptyList()
-                } catch (e: IOException) {
-                    logger.w(e) { "Error loading app store app" }
-                    emptyList()
-                }
+            try {
+                logger.v { "Fetching chunk size = ${lockerEntries.size}" }
+                httpClient.post(url = Url("${source.url}/v1/apps/bulk")) {
+                    header("Content-Type", "application/json")
+                    setBody(BulkFetchParams(lockerEntries.map { it.appstoreId }).encodeToJson())
+                }.takeIf { it.status.isSuccess() }?.body<BulkStoreResponse>()
+                    ?.data?.mapNotNull { app ->
+                        val matchingEntry = entriesByAppstoreId[app.id]
+                        app.toLockerEntry(
+                            sourceUrl = matchingEntry?.appstoreSource ?: source.url,
+                            timelineToken = matchingEntry?.timelineToken,
+                        )
+                    } ?: emptyList()
+            } catch (e: IOException) {
+                logger.w(e) { "Error loading app store app" }
+                emptyList()
             }
-            result
-        }.filterNotNull()
+        }
     }
 
     private suspend fun fetchAppStoreAppsOneByOne(

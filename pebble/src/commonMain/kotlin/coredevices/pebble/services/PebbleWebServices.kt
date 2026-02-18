@@ -790,6 +790,6 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
                 app.asLockerEntryPlatform("gabbro", fallbackFlagsFinal)?.let { add(it) }
             }
         },
-        source = sourceUrl,
+        source = app.source,
     )
 }

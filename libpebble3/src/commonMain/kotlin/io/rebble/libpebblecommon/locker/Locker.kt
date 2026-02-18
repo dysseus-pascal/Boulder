@@ -192,11 +192,6 @@ class Locker(
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
-    private fun orderIndexForInsert(type: AppType) = when (type) {
-        AppType.Watchface -> -1
-        AppType.Watchapp -> SystemApps.entries.size
-    }
-
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
@@ -605,4 +600,9 @@ abstract class LockerPBWCache(context: AppContext) {
             }
         }
     }
+}
+
+fun orderIndexForInsert(type: AppType) = when (type) {
+    AppType.Watchface -> -1
+    AppType.Watchapp -> SystemApps.entries.size
 }

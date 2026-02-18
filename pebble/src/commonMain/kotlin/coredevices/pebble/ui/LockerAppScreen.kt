@@ -77,6 +77,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
+import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -664,7 +665,7 @@ suspend fun LibPebble.launchApp(
         try {
             withTimeout(15.seconds) {
                 topBarParams.showSnackbar("Waiting to sync $typeText to watch...")
-                setAppOrder(entry.uuid, -1)
+                setAppOrder(entry.uuid, orderIndexForInsert(entry.type))
             }
         } catch (_: TimeoutCancellationException) {
             logger.w { "timed out waiting for order change to sync to watch" }

@@ -575,6 +575,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                     )
                 }
+                storeSource?.let { storeSource ->
+                    PropertyRow(
+                        name = "STORE",
+                        value = storeSource.title,
+                    )
+                }
             }
         }
     }

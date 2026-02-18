@@ -23,7 +23,6 @@ import coredevices.util.GoogleAuthUtil
 import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.serialization.json.Json
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine

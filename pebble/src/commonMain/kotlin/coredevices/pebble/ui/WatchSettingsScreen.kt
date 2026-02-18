@@ -147,20 +147,23 @@ enum class TopLevelType(val displayName: String) {
 enum class Section(val title: String /*val type: TopLevelType*/) {
     About("About"),
     Support("Support"),
-    Default("Settings"),
+    Defaults("Defaults"),
+    QuickLaunch("Quick Launch"), // watch only
+    NotificationsWatch("Notifications"), // watch only
+    Settings("Settings"),
     Apps("Apps"),
     Calendar("Calendar"),
     Health("Health"),
     Speech("Speech Recognition"),
-    Time("Time"), // watch only
-    Timeline("Timeline"), // watch only
     Display("Display"), // watch only
     Weather("Weather"),
     Notifications("Notifications"),
+    Time("Time"), // watch only
+    Timeline("Timeline"), // watch only
     QuietTime("Quiet Time"),
     Connectivity("Connectivity"),
-    QuickLaunch("Quick Launch"),
     Logging("Logging"),
+    Other("Other"), // watch only
     Analytics("Analytics"),
     Debug("Debug"),
 }
@@ -516,7 +519,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -540,7 +543,7 @@ please disable the option.""".trimIndent(),
                     title = "Background Refresh Interval",
                     description = "How often to check for updates, update apps from store, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     selectedItem = RegularSyncInterval.from(coreConfig.regularSyncInterval),
                     items = RegularSyncInterval.entries,
                     onItemSelected = {
@@ -553,7 +556,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Enable Index Feed",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     checked = coreConfig.enableIndex,
                     onCheckChanged = {
                         coreConfigHolder.update(
@@ -600,7 +603,7 @@ please disable the option.""".trimIndent(),
                     title = "Store notifications for",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
-                    description = "How long notifications are stored for (days). This enabled better deduplicating, and powers the notification history view",
+                    description = "How long notifications are stored for. This enabled better deduplicating, and powers the notification history view",
                     value = libPebbleConfig.notificationConfig.storeNotifiationsForDays.toLong(),
                     onValueChange = {
                         libPebble.updateConfig(
@@ -614,6 +617,7 @@ please disable the option.""".trimIndent(),
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                     min = 0,
                     max = 7,
+                    unit = "Days"
                 ),
                 basicSettingsToggleItem(
                     title = "Store disabled notifications",
@@ -795,7 +799,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     checked = libPebbleConfig.bleConfig.reversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1223,7 +1227,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign Out - Core Devices Account",
                     description = "Sign out of your Google account",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     action = {
                         scope.launch {
                             try {
@@ -1241,7 +1245,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign In - Core Devices Account",
                     description = "Sign in to Core account to backup settings, apps, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     button = { SignInButton() },
                     show = { coreUser == null },
                 ),
@@ -1249,7 +1253,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign Out - Rebble",
                     description = "Sign out of your Rebble account",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Default,
+                    section = Section.Settings,
                     action = {
                         scope.launch {
                             pebbleAccount.setToken(null, null)
@@ -1564,10 +1568,12 @@ fun basicSettingsNumberItem(
     onValueChange: (Long) -> Unit,
     min: Int,
     max: Int,
+    unit: String,
     description: String? = null,
     keywords: String = "",
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
+    defaultValue: Long? = null,
 ) = SettingsItem(
     title = title,
     topLevelType = topLevelType,
@@ -1602,7 +1608,29 @@ fun basicSettingsNumberItem(
                             onValueChange(sliderPosition)
                         },
                     )
-                    Text(text = sliderPosition.toString())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "$sliderPosition $unit",
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(vertical = 6.dp),
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (defaultValue != null) {
+                            TextButton(
+                                onClick = {
+                                    onValueChange(defaultValue)
+                                },
+                                enabled = value != defaultValue,
+                            ) {
+                                Text(
+                                    text = "Default: $defaultValue",
+                                    modifier = Modifier.widthIn(max = 150.dp),
+                                    maxLines = 1,
+                                    lineHeight = 12.sp,
+                                )
+                            }
+                        }
+                    }
                 }
             },
             shadowElevation = ELEVATION,

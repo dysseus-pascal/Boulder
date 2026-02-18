@@ -14,7 +14,6 @@ import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
 import coredevices.pebble.PebbleAppDelegate
-import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig

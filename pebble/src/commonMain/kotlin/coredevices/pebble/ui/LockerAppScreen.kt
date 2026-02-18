@@ -66,6 +66,7 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
+import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.ktor.http.URLProtocol
@@ -173,7 +174,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val connected = lastConnectedWatch is ConnectedPebbleDevice
         val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val viewModel = koinViewModel<LockerAppViewModel>()
-        var showRemoveConfirmDialog by remember { mutableStateOf(false) }
+        var showRemoveConfirmDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, watchType)
@@ -196,44 +197,37 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         LaunchedEffect(entry) {
             topBarParams.searchAvailable(null)
             topBarParams.actions {
-                if (showRemoveConfirmDialog && entry != null) {
-                    AlertDialog(
-                        onDismissRequest = { showRemoveConfirmDialog = false },
-                        title = { Text("Remove ${entry.title}?") },
-                        text = { Text("Are you sure you want to remove this app from your Pebble?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                // Don't use local scope: that will die because we moved back
-                                GlobalScope.launch {
-                                    showRemoveConfirmDialog = false
-                                    logger.d { "removing app ${entry.uuid}" }
-                                    topBarParams.showSnackbar("Removing ${entry.title}")
-                                    if (!coreConfig.useNativeAppStoreV2) {
-                                        withContext(Dispatchers.Main) {
-                                            navBarNav.goBack()
-                                        }
+                if (entry != null) {
+                    ConfirmDialog(
+                        show = showRemoveConfirmDialog,
+                        title = "Remove ${entry.title}?",
+                        text = "Are you sure you want to remove this app from your Pebble?",
+                        onConfirm = {
+                            // Don't use local scope: that will die because we moved back
+                            GlobalScope.launch {
+                                logger.d { "removing app ${entry.uuid}" }
+                                topBarParams.showSnackbar("Removing ${entry.title}")
+                                if (!coreConfig.useNativeAppStoreV2) {
+                                    withContext(Dispatchers.Main) {
+                                        navBarNav.goBack()
                                     }
-                                    val removed = libPebble.removeApp(entry.uuid)
-                                    nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
-                                    logger.d { "removed = $removed" }
-                                    topBarParams.showSnackbar("Removed ${entry.title}")
                                 }
-                            }) { Text("Remove") }
+                                val removed = libPebble.removeApp(entry.uuid)
+                                nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
+                                logger.d { "removed = $removed" }
+                                topBarParams.showSnackbar("Removed ${entry.title}")
+                            }
                         },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                showRemoveConfirmDialog = false
-                            }) { Text("Cancel") }
-                        }
+                        confirmText = "Remove",
                     )
                 }
                 val showRemove = entry?.commonAppType is CommonAppType.Locker
                 if (showRemove) {
                     TopBarIconButtonWithToolTip(
-                        onClick = { showRemoveConfirmDialog = true },
+                        onClick = { showRemoveConfirmDialog.value = true },
                         icon = Icons.Filled.Delete,
                         description = "Remove",
-                        enabled = !showRemoveConfirmDialog,
+                        enabled = !showRemoveConfirmDialog.value,
                     )
                 }
             }

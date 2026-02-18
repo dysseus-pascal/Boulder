@@ -733,7 +733,7 @@ fun SearchResultsList(
                         navBarNav,
                         width = 120.dp,
                         topBarParams = topBarParams,
-                        highlightInLocker = true,
+                        highlightInLocker = false,
                     )
                 }
             }

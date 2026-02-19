@@ -264,6 +264,10 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                         }
                     } catch (e: Exception) {
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
+                        if (!(sttConfig.value.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {
+                            logger.e { "Cactus STT model '${sttConfig.value.modelName}' is not downloaded" }
+                            throw TranscriptionException.TranscriptionRequiresDownload("Model not downloaded")
+                        }
                         val result = sttModel.transcribe(
                             filePath = path.toString(),
                             params = params,

@@ -484,11 +484,8 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
         return null
     }
-    val screenshotPlatform = assetCollections.find {
-        it.hardwarePlatform == watchType.codename
-    } ?: assetCollections.find {
-        watchType.getCompatibleAppVariants().any { plat -> plat.codename == it.hardwarePlatform }
-    }
+    val screenshotWatchType = watchType.getBestVariant(assetCollections.map { it.hardwarePlatform })
+    val screenshotPlatform = screenshotWatchType?.let { assetCollections.find { it.hardwarePlatform == screenshotWatchType.codename } }
     return CommonApp(
         title = title,
         developerName = author,

@@ -28,6 +28,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
 import androidx.paging.filter
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSourceDao
@@ -138,7 +139,7 @@ fun AppStoreCollectionScreen(
                 showIncompatible = viewModel.showIncompatible,
                 showScaled = viewModel.showScaled,
             )
-            if (apps == null || apps.itemCount == 0) {
+            if (apps == null || apps.loadState.refresh is LoadState.Loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )

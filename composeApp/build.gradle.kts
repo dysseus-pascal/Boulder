@@ -14,6 +14,7 @@ plugins {
     alias(libs.plugins.firebaseCrashlytics)
     alias(libs.plugins.androidVersion)
     alias(libs.plugins.nativeCocoaPods)
+    alias(libs.plugins.kotlinx.atomicfu)
 }
 
 val properties = Properties().apply {

@@ -135,6 +135,7 @@ object IOSDelegate : KoinComponent {
                         .build()
                 }
                 .components {
+                    add(AnimatedSkiaImageDecoder.Factory())
                     add(SvgDecoder.Factory())
                 }
                 .build()

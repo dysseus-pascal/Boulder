@@ -389,7 +389,9 @@ class AppstoreService(
                         listOf(
                             TagFilters.of(appType.code),
                             TagFilters.of(platform.storeString()),
-                            TagFilters.of(watchType.codename),
+                            // Don't filter on platform - rebble index doesn't have emery for all
+                            // compatible apps (plus we have the incompatible filter..)
+//                            TagFilters.of(watchType.codename),
                         )
                     ),
                 ),

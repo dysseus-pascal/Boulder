@@ -119,7 +119,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         return scope.launch(Dispatchers.IO) {
             try {
                 initIfNeeded()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
             }
             if (!sttModel.isReady()) {

@@ -364,6 +364,11 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                         throw TranscriptionException.NoSpeechDetected("non_speech_tokens", modelUsed = resultModelUsed)
                     }
 
+                    text.replace("s*", "").lowercase().count { it in ('a'..'z') } < 2 -> {
+                        logger.w { "Transcription result looks like it only contains stutters or noise: '${result.text}'" }
+                        throw TranscriptionException.NoSpeechDetected("stutters_or_noise", modelUsed = resultModelUsed)
+                    }
+
                     text == "File processed offline" -> {
                         logger.w { "Transcription returned placeholder text indicating demo mode" }
                         throw TranscriptionException.TranscriptionServiceError("Model may be in demo mode", modelUsed = resultModelUsed)

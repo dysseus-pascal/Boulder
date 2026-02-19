@@ -934,7 +934,7 @@ please disable the option.""".trimIndent(),
                                 fetchWeather = it,
                             )
                         )
-                        GlobalScope.launch { weatherFetcher.fetchWeather() }
+                        GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
                 ),
                 basicSettingsDropdownItem(
@@ -963,7 +963,7 @@ please disable the option.""".trimIndent(),
                                 weatherPinsV2 = it,
                             )
                         )
-                        GlobalScope.launch { weatherFetcher.fetchWeather() }
+                        GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
                     show = { coreConfig.fetchWeather }
                 ),
@@ -980,7 +980,7 @@ please disable the option.""".trimIndent(),
                                 weatherUnits = it,
                             )
                         )
-                        GlobalScope.launch { weatherFetcher.fetchWeather() }
+                        GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
                     itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
@@ -1210,7 +1210,7 @@ please disable the option.""".trimIndent(),
                     section = Section.Debug,
                     action = {
                         GlobalScope.launch {
-                            coreBackgroundSync.doBackgroundSync(force = true)
+                            coreBackgroundSync.doBackgroundSync(this, force = true)
                         }
                     },
                     isDebugSetting = true,

@@ -23,6 +23,7 @@ import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -102,7 +103,7 @@ class CommonAppDelegate(
         }
     }
 
-    override suspend fun doBackgroundSync(force: Boolean) {
+    override suspend fun doBackgroundSync(scope: CoroutineScope, force: Boolean) {
         if (!syncInProgress.compareAndSet(false, true)) {
             logger.d { "Skipping background sync - already in progress" }
             return
@@ -117,23 +118,23 @@ class CommonAppDelegate(
         }
         val jobs = if (doFullSync) {
             listOf(
-                GlobalScope.launch {
+                scope.launch {
                     coreAnalytics.processHeartbeat()
                 },
-                GlobalScope.launch {
-                    pebbleAppDelegate.performBackgroundWork()
+                scope.launch {
+                    pebbleAppDelegate.performBackgroundWork(scope)
                 },
-                GlobalScope.launch {
+                scope.launch {
                     appUpdate.updateAvailable.value
                 },
-                GlobalScope.launch {
-                    weatherFetcher.fetchWeather()
+                scope.launch {
+                    weatherFetcher.fetchWeather(scope)
                 },
             )
         } else {
             listOf(
-                GlobalScope.launch {
-                    weatherFetcher.fetchWeather()
+                scope.launch {
+                    weatherFetcher.fetchWeather(scope)
                 },
             )
         }

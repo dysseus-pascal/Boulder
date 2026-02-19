@@ -104,7 +104,6 @@ import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
-import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
@@ -197,46 +196,6 @@ fun settingsBadgeTotal(): Int {
         false -> 0
     }
     return missingPermissions.size + updatesAvailable + appUpdated
-}
-
-fun pebbleScreenContext(
-    libPebble: LibPebble,
-    coreConfigFlow: CoreConfigFlow,
-    permissionRequester: PermissionRequester,
-    companionDevice: CompanionDevice,
-): String {
-    val watches = libPebble.watches.value.sortedByDescending {
-        when (it) {
-            is KnownPebbleDevice -> it.lastConnected.epochSeconds
-            else -> 0
-        }
-    }
-    val lastConnectedWatch = watches.firstOrNull() as? KnownPebbleDevice
-    val watchesWithoutCompanionDevicePermission = watches.mapNotNull {
-        if (it is KnownPebbleDevice && !companionDevice.hasApprovedDevice(it.identifier)) {
-            "[${it.identifier} / ${it.name}]"
-        } else {
-            null
-        }
-    }
-    return buildString {
-        appendLine("lastConnectedFirmwareVersion: ${lastConnectedWatch?.runningFwVersion}")
-        appendLine("lastConnectedSerial: ${lastConnectedWatch?.serial}")
-        appendLine("lastConnectedWatchType: ${lastConnectedWatch?.watchType}")
-        appendLine("activeWatchface: ${libPebble.activeWatchface.value?.let { 
-            "${it.properties.id} / ${it.properties.title}"
-        }}")
-        appendLine("otherPebbleApps: ${libPebble.otherPebbleCompanionAppsInstalled().value}")
-        appendLine("libPebbleConfig: ${libPebble.config.value}")
-        appendLine("coreConfig: ${coreConfigFlow.value}")
-        appendLine("missingPermissions: ${permissionRequester.missingPermissions.value}")
-        appendLine("watchesWithoutCompanionDevicePermission: $watchesWithoutCompanionDevicePermission")
-        appendLine(libPebble.watchesDebugState())
-        appendLine("Watches (most recently connected first):")
-        watches.forEachIndexed { index, watch ->
-            appendLine("watch_$index $watch")
-        }
-    }
 }
 
 private val logger = Logger.withTag("WatchSettingsScreen")
@@ -487,13 +446,6 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        nextBugReportContext.nextContext =
-                            pebbleScreenContext(
-                                libPebble,
-                                coreConfigFlow,
-                                permissionRequester,
-                                companionDevice
-                            )
                         navBarNav.navigateTo(
                             CommonRoutes.BugReport(
                                 pebble = true,

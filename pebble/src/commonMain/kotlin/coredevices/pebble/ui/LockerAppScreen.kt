@@ -31,14 +31,12 @@ import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -182,6 +180,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
             lockerEntry ?: viewModel.selectedStoreEntry
         }
+        val storeEntry = viewModel.selectedStoreEntry
         val storeSource = appstoreSourceFromId(storeSourceId)
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
@@ -238,9 +237,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
         ) {
             entry?.let { entry ->
-                if (entry.commonAppType is CommonAppType.Store && entry.commonAppType.headerImageUrl != null) {
+                if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.headerImageUrl != null) {
                     AsyncImage(
-                        model = entry.commonAppType.headerImageUrl,
+                        model = storeEntry.commonAppType.headerImageUrl,
                         contentDescription = "banner",
                         modifier = Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.FillWidth,
@@ -268,14 +267,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 modifier = Modifier.padding(vertical = 5.dp),
                             )
                         }
-                        if (entry.hearts != null) {
+                        val hearts = if (storeEntry?.hearts != null) {
+                            storeEntry.hearts
+                        } else {
+                            entry.hearts
+                        }
+                        if (hearts != null) {
                             Row(modifier = Modifier.padding(vertical = 5.dp)) {
                                 Icon(
                                     Icons.Outlined.Favorite,
                                     contentDescription = "Hearts",
                                 )
                                 Text(
-                                    text = "${entry.hearts}",
+                                    text = "$hearts",
                                     modifier = Modifier.padding(start = 5.dp),
                                 )
                             }
@@ -367,9 +371,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     )
                 }
                 // Only show for store, right now (until we figure out populating data or locker)
-                if (entry.capabilities.isNotEmpty() && entry.commonAppType is CommonAppType.Store) {
+                if (storeEntry?.capabilities?.isNotEmpty() == true) {
                     FlowRow(modifier = Modifier.padding(5.dp)) {
-                        entry.capabilities.forEach { permission ->
+                        storeEntry.capabilities.forEach { permission ->
                             PermissionItem(permission, entry, topBarParams)
                         }
                     }
@@ -484,14 +488,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         )
                     }
                 }
-                val screenshotsToDisplay = remember(entry) {
-                    when (entry.commonAppType) {
+                val screenshotsToDisplay = remember(storeEntry) {
+                    when (storeEntry?.commonAppType) {
                         is CommonAppType.Store -> {
 //                            when (entry.type) {
 //                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
 //                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
 //                            }
-                            entry.commonAppType.allScreenshotUrls.drop(1)
+                            storeEntry.commonAppType.allScreenshotUrls.drop(1)
                         }
                         else -> emptyList()
                     }

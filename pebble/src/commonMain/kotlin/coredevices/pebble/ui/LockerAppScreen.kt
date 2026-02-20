@@ -111,11 +111,12 @@ class LockerAppViewModel(
 //    var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
+    var hearts by mutableStateOf<Int?>(null)
 
-    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource) {
+    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, useCache: Boolean) {
         val service = get<AppstoreService> { parametersOf(source) }
         viewModelScope.launch {
-            val result = service.fetchAppStoreApp(id, watchType)?.data?.firstOrNull()
+            val result = service.fetchAppStoreApp(id, watchType, useCache)?.data?.firstOrNull()
 //            if (result != null) {
 //                storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
 //            }
@@ -124,7 +125,9 @@ class LockerAppViewModel(
                 platform = platform,
                 source = source,
                 categories = service.cachedCategoriesOrDefaults(AppType.fromString(result.type)),
-            )
+            ).also {
+                hearts = it?.hearts
+            }
         }
     }
 
@@ -197,10 +200,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val coreConfigFlow: CoreConfigFlow = koinInject()
         val coreConfig by coreConfigFlow.flow.collectAsState()
 
-        LaunchedEffect(storeId, storeSource, watchType) {
+        fun reloadFromStore(useCache: Boolean) {
             if (storeId != null && storeSource != null) {
-                viewModel.loadAppFromStore(storeId, watchType, storeSource)
+                viewModel.loadAppFromStore(
+                    id = storeId,
+                    watchType = watchType,
+                    source = storeSource,
+                    useCache = useCache,
+                )
             }
+        }
+
+        LaunchedEffect(storeId, storeSource, watchType) {
+            reloadFromStore(useCache = true)
         }
 
         LaunchedEffect(entry) {
@@ -276,8 +288,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 modifier = Modifier.padding(vertical = 5.dp),
                             )
                         }
-                        val hearts = if (storeEntry?.hearts != null) {
-                            storeEntry.hearts
+                        val hearts = if (viewModel.hearts != null) {
+                            viewModel.hearts
                         } else {
                             entry.hearts
                         }
@@ -311,14 +323,20 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                                     isChanging = true
                                                     val result = service.addHeart(addUrl, entry.storeId)
                                                     isChanging = false
-                                                    if (!result) {
+                                                    if (result) {
+                                                        viewModel.hearts?.let { viewModel.hearts = it + 1 }
+                                                        reloadFromStore(useCache = false)
+                                                    } else {
                                                         topBarParams.showSnackbar("Failed to heart app")
                                                     }
                                                 } else {
                                                     isChanging = true
                                                     val result = service.removeHeart(removeUrl, entry.storeId)
                                                     isChanging = false
-                                                    if (!result) {
+                                                    if (result) {
+                                                        viewModel.hearts?.let { viewModel.hearts = it - 1 }
+                                                        reloadFromStore(useCache = false)
+                                                    } else {
                                                         topBarParams.showSnackbar("Failed to remove heart")
                                                     }
                                                 }

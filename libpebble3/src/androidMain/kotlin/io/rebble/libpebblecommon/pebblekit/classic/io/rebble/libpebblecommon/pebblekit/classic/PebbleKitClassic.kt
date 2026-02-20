@@ -97,13 +97,15 @@ class PebbleKitClassic(
         scope.launch {
             IntentFilter(INTENT_APP_SEND).asFlow(context, exported = true).collect { intent ->
                 logger.d { "Got outbound message" }
-                val uuid = intent.getSerializableExtra(APP_UUID) as UUID? ?: return@collect
+                val uuid = (intent.getSerializableExtra(APP_UUID) as? UUID?)?.toKotlinUuid() ?:
+                    // Fallback to string
+                    intent.getStringExtra(APP_UUID)?.let { Uuid.parseOrNull(it) } ?: return@collect
                 val dictionary: PebbleClassicDictionary = PebbleClassicDictionary.fromJson(
                     intent.getStringExtra(MSG_DATA)
                 )
                 val transactionId: Int = intent.getIntExtra(TRANSACTION_ID, 0)
 
-                val msg = AppMessageData(transactionId.toUByte(), uuid.toKotlinUuid(), dictionary.toAppMessageDict())
+                val msg = AppMessageData(transactionId.toUByte(), uuid, dictionary.toAppMessageDict())
                 val result = device.sendAppMessage(msg)
                 logger.d { "Result from the app: $result" }
                 val intentAction = when (result) {

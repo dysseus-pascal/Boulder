@@ -31,6 +31,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.ktor.http.parseUrl
@@ -173,10 +174,10 @@ class AppstoreService(
     suspend fun addHeart(url: String, appId: String): Boolean {
         val success = when (source.url) {
             PEBBLE_FEED_URL -> {
-                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Core)?.status?.isSuccess() ?: false
+                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Core)?.status?.isSuccessOr(409) ?: false
             }
             REBBLE_FEED_URL -> {
-                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Pebble)?.status?.isSuccess() ?: false
+                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Pebble)?.status?.isSuccessOr(400) ?: false
             }
             else -> false
         }
@@ -491,3 +492,5 @@ fun enableByDefault(source: AppstoreSource, type: AppType, slug: String): Boolea
         else -> isFirstSource
     }
 }
+
+fun HttpStatusCode.isSuccessOr(code: Int) = isSuccess() || value == code

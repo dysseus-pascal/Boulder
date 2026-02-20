@@ -112,7 +112,11 @@ private class AnimatedSkiaImage(
 
     private fun decodeFrame(index: Int) = coroutineScope.launch(Dispatchers.Default) {
         val target = if (current.value) bitmapA else bitmapB
-        codec.readPixels(target, index)
+        try {
+            codec.readPixels(target, index)
+        } catch (e: Exception) {
+            return@launch
+        }
         target.notifyPixelsChanged()
         current.value = !current.value
     }

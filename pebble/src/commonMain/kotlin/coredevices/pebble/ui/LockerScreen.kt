@@ -73,7 +73,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.compose.itemKey
 import co.touchlab.kermit.Logger
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -134,6 +133,7 @@ class LockerViewModel(
     val type = mutableStateOf(AppType.Watchface)
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
+    val hearted = mutableStateOf(false)
     var storeIsRefreshing by mutableStateOf(false)
     var lockerIsRefreshing by mutableStateOf(false)
 
@@ -297,15 +297,18 @@ fun LockerScreen(
                 }
             }
         }
+        val currentHearts = currentHearts()
         val lockerEntries = loadLockerEntries(
+            currentHearts = currentHearts,
             type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
             watchType = watchType,
             showIncompatible = viewModel.showIncompatible.value,
             showScaled = viewModel.showScaled.value,
+            hearted = viewModel.hearted.value,
         )
         val activeWatchface = loadActiveWatchface(watchType)
-        if (lockerEntries == null || activeWatchface == null) {
+        if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
             return
@@ -335,14 +338,16 @@ fun LockerScreen(
                     selectedType = viewModel.type,
                     showIncompatible = viewModel.showIncompatible,
                     showScaled = viewModel.showScaled,
+                    hearted = viewModel.hearted,
                 )
                 if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStoreV2) {
-                    val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value, viewModel.showScaled.value) {
+                    val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value, viewModel.showScaled.value, viewModel.hearted.value) {
                         viewModel.storeSearchResults.map { searchResults ->
                             lockerEntries + searchResults.filter { searchResult ->
                                 !lockerEntries.any { lockerEntry -> searchResult.uuid == lockerEntry.uuid }
                                         && (viewModel.showIncompatible.value || searchResult.isCompatible)
                                         && (viewModel.showScaled.value || searchResult.isNativelyCompatible)
+                                        && (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = searchResult.appstoreSource?.id, appId = searchResult.storeId))
                             }
                         }
                     }
@@ -549,7 +554,9 @@ fun LockerScreen(
                                                 collection,
                                                 watchType,
                                                 lockerEntries,
-                                                viewModel.showScaled,
+                                                viewModel.showScaled.value,
+                                                viewModel.type.value,
+                                                viewModel.hearted.value,
                                             ) {
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
@@ -560,9 +567,10 @@ fun LockerScreen(
                                                         source,
                                                         home.categories
                                                     )
-                                                }.filter {
-                                                    it.type == viewModel.type.value &&
-                                                            (viewModel.showScaled.value || it.isNativelyCompatible)
+                                                }.filter { app ->
+                                                    app.type == viewModel.type.value &&
+                                                            (viewModel.showScaled.value || app.isNativelyCompatible) &&
+                                                    (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
                                                 }
                                                     .distinctBy { it.uuid }
                                             }

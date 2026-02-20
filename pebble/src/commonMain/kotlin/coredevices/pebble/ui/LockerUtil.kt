@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -78,6 +79,7 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
@@ -134,12 +136,32 @@ fun appstoreCategories(appType: AppType?, sources: List<AppstoreSource>?): Map<A
 }
 
 @Composable
+fun currentHearts(): Map<Int, Set<String>>? {
+    val heartsDao: HeartsDao = koinInject()
+    val hearts by heartsDao.getAllHeartsFlow().map { list ->
+        buildMap {
+            for (h in list) getOrPut(h.sourceId) { mutableSetOf() }.add(h.appId)
+        }
+    }.collectAsState(null)
+    return hearts
+}
+
+fun Map<Int, Set<String>>?.hasHeart(sourceId: Int?, appId: String?): Boolean {
+    if (sourceId == null || appId == null) {
+        return false
+    }
+    return this?.get(sourceId)?.contains(appId) ?: false
+}
+
+@Composable
 fun loadLockerEntries(
+    currentHearts: Map<Int, Set<String>>?,
     type: AppType,
     searchQuery: String,
     watchType: WatchType,
     showIncompatible: Boolean,
     showScaled: Boolean,
+    hearted: Boolean,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -158,10 +180,10 @@ fun loadLockerEntries(
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents(coreConfig)
     val categories = appstoreCategories(type, appstoreSources)
-    if (entries == null || appstoreSources == null || categories == null) {
+    if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled) {
+    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled, hearted) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
@@ -169,6 +191,9 @@ fun loadLockerEntries(
                 return@mapNotNull null
             }
             if (!showScaled && !app.isNativelyCompatible) {
+                return@mapNotNull null
+            }
+            if (hearted && !currentHearts.hasHeart(sourceId = appstoreSource?.id, appId = app.storeId)) {
                 return@mapNotNull null
             }
             app
@@ -655,10 +680,11 @@ fun AppsFilterRow(
     selectedType: MutableState<AppType>?,
     showIncompatible: MutableState<Boolean>?,
     showScaled: MutableState<Boolean>?,
+    hearted: MutableState<Boolean>?,
 ) {
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
-        if (!hasShownScrollHint && scrollState.maxValue > 0 && selectedType != null && showIncompatible != null && showScaled != null) {
+        if (!hasShownScrollHint && scrollState.maxValue > 0) {
             hasShownScrollHint = true
             // Wait a small bit for the layout to settle and user to focus
             delay(500.milliseconds)
@@ -735,6 +761,25 @@ fun AppsFilterRow(
                             Icon(
                                 imageVector = Icons.Filled.Done,
                                 contentDescription = "Show Scaled",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (hearted != null) {
+                FilterChip(
+                    selected = hearted.value,
+                    onClick = { hearted.value = !hearted.value },
+                    label = { Text("Hearted") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (hearted.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = "Hearted",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }

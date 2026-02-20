@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,15 +26,20 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.HeartBroken
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -113,13 +119,15 @@ class LockerAppViewModel(
 //                storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
 //            }
             selectedStoreEntry = result?.asCommonApp(
-                watchType,
-                platform,
-                source,
-                service.cachedCategoriesOrDefaults(AppType.fromString(result.type))
+                watchType = watchType,
+                platform = platform,
+                source = source,
+                categories = service.cachedCategoriesOrDefaults(AppType.fromString(result.type)),
             )
         }
     }
+
+    fun serviceFor(entry: CommonApp) = get<AppstoreService> { parametersOf(entry.appstoreSource) }
 
 //    private suspend fun getAppVariants(
 //        uuid: Uuid,
@@ -272,12 +280,58 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         } else {
                             entry.hearts
                         }
-                        if (hearts != null) {
+                        val isHearted = entry.isHearted()
+                        if (hearts != null && isHearted != null) {
                             Row(modifier = Modifier.padding(vertical = 5.dp)) {
-                                Icon(
-                                    Icons.Outlined.Favorite,
-                                    contentDescription = "Hearts",
-                                )
+                                val service = remember(entry) { viewModel.serviceFor(entry) }
+                                val loggedInForHearts = remember(entry) { service.isLoggedIn() }
+                                val addUrl = remember(storeEntry) {
+                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.addHeartUrl
+                                }
+                                val removeUrl = remember(storeEntry) {
+                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.removeHeartUrl
+                                }
+                                var isChanging by remember { mutableStateOf(false) }
+                                val canAddAndRemove = loggedInForHearts && addUrl != null && removeUrl != null && entry.storeId != null && !isChanging
+                                val icon = remember(entry, isHearted) {
+                                    when {
+                                        isHearted -> Icons.Outlined.Favorite
+                                        else -> Icons.Outlined.FavoriteBorder
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (entry.storeId == null) {
+                                            return@IconButton
+                                        }
+                                        scope.launch {
+                                            if (canAddAndRemove) {
+                                                if (!isHearted) {
+                                                    isChanging = true
+                                                    val result = service.addHeart(addUrl, entry.storeId)
+                                                    isChanging = false
+                                                    if (!result) {
+                                                        topBarParams.showSnackbar("Failed to heart app")
+                                                    }
+                                                } else {
+                                                    isChanging = true
+                                                    val result = service.removeHeart(removeUrl, entry.storeId)
+                                                    isChanging = false
+                                                    if (!result) {
+                                                        topBarParams.showSnackbar("Failed to remove heart")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.animateContentSize(),
+                                    enabled = canAddAndRemove,
+                                ) {
+                                    Icon(
+                                        icon,
+                                        contentDescription = "Hearts",
+                                    )
+                                }
                                 Text(
                                     text = "$hearts",
                                     modifier = Modifier.padding(start = 5.dp),

@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.algolia.client.exception.AlgoliaApiException
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
@@ -18,6 +19,8 @@ import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.weather.WeatherResponse
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
@@ -26,6 +29,7 @@ import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.URLBuilder
@@ -86,6 +90,12 @@ fun PebbleAccountProvider.isLoggedIn(): Boolean = get().loggedIn.value != null
 
 private val logger = Logger.withTag("PebbleHttpClient")
 
+enum class HttpClientAuthType {
+    Pebble,
+    Core,
+    None,
+}
+
 class PebbleHttpClient(
     private val pebbleAccount: PebbleAccountProvider,
     httpClient: HttpClient = HttpClient(),
@@ -94,18 +104,47 @@ class PebbleHttpClient(
         install(HttpCache)
     }
     companion object {
+        suspend fun PebbleHttpClient.authFor(type: HttpClientAuthType): String? = when (type) {
+            HttpClientAuthType.Pebble -> pebbleAccount.get().loggedIn.value
+            HttpClientAuthType.Core -> Firebase.auth.currentUser?.getIdToken(false)
+            HttpClientAuthType.None -> null
+        }
+
         internal suspend fun PebbleHttpClient.put(
             url: String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
         ): HttpResponse? {
-            val token = pebbleAccount.get().loggedIn.value
-            if (auth && token == null) {
+            val token = authFor(auth)
+            if (auth != HttpClientAuthType.None && token == null) {
                 logger.i("not logged in")
                 return null
             }
             val response = try {
                 httpClient.put(url) {
-                    if (auth && token != null) {
+                    if (token != null) {
+                        bearerAuth(token)
+                    }
+                }
+            } catch (e: IOException) {
+                logger.w(e) { "Error doing put: ${e.message}" }
+                return null
+            }
+            logger.v { "post url=$url result=${response.status}" }
+            return response
+        }
+
+        suspend fun PebbleHttpClient.post(
+            url: String,
+            auth: HttpClientAuthType,
+        ): HttpResponse? {
+            val token = authFor(auth)
+            if (auth != HttpClientAuthType.None && token == null) {
+                logger.i("not logged in")
+                return null
+            }
+            val response = try {
+                httpClient.post(url) {
+                    if (token != null) {
                         bearerAuth(token)
                     }
                 }
@@ -119,16 +158,16 @@ class PebbleHttpClient(
 
         internal suspend fun PebbleHttpClient.delete(
             url: String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
         ): Boolean {
-            val token = pebbleAccount.get().loggedIn.value
-            if (auth && token == null) {
+            val token = authFor(auth)
+            if (auth != HttpClientAuthType.None && token == null) {
                 logger.i("not logged in")
                 return false
             }
             val response = try {
                 httpClient.delete(url) {
-                    if (auth && token != null) {
+                    if (token != null) {
                         bearerAuth(token)
                     }
                 }
@@ -142,18 +181,18 @@ class PebbleHttpClient(
 
         internal suspend inline fun <reified T> PebbleHttpClient.get(
             url: String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
             parameters: Map<String, String> = emptyMap(),
         ): T? {
             logger.v("get: ${url.sanitizeUrl()} auth=$auth")
-            val token = pebbleAccount.get().loggedIn.value
-            if (auth && token == null) {
+            val token = authFor(auth)
+            if (auth != HttpClientAuthType.None && token == null) {
                 logger.i("not logged in")
                 return null
             }
             val response = try {
                 httpClient.get(url) {
-                    if (auth && token != null) {
+                    if (token != null) {
                         bearerAuth(token)
                     }
                     parameters.forEach {
@@ -180,7 +219,7 @@ class PebbleHttpClient(
         }
     }
 
-    override suspend fun getBootConfig(url: String): BootConfig? = get(url, auth = false)
+    override suspend fun getBootConfig(url: String): BootConfig? = get(url, auth = HttpClientAuthType.Pebble)
 }
 
 private val COORDINATE_REGEX = Regex("""/(-?\d+\.\d+)/(-?\d+\.\d+)""")
@@ -191,7 +230,8 @@ private fun String.sanitizeUrl(): String {
 }
 
 interface PebbleWebServices {
-    suspend fun fetchUsersMe(): UsersMeResponse?
+    suspend fun fetchUsersMePebble(): UsersMeResponse?
+    suspend fun fetchUsersMeCore(): CoreUsersMe?
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
@@ -209,7 +249,8 @@ class RealPebbleWebServices(
     private val memfault: Memfault,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
-    private val coreConfig: CoreConfigFlow
+    private val coreConfig: CoreConfigFlow,
+    private val heartsDao: HeartsDao,
 ) : WebServices, PebbleWebServices, KoinComponent {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -218,7 +259,7 @@ class RealPebbleWebServices(
     companion object {
         private suspend inline fun <reified T> RealPebbleWebServices.get(
             url: BootConfig.Config.() -> String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
         ): T? {
             val bootConfig = bootConfig.getBootConfig()
             if (bootConfig == null) {
@@ -230,7 +271,7 @@ class RealPebbleWebServices(
 
         private suspend fun RealPebbleWebServices.put(
             url: BootConfig.Config.() -> String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
         ): HttpResponse? {
             val bootConfig = bootConfig.getBootConfig()
             if (bootConfig == null) {
@@ -242,7 +283,7 @@ class RealPebbleWebServices(
 
         private suspend fun RealPebbleWebServices.delete(
             url: BootConfig.Config.() -> String,
-            auth: Boolean,
+            auth: HttpClientAuthType,
         ): Boolean {
             val bootConfig = bootConfig.getBootConfig()
             if (bootConfig == null) {
@@ -271,13 +312,23 @@ class RealPebbleWebServices(
         }
     }
 
-    override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
+    override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = HttpClientAuthType.Pebble)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
         return if (coreConfig.value.useNativeAppStoreV2) {
+            fetchUserHearts()
             firestoreLocker.fetchLocker()
         } else {
             fetchPebbleLocker()?.let { LockerModelWrapper(it, emptySet()) }
+        }
+    }
+
+    private suspend fun fetchUserHearts() {
+        getAllSources(enabledOnly = true).forEach { source ->
+            val hearts = appstoreServiceForSource(source).fetchHearts()
+            if (hearts != null) {
+                heartsDao.updateHeartsForSource(sourceId = source.id, newHearts = hearts)
+            }
         }
     }
 
@@ -291,7 +342,7 @@ class RealPebbleWebServices(
     }
 
     override suspend fun removeFromLegacyLocker(id: Uuid): Boolean {
-        return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
+        return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = HttpClientAuthType.Pebble)
     }
 
     override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult =
@@ -302,15 +353,17 @@ class RealPebbleWebServices(
     }
 
     override suspend fun addToLegacyLocker(uuid: String): Boolean =
-        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.status?.isSuccess() == true
+        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = HttpClientAuthType.Pebble)?.status?.isSuccess() == true
 
     override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? {
-        return put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.body()
+        return put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = HttpClientAuthType.Pebble)?.body()
     }
 
     override suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
 
-    override suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
+    override suspend fun fetchUsersMePebble(): UsersMeResponse? = get({ links.usersMe }, auth = HttpClientAuthType.Pebble)
+
+    override suspend fun fetchUsersMeCore(): CoreUsersMe? = get({ "https://appstore-api.repebble.com/api/v1/users/me" }, auth = HttpClientAuthType.Core)
 
     override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
         return getAllSources(enabledOnly).mapNotNull {
@@ -322,7 +375,7 @@ class RealPebbleWebServices(
 
     override suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
         val url = "https://weather-api.repebble.com/api/v1/geocode/$latitude/$longitude?language=$language&units=${units.code}"
-        return httpClient.get(url, auth = false)
+        return httpClient.get(url, auth = HttpClientAuthType.None)
     }
 
     suspend fun searchUuidInSources(uuid: Uuid): List<Pair<String, AppstoreSource>> {
@@ -606,7 +659,7 @@ data class StoreApplication(
     val id: String,
     @SerialName("latest_release")
     val latestRelease: StoreLatestRelease? = null,
-//    val links: StoreLinks,
+    val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
     @SerialName("published_date")
@@ -621,6 +674,14 @@ data class StoreApplication(
     val uuid: String? = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
+)
+
+@Serializable
+data class StoreLinks(
+    @SerialName("add_heart")
+    val addHeart: String? = null,
+    @SerialName("remove_heart")
+    val removeHeart: String? = null,
 )
 
 /**
@@ -670,6 +731,13 @@ data class StoreChangelogEntry(
     val releaseNotes: String?,
     @SerialName("version")
     val version: String?,
+)
+
+@Serializable
+data class CoreUsersMe(
+    val uid: String,
+    @SerialName("voted_ids")
+    val votedIds: List<String>,
 )
 
 //@Serializable

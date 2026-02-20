@@ -10,12 +10,18 @@ import com.algolia.client.model.search.TagFilters
 import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
+import coredevices.database.HeartEntity
+import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.services.AppstoreService.BulkFetchParams.Companion.encodeToJson
+import coredevices.pebble.services.PebbleHttpClient.Companion.delete
+import coredevices.pebble.services.PebbleHttpClient.Companion.post
 import coredevices.pebble.ui.CommonApp
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.cachedCategoriesOrDefaults
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -51,6 +57,8 @@ class AppstoreService(
     private val appstoreCollectionDao: AppstoreCollectionDao,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val pebbleWebServices: PebbleWebServices,
+    private val pebbleHttpClient: PebbleHttpClient,
+    private val heartsDao: HeartsDao,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -160,6 +168,64 @@ class AppstoreService(
             }
             result
         }.filterNotNull()
+    }
+
+    suspend fun addHeart(url: String, appId: String): Boolean {
+        val success = when (source.url) {
+            PEBBLE_FEED_URL -> {
+                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Core)?.status?.isSuccess() ?: false
+            }
+            REBBLE_FEED_URL -> {
+                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Pebble)?.status?.isSuccess() ?: false
+            }
+            else -> false
+        }
+        if (success) {
+            heartsDao.addHeart(HeartEntity(sourceId = source.id, appId = appId))
+        }
+        return success
+    }
+
+    suspend fun removeHeart(url: String, appId: String): Boolean {
+        val success = when (source.url) {
+            PEBBLE_FEED_URL -> {
+                pebbleHttpClient.delete(url = url, auth = HttpClientAuthType.Core)
+            }
+            REBBLE_FEED_URL -> {
+                pebbleHttpClient.post(url = url, auth = HttpClientAuthType.Pebble)?.status?.isSuccess() ?: false
+            }
+            else -> false
+        }
+        if (success) {
+            heartsDao.removeHeart(HeartEntity(sourceId = source.id, appId = appId))
+        }
+        return success
+    }
+
+    fun isLoggedIn(): Boolean {
+        return when (source.url) {
+            PEBBLE_FEED_URL -> {
+                Firebase.auth.currentUser != null
+            }
+            REBBLE_FEED_URL -> {
+                pebbleAccountProvider.isLoggedIn()
+            }
+            else -> false
+        }
+    }
+
+    suspend fun fetchHearts(): List<String>? {
+        return when (source.url) {
+            PEBBLE_FEED_URL -> {
+                val response = pebbleWebServices.fetchUsersMeCore()
+                logger.v { "response: $response" }
+                null
+            }
+            REBBLE_FEED_URL -> {
+                pebbleWebServices.fetchUsersMePebble()?.users?.firstOrNull()?.votedIds
+            }
+            else -> null
+        }
     }
 
     suspend fun fetchAppStoreApp(
@@ -310,10 +376,10 @@ class AppstoreService(
                     if (response != null) {
                         val apps = response.data.mapNotNull {
                             it.asCommonApp(
-                                hardwarePlatform,
-                                platform,
-                                source,
-                                categories.await(),
+                                watchType = hardwarePlatform,
+                                platform = platform,
+                                source = source,
+                                categories = categories.await(),
                             )
                         }
                         LoadResult.Page(

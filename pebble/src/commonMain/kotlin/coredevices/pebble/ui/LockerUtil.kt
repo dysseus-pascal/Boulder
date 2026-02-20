@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
@@ -173,6 +174,16 @@ fun loadLockerEntries(
             app
         }
     }
+}
+
+@Composable
+fun CommonApp.isHearted(): Boolean? {
+    val heartsDao: HeartsDao = koinInject()
+    if (appstoreSource == null || storeId == null) {
+        return null
+    }
+    val hearted by heartsDao.isHeartedFlow(sourceId = appstoreSource.id, appId = storeId).collectAsState(null)
+    return hearted
 }
 
 @Composable
@@ -362,6 +373,8 @@ sealed class CommonAppType {
         val storeSource: AppstoreSource,
         val headerImageUrl: String?,
         val allScreenshotUrls: List<String>,
+        val addHeartUrl: String?,
+        val removeHeartUrl: String?,
     ) : CommonAppType()
 
     data class System(
@@ -370,7 +383,11 @@ sealed class CommonAppType {
     ) : CommonAppType(), CommonAppTypeLocal
 }
 
-fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSource?, categories: List<StoreCategory>?): CommonApp {
+fun LockerWrapper.asCommonApp(
+    watchType: WatchType?,
+    appstoreSource: AppstoreSource?,
+    categories: List<StoreCategory>?,
+): CommonApp {
     val compatiblePlatform = findCompatiblePlatform(watchType)
     val anyPlatform = properties.platforms.firstOrNull()
     return CommonApp(
@@ -427,7 +444,12 @@ fun WatchType.performsScaling(): Boolean = when (this) {
     else -> false
 }
 
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>): CommonApp? {
+fun StoreApplication.asCommonApp(
+    watchType: WatchType,
+    platform: Platform,
+    source: AppstoreSource,
+    categories: List<StoreCategory>,
+): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -447,6 +469,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
             storeApp = this,
             headerImageUrl = headerImage,
             allScreenshotUrls = screenshotImages.mapNotNull { it.values.firstOrNull() },
+            addHeartUrl = links.addHeart,
+            removeHeartUrl = links.removeHeart,
         ),
         type = appType,
         category = category,
@@ -477,8 +501,11 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
 }
 
 
-
-fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
+fun StoreSearchResult.asCommonApp(
+    watchType: WatchType,
+    platform: Platform,
+    source: AppstoreSource,
+): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -491,7 +518,7 @@ fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, sour
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList()),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null),
         type = appType,
         category = category,
         version = null,

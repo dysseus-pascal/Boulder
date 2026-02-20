@@ -67,6 +67,7 @@ val utilModule = module {
     single { get<CoreDatabase>().appstoreSourceDao() }
     single { get<CoreDatabase>().appstoreCollectionDao() }
     single { get<CoreDatabase>().weatherLocationDao() }
+    single { get<CoreDatabase>().heartsDao() }
     singleOf(::UserConfigDao)
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }

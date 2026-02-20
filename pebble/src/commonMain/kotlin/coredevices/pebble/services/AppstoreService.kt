@@ -218,9 +218,7 @@ class AppstoreService(
     suspend fun fetchHearts(): List<String>? {
         return when (source.url) {
             PEBBLE_FEED_URL -> {
-                val response = pebbleWebServices.fetchUsersMeCore()
-                logger.v { "response: $response" }
-                null
+                pebbleWebServices.fetchUsersMeCore()?.votedIds
             }
             REBBLE_FEED_URL -> {
                 pebbleWebServices.fetchUsersMePebble()?.users?.firstOrNull()?.votedIds

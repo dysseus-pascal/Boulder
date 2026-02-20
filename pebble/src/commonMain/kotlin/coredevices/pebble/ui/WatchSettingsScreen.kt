@@ -1200,7 +1200,7 @@ please disable the option.""".trimIndent(),
                     description = "Sign in to Core account to backup settings, apps, etc",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Settings,
-                    button = { SignInButton() },
+                    button = { SignInButton(onError = { topBarParams.showSnackbar(it) }) },
                     show = { coreUser == null },
                 ),
                 basicSettingsActionItem(

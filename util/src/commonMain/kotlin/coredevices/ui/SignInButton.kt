@@ -44,7 +44,12 @@ fun SignInButton(onError: (String) -> Unit = {}, enabled: Boolean = true) {
                 } catch (_: FirebaseAuthUserCollisionException) {
                     Logger.i { "User is already created, not linking anonymous user" }
                 }
-                Firebase.auth.signInWithCredential(credential)
+                try {
+                    Firebase.auth.signInWithCredential(credential)
+                } catch (e: Exception) {
+                    onError("Network error during sign in")
+                    return@launch
+                }
                 Firebase.auth.currentUser?.emailOrNull?.let {
                     analyticsBackend.setUser(email = it)
                 }

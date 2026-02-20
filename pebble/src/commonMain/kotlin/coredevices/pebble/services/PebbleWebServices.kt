@@ -726,7 +726,7 @@ data class StoreHardwarePlatform(
 @Serializable
 data class StoreChangelogEntry(
     @SerialName("published_date")
-    val publishedDate: String,
+    val publishedDate: String?,
     @SerialName("release_notes")
     val releaseNotes: String?,
     @SerialName("version")

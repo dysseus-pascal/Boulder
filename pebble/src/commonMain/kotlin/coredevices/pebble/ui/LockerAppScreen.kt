@@ -40,6 +40,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -282,7 +283,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                         val isHearted = entry.isHearted()
                         if (hearts != null && isHearted != null) {
-                            Row(modifier = Modifier.padding(vertical = 5.dp)) {
+                            Row(modifier = Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val service = remember(entry) { viewModel.serviceFor(entry) }
                                 val loggedInForHearts = remember(entry) { service.isLoggedIn() }
                                 val addUrl = remember(storeEntry) {
@@ -330,6 +331,11 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     Icon(
                                         icon,
                                         contentDescription = "Hearts",
+                                        tint = if (isHearted) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            LocalContentColor.current
+                                        },
                                     )
                                 }
                                 Text(

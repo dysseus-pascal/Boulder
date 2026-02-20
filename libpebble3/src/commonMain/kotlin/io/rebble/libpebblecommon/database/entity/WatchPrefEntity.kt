@@ -417,7 +417,7 @@ enum class EnumWatchPref(
 
     override val type = WatchPrefType.TypeUInt8
     override fun decodeValue(value: String): WatchPrefEnum =
-        options.first { it.code == value.toUByte() }
+        options.firstOrNull { it.code == value.toUByte() } ?: defaultValue
 
     override fun encodeValue(value: WatchPrefEnum): String = value.code.toString()
 }
@@ -530,7 +530,7 @@ enum class ColorWatchPref(
     ;
 
     override val type = WatchPrefType.TypeColor
-    override fun decodeValue(value: String): TimelineColor = TimelineColor.findByName(value)!!
+    override fun decodeValue(value: String): TimelineColor = TimelineColor.findByName(value) ?: defaultValue
     override fun encodeValue(value: TimelineColor): String = value.identifier
 }
 

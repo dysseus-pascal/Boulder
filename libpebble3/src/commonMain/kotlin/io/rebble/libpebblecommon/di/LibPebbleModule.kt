@@ -53,6 +53,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.Mtu
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PPoGReset
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebblePairing
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogClient
@@ -515,6 +516,7 @@ fun initKoin(
                     scopedOf(::PebblePairing)
                     scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
                     scopedOf(::PreConnectScanner)
+                    scopedOf(::PPoGReset)
 
                     // Services
                     scopedOf(::SystemService)

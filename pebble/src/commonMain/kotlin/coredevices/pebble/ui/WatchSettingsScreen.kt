@@ -1184,6 +1184,8 @@ please disable the option.""".trimIndent(),
                         scope.launch {
                             try {
                                 Firebase.auth.signOut()
+                                Firebase.auth.signInAnonymously()
+                                libPebble.requestLockerSync()
                                 analyticsBackend.setUser(email = null)
                                 logger.d { "User signed out" }
                             } catch (e: Exception) {

@@ -106,7 +106,12 @@ class PebbleHttpClient(
     companion object {
         suspend fun PebbleHttpClient.authFor(type: HttpClientAuthType): String? = when (type) {
             HttpClientAuthType.Pebble -> pebbleAccount.get().loggedIn.value
-            HttpClientAuthType.Core -> Firebase.auth.currentUser?.getIdToken(false)
+            HttpClientAuthType.Core -> try {
+                Firebase.auth.currentUser?.getIdToken(false)
+            } catch (e: Exception) {
+                logger.e(e) { "Network error fetching Firebase token" }
+                null
+            }
             HttpClientAuthType.None -> null
         }
 

@@ -711,7 +711,7 @@ data class StoreLatestRelease(
     @SerialName("pbw_file")
     val pbwFile: String,
     @SerialName("published_date")
-    val publishedDate: String,
+    val publishedDate: String?,
     @SerialName("release_notes")
     val releaseNotes: String?,
     val version: String?,

@@ -9,6 +9,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreLocker
+import coredevices.pebble.account.compareVersionStrings
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.UsersMeResponse
 import coredevices.pebble.firmware.FirmwareUpdateCheck
@@ -393,7 +394,8 @@ class RealPebbleWebServices(
 
     override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
-        return getAllSources().map { source ->
+        val sources = getAllSources()
+        val results = sources.map { source ->
             scope.async {
                 val appstore = appstoreServiceForSource(source)
                 try {
@@ -408,7 +410,19 @@ class RealPebbleWebServices(
                     emptyList()
                 }
             }
-        }.awaitAll().flatten().distinctBy { it.second.uuid }
+        }.awaitAll().flatten()
+        // Deduplicate by UUID. Prefer the entry with the higher version, or the earlier source if tied.
+        return results.groupBy { it.second.uuid }.values.map { duplicates ->
+            if (duplicates.size == 1) {
+                duplicates.first()
+            } else {
+                duplicates.maxWith(
+                    Comparator<Pair<AppstoreSource, StoreSearchResult>> { a, b ->
+                        compareVersionStrings(a.second.latestRelease?.version ?: a.second.version, b.second.latestRelease?.version ?: b.second.version)
+                    }.thenByDescending { it.first.id }
+                )
+            }
+        }
 //        logger.v { "search response: $response" }
     }
 }
@@ -540,6 +554,9 @@ data class StoreSearchResult(
     val screenshotImages: List<String>,
     @SerialName("asset_collections")
     val assetCollections: List<StoreAssetCollection>,
+    @SerialName("latest_release")
+    val latestRelease: StoreLatestRelease? = null,
+    val version: String? = null,
 )
 
 @Serializable

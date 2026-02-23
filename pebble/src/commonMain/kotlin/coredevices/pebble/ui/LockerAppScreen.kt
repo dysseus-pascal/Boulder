@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,7 +27,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.LocationSearching
@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.HeartBroken
-import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -48,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -59,6 +58,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -597,9 +598,16 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     }
                 }
                 Spacer(Modifier.height(5.dp))
+                // Shared minimum width for the name column — grows to fit the widest label.
+                var propertyNameWidthPx by remember { mutableIntStateOf(0) }
+                val density = LocalDensity.current
+                val propertyNameModifier = Modifier
+                    .widthIn(min = with(density) { propertyNameWidthPx.toDp() })
+                    .onSizeChanged { propertyNameWidthPx = maxOf(propertyNameWidthPx, it.width) }
                 if (platform == Platform.Android && entry.androidCompanion != null) {
                     PropertyRow(
                         name = "COMPANION",
+                        nameModifier = propertyNameModifier,
                         value = entry.androidCompanion.name,
                         onClick = {
                             urlLauncher.openUri(entry.androidCompanion.url)
@@ -610,6 +618,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 if (description != null && description.isNotBlank()) {
                     PropertyRow(
                         name = "DESCRIPTION",
+                        nameModifier = propertyNameModifier,
                         value = description,
                         multiRow = true,
                     )
@@ -617,6 +626,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 
                 PropertyRow(
                     name = "DEVELOPER",
+                    nameModifier = propertyNameModifier,
                     value = entry.developerName,
                     onClick = if (entry.developerId != null && storeSource != null) {
                         {
@@ -633,7 +643,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                 )
                 entry.category?.let { category ->
-                    PropertyRow(name = "CATEGORY", value = category)
+                    PropertyRow(name = "CATEGORY", nameModifier = propertyNameModifier, value = category)
                 }
                 entry.version?.let { version ->
                     val sideloadedText = if (entry.commonAppType is CommonAppType.Locker && entry.commonAppType.sideloaded) {
@@ -641,11 +651,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     } else {
                         ""
                     }
-                    PropertyRow(name = "VERSION", value = "$version$sideloadedText")
+                    PropertyRow(name = "VERSION", nameModifier = propertyNameModifier, value = "$version$sideloadedText")
                 }
                 entry.sourceLink?.let { sourceLink ->
                     PropertyRow(
                         name = "SOURCE CODE",
+                        nameModifier = propertyNameModifier,
                         value = "External Link",
                         onClick = {
                             val urlParsed = parseUrl(sourceLink)
@@ -660,6 +671,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 storeSource?.let { storeSource ->
                     PropertyRow(
                         name = "STORE",
+                        nameModifier = propertyNameModifier,
                         value = storeSource.title,
                     )
                 }
@@ -675,6 +687,7 @@ private fun PropertyRow(
     onClick: (() -> Unit)? = null,
     onClickIcon: ImageVector = Icons.AutoMirrored.Default.Launch,
     multiRow: Boolean = false,
+    nameModifier: Modifier = Modifier,
 ) {
     Row(modifier = Modifier.padding(5.dp).let{
         if (onClick != null) {
@@ -686,7 +699,7 @@ private fun PropertyRow(
         Text(
             text = name,
             color = Color.Gray,
-            modifier = Modifier.width(130.dp),
+            modifier = nameModifier,
             maxLines = 1
         )
         if (!multiRow) {

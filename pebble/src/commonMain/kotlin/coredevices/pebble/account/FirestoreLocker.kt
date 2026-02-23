@@ -2,6 +2,7 @@ package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
+import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.REBBLE_FEED_URL
 import coredevices.pebble.ui.CommonAppType
@@ -119,43 +120,51 @@ class RealFirestoreLocker(
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
-        val appsBySource = fsLocker.groupBy { it.appstoreSource }.let {
-            if (REBBLE_FEED_URL in it) {
-                it
-            } else {
-                // Force it to at least maybe call rebble sync
-                it + (REBBLE_FEED_URL to emptyList())
-            }
-        }
-        val apps = appsBySource.flatMap { (source, entries) ->
-            val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = source, title = "")) }
-            val appsForSource = appstore.fetchAppStoreApps(entries, useCache = !forceRefresh)
-            if (source == REBBLE_FEED_URL) {
-                appsForSource.filter { f -> entries.none { e -> Uuid.parse(f.uuid) == e.uuid } }.forEach { entry ->
+        val designatedSourceByUuid = fsLocker.associate { it.uuid.toString() to it.appstoreSource }
+        val allSources = get<AppstoreSourceDao>().getAllEnabledSources()
+        logger.v { "sources: $allSources" }
+        val apps = allSources.flatMap { source ->
+            val appstore: AppstoreService = get { parametersOf(source) }
+            val appsForSource = appstore.fetchAppStoreApps(fsLocker, useCache = !forceRefresh)
+            if (source.url == REBBLE_FEED_URL) {
+                appsForSource.filter { f -> fsLocker.none { e -> Uuid.parse(f.uuid) == e.uuid } }.forEach { entry ->
                     // Add to firestore locker
                     val firestoreEntry = FirestoreLockerEntry(
                         uuid = Uuid.parse(entry.uuid),
                         appstoreId = entry.id,
-                        appstoreSource = source,
+                        appstoreSource = source.url,
                         timelineToken = entry.userToken,
                     )
                     dao.addLockerEntryForUser(user.uid, firestoreEntry)
                 }
             }
-            appsForSource.map { appstore.source.id to it }
+            appsForSource.map { SourcedLockerEntry(source, it) }
         }
         // Deduplicate by UUID (same app can exist in multiple stores).
-        // Prefer the entry with the higher version, or the earlier source if tied.
-        val dedupedApps = apps.groupBy { it.second.uuid }.values.map { duplicates ->
+        // Prefer highest version, then the source the app is already associated with, then lowest source ID.
+        val dedupedSourcedApps = apps.groupBy { it.entry.uuid }.values.map { duplicates ->
             if (duplicates.size == 1) {
-                duplicates.first().second
+                duplicates.first()
             } else {
+                val designatedSource = designatedSourceByUuid[duplicates.first().entry.uuid]
                 duplicates.maxWith(
-                    Comparator<Pair<Int, LockerEntry>> { a, b -> compareVersionStrings(a.second.version, b.second.version) }
-                        .thenByDescending { it.first }
-                ).second
+                    Comparator<SourcedLockerEntry> { a, b -> compareVersionStrings(a.entry.version, b.entry.version) }
+                        .thenBy { it.source.url == designatedSource }
+                        .thenByDescending { it.source.id }
+                )
             }
         }
+
+        // Update Firestore source for any entry where the winning source changed.
+        val fsLockerByUuid = fsLocker.associateBy { it.uuid.toString() }
+        dedupedSourcedApps.forEach { sourced ->
+            val existingEntry = fsLockerByUuid[sourced.entry.uuid] ?: return@forEach
+            if (existingEntry.appstoreSource != sourced.source.url) {
+                dao.addLockerEntryForUser(user.uid, existingEntry.copy(appstoreSource = sourced.source.url))
+            }
+        }
+
+        val dedupedApps = dedupedSourcedApps.map { it.entry }
         return LockerModelWrapper(
             locker = LockerModel(
                 applications = dedupedApps
@@ -231,6 +240,11 @@ data class FirestoreLockerEntry(
  * Compare two version strings numerically by major.minor segments.
  * null versions sort lower than non-null.
  */
+private data class SourcedLockerEntry(
+    val source: AppstoreSource,
+    val entry: LockerEntry,
+)
+
 internal fun compareVersionStrings(a: String?, b: String?): Int {
     if (a == null && b == null) return 0
     if (a == null) return -1

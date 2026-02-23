@@ -9,7 +9,7 @@ class OAuthRedirectHandler {
     companion object {
         private val logger = Logger.withTag("OAuthRedirectHandler")
     }
-    private val _oauthRedirects = MutableSharedFlow<Uri>(extraBufferCapacity = 1, replay = 1)
+    private val _oauthRedirects = MutableSharedFlow<Uri>(extraBufferCapacity = 1, replay = 0)
     val oauthRedirects = _oauthRedirects.asSharedFlow()
 
     fun handleOAuthRedirect(uri: Uri?): Boolean {

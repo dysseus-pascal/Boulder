@@ -9,9 +9,9 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreLocker
-import coredevices.pebble.account.compareVersionStrings
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.UsersMeResponse
+import coredevices.pebble.account.compareVersionStrings
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.services.PebbleHttpClient.Companion.delete
 import coredevices.pebble.services.PebbleHttpClient.Companion.get
@@ -71,12 +71,14 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface PebbleBootConfigService {
@@ -626,6 +628,44 @@ data class BulkStoreResponse(
     val data: List<StoreApplication>
 )
 
+object PublishedDateSerializer : KSerializer<kotlin.time.Instant?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PublishedDate", PrimitiveKind.STRING).nullable
+
+    // "Sat, 30 Nov 2013 13:36:50 GMT" — RFC 1123
+    private val rfc1123Regex = Regex(
+        """^\w{3}, (\d{1,2}) (\w{3}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$"""
+    )
+    private val months = mapOf(
+        "Jan" to 1, "Feb" to 2, "Mar" to 3, "Apr" to 4, "May" to 5, "Jun" to 6,
+        "Jul" to 7, "Aug" to 8, "Sep" to 9, "Oct" to 10, "Nov" to 11, "Dec" to 12
+    )
+
+    override fun deserialize(decoder: Decoder): kotlin.time.Instant? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return null
+        val element = jsonDecoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val raw = (element as? JsonPrimitive)?.contentOrNull?.trim()?.ifEmpty { return null } ?: return null
+
+        // Try ISO 8601 first (e.g. "2013-11-30T13:38:31.987")
+        kotlin.runCatching { kotlin.time.Instant.parse(raw) }.getOrNull()?.let { return it }
+        // Try with appended "Z" for ISO without timezone
+        kotlin.runCatching { kotlin.time.Instant.parse("${raw}Z") }.getOrNull()?.let { return it }
+
+        // Try RFC 1123 (e.g. "Sat, 30 Nov 2013 13:36:50 GMT")
+        rfc1123Regex.matchEntire(raw)?.destructured?.let { (day, mon, year, hh, mm, ss) ->
+            val month = months[mon] ?: return null
+            val isoString = "${year.padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.padStart(2, '0')}T${hh}:${mm}:${ss}Z"
+            kotlin.runCatching { kotlin.time.Instant.parse(isoString) }.getOrNull()?.let { return it }
+        }
+
+        return null
+    }
+
+    override fun serialize(encoder: Encoder, value: kotlin.time.Instant?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value.toString())
+    }
+}
+
 object HeaderImageSerializer : KSerializer<String?> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("HeaderImage", PrimitiveKind.STRING).nullable
 
@@ -685,7 +725,8 @@ data class StoreApplication(
     @SerialName("list_image")
     val listImage: Map<String, String>,
     @SerialName("published_date")
-    val publishedDate: String?,
+    @Serializable(with = PublishedDateSerializer::class)
+    val publishedDate: Instant?,
     @SerialName("screenshot_hardware")
     val screenshotHardware: String?,
     @SerialName("screenshot_images")
@@ -728,7 +769,8 @@ data class StoreLatestRelease(
     @SerialName("pbw_file")
     val pbwFile: String,
     @SerialName("published_date")
-    val publishedDate: String?,
+    @Serializable(with = PublishedDateSerializer::class)
+    val publishedDate: Instant?,
     @SerialName("release_notes")
     val releaseNotes: String?,
     val version: String?,

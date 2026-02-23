@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 const val LOCKER_UI_LOAD_LIMIT = 100
@@ -400,6 +401,7 @@ sealed class CommonAppType {
         val allScreenshotUrls: List<String>,
         val addHeartUrl: String?,
         val removeHeartUrl: String?,
+        val publishedDate: Instant?,
     ) : CommonAppType()
 
     data class System(
@@ -496,6 +498,7 @@ fun StoreApplication.asCommonApp(
             allScreenshotUrls = screenshotImages.mapNotNull { it.values.firstOrNull() },
             addHeartUrl = links.addHeart,
             removeHeartUrl = links.removeHeart,
+            publishedDate = latestRelease.publishedDate ?: publishedDate,
         ),
         type = appType,
         category = category,
@@ -543,7 +546,7 @@ fun StoreSearchResult.asCommonApp(
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null, publishedDate = null),
         type = appType,
         category = category,
         version = null,

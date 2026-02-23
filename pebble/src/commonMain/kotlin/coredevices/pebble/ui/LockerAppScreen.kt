@@ -85,6 +85,13 @@ import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.DayOfWeekNames
+import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.format.Padding
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -668,6 +675,16 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                     )
                 }
+                if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.publishedDate != null) {
+                    PropertyRow(
+                        name = "UPDATED",
+                        nameModifier = propertyNameModifier,
+                        value = PUBLISHED_DATE_FORMAT.format(
+                            storeEntry.commonAppType.publishedDate
+                                .toLocalDateTime(TimeZone.currentSystemDefault())
+                        ),
+                    )
+                }
                 storeSource?.let { storeSource ->
                     PropertyRow(
                         name = "STORE",
@@ -851,4 +868,16 @@ suspend fun CommonApp.showSettings(
 
         is CommonAppType.Store -> Unit
     }
+}
+
+private val PUBLISHED_DATE_FORMAT = LocalDateTime.Format {
+    dayOfWeek(DayOfWeekNames.ENGLISH_ABBREVIATED)
+    chars(", ")
+    day(Padding.NONE)
+    char(' ')
+    monthName(MonthNames.ENGLISH_ABBREVIATED)
+    char(' ')
+    year()
+    char(' ')
+    hour(); char(':'); minute(); char(':'); second()
 }

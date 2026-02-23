@@ -142,20 +142,18 @@ class RealFirestoreLocker(
                     dao.addLockerEntryForUser(user.uid, firestoreEntry)
                 }
             }
-            appsForSource
+            appsForSource.map { appstore.source.id to it }
         }
         // Deduplicate by UUID (same app can exist in multiple stores).
         // Prefer the entry with the higher version, or the earlier source if tied.
-        val sourceCount = appsBySource.keys.size
-        val sourcePriority = appsBySource.keys.withIndex().associate { (i, url) -> url to (sourceCount - i) }
-        val dedupedApps = apps.groupBy { it.uuid }.values.map { duplicates ->
+        val dedupedApps = apps.groupBy { it.second.uuid }.values.map { duplicates ->
             if (duplicates.size == 1) {
-                duplicates.first()
+                duplicates.first().second
             } else {
                 duplicates.maxWith(
-                    Comparator<LockerEntry> { a, b -> compareVersionStrings(a.version, b.version) }
-                        .thenBy { sourcePriority[it.source] ?: 0 }
-                )
+                    Comparator<Pair<Int, LockerEntry>> { a, b -> compareVersionStrings(a.second.version, b.second.version) }
+                        .thenByDescending { it.first }
+                ).second
             }
         }
         return LockerModelWrapper(

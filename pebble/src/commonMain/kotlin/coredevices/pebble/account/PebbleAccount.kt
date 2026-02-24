@@ -2,10 +2,11 @@ package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.firestore.UsersDao
 import coredevices.pebble.services.PebbleWebServices
 import io.rebble.libpebblecommon.connection.TokenProvider
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -22,6 +23,7 @@ class RealPebbleAccount(
     private val settings: Settings,
     private val pebbleWebServices: PebbleWebServices,
     private val bootConfigProvider: BootConfigProvider,
+    private val usersDao: UsersDao,
 ) : PebbleAccount {
     private val logger = Logger.withTag("PebbleAccount")
     private val _loggedIn = MutableStateFlow(getToken())
@@ -48,6 +50,7 @@ class RealPebbleAccount(
             return
         }
         settings.putString(DEV_KEY, devPortalId)
+        usersDao.initUserTokens(devPortalId)
         _devToken.value = devPortalId
     }
 
@@ -61,10 +64,11 @@ class RealPebbleAccount(
 }
 
 class PebbleTokenProvider(
-    private val pebbleAccount: PebbleAccount,
+    private val usersDao: UsersDao,
 ) : TokenProvider {
     override suspend fun getDevToken(): String? {
-        return pebbleAccount.devToken.value
+        val userConfig = usersDao.getUser()
+        return userConfig?.rebbleUserToken ?: userConfig?.pebbleUserToken
     }
 }
 

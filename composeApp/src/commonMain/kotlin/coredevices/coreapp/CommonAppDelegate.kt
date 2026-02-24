@@ -13,7 +13,9 @@ import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
@@ -47,6 +49,8 @@ class CommonAppDelegate(
     private val experimentalDevices: ExperimentalDevices,
     private val coreConfigHolder: CoreConfigHolder,
     private val appContext: AppContext,
+    private val usersDao: UsersDao,
+    private val pebbleAccountProvider: PebbleAccountProvider,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -83,6 +87,7 @@ class CommonAppDelegate(
                     logger.e(e) { "Failed to sign in anonymously" }
                 }
             }
+            usersDao.initUserTokens(pebbleAccountProvider.get().devToken.value)
         }
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)

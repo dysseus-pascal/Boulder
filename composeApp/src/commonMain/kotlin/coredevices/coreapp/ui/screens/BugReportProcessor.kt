@@ -286,9 +286,9 @@ class BugReportProcessor(
                 append("\nAttachment: ${it.fileName}")
             }
             append("\nTime since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
-            append("\nFirebase uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_FIREBASE_UPLOADS)}")
-            append("\nMemfault uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MEMFAULT_UPLOADS)}")
-            append("\nMixpanel uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MIXPANEL_UPLOADS)}")
+            append("\nFirebase uploads enabled: ${settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)}")
+            append("\nMemfault uploads enabled: ${settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)}")
+            append("\nMixpanel uploads enabled: ${settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)}")
         }
         return summaryWithAttachmentCount
     }

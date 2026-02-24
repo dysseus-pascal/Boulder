@@ -438,7 +438,7 @@ class AppstoreService(
         }
     }
 
-    suspend fun search(search: String, appType: AppType, watchType: WatchType): List<StoreSearchResult> {
+    suspend fun search(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<StoreSearchResult> {
         if (searchClient == null) {
             logger.w { "searchClient is null, cannot search" }
             return emptyList()
@@ -459,6 +459,8 @@ class AppstoreService(
 //                            TagFilters.of(watchType.codename),
                         )
                     ),
+                    page = page,
+                    hitsPerPage = pageSize,
                 ),
             ).hits.mapNotNull {
                 it.additionalProperties?.let { props ->

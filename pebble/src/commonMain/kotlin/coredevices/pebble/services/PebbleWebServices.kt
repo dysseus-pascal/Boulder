@@ -243,7 +243,7 @@ interface PebbleWebServices {
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
-    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>>
+    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<Pair<AppstoreSource, StoreSearchResult>>
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
     suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
     suspend fun removeFromLegacyLocker(id: Uuid): Boolean
@@ -394,14 +394,14 @@ class RealPebbleWebServices(
         }.awaitAll().filterNotNull()
     }
 
-    override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
+    override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int, pageSize: Int): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
         val sources = getAllSources()
         val results = sources.map { source ->
             scope.async {
                 val appstore = appstoreServiceForSource(source)
                 try {
-                    appstore.search(search, appType, watchType).map {
+                    appstore.search(search, appType, watchType, page, pageSize).map {
                         Pair(source, it)
                     }
                 } catch (e: AlgoliaApiException) {

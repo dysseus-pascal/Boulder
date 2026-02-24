@@ -190,7 +190,9 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override suspend fun searchAppStore(
             search: String,
             appType: AppType,
-            watchType: WatchType
+            watchType: WatchType,
+            page: Int,
+            pageSize: Int
         ): List<Pair<AppstoreSource, StoreSearchResult>> = emptyList()
 
         override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? = null

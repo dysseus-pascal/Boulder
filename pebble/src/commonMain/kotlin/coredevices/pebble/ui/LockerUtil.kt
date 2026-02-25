@@ -56,6 +56,7 @@ import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
+import coredevices.pebble.services.StoreChangelogEntry
 import coredevices.pebble.services.StoreSearchResult
 import coredevices.pebble.services.isLoggedIn
 import coredevices.pebble.services.isRebbleFeed
@@ -380,7 +381,6 @@ data class CommonApp(
     val sourceLink: String?,
     val appstoreSource: AppstoreSource?,
     val capabilities: List<AppCapability>,
-    val developerLink: String?,
 )
 
 interface CommonAppTypeLocal {
@@ -403,6 +403,8 @@ sealed class CommonAppType {
         val addHeartUrl: String?,
         val removeHeartUrl: String?,
         val publishedDate: Instant?,
+        val developerLink: String?,
+        val changelog: List<StoreChangelogEntry>,
     ) : CommonAppType()
 
     data class System(
@@ -464,7 +466,6 @@ fun LockerWrapper.asCommonApp(
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
         capabilities = properties.capabilities,
-        developerLink = null,
     )
 }
 
@@ -501,6 +502,8 @@ fun StoreApplication.asCommonApp(
             addHeartUrl = links.addHeart,
             removeHeartUrl = links.removeHeart,
             publishedDate = latestRelease.publishedDate ?: publishedDate,
+            developerLink = website,
+            changelog = changelog,
         ),
         type = appType,
         category = category,
@@ -527,7 +530,6 @@ fun StoreApplication.asCommonApp(
         categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
         capabilities = AppCapability.fromString(capabilities),
-        developerLink = this.website,
     )
 }
 
@@ -549,7 +551,7 @@ fun StoreSearchResult.asCommonApp(
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null, publishedDate = null),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null, developerLink = null, publishedDate = null, changelog = emptyList()),
         type = appType,
         category = category,
         version = null,
@@ -572,7 +574,6 @@ fun StoreSearchResult.asCommonApp(
         categorySlug = null,
         appstoreSource = source,
         capabilities = emptyList(),
-        developerLink = null,
     )
 }
 

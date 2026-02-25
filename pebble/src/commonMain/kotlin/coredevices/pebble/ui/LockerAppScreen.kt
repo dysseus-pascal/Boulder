@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -42,6 +44,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +65,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -203,6 +208,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             lockerEntry ?: viewModel.selectedStoreEntry
         }
         val storeEntry = viewModel.selectedStoreEntry
+        val commonAppStore = remember(storeEntry) { storeEntry?.commonAppType as? CommonAppType.Store }
         val storeSource = appstoreSourceFromId(storeSourceId)
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
@@ -268,9 +274,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
         ) {
             entry?.let { entry ->
-                if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.headerImageUrl != null) {
+                if (commonAppStore?.headerImageUrl != null) {
                     AsyncImage(
-                        model = storeEntry.commonAppType.headerImageUrl,
+                        model = commonAppStore.headerImageUrl,
                         contentDescription = "banner",
                         modifier = Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.FillWidth,
@@ -308,12 +314,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             Row(modifier = Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val service = remember(entry) { viewModel.serviceFor(entry) }
                                 val loggedInForHearts = remember(entry) { service.isLoggedIn() }
-                                val addUrl = remember(storeEntry) {
-                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.addHeartUrl
-                                }
-                                val removeUrl = remember(storeEntry) {
-                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.removeHeartUrl
-                                }
+                                val addUrl = commonAppStore?.addHeartUrl
+                                val removeUrl = commonAppStore?.removeHeartUrl
                                 var isChanging by remember { mutableStateOf(false) }
                                 val canAddAndRemove = loggedInForHearts && addUrl != null && removeUrl != null && entry.storeId != null && !isChanging
                                 val icon = remember(entry, isHearted) {
@@ -660,9 +662,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     } else {
                         ""
                     }
-                    val updatedDateText = if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.publishedDate != null) {
+                    val updatedDateText = if (commonAppStore?.publishedDate != null) {
                         " - ${PUBLISHED_DATE_FORMAT.format(
-                            storeEntry.commonAppType.publishedDate
+                            commonAppStore.publishedDate
                                 .toLocalDateTime(TimeZone.currentSystemDefault())
                         ).uppercase()}"
                     } else {
@@ -678,13 +680,58 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         onClick = { urlLauncher.open(sourceLink) }
                     )
                 }
-                entry.developerLink?.let { developerLink ->
+
+                commonAppStore?.developerLink?.let { developerLink ->
                     PropertyRow(
                         name = "WEBSITE LINK",
                         nameModifier = propertyNameModifier,
                         value = "External Link",
                         onClick = { urlLauncher.open(developerLink) }
                     )
+                }
+                commonAppStore?.changelog?.let { changelog ->
+                    if (changelog.isNotEmpty()) {
+                        val show = remember { mutableStateOf(false) }
+                        PropertyRow(
+                            name = "CHANGELOG",
+                            nameModifier = propertyNameModifier,
+                            value = "View",
+                            onClick = { show.value = true },
+                            onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
+                        )
+                        if (show.value) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    show.value = false
+                                },
+                                title = { Text("Changelog") },
+                                text = {
+                                    LazyColumn {
+                                        items(changelog) { item ->
+                                            Row(modifier = Modifier.padding(5.dp)) {
+                                                Text(item.version ?: "Unknown version", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                val date = remember(item.publishedDate) {
+                                                    commonAppStore.publishedDate?.let {
+                                                        PUBLISHED_DATE_FORMAT.format(
+                                                            it.toLocalDateTime(TimeZone.currentSystemDefault())
+                                                        ).uppercase()
+                                                    } ?: ""
+                                                }
+                                                Text(date, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text(item.releaseNotes ?: "\n", modifier = Modifier.padding(5.dp))
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        show.value = false
+                                    }) { Text("Dismiss") }
+                                }
+                            )
+                        }
+                    }
                 }
 
                 storeSource?.let { storeSource ->

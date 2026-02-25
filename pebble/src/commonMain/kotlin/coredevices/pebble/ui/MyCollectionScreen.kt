@@ -87,6 +87,7 @@ fun MyCollectionScreen(
         showIncompatible = viewModel.showIncompatible.value,
         showScaled = viewModel.showScaled.value,
         hearted = viewModel.hearted.value,
+        limit = 700,
     )
     if (lockerEntries == null) {
         return

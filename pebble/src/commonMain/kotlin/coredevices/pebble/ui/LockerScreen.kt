@@ -322,6 +322,7 @@ fun LockerScreen(
             showIncompatible = viewModel.showIncompatible.value,
             showScaled = viewModel.showScaled.value,
             hearted = viewModel.hearted.value,
+            limit = 25,
         )
         val activeWatchface = loadActiveWatchface(watchType)
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {

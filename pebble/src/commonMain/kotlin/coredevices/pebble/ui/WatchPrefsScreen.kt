@@ -205,7 +205,7 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
     val installedApps by libPebble.getLocker(
         type = AppType.Watchapp,
         searchQuery = null,
-        limit = LOCKER_UI_LOAD_LIMIT,
+        limit = 100,
     ).map { apps ->
         apps.filter { app -> app.isSynced() }
     }.collectAsState(emptyList())

@@ -88,7 +88,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-const val LOCKER_UI_LOAD_LIMIT = 100
 private val logger = Logger.withTag("LockerUtil")
 
 @Composable
@@ -164,6 +163,7 @@ fun loadLockerEntries(
     showIncompatible: Boolean,
     showScaled: Boolean,
     hearted: Boolean,
+    limit: Int,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -173,7 +173,7 @@ fun loadLockerEntries(
         libPebble.getLocker(
             type = type,
             searchQuery = searchQuery,
-            limit = LOCKER_UI_LOAD_LIMIT,
+            limit = limit,
         )
     }
     val entries by lockerQuery.collectAsState(null)

@@ -93,11 +93,10 @@ private val logger = Logger.withTag("LockerUtil")
 @Composable
 private fun firestoreLockerContents(coreConfig: CoreConfig): List<FirestoreLockerEntry>? {
     val firestoreLocker: FirestoreLocker = koinInject()
-    val firestoreLockerContents by produceState<List<FirestoreLockerEntry>?>(null, coreConfig.useNativeAppStoreV2) {
-        if (coreConfig.useNativeAppStoreV2) {
-            value = firestoreLocker.readLocker()
-        }
+    if (!coreConfig.useNativeAppStoreV2) {
+        return null
     }
+    val firestoreLockerContents by firestoreLocker.locker.collectAsState()
     return firestoreLockerContents
 }
 

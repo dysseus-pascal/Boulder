@@ -222,6 +222,7 @@ interface LockerApi {
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry)
+    suspend fun addAppsToLocker(apps: List<LockerEntry>)
     fun restoreSystemAppOrder()
     val activeWatchface: StateFlow<LockerWrapper?>
 }

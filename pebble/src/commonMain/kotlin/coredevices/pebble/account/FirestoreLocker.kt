@@ -12,46 +12,30 @@ import dev.gitlive.firebase.firestore.FieldPath
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreException
 import dev.gitlive.firebase.firestore.FirestoreExceptionCode
+import dev.gitlive.firebase.firestore.QuerySnapshot
 import dev.gitlive.firebase.firestore.code
 import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
-    suspend fun getLockerEntriesForUser(uid: String): List<FirestoreLockerEntry> {
-        try {
-            return firestore.collection("lockers")
-                .document(uid)
-                .collection("entries")
-                .get()
-                .documents
-                .map {
-                    it.data()
-                }
-        } catch (e: FirebaseFirestoreException) {
-            throw FirestoreDaoException.fromFirebaseException(e)
-        }
-    }
-
-    suspend fun isLockerEntriesEmptyForUser(uid: String): Boolean {
-        try {
-            val querySnapshot = firestore.collection("lockers")
-                .document(uid)
-                .collection("entries")
-                .limit(1)
-                .get()
-            return querySnapshot.documents.isEmpty()
-        } catch (e: FirebaseFirestoreException) {
-            throw FirestoreDaoException.fromFirebaseException(e)
-        }
-    }
-
     suspend fun addLockerEntryForUser(
         uid: String,
         entry: FirestoreLockerEntry
@@ -85,38 +69,96 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
             throw FirestoreDaoException.fromFirebaseException(e)
         }
     }
+
+    fun observeLockerEntriesForUser(uid: String): Flow<QuerySnapshot> = firestore.collection("lockers")
+        .document(uid)
+        .collection("entries")
+        .snapshots
 }
 
 interface FirestoreLocker {
-    suspend fun readLocker(): List<FirestoreLockerEntry>?
-    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper?
+    val locker: StateFlow<List<FirestoreLockerEntry>?>
+    suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper?
     suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean
     suspend fun removeApp(uuid: Uuid): Boolean
+    fun init()
 }
 
 class RealFirestoreLocker(
     private val dao: FirestoreLockerDao,
+    private val libPebbleLockerProxy: LibPebbleLockerProxy,
 ): KoinComponent, FirestoreLocker {
     companion object {
         private val logger = Logger.withTag("FirestoreLocker")
     }
 
-    override suspend fun readLocker(): List<FirestoreLockerEntry>? {
-        val user = Firebase.auth.currentUser ?: return null
-        return try {
-            dao.getLockerEntriesForUser(user.uid)
-        } catch (e: FirestoreDaoException) {
-            logger.e(e) { "Error fetching locker entries from Firestore (uid ${user.uid}): ${e.message}" }
-            null
+    private val _locker = MutableStateFlow<List<FirestoreLockerEntry>?>(null)
+    override val locker: StateFlow<List<FirestoreLockerEntry>?> = _locker.asStateFlow()
+
+    override fun init() {
+        GlobalScope.launch {
+            Firebase.auth.authStateChanged.collect { user ->
+                logger.v { "User changed: $user" }
+                if (user == null) {
+                    return@collect
+                }
+                dao.observeLockerEntriesForUser(user.uid)
+                    .catch { e -> logger.w(e) { "catching error in observe" } }
+                    .collect {
+                        logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
+                        val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
+                        handleFirestoreChanges(lockerData)
+                        _locker.value = lockerData
+                    }
+            }
+        }
+    }
+
+    /**
+     * Handle individual changes from firebase pushes (only for pebble store)
+     */
+    private suspend fun handleFirestoreChanges(locker: List<FirestoreLockerEntry>) {
+        val existingLocker = libPebbleLockerProxy.getAllLockerUuids().first()
+        val added = locker.filter {
+            it.uuid !in existingLocker && it.appstoreSource != REBBLE_FEED_URL
+        }
+        // Not handling removed here (web doesn't remove right now + we won't know if it's rebble/pebble)
+        if (added.isEmpty()) {
+            return
+        }
+        val allSources = get<AppstoreSourceDao>().getAllEnabledSources()
+        val appsToAdd = allSources.flatMap {  source ->
+            if (source.url == REBBLE_FEED_URL) {
+                return@flatMap emptyList()
+            }
+            val lockerForSource = added.filter { it.appstoreSource == source.url }
+            if (lockerForSource.isEmpty()) {
+                return@flatMap emptyList()
+            }
+            val appstore: AppstoreService = get { parametersOf(source) }
+            appstore.fetchAppStoreApps(lockerForSource, useCache = false)
+        }
+        logger.d { "Adding ${appsToAdd.size} apps to locker from firestore update" }
+        libPebbleLockerProxy.addAppsToLocker(appsToAdd)
+        if (appsToAdd.size == 1) {
+            logger.d { "...and starting single new app on watch" }
+            val app = appsToAdd.first()
+            val uuid = Uuid.parse(app.uuid)
+            if (!libPebbleLockerProxy.waitUntilAppSyncedToWatch(uuid, 15.seconds)) {
+                logger.w { "timed out waiting for blobdb item to sync to watch" }
+                return
+            }
+            // Give it a small bit of time to settle
+            delay(0.5.seconds)
+            libPebbleLockerProxy.startAppOnWatch(uuid)
         }
     }
 
     override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
-        val fsLocker = try {
-            dao.getLockerEntriesForUser(user.uid)
-        } catch (e: FirestoreDaoException) {
-            logger.e(e) { "Error fetching locker entries from Firestore (uid ${user.uid}): ${e.message}" }
+        val fsLocker = locker.value
+        if (fsLocker == null) {
+            logger.w { "fetchLocker: locker is null" }
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
@@ -226,6 +268,16 @@ sealed class FirestoreDaoException(override val cause: Throwable? = null, privat
             }
         }
     }
+}
+
+/**
+ * Workaround for a cyclic dependency, because koin doesn't support Provider
+ */
+interface LibPebbleLockerProxy {
+    fun getAllLockerUuids(): Flow<List<Uuid>>
+    suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    suspend fun waitUntilAppSyncedToWatch(id: Uuid, timeout: Duration): Boolean
+    suspend fun startAppOnWatch(id: Uuid): Boolean
 }
 
 @Serializable

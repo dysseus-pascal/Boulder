@@ -325,7 +325,7 @@ class RealPebbleWebServices(
     override suspend fun fetchLocker(): LockerModelWrapper? {
         return if (coreConfig.value.useNativeAppStoreV2) {
             fetchUserHearts()
-            firestoreLocker.fetchLocker()
+            firestoreLocker.fetchLocker(forceRefresh = true)
         } else {
             fetchPebbleLocker()?.let { LockerModelWrapper(it, emptySet()) }
         }

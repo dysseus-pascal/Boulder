@@ -6,6 +6,7 @@ import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.GithubAccount
+import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
 import coredevices.pebble.account.RealBootConfigProvider
@@ -55,6 +56,8 @@ import io.rebble.libpebblecommon.BleConfig
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.TokenProvider
@@ -62,7 +65,9 @@ import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -76,6 +81,8 @@ import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.uuid.Uuid
 
 val watchModule = module {
     single {
@@ -118,6 +125,35 @@ val watchModule = module {
     factory { p ->
         AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get())
     }
+    single {
+        object : LibPebbleLockerProxy {
+            fun activeWatch() = get<LibPebble>().watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
+
+            override fun getAllLockerUuids(): Flow<List<Uuid>> {
+                return get<LibPebble>().getAllLockerUuids()
+            }
+
+            override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
+                get<LibPebble>().addAppsToLocker(apps)
+            }
+
+            override suspend fun waitUntilAppSyncedToWatch(
+                id: Uuid,
+                timeout: Duration
+            ): Boolean {
+                val watch = activeWatch()
+                if (watch == null) {
+                    return false
+                }
+                return get<LibPebble>().waitUntilAppSyncedToWatch(id, watch.identifier, timeout)
+            }
+
+            override suspend fun startAppOnWatch(id: Uuid): Boolean {
+                get<LibPebble>().launchApp(id)
+                return true
+            }
+        }
+    } bind LibPebbleLockerProxy::class
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) binds arrayOf(WebServices::class, PebbleWebServices::class)
     singleOf(::RealPebbleDeepLinkHandler) bind PebbleDeepLinkHandler::class

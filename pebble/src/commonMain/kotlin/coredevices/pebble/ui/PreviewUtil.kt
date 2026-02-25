@@ -263,10 +263,11 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { appstoreCache } bind AppstoreCache::class
     single { NextBugReportContext() }
     val firestoreLocker = object : FirestoreLocker {
-        override suspend fun readLocker(): List<FirestoreLockerEntry>? = null
+        override val locker: StateFlow<List<FirestoreLockerEntry>?> = MutableStateFlow(null)
         override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? = null
         override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean = true
         override suspend fun removeApp(uuid: Uuid): Boolean = true
+        override fun init() {}
     }
     single { firestoreLocker } bind FirestoreLocker::class
     val coreConfig = CoreConfig(

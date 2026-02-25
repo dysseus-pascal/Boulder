@@ -187,6 +187,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun addAppToLocker(app: LockerEntry) {
     }
 
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
+    }
+
     override fun restoreSystemAppOrder() {
     }
 

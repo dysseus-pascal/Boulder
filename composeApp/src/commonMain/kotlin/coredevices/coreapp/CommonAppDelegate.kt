@@ -15,6 +15,7 @@ import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
 import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CommonBuildKonfig
@@ -51,6 +52,7 @@ class CommonAppDelegate(
     private val appContext: AppContext,
     private val usersDao: UsersDao,
     private val pebbleAccountProvider: PebbleAccountProvider,
+    private val firestoreLocker: FirestoreLocker,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -104,6 +106,7 @@ class CommonAppDelegate(
                 experimentalDevices.init()
             }
         }
+        firestoreLocker.init()
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }

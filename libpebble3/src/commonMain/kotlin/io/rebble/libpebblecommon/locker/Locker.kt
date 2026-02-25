@@ -190,6 +190,13 @@ class Locker(
         lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
     }
 
+    override suspend fun addAppsToLocker(apps: List<io.rebble.libpebblecommon.web.LockerEntry>) {
+        lockerEntryDao.insertOrReplaceAndOrder(apps.map { app ->
+            val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
+            app.asEntity(orderIndex)
+        }, config.value.lockerSyncLimitV2)
+    }
+
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
     suspend fun update(locker: LockerModelWrapper) {

@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -72,6 +73,7 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
+import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
@@ -658,42 +660,57 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     } else {
                         ""
                     }
-                    PropertyRow(name = "VERSION", nameModifier = propertyNameModifier, value = "$version$sideloadedText")
+                    val updatedDateText = if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.publishedDate != null) {
+                        " - ${PUBLISHED_DATE_FORMAT.format(
+                            storeEntry.commonAppType.publishedDate
+                                .toLocalDateTime(TimeZone.currentSystemDefault())
+                        ).uppercase()}"
+                    } else {
+                        ""
+                    }
+                    PropertyRow(name = "VERSION", nameModifier = propertyNameModifier, value = "$version$sideloadedText$updatedDateText")
                 }
                 entry.sourceLink?.let { sourceLink ->
                     PropertyRow(
                         name = "SOURCE CODE",
                         nameModifier = propertyNameModifier,
                         value = "External Link",
-                        onClick = {
-                            val urlParsed = parseUrl(sourceLink)
-                            if (urlParsed != null && urlParsed.protocolOrNull in listOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
-                                urlLauncher.openUri(sourceLink)
-                            } else {
-                                logger.w { "Not opening invalid URL: $sourceLink" }
-                            }
-                        }
+                        onClick = { urlLauncher.open(sourceLink) }
                     )
                 }
-                if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.publishedDate != null) {
+                entry.developerLink?.let { developerLink ->
                     PropertyRow(
-                        name = "UPDATED",
+                        name = "WEBSITE LINK",
                         nameModifier = propertyNameModifier,
-                        value = PUBLISHED_DATE_FORMAT.format(
-                            storeEntry.commonAppType.publishedDate
-                                .toLocalDateTime(TimeZone.currentSystemDefault())
-                        ),
+                        value = "External Link",
+                        onClick = { urlLauncher.open(developerLink) }
                     )
                 }
+
                 storeSource?.let { storeSource ->
+                    val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
+                        { urlLauncher.open("https://apps.repebble.com/${entry.storeId}") }
+                    } else {
+                        null
+                    }
                     PropertyRow(
                         name = "STORE",
                         nameModifier = propertyNameModifier,
                         value = storeSource.title,
+                        onClick = onClick,
                     )
                 }
             }
         }
+    }
+}
+
+fun UriHandler.open(url : String) {
+    val urlParsed = parseUrl(url)
+    if (urlParsed != null && urlParsed.protocolOrNull in listOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
+        openUri(url)
+    } else {
+        logger.w { "Not opening invalid URL: $url" }
     }
 }
 
@@ -871,13 +888,10 @@ suspend fun CommonApp.showSettings(
 }
 
 private val PUBLISHED_DATE_FORMAT = LocalDateTime.Format {
-    dayOfWeek(DayOfWeekNames.ENGLISH_ABBREVIATED)
-    chars(", ")
-    day(Padding.NONE)
-    char(' ')
     monthName(MonthNames.ENGLISH_ABBREVIATED)
     char(' ')
-    year()
+    day(Padding.NONE)
+    char(',')
     char(' ')
-    hour(); char(':'); minute(); char(':'); second()
+    year()
 }

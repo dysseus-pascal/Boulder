@@ -380,6 +380,7 @@ data class CommonApp(
     val sourceLink: String?,
     val appstoreSource: AppstoreSource?,
     val capabilities: List<AppCapability>,
+    val developerLink: String?,
 )
 
 interface CommonAppTypeLocal {
@@ -463,6 +464,7 @@ fun LockerWrapper.asCommonApp(
         sourceLink = properties.sourceLink,
         appstoreSource = appstoreSource,
         capabilities = properties.capabilities,
+        developerLink = null,
     )
 }
 
@@ -525,6 +527,7 @@ fun StoreApplication.asCommonApp(
         categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
         capabilities = AppCapability.fromString(capabilities),
+        developerLink = this.website,
     )
 }
 
@@ -569,6 +572,7 @@ fun StoreSearchResult.asCommonApp(
         categorySlug = null,
         appstoreSource = source,
         capabilities = emptyList(),
+        developerLink = null,
     )
 }
 

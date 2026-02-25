@@ -5,13 +5,11 @@ import com.algolia.client.api.SearchClient
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerDao
-import coredevices.pebble.account.GithubAccount
 import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
 import coredevices.pebble.account.RealBootConfigProvider
 import coredevices.pebble.account.RealFirestoreLocker
-import coredevices.pebble.account.RealGithubAccount
 import coredevices.pebble.account.RealPebbleAccount
 import coredevices.pebble.firmware.Cohorts
 import coredevices.pebble.firmware.FirmwareUpdateCheck
@@ -21,7 +19,6 @@ import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.CactusTranscription
-import coredevices.pebble.services.Github
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
 import coredevices.pebble.services.NullTranscriptionProvider
@@ -47,6 +44,8 @@ import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.weather.YahooWeatherInterceptor
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.MobileGeocoder
 import io.ktor.client.HttpClient
@@ -92,8 +91,8 @@ val watchModule = module {
             get(),
             get(),
             get(),
-            get<GithubAccount>().loggedIn
-                .map { it?.response?.accessToken }
+            Firebase.auth.authStateChanged
+                .map { it?.getIdToken(false) }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),
             get(),
@@ -111,7 +110,6 @@ val watchModule = module {
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
-    singleOf(::RealGithubAccount) bind GithubAccount::class
     singleOf(::FirestoreLockerDao)
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class
@@ -160,7 +158,6 @@ val watchModule = module {
     factoryOf(::PebbleHttpClient) bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
     factoryOf(::Memfault)
-    factoryOf(::Github)
     factoryOf(::Cohorts)
     factoryOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)

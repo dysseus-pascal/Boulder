@@ -5,7 +5,6 @@ import com.eygraber.uri.Uri
 import coredevices.analytics.CoreAnalytics
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.account.PebbleAccount
-import coredevices.pebble.services.Github
 import coredevices.pebble.ui.NavBarRoute
 import coredevices.pebble.ui.PebbleNavBarRoutes
 import coredevices.util.CoreConfigFlow
@@ -38,7 +37,6 @@ interface PebbleDeepLinkHandler {
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
     private val libPebble: LibPebble,
-    private val github: Github,
     private val analytics: CoreAnalytics,
     private val context: AppContext,
     private val appstoreSourceDao: AppstoreSourceDao,
@@ -236,9 +234,6 @@ class RealPebbleDeepLinkHandler(
         if (state == null) {
             logger.w("handleGithubAuth: state is null")
             return false
-        }
-        GlobalScope.launch {
-            github.handleRedirect(code, state, error)
         }
         return true
     }

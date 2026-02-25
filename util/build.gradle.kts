@@ -196,8 +196,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "USER_AGENT_VERSION", headSha)
         buildConfigField(FieldSpec.Type.STRING, "BUG_URL", gradleStringPropOrNull("bugUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "TOKEN_URL", gradleStringPropOrNull("tokenUrl"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "GITHUB_CLIENT_ID", gradleStringPropOrNull("githubClientId"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "GITHUB_CLIENT_SECRET", gradleStringPropOrNull("githubClientSecret"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MIXPANEL_TOKEN", gradleStringPropOrNull("mixpanelToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "WISPR_KEY", gradleStringPropOrNull("wisprKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)

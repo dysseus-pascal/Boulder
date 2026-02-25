@@ -415,7 +415,7 @@ fun initKoin(
                 single {
                     DevConnectionCloudpebbleProxy(
                         libPebble = get(),
-                        url = "wss://cloudpebble-proxy.repebble.com/device",
+                        url = "wss://cloudpebble-proxy.repebble.com/device-v2",
                         scope = get(),
                         token = proxyTokenProvider
                     )

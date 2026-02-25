@@ -71,16 +71,15 @@ import com.russhwolf.settings.ExperimentalSettingsApi
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
-import coredevices.pebble.account.GithubAccount
 import coredevices.pebble.rememberLibPebble
-import coredevices.pebble.services.Github
-import coredevices.pebble.services.GithubUser
 import coredevices.pebble.services.LanguagePack
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.displayName
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -651,20 +650,8 @@ private fun DevConnection(
     val config by libPebble.config.collectAsState()
     if (watch is ConnectedPebble.DevConnection && (watch !is ConnectedPebbleDeviceInRecovery || config.watchConfig.ignoreMissingPrf)) {
         val config by libPebble.config.collectAsState()
-        val github = koinInject<Github>()
-        val githubAccount by koinInject<GithubAccount>().loggedIn.collectAsState()
+        val account by Firebase.auth.authStateChanged.collectAsState(Firebase.auth.currentUser)
         val scope = rememberCoroutineScope()
-        val uriHandler = LocalUriHandler.current
-        val settings = koinInject<Settings>()
-
-        fun login() {
-            scope.launch {
-                val uuid = Uuid.random()
-                settings.putString(Github.STATE_SETTING_KEY, uuid.toString())
-                val authUrl = github.getAuthorizationUrl(uuid.toString(), setOf("profile"))
-                uriHandler.openUri(authUrl.toString())
-            }
-        }
 
         Box(modifier = modifier) {
             Column {
@@ -674,7 +661,7 @@ private fun DevConnection(
                 ) {
                     Text("Dev Connection")
                     Spacer(Modifier.weight(1f))
-                    if (githubAccount != null || config.watchConfig.lanDevConnection) {
+                    if (account?.isAnonymous == false || config.watchConfig.lanDevConnection) {
                         Switch(
                             checked = active,
                             onCheckedChange = {
@@ -688,18 +675,14 @@ private fun DevConnection(
                             }
                         )
                     } else {
-                        Button(
-                            onClick = ::login
-                        ) {
-                            Text("Login to GitHub")
-                        }
+                        Text("Login required")
                     }
                 }
                 if (active) {
                     if (config.watchConfig.lanDevConnection) {
                         LanDevConnectionDetail()
                     } else {
-                        ProxyDevConnectionDetail(::login)
+                        ProxyDevConnectionDetail()
                     }
                 }
             }
@@ -756,19 +739,7 @@ private fun LanDevConnectionDetail() {
 }
 
 @Composable
-private fun ProxyDevConnectionDetail(login: () -> Unit) {
-    val github = koinInject<Github>()
-    val githubAccount by koinInject<GithubAccount>().loggedIn.collectAsState()
-    val scope = rememberCoroutineScope()
-    var user by remember { mutableStateOf<GithubUser?>(null) }
-    LaunchedEffect(githubAccount) {
-        user = if (githubAccount != null) {
-            github.user()
-        } else {
-            null
-        }
-    }
-
+private fun ProxyDevConnectionDetail() {
     ElevatedCard(
         modifier = Modifier.padding(5.dp),
         colors = CardDefaults.cardColors(
@@ -787,20 +758,6 @@ private fun ProxyDevConnectionDetail(login: () -> Unit) {
                     "Watch exposed to Cloudpebble Proxy",
                     style = MaterialTheme.typography.titleMedium
                 )
-            }
-            if (user != null) {
-                Spacer(Modifier.height(8.dp))
-                Text("Logged in via GitHub as ${user!!.login}")
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = login,
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                ) {
-                    Text("Change User")
-                }
             }
         }
     }

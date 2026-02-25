@@ -1,14 +1,22 @@
 package coredevices.firestore
 
 import co.touchlab.kermit.Logger
-import dev.gitlive.firebase.firestore.DocumentSnapshot
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 
 interface UsersDao {
-    suspend fun ensureUserDocumentCreated()
-    suspend fun getUser(): User?
+    val user: Flow<User?>
     suspend fun updateNotionToken(
         notionToken: String?
     )
@@ -19,25 +27,37 @@ interface UsersDao {
         todoBlockId: String
     )
     suspend fun initUserTokens(rebbleUserToken: String?)
-    fun userFlow(): Flow<DocumentSnapshot>
+    fun init()
 }
 
 class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao {
     private val userDoc get() = authenticatedId?.let { db.document(it) }
     private val logger = Logger.withTag("UsersDaoImpl")
 
-    override suspend fun ensureUserDocumentCreated() {
-        if (userDoc?.get()?.exists == false) {
-            userDoc?.set(User())
-        }
-    }
+    private val _user = MutableSharedFlow<User?>(replay = 1)
+    override val user: Flow<User?> = _user.asSharedFlow()
 
-    override suspend fun getUser(): User? {
-        val doc = userDoc?.get()
-        return if (doc?.exists == true) {
-            doc.data<User>()
-        } else {
-            null
+    override fun init() {
+        GlobalScope.launch {
+            Firebase.auth.authStateChanged
+                .onStart { emit(Firebase.auth.currentUser) }
+                .flatMapLatest { user ->
+                    logger.v { "User changed: $user" }
+                    if (user == null) {
+                        _user.emit(null)
+                        flowOf(null)
+                    } else {
+                        // 2. Use flatMapLatest so the inner snapshot
+                        // is cancelled if the user logs out
+                        db.document("users/${user.uid}")
+                            .snapshots
+                            .catch { e -> logger.w(e) { "Error observing user doc" } }
+                    }
+                }
+                .collect { snapshot ->
+                    logger.d { "User changed.." }
+                    _user.emit(snapshot?.data<User?>())
+                }
         }
     }
 
@@ -60,7 +80,7 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
     }
 
     override suspend fun initUserTokens(rebbleUserToken: String?) {
-        val user = getUser()
+        val user = user.first()
         if (user == null) {
             logger.w { "initUserTokens: user is null" }
             return
@@ -72,8 +92,6 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
             userDoc?.update(mapOf("pebble_user_token" to generateRandomUserToken()))
         }
     }
-
-    override fun userFlow() = userDoc?.snapshots ?: flow {  }
 }
 
 fun generateRandomUserToken(): String {

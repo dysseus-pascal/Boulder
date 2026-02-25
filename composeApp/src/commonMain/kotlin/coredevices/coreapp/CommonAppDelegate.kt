@@ -87,6 +87,7 @@ class CommonAppDelegate(
                     logger.e(e) { "Failed to sign in anonymously" }
                 }
             }
+            usersDao.init()
             usersDao.initUserTokens(pebbleAccountProvider.get().devToken.value)
         }
         Firebase.auth.currentUser?.emailOrNull?.let {

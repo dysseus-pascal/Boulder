@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.TokenProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -67,7 +68,7 @@ class PebbleTokenProvider(
     private val usersDao: UsersDao,
 ) : TokenProvider {
     override suspend fun getDevToken(): String? {
-        val userConfig = usersDao.getUser()
+        val userConfig = usersDao.user.firstOrNull()
         return userConfig?.rebbleUserToken ?: userConfig?.pebbleUserToken
     }
 }

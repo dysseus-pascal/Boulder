@@ -1,4 +1,4 @@
-package coredevices.coreapp
+package coredevices.coreapp.auth
 
 import PlatformUiContext
 import android.app.Activity
@@ -19,7 +19,7 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.russhwolf.settings.Settings
 import coredevices.util.CommonBuildKonfig
-import coredevices.util.GoogleAuthUtil
+import coredevices.util.auth.GoogleAuthUtil
 import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.CompletableDeferred

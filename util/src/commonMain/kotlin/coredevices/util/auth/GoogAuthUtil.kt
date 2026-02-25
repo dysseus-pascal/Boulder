@@ -1,4 +1,4 @@
-package coredevices.util
+package coredevices.util.auth
 
 import PlatformUiContext
 import dev.gitlive.firebase.auth.AuthCredential

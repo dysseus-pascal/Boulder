@@ -4,6 +4,8 @@ import co.touchlab.crashkios.crashlytics.enableCrashlytics
 import co.touchlab.crashkios.crashlytics.setCrashlyticsUnhandledExceptionHook
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
+import cocoapods.FirebaseAuth.FIROAuthCredential
+import cocoapods.FirebaseAuth.FIROAuthProvider
 import cocoapods.FirebaseMessaging.FIRMessaging
 import cocoapods.FirebaseMessaging.FIRMessagingAPNSTokenType
 import cocoapods.GoogleSignIn.GIDSignIn
@@ -31,7 +33,11 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.app
+import dev.gitlive.firebase.auth.auth
+import dev.gitlive.firebase.auth.ios
 import dev.gitlive.firebase.crashlytics.crashlytics
+import dev.gitlive.firebase.ios
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope

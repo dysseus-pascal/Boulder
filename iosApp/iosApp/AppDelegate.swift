@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 import ComposeApp
 import Mixpanel
+import FirebaseCore
+import FirebaseAuth
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
@@ -40,7 +42,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ app: UIApplication,
                      open url: URL,
                      options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        return IOSDelegate.shared.handleOpenUrl(url: url)
+        if !Auth.auth().canHandle(url) {
+            return IOSDelegate.shared.handleOpenUrl(url: url)
+        } else {
+            return true
+        }
     }
     
     func applicationWillTerminate(_ application: UIApplication) {

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -89,6 +90,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInButton
+import coredevices.ui.SignInDialog
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
@@ -250,11 +252,17 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
         var showHealthStatsDialog by remember { mutableStateOf(false) }
+        var showSignInDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
         if (showHealthStatsDialog) {
             HealthStatsDialog(
                 libPebble = libPebble,
                 onDismissRequest = { showHealthStatsDialog = false },
+            )
+        }
+        if (showSignInDialog) {
+            SignInDialog(
+                onDismiss = { showSignInDialog = false }
             )
         }
         if (showBtClassicInfoDialog) {
@@ -1200,7 +1208,7 @@ please disable the option.""".trimIndent(),
                     description = "Sign in to Pebble account to backup settings, apps, etc",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Settings,
-                    button = { SignInButton(onError = { topBarParams.showSnackbar(it) }) },
+                    button = { Button(onClick = { showSignInDialog = true }) { Text("Sign In") } },
                     show = { coreUser == null },
                 ),
                 basicSettingsActionItem(

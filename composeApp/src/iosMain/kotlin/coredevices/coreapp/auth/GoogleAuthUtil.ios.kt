@@ -1,13 +1,11 @@
-package coredevices.coreapp
+package coredevices.coreapp.auth
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
 import cocoapods.GoogleSignIn.GIDSignIn
-import coredevices.util.GoogleAuthUtil
-import dev.gitlive.firebase.Firebase
+import coredevices.util.auth.GoogleAuthUtil
 import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.GoogleAuthProvider
-import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CompletableDeferred
 import platform.UIKit.UIApplication
 import kotlin.coroutines.resume

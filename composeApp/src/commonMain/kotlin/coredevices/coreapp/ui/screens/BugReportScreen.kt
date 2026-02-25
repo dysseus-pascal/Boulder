@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.InsertPhoto
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.BottomAppBar
@@ -51,6 +50,8 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
@@ -60,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -71,29 +73,21 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
-import coredevices.analytics.AnalyticsBackend
-import coredevices.analytics.setUser
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
-import coredevices.ui.SignInButton
-import coredevices.util.GoogleAuthUtil
+import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.emailOrNull
-import coredevices.util.getAndroidActivity
-import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
 
@@ -159,6 +153,8 @@ fun BugReportScreen(
         val keyboardController = LocalSoftwareKeyboardController.current
         val canSendReports = bugReportProcessor.canSendReports()
         val platformShareLauncher: PlatformShareLauncher = koinInject()
+        val snackbarHostState = remember { SnackbarHostState() }
+        var showSignInDialog by remember { mutableStateOf(false) }
 
         fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
@@ -239,7 +235,14 @@ fun BugReportScreen(
             imageAttachmentScreenLauncher?.invoke()
         }
 
+        if (showSignInDialog) {
+            SignInDialog(
+                onDismiss = { showSignInDialog = false }
+            )
+        }
+
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = { Text("Bug Report") },
@@ -350,7 +353,11 @@ fun BugReportScreen(
                         modifier = Modifier.padding(4.dp),
                         color = MaterialTheme.colorScheme.error
                     )
-                    SignInButton(onError = setStatus, enabled = !sending)
+                    Button(
+                        onClick = { showSignInDialog = true },
+                    ) {
+                        Text("Sign In")
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
                 if (recordingPath != null) {

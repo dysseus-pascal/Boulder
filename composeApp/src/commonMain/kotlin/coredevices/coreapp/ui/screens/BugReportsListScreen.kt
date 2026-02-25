@@ -41,11 +41,8 @@ import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coredevices.coreapp.api.AtlasTicketDetails
 import coredevices.coreapp.api.BugReports
-import coredevices.util.GoogleAuthUtil
-import coredevices.util.Platform
+import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.emailOrNull
-import coredevices.util.getAndroidActivity
-import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -53,7 +50,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 
 @Composable
 fun BugReportsListScreen(

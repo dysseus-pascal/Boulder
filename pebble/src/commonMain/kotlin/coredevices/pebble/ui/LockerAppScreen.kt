@@ -712,7 +712,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                                 Text(item.version ?: "Unknown version", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                                 Spacer(modifier = Modifier.weight(1f))
                                                 val date = remember(item.publishedDate) {
-                                                    commonAppStore.publishedDate?.let {
+                                                    item.publishedDate?.let {
                                                         PUBLISHED_DATE_FORMAT.format(
                                                             it.toLocalDateTime(TimeZone.currentSystemDefault())
                                                         ).uppercase()

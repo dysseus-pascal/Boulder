@@ -653,9 +653,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     },
                     onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                 )
-                entry.category?.let { category ->
-                    PropertyRow(name = "CATEGORY", nameModifier = propertyNameModifier, value = category)
-                }
                 entry.version?.let { version ->
                     val sideloadedText = if (entry.commonAppType is CommonAppType.Locker && entry.commonAppType.sideloaded) {
                         " (sideloaded)"

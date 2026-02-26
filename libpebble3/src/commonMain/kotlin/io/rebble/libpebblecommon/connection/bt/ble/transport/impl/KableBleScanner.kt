@@ -6,7 +6,9 @@ import com.juul.kable.Scanner
 import io.rebble.libpebblecommon.connection.BleScanResult
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.mapNotNull
 
 fun kableBleScanner(): BleScanner = KableBleScanner()
@@ -22,6 +24,7 @@ class KableBleScanner : BleScanner {
                 }
             }
         }.advertisements
+            .buffer(Channel.UNLIMITED)
             .mapNotNull {
                 val name = it.name ?: return@mapNotNull null
                 val manufacturerData = it.manufacturerData ?: return@mapNotNull null

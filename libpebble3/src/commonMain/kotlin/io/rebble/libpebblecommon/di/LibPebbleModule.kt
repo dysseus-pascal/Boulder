@@ -67,6 +67,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
 import io.rebble.libpebblecommon.connection.bt.classic.pebble.PebbleBtClassic
+import io.rebble.libpebblecommon.connection.devconnection.CloudpebbleProxyProtocolVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
@@ -416,6 +417,7 @@ fun initKoin(
                     DevConnectionCloudpebbleProxy(
                         libPebble = get(),
                         url = "wss://cloudpebble-proxy.repebble.com/device-v2",
+                        protocolVersion = CloudpebbleProxyProtocolVersion.V2,
                         scope = get(),
                         token = proxyTokenProvider
                     )

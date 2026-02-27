@@ -359,13 +359,10 @@ fun LockerScreen(
                 )
                 if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStoreV2) {
                     val lockerUuids = remember(lockerEntries) { lockerEntries.mapTo(HashSet()) { it.uuid } }
-                    // lockerUuids is intentionally NOT in the remember key below — including it would
-                    // recreate the pager (and trigger a network refetch) on every background locker sync.
-                    val filteredStoreResults = remember(viewModel.searchPager, viewModel.showIncompatible.value, viewModel.showScaled.value, viewModel.hearted.value) {
-                        val capturedLockerUuids = lockerUuids
+                    val filteredStoreResults = remember(viewModel.searchPager, viewModel.showIncompatible.value, viewModel.showScaled.value, viewModel.hearted.value, lockerUuids) {
                         viewModel.searchPager?.map { pagingData ->
                             pagingData.filter { app ->
-                                app.uuid !in capturedLockerUuids
+                                app.uuid !in lockerUuids
                                         && (viewModel.showIncompatible.value || app.isCompatible)
                                         && (viewModel.showScaled.value || app.isNativelyCompatible)
                                         && (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
@@ -755,7 +752,7 @@ fun SearchResultsList(
                 item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
                 items(
                     items = lockerEntries,
-                    key = { it.storeId ?: it.uuid },
+                    key = { "${it.storeId}-${it.uuid}" },
                 ) { entry ->
                     NativeWatchfaceCard(
                         entry,
@@ -775,8 +772,8 @@ fun SearchResultsList(
                 }
             } else {
                 items(
-                    count = storeResults!!.itemCount,
-                    key = storeResults.itemKey { it.storeId ?: it.uuid.toString() },
+                    count = storeResults.itemCount,
+                    key = storeResults.itemKey { "${it.storeId}-${it.uuid}" },
                 ) { index ->
                     storeResults[index]?.let { entry ->
                         NativeWatchfaceCard(
@@ -788,7 +785,7 @@ fun SearchResultsList(
                         )
                     }
                 }
-                if (storeResults!!.loadState.append is LoadState.Loading) {
+                if (storeResults.loadState.append is LoadState.Loading) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()

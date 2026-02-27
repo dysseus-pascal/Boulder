@@ -13,6 +13,10 @@ class ExperimentalDevices {
     fun init() {
     }
 
+    fun handleDeepLink(uri: String): Boolean {
+        return false
+    }
+
     fun requiredRuntimePermissions(): Set<Permission> {
         return emptySet()
     }

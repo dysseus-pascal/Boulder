@@ -11,6 +11,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.toKmpUriOrNull
+import coredevices.ExperimentalDevices
 import coredevices.coreapp.ui.App
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.pebble.PebbleAndroidDelegate
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val coreDeepLinkHandler: CoreDeepLinkHandler by inject()
     private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
+    private val experimentalDevices: ExperimentalDevices by inject()
 
     companion object {
         private val logger = Logger.withTag(MainActivity::class.simpleName!!)
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity() {
             uri?.let {
                 pebbleDeepLinkHandler.handle(it)
                 coreDeepLinkHandler.handle(it)
+                experimentalDevices.handleDeepLink(it)
             }
             setIntent(null)
         }

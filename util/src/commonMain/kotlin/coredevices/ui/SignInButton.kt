@@ -60,6 +60,7 @@ fun SignInButton(
                     Firebase.auth.currentUser?.emailOrNull?.let {
                         analyticsBackend.setUser(email = it)
                     }
+                    Logger.i { "Signed in successfully as ${Firebase.auth.currentUser?.uid} via ${credential.providerId}" }
                     analyticsBackend.logEvent("signed_in_google", mapOf("provider" to credential.providerId))
                     onSuccess()
                 } catch (e: Exception) {

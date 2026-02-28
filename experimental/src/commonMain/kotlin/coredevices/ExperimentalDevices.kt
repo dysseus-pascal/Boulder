@@ -9,7 +9,6 @@ import com.eygraber.uri.Uri
 import coredevices.pebble.ui.TopBarParams
 import coredevices.util.Permission
 import kotlinx.io.files.Path
-import com.eygraber.uri.Uri
 
 class ExperimentalDevices {
     fun init() {

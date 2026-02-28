@@ -5,6 +5,7 @@ import androidx.navigation.NavGraphBuilder
 import CoreNav
 import CoreRoute
 import DocumentAttachment
+import com.eygraber.uri.Uri
 import coredevices.pebble.ui.TopBarParams
 import coredevices.util.Permission
 import kotlinx.io.files.Path
@@ -13,7 +14,7 @@ class ExperimentalDevices {
     fun init() {
     }
 
-    fun handleDeepLink(uri: String): Boolean {
+    fun handleDeepLink(uri: Uri): Boolean {
         return false
     }
 

@@ -65,6 +65,7 @@ kotlin {
                 implementation(libs.koin.core)
                 implementation(libs.androidx.navigation.compose)
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.uri)
                 implementation(project(":util"))
             }
         }

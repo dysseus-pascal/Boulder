@@ -159,7 +159,7 @@ fun AppStoreCollectionScreen(
                         ) {
                             items(
                                 count = apps.itemCount,
-                                key = apps.itemKey { it.storeId ?: it.uuid }
+                                key = apps.itemKey { "${it.storeId}-${it.uuid}" }
                             ) { index ->
                                 val entry = apps[index]!!
                                 NativeWatchfaceCard(
@@ -179,7 +179,7 @@ fun AppStoreCollectionScreen(
                         ) {
                             items(
                                 count = apps.itemCount,
-                                key = apps.itemKey { it.storeId ?: it.uuid }
+                                key = apps.itemKey { "${it.storeId}-${it.uuid}" }
                             ) { index ->
                                 val entry = apps[index]!!
                                 NativeWatchfaceListItem(

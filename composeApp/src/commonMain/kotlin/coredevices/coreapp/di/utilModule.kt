@@ -16,6 +16,8 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.database.CoreDatabase
 import coredevices.database.UserConfigDao
 import coredevices.database.getCoreRoomDatabase
+import coredevices.firestore.UsersDao
+import coredevices.firestore.UsersDaoImpl
 import coredevices.util.AppResumed
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -24,6 +26,8 @@ import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelDownloadManager
 import coredevices.util.models.ModelManager
+import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.TranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -73,4 +77,6 @@ val utilModule = module {
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     singleOf(::ModelManager)
     singleOf(::OAuthRedirectHandler)
+    singleOf(::CactusTranscriptionService) bind TranscriptionService::class
+    singleOf(::UsersDaoImpl) bind UsersDao::class
 }

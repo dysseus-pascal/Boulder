@@ -61,6 +61,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -569,8 +570,33 @@ data class StoreAssetCollection(
     val screenshots: List<String>,
 )
 
+class LenientListSerializer<T>(private val elementSerializer: KSerializer<T>) : KSerializer<List<T>> {
+    private val logger = Logger.withTag("LenientList")
+    private val delegate = ListSerializer(elementSerializer)
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): List<T> {
+        val jsonDecoder = decoder as JsonDecoder
+        val array = jsonDecoder.decodeJsonElement() as JsonArray
+        return array.mapNotNull { element ->
+            try {
+                jsonDecoder.json.decodeFromJsonElement(elementSerializer, element)
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to decode list element, skipping" }
+                null
+            }
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<T>) {
+        delegate.serialize(encoder, value)
+    }
+}
+
 @Serializable
 data class StoreAppResponse(
+    @Serializable(with = LenientListSerializer::class)
     val data: List<StoreApplication>,
     val limit: Int,
     val links: StoreResponseLinks,
@@ -584,6 +610,7 @@ data class StoreResponseLinks(
 
 @Serializable
 data class AppStoreHome(
+    @Serializable(with = LenientListSerializer::class)
     val applications: List<StoreApplication>,
     val categories: List<StoreCategory>,
     val collections: List<StoreCollection>,
@@ -625,6 +652,7 @@ data class StoreCollection(
 
 @Serializable
 data class BulkStoreResponse(
+    @Serializable(with = LenientListSerializer::class)
     val data: List<StoreApplication>
 )
 
@@ -694,7 +722,7 @@ object HeaderImageSerializer : KSerializer<String?> {
 @Serializable
 data class StoreApplication(
     val author: String,
-    val capabilities: List<String>,
+    val capabilities: List<String>? = null,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,
@@ -867,8 +895,8 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         title = app.title,
         type = app.type,
         developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
-        isConfigurable = app.capabilities.contains("configurable"),
-        isTimelineEnabled = app.capabilities.contains("timeline"),
+        isConfigurable = app.capabilities.orEmpty().contains("configurable"),
+        isTimelineEnabled = app.capabilities.orEmpty().contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
                 if (!it.startsWith("http")) {

@@ -368,7 +368,7 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                         throw TranscriptionException.NoSpeechDetected("non_speech_tokens", modelUsed = resultModelUsed)
                     }
 
-                    text.replace("s*", "").lowercase().count { it in ('a'..'z') } < 2 -> {
+                    text.replace("s*", "").lowercase().count { it.isLetterOrDigit() } < 2 -> {
                         logger.w { "Transcription result looks like it only contains stutters or noise: '${result.text}'" }
                         throw TranscriptionException.NoSpeechDetected("stutters_or_noise", modelUsed = resultModelUsed)
                     }

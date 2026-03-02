@@ -161,7 +161,7 @@ fun BugReportScreen(
 
             // Check if user is signed in before proceeding
             if (user == null && !shareLocally) {
-                setStatus("Please sign in with Google before submitting a bug report")
+                setStatus("Please sign in before submitting a bug report")
                 return
             }
 
@@ -172,7 +172,7 @@ fun BugReportScreen(
                 // Extract Google ID token from current user
                 val currentUser = user
                 if (currentUser == null && !shareLocally) {
-                    setStatus("Please sign in with Google before submitting a bug report")
+                    setStatus("Please sign in before submitting a bug report")
                     setSending(false)
                     return@launch
                 }
@@ -347,7 +347,7 @@ fun BugReportScreen(
                 )
                 if (user == null) {
                     Text(
-                        "You must sign in with Google to submit a bug report",
+                        "You must sign in to submit a bug report",
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(4.dp),

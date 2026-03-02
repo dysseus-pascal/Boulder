@@ -89,7 +89,6 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
-import coredevices.ui.SignInButton
 import coredevices.ui.SignInDialog
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -474,7 +473,6 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
                     action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
-                    show = { coreConfig.useNativeAppStoreV2 },
                 ),
                 basicSettingsDropdownItem(
                     title = "App Theme",

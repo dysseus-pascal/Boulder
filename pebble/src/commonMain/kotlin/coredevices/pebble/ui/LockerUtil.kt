@@ -62,7 +62,6 @@ import coredevices.pebble.services.isLoggedIn
 import coredevices.pebble.services.isRebbleFeed
 import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
-import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -91,11 +90,8 @@ import kotlin.uuid.Uuid
 private val logger = Logger.withTag("LockerUtil")
 
 @Composable
-private fun firestoreLockerContents(coreConfig: CoreConfig): List<FirestoreLockerEntry>? {
+private fun firestoreLockerContents(): List<FirestoreLockerEntry>? {
     val firestoreLocker: FirestoreLocker = koinInject()
-    if (!coreConfig.useNativeAppStoreV2) {
-        return null
-    }
     val firestoreLockerContents by firestoreLocker.locker.collectAsState()
     return firestoreLockerContents
 }
@@ -110,11 +106,7 @@ private fun appstoreSources(): List<AppstoreSource>? {
 private fun LockerWrapper.findStoreSource(
     firestoreLockerContents: List<FirestoreLockerEntry>?,
     appstoreSources: List<AppstoreSource>?,
-    coreConfig: CoreConfig,
 ): AppstoreSource? {
-    if (!coreConfig.useNativeAppStoreV2) {
-        return null
-    }
     val firestoreEntry = firestoreLockerContents?.find { entry ->
         entry.uuid == properties.id
     } ?: return null
@@ -176,17 +168,15 @@ fun loadLockerEntries(
         )
     }
     val entries by lockerQuery.collectAsState(null)
-    val coreConfigFlow: CoreConfigFlow = koinInject()
-    val coreConfig by coreConfigFlow.flow.collectAsState()
     val appstoreSources = appstoreSources()
-    val firestoreLockerContents = firestoreLockerContents(coreConfig)
+    val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(type, appstoreSources)
     if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled, hearted) {
+    return remember(entries, watchType, appstoreSources, firestoreLockerContents, showIncompatible, showScaled, hearted) {
         entries?.mapNotNull {
-            val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
+            val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
             if (!showIncompatible && !app.isCompatible) {
                 return@mapNotNull null
@@ -253,16 +243,14 @@ fun CommonApp.inMyCollection(): Boolean {
 
 @Composable
 private fun LockerWrapper.load(watchType: WatchType): CommonApp? {
-    val coreConfigFlow: CoreConfigFlow = koinInject()
-    val coreConfig by coreConfigFlow.flow.collectAsState()
     val appstoreSources = appstoreSources()
-    val firestoreLockerContents = firestoreLockerContents(coreConfig)
+    val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(properties.type, appstoreSources)
     if (appstoreSources == null || categories == null) {
         return null
     }
-    return remember(this, watchType, appstoreSources, firestoreLockerContents, coreConfig) {
-        val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
+    return remember(this, watchType, appstoreSources, firestoreLockerContents) {
+        val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources)
         logger.v { "appstoreSource = $appstoreSource" }
         asCommonApp(watchType, appstoreSource, categories[appstoreSource])
     }
@@ -627,9 +615,6 @@ class NativeLockerAddUtil(
         source: AppstoreSource?,
         uuid: Uuid,
     ) {
-        if (!coreConfig.value.useNativeAppStoreV2) {
-            return
-        }
         if (source == null) {
             return
         }

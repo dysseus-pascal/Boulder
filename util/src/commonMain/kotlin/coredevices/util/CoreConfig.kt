@@ -76,7 +76,6 @@ enum class WeatherUnit(val code: String, val displayName: String) {
 
 @Serializable
 data class CoreConfig(
-    val useNativeAppStoreV2: Boolean = true,
     val ignoreOtherPebbleApps: Boolean = false,
     val disableCompanionDeviceManager: Boolean = false,
     val weatherPinsV2: Boolean = true,

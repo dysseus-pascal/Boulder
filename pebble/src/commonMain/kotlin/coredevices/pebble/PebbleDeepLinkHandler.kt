@@ -187,27 +187,19 @@ class RealPebbleDeepLinkHandler(
         logger.v { "handleAppstore: $path" }
         GlobalScope.launch {
             val appId = path.removePrefix("/").removeSuffix("/")
-            if (coreConfigFlow.value.useNativeAppStoreV2) {
-                val store = appstoreSourceDao.getAllEnabledSourcesFlow().firstOrNull()?.find {
-                    it.url == storeUrl
-                }
-                if (store == null) {
-                    _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
-                    return@launch
-                }
-                val route = PebbleNavBarRoutes.LockerAppRoute(
-                    uuid = null,
-                    storedId = appId,
-                    storeSource = store.id,
-                )
-                _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
-            } else {
-                val route = PebbleNavBarRoutes.AppStoreRoute(
-                    appType = null,
-                    deepLinkId = appId,
-                )
-                _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+            val store = appstoreSourceDao.getAllEnabledSourcesFlow().firstOrNull()?.find {
+                it.url == storeUrl
             }
+            if (store == null) {
+                _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
+                return@launch
+            }
+            val route = PebbleNavBarRoutes.LockerAppRoute(
+                uuid = null,
+                storedId = appId,
+                storeSource = store.id,
+            )
+            _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
         }
         return true
     }

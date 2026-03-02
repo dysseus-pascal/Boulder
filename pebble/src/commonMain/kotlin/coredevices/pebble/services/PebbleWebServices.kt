@@ -324,12 +324,8 @@ class RealPebbleWebServices(
     override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = HttpClientAuthType.Pebble)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
-        return if (coreConfig.value.useNativeAppStoreV2) {
-            fetchUserHearts()
-            firestoreLocker.fetchLocker(forceRefresh = true)
-        } else {
-            fetchPebbleLocker()?.let { LockerModelWrapper(it, emptySet()) }
-        }
+        fetchUserHearts()
+        return firestoreLocker.fetchLocker(forceRefresh = true)
     }
 
     private suspend fun fetchUserHearts() {
@@ -342,12 +338,8 @@ class RealPebbleWebServices(
     }
 
     override suspend fun removeFromLocker(id: Uuid): Boolean {
-        if (coreConfig.value.useNativeAppStoreV2) {
-            firestoreLocker.removeApp(id)
-            return true
-        } else {
-            return removeFromLegacyLocker(id)
-        }
+        firestoreLocker.removeApp(id)
+        return true
     }
 
     override suspend fun removeFromLegacyLocker(id: Uuid): Boolean {

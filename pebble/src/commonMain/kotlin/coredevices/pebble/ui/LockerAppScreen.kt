@@ -45,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -80,7 +81,6 @@ import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
-import coredevices.util.CoreConfigFlow
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -123,10 +123,12 @@ class LockerAppViewModel(
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
     var hearts by mutableStateOf<Int?>(null)
+    var loadingFromStore = false
 
     fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, useCache: Boolean) {
         val service = get<AppstoreService> { parametersOf(source) }
         viewModelScope.launch {
+            loadingFromStore = true
             val result = service.fetchAppStoreApp(id, watchType, useCache)?.data?.firstOrNull()
 //            if (result != null) {
 //                storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
@@ -139,6 +141,7 @@ class LockerAppViewModel(
             ).also {
                 hearts = it?.hearts
             }
+            loadingFromStore = false
         }
     }
 
@@ -204,13 +207,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             lockerEntry ?: viewModel.selectedStoreEntry
         }
         val storeEntry = viewModel.selectedStoreEntry
-        val commonAppStore = remember(storeEntry) { storeEntry?.commonAppType as? CommonAppType.Store }
+        val commonAppStore =
+            remember(storeEntry) { storeEntry?.commonAppType as? CommonAppType.Store }
         val storeSource = appstoreSourceFromId(storeSourceId)
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
-        val coreConfigFlow: CoreConfigFlow = koinInject()
-        val coreConfig by coreConfigFlow.flow.collectAsState()
 
         fun reloadFromStore(useCache: Boolean) {
             if (storeId != null && storeSource != null) {
@@ -261,238 +263,261 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             }
             topBarParams.title(entry?.type?.name ?: "")
         }
-        Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
+        PullToRefreshBox(
+            isRefreshing = viewModel.loadingFromStore,
+            onRefresh = { reloadFromStore(useCache = false) },
         ) {
-            entry?.let { entry ->
-                if (commonAppStore?.headerImageUrl != null) {
-                    AsyncImage(
-                        model = commonAppStore.headerImageUrl,
-                        contentDescription = "banner",
-                        modifier = Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.FillWidth,
-                    )
-                }
-                Row {
-                    AppImage(
-                        entry = entry,
-                        modifier = Modifier.padding(10.dp).clip(RoundedCornerShape(12.dp)),
-                        size = 140.dp,
-                    )
-                    Column(modifier = Modifier.padding(horizontal = 5.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (entry.type == AppType.Watchapp) {
-                                AsyncImage(
-                                    model = entry.listImageUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                            }
-                            Text(
-                                text = entry.title,
-                                fontSize = 22.sp,
-                                modifier = Modifier.padding(vertical = 5.dp),
-                            )
-                        }
-                        val hearts = if (viewModel.hearts != null) {
-                            viewModel.hearts
-                        } else {
-                            entry.hearts
-                        }
-                        val isHearted = entry.isHearted()
-                        if (hearts != null && isHearted != null) {
-                            Row(modifier = Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                                val service = remember(entry) { viewModel.serviceFor(entry) }
-                                val loggedInForHearts = remember(entry) { service.isLoggedIn() }
-                                val addUrl = commonAppStore?.addHeartUrl
-                                val removeUrl = commonAppStore?.removeHeartUrl
-                                var isChanging by remember { mutableStateOf(false) }
-                                val canAddAndRemove = loggedInForHearts && addUrl != null && removeUrl != null && entry.storeId != null && !isChanging
-                                val icon = remember(entry, isHearted) {
-                                    when {
-                                        isHearted -> Icons.Outlined.Favorite
-                                        else -> Icons.Outlined.FavoriteBorder
-                                    }
-                                }
-                                IconButton(
-                                    onClick = {
-                                        if (entry.storeId == null) {
-                                            return@IconButton
-                                        }
-                                        scope.launch {
-                                            if (canAddAndRemove) {
-                                                if (!isHearted) {
-                                                    isChanging = true
-                                                    val result = service.addHeart(addUrl, entry.storeId)
-                                                    isChanging = false
-                                                    if (result) {
-                                                        viewModel.hearts?.let { viewModel.hearts = it + 1 }
-                                                        reloadFromStore(useCache = false)
-                                                    } else {
-                                                        topBarParams.showSnackbar("Failed to heart app")
-                                                    }
-                                                } else {
-                                                    isChanging = true
-                                                    val result = service.removeHeart(removeUrl, entry.storeId)
-                                                    isChanging = false
-                                                    if (result) {
-                                                        viewModel.hearts?.let { viewModel.hearts = it - 1 }
-                                                        reloadFromStore(useCache = false)
-                                                    } else {
-                                                        topBarParams.showSnackbar("Failed to remove heart")
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.animateContentSize(),
-                                    enabled = canAddAndRemove,
-                                ) {
-                                    Icon(
-                                        icon,
-                                        contentDescription = "Hearts",
-                                        tint = if (isHearted) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            LocalContentColor.current
-                                        },
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
+            ) {
+                entry?.let { entry ->
+                    if (commonAppStore?.headerImageUrl != null) {
+                        AsyncImage(
+                            model = commonAppStore.headerImageUrl,
+                            contentDescription = "banner",
+                            modifier = Modifier.fillMaxWidth().padding(10.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.FillWidth,
+                        )
+                    }
+                    Row {
+                        AppImage(
+                            entry = entry,
+                            modifier = Modifier.padding(10.dp).clip(RoundedCornerShape(12.dp)),
+                            size = 140.dp,
+                        )
+                        Column(modifier = Modifier.padding(horizontal = 5.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (entry.type == AppType.Watchapp) {
+                                    AsyncImage(
+                                        model = entry.listImageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(28.dp)
                                     )
+                                    Spacer(modifier = Modifier.width(5.dp))
                                 }
                                 Text(
-                                    text = "$hearts",
-                                    modifier = Modifier.padding(start = 5.dp),
-                                )
-                            }
-                        }
-                        if (entry.type == AppType.Watchapp) {
-                            entry.category?.let {
-                                Spacer(Modifier.height(5.dp))
-                                FilterChip(
-                                    true,
-                                    onClick = {
-                                        if (entry.categorySlug != null && storeSource != null) {
-                                            navBarNav.navigateTo(
-                                                PebbleNavBarRoutes.AppStoreCollectionRoute(
-                                                    sourceId = storeSource.id,
-                                                    path = "category/${entry.categorySlug}",
-                                                    title = entry.category
-                                                )
-                                            )
-                                        }
-                                    },
-                                    label = { Text(entry.category) }
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(5.dp))
-                        val watchName = lastConnectedWatch?.displayName() ?: ""
-                        val onWatchText = if (entry.isCompatible && entry.isSynced()) {
-                            if (appIsRunning) {
-                                "Running On Watch $watchName"
-                            } else {
-                                "On Watch $watchName"
-                            }
-                        } else if (!entry.isCompatible) {
-                            "Not Compatible with $watchName"
-                        } else if (entry.commonAppType !is CommonAppType.Store) {
-                            "Not On Watch $watchName"
-                        } else {
-                            null
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            entry.CompatibilityWarning(topBarParams)
-                            if (onWatchText != null) {
-                                Text(
-                                    onWatchText,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    text = entry.title,
+                                    fontSize = 22.sp,
                                     modifier = Modifier.padding(vertical = 5.dp),
                                 )
                             }
-                        }
-                    }
-                }
-
-                val connectedIdentifier = lastConnectedWatch?.identifier
-                val showStartApp =
-                    entry.isCompatible && entry.commonAppType.canStartApp() && !appIsRunning
-                            && !viewModel.addedToLocker
-                if (showStartApp) {
-                    val loadToWatchText = if (entry.isSynced()) {
-                        ""
-                    } else {
-                        "Load To Watch & "
-                    }
-                    val text = if (entry.type == AppType.Watchapp) {
-                        "${loadToWatchText}Start App"
-                    } else {
-                        "${loadToWatchText}Start Watchface"
-                    }
-                    PebbleElevatedButton(
-                        text = text,
-                        onClick = {
-                            // Global scope because it could take a second to download/sync/load app
-                            GlobalScope.launch {
-                                if (connectedIdentifier != null) {
-                                    loadingToWatch = true
-                                    libPebble.launchApp(
-                                        entry,
-                                        topBarParams,
-                                        connectedIdentifier
+                            val hearts = if (viewModel.hearts != null) {
+                                viewModel.hearts
+                            } else {
+                                entry.hearts
+                            }
+                            val isHearted = entry.isHearted()
+                            if (hearts != null && isHearted != null) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val service = remember(entry) { viewModel.serviceFor(entry) }
+                                    val loggedInForHearts = remember(entry) { service.isLoggedIn() }
+                                    val addUrl = commonAppStore?.addHeartUrl
+                                    val removeUrl = commonAppStore?.removeHeartUrl
+                                    var isChanging by remember { mutableStateOf(false) }
+                                    val canAddAndRemove =
+                                        loggedInForHearts && addUrl != null && removeUrl != null && entry.storeId != null && !isChanging
+                                    val icon = remember(entry, isHearted) {
+                                        when {
+                                            isHearted -> Icons.Outlined.Favorite
+                                            else -> Icons.Outlined.FavoriteBorder
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (entry.storeId == null) {
+                                                return@IconButton
+                                            }
+                                            scope.launch {
+                                                if (canAddAndRemove) {
+                                                    if (!isHearted) {
+                                                        isChanging = true
+                                                        val result =
+                                                            service.addHeart(addUrl, entry.storeId)
+                                                        isChanging = false
+                                                        if (result) {
+                                                            viewModel.hearts?.let {
+                                                                viewModel.hearts = it + 1
+                                                            }
+                                                            reloadFromStore(useCache = false)
+                                                        } else {
+                                                            topBarParams.showSnackbar("Failed to heart app")
+                                                        }
+                                                    } else {
+                                                        isChanging = true
+                                                        val result = service.removeHeart(
+                                                            removeUrl,
+                                                            entry.storeId
+                                                        )
+                                                        isChanging = false
+                                                        if (result) {
+                                                            viewModel.hearts?.let {
+                                                                viewModel.hearts = it - 1
+                                                            }
+                                                            reloadFromStore(useCache = false)
+                                                        } else {
+                                                            topBarParams.showSnackbar("Failed to remove heart")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.animateContentSize(),
+                                        enabled = canAddAndRemove,
+                                    ) {
+                                        Icon(
+                                            icon,
+                                            contentDescription = "Hearts",
+                                            tint = if (isHearted) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                LocalContentColor.current
+                                            },
+                                        )
+                                    }
+                                    Text(
+                                        text = "$hearts",
+                                        modifier = Modifier.padding(start = 5.dp),
                                     )
-                                    loadingToWatch = false
                                 }
                             }
-                        },
-                        enabled = connected && !loadingToWatch,
-                        icon = Icons.Default.PlayCircle,
-                        contentDescription = text,
-                        primaryColor = true,
-                        modifier = Modifier.padding(5.dp),
-                    )
-                }
-                // Only show for store, right now (until we figure out populating data or locker)
-                if (storeEntry?.capabilities?.isNotEmpty() == true) {
-                    FlowRow(modifier = Modifier.padding(5.dp)) {
-                        storeEntry.capabilities.forEach { permission ->
-                            PermissionItem(permission, entry, topBarParams)
+                            if (entry.type == AppType.Watchapp) {
+                                entry.category?.let {
+                                    Spacer(Modifier.height(5.dp))
+                                    FilterChip(
+                                        true,
+                                        onClick = {
+                                            if (entry.categorySlug != null && storeSource != null) {
+                                                navBarNav.navigateTo(
+                                                    PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                                        sourceId = storeSource.id,
+                                                        path = "category/${entry.categorySlug}",
+                                                        title = entry.category
+                                                    )
+                                                )
+                                            }
+                                        },
+                                        label = { Text(entry.category) }
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(5.dp))
+                            val watchName = lastConnectedWatch?.displayName() ?: ""
+                            val onWatchText = if (entry.isCompatible && entry.isSynced()) {
+                                if (appIsRunning) {
+                                    "Running On Watch $watchName"
+                                } else {
+                                    "On Watch $watchName"
+                                }
+                            } else if (!entry.isCompatible) {
+                                "Not Compatible with $watchName"
+                            } else if (entry.commonAppType !is CommonAppType.Store) {
+                                "Not On Watch $watchName"
+                            } else {
+                                null
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                entry.CompatibilityWarning(topBarParams)
+                                if (onWatchText != null) {
+                                    Text(
+                                        onWatchText,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(vertical = 5.dp),
+                                    )
+                                }
+                            }
                         }
                     }
-                }
-                if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
+
+                    val connectedIdentifier = lastConnectedWatch?.identifier
+                    val showStartApp =
+                        entry.isCompatible && entry.commonAppType.canStartApp() && !appIsRunning
+                                && !viewModel.addedToLocker
+                    if (showStartApp) {
+                        val loadToWatchText = if (entry.isSynced()) {
+                            ""
+                        } else {
+                            "Load To Watch & "
+                        }
+                        val text = if (entry.type == AppType.Watchapp) {
+                            "${loadToWatchText}Start App"
+                        } else {
+                            "${loadToWatchText}Start Watchface"
+                        }
+                        PebbleElevatedButton(
+                            text = text,
+                            onClick = {
+                                // Global scope because it could take a second to download/sync/load app
+                                GlobalScope.launch {
+                                    if (connectedIdentifier != null) {
+                                        loadingToWatch = true
+                                        libPebble.launchApp(
+                                            entry,
+                                            topBarParams,
+                                            connectedIdentifier
+                                        )
+                                        loadingToWatch = false
+                                    }
+                                }
+                            },
+                            enabled = connected && !loadingToWatch,
+                            icon = Icons.Default.PlayCircle,
+                            contentDescription = text,
+                            primaryColor = true,
+                            modifier = Modifier.padding(5.dp),
+                        )
+                    }
+                    // Only show for store, right now (until we figure out populating data or locker)
+                    if (storeEntry?.capabilities?.isNotEmpty() == true) {
+                        FlowRow(modifier = Modifier.padding(5.dp)) {
+                            storeEntry.capabilities.forEach { permission ->
+                                PermissionItem(permission, entry, topBarParams)
+                            }
+                        }
+                    }
+                    if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
 //                    val hasUuidConflict = remember(viewModel.storeEntries) { // One store has multiple entries with same uuid
 //                        viewModel.storeEntries?.let {
 //                            it.distinctBy { it.source.url }.size < it.size
 //                        } ?: false
 //                    }
 //                    var variantsExpanded by remember { mutableStateOf(false) }
-                    Row(Modifier.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        PebbleElevatedButton(
-                            text = "Add To Watch",
-                            onClick = {
-                                // Global scope because it could take a second to download/sync/load app
-                                GlobalScope.launch {
-                                    val watch = lastConnectedWatch as? ConnectedPebbleDevice
-                                    viewModel.addedToLocker = true
-                                    val addResult = nativeLockerAddUtil.addAppToLocker(entry.commonAppType, entry.commonAppType.storeSource)
-                                    if (!addResult) {
-                                        topBarParams.showSnackbar("Failed to add app")
-                                        return@launch
-                                    }
-                                    if (watch != null) {
-                                        libPebble.launchApp(
-                                            entry = entry,
-                                            topBarParams = topBarParams,
-                                            connectedIdentifier = watch.identifier,
+                        Row(
+                            Modifier.padding(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PebbleElevatedButton(
+                                text = "Add To Watch",
+                                onClick = {
+                                    // Global scope because it could take a second to download/sync/load app
+                                    GlobalScope.launch {
+                                        val watch = lastConnectedWatch as? ConnectedPebbleDevice
+                                        viewModel.addedToLocker = true
+                                        val addResult = nativeLockerAddUtil.addAppToLocker(
+                                            entry.commonAppType,
+                                            entry.commonAppType.storeSource
                                         )
+                                        if (!addResult) {
+                                            topBarParams.showSnackbar("Failed to add app")
+                                            return@launch
+                                        }
+                                        if (watch != null) {
+                                            libPebble.launchApp(
+                                                entry = entry,
+                                                topBarParams = topBarParams,
+                                                connectedIdentifier = watch.identifier,
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                            icon = Icons.Default.Add,
-                            contentDescription = "Add To Watch",
-                            primaryColor = true,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
+                                },
+                                icon = Icons.Default.Add,
+                                contentDescription = "Add To Watch",
+                                primaryColor = true,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
 //                        if (viewModel.storeEntries != null && (viewModel.storeEntries?.size ?: 1) > 1) {
 //                            ExposedDropdownMenuBox(
 //                                expanded = variantsExpanded,
@@ -541,199 +566,223 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 //                                }
 //                            }
 //                        }
+                        }
                     }
-                }
 
-                Row {
-                    entry.SettingsButton(
-                        navBarNav = navBarNav,
-                        topBarParams = topBarParams,
-                        connected = connected,
-                    )
-                    if (entry.commonAppType is CommonAppTypeLocal && entry.commonAppType.order > 0) {
-                        PebbleElevatedButton(
-                            text = "Move To Top",
-                            onClick = {
-                                scope.launch {
-                                    val index = when (entry.type) {
-                                        AppType.Watchface -> -1
-                                        AppType.Watchapp -> SystemApps.entries.size
-                                    }
-                                    libPebble.setAppOrder(entry.uuid, index)
-                                }
-                            },
-                            icon = Icons.Default.VerticalAlignTop,
-                            contentDescription = "Move To Top",
-                            primaryColor = false,
-                            modifier = Modifier.padding(5.dp),
+                    Row {
+                        entry.SettingsButton(
+                            navBarNav = navBarNav,
+                            topBarParams = topBarParams,
+                            connected = connected,
                         )
+                        if (entry.commonAppType is CommonAppTypeLocal && entry.commonAppType.order > 0) {
+                            PebbleElevatedButton(
+                                text = "Move To Top",
+                                onClick = {
+                                    scope.launch {
+                                        val index = when (entry.type) {
+                                            AppType.Watchface -> -1
+                                            AppType.Watchapp -> SystemApps.entries.size
+                                        }
+                                        libPebble.setAppOrder(entry.uuid, index)
+                                    }
+                                },
+                                icon = Icons.Default.VerticalAlignTop,
+                                contentDescription = "Move To Top",
+                                primaryColor = false,
+                                modifier = Modifier.padding(5.dp),
+                            )
+                        }
                     }
-                }
-                val screenshotsToDisplay = remember(storeEntry) {
-                    when (storeEntry?.commonAppType) {
-                        is CommonAppType.Store -> {
+                    val screenshotsToDisplay = remember(storeEntry) {
+                        when (storeEntry?.commonAppType) {
+                            is CommonAppType.Store -> {
 //                            when (entry.type) {
 //                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
 //                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
 //                            }
-                            storeEntry.commonAppType.allScreenshotUrls.drop(1)
-                        }
-                        else -> emptyList()
-                    }
-                }
-                if (screenshotsToDisplay.isNotEmpty()) {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        contentPadding = PaddingValues(horizontal = 5.dp),
-                    ) {
-                        items(screenshotsToDisplay, key = { it } ) { screenshotUrl ->
-                            AsyncImage(
-                                model = screenshotUrl,
-                                contentDescription = "Screenshot",
-                                modifier = Modifier.size(110.dp).clip(RoundedCornerShape(7.dp)),
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(5.dp))
-                // Shared minimum width for the name column — grows to fit the widest label.
-                var propertyNameWidthPx by remember { mutableIntStateOf(0) }
-                val density = LocalDensity.current
-                val propertyNameModifier = Modifier
-                    .widthIn(min = with(density) { propertyNameWidthPx.toDp() })
-                    .onSizeChanged { propertyNameWidthPx = maxOf(propertyNameWidthPx, it.width) }
-                if (platform == Platform.Android && entry.androidCompanion != null) {
-                    PropertyRow(
-                        name = "COMPANION",
-                        nameModifier = propertyNameModifier,
-                        value = entry.androidCompanion.name,
-                        onClick = {
-                            urlLauncher.openUri(entry.androidCompanion.url)
-                        },
-                    )
-                }
-                val description = viewModel.selectedStoreEntry?.description ?: entry.description
-                if (description != null && description.isNotBlank()) {
-                    PropertyRow(
-                        name = "DESCRIPTION",
-                        nameModifier = propertyNameModifier,
-                        value = description,
-                        multiRow = true,
-                    )
-                }
+                                storeEntry.commonAppType.allScreenshotUrls.drop(1)
+                            }
 
-                PropertyRow(
-                    name = "DEVELOPER",
-                    nameModifier = propertyNameModifier,
-                    value = entry.developerName,
-                    onClick = if (entry.developerId != null && storeSource != null) {
-                        {
-                            val developerId = entry.developerId
-                            navBarNav.navigateTo(PebbleNavBarRoutes.AppStoreCollectionRoute(
-                                sourceId = storeSource.id,
-                                path = "dev/$developerId",
-                                title = "Developer: ${entry.developerName}"
-                            ))
+                            else -> emptyList()
                         }
-                    } else {
-                        null
-                    },
-                    onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
-                )
-                entry.version?.let { version ->
-                    val sideloadedText = if (entry.commonAppType is CommonAppType.Locker && entry.commonAppType.sideloaded) {
-                        " (sideloaded)"
-                    } else {
-                        ""
                     }
-                    val updatedDateText = if (commonAppStore?.publishedDate != null) {
-                        " - ${PUBLISHED_DATE_FORMAT.format(
-                            commonAppStore.publishedDate
-                                .toLocalDateTime(TimeZone.currentSystemDefault())
-                        ).uppercase()}"
-                    } else {
-                        ""
+                    if (screenshotsToDisplay.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight()
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            contentPadding = PaddingValues(horizontal = 5.dp),
+                        ) {
+                            items(screenshotsToDisplay, key = { it }) { screenshotUrl ->
+                                AsyncImage(
+                                    model = screenshotUrl,
+                                    contentDescription = "Screenshot",
+                                    modifier = Modifier.size(110.dp).clip(RoundedCornerShape(7.dp)),
+                                )
+                            }
+                        }
                     }
-                    PropertyRow(name = "VERSION", nameModifier = propertyNameModifier, value = "$version$sideloadedText$updatedDateText")
-                }
-                entry.sourceLink?.let { sourceLink ->
-                    PropertyRow(
-                        name = "SOURCE CODE",
-                        nameModifier = propertyNameModifier,
-                        value = "External Link",
-                        onClick = { urlLauncher.open(sourceLink) }
-                    )
-                }
-
-                commonAppStore?.developerLink?.let { developerLink ->
-                    PropertyRow(
-                        name = "WEBSITE LINK",
-                        nameModifier = propertyNameModifier,
-                        value = "External Link",
-                        onClick = { urlLauncher.open(developerLink) }
-                    )
-                }
-                commonAppStore?.changelog?.let { changelog ->
-                    if (changelog.isNotEmpty()) {
-                        val show = remember { mutableStateOf(false) }
+                    Spacer(Modifier.height(5.dp))
+                    // Shared minimum width for the name column — grows to fit the widest label.
+                    var propertyNameWidthPx by remember { mutableIntStateOf(0) }
+                    val density = LocalDensity.current
+                    val propertyNameModifier = Modifier
+                        .widthIn(min = with(density) { propertyNameWidthPx.toDp() })
+                        .onSizeChanged {
+                            propertyNameWidthPx = maxOf(propertyNameWidthPx, it.width)
+                        }
+                    if (platform == Platform.Android && entry.androidCompanion != null) {
                         PropertyRow(
-                            name = "CHANGELOG",
+                            name = "COMPANION",
                             nameModifier = propertyNameModifier,
-                            value = "View",
-                            onClick = { show.value = true },
-                            onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
+                            value = entry.androidCompanion.name,
+                            onClick = {
+                                urlLauncher.openUri(entry.androidCompanion.url)
+                            },
                         )
-                        if (show.value) {
-                            AlertDialog(
-                                onDismissRequest = {
-                                    show.value = false
-                                },
-                                title = { Text("Changelog") },
-                                text = {
-                                    LazyColumn {
-                                        items(changelog) { item ->
-                                            Row(modifier = Modifier.padding(5.dp)) {
-                                                Text(item.version ?: "Unknown version", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                                Spacer(modifier = Modifier.weight(1f))
-                                                val date = remember(item.publishedDate) {
-                                                    item.publishedDate?.let {
-                                                        PUBLISHED_DATE_FORMAT.format(
-                                                            it.toLocalDateTime(TimeZone.currentSystemDefault())
-                                                        ).uppercase()
-                                                    } ?: ""
-                                                }
-                                                Text(date, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Text(item.releaseNotes ?: "\n", modifier = Modifier.padding(5.dp))
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        show.value = false
-                                    }) { Text("Dismiss") }
-                                }
+                    }
+                    val description = viewModel.selectedStoreEntry?.description ?: entry.description
+                    if (description != null && description.isNotBlank()) {
+                        PropertyRow(
+                            name = "DESCRIPTION",
+                            nameModifier = propertyNameModifier,
+                            value = description,
+                            multiRow = true,
+                        )
+                    }
+
+                    PropertyRow(
+                        name = "DEVELOPER",
+                        nameModifier = propertyNameModifier,
+                        value = entry.developerName,
+                        onClick = if (entry.developerId != null && storeSource != null) {
+                            {
+                                val developerId = entry.developerId
+                                navBarNav.navigateTo(
+                                    PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                        sourceId = storeSource.id,
+                                        path = "dev/$developerId",
+                                        title = "Developer: ${entry.developerName}"
+                                    )
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                        onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
+                    )
+                    entry.version?.let { version ->
+                        val sideloadedText =
+                            if (entry.commonAppType is CommonAppType.Locker && entry.commonAppType.sideloaded) {
+                                " (sideloaded)"
+                            } else {
+                                ""
+                            }
+                        val updatedDateText = if (commonAppStore?.publishedDate != null) {
+                            " - ${
+                                PUBLISHED_DATE_FORMAT.format(
+                                    commonAppStore.publishedDate
+                                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                                ).uppercase()
+                            }"
+                        } else {
+                            ""
+                        }
+                        PropertyRow(
+                            name = "VERSION",
+                            nameModifier = propertyNameModifier,
+                            value = "$version$sideloadedText$updatedDateText"
+                        )
+                    }
+                    entry.sourceLink?.let { sourceLink ->
+                        PropertyRow(
+                            name = "SOURCE CODE",
+                            nameModifier = propertyNameModifier,
+                            value = "External Link",
+                            onClick = { urlLauncher.open(sourceLink) }
+                        )
+                    }
+
+                    commonAppStore?.developerLink?.let { developerLink ->
+                        PropertyRow(
+                            name = "WEBSITE LINK",
+                            nameModifier = propertyNameModifier,
+                            value = "External Link",
+                            onClick = { urlLauncher.open(developerLink) }
+                        )
+                    }
+                    commonAppStore?.changelog?.let { changelog ->
+                        if (changelog.isNotEmpty()) {
+                            val show = remember { mutableStateOf(false) }
+                            PropertyRow(
+                                name = "CHANGELOG",
+                                nameModifier = propertyNameModifier,
+                                value = "View",
+                                onClick = { show.value = true },
+                                onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                             )
+                            if (show.value) {
+                                AlertDialog(
+                                    onDismissRequest = {
+                                        show.value = false
+                                    },
+                                    title = { Text("Changelog") },
+                                    text = {
+                                        LazyColumn {
+                                            items(changelog) { item ->
+                                                Row(modifier = Modifier.padding(5.dp)) {
+                                                    Text(
+                                                        item.version ?: "Unknown version",
+                                                        fontSize = 20.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Spacer(modifier = Modifier.weight(1f))
+                                                    val date = remember(item.publishedDate) {
+                                                        item.publishedDate?.let {
+                                                            PUBLISHED_DATE_FORMAT.format(
+                                                                it.toLocalDateTime(TimeZone.currentSystemDefault())
+                                                            ).uppercase()
+                                                        } ?: ""
+                                                    }
+                                                    Text(
+                                                        date,
+                                                        fontSize = 20.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                Text(
+                                                    item.releaseNotes ?: "\n",
+                                                    modifier = Modifier.padding(5.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            show.value = false
+                                        }) { Text("Dismiss") }
+                                    }
+                                )
+                            }
                         }
                     }
-                }
 
-                storeSource?.let { storeSource ->
-                    val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
-                        { urlLauncher.open("https://apps.repebble.com/${entry.storeId}") }
-                    } else {
-                        null
+                    storeSource?.let { storeSource ->
+                        val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
+                            { urlLauncher.open("https://apps.repebble.com/${entry.storeId}") }
+                        } else {
+                            null
+                        }
+                        PropertyRow(
+                            name = "STORE",
+                            nameModifier = propertyNameModifier,
+                            value = storeSource.title,
+                            onClick = onClick,
+                        )
                     }
-                    PropertyRow(
-                        name = "STORE",
-                        nameModifier = propertyNameModifier,
-                        value = storeSource.title,
-                        onClick = onClick,
-                    )
                 }
             }
         }

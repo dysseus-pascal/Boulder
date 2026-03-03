@@ -2,8 +2,10 @@ package coredevices.ui
 
 import PlatformUiContext
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -39,14 +41,15 @@ internal expect suspend fun signInWithCredential(credential: AuthCredential)
 fun SignInButton(
     onError: (String) -> Unit = {},
     onSuccess: () -> Unit = {},
-    text: @Composable () -> Unit,
+    text: String,
     credentialProvider: suspend (context: PlatformUiContext) -> AuthCredential?,
-    enabled: Boolean = true,
+    primaryColor: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val analyticsBackend: AnalyticsBackend = koinInject()
     val context = rememberUiContext()
     val scope = rememberCoroutineScope()
-    Button(
+    PebbleElevatedButton(
         onClick = {
             scope.launch {
                 val credential = try {
@@ -61,7 +64,10 @@ fun SignInButton(
                         analyticsBackend.setUser(email = it)
                     }
                     Logger.i { "Signed in successfully as ${Firebase.auth.currentUser?.uid} via ${credential.providerId}" }
-                    analyticsBackend.logEvent("signed_in_google", mapOf("provider" to credential.providerId))
+                    analyticsBackend.logEvent(
+                        "signed_in_google",
+                        mapOf("provider" to credential.providerId)
+                    )
                     onSuccess()
                 } catch (e: Exception) {
                     Logger.e(e) { "Error signing in with credential: ${e.message}" }
@@ -70,16 +76,16 @@ fun SignInButton(
                 }
             }
         },
-        enabled = enabled
-    ) {
-        text()
-    }
+        text = text,
+        primaryColor = primaryColor,
+        modifier = modifier,
+    )
 }
 
 @Composable
-fun SignInDialog(onDismiss: () -> Unit = {}) {
-    val koin = currentKoinScope()
-    var error by remember { mutableStateOf<String?>(null) }
+fun SignInDialog(
+    onDismiss: () -> Unit = {},
+) {
     Dialog(
         onDismissRequest = onDismiss
     ) {
@@ -90,55 +96,74 @@ fun SignInDialog(onDismiss: () -> Unit = {}) {
             shape = MaterialTheme.shapes.extraLarge,
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Sign in", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 16.dp))
-                SignInButton(
-                    onError = {
-                        error = it
-                    },
-                    onSuccess = {
-                        onDismiss()
-                    },
-                    text = { Text("Sign in with Google") },
-                    credentialProvider = { context ->
-                        val googleAuthUtil = koin.get<GoogleAuthUtil>()
-                        googleAuthUtil.signInGoogle(context)
-                    },
+                Text(
+                    "Sign in",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.padding(8.dp)
                 )
-                SignInButton(
-                    onError = {
-                        error = it
-                    },
-                    onSuccess = {
-                        onDismiss()
-                    },
-                    text = { Text("Sign in with Apple") },
-                    credentialProvider = { context ->
-                        val appleAuthUtil = koin.get<AppleAuthUtil>()
-                        appleAuthUtil.signInApple(context)
-                    },
-                )
-                SignInButton(
-                    onError = {
-                        error = it
-                    },
-                    onSuccess = {
-                        onDismiss()
-                    },
-                    text = { Text("Sign in with GitHub") },
-                    credentialProvider = { context ->
-                        val githubAuthUtil = koin.get<GitHubAuthUtil>()
-                        githubAuthUtil.signInGithub(context)
-                    },
-                )
-                if (error != null) {
-                    Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp))
-                }
+                SignInButtons(onDismiss, primaryColor = true)
             }
+        }
+    }
+}
+
+@Composable
+fun SignInButtons(
+    onDismiss: () -> Unit,
+    primaryColor: Boolean,
+) {
+    val koin = currentKoinScope()
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+            SignInButton(
+                onError = { error = it },
+                onSuccess = onDismiss,
+                text = "Sign in with Google",
+                credentialProvider = { context ->
+                    val googleAuthUtil = koin.get<GoogleAuthUtil>()
+                    googleAuthUtil.signInGoogle(context)
+                },
+                primaryColor = primaryColor,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            SignInButton(
+                onError = { error = it },
+                onSuccess = onDismiss,
+                text = "Sign in with Apple",
+                credentialProvider = { context ->
+                    val appleAuthUtil = koin.get<AppleAuthUtil>()
+                    appleAuthUtil.signInApple(context)
+                },
+                primaryColor = primaryColor,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            SignInButton(
+                onError = { error = it },
+                onSuccess = onDismiss,
+                text = "Sign in with GitHub",
+                credentialProvider = { context ->
+                    val githubAuthUtil = koin.get<GitHubAuthUtil>()
+                    githubAuthUtil.signInGithub(context)
+                },
+                primaryColor = primaryColor,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (error != null) {
+            Text(
+                error!!,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
         }
     }
 }

@@ -20,6 +20,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,10 +33,11 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.SignInButtons
+import coredevices.ui.SignInDialog
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
-import coredevices.util.description
 import coredevices.util.name
 import coredevices.util.rememberUiContext
 import coredevices.util.requestIsFullScreen
@@ -43,6 +48,7 @@ import org.koin.compose.viewmodel.koinViewModel
 enum class OnboardingStage {
     Welcome,
     Permissions,
+    SignIn,
     Done,
 }
 
@@ -111,7 +117,7 @@ fun OnboardingScreen(
                         }
                         logger.v { "permissionToRequest = $permissionToRequest  /  missingPermissions = $missingPermissions " }
                         if (permissionToRequest == null) {
-                            viewModel.stage.value = OnboardingStage.Done
+                            viewModel.stage.value = OnboardingStage.SignIn
                         } else {
                             val warnBeforeFullScreenRequest = permissionToRequest.requestIsFullScreen()
                             LaunchedEffect(permissionToRequest) {
@@ -138,7 +144,7 @@ fun OnboardingScreen(
                                     textAlign = TextAlign.Center,
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Text(permissionToRequest.description(), textAlign = TextAlign.Center)
+                                Text(permissionToRequest.descriptionOnboarding(), textAlign = TextAlign.Center)
                                 if (warnBeforeFullScreenRequest) {
                                     Spacer(modifier = Modifier.height(10.dp))
                                     PebbleElevatedButton(
@@ -159,6 +165,31 @@ fun OnboardingScreen(
                     }
                 }
 
+                OnboardingStage.SignIn -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "Sign In",
+                            fontSize = 35.sp,
+                            modifier = Modifier.padding(bottom = 25.dp),
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text("Sign in to backup your Pebble account to backup apps, settings, etc", textAlign = TextAlign.Center)
+                        SignInButtons(
+                            onDismiss = { viewModel.stage.value = OnboardingStage.Done },
+                            primaryColor = false,
+                        )
+                        PebbleElevatedButton(
+                            text = "Skip",
+                            onClick = { viewModel.stage.value = OnboardingStage.Done },
+                            primaryColor = false,
+                        )
+                    }
+                }
+
                 OnboardingStage.Done -> {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(20.dp),
@@ -166,7 +197,7 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         PebbleElevatedButton(
-                            text = "Let's Go!",
+                            text = "Connect a Pebble!",
                             onClick = ::exitOnboarding,
                             primaryColor = false,
                         )
@@ -176,5 +207,12 @@ fun OnboardingScreen(
         }
     }
 }
+
+val HighlightStyle = SpanStyle(
+    fontWeight = FontWeight.Bold,
+    fontStyle = FontStyle.Italic
+)
+
+expect fun Permission.descriptionOnboarding(): AnnotatedString
 
 const val SHOWN_ONBOARDING = "shown_onboarding"

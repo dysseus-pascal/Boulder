@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Badge
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -77,6 +76,7 @@ import com.russhwolf.settings.set
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
+import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
@@ -90,8 +90,6 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
-import coredevices.util.CompanionDevice
-import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.WeatherUnit
@@ -323,8 +321,6 @@ please disable the option.""".trimIndent(),
         val enableFirebase = mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true))
         val enableMemfault = mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true))
         val enableMixpanel = mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true))
-        val companionDevice: CompanionDevice = koinInject()
-        val coreConfigFlow: CoreConfigFlow = koinInject()
         val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
         val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
         val appUpdateTracker: AppUpdateTracker = koinInject()
@@ -355,6 +351,7 @@ please disable the option.""".trimIndent(),
             }
         }
         val watchPrefs = watchPrefs()
+        val coreAnalytics: CoreAnalytics = koinInject()
 
         val rawSettingsItems = remember(
             libPebbleConfig,
@@ -1099,6 +1096,9 @@ please disable the option.""".trimIndent(),
                     onCheckChanged = {
                         enableFirebase.value = it
                         settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("crashlytics_collection_disabled")
+                        }
                         Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
                     },
                 ),
@@ -1110,6 +1110,9 @@ please disable the option.""".trimIndent(),
                     checked = enableMemfault.value,
                     onCheckChanged = {
                         enableMemfault.value = it
+                        if (!it) {
+                            coreAnalytics.logEvent("memfault_collection_disabled")
+                        }
                         settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
                     },
                 ),
@@ -1122,6 +1125,9 @@ please disable the option.""".trimIndent(),
                     onCheckChanged = {
                         enableMixpanel.value = it
                         settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("mixpanel_collection_disabled")
+                        }
                         analyticsBackend.setEnabled(it)
                     },
                 ),
@@ -1203,10 +1209,10 @@ please disable the option.""".trimIndent(),
                 ),
                 basicSettingsActionItem(
                     title = "Sign In - Pebble Account",
-                    description = "Sign in to Pebble account to backup settings, apps, etc",
+                    description = "Sign in to backup your Pebble account to backup apps, settings, etc",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Settings,
-                    button = { Button(onClick = { showSignInDialog = true }) { Text("Sign In") } },
+                    action = { showSignInDialog = true },
                     show = { coreUser == null },
                 ),
                 basicSettingsActionItem(

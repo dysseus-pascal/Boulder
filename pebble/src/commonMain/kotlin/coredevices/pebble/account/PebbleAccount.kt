@@ -66,10 +66,11 @@ class RealPebbleAccount(
 
 class PebbleTokenProvider(
     private val usersDao: UsersDao,
+    private val pebbleAccount: PebbleAccount,
 ) : TokenProvider {
     override suspend fun getDevToken(): String? {
         val userConfig = usersDao.user.firstOrNull()
-        return userConfig?.rebbleUserToken ?: userConfig?.pebbleUserToken
+        return userConfig?.rebbleUserToken ?: userConfig?.pebbleUserToken ?: pebbleAccount.devToken.value
     }
 }
 

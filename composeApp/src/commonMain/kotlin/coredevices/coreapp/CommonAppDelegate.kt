@@ -78,19 +78,9 @@ class CommonAppDelegate(
     }
 
     fun init() {
+        usersDao.init()
         GlobalScope.launch(Dispatchers.Default) {
-            if (Firebase.auth.currentUser == null) {
-                logger.i { "Logging into firebase anonymously" }
-                try {
-                    Firebase.auth.signInAnonymously().let {
-                        logger.d { "Firebase anonymous UID: ${it.user?.uid}" }
-                    }
-                } catch (e: Exception) {
-                    logger.e(e) { "Failed to sign in anonymously" }
-                }
-            }
-            usersDao.init()
-            usersDao.initUserTokens(pebbleAccountProvider.get().devToken.value)
+            usersDao.initUserDevToken(pebbleAccountProvider.get().devToken.value)
         }
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)

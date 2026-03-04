@@ -51,7 +51,7 @@ class RealPebbleAccount(
             return
         }
         settings.putString(DEV_KEY, devPortalId)
-        usersDao.initUserTokens(devPortalId)
+        usersDao.initUserDevToken(devPortalId)
         _devToken.value = devPortalId
     }
 

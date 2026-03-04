@@ -9,9 +9,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
@@ -26,7 +28,7 @@ interface UsersDao {
     suspend fun updateTodoBlockId(
         todoBlockId: String
     )
-    suspend fun initUserTokens(rebbleUserToken: String?)
+    suspend fun initUserDevToken(rebbleUserToken: String?)
     fun init()
 }
 
@@ -39,18 +41,36 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
 
     override fun init() {
         GlobalScope.launch {
+            if (Firebase.auth.currentUser == null) {
+                logger.i { "Logging into firebase anonymously" }
+                try {
+                    Firebase.auth.signInAnonymously()
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to sign in anonymously" }
+                }
+            }
             Firebase.auth.authStateChanged
                 .onStart { emit(Firebase.auth.currentUser) }
-                .flatMapLatest { user ->
-                    logger.v { "User changed: $user" }
-                    if (user == null) {
+                .flatMapLatest { firebaseUser ->
+                    logger.v { "User changed: $firebaseUser" }
+                    if (firebaseUser == null) {
                         _user.emit(null)
                         flowOf(null)
                     } else {
-                        // 2. Use flatMapLatest so the inner snapshot
-                        // is cancelled if the user logs out
-                        db.document("users/${user.uid}")
-                            .snapshots
+                        val docRef = db.document("users/${firebaseUser.uid}")
+                        docRef.snapshots
+                            .onEach { snapshot ->
+                                try {
+                                    if (!snapshot.exists) {
+                                        docRef.set(User(pebbleUserToken = generateRandomUserToken()))
+                                    } else if (snapshot.data<User?>()?.pebbleUserToken == null) {
+                                        docRef.update(mapOf("pebble_user_token" to generateRandomUserToken()))
+                                    }
+                                } catch (e: Exception) {
+                                    logger.w(e) { "Error initializing user document" }
+                                }
+                            }
+                            .filter { it.exists }
                             .catch { e -> logger.w(e) { "Error observing user doc" } }
                     }
                 }
@@ -79,17 +99,15 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
         userDoc?.update(mapOf("todo_block_id" to todoBlockId))
     }
 
-    override suspend fun initUserTokens(rebbleUserToken: String?) {
+    override suspend fun initUserDevToken(rebbleUserToken: String?) {
+        if (rebbleUserToken == null) return
         val user = user.first()
         if (user == null) {
-            logger.w { "initUserTokens: user is null" }
+            logger.w { "initUserDevToken: user is null" }
             return
         }
-        if (rebbleUserToken != null && user.rebbleUserToken != rebbleUserToken) {
+        if (user.rebbleUserToken != rebbleUserToken) {
             userDoc?.update(mapOf("rebble_user_token" to rebbleUserToken))
-        }
-        if (user.pebbleUserToken == null) {
-            userDoc?.update(mapOf("pebble_user_token" to generateRandomUserToken()))
         }
     }
 }

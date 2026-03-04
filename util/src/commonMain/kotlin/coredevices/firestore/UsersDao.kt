@@ -5,12 +5,15 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
@@ -41,20 +44,25 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
 
     override fun init() {
         GlobalScope.launch {
-            if (Firebase.auth.currentUser == null) {
-                logger.i { "Logging into firebase anonymously" }
-                try {
-                    Firebase.auth.signInAnonymously()
-                } catch (e: Exception) {
-                    logger.e(e) { "Failed to sign in anonymously" }
-                }
-            }
+            // Wait for Firebase to restore persisted auth state before proceeding
+            Firebase.auth.authStateChanged.first()
             Firebase.auth.authStateChanged
                 .onStart { emit(Firebase.auth.currentUser) }
+                .distinctUntilChanged { old, new -> old?.uid == new?.uid }
                 .flatMapLatest { firebaseUser ->
                     logger.v { "User changed: $firebaseUser" }
                     if (firebaseUser == null) {
                         _user.emit(null)
+                        logger.i { "Logging into firebase anonymously" }
+                        try {
+                            // Signing in will trigger a new emission of this flow - don't let it
+                            // cancel the sign-in...
+                            withContext(NonCancellable) {
+                                Firebase.auth.signInAnonymously()
+                            }
+                        } catch (e: Exception) {
+                            logger.e(e) { "Failed to sign in anonymously" }
+                        }
                         flowOf(null)
                     } else {
                         val docRef = db.document("users/${firebaseUser.uid}")

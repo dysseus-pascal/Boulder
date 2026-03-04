@@ -31,7 +31,6 @@ object PebbleRoutes {
     data class WatchappSettingsRoute(
         val watchIdentifier: String,
         val title: String,
-        val url: String
     ) : CoreRoute
 }
 
@@ -256,7 +255,6 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (
             coreNav = coreNav,
             watchIdentifier = route.watchIdentifier,
             title = route.title,
-            url = route.url,
         )
     }
 }

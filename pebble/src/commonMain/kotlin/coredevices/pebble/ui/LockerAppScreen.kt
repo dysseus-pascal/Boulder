@@ -955,11 +955,11 @@ suspend fun CommonApp.showSettings(
                     return
                 }
                 logger.d { "Got app settings URL" }
+                WatchappSettingsUrlCache.put(watch.identifier.asString, url)
                 navBarNav.navigateTo(
                     PebbleRoutes.WatchappSettingsRoute(
-                        watch.identifier.asString,
+                        watchIdentifier = watch.identifier.asString,
                         title = title,
-                        url = url
                     )
                 )
             }

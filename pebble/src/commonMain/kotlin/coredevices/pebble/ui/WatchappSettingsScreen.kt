@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -49,6 +50,16 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.Uuid
 
 private const val URL_DATA_PREFIX = "data:text/html;charset=utf-8,"
+
+// The settings URL can be a large data: URI (hundreds of KB of HTML) which would cause
+// TransactionTooLargeException if passed as a navigation route argument. Store it here
+// in memory instead, keyed by watchIdentifier.
+internal object WatchappSettingsUrlCache {
+    private val urls = mutableMapOf<String, String>()
+    fun put(watchIdentifier: String, url: String) { urls[watchIdentifier] = url }
+    fun get(watchIdentifier: String): String? = urls[watchIdentifier]
+    fun remove(watchIdentifier: String) { urls.remove(watchIdentifier) }
+}
 internal expect fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid
@@ -63,8 +74,11 @@ fun WatchappSettingsScreen(
     coreNav: CoreNav,
     watchIdentifier: String,
     title: String,
-    url: String,
 ) {
+    val url = remember(watchIdentifier) { WatchappSettingsUrlCache.get(watchIdentifier) ?: "" }
+    DisposableEffect(watchIdentifier) {
+        onDispose { WatchappSettingsUrlCache.remove(watchIdentifier) }
+    }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()
         val pkjsSessionFlow = remember(watchIdentifier) {

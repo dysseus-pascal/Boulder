@@ -92,8 +92,12 @@ actual class ModelDownloadManager(
 
     actual fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
         if (jobScheduler.allPendingJobs.any { it.service == serviceComponentName }) {
-            Logger.withTag("ModelDownloadManager").i { "A model download job is already scheduled, not scheduling another." }
-            return false
+            Logger.withTag("ModelDownloadManager").w { "A model download job is already scheduled, cancelling it." }
+            jobScheduler.allPendingJobs.forEach {
+                if (it.service == serviceComponentName) {
+                    jobScheduler.cancel(it.id)
+                }
+            }
         }
         val info = buildJobInfo(
             modelSlug = modelInfo.slug,

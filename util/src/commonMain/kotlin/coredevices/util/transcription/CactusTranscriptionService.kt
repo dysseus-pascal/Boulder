@@ -328,6 +328,11 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         logger.d { "Sample rate: $sampleRate Hz, encoding: $encoding" }
         logger.d { "Duration: ${audioSize / (sampleRate * 2.0)}s (assuming 16-bit mono)" }
 
+        if (buffer.size == 0L || audioSize / (sampleRate * 2.0) < 0.1) {
+            logger.w { "No audio data received, skipping transcription" }
+            throw TranscriptionException.NoSpeechDetected("No audio data received")
+        }
+
         try {
             withTimeout(20.seconds) {
                 initJob?.join()

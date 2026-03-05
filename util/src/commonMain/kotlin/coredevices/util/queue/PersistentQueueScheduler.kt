@@ -3,10 +3,13 @@ package coredevices.util.queue
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -61,7 +64,7 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
         } finally {
             _currentTaskId.value = null
         }
-    }.launchIn(scope)
+    }.flowOn(Dispatchers.IO).launchIn(scope)
 
     /**
      * Call this on app startup to resume any pending tasks that were not completed in the previous session.

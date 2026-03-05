@@ -19,16 +19,20 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private const val APPMESSAGE_BUFFER_SIZE = 32
 private const val MAX_SUBSCRIBERS_PER_APP = 2
 private val APPMESSAGE_TIMEOUT = 10.seconds
+private val STALE_APPMESSAGE_THRESHOLD = 2.5.seconds
 
 class AppMessageService(
     private val protocolHandler: PebbleProtocolHandler,
-    private val scope: ConnectionCoroutineScope
+    private val scope: ConnectionCoroutineScope,
+    private val clock: Clock,
 ) : ProtocolService, ConnectedPebble.AppMessages {
     private val logger = Logger.withTag("AppMessageService")
     private val channelGroups = HashMap<Uuid, ChannelGroup>()
@@ -36,23 +40,23 @@ class AppMessageService(
     private val mapAccessMutex = Mutex()
 
     private class ChannelGroup {
-        val all = mutableListOf<Channel<AppMessageData>>()
-        val unclaimed = ArrayDeque<Channel<AppMessageData>>()
+        val all = mutableListOf<Channel<InboundAppMessageData>>()
+        val unclaimed = ArrayDeque<Channel<InboundAppMessageData>>()
 
         init {
             repeat(MAX_SUBSCRIBERS_PER_APP) {
-                val ch = Channel<AppMessageData>(APPMESSAGE_BUFFER_SIZE)
+                val ch = Channel<InboundAppMessageData>(APPMESSAGE_BUFFER_SIZE)
                 all.add(ch)
                 unclaimed.addLast(ch)
             }
         }
 
-        fun claim(): Channel<AppMessageData> {
+        fun claim(): Channel<InboundAppMessageData> {
             return unclaimed.removeFirstOrNull()
                 ?: error("All $MAX_SUBSCRIBERS_PER_APP AppMessage channels already claimed")
         }
 
-        fun release(channel: Channel<AppMessageData>) {
+        fun release(channel: Channel<InboundAppMessageData>) {
             unclaimed.addLast(channel)
         }
     }
@@ -125,13 +129,30 @@ class AppMessageService(
         }
         try {
             for (msg in channel) {
-                send(msg)
+                // Messages can buffer up after an app stops on the phone - don't send these stale
+                // messages after the app starts again.
+                if (clock.now() - msg.timestamp > STALE_APPMESSAGE_THRESHOLD) {
+                    logger.w { "Dropping stale AppMessage ${msg.appMessageData.transactionId} for $appUuid" }
+                    continue
+                }
+                send(msg.appMessageData)
             }
         } finally {
             mapAccessMutex.withLock {
                 channelGroups[appUuid]?.release(channel)
             }
         }
+    }
+
+    private fun AppMessage.AppMessagePush.appMessageData(): InboundAppMessageData {
+        return InboundAppMessageData(
+            timestamp = clock.now(),
+            appMessageData = AppMessageData(
+                transactionId = transactionId.get(),
+                uuid = uuid.get(),
+                data = dictionary.list.associate { it.key.get().toInt() to it.getTypedData() }
+            ),
+        )
     }
 }
 
@@ -161,17 +182,14 @@ data class AppMessageData(
     val data: AppMessageDictionary
 )
 
+data class InboundAppMessageData(
+    val timestamp: Instant,
+    val appMessageData: AppMessageData,
+)
+
 sealed class AppMessageResult(val transactionId: UByte) {
     class ACK(transactionId: UByte) : AppMessageResult(transactionId)
     class NACK(transactionId: UByte) : AppMessageResult(transactionId)
-}
-
-private fun AppMessage.AppMessagePush.appMessageData(): AppMessageData {
-    return AppMessageData(
-        transactionId = transactionId.get(),
-        uuid = uuid.get(),
-        data = dictionary.list.associate { it.key.get().toInt() to it.getTypedData() }
-    )
 }
 
 private fun AppMessage.AppMessageACK.appMessageResult() = AppMessageResult.ACK(transactionId.get())

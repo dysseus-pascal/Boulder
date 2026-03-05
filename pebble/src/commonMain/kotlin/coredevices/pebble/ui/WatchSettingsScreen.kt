@@ -517,6 +517,7 @@ please disable the option.""".trimIndent(),
                         coreConfigHolder.update(
                             coreConfig.copy(
                                 enableIndex = it,
+                                indexPermissionsConfirmed = if (it) coreConfig.indexPermissionsConfirmed else false,
                             )
                         )
                     },

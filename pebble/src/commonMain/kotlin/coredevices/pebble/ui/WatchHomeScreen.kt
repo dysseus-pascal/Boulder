@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -42,6 +44,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TooltipState
@@ -52,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +70,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -85,7 +90,14 @@ import coreapp.util.generated.resources.back
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.ui.M3Dialog
+import coredevices.util.CoreConfigHolder
 import coredevices.util.CoreConfigFlow
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import coredevices.util.description
+import coredevices.util.name
+import coredevices.util.rememberUiContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -251,6 +263,62 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
         val params by viewModel.paramsFlow.collectAsState(Params())
+
+        val coreConfigHolder: CoreConfigHolder = koinInject()
+        val coreConfig by coreConfigHolder.config.collectAsState()
+        val permissionRequester: PermissionRequester = koinInject()
+        val missingPermissions = permissionRequester.missingPermissions.collectAsState()
+        val missingRequiredPermissions by remember {
+            derivedStateOf {
+                missingPermissions.value.filter {
+                    it in listOf(
+                        Permission.SetAlarms,
+                        Permission.Reminders
+                    )
+                }
+            }
+        }
+        if (
+            coreConfig.enableIndex &&
+            !coreConfig.indexPermissionsConfirmed &&
+            missingRequiredPermissions.isNotEmpty()
+        ) {
+            val uiContext = rememberUiContext()
+            M3Dialog(
+                onDismissRequest = {
+                    coreConfigHolder.update(coreConfig.copy(enableIndex = false))
+                },
+                title = { Text("Index Permissions") },
+                buttons = {
+                    TextButton(onClick = {
+                        coreConfigHolder.update(coreConfig.copy(enableIndex = false))
+                    }) {
+                        Text("Cancel")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        coreConfigHolder.update(coreConfig.copy(indexPermissionsConfirmed = true))
+                        if (uiContext != null) {
+                            scope.launch {
+                                for (permission in missingRequiredPermissions) {
+                                    permissionRequester.requestPermission(permission, uiContext)
+                                }
+                            }
+                        }
+                    }) {
+                        Text("Continue")
+                    }
+                },
+            ) {
+                Text("Index requires additional permissions to function.\n" +
+                        "Please grant the following permissions:")
+                Spacer(Modifier.height(8.dp))
+                for (permission in missingRequiredPermissions) {
+                    Text(permission.name(), fontWeight = FontWeight.Bold)
+                    Text(permission.description())
+                }
+            }
+        }
 
         Scaffold(
             topBar = {

@@ -41,6 +41,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -109,6 +110,7 @@ fun AppStoreCollectionScreen(
             appType
         )
     }
+    val sharedViewModel: SharedLockerViewModel = koinInject()
     val lastConnectedWatch = lastConnectedWatch()
     val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
     LaunchedEffect(watchType) {
@@ -140,9 +142,7 @@ fun AppStoreCollectionScreen(
             AppsFilterRow(
                 watchType = watchType,
                 selectedType = null,
-                showIncompatible = viewModel.showIncompatible,
-                showScaled = viewModel.showScaled,
-                hearted = viewModel.hearted,
+                sharedLockerViewModel = sharedViewModel,
             )
             if (apps == null || apps.loadState.refresh is LoadState.Loading) {
                 CircularProgressIndicator(

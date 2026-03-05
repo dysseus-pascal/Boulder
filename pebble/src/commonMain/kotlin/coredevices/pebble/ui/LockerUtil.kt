@@ -116,7 +116,10 @@ private fun LockerWrapper.findStoreSource(
 }
 
 @Composable
-fun appstoreCategories(appType: AppType?, sources: List<AppstoreSource>?): Map<AppstoreSource, List<StoreCategory>>? {
+fun appstoreCategories(
+    appType: AppType?,
+    sources: List<AppstoreSource>?
+): Map<AppstoreSource, List<StoreCategory>>? {
     val cache: AppstoreCache = koinInject()
     if (sources == null || appType == null) {
         return null
@@ -174,7 +177,15 @@ fun loadLockerEntries(
     if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, showIncompatible, showScaled, hearted) {
+    return remember(
+        entries,
+        watchType,
+        appstoreSources,
+        firestoreLockerContents,
+        showIncompatible,
+        showScaled,
+        hearted
+    ) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
@@ -184,7 +195,11 @@ fun loadLockerEntries(
             if (!showScaled && !app.isNativelyCompatible) {
                 return@mapNotNull null
             }
-            if (hearted && !currentHearts.hasHeart(sourceId = appstoreSource?.id, appId = app.storeId)) {
+            if (hearted && !currentHearts.hasHeart(
+                    sourceId = appstoreSource?.id,
+                    appId = app.storeId
+                )
+            ) {
                 return@mapNotNull null
             }
             app
@@ -198,7 +213,8 @@ fun CommonApp.isHearted(): Boolean? {
     if (appstoreSource == null || storeId == null) {
         return null
     }
-    val hearted by heartsDao.isHeartedFlow(sourceId = appstoreSource.id, appId = storeId).collectAsState(null)
+    val hearted by heartsDao.isHeartedFlow(sourceId = appstoreSource.id, appId = storeId)
+        .collectAsState(null)
     return hearted
 }
 
@@ -229,7 +245,7 @@ fun allCollectionUuids(): List<Uuid> {
 
 @Composable
 fun CommonApp.inMyCollection(): Boolean {
-    val collectionUuids  = allCollectionUuids()
+    val collectionUuids = allCollectionUuids()
     return remember(this, collectionUuids) {
         when (commonAppType) {
             is CommonAppType.Locker -> true
@@ -328,21 +344,31 @@ fun lastConnectedWatch(): KnownPebbleDevice? {
     val watches by watchesFiltered.collectAsState()
     val lastConnectedWatch = remember(watches) {
         watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
-                .firstOrNull()
+            .firstOrNull()
     }
     return lastConnectedWatch
 }
 
-private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(appType: AppType, cache: AppstoreCache): List<StoreCategory> {
+private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(
+    appType: AppType,
+    cache: AppstoreCache
+): List<StoreCategory> {
     return cache.readCategories(appType, this) ?: when (appType) {
         AppType.Watchface -> DEFAULT_CATEGORIES_FACES
         AppType.Watchapp -> DEFAULT_CATEGORIES_APPS
     }
 }
 
-suspend fun AppstoreSource.cachedCategoriesOrDefaults(appType: AppType?, cache: AppstoreCache): List<StoreCategory> {
+suspend fun AppstoreSource.cachedCategoriesOrDefaults(
+    appType: AppType?,
+    cache: AppstoreCache
+): List<StoreCategory> {
     return when (appType) {
-        null -> cachedCategoriesOrDefaultsForType(AppType.Watchapp, cache) + cachedCategoriesOrDefaultsForType(AppType.Watchface, cache)
+        null -> cachedCategoriesOrDefaultsForType(
+            AppType.Watchapp,
+            cache
+        ) + cachedCategoriesOrDefaultsForType(AppType.Watchface, cache)
+
         else -> cachedCategoriesOrDefaultsForType(appType, cache)
     }
 }
@@ -429,7 +455,8 @@ fun LockerWrapper.asCommonApp(
         category = properties.category,
         version = properties.version,
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
-        screenshotImageUrl = compatiblePlatform?.screenshotImageUrl ?: anyPlatform?.screenshotImageUrl,
+        screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
+            ?: anyPlatform?.screenshotImageUrl,
         isCompatible = compatiblePlatform.isCompatible(),
         hearts = when (this) {
             is LockerWrapper.NormalApp -> properties.hearts
@@ -506,9 +533,10 @@ fun StoreApplication.asCommonApp(
                     // If store doesn't report binary info, mark as compatible
                     hardwarePlatforms == null -> true
                     // If store has binary info, only natively compatible if there is a matching binary
-                    else ->hardwarePlatforms.any { it.name == watchType.codename && it.pebbleProcessInfoFlags != null }
+                    else -> hardwarePlatforms.any { it.name == watchType.codename && it.pebbleProcessInfoFlags != null }
                 }
             }
+
             else -> true
         },
         storeId = id,
@@ -532,18 +560,30 @@ fun StoreSearchResult.asCommonApp(
         return null
     }
     val screenshotWatchType = watchType.getBestVariant(assetCollections.map { it.hardwarePlatform })
-    val screenshotPlatform = screenshotWatchType?.let { assetCollections.find { it.hardwarePlatform == screenshotWatchType.codename } }
+    val screenshotPlatform =
+        screenshotWatchType?.let { assetCollections.find { it.hardwarePlatform == screenshotWatchType.codename } }
     return CommonApp(
         title = title,
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null, developerLink = null, publishedDate = null, changelog = emptyList()),
+        commonAppType = CommonAppType.Store(
+            storeSource = source,
+            storeApp = null,
+            headerImageUrl = null,
+            allScreenshotUrls = emptyList(),
+            addHeartUrl = null,
+            removeHeartUrl = null,
+            developerLink = null,
+            publishedDate = null,
+            changelog = emptyList()
+        ),
         type = appType,
         category = category,
         version = null,
         listImageUrl = listImage,
-        screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull() ?: screenshotImages.firstOrNull(),
+        screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull()
+            ?: screenshotImages.firstOrNull(),
         isCompatible = compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
@@ -553,6 +593,7 @@ fun StoreSearchResult.asCommonApp(
                 // Mark as compatible if API doesn't set the field
                 platformCompatibility?.hasBinary == null || platformCompatibility.hasBinary == true
             }
+
             else -> true
         },
         storeId = id,
@@ -670,9 +711,7 @@ private var hasShownScrollHint = false
 fun AppsFilterRow(
     watchType: WatchType,
     selectedType: MutableState<AppType>?,
-    showIncompatible: MutableState<Boolean>?,
-    showScaled: MutableState<Boolean>?,
-    hearted: MutableState<Boolean>?,
+    sharedLockerViewModel: SharedLockerViewModel,
 ) {
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
@@ -742,13 +781,16 @@ fun AppsFilterRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            if (watchType.performsScaling() && showScaled != null) {
+            if (watchType.performsScaling()) {
                 FilterChip(
-                    selected = showScaled.value,
-                    onClick = { showScaled.value = !showScaled.value },
+                    selected = sharedLockerViewModel.showScaled.value,
+                    onClick = {
+                        sharedLockerViewModel.showScaled.value =
+                            !sharedLockerViewModel.showScaled.value
+                    },
                     label = { Text("Show Scaled") },
                     modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (showScaled.value) {
+                    leadingIcon = if (sharedLockerViewModel.showScaled.value) {
                         {
                             Icon(
                                 imageVector = Icons.Filled.Done,
@@ -761,44 +803,45 @@ fun AppsFilterRow(
                     },
                 )
             }
-            if (hearted != null) {
-                FilterChip(
-                    selected = hearted.value,
-                    onClick = { hearted.value = !hearted.value },
-                    label = { Text("Hearted") },
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (hearted.value) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Favorite,
-                                contentDescription = "Hearted",
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
-            if (showIncompatible != null) {
-                FilterChip(
-                    selected = showIncompatible.value,
-                    onClick = { showIncompatible.value = !showIncompatible.value },
-                    label = { Text("Show Incompatible") },
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (showIncompatible.value) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Done,
-                                contentDescription = "Show Incompatible",
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
+            FilterChip(
+                selected = sharedLockerViewModel.hearted.value,
+                onClick = {
+                    sharedLockerViewModel.hearted.value = !sharedLockerViewModel.hearted.value
+                },
+                label = { Text("Hearted") },
+                modifier = Modifier.padding(horizontal = 4.dp),
+                leadingIcon = if (sharedLockerViewModel.hearted.value) {
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Favorite,
+                            contentDescription = "Hearted",
+                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+            FilterChip(
+                selected = sharedLockerViewModel.showIncompatible.value,
+                onClick = {
+                    sharedLockerViewModel.showIncompatible.value =
+                        !sharedLockerViewModel.showIncompatible.value
+                },
+                label = { Text("Show Incompatible") },
+                modifier = Modifier.padding(horizontal = 4.dp),
+                leadingIcon = if (sharedLockerViewModel.showIncompatible.value) {
+                    {
+                        Icon(
+                            imageVector = Icons.Filled.Done,
+                            contentDescription = "Show Incompatible",
+                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
         }
     }
 }

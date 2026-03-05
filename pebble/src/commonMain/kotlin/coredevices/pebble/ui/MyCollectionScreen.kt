@@ -42,6 +42,7 @@ import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -63,6 +64,7 @@ fun MyCollectionScreen(
     appType: AppType,
 ) {
     val viewModel = koinViewModel<MyCollectionViewModel>()
+    val sharedViewModel: SharedLockerViewModel = koinInject()
     val libPebble = rememberLibPebble()
     val watchesFiltered = remember {
         libPebble.watches.map {
@@ -132,9 +134,7 @@ fun MyCollectionScreen(
         AppsFilterRow(
             watchType = watchType,
             selectedType = null,
-            showIncompatible = viewModel.showIncompatible,
-            showScaled = viewModel.showScaled,
-            hearted = viewModel.hearted,
+            sharedLockerViewModel = sharedViewModel,
         )
         when (appType) {
             AppType.Watchface -> {

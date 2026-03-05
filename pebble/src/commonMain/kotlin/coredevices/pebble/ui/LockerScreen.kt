@@ -135,6 +135,12 @@ private data class SearchParams(
     val platform: Platform,
 )
 
+class SharedLockerViewModel : ViewModel() {
+    val showIncompatible = mutableStateOf(false)
+    val showScaled = mutableStateOf(true)
+    val hearted = mutableStateOf(false)
+}
+
 class LockerViewModel(
     private val pebbleWebServices: PebbleWebServices,
     private val storeSourceDao: AppstoreSourceDao,
@@ -145,9 +151,6 @@ class LockerViewModel(
     private var lastSearchParams: SearchParams? = null
     val searchState = SearchState()
     val type = mutableStateOf(AppType.Watchface)
-    val showIncompatible = mutableStateOf(false)
-    val showScaled = mutableStateOf(true)
-    val hearted = mutableStateOf(false)
     var storeIsRefreshing by mutableStateOf(false)
     var lockerIsRefreshing by mutableStateOf(false)
 
@@ -203,6 +206,7 @@ fun LockerScreen(
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<LockerViewModel>()
+        val sharedViewModel: SharedLockerViewModel = koinInject()
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
         val lastConnectedWatch = lastConnectedWatch()
@@ -300,9 +304,9 @@ fun LockerScreen(
             type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
             watchType = watchType,
-            showIncompatible = viewModel.showIncompatible.value,
-            showScaled = viewModel.showScaled.value,
-            hearted = viewModel.hearted.value,
+            showIncompatible = sharedViewModel.showIncompatible.value,
+            showScaled = sharedViewModel.showScaled.value,
+            hearted = sharedViewModel.hearted.value,
             limit = 25,
         )
         val activeWatchface = loadActiveWatchface(watchType)
@@ -317,19 +321,17 @@ fun LockerScreen(
                 AppsFilterRow(
                     watchType = watchType,
                     selectedType = viewModel.type,
-                    showIncompatible = viewModel.showIncompatible,
-                    showScaled = viewModel.showScaled,
-                    hearted = viewModel.hearted,
+                    sharedLockerViewModel = sharedViewModel,
                 )
                 if (viewModel.searchState.query.isNotEmpty()) {
                     val lockerUuids = remember(lockerEntries) { lockerEntries.mapTo(HashSet()) { it.uuid } }
-                    val filteredStoreResults = remember(viewModel.searchPager, viewModel.showIncompatible.value, viewModel.showScaled.value, viewModel.hearted.value, lockerUuids) {
+                    val filteredStoreResults = remember(viewModel.searchPager, sharedViewModel.showIncompatible.value, sharedViewModel.showScaled.value, sharedViewModel.hearted.value, lockerUuids) {
                         viewModel.searchPager?.map { pagingData ->
                             pagingData.filter { app ->
                                 app.uuid !in lockerUuids
-                                        && (viewModel.showIncompatible.value || app.isCompatible)
-                                        && (viewModel.showScaled.value || app.isNativelyCompatible)
-                                        && (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
+                                        && (sharedViewModel.showIncompatible.value || app.isCompatible)
+                                        && (sharedViewModel.showScaled.value || app.isNativelyCompatible)
+                                        && (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
                             }
                         }
                     }?.collectAsLazyPagingItems()
@@ -535,9 +537,9 @@ fun LockerScreen(
                                             collection,
                                             watchType,
                                             lockerEntries,
-                                            viewModel.showScaled.value,
+                                            sharedViewModel.showScaled.value,
                                             viewModel.type.value,
-                                            viewModel.hearted.value,
+                                            sharedViewModel.hearted.value,
                                         ) {
                                             collection.applicationIds.mapNotNull { appId ->
                                                 home.applications.find { app ->
@@ -550,8 +552,8 @@ fun LockerScreen(
                                                 )
                                             }.filter { app ->
                                                 app.type == viewModel.type.value &&
-                                                        (viewModel.showScaled.value || app.isNativelyCompatible) &&
-                                                (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
+                                                        (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
+                                                (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
                                             }
                                                 .distinctBy { it.uuid }
                                         }

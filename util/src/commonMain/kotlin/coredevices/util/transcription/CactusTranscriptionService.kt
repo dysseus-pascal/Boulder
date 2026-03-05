@@ -22,7 +22,10 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -42,7 +45,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): TranscriptionService {
+class CactusTranscriptionService(
+    private val coreConfigFlow: CoreConfigFlow,
+    private val wisprFlow: WisprFlowTranscriptionService
+): TranscriptionService {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
@@ -86,11 +92,6 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
     private suspend fun initIfNeeded() {
         val config = sttConfig.value
         when (config.mode) {
-            CactusSTTMode.RemoteOnly -> {
-                CommonBuildKonfig.WISPR_KEY?.let {
-                    sttModel.warmUpWispr(it)
-                } ?: logger.e { "WISPR API key is not set, cannot use RemoteOnly mode" }
-            }
             CactusSTTMode.LocalOnly, CactusSTTMode.RemoteFirst -> {
                 if (!(config.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {
                     logger.e { "Cactus STT model '${config.modelName}' is not downloaded, cannot initialize local model" }
@@ -106,12 +107,8 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                     logger.d { "Cactus STT model initialized successfully in $initDuration" }
                     lastInitedModel = config.modelName
                 }
-                if (config.mode == CactusSTTMode.RemoteFirst) {
-                    CommonBuildKonfig.WISPR_KEY?.let {
-                        sttModel.warmUpWispr(it)
-                    }
-                }
             }
+            else -> {}
         }
     }
 
@@ -128,7 +125,12 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         }
     }
 
-    override suspend fun isAvailable(): Boolean = sttModel.isReady()
+    override suspend fun isAvailable(): Boolean {
+       return when (configuredMode) {
+              CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable()
+              CactusSTTMode.LocalOnly, CactusSTTMode.RemoteFirst -> wisprFlow.isAvailable() || sttModel.isReady()
+       }
+    }
 
     private fun makeWisprConfig(
         language: STTLanguage,
@@ -192,7 +194,6 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        timeout: Duration = 30.seconds
     ): TranscriptionResult {
         val params = CactusTranscriptionParams(maxTokens = 384)
         val path = getCacheFilePath()
@@ -206,21 +207,21 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
             logger.d { "Using transcription mode ${sttConfig.value.mode}" }
             return when (val sttMode = sttConfig.value.mode) {
                 CactusSTTMode.RemoteOnly -> {
-                    val result = sttModel.transcribe(
-                        filePath = path.toString(),
-                        params = params,
-                        mode = sttMode.cactusValue,
-                        wisprConfig = makeWisprConfig(
-                            language,
-                            conversationContext,
-                            dictionaryContext,
-                            contentContext
-                        )
-                    )
+                    val result = wisprFlow.transcribe(
+                        audioStreamFrames = flowOf(audio),
+                        sampleRate = sampleRate,
+                        language = language,
+                        conversationContext = conversationContext,
+                        dictionaryContext = dictionaryContext,
+                        contentContext = contentContext
+                    ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
                     TranscriptionResult(
-                        cactus = result,
+                        cactus = CactusTranscriptionResult(
+                            text = result.text,
+                            success = true
+                        ),
                         modeUsed = sttMode,
-                        modelUsed = sttConfig.value.modelName
+                        modelUsed = result.modelUsed
                     )
                 }
                 CactusSTTMode.LocalOnly -> {
@@ -241,27 +242,22 @@ class CactusTranscriptionService(private val coreConfigFlow: CoreConfigFlow): Tr
                 }
                 CactusSTTMode.RemoteFirst -> {
                     try {
-                        withTimeout(timeout) {
-                            val result = sttModel.transcribe(
-                                filePath = path.toString(),
-                                params = params,
-                                mode = TranscriptionMode.REMOTE,
-                                wisprConfig = makeWisprConfig(
-                                    language,
-                                    conversationContext,
-                                    dictionaryContext,
-                                    contentContext
-                                )
-                            )
-                            if (result == null) {
-                                error("Remote transcription returned null")
-                            }
-                            TranscriptionResult(
-                                cactus = result,
-                                modeUsed = CactusSTTMode.RemoteFirst,
-                                modelUsed = "wisprflow"
-                            )
-                        }
+                        val result = wisprFlow.transcribe(
+                            audioStreamFrames = flowOf(audio),
+                            sampleRate = sampleRate,
+                            language = language,
+                            conversationContext = conversationContext,
+                            dictionaryContext = dictionaryContext,
+                            contentContext = contentContext
+                        ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+                        TranscriptionResult(
+                            cactus = CactusTranscriptionResult(
+                                text = result.text,
+                                success = true
+                            ),
+                            modeUsed = sttMode,
+                            modelUsed = result.modelUsed
+                        )
                     } catch (e: Exception) {
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
                         if (!(sttConfig.value.modelName?.let { sttModel.isModelDownloaded(it) } ?: false)) {

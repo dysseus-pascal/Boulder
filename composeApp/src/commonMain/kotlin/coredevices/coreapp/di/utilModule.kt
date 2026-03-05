@@ -7,6 +7,7 @@ import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
+import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
 import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
@@ -24,10 +25,10 @@ import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
-import coredevices.util.models.ModelDownloadManager
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionService
+import coredevices.util.transcription.WisprFlowTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -77,6 +78,8 @@ val utilModule = module {
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     singleOf(::ModelManager)
     singleOf(::OAuthRedirectHandler)
+    singleOf(::WisprFlowAuth)
     singleOf(::CactusTranscriptionService) bind TranscriptionService::class
+    singleOf(::WisprFlowTranscriptionService)
     singleOf(::UsersDaoImpl) bind UsersDao::class
 }

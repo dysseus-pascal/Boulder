@@ -225,7 +225,7 @@ actual class GattServer(
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
-    ): Boolean {
+    ): SendResult {
         val message = MessageToSend(
             identifier = identifier,
             serviceUuid = serviceUuid,
@@ -236,11 +236,15 @@ actual class GattServer(
             timeout = SEND_TIMEOUT,
             block = {
                 sendQueue.send(message)
-                message.status.filterNotNull().first()
+                if (message.status.filterNotNull().first()) {
+                    SendResult.Success
+                } else {
+                    SendResult.Failed
+                }
             },
             onTimeout = {
                 logger.w { "Timeout sending data to $identifier" }
-                false
+                SendResult.Failed
             },
         )
     }

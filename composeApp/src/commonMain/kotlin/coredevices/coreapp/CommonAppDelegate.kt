@@ -26,6 +26,7 @@ import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -53,6 +54,7 @@ class CommonAppDelegate(
     private val usersDao: UsersDao,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val firestoreLocker: FirestoreLocker,
+    private val libPebble: LibPebble,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -77,6 +79,23 @@ class CommonAppDelegate(
         }
     }
 
+    private fun oneTimeSetLockerOrderMode() {
+        GlobalScope.launch {
+            val key = "HAS_DONE_ONE_OFF_WATCHFACE_ORDER_SETTING"
+            if (!settings.hasKey(key)) {
+                val config = libPebble.config.value
+                libPebble.updateConfig(
+                    config.copy(
+                        watchConfig = config.watchConfig.copy(
+                            orderWatchfacesByLastUsed = true,
+                        )
+                    )
+                )
+                settings.putBoolean(key, true)
+            }
+        }
+    }
+
     fun init() {
         usersDao.init()
         GlobalScope.launch(Dispatchers.Default) {
@@ -97,6 +116,7 @@ class CommonAppDelegate(
             }
         }
         firestoreLocker.init()
+        oneTimeSetLockerOrderMode()
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }

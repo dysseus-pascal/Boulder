@@ -78,6 +78,7 @@ data class WatchConfig(
      * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
      */
     val appMessageToMultipleCompanions: Boolean = true,
+    val orderWatchfacesByLastUsed: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

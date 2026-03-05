@@ -20,11 +20,16 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -34,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -712,6 +718,7 @@ fun AppsFilterRow(
     watchType: WatchType,
     selectedType: MutableState<AppType>?,
     sharedLockerViewModel: SharedLockerViewModel,
+    showWatchfaceOrderSetting: Boolean,
 ) {
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
@@ -822,6 +829,62 @@ fun AppsFilterRow(
                     null
                 },
             )
+            if (showWatchfaceOrderSetting) {
+                val orderExpanded = remember { mutableStateOf(false) }
+                val selectedOrderMode = remember(sharedLockerViewModel.orderWatchfacesByLastUsed.value) {
+                    WatchfaceFilterMode.from(sharedLockerViewModel.orderWatchfacesByLastUsed.value)
+                }
+                Box(modifier = Modifier.padding(horizontal = 4.dp)) {
+                    FilterChip(
+                        onClick = { orderExpanded.value = !orderExpanded.value },
+                        label = { Text("Order") },
+                        selected = false,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = selectedOrderMode.icon,
+                                contentDescription = selectedOrderMode.description,
+                            )
+                        },
+                    )
+                    DropdownMenu(
+                        expanded = orderExpanded.value,
+                        onDismissRequest = { orderExpanded.value = false }
+                    ) {
+                        val libPebble = rememberLibPebble()
+                        WatchfaceFilterMode.entries.forEach { mode ->
+                            DropdownMenuItem(
+                                onClick = {
+                                    val config = libPebble.config.value
+                                    libPebble.updateConfig(
+                                        config.copy(
+                                            watchConfig = config.watchConfig.copy(
+                                                orderWatchfacesByLastUsed = mode.orderWatchfacesByLastUsed,
+                                            )
+                                        )
+                                    )
+                                    orderExpanded.value = false
+                                },
+                                text = { Text(mode.description) },
+                                trailingIcon = {
+                                    Icon(
+                                            imageVector = mode.icon,
+                                            contentDescription = mode.description,
+                                        )
+                                },
+                                leadingIcon = if (mode == selectedOrderMode) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                } else { null },
+                            )
+                        }
+                    }
+                }
+            }
             FilterChip(
                 selected = sharedLockerViewModel.showIncompatible.value,
                 onClick = {
@@ -843,6 +906,20 @@ fun AppsFilterRow(
                 },
             )
         }
+    }
+}
+
+enum class WatchfaceFilterMode(
+    val orderWatchfacesByLastUsed: Boolean,
+    val icon: ImageVector,
+    val description: String,
+) {
+    MostRecent(true, Icons.Default.Schedule, "Order by recently used"),
+    Manual(false, Icons.Default.Reorder, "Order manually"),
+    ;
+
+    companion object {
+        fun from(orderWatchfacesByLastUsed: Boolean): WatchfaceFilterMode = entries.first { it.orderWatchfacesByLastUsed == orderWatchfacesByLastUsed }
     }
 }
 

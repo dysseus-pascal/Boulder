@@ -361,6 +361,9 @@ class Locker(
             val entry = getApp(uuid)
             if (entry?.type == AppType.Watchface.code && currentActive?.properties?.id != uuid) {
                 lockerEntryDao.setActive(uuid)
+                if (config.value.orderWatchfacesByLastUsed) {
+                    setAppOrder(uuid, 0)
+                }
             }
         }
     }

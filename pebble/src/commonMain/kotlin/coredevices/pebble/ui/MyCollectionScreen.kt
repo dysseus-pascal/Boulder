@@ -65,6 +65,7 @@ fun MyCollectionScreen(
 ) {
     val viewModel = koinViewModel<MyCollectionViewModel>()
     val sharedViewModel: SharedLockerViewModel = koinInject()
+    sharedViewModel.Init()
     val libPebble = rememberLibPebble()
     val watchesFiltered = remember {
         libPebble.watches.map {
@@ -135,6 +136,7 @@ fun MyCollectionScreen(
             watchType = watchType,
             selectedType = null,
             sharedLockerViewModel = sharedViewModel,
+            showWatchfaceOrderSetting = appType == AppType.Watchface,
         )
         when (appType) {
             AppType.Watchface -> {

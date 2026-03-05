@@ -139,6 +139,14 @@ class SharedLockerViewModel : ViewModel() {
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
     val hearted = mutableStateOf(false)
+    val orderWatchfacesByLastUsed = mutableStateOf(true)
+
+    @Composable
+    fun Init() {
+        val libPebble = rememberLibPebble()
+        val config by libPebble.config.collectAsState()
+        orderWatchfacesByLastUsed.value = config.watchConfig.orderWatchfacesByLastUsed
+    }
 }
 
 class LockerViewModel(
@@ -207,6 +215,7 @@ fun LockerScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<LockerViewModel>()
         val sharedViewModel: SharedLockerViewModel = koinInject()
+        sharedViewModel.Init()
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
         val lastConnectedWatch = lastConnectedWatch()
@@ -322,6 +331,7 @@ fun LockerScreen(
                     watchType = watchType,
                     selectedType = viewModel.type,
                     sharedLockerViewModel = sharedViewModel,
+                    showWatchfaceOrderSetting = viewModel.type.value == AppType.Watchface,
                 )
                 if (viewModel.searchState.query.isNotEmpty()) {
                     val lockerUuids = remember(lockerEntries) { lockerEntries.mapTo(HashSet()) { it.uuid } }

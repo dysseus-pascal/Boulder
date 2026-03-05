@@ -111,6 +111,7 @@ fun AppStoreCollectionScreen(
         )
     }
     val sharedViewModel: SharedLockerViewModel = koinInject()
+    sharedViewModel.Init()
     val lastConnectedWatch = lastConnectedWatch()
     val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
     LaunchedEffect(watchType) {
@@ -143,6 +144,7 @@ fun AppStoreCollectionScreen(
                 watchType = watchType,
                 selectedType = null,
                 sharedLockerViewModel = sharedViewModel,
+                showWatchfaceOrderSetting = false,
             )
             if (apps == null || apps.loadState.refresh is LoadState.Loading) {
                 CircularProgressIndicator(

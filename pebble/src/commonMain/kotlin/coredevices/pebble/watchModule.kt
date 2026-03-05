@@ -34,7 +34,6 @@ import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.ModelManagementScreenViewModel
-import coredevices.pebble.ui.MyCollectionViewModel
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
@@ -207,7 +206,6 @@ val watchModule = module {
     viewModelOf(::AppstoreSettingsScreenViewModel)
     viewModelOf(::ContactsViewModel)
     viewModelOf(::WatchSettingsScreenViewModel)
-    viewModelOf(::MyCollectionViewModel)
     viewModel { p ->
         AppStoreCollectionScreenViewModel(
             get(),

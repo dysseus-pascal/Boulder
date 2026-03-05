@@ -51,19 +51,12 @@ import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("MyCollectionScreen")
 
-class MyCollectionViewModel: ViewModel() {
-    val showIncompatible = mutableStateOf(false)
-    val showScaled = mutableStateOf(true)
-    val hearted = mutableStateOf(false)
-}
-
 @Composable
 fun MyCollectionScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     appType: AppType,
 ) {
-    val viewModel = koinViewModel<MyCollectionViewModel>()
     val sharedViewModel: SharedLockerViewModel = koinInject()
     sharedViewModel.Init()
     val libPebble = rememberLibPebble()
@@ -87,9 +80,9 @@ fun MyCollectionScreen(
         type = appType,
         searchQuery = searchState.query,
         watchType = watchType,
-        showIncompatible = viewModel.showIncompatible.value,
-        showScaled = viewModel.showScaled.value,
-        hearted = viewModel.hearted.value,
+        showIncompatible = sharedViewModel.showIncompatible.value,
+        showScaled = sharedViewModel.showScaled.value,
+        hearted = sharedViewModel.hearted.value,
         limit = 700,
     )
     if (lockerEntries == null) {

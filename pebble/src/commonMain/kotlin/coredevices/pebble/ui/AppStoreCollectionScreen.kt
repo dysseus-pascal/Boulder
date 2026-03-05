@@ -55,9 +55,6 @@ class AppStoreCollectionScreenViewModel(
     val path: String,
     val appType: AppType?,
 ): ViewModel(), KoinComponent {
-    val showIncompatible = mutableStateOf(false)
-    val showScaled = mutableStateOf(true)
-    val hearted = mutableStateOf(false)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
     private var loadedAppsWatchType: WatchType? = null
@@ -118,14 +115,14 @@ fun AppStoreCollectionScreen(
         viewModel.maybeLoad(watchType)
     }
     val currentHearts = currentHearts()
-    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value, viewModel.showIncompatible.value, viewModel.hearted.value) {
+    val apps = remember(viewModel.loadedApps, sharedViewModel.showScaled.value, sharedViewModel.showIncompatible.value, sharedViewModel.hearted.value) {
         viewModel.loadedApps?.map {
             it.filter { app ->
-                if (!viewModel.showScaled.value && !app.isNativelyCompatible) {
+                if (!sharedViewModel.showScaled.value && !app.isNativelyCompatible) {
                     false
-                } else if (!viewModel.showIncompatible.value && !app.isCompatible) {
+                } else if (!sharedViewModel.showIncompatible.value && !app.isCompatible) {
                     false
-                } else if (viewModel.hearted.value && !currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) {
+                } else if (sharedViewModel.hearted.value && !currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) {
                     false
                 } else {
                     true

@@ -22,13 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.LoadState
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import androidx.paging.LoadState
 import androidx.paging.filter
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSourceDao
@@ -109,10 +109,8 @@ fun AppStoreCollectionScreen(
     }
     val sharedViewModel: SharedLockerViewModel = koinInject()
     sharedViewModel.Init()
-    val lastConnectedWatch = lastConnectedWatch()
-    val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
-    LaunchedEffect(watchType) {
-        viewModel.maybeLoad(watchType)
+    LaunchedEffect(sharedViewModel.watchType.value) {
+        viewModel.maybeLoad(sharedViewModel.watchType.value)
     }
     val currentHearts = currentHearts()
     val apps = remember(viewModel.loadedApps, sharedViewModel.showScaled.value, sharedViewModel.showIncompatible.value, sharedViewModel.hearted.value) {
@@ -138,7 +136,6 @@ fun AppStoreCollectionScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
         Column {
             AppsFilterRow(
-                watchType = watchType,
                 selectedType = null,
                 sharedLockerViewModel = sharedViewModel,
                 showWatchfaceOrderSetting = false,

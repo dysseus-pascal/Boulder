@@ -341,6 +341,16 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
     }
 }
 
+fun WatchType.modelDescription() = when (this) {
+    WatchType.APLITE -> "Pebble"
+    WatchType.BASALT -> "Pebble Time"
+    WatchType.CHALK -> "Pebble Time Round"
+    WatchType.DIORITE -> "Pebble 2"
+    WatchType.EMERY -> "Pebble Time 2"
+    WatchType.FLINT -> "Pebble 2 Duo"
+    WatchType.GABBRO -> "Pebble Round 2"
+}
+
 @Composable
 fun lastConnectedWatch(): KnownPebbleDevice? {
     val libPebble = rememberLibPebble()
@@ -715,7 +725,6 @@ private var hasShownScrollHint = false
 
 @Composable
 fun AppsFilterRow(
-    watchType: WatchType,
     selectedType: MutableState<AppType>?,
     sharedLockerViewModel: SharedLockerViewModel,
     showWatchfaceOrderSetting: Boolean,
@@ -788,7 +797,7 @@ fun AppsFilterRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            if (watchType.performsScaling()) {
+            if (sharedLockerViewModel.watchType.value.performsScaling()) {
                 FilterChip(
                     selected = sharedLockerViewModel.showScaled.value,
                     onClick = {
@@ -872,6 +881,36 @@ fun AppsFilterRow(
                                         )
                                 },
                                 leadingIcon = if (mode == selectedOrderMode) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                } else { null },
+                            )
+                        }
+                    }
+                }
+            }
+            if (sharedLockerViewModel.showWatchTypeDropdown.value) {
+                val watchTypeExpanded = remember { mutableStateOf(false) }
+                Box(modifier = Modifier.padding(horizontal = 4.dp)) {
+                    FilterChip(
+                        onClick = { watchTypeExpanded.value = !watchTypeExpanded.value },
+                        label = { Text(sharedLockerViewModel.watchType.value.modelDescription()) },
+                        selected = false,
+                    )
+                    DropdownMenu(
+                        expanded = watchTypeExpanded.value,
+                        onDismissRequest = { watchTypeExpanded.value = false }
+                    ) {
+                        WatchType.entries.forEach { watchType ->
+                            DropdownMenuItem(
+                                onClick = { sharedLockerViewModel.watchType.value = watchType },
+                                text = { Text(watchType.modelDescription()) },
+                                leadingIcon = if (watchType ==  sharedLockerViewModel.watchType.value) {
                                     {
                                         Icon(
                                             imageVector = Icons.Filled.Done,

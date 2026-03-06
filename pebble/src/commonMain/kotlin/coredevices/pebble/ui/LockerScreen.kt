@@ -140,12 +140,27 @@ class SharedLockerViewModel : ViewModel() {
     val showScaled = mutableStateOf(true)
     val hearted = mutableStateOf(false)
     val orderWatchfacesByLastUsed = mutableStateOf(true)
+    val watchType = mutableStateOf(WatchType.EMERY)
+    val showWatchTypeDropdown = mutableStateOf(false)
+    private val haveSetWatchType = mutableStateOf(false)
 
     @Composable
     fun Init() {
         val libPebble = rememberLibPebble()
         val config by libPebble.config.collectAsState()
         orderWatchfacesByLastUsed.value = config.watchConfig.orderWatchfacesByLastUsed
+        val lastConnectedWatch = lastConnectedWatch()
+        if (lastConnectedWatch != null) {
+            if (lastConnectedWatch is ConnectedPebbleDevice) {
+                watchType.value = lastConnectedWatch.watchType.watchType
+            } else if (!haveSetWatchType.value) {
+                // Only set value for "last connected" once (will inherit if actually connected +
+                // don't want to override manual selection)
+                watchType.value = lastConnectedWatch.watchType.watchType
+            }
+        }
+        showWatchTypeDropdown.value = lastConnectedWatch !is ConnectedPebbleDevice
+        haveSetWatchType.value = true
     }
 }
 
@@ -219,7 +234,6 @@ fun LockerScreen(
         val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
         val lastConnectedWatch = lastConnectedWatch()
-        val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val appContext = koinInject<AppContext>()
         val launchInstallAppDialog = rememberOpenDocumentLauncher {
             it?.firstOrNull()?.let { file ->
@@ -274,7 +288,7 @@ fun LockerScreen(
                 )
             }
             topBarParams.title(title)
-            viewModel.maybeRefreshStore(watchType)
+            viewModel.maybeRefreshStore(sharedViewModel.watchType.value)
             launch {
                 topBarParams.scrollToTop.collect {
                     val listState = if (viewModel.searchState.query.isNotEmpty()) {
@@ -304,7 +318,7 @@ fun LockerScreen(
 
         LaunchedEffect(viewModel.searchState.query, viewModel.type.value) {
             if (viewModel.searchState.query.isNotEmpty()) {
-                viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type.value)
+                viewModel.searchStore(viewModel.searchState.query, sharedViewModel.watchType.value, platform, viewModel.type.value)
             }
         }
         val currentHearts = currentHearts()
@@ -312,13 +326,13 @@ fun LockerScreen(
             currentHearts = currentHearts,
             type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
-            watchType = watchType,
+            watchType = sharedViewModel.watchType.value,
             showIncompatible = sharedViewModel.showIncompatible.value,
             showScaled = sharedViewModel.showScaled.value,
             hearted = sharedViewModel.hearted.value,
             limit = 25,
         )
-        val activeWatchface = loadActiveWatchface(watchType)
+        val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value)
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
@@ -328,7 +342,6 @@ fun LockerScreen(
         Scaffold {
             Column {
                 AppsFilterRow(
-                    watchType = watchType,
                     selectedType = viewModel.type,
                     sharedLockerViewModel = sharedViewModel,
                     showWatchfaceOrderSetting = viewModel.type.value == AppType.Watchface,
@@ -362,7 +375,7 @@ fun LockerScreen(
                         viewModel.lockerIsRefreshing = true
                         logger.v { "set isRefreshing to true" }
                         val lockerFinished = libPebble.requestLockerSync()
-                        viewModel.refreshStore(watchType, useCache = false)
+                        viewModel.refreshStore(sharedViewModel.watchType.value, useCache = false)
                         scope.launch {
                             lockerFinished.await()
                             viewModel.lockerIsRefreshing = false
@@ -545,7 +558,7 @@ fun LockerScreen(
                                         remember(
                                             home,
                                             collection,
-                                            watchType,
+                                            sharedViewModel.watchType.value,
                                             lockerEntries,
                                             sharedViewModel.showScaled.value,
                                             viewModel.type.value,
@@ -555,7 +568,7 @@ fun LockerScreen(
                                                 home.applications.find { app ->
                                                     app.id == appId
                                                 }?.asCommonApp(
-                                                    watchType,
+                                                    sharedViewModel.watchType.value,
                                                     platform,
                                                     source,
                                                     home.categories

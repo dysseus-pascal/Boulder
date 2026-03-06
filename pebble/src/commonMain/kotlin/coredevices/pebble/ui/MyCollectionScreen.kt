@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,16 +33,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
 import coredevices.pebble.rememberLibPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
-import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -66,8 +62,6 @@ fun MyCollectionScreen(
                 .firstOrNull()
         }
     }
-    val lastConnectedWatch by watchesFiltered.collectAsState(null)
-    val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
     val searchState = rememberSearchState()
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(searchState)
@@ -79,7 +73,7 @@ fun MyCollectionScreen(
         currentHearts = currentHearts,
         type = appType,
         searchQuery = searchState.query,
-        watchType = watchType,
+        watchType = sharedViewModel.watchType.value,
         showIncompatible = sharedViewModel.showIncompatible.value,
         showScaled = sharedViewModel.showScaled.value,
         hearted = sharedViewModel.hearted.value,
@@ -126,7 +120,6 @@ fun MyCollectionScreen(
 
     Column {
         AppsFilterRow(
-            watchType = watchType,
             selectedType = null,
             sharedLockerViewModel = sharedViewModel,
             showWatchfaceOrderSetting = appType == AppType.Watchface,

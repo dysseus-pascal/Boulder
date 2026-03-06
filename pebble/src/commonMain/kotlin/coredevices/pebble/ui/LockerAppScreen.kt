@@ -197,12 +197,13 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         ) ?: mutableStateOf(null)
         val appIsRunning = runningApp == uuid
         val connected = lastConnectedWatch is ConnectedPebbleDevice
-        val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val viewModel = koinViewModel<LockerAppViewModel>()
+        val sharedViewModel: SharedLockerViewModel = koinInject()
+        sharedViewModel.Init()
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
-        val lockerEntry = loadLockerEntry(uuid, watchType)
+        val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
         val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
             lockerEntry ?: viewModel.selectedStoreEntry
         }
@@ -218,14 +219,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             if (storeId != null && storeSource != null) {
                 viewModel.loadAppFromStore(
                     id = storeId,
-                    watchType = watchType,
+                    watchType = sharedViewModel.watchType.value,
                     source = storeSource,
                     useCache = useCache,
                 )
             }
         }
 
-        LaunchedEffect(storeId, storeSource, watchType) {
+        LaunchedEffect(storeId, storeSource, sharedViewModel.watchType.value) {
             reloadFromStore(useCache = true)
         }
 

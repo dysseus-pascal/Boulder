@@ -79,7 +79,11 @@ class NotificationHandler(
     }
 
     fun getNotification(itemId: Uuid): LibPebbleNotification? {
-        return inflightNotifications.values.firstOrNull { it.uuid == itemId }
+        return inflightNotifications.values.firstOrNull {
+            it.uuid == itemId
+        } ?: inflightNotifications.values.firstOrNull {
+            itemId in it.previousUuids
+        }
     }
 
     private val _channelChanged = MutableSharedFlow<Unit>()
@@ -190,9 +194,10 @@ class NotificationHandler(
         app: NotificationAppItem,
         channel: ChannelItem?,
     ): NotificationResult {
+        val previousUuids = findPreviousUuids(sbn)
         for (processor in notificationProcessors) {
             try {
-                when (val result = processor.extractNotification(sbn, app, channel)) {
+                when (val result = processor.extractNotification(sbn, app, channel, previousUuids)) {
                     is NotificationResult.Extracted -> {
                         verboseLog { "Notification from ${sbn.packageName.obfuscate(privateLogger)} extracted by ${processor::class.simpleName}" }
                         return result
@@ -207,6 +212,14 @@ class NotificationHandler(
             }
         }
         return NotificationResult.NotProcessed
+    }
+
+    private fun findPreviousUuids(sbn: StatusBarNotification): List<Uuid> {
+        val match = inflightNotifications[sbn.key]
+        if (match == null) {
+            return emptyList()
+        }
+        return listOf(match.uuid) + match.previousUuids
     }
 
 //    fun setActiveNotifications(notifications: List<StatusBarNotification>) =

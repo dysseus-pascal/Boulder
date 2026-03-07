@@ -33,6 +33,8 @@ data class LibPebbleNotification(
     val people: List<ContactEntity>,
     val vibrationPattern: List<UInt>?,
     val color: Int? = null, // ARGB
+    /** Previous timeline notification UUIDs for which we should also handle actions */
+    val previousUuids: List<Uuid>,
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&

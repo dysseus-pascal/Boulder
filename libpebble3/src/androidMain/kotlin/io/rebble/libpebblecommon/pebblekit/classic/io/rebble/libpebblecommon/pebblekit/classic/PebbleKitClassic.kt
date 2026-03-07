@@ -6,6 +6,7 @@ import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
@@ -32,6 +33,7 @@ import kotlin.uuid.toKotlinUuid
 class PebbleKitClassic(
     private val device: CompanionAppDevice,
     val appInfo: PbwAppInfo,
+    private val connectionScope: ConnectionCoroutineScope,
 ) :
     LibPebbleKoinComponent, CompanionApp {
     companion object {
@@ -124,7 +126,7 @@ class PebbleKitClassic(
         }
     }
 
-    override suspend fun start(connectionScope: CoroutineScope) {
+    override suspend fun start() {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PebbleKitClassic: ${throwable.message}" }
         }

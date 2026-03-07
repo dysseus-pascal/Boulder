@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -56,6 +57,7 @@ class PKJSApp(
     private val jsPath: Path,
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
+    private val connectionScope: ConnectionCoroutineScope,
 ): LibPebbleKoinComponent, CompanionApp {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
@@ -157,7 +159,7 @@ class PKJSApp(
             )
         }
 
-    override suspend fun start(connectionScope: CoroutineScope) {
+    override suspend fun start() {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PKJSApp: ${throwable.message}" }
         }

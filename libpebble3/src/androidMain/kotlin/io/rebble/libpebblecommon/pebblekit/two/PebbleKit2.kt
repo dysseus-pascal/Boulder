@@ -4,6 +4,8 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.UserFacingError
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
@@ -38,6 +40,8 @@ class PebbleKit2(
     private val device: CompanionAppDevice,
     private val appInfo: PbwAppInfo,
     private val pkjsRunning: Boolean,
+    private val libpebbleScope: LibPebbleCoroutineScope,
+    private val connectionScope: ConnectionCoroutineScope,
 ) : LibPebbleKoinComponent, CompanionApp {
     private val nextTransactionId = atomic(0)
     private val targetPackages = appInfo.companionApp?.android?.apps.orEmpty().mapNotNull { it.pkg }
@@ -48,7 +52,7 @@ class PebbleKit2(
     private var runningScope: CoroutineScope? = null
     private var incomingConsumer: Job? = null
 
-    override suspend fun start(connectionScope: CoroutineScope) {
+    override suspend fun start() {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PebbleKit2 $uuid: ${throwable.message}" }
         }
@@ -83,22 +87,19 @@ class PebbleKit2(
     }
 
     override suspend fun stop() {
-        // We have to stop the incoming message consumer immediately, otherwise we might consume future messages before the service
-        // is closed.
         incomingConsumer?.cancel()
 
-        runningScope?.launch {
+        val scope = runningScope
+        runningScope = null
+
+        // Cancel the scope immediately to release the AppMessage channel
+        scope?.cancel()
+
+        // Give the companion app a couple of seconds to clean up before closing the connection
+        libpebbleScope.launch {
             connector.sendOnAppClosed(uuid.toJavaUuid(), WatchIdentifier(device.watchInfo.serial))
-        }
-
-        runningScope?.launch {
-            withContext(NonCancellable) {
-                // Close the service within a couple of seconds to allow the service to perform clean up operations
-                delay(5.seconds)
-                connector.close()
-            }
-
-            runningScope?.cancel()
+            delay(5.seconds)
+            connector.close()
         }
     }
 

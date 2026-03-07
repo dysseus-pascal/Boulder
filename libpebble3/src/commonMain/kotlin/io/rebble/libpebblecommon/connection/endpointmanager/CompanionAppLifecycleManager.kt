@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -35,8 +36,9 @@ class CompanionAppLifecycleManager(
     private val appRunStateService: AppRunStateService,
     private val appMessagesService: AppMessageService,
     private val locker: Locker,
-    private val scope: ConnectionCoroutineScope,
+    private val connectionScope: ConnectionCoroutineScope,
     private val libPebbleConfigFlow: LibPebbleConfigFlow,
+    private val libpebbleCoroutineScope: LibPebbleCoroutineScope
 ): ConnectedPebble.PKJS, ConnectedPebble.CompanionAppControl {
     companion object {
         private val logger = Logger.withTag(CompanionAppLifecycleManager::class.simpleName!!)
@@ -57,7 +59,7 @@ class CompanionAppLifecycleManager(
         runningApps.value = emptyList()
     }
 
-    private suspend fun handleNewRunningApp(lockerEntry: LockerEntry, scope: CoroutineScope) {
+    private suspend fun handleNewRunningApp(lockerEntry: LockerEntry) {
         try {
             val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, lockerEntry.version, locker))
             if (runningApps.value.isNotEmpty()) {
@@ -67,7 +69,7 @@ class CompanionAppLifecycleManager(
 
             runningApps.value = createCompanionApps(pbw, lockerEntry).also { apps ->
                 apps.forEach {
-                    it.start(scope)
+                    it.start()
                 }
             }
         } catch (e: CancellationException) {
@@ -91,6 +93,7 @@ class CompanionAppLifecycleManager(
                     jsPath,
                     pbw.info,
                     lockerEntry,
+                    connectionScope,
                 )
             } else null
             pkjsApp?.let { add(it) }
@@ -99,6 +102,8 @@ class CompanionAppLifecycleManager(
                     device = device,
                     appInfo = pbw.info,
                     pkjsRunning = pkjsApp != null,
+                    connectionCoroutineScope = connectionScope,
+                    libPebbleCoroutineScope = libpebbleCoroutineScope,
                 )?.let {
                     add(it)
                 }
@@ -118,14 +123,14 @@ class CompanionAppLifecycleManager(
                 val lockerEntry = lockerEntryDao.getEntry(it)
                 lockerEntry?.let {
                     if (!it.systemApp) {
-                        handleNewRunningApp(lockerEntry, scope)
+                        handleNewRunningApp(lockerEntry)
                     }
                 }
             }
         }.onCompletion {
             // Unsure if this is needed
             handleAppStop()
-        }.launchIn(scope)
+        }.launchIn(connectionScope)
     }
 }
 
@@ -150,4 +155,6 @@ expect fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
     appInfo: PbwAppInfo,
     pkjsRunning: Boolean,
+    libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    connectionCoroutineScope: ConnectionCoroutineScope,
 ): CompanionApp?

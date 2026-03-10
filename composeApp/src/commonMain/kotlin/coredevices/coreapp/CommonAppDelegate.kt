@@ -1,8 +1,7 @@
 package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
-import com.cactus.CactusSTT
-import com.cactus.services.CactusConfig
+import coredevices.util.transcription.CactusModelPathProvider
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
@@ -59,23 +58,12 @@ class CommonAppDelegate(
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
 
-    /**
-     * Fixes case people updated to new version with the setting for model after using the previous default,
-     * so we don't try to init with the new default they won't have downloaded.
-     */
-    private fun migrateCactusModelSetting() {
-        GlobalScope.launch {
-            try {
-                if (!settings.hasKey("cactus_stt_model")) {
-                    val model = CactusSTT().getVoiceModels()
-                        .firstOrNull { it.isDownloaded }
-                    model?.let {
-                        settings.putString("cactus_stt_model", it.slug)
-                    }
-                }
-            } catch (e: Exception) {
-                logger.e(e) { "migrateCactusModelSetting failed" }
-            }
+    private fun initCactus() {
+        try {
+            val modelProvider = org.koin.mp.KoinPlatform.getKoin().get<CactusModelPathProvider>()
+            modelProvider.initTelemetry()
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus telemetry init skipped" }
         }
     }
 
@@ -104,9 +92,7 @@ class CommonAppDelegate(
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)
         }
-        CactusConfig.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
-        CommonBuildKonfig.CACTUS_PRO_KEY?.let { CactusConfig.setProKey(it) }
-        migrateCactusModelSetting()
+        initCactus()
         pushMessaging.init()
         bugReports.init()
         GlobalScope.launch(Dispatchers.Default) {

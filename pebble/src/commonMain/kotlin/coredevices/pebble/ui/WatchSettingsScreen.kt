@@ -1100,6 +1100,7 @@ please disable the option.""".trimIndent(),
                             CactusSTTMode.RemoteOnly -> "Disabled"
                             CactusSTTMode.RemoteFirst -> "Fallback only"
                             CactusSTTMode.LocalOnly -> "Forced"
+                            CactusSTTMode.LocalFirst -> "Preferred"
                         }
                     },
                 ),

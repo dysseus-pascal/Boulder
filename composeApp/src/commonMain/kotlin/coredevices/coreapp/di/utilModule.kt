@@ -26,6 +26,7 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
+import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
@@ -79,7 +80,18 @@ val utilModule = module {
     singleOf(::ModelManager)
     singleOf(::OAuthRedirectHandler)
     singleOf(::WisprFlowAuth)
-    singleOf(::CactusTranscriptionService) bind TranscriptionService::class
+    single {
+        CactusTranscriptionService(
+            get(),
+            get(),
+            getOrNull<CactusModelPathProvider>() ?: object : CactusModelPathProvider {
+                override suspend fun getSTTModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override suspend fun getLMModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override fun initTelemetry() {}
+            },
+            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
+        )
+    } bind TranscriptionService::class
     singleOf(::WisprFlowTranscriptionService)
     singleOf(::UsersDaoImpl) bind UsersDao::class
 }

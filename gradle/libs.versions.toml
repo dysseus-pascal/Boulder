@@ -50,7 +50,6 @@ coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.38.0"
 coredevices-speex = "1946c84"
-cactus = "1.4.3-beta"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
 compass = "2.4.1"
@@ -137,7 +136,6 @@ firebase-storage = { group = "dev.gitlive", name = "firebase-storage", version.r
 kmpnotifier = { group = "io.github.mirzemehdi", name = "kmpnotifier", version.ref = "kmpnotifier" }
 mixpanel-android = { module = "com.mixpanel.android:mixpanel-android", version.ref = "mixpanel-android" }
 webview = { module = "io.github.kevinnzou:compose-webview-multiplatform", version.ref = "webview" }
-cactus = { group = "com.cactuscompute", name = "cactus", version.ref = "cactus" }
 coil = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }

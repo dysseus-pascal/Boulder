@@ -19,7 +19,7 @@ import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
-import com.cactus.CactusContextInitializer
+import coredevices.util.transcription.CactusModelPathProvider
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.mmk.kmpnotifier.notification.NotifierManager
@@ -70,7 +70,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         initLogging()
         logger.i { "onCreate() version = ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${BuildConfig.BUILD_TYPE}" }
         setupExceptionHandler()
-        CactusContextInitializer.initialize(this.applicationContext)
+        // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()
         configureStrictMode()
         NotifierManager.initialize(

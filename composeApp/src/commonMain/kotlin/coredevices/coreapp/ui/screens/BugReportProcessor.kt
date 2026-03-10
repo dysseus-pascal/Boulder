@@ -144,7 +144,7 @@ class BugReportProcessor(
             val configuredModel = transcriptionService.configuredModel
             val configuredMode = transcriptionService.configuredMode
             val lastSuccessfulMode = when (transcriptionService.lastSuccessfulMode) {
-                CactusSTTMode.LocalOnly -> "Local"
+                CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> "Local"
                 CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
                 null -> "None"
             }

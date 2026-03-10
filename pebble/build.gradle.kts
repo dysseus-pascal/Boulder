@@ -120,7 +120,7 @@ kotlin {
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
                 implementation(libs.coredevices.speex)
-                api(libs.cactus)
+                api(project(":cactus"))
                 api(libs.algolia)
                 implementation(libs.reorderable)
                 implementation(libs.compass.geocoder)

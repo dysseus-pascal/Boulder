@@ -16,8 +16,7 @@ import android.os.Build
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import co.touchlab.kermit.Logger
-import com.cactus.CactusLM
-import com.cactus.CactusSTT
+import coredevices.util.transcription.CactusModelPathProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -200,10 +199,11 @@ class ModelDownloadService : JobService(), KoinComponent {
     }
 
     private suspend fun downloadModel(modelSlug: String, stt: Boolean) {
+        val modelProvider: CactusModelPathProvider by inject()
         if (stt) {
-            CactusSTT().downloadModel(modelSlug)
+            modelProvider.getSTTModelPath()
         } else {
-            CactusLM().downloadModel(modelSlug)
+            modelProvider.getLMModelPath()
         }
     }
 

@@ -123,7 +123,7 @@ kotlin {
                 implementation(libs.webview)
                 implementation(libs.uri)
                 implementation(compose.components.uiToolingPreview)
-                implementation(libs.cactus)
+                implementation(project(":cactus"))
                 implementation(project(":libpebble3"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
@@ -202,6 +202,9 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "qwen3-0.6")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "Qwen3-0.6B")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v1.10")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v1.9")
     }
 }

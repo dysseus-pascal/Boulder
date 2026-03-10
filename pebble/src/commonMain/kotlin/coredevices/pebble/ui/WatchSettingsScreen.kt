@@ -48,6 +48,9 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,10 +95,13 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
+import coredevices.util.STTConfig
 import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelManager
+import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -106,6 +112,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -230,6 +237,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val currentTheme by themeProvider.theme.collectAsState()
         val pebbleFeatures = koinInject<PebbleFeatures>()
         val pebbleAccount = koinInject<PebbleAccount>()
+        val localSnackbarHostState = remember { SnackbarHostState() }
         val loggedIn by pebbleAccount.loggedIn.collectAsState()
         val coreUser by Firebase.auth.authStateChanged.map {
             it?.emailOrNull
@@ -239,6 +247,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         val appContext = koinInject<AppContext>()
         val appVersion = koinInject<CoreAppVersion>()
         val platform = koinInject<Platform>()
+        val modelManager: ModelManager = koinInject()
         val nextBugReportContext: NextBugReportContext = koinInject()
         val appUpdate: AppUpdate = koinInject()
         val updateState by appUpdate.updateAvailable.collectAsState()
@@ -251,6 +260,77 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         var showHealthStatsDialog by remember { mutableStateOf(false) }
         var showSignInDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
+        var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
+        val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
+        val recommendedSTTModel = modelManager.getRecommendedSTTModel()
+        pendingSTTModeDialog?.let { pendingSTTMode ->
+            ModelDownloadPromptDialog(
+                isLite = recommendedSTTModel is RecommendedModel.Lite,
+                onGetRecommended = {
+                    scope.launch {
+                        val models = modelManager.getAvailableSTTModels()
+                        val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
+                            ?: run {
+                                topBarParams.showSnackbar("Error occurred. Please try again later.")
+                                logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
+                                pendingSTTModeDialog = null
+                                return@launch
+                            }
+                        if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
+                            topBarParams.showSnackbar("Error starting download. Please try again later.")
+                            logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
+                        } else {
+                            coreConfigHolder.update(
+                                coreConfig.copy(
+                                    sttConfig = STTConfig(
+                                        mode = pendingSTTMode,
+                                        modelName = recommendedModel.slug
+                                    )
+                                )
+                            )
+                        }
+                        pendingSTTModeDialog = null
+                    }
+                },
+                onDismiss = {
+                    pendingSTTModeDialog = null
+                }
+            )
+        }
+        var modelSnackbarJob by remember { mutableStateOf<Job?>(null) }
+        LaunchedEffect(modelDownloadStatus) {
+            when (modelDownloadStatus) {
+                is ModelDownloadStatus.Idle -> {
+                    modelSnackbarJob?.let {
+                        it.cancel()
+                        modelSnackbarJob = null
+                    }
+                }
+                is ModelDownloadStatus.Cancelled -> {
+                    modelSnackbarJob?.let {
+                        it.cancel()
+                        modelSnackbarJob = null
+                    }
+                }
+                is ModelDownloadStatus.Failed -> {
+                    modelSnackbarJob?.let {
+                        it.cancel()
+                        modelSnackbarJob = null
+                    }
+                    localSnackbarHostState.showSnackbar("Failed to download model")
+                }
+                is ModelDownloadStatus.Downloading -> {
+                    if (modelSnackbarJob?.isActive != true) {
+                        modelSnackbarJob = scope.launch {
+                            localSnackbarHostState.showSnackbar(
+                                "Downloading model...",
+                                duration = SnackbarDuration.Indefinite
+                            )
+                        }
+                    }
+                }
+            }
+        }
         if (showHealthStatsDialog) {
             HealthStatsDialog(
                 libPebble = libPebble,
@@ -325,7 +405,6 @@ please disable the option.""".trimIndent(),
         val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
         val appUpdateTracker: AppUpdateTracker = koinInject()
         val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
-        val modelManager: ModelManager = koinInject()
         val hasOfflineModels = remember {
             modelManager.getDownloadedModelSlugs().any { it.startsWith("whisper", false) }
         }
@@ -1003,16 +1082,16 @@ please disable the option.""".trimIndent(),
                     items = CactusSTTMode.entries,
                     selectedItem = coreConfig.sttConfig.mode,
                     onItemSelected = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                sttConfig = coreConfig.sttConfig.copy(
-                                    mode = it
+                        if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
+                            pendingSTTModeDialog = it
+                        } else {
+                            coreConfigHolder.update(
+                                coreConfig.copy(
+                                    sttConfig = coreConfig.sttConfig.copy(
+                                        mode = it
+                                    )
                                 )
                             )
-                        )
-                        if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
-                            topBarParams.showSnackbar("Please download a model for speech recognition to work offline")
-                            navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute(true))
                         }
                     },
                     itemText = { mode ->
@@ -1036,7 +1115,7 @@ please disable the option.""".trimIndent(),
                     section = Section.Speech,
                     show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute())
+                        navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
                 ),
                 basicSettingsToggleItem(
@@ -1348,6 +1427,7 @@ please disable the option.""".trimIndent(),
                     }
                 }
             },
+            snackbarHost = { SnackbarHost(localSnackbarHostState) }
         ) {
             Column {
                 // Only show tab buttons at top of there is more than one

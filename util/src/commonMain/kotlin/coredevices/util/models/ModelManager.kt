@@ -87,17 +87,23 @@ class ModelManager(
         }
     }
 
-    fun getRecommendedSTTModel(): String {
+    fun getRecommendedSTTModel(): RecommendedModel {
         return when {
-            platform.supportsNPU() -> "whisper-medium-pro"
-            platform.supportsHeavyCPU() -> "whisper-small"
-            else -> "whisper-base"
+            platform.supportsNPU() -> RecommendedModel.Standard("whisper-medium-pro")
+            platform.supportsHeavyCPU() -> RecommendedModel.Standard("whisper-small")
+            else -> RecommendedModel.Lite("whisper-base")
         }
     }
 
     fun getRecommendedLanguageModel(): String {
         return "qwen3-0.6"
     }
+}
+
+sealed class RecommendedModel {
+    abstract val modelSlug: String
+    data class Lite(override val modelSlug: String) : RecommendedModel()
+    data class Standard(override val modelSlug: String) : RecommendedModel()
 }
 
 data class ModelInfo(

@@ -35,17 +35,24 @@ class ModelManager(
     suspend fun getAvailableSTTModels(): List<ModelInfo> {
         val sttModel = CommonBuildKonfig.CACTUS_STT_MODEL
         val sizeMB = modelPathProvider?.let {
-            (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
-        } ?: 0
+            val onDisk = (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
+            if (onDisk > 0) onDisk else KNOWN_STT_SIZE_MB
+        } ?: KNOWN_STT_SIZE_MB
         return listOf(ModelInfo(slug = sttModel, sizeInMB = sizeMB))
     }
 
     suspend fun getAvailableLanguageModels(): List<ModelInfo> {
         val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
         val sizeMB = modelPathProvider?.let {
-            (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
-        } ?: 0
+            val onDisk = (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
+            if (onDisk > 0) onDisk else KNOWN_LM_SIZE_MB
+        } ?: KNOWN_LM_SIZE_MB
         return listOf(ModelInfo(slug = lmModel, sizeInMB = sizeMB))
+    }
+
+    companion object {
+        private const val KNOWN_STT_SIZE_MB = 670
+        private const val KNOWN_LM_SIZE_MB = 530
     }
 
     fun getRecommendedSTTMode(): CactusSTTMode {

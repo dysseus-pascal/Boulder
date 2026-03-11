@@ -32,7 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
@@ -217,7 +217,7 @@ class BugReportProcessor(
 
     fun updateBugReportWithNewLogs(bugReportId: String) {
         processBugReport(service = true) { state, userIdToken ->
-            state.value = BugReportState.GatheringWatchLogs
+            state.tryEmit(BugReportState.GatheringWatchLogs)
             val logsPath = logWriter.dumpLogs()
             val attachments = getPebbleLogFile() +
                     getPebbleCoreDump() +
@@ -234,11 +234,11 @@ class BugReportProcessor(
                 googleIdToken = userIdToken,
             )
             if (uploadResult.isSuccess) {
-                state.value = BugReportState.BugReportResult.Success(bugReportId)
+                state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
             } else {
-                state.value = BugReportState.BugReportResult.Failed(
+                state.tryEmit(BugReportState.BugReportResult.Failed(
                     uploadResult.exceptionOrNull()?.message ?: "Unknown error"
-                )
+                ))
             }
         }
     }
@@ -255,11 +255,11 @@ class BugReportProcessor(
                 googleIdToken = userIdToken,
             )
             if (uploadResult.isSuccess) {
-                state.value = BugReportState.BugReportResult.Success(bugReportId)
+                state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
             } else {
-                state.value = BugReportState.BugReportResult.Failed(
+                state.tryEmit(BugReportState.BugReportResult.Failed(
                     uploadResult.exceptionOrNull()?.message ?: "Unknown error"
-                )
+                ))
             }
         }
     }
@@ -331,7 +331,7 @@ class BugReportProcessor(
                         e.message?.contains("timeout") == true -> "Request timed out. Please try again."
                         else -> "Unable to submit bug report. Please try again later."
                     }
-                    state.value = BugReportState.BugReportResult.Failed(userMessage)
+                    state.tryEmit(BugReportState.BugReportResult.Failed(userMessage))
                     return@processBugReport
                 }
 
@@ -347,8 +347,7 @@ class BugReportProcessor(
 
                 if (bugReportId == null) {
                     logger.e { "No bug report ID returned from server" }
-                    state.value =
-                        BugReportState.BugReportResult.Failed("Bug report created but no ID returned")
+                    state.tryEmit(BugReportState.BugReportResult.Failed("Bug report created but no ID returned"))
                     return@processBugReport
                 }
                 bugReportId
@@ -371,11 +370,11 @@ class BugReportProcessor(
                     googleIdToken = userIdToken,
                 )
                 if (uploadResult.isSuccess) {
-                    state.value = BugReportState.BugReportResult.Success(bugReportId)
+                    state.tryEmit(BugReportState.BugReportResult.Success(bugReportId))
                 } else {
-                    state.value = BugReportState.BugReportResult.Failed(
+                    state.tryEmit(BugReportState.BugReportResult.Failed(
                         uploadResult.exceptionOrNull()?.message ?: "Unknown error"
-                    )
+                    ))
                 }
             } else {
                 // Create a zip file containing all the attachments + parameters to reportBug
@@ -395,16 +394,17 @@ class BugReportProcessor(
                         zipFile.addEntry(ZipEntry(it.fileName), { it.source.readByteArray() })
                     }
                 }
-                state.value = BugReportState.ReadyToShare(
+                state.tryEmit(BugReportState.ReadyToShare(
                     name = filename,
                     file = bugReportFile,
-                )
+                ))
             }
         }
     }
 
-    private fun processBugReport(service: Boolean, block: suspend (state: MutableStateFlow<BugReportState>, userIdToken: String?) -> Unit): Flow<BugReportState> {
-        val state = MutableStateFlow<BugReportState>(BugReportState.Creating)
+    private fun processBugReport(service: Boolean, block: suspend (state: MutableSharedFlow<BugReportState>, userIdToken: String?) -> Unit): Flow<BugReportState> {
+        val state = MutableSharedFlow<BugReportState>(replay = 1, extraBufferCapacity = Int.MAX_VALUE)
+        state.tryEmit(BugReportState.Creating)
         if (service) {
             startForegroundService()
             notifyState("Creating bug report...")
@@ -446,10 +446,10 @@ class BugReportProcessor(
 
     private suspend fun gatherAttachments(
         params: BugReportGenerationParams,
-        state: MutableStateFlow<BugReportState>
+        state: MutableSharedFlow<BugReportState>
     ): List<DocumentAttachment> {
         // Phase 2: Gather attachments (including watch logs/core dump)
-        state.value = BugReportState.GatheringWatchLogs
+        state.tryEmit(BugReportState.GatheringWatchLogs)
 
         // Add full logs as the first attachment (if available)
         val attachments = mutableListOf<DocumentAttachment>()
@@ -533,12 +533,12 @@ class BugReportProcessor(
     }
 
     suspend fun uploadAttachments(
-        state: MutableStateFlow<BugReportState>,
+        state: MutableSharedFlow<BugReportState>,
         bugReportId: String,
         attachments: List<DocumentAttachment>,
         googleIdToken: String?,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        state.value = BugReportState.UploadingAttachments
+        state.tryEmit(BugReportState.UploadingAttachments)
         try {
             logger.d { "Starting upload of ${attachments.size} attachments for bug report $bugReportId" }
 

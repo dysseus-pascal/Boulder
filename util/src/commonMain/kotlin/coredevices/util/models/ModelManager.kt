@@ -2,10 +2,12 @@ package coredevices.util.models
 
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.Platform
+import coredevices.util.transcription.CactusModelPathProvider
 
 class ModelManager(
     private val platform: Platform,
     private val modelDownloadManager: ModelDownloadManager,
+    private val modelPathProvider: CactusModelPathProvider? = null,
 ) {
     val modelDownloadStatus = modelDownloadManager.downloadStatus
 
@@ -22,19 +24,28 @@ class ModelManager(
     }
 
     fun getDownloadedModelSlugs(): List<String> {
-        return listOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+        return modelPathProvider?.getDownloadedModels()
+            ?: listOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
     }
 
     fun deleteModel(modelName: String) {
-        // No-op: vendored models are managed by CactusModelProvider
+        modelPathProvider?.deleteModel(modelName)
     }
 
     suspend fun getAvailableSTTModels(): List<ModelInfo> {
-        return listOf(ModelInfo(slug = CommonBuildKonfig.CACTUS_STT_MODEL))
+        val sttModel = CommonBuildKonfig.CACTUS_STT_MODEL
+        val sizeMB = modelPathProvider?.let {
+            (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
+        } ?: 0
+        return listOf(ModelInfo(slug = sttModel, sizeInMB = sizeMB))
     }
 
     suspend fun getAvailableLanguageModels(): List<ModelInfo> {
-        return listOf(ModelInfo(slug = CommonBuildKonfig.CACTUS_LM_MODEL_NAME))
+        val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val sizeMB = modelPathProvider?.let {
+            (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
+        } ?: 0
+        return listOf(ModelInfo(slug = lmModel, sizeInMB = sizeMB))
     }
 
     fun getRecommendedSTTMode(): CactusSTTMode {

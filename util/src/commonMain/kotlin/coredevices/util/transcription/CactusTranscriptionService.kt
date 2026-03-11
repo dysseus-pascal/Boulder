@@ -83,6 +83,11 @@ class CactusTranscriptionService(
     private suspend fun initIfNeeded() {
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
+        val sttModelName = coredevices.util.CommonBuildKonfig.CACTUS_STT_MODEL
+        if (!modelProvider.isModelDownloaded(sttModelName)) {
+            logger.w { "STT model '$sttModelName' not downloaded, skipping init" }
+            return
+        }
         val start = Clock.System.now()
         if (config.modelName != lastInitedModel) {
             model?.close()

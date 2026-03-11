@@ -77,7 +77,7 @@ val utilModule = module {
     singleOf(::UserConfigDao)
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
-    singleOf(::ModelManager)
+    single { ModelManager(get(), get(), getOrNull()) }
     singleOf(::OAuthRedirectHandler)
     singleOf(::WisprFlowAuth)
     single {
@@ -87,6 +87,10 @@ val utilModule = module {
             getOrNull<CactusModelPathProvider>() ?: object : CactusModelPathProvider {
                 override suspend fun getSTTModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
                 override suspend fun getLMModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override fun isModelDownloaded(modelName: String): Boolean = false
+                override fun getDownloadedModels(): List<String> = emptyList()
+                override fun deleteModel(modelName: String) {}
+                override fun getModelSizeBytes(modelName: String): Long = 0L
                 override fun initTelemetry() {}
             },
             getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()

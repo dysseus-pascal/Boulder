@@ -409,21 +409,24 @@ class BugReportProcessor(
             startForegroundService()
             notifyState("Creating bug report...")
             GlobalScope.launch {
-                state.transformWhile {
-                    emit(it)
-                    it !is BugReportState.BugReportResult
-                }.collect {
-                    when (it) {
-                        BugReportState.Creating -> Unit
-                        BugReportState.GatheringWatchLogs -> notifyState("Gathering watch logs...")
-                        BugReportState.UploadingAttachments -> notifyState("Uploading attachments")
-                        is BugReportState.BugReportResult.Failed -> notifyState("Bug report failed: ${it.error}")
-                        is BugReportState.BugReportResult.Success -> notifyState("Bug report successfully uploaded!")
-                        is BugReportState.ReadyToShare -> Unit
+                try {
+                    state.transformWhile {
+                        emit(it)
+                        it !is BugReportState.BugReportResult
+                    }.collect {
+                        when (it) {
+                            BugReportState.Creating -> Unit
+                            BugReportState.GatheringWatchLogs -> notifyState("Gathering watch logs...")
+                            BugReportState.UploadingAttachments -> notifyState("Uploading attachments")
+                            is BugReportState.BugReportResult.Failed -> notifyState("Bug report failed: ${it.error}")
+                            is BugReportState.BugReportResult.Success -> notifyState("Bug report successfully uploaded!")
+                            is BugReportState.ReadyToShare -> Unit
+                        }
                     }
+                } finally {
+                    logger.d { "Bug report processing complete; stopping service" }
+                    stopForegroundService()
                 }
-                logger.d { "Bug report processing complete; stopping service" }
-                stopForegroundService()
             }
         }
         GlobalScope.launch(Dispatchers.IO) {
@@ -433,7 +436,12 @@ class BugReportProcessor(
                 logger.e(e) { "No user token: ${e.message}" }
                 null
             }
-            block(state, userIdToken)
+            try {
+                block(state, userIdToken)
+            } catch (e: Exception) {
+                logger.e(e) { "Unhandled exception in bug report processing" }
+                state.tryEmit(BugReportState.BugReportResult.Failed("An unexpected error occurred"))
+            }
         }
         return state
     }

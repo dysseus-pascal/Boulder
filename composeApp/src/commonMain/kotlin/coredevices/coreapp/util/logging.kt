@@ -100,14 +100,18 @@ class FileLogWriter : LogWriter(), AutoCloseable {
         val backupTime = Clock.System.now()
         // Rename the existing log file to a backup
         val backupPath = Path(getLogsCacheDir() + "/previous.log.gz")
-        SystemFileSystem.sink(backupPath).buffered().asOkioSink().deflate().use { sink ->
-            SystemFileSystem.source(path).buffered().use { source ->
-                source.transferTo(sink.asKotlinxIoRawSink())
+        try {
+            SystemFileSystem.sink(backupPath).buffered().asOkioSink().deflate().use { gzipSink ->
+                SystemFileSystem.source(path).buffered().use { source ->
+                    source.transferTo(gzipSink.asKotlinxIoRawSink())
+                }
             }
+        } catch (_: Exception) {
+            // Best-effort backup; don't crash the log writer if compression fails
         }
         // Create a new log file
         SystemFileSystem.sink(path, append = false).buffered().use { sink ->
-            sink.append("Log file rolled over at ${backupTime}\n")
+            sink.writeString("Log file rolled over at $backupTime\n")
             sink.flush()
         }
     }
@@ -134,7 +138,13 @@ class FileLogWriter : LogWriter(), AutoCloseable {
                     logMutex.withLock { // Serialize access to the sink
                         SystemFileSystem.metadataOrNull(path)?.let {
                             if (it.size > MAX_LOG_FILE_SIZE) {
-                                rollover(path)
+                                logContext.sink.flush()
+                                logContext.sink.closeQuietly()
+                                try {
+                                    rollover(path)
+                                } finally {
+                                    logContext.sink = SystemFileSystem.sink(path, true).buffered()
+                                }
                             }
                         }
                         writeLogEntryToFile(logEntry)

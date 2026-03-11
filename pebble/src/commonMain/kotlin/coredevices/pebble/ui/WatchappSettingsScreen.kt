@@ -100,7 +100,7 @@ fun WatchappSettingsScreen(
         val interceptor = remember {
             SettingsRequestInterceptor(
                 onSuccess = { data ->
-                    persistLocalStorage(state.nativeWebView)
+                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     pkjsSession?.triggerOnWebviewClosed(data) ?: run {
                         Logger.w { "No PKJS session found for $watchIdentifier, cannot handle webview close" }
                     }
@@ -109,7 +109,7 @@ fun WatchappSettingsScreen(
                     }
                 },
                 onError = {
-                    persistLocalStorage(state.nativeWebView)
+                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
                     }
@@ -120,7 +120,8 @@ fun WatchappSettingsScreen(
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Loading) {
                 Logger.d("WatchappSettingsScreen") { "Page load finished, applying shims" }
-                restoreLocalStorage(state.nativeWebView)
+                val nativeWebView = runCatching { state.nativeWebView }.getOrNull() ?: return@LaunchedEffect
+                restoreLocalStorage(nativeWebView)
             }
         }
 

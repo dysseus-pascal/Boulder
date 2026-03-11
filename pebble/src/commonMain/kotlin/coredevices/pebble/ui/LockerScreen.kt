@@ -97,6 +97,7 @@ import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.SearchPagingSource
 import coredevices.pebble.services.StoreCategory
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
@@ -180,19 +181,36 @@ class LockerViewModel(
         val finishedAll: List<Deferred<Unit>> = AppType.entries.map {
             val finished = CompletableDeferred<Unit>()
             viewModelScope.launch {
-                val result = withContext(Dispatchers.IO) {
-                    pebbleWebServices.fetchAppStoreHome(it, platform, enabledOnly = true, useCache = useCache)
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        pebbleWebServices.fetchAppStoreHome(it, platform, enabledOnly = true, useCache = useCache)
+                    }
+                    if (!result.isEmpty()) {
+                        storeHomeAllFeeds[it] = result
+                    }
+                } finally {
+                    finished.complete(Unit)
                 }
-                if (!result.isEmpty()) {
-                    storeHomeAllFeeds[it] = result
-                }
-                finished.complete(Unit)
             }
             finished
         }
         return viewModelScope.async {
             finishedAll.awaitAll()
             storeIsRefreshing = false
+        }
+    }
+
+    fun startLockerRefresh(libPebble: LibPebble, watchType: WatchType) {
+        lockerIsRefreshing = true
+        logger.v { "set isRefreshing to true" }
+        val lockerFinished = libPebble.requestLockerSync()
+        refreshStore(watchType, useCache = false)
+        viewModelScope.launch {
+            try {
+                lockerFinished.await()
+            } finally {
+                lockerIsRefreshing = false
+            }
         }
     }
 
@@ -370,14 +388,7 @@ fun LockerScreen(
                     }
                 } else {
                     PullToRefreshBox(isRefreshing = viewModel.storeIsRefreshing || viewModel.lockerIsRefreshing, onRefresh = {
-                        viewModel.lockerIsRefreshing = true
-                        logger.v { "set isRefreshing to true" }
-                        val lockerFinished = libPebble.requestLockerSync()
-                        viewModel.refreshStore(sharedViewModel.watchType.value, useCache = false)
-                        scope.launch {
-                            lockerFinished.await()
-                            viewModel.lockerIsRefreshing = false
-                        }
+                        viewModel.startLockerRefresh(libPebble, sharedViewModel.watchType.value)
                     }) {
                         val myApps by remember(lockerEntries) {
                             derivedStateOf {

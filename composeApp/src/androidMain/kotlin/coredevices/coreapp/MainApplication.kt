@@ -141,11 +141,12 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
             }
             .components {
                 add(SvgDecoder.Factory())
-                if (SDK_INT >= 28) {
-                    add(AnimatedImageDecoder.Factory())
-                } else {
+                // Trying to see if not using AnimatedImageDecoder fixes memory leaks
+//                if (SDK_INT >= 28) {
+//                    add(AnimatedImageDecoder.Factory())
+//                } else {
                     add(GifDecoder.Factory())
-                }
+//                }
             }
             .build()
     }

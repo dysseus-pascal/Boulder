@@ -16,12 +16,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
 interface UsersDao {
-    val user: Flow<User?>
+    val user: Flow<PebbleUser?>
     suspend fun updateNotionToken(
         notionToken: String?
     )
@@ -35,12 +36,17 @@ interface UsersDao {
     fun init()
 }
 
+data class PebbleUser(
+    val isAnonymousUser: Boolean,
+    val user: User,
+)
+
 class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao {
     private val userDoc get() = authenticatedId?.let { db.document(it) }
     private val logger = Logger.withTag("UsersDaoImpl")
 
-    private val _user = MutableSharedFlow<User?>(replay = 1)
-    override val user: Flow<User?> = _user.asSharedFlow()
+    private val _user = MutableSharedFlow<PebbleUser?>(replay = 1)
+    override val user: Flow<PebbleUser?> = _user.asSharedFlow()
 
     override fun init() {
         GlobalScope.launch {
@@ -79,12 +85,21 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
                                 }
                             }
                             .filter { it.exists }
+                            .map { snapshot ->
+                                // COMBINE BOTH SOURCES HERE:
+                                // firebaseUser provides 'isAnonymous', snapshot provides the Firestore data
+                                val userData = snapshot.data<User>()
+                                PebbleUser(
+                                    isAnonymousUser = firebaseUser.isAnonymous,
+                                    user = userData
+                                )
+                            }
                             .catch { e -> logger.w(e) { "Error observing user doc" } }
                     }
                 }
-                .collect { snapshot ->
+                .collect { user ->
                     logger.d { "User changed.." }
-                    _user.emit(snapshot?.data<User?>())
+                    _user.emit(user)
                 }
         }
     }
@@ -114,7 +129,7 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
             logger.w { "initUserDevToken: user is null" }
             return
         }
-        if (user.rebbleUserToken != rebbleUserToken) {
+        if (user.user.rebbleUserToken != rebbleUserToken) {
             userDoc?.update(mapOf("rebble_user_token" to rebbleUserToken))
         }
     }

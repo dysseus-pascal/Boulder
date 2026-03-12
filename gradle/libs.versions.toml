@@ -110,6 +110,7 @@ koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = 
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 pebblekit = { module = "com.github.pebble-dev:PebbleKitAndroid2", version.ref = "pebblekit" }
 settings = { group = "com.russhwolf", name = "multiplatform-settings-no-arg", version.ref = "settings" }
+settings-test = { group = "com.russhwolf", name = "multiplatform-settings-test", version.ref = "settings" }
 settings-serialization = { group = "com.russhwolf", name = "multiplatform-settings-serialization", version.ref = "settings" }
 kable = { group = "com.juul.kable", name = "kable-core", version.ref = "kable" }
 kmpio = { module = "io.github.skolson:kmp-io", version.ref = "kmpio" }

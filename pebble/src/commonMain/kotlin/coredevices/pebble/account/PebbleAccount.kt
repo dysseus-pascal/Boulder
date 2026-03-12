@@ -70,7 +70,7 @@ class PebbleTokenProvider(
 ) : TokenProvider {
     override suspend fun getDevToken(): String? {
         val userConfig = usersDao.user.firstOrNull()
-        return userConfig?.rebbleUserToken ?: userConfig?.pebbleUserToken ?: pebbleAccount.devToken.value
+        return userConfig?.user?.rebbleUserToken ?: userConfig?.user?.pebbleUserToken ?: pebbleAccount.devToken.value
     }
 }
 

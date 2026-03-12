@@ -106,6 +106,7 @@ kotlin {
                 implementation(libs.serialization)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.settings)
+                implementation(libs.settings.test)
                 implementation(libs.settings.serialization)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)

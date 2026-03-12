@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import AppUpdateTracker
 import CoreAppVersion
 import NextBugReportContext
 import PlatformUiContext
@@ -11,6 +12,7 @@ import coil3.ColorImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import com.eygraber.uri.Uri
+import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdatePlatformContent
@@ -19,6 +21,10 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.HeartEntity
+import coredevices.database.HeartsDao
+import coredevices.firestore.PebbleUser
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
@@ -43,6 +49,7 @@ import coredevices.util.AppResumed
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
+import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -64,7 +71,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
 import org.koin.dsl.bind
 import org.koin.dsl.binds
@@ -172,6 +181,28 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override suspend fun getAllCollections(): List<AppstoreCollection> = emptyList()
     }
     single { storeCollectionDao } bind AppstoreCollectionDao::class
+    val usersDao = object : UsersDao {
+        override val user: Flow<PebbleUser?> = flow { emit(null) }
+        override suspend fun updateNotionToken(notionToken: String?) {}
+        override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
+        override suspend fun updateTodoBlockId(todoBlockId: String) {}
+        override suspend fun initUserDevToken(rebbleUserToken: String?) {}
+        override fun init() {}
+    }
+    single { usersDao } bind UsersDao::class
+    val heartsDao = object : HeartsDao {
+        override suspend fun addHeart(heart: HeartEntity) {}
+        override suspend fun addHearts(hearts: List<HeartEntity>) {}
+        override suspend fun removeHeart(heart: HeartEntity) {}
+        override suspend fun removeHearts(hearts: List<HeartEntity>) {}
+        override fun isHeartedFlow(
+            sourceId: Int,
+            appId: String
+        ): Flow<Boolean>  = flow { emit(false) }
+        override fun getAllHeartsFlow(): Flow<List<HeartEntity>>  = flow {  }
+        override suspend fun getAllHeartsForSource(sourceId: Int): List<String> = emptyList()
+    }
+    single { heartsDao } bind HeartsDao::class
     val webServices = object : PebbleWebServices {
         override suspend fun fetchUsersMePebble(): UsersMeResponse? = null
         override suspend fun fetchUsersMeCore(): CoreUsersMe? = null
@@ -213,6 +244,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 
     }
     single { LockerViewModel(webServices, storeSourceDao) }
+    single { SharedLockerViewModel() }
     single { storeSourceDao } bind AppstoreSourceDao::class
     single { configProvider } bind BootConfigProvider::class
     single { FakeLibPebble() } binds arrayOf(LibPebble::class, NotificationApps::class)
@@ -305,6 +337,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         }
     } } bind PermissionRequester::class
     single { PebbleFeatures(get()) }
+    single { AppResumed() }
     single { object : AppUpdate {
         override val updateAvailable: StateFlow<AppUpdateState> = MutableStateFlow(AppUpdateState.NoUpdateAvailable)
 
@@ -330,7 +363,9 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             return false
         }
     } } bind CompanionDevice::class
-    single { Settings() }
+    single<Settings> { MapSettings() }
+    single { CoreConfigHolder(coreConfig, get(), Json) }
+    single { AppUpdateTracker(get(), get()) }
 }
 
 @Composable

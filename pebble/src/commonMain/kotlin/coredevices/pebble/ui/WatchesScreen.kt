@@ -105,6 +105,7 @@ import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.devices
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
@@ -752,9 +753,10 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
             val libPebble = rememberLibPebble()
             if (watch is ConnectedPebble.DevConnection) {
                 val config by libPebble.config.collectAsState()
-                val account by Firebase.auth.authStateChanged.collectAsState(Firebase.auth.currentUser)
+                val usersDao: UsersDao = koinInject()
+                val user by usersDao.user.collectAsState(null)
                 val active by watch.devConnectionActive.collectAsState()
-                val canUseDevConnection = account?.isAnonymous == false || config.watchConfig.lanDevConnection
+                val canUseDevConnection = user?.isAnonymousUser == false || config.watchConfig.lanDevConnection
                 DropdownMenuItem(
                     text = { Text("Dev Connection") },
                     leadingIcon = { Icon(Icons.Outlined.DeveloperBoard, contentDescription = null) },

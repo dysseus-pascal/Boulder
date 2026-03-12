@@ -3,6 +3,7 @@ package coredevices.api
 import co.touchlab.kermit.Logger
 import coredevices.util.CommonBuildKonfig
 import io.ktor.client.call.body
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.request.post
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,18 +29,20 @@ class WisprFlowAuth : ApiClient(CommonBuildKonfig.USER_AGENT_VERSION) {
     private var cachedToken: String? = null
     private var tokenExpiresAt: TimeSource.Monotonic.ValueTimeMark? = null
 
-    suspend fun getAccessToken(): String? {
+    suspend fun getAccessToken(forceRefresh: Boolean = false): String? {
         val authUrl = CommonBuildKonfig.WISPR_AUTH_URL ?: throw IllegalStateException("WISPR_AUTH_URL is not configured")
 
         mutex.withLock {
             val expires = tokenExpiresAt
-            if (cachedToken != null && expires != null && !expires.hasPassedNow()) {
+            if (cachedToken != null && expires != null && !expires.hasPassedNow() && !forceRefresh) {
+                logger.d { "Using cached Wispr access token, expires in ${expires.elapsedNow().inWholeSeconds}s" }
                 return cachedToken
             }
 
             return try {
                 val response = client.post("$authUrl/token") {
                     firebaseAuth()
+                    expectSuccess = true
                 }
                 val tokenResponse = response.body<WisprTokenResponse>()
                 val expiresIn = tokenResponse.expires_in

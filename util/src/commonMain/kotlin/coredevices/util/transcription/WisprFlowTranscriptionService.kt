@@ -71,18 +71,48 @@ class WisprFlowTranscriptionService(
         if (available && pendingConnection == null) {
             pendingConnection = scope.async {
                 val clientKey = checkNotNull(resolveAccessToken()) { "WISPR access token unavailable" }
-                val session = connectWebSocket(clientKey)
-                PreconnectedSession(clientKey, session)
+                val (resolvedKey, session) = connectWebSocket(clientKey)
+                PreconnectedSession(resolvedKey, session)
             }
         }
         return available
     }
 
-    private suspend fun connectWebSocket(clientKey: String): WebSocketSession {
-        return withTimeout(10.seconds) {
-            client.webSocketSession(WISPR_WS_URL) {
-                url.parameters.append("client_key", "Bearer $clientKey")
+    private suspend fun connectWebSocket(clientKey: String): Pair<String, WebSocketSession> {
+        return try {
+            val session = withTimeout(10.seconds) {
+                client.webSocketSession(WISPR_WS_URL) {
+                    url.parameters.append("client_key", "Bearer $clientKey")
+                }
             }
+            clientKey to session
+        } catch (e: Exception) {
+            if (e.isForbidden()) {
+                logger.w { "WebSocket connection returned 403, refreshing token and retrying" }
+                val newToken = checkNotNull(wisprFlowAuth.getAccessToken(forceRefresh = true)) {
+                    "WISPR access token unavailable after refresh"
+                }
+                val session = withTimeout(10.seconds) {
+                    client.webSocketSession(WISPR_WS_URL) {
+                        url.parameters.append("client_key", "Bearer $newToken")
+                    }
+                }
+                newToken to session
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun Exception.isForbidden(): Boolean {
+        // Ktor throws various exception types for failed WebSocket upgrades.
+        // Check the message and cause chain for 403 status indicators.
+        val msg = message ?: ""
+        val causeMsg = cause?.message ?: ""
+        return when {
+            "403" in msg || "Forbidden" in msg -> true
+            "403" in causeMsg || "Forbidden" in causeMsg -> true
+            else -> false
         }
     }
 
@@ -116,8 +146,10 @@ class WisprFlowTranscriptionService(
             clientKey = preconnected.clientKey
             session = preconnected.session
         } else {
-            clientKey = checkNotNull(resolveAccessToken()) { "WISPR access token unavailable" }
-            session = connectWebSocket(clientKey)
+            val initialKey = checkNotNull(resolveAccessToken()) { "WISPR access token unavailable" }
+            val (resolvedKey, resolvedSession) = connectWebSocket(initialKey)
+            clientKey = resolvedKey
+            session = resolvedSession
         }
 
 

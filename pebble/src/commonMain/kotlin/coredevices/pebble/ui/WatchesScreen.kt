@@ -71,6 +71,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -157,7 +158,11 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
+import theme.CoreAppColorScheme
+import theme.ThemeProvider
 import theme.coreOrange
+import theme.currentColorScheme
+import theme.greyScheme
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -610,6 +615,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
     val showConfirmResetIntoPrfDialog = remember { mutableStateOf(false) }
     val showConfirmFactoryResetDialog = remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val currentColorScheme = currentColorScheme()
 
     Box {
         IconButton(onClick = { showMenu = !showMenu }) {
@@ -618,7 +624,20 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
-            modifier = Modifier.widthIn(min = 250.dp),
+            modifier = Modifier.widthIn(min = 250.dp).then(
+                if (currentColorScheme == CoreAppColorScheme.Grey) {
+                    Modifier.border(
+                        width = 1.5.dp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                } else Modifier
+            ),
+            containerColor = if (currentColorScheme == CoreAppColorScheme.Grey) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                MenuDefaults.containerColor
+            },
         ) {
             val firmwareVersion = when {
                 watch is KnownPebbleDevice -> watch.runningFwVersion
@@ -664,7 +683,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                             Icon(
                                 Icons.Outlined.Autorenew,
                                 contentDescription = null,
-                                modifier = Modifier.graphicsLayer { rotationZ = rotate }
+                                modifier = Modifier.graphicsLayer { rotationZ = rotate },
                             )
                         },
                         enabled = false,
@@ -830,106 +849,122 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         onClick = { debugMenuExpanded = true }
                     )
 
-                    // The actual Submenu
-                    DropdownMenu(
-                        expanded = debugMenuExpanded,
-                        onDismissRequest = { debugMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Firmware Update Debug") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.SystemUpdateAlt,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                showMenu = false
-                                debugMenuExpanded = false
-                                navBarNav.navigateTo(
-                                    PebbleRoutes.FirmwareSideloadRoute(
-                                        watch.identifier.asString,
-                                    )
-                                )
-                            }
-                        )
-
-                        if (watch is ConnectedPebbleDevice) {
+                    val debugMenuTheme = MaterialTheme.colorScheme.copy(
+                        surface = MaterialTheme.colorScheme.primary,
+                        onSurface = MaterialTheme.colorScheme.onPrimary
+                    )
+                    MaterialTheme(colorScheme = debugMenuTheme) {
+                        DropdownMenu(
+                            expanded = debugMenuExpanded,
+                            onDismissRequest = { debugMenuExpanded = false },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ) {
                             DropdownMenuItem(
-                                text = { Text("Ping Watch") },
+                                text = { Text("Firmware Update Debug") },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.NetworkPing,
-                                        contentDescription = null
+                                        Icons.Default.SystemUpdateAlt,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
                                     )
                                 },
                                 onClick = {
                                     showMenu = false
                                     debugMenuExpanded = false
-                                    scope.launch { watch.sendPing(1234u) }
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = { Text("Write Notification") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.NotificationAdd,
-                                        contentDescription = null
+                                    navBarNav.navigateTo(
+                                        PebbleRoutes.FirmwareSideloadRoute(
+                                            watch.identifier.asString,
+                                        )
                                     )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    debugMenuExpanded = false
-                                    scope.launch { showNotificationDialog = true }
                                 }
                             )
 
-                            DropdownMenuItem(
-                                text = { Text("Create a Core Dump") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Warning,
-                                        contentDescription = null
-                                    )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    debugMenuExpanded = false
-                                    showConfirmCoreDumpDialog.value = true
-                                }
-                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f))
 
-                            if (watch.watchInfo.recoveryFwVersion != null) {
+                            if (watch is ConnectedPebbleDevice) {
                                 DropdownMenuItem(
-                                    text = { Text("Reset into PRF") },
+                                    text = { Text("Ping Watch") },
                                     leadingIcon = {
                                         Icon(
-                                            Icons.Default.Warning,
-                                            contentDescription = null
+                                            Icons.Default.NetworkPing,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
                                         )
                                     },
                                     onClick = {
                                         showMenu = false
                                         debugMenuExpanded = false
-                                        showConfirmResetIntoPrfDialog.value = true
+                                        scope.launch { watch.sendPing(1234u) }
                                     }
                                 )
 
                                 DropdownMenuItem(
-                                    text = { Text("Factory reset") },
+                                    text = { Text("Write Notification") },
                                     leadingIcon = {
                                         Icon(
-                                            Icons.Default.Warning,
-                                            contentDescription = null
+                                            Icons.Default.NotificationAdd,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
                                         )
                                     },
                                     onClick = {
                                         showMenu = false
                                         debugMenuExpanded = false
-                                        showConfirmFactoryResetDialog.value = true
+                                        scope.launch { showNotificationDialog = true }
                                     }
                                 )
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f))
+
+                                DropdownMenuItem(
+                                    text = { Text("Create a Core Dump") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        debugMenuExpanded = false
+                                        showConfirmCoreDumpDialog.value = true
+                                    }
+                                )
+
+                                if (watch.watchInfo.recoveryFwVersion != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Reset into PRF") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Warning,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            debugMenuExpanded = false
+                                            showConfirmResetIntoPrfDialog.value = true
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = { Text("Factory reset") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Warning,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            debugMenuExpanded = false
+                                            showConfirmFactoryResetDialog.value = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

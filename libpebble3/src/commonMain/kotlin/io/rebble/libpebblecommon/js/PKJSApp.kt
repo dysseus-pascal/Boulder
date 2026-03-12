@@ -142,7 +142,13 @@ class PKJSApp(
             return null
         }
         val url = runningScope!!.async { urlOpenRequests.receive() }
-        jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
+        try {
+            jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
+        } catch (e: Exception) {
+            url.cancel()
+            logger.e(e) { "Error signalling show configuration" }
+            return null
+        }
         return url.await()
     }
 

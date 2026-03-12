@@ -52,11 +52,6 @@ object PebbleNavBarRoutes {
     data object WatchesRoute : NavBarRoute
 
     @Serializable
-    data class WatchRoute(
-        val identifier: String,
-    ) : NavBarRoute
-
-    @Serializable
     data object WatchfacesRoute : NavBarRoute
 
     @Serializable
@@ -153,10 +148,6 @@ fun NavGraphBuilder.addNavBarRoutes(
 ) {
     composableWithAnimations<PebbleNavBarRoutes.WatchesRoute>(viewModel) {
         WatchesScreen(nav, topBarParams)
-    }
-    composableWithAnimations<PebbleNavBarRoutes.WatchRoute>(viewModel) {
-        val route: PebbleNavBarRoutes.WatchRoute = it.toRoute()
-        WatchScreen(nav, topBarParams, route.identifier)
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchfacesRoute>(viewModel) {
         LockerScreen(

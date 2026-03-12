@@ -93,7 +93,7 @@ class PebbleAppDelegate(
                 libPebble.watches.collect { watches ->
                     watches.forEach { watch ->
                         if (watch is ConnectedPebble.Firmware) {
-                            watch.firmwareUpdateAvailable?.let { fwup ->
+                            watch.firmwareUpdateAvailable.result?.let { fwup ->
                                 if (fwup is FirmwareUpdateCheckResult.FoundUpdate) {
                                     firmwareUpdateUiTracker.maybeNotifyFirmwareUpdate(
                                         fwup,

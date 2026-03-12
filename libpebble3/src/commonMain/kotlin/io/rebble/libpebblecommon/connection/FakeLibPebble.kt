@@ -469,7 +469,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
         }
         FakeConnectedDevice(
             identifier = fakeIdentifier,
-            firmwareUpdateAvailable = fwupAvailable,
+            firmwareUpdateAvailable = FirmwareUpdateCheckState(false, fwupAvailable),
             firmwareUpdateState = fwupState,
             name = name,
             nickname = null,
@@ -490,7 +490,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
 
 class FakeConnectedDevice(
     override val identifier: PebbleIdentifier,
-    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
     override val name: String,
     override val nickname: String?,
@@ -643,7 +643,7 @@ class FakeConnectedDevice(
 
 class FakeConnectedDeviceInRecovery(
     override val identifier: PebbleIdentifier,
-    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
     override val name: String,
     override val nickname: String?,

@@ -173,6 +173,11 @@ interface TokenProvider {
     suspend fun getDevToken(): String?
 }
 
+data class FirmwareUpdateCheckState(
+    val checkingForUpdates: Boolean,
+    val result: FirmwareUpdateCheckResult?,
+)
+
 sealed class FirmwareUpdateCheckResult {
     data class FoundUpdate(
         val version: FirmwareVersion,

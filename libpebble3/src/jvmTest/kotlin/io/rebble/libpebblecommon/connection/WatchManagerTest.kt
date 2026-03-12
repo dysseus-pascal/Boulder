@@ -139,8 +139,8 @@ class WatchManagerTest {
         override fun checkForUpdates() {
         }
 
-        override val availableUpdates: Flow<FirmwareUpdateCheckResult?>
-            get() = MutableStateFlow(null)
+        override val availableUpdates: Flow<FirmwareUpdateCheckState>
+            get() = MutableStateFlow(FirmwareUpdateCheckState(false, null))
 
     }
     private val firmwareUpdater = object : FirmwareUpdater {

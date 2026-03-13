@@ -134,14 +134,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
                 zipFs.source(zipEntryPath).buffer().use { source ->
                     val fullPath = zipEntryPath.toString().trimStart('/')
 
-                    // Preserve .mlpackage directory structure, otherwise strip first directory level
-                    val relativeFilePath = if (fullPath.contains(".mlpackage/") || fullPath.endsWith(".mlpackage")) {
-                        fullPath
-                    } else if (fullPath.contains('/')) {
-                        fullPath.substringAfter('/')
-                    } else {
-                        fullPath
-                    }
+                    val relativeFilePath = fullPath
 
                     val fileToWrite = outputDir.resolve(relativeFilePath)
                     fileToWrite.createParentDirectories()

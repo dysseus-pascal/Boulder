@@ -45,8 +45,8 @@ actual fun writeFile(
 ): Path? {
     val stream = try {
         appContext.context.contentResolver.openInputStream(uri.toAndroidUri())
-    } catch (e: FileNotFoundException) {
-        logger.e(e) { "writeFile: FileNotFoundException" }
+    } catch (e: Exception) {
+        logger.e(e) { "writeFile" }
         return null
     }
     if (stream == null) {

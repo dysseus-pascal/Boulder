@@ -90,6 +90,7 @@ val utilModule = module {
                 override fun isModelDownloaded(modelName: String): Boolean = false
                 override fun getDownloadedModels(): List<String> = emptyList()
                 override fun getIncompatibleModels(): List<String> = emptyList()
+                override fun markModelCompatible(modelName: String) {}
                 override fun deleteModel(modelName: String) {}
                 override fun getModelSizeBytes(modelName: String): Long = 0L
                 override fun initTelemetry() {}

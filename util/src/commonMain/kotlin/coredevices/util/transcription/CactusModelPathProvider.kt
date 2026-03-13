@@ -6,7 +6,6 @@ interface CactusModelPathProvider {
     fun isModelDownloaded(modelName: String): Boolean
     fun getDownloadedModels(): List<String>
     fun getIncompatibleModels(): List<String>
-    fun markModelCompatible(modelName: String)
     fun deleteModel(modelName: String)
     fun getModelSizeBytes(modelName: String): Long
     fun initTelemetry()

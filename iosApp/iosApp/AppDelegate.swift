@@ -67,6 +67,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             completionHandler(UIBackgroundFetchResult(rawValue: result as! UInt) ?? .noData)
         })
     }
+
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        IOSDelegate.shared.applicationDidReceiveMemoryWarning()
+    }
     
     func application(
         _ application: UIApplication,

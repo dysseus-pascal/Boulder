@@ -255,6 +255,10 @@ object IOSDelegate : KoinComponent {
         logger.v { "sceneDidEnterBackground" }
     }
 
+    fun applicationDidReceiveMemoryWarning() {
+        logger.w { "applicationDidReceiveMemoryWarning" }
+    }
+
     fun applicationDidEnterBackground() {
         fileLogWriter.logBlockingAndFlush(Severity.Info, "applicationDidEnterBackground", "IOSDelegate", null)
     }

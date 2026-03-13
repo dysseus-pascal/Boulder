@@ -110,6 +110,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
@@ -1218,6 +1219,24 @@ please disable the option.""".trimIndent(),
                     section = Section.Debug,
                     action = { postTestNotification(appContext) },
                     show = { pebbleFeatures.supportsPostTestNotification() },
+                ),
+                basicSettingsDropdownItem(
+                    title = "Watch type for unknown devices",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    items = WatchType.entries,
+                    selectedItem = libPebbleConfig.watchConfig.unknownWatchTypePlatform,
+                    onItemSelected = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    unknownWatchTypePlatform = it
+                                )
+                            )
+                        )
+                    },
+                    itemText = { it.name },
+                    isDebugSetting = true,
                 ),
                 basicSettingsActionItem(
                     title = "Force JSCore GC",

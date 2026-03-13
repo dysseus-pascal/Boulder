@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,6 +80,7 @@ data class WatchConfig(
      */
     val appMessageToMultipleCompanions: Boolean = true,
     val orderWatchfacesByLastUsed: Boolean = false,
+    val unknownWatchTypePlatform: WatchType = WatchType.EMERY
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

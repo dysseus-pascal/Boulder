@@ -1,6 +1,8 @@
 package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
+import com.mmk.kmpnotifier.notification.Notifier
+import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.util.transcription.CactusModelPathProvider
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
@@ -22,6 +24,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
+import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -59,11 +62,43 @@ class CommonAppDelegate(
     private val syncInProgress = MutableStateFlow(false)
 
     private fun initCactus() {
+        val modelProvider = try {
+            org.koin.mp.KoinPlatform.getKoin().get<CactusModelPathProvider>()
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus model provider not available" }
+            return
+        }
         try {
-            val modelProvider = org.koin.mp.KoinPlatform.getKoin().get<CactusModelPathProvider>()
             modelProvider.initTelemetry()
         } catch (e: Exception) {
             logger.w(e) { "Cactus telemetry init skipped" }
+        }
+        try {
+            val incompatible = modelProvider.getIncompatibleModels()
+            if (incompatible.isNotEmpty()) {
+                logger.d { "Incompatible models found, deleting and notifying user to migrate" }
+                coreConfigHolder.update(
+                    coreConfigHolder.config.value.copy(
+                        sttConfig = coreConfigHolder.config.value.sttConfig.copy(
+                            mode = CactusSTTMode.RemoteOnly,
+                            modelName = null,
+                        )
+                    )
+                )
+                incompatible.forEach {
+                    try {
+                        modelProvider.deleteModel(it)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Failed to delete incompatible model $it" }
+                    }
+                }
+                NotifierManager.getLocalNotifier().notify(
+                    "Offline voice recognition",
+                    "We've made improvements to our offline voice recognition. Please open the app to download the new model from settings."
+                )
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus incompatible model check skipped" }
         }
     }
 

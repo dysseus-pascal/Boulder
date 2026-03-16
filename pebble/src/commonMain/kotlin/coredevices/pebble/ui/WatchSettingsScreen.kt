@@ -407,7 +407,7 @@ please disable the option.""".trimIndent(),
         val appUpdateTracker: AppUpdateTracker = koinInject()
         val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
         val hasOfflineModels = remember {
-            modelManager.getDownloadedModelSlugs().any { it.startsWith("whisper", false) }
+            modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
         }
         LaunchedEffect(Unit) {
             appUpdateTracker.acknowledgeCurrentVersion()

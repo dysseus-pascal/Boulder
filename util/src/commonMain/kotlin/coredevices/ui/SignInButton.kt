@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +30,8 @@ import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.auth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.koin.compose.currentKoinScope
 import org.koin.compose.koinInject
@@ -48,10 +49,13 @@ fun SignInButton(
 ) {
     val analyticsBackend: AnalyticsBackend = koinInject()
     val context = rememberUiContext()
-    val scope = rememberCoroutineScope()
     PebbleElevatedButton(
         onClick = {
-            scope.launch {
+            // Must use GlobalScope here: on iOS, presenting the native Apple/Google sign-in sheet
+            // causes the Compose UIKitComposeSceneLayer to be disposed, which would cancel a
+            // rememberCoroutineScope mid-flight and throw ForgottenCoroutineScopeException.
+            // Dispatchers.Main ensures onSuccess/onError callbacks update Compose state safely.
+            GlobalScope.launch(Dispatchers.Main) {
                 val credential = try {
                     credentialProvider(context!!) ?: return@launch
                 } catch (e: Exception) {

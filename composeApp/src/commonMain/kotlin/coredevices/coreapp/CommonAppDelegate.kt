@@ -127,38 +127,42 @@ class CommonAppDelegate(
             logger.d { "Skipping background sync - already in progress" }
             return
         }
-
         val now = Clock.System.now()
-        val lastFullSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
-        val doFullSync = force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
+        val lastFullSync =
+            Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        val doFullSync =
+            force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
         logger.d { "doBackgroundSync: doFullSync=$doFullSync" }
-        if (doFullSync) {
-            settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
+        try {
+            if (doFullSync) {
+                settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
+            }
+            val jobs = if (doFullSync) {
+                listOf(
+                    scope.launch {
+                        coreAnalytics.processHeartbeat()
+                    },
+                    scope.launch {
+                        pebbleAppDelegate.performBackgroundWork(scope)
+                    },
+                    scope.launch {
+                        appUpdate.updateAvailable.value
+                    },
+                    scope.launch {
+                        weatherFetcher.fetchWeather(scope)
+                    },
+                )
+            } else {
+                listOf(
+                    scope.launch {
+                        weatherFetcher.fetchWeather(scope)
+                    },
+                )
+            }
+            jobs.joinAll()
+        } finally {
+            syncInProgress.value = false
         }
-        val jobs = if (doFullSync) {
-            listOf(
-                scope.launch {
-                    coreAnalytics.processHeartbeat()
-                },
-                scope.launch {
-                    pebbleAppDelegate.performBackgroundWork(scope)
-                },
-                scope.launch {
-                    appUpdate.updateAvailable.value
-                },
-                scope.launch {
-                    weatherFetcher.fetchWeather(scope)
-                },
-            )
-        } else {
-            listOf(
-                scope.launch {
-                    weatherFetcher.fetchWeather(scope)
-                },
-            )
-        }
-        jobs.joinAll()
-        syncInProgress.value = false
         logger.d { "doBackgroundSync / finished doFullSync=$doFullSync" }
     }
 

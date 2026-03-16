@@ -152,7 +152,7 @@ class WeatherFetcher(
             logger.w { "Couldn't find temps for units: $units" }
             return null
         }
-        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(0)
+        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(1)
         if (tomorrow == null || tomorrow.day == null) {
             logger.w { "Couldn't find forcast for tomorrow" }
             return null

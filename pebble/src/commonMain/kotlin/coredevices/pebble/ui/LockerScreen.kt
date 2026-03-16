@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1003,6 +1004,7 @@ fun NativeWatchfaceCard(
                     maxLines = 1,
                     fontWeight = FontWeight.Bold,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.heightIn(min = 18.dp)
                 )
             }
             Row(modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 5.dp, end = 5.dp)) {
@@ -1029,89 +1031,6 @@ fun NativeWatchfaceCard(
                 )
                 entry.CompatibilityWarning(topBarParams)
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LegacyWatchfaceCard(
-    entry: CommonApp,
-    navBarNav: NavBarNav,
-    running: Boolean,
-    topBarParams: TopBarParams,
-) {
-    ElevatedCard(
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 5.dp
-        ),
-        modifier = Modifier.padding(7.dp)
-            .clickable {
-                navBarNav.navigateTo(
-                    PebbleNavBarRoutes.LockerAppRoute(
-                        uuid = entry.uuid.toString(),
-                        storedId = null,
-                        storeSource = null
-                    )
-                )
-            }.border(
-                width = 2.dp,
-                color = if (running) coreOrange else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
-            ),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                val modifier =
-                    Modifier.padding(top = 12.dp, bottom = 8.dp).align(Alignment.Center)
-                if (entry.isCompatible) {
-                    AppImage(
-                        entry,
-                        modifier = modifier,
-                        size = 120.dp,
-                    )
-                    if (!entry.isNativelyCompatible) {
-                        IconButton(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(7.dp)
-                                .size(30.dp),
-                            onClick = {
-                                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
-                            },
-                        ) {
-                            Icon(
-                                Icons.Filled.Info,
-                                contentDescription = "Not natively compatible, but can be scaled",
-                                modifier = Modifier.fillMaxSize(),
-                                tint = coreOrange,
-                            )
-                        }
-                    }
-                } else {
-                    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-                        Text("Not Compatible", fontSize = 15.sp, textAlign = TextAlign.Center)
-                    }
-                }
-            }
-            Text(
-                entry.title,
-                fontSize = 13.sp,
-                lineHeight = 15.sp,
-                maxLines = 1,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-                    .padding(vertical = 5.dp, horizontal = 2.dp),
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                entry.developerName,
-                color = Color.Gray,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-                    .padding(top = 2.dp, bottom = 5.dp),
-            )
         }
     }
 }

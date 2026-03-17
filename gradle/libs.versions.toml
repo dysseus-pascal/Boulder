@@ -50,6 +50,12 @@ coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.38.0"
 coredevices-speex = "1946c84"
+mcp = "0.8.3"
+glance = "1.1.1"
+#noinspection GradleDependency
+coredevices-haversine = "79c4158"
+#noinspection GradleDependency
+junit-ext = "1.3.0"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
 compass = "2.4.1"
@@ -143,6 +149,14 @@ coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
 algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
 coredevices-speex = { group = "io.github.coredevices.speex", name = "speex", version.ref = "coredevices-speex" }
+coredevices-haversine = { group = "io.github.coredevices.haversine", name = "haversine", version.ref = "coredevices-haversine" }
+modelcontextprotocol-client = { module = "io.modelcontextprotocol:kotlin-sdk-client", version.ref = "mcp" }
+modelcontextprotocol-core = { module = "io.modelcontextprotocol:kotlin-sdk-core", version.ref = "mcp" }
+modelcontextprotocol-server = { module = "io.modelcontextprotocol:kotlin-sdk-server", version.ref = "mcp" }
+androidx-glance = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
+androidx-core = { group = "androidx.test", name = "core", version.ref = "androidXTestVersion" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit-ext" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 compass-geocoder = { module = "dev.jordond.compass:geocoder", version.ref = "compass" }
 compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", version.ref = "compass" }

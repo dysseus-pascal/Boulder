@@ -19,14 +19,6 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven(url = "https://jitpack.io")
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/coredevices/haversine-kmp")
-            credentials {
-                username = properties.getProperty("github.username") ?: System.getenv("GITHUB_ACTOR")
-                password = properties.getProperty("github.token") ?: System.getenv("GITHUB_TOKEN")
-            }
-        }
     }
 }
 

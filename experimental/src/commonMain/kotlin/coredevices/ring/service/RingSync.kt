@@ -206,7 +206,7 @@ class RingSync(
                                     val t = Clock.System.now()
                                     when (satelliteStatus) {
                                         is SatelliteStatus.Transferring -> {
-                                            logger.d { "Status ${satelliteStatus.transferStatus} $t" }
+                                            logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi}" }
                                             val transferStatus = satelliteStatus.transferStatus
                                             if (transferStatus is TransferStatus.TransferComplete) {
                                                 removeDCBias(transferStatus.samples)

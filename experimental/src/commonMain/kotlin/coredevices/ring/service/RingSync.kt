@@ -234,7 +234,7 @@ class RingSync(
                                                     }
 
                                                     is TransferStatus.TransferTypeDetermined -> {
-                                                        logger.i { "Transfer type determined for ${transferStatus.collectionIndex}: collectionStartIndex = ${transferStatus.collectionStartIndex}, isAudio = ${transferStatus.isAudio}, sequence = ${transferStatus.buttonSequence}" }
+                                                        logger.i { "Transfer type determined for ${transferStatus.collectionIndex}: collectionStartIndex = ${transferStatus.collectionStartIndex}, isAudio = ${transferStatus.isAudio}, sequence = ${transferStatus.buttonSequence}, final = ${transferStatus.final}" }
                                                         logger.i { "Lifetime collection count: ${transferStatus.lifetimeCollectionCount}" }
                                                         transferStatus.satellite.state.value?.serialNumber?.let { serial ->
                                                             transferStatus.lifetimeCollectionCount?.let { count ->

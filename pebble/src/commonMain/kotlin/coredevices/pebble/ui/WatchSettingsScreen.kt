@@ -399,9 +399,9 @@ please disable the option.""".trimIndent(),
         val missingPermissions by permissionRequester.missingPermissions.collectAsState()
         val uiContext = rememberUiContext()
         val analyticsBackend: AnalyticsBackend = koinInject()
-        val enableFirebase = mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true))
-        val enableMemfault = mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true))
-        val enableMixpanel = mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true))
+        val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
+        val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
+        val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
         val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
         val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
         val appUpdateTracker: AppUpdateTracker = koinInject()

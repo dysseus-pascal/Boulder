@@ -89,7 +89,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
 
             override fun goBack() {
-                navController.popBackStack()
+                if (navController.previousBackStackEntry != null) {
+                    navController.popBackStack()
+                }
             }
 
             override fun goBackToPebble() {

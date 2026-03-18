@@ -400,6 +400,22 @@ fun LockerScreen(
                             }
                         }
 
+                        // For each feed, track which app IDs and UUIDs appear in higher-priority feeds
+                        // so duplicates can be excluded from lower feeds.
+                        val seenInHigherFeeds = remember(storeHome) {
+                            val seenStoreIds = mutableSetOf<String>()
+                            val seenUuids = mutableSetOf<String>()
+                            buildMap<Int, Pair<Set<String>, Set<String>>> {
+                                storeHome.forEach { display ->
+                                    put(display.source.id, Pair(seenStoreIds.toSet(), seenUuids.toSet()))
+                                    display.home.applications.forEach { app ->
+                                        seenStoreIds.add(app.id)
+                                        app.uuid?.let { seenUuids.add(it) }
+                                    }
+                                }
+                            }
+                        }
+
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(),
                             state = mainListState,
@@ -561,6 +577,7 @@ fun LockerScreen(
                                     home.collections,
                                     contentType = { "app_carousel_collection" },
                                     key = { "collection_${source.id}_${it.slug}" }) { collection ->
+                                    val (excludedStoreIds, excludedUuids) = seenInHigherFeeds[source.id] ?: Pair(emptySet<String>(), emptySet<String>())
                                     val collectionApps =
                                         remember(
                                             home,
@@ -570,6 +587,8 @@ fun LockerScreen(
                                             sharedViewModel.showScaled.value,
                                             viewModel.type.value,
                                             sharedViewModel.hearted.value,
+                                            excludedStoreIds,
+                                            excludedUuids,
                                         ) {
                                             collection.applicationIds.mapNotNull { appId ->
                                                 home.applications.find { app ->
@@ -583,7 +602,9 @@ fun LockerScreen(
                                             }.filter { app ->
                                                 app.type == viewModel.type.value &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
-                                                (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
+                                                (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) &&
+                                                app.storeId !in excludedStoreIds &&
+                                                app.uuid.toString() !in excludedUuids
                                             }
                                                 .distinctBy { it.uuid }
                                         }

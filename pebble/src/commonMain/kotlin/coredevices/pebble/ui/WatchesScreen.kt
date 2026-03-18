@@ -417,8 +417,7 @@ private fun NicknameDialog(watch: KnownPebbleDevice, onDismissRequest: () -> Uni
     var nickname by remember { mutableStateOf(watch.nickname) }
     val focusRequester = remember { FocusRequester() }
 
-    // Re-initialize TextFieldValue whenever 'nickname' state changes
-    var textFieldValue by remember(nickname) {
+    var textFieldValue by remember {
         mutableStateOf(TextFieldValue(nickname ?: watch.name))
     }
 
@@ -460,7 +459,7 @@ private fun NicknameDialog(watch: KnownPebbleDevice, onDismissRequest: () -> Uni
                         IconButton(
                             onClick = {
                                 nickname = null
-                                // nickname change triggers LaunchedEffect above
+                                textFieldValue = TextFieldValue(watch.name)
                             },
                         ) {
                             Icon(Icons.Default.Cancel, contentDescription = "Remove Nickname")

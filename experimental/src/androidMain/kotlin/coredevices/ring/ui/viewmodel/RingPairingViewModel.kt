@@ -1,5 +1,6 @@
 package coredevices.ring.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
@@ -20,6 +21,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,10 +39,10 @@ import org.koin.core.component.inject
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
 
-class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit, private val bondingEvents: Flow<BondingEvent>): ViewModel(),
+class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit, private val bondingEvents: Flow<BondingEvent>, private val context: Context): ViewModel(),
     KoinComponent {
     companion object {
-        private val logger = Logger.withTag(RingPairingViewModel::class.simpleName!!)
+        private val logger = Logger.withTag("RingPairingViewModel")
     }
 
     private val companionDeviceManager: RingCompanionDeviceManager
@@ -121,17 +124,48 @@ class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit,
             when (result) {
                 is CompanionRegisterResult.Success -> {
                     _pairingState.value = PairingState.Pairing(result.id ?: "")
-                    val bond = withTimeoutOrNull(60000) {
-                        bondingEvents.first {
+                    val bond = withTimeoutOrNull(10000) {
+                        bondingEvents.onEach {
+                            logger.d { "Received bonding event: $it" }
+                        }.first {
                             val bondedId = it.deviceId?.replace(":", "")?.uppercase()
                             it is BondingEvent.Error ||
                                     (it is BondingEvent.Bonded && bondedId == result.id!!)
                         }
                     } ?: run {
-                        logger.e { "Pairing timed out" }
-                        onShowSnackbar("Pairing timed out. Please try again.")
-                        _pairingState.value = PairingState.Idle
-                        return@launch
+                        logger.w { "Initial pairing timeout, trying to request pairing" }
+                        val bondAsync = async {
+                            bondingEvents.onEach {
+                                logger.d { "Received bonding event: $it" }
+                            }.first {
+                                val bondedId = it.deviceId?.replace(":", "")?.uppercase()
+                                it is BondingEvent.Error ||
+                                        (it is BondingEvent.Bonded && bondedId == result.id!!)
+                            }
+                        }
+                        try {
+                            val bt = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
+                            bt.adapter.getRemoteDevice(result.id!!).createBond()
+                        } catch (e: SecurityException) {
+                            logger.e(e) { "Failed to request bonding, likely missing BLUETOOTH_CONNECT permission" }
+                            onShowSnackbar("Failed to request pairing, please grant Bluetooth permissions and try again")
+                            _pairingState.value = PairingState.Idle
+                            return@launch
+                        } catch (e: Exception) {
+                            logger.e(e) { "Failed to request bonding" }
+                            onShowSnackbar("Failed to request pairing, please try again")
+                            _pairingState.value = PairingState.Idle
+                            return@launch
+                        }
+                        withTimeoutOrNull(10000) {
+                            bondAsync.await()
+                        } ?: run {
+                            logger.e { "Pairing timed out after explicit request" }
+                            onShowSnackbar("Pairing timed out. Please try again.")
+                            _pairingState.value = PairingState.Idle
+                            return@launch
+                        }
+
                     }
                     logger.d { "Bonding event received: $bond" }
                     when (bond) {

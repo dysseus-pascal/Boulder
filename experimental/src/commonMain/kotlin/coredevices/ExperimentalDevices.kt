@@ -119,7 +119,7 @@ class ExperimentalDevices(
                 if (isDebugEnabled) {
                     IconButton(
                         onClick = {
-                            launchWavImportDialog(listOf("audio/wav"))
+                            launchWavImportDialog(listOf("audio/*"))
                         }
                     ) {
                         Icon(Icons.Default.AudioFile, contentDescription = "Debug")

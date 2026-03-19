@@ -780,6 +780,16 @@ data class StoreLinks(
  */
 
 @Serializable
+enum class SettingsPageState() {
+    @SerialName("no_page")
+    NoPage,
+    @SerialName("page_loads")
+    PageLoads,
+    @SerialName("page_doesnt_load")
+    PageDoesntLoad,
+}
+
+@Serializable
 data class StoreLatestRelease(
     val id: String,
     @SerialName("js_md5")
@@ -793,6 +803,8 @@ data class StoreLatestRelease(
     val publishedDate: Instant?,
     @SerialName("release_notes")
     val releaseNotes: String?,
+    @SerialName("settings_page_state")
+    val settingsPageState: SettingsPageState? = null,
     val version: String?,
 )
 

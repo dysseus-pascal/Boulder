@@ -37,6 +37,8 @@ import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +81,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
+import coredevices.pebble.services.SettingsPageState
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -583,6 +586,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 primaryColor = false,
                                 modifier = Modifier.padding(5.dp),
                             )
+                        }
+                    }
+                    if (commonAppStore?.settingsPageState == SettingsPageState.PageDoesntLoad) {
+                        Row {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "This app's settings page may not work any more",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(15.dp)
+                                )
+                            }
                         }
                     }
                     val screenshotsToDisplay = remember(storeEntry) {

@@ -60,6 +60,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.SettingsPageState
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreChangelogEntry
@@ -434,6 +435,7 @@ sealed class CommonAppType {
         val publishedDate: Instant?,
         val developerLink: String?,
         val changelog: List<StoreChangelogEntry>,
+        val settingsPageState: SettingsPageState?,
     ) : CommonAppType()
 
     data class System(
@@ -534,6 +536,7 @@ fun StoreApplication.asCommonApp(
             publishedDate = latestRelease.publishedDate ?: publishedDate,
             developerLink = website,
             changelog = changelog,
+            settingsPageState = latestRelease.settingsPageState,
         ),
         type = appType,
         category = category,
@@ -592,7 +595,8 @@ fun StoreSearchResult.asCommonApp(
             removeHeartUrl = null,
             developerLink = null,
             publishedDate = null,
-            changelog = emptyList()
+            changelog = emptyList(),
+            settingsPageState = null,
         ),
         type = appType,
         category = category,

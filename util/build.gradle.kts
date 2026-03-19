@@ -44,6 +44,16 @@ compose.resources {
     packageOfResClass = "coreapp.util.generated.resources"
 }
 
+val properties = Properties().apply {
+    try {
+        load(rootDir.resolve("local.properties").reader())
+    } catch (e: Exception) {
+        println("local.properties file not found")
+    }
+}
+
+val enableKrisp = (properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+
 kotlin {
 
 // Target declarations - add or remove as needed below. These define
@@ -65,12 +75,6 @@ kotlin {
 // project can be found here:
 // https://developer.android.com/kotlin/multiplatform/migrate
     val xcfName = "coreapp-util"
-
-    iosX64 {
-        binaries.framework {
-            baseName = xcfName
-        }
-    }
 
     iosArm64 {
         binaries.framework {
@@ -129,6 +133,11 @@ kotlin {
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
+                if (enableKrisp) {
+                    implementation(libs.coredevices.krispPrivate)
+                } else {
+                    implementation(project(":krisp-stubs"))
+                }
             }
         }
 
@@ -168,14 +177,6 @@ val headSha by lazy {
     project.providers.exec {
         commandLine("git", "describe", "--always", "--dirty")
     }.standardOutput.asText.get().trim()
-}
-
-val properties = Properties().apply {
-    try {
-        load(rootDir.resolve("local.properties").reader())
-    } catch (e: Exception) {
-        println("local.properties file not found")
-    }
 }
 val enableQa = System.getenv("QA")?.toBoolean() ?: properties.getProperty("QA")?.toBoolean() ?: true
 

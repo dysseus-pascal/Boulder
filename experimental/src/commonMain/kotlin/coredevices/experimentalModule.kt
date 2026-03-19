@@ -47,6 +47,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingBackgroundManager
 import coredevices.ring.service.RingPairing
 import coredevices.ring.service.RingSync
+import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
@@ -150,9 +151,10 @@ val experimentalModule = module {
     } bind VermillionApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
-    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get()) }
+    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RecordingStorage)
+    singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
     singleOf(::RingBackgroundManager)
     singleOf(::IndexNotificationManager)

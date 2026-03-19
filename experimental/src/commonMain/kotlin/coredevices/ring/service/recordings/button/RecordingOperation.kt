@@ -1,5 +1,6 @@
 package coredevices.ring.service.recordings.button
 
+import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -9,6 +10,7 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -21,6 +23,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
@@ -75,6 +78,14 @@ open class DefaultRecordingOperation(
         }
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
         coroutineScope {
+            launch(Dispatchers.IO) {
+                try {
+                    recordingStorage.persistRecording(fileId)
+                } catch (e: Exception) {
+                    //TODO: Better sync handling, e.g. retry later
+                    logger.e(e) { "Error persisting recording $fileId" }
+                }
+            }
             val mcpSession = mcpSessionFactory.createForSandboxGroup(
                 mcpSandboxRepository.getDefaultGroupId(),
                 this

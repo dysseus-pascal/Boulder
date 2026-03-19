@@ -209,7 +209,9 @@ class RingSync(
                                             logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi}" }
                                             val transferStatus = satelliteStatus.transferStatus
                                             if (transferStatus is TransferStatus.TransferComplete) {
-                                                removeDCBias(transferStatus.samples)
+                                                withContext(Dispatchers.IO) {
+                                                    removeDCBias(transferStatus.samples)
+                                                }
                                             }
                                             try {
                                                 var id: String? = null

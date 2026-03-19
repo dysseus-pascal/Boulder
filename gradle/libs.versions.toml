@@ -55,6 +55,7 @@ glance = "1.1.1"
 #noinspection GradleDependency
 coredevices-haversine = "79c4158"
 #noinspection GradleDependency
+coredevices-krisp = "5ff0ae9"
 junit-ext = "1.3.0"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
@@ -162,3 +163,4 @@ compass-geocoder = { module = "dev.jordond.compass:geocoder", version.ref = "com
 compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", version.ref = "compass" }
 compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.ref = "compass" }
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
+coredevices-krispPrivate = { group = "coredevices.krispkmp", name = "library", version.ref = "coredevices-krisp" }

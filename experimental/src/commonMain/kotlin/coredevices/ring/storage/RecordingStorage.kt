@@ -72,7 +72,7 @@ class RecordingStorage(private val cachedMetadataDao: CachedRecordingMetadataDao
      */
     suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink {
         val metadata = CachedRecordingMetadata(id, sampleRate, mimeType)
-        cachedMetadataDao.insert(metadata)
+        cachedMetadataDao.insertOrReplace(metadata)
         return SystemFileSystem.sink(Path(getRecordingsCacheDirectory(), id)).buffered()
     }
 

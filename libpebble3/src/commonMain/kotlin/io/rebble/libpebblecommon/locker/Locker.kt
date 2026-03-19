@@ -309,9 +309,9 @@ class Locker(
     }
 
     private suspend fun insertSystemApps(force: Boolean) {
-        val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
+        val lockerApps = getAllLockerBasicInfo()
             .first()
-            .map { it.properties.id }
+            .map { it.id }
         val systemAppsToInsert =
             SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->

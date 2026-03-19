@@ -437,15 +437,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         entry.isCompatible && entry.commonAppType.canStartApp() && !appIsRunning
                                 && !viewModel.addedToLocker
                     if (showStartApp) {
-                        val loadToWatchText = if (entry.isSynced()) {
-                            ""
-                        } else {
-                            "Load To Watch & "
-                        }
                         val text = if (entry.type == AppType.Watchapp) {
-                            "${loadToWatchText}Start App"
+                            "Start App"
                         } else {
-                            "${loadToWatchText}Start Watchface"
+                            "Start Watchface"
                         }
                         PebbleElevatedButton(
                             text = text,

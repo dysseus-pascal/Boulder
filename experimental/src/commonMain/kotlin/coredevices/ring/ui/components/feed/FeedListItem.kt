@@ -34,6 +34,13 @@ import coredevices.ring.ui.components.chat.ChatBubble
 import coredevices.ring.ui.components.chat.ResponseBubble
 import coredevices.ring.ui.components.chat.SemanticResultActionTaken
 import coredevices.ring.ui.components.chat.SemanticResultIcon
+import coredevices.ring.ui.isLocale24HourFormat
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 @Composable
 fun FeedListItem(
@@ -69,7 +76,38 @@ fun FeedListItem(
                     onLongClick = { onHold?.invoke() }
                 ),
         ) {
+            val timestamp = remember(feedItem.entry?.timestamp) {
+                val ts = feedItem.entry?.ringTransferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) }
+                    ?: feedItem.localTimestamp
+                ts.let {
+                    it.toLocalDateTime(TimeZone.currentSystemDefault()).format(LocalDateTime.Format {
+                        if (isLocale24HourFormat()) {
+                            hour()
+                            char(':')
+                            minute()
+                            char(':')
+                            second()
+                        } else {
+                            amPmHour()
+                            char(':')
+                            minute()
+                            char(':')
+                            second()
+                            char(' ')
+                            amPmMarker("am", "pm")
+                        }
+                    })
+                }
+            }
             Column {
+                timestamp?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
                 when (feedItem.entry?.status) {
                     null -> Text("Processing...")
                     RecordingEntryStatus.pending -> Text("Transcribing...", overflow = TextOverflow.Ellipsis)

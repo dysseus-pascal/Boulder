@@ -52,7 +52,7 @@ val properties = Properties().apply {
     }
 }
 
-val enableKrisp = (properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
 
 kotlin {
 

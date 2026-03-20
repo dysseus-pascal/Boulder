@@ -8,6 +8,7 @@ enum class NotificationProperties(
     val color: TimelineColor?,
     val icon: TimelineIcon?,
     val addShowsUserInterfaceActions: Boolean = false,
+    val showLocalOnlyNotifications: Boolean = false,
 ) {
     Gmail(pkgName = "com.google.android.gm", color = TimelineColor.Red, icon = TimelineIcon.NotificationGmail),
     GoogleQuickSearchBox(pkgName = "com.google.android.googlequicksearchbox", color = TimelineColor.BlueMoon, icon = null),
@@ -19,7 +20,7 @@ enum class NotificationProperties(
     GoogleCalendar(pkgName = "com.google.android.calendar", color = TimelineColor.BlueMoon, icon = null),
     Telegram(pkgName = "org.telegram.messenger", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTelegram),
     Facebook(pkgName = "com.facebook.katana", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationFacebook),
-    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger),
+    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger, showLocalOnlyNotifications = true),
     Hipchat(pkgName = "com.hipchat", color = TimelineColor.CobaltBlue, icon = null),
     Skype(pkgName = "com.skype.raider", color = TimelineColor.VividCerulean, icon = null),
     Twitter(pkgName = "com.twitter.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTwitter),

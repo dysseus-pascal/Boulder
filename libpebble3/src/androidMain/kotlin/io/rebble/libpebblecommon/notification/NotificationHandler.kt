@@ -28,6 +28,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMut
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
@@ -153,9 +154,10 @@ class NotificationHandler(
         }
         val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
         val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
+        val appProperties = NotificationProperties.lookup(sbn.packageName)
+        val showLocalOnlyNotifications = notificationConfig.value.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
         val decision = when {
-            sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
-                NotSentLocalOnly
+            sbn.notification.isLocalOnly() && !showLocalOnlyNotifications -> NotSentLocalOnly
             anyContactMuted -> NotSendContactMuted
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted

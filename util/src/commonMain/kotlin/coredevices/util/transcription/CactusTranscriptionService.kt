@@ -21,8 +21,11 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
@@ -33,6 +36,7 @@ import kotlinx.io.files.SystemTemporaryDirectory
 import kotlinx.io.readByteArray
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -47,6 +51,7 @@ class CactusTranscriptionService(
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
     }
 
+    private val transcriptionMutex = Mutex()
     private var model: Cactus? = null
     private var initJob: Job? = null
     private var lastInitedModel: String? = null
@@ -142,6 +147,7 @@ class CactusTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
+        timeout: Duration,
     ): LocalTranscriptionResult {
         val path = getCacheFilePath()
         withContext(Dispatchers.IO) {
@@ -160,7 +166,8 @@ class CactusTranscriptionService(
                         language = language,
                         conversationContext = conversationContext,
                         dictionaryContext = dictionaryContext,
-                        contentContext = contentContext
+                        contentContext = contentContext,
+                        timeout = timeout
                     ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
                     LocalTranscriptionResult(
                         text = result.text,
@@ -172,7 +179,9 @@ class CactusTranscriptionService(
                     val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                     inferenceBoost.acquire()
                     val result = try {
-                        cactus.transcribe(audioPath = path.toString())
+                        withTimeout(timeout) {
+                            cactus.transcribe(audioPath = path.toString())
+                        }
                     } finally {
                         inferenceBoost.release()
                     }
@@ -190,7 +199,8 @@ class CactusTranscriptionService(
                             language = language,
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
-                            contentContext = contentContext
+                            contentContext = contentContext,
+                            timeout = timeout
                         ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
                         LocalTranscriptionResult(
                             text = result.text,
@@ -202,7 +212,9 @@ class CactusTranscriptionService(
                         val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                         inferenceBoost.acquire()
                         val result = try {
-                            cactus.transcribe(audioPath = path.toString())
+                            withTimeout(timeout) {
+                                cactus.transcribe(audioPath = path.toString())
+                            }
                         } finally {
                             inferenceBoost.release()
                         }
@@ -259,7 +271,8 @@ class CactusTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        encoding: AudioEncoding
+        encoding: AudioEncoding,
+        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "CactusTranscriptionService.transcribe() called" }
         if (initJob == null || model == null || lastInitedModel != sttConfig.value.modelName) {
@@ -286,14 +299,17 @@ class CactusTranscriptionService(
         try {
             withTimeout(20.seconds) { initJob?.join() }
             val start = Clock.System.now()
-            val (text, modeUsed, modelUsed) = cactusTranscribe(
-                audio = buffer.readByteArray(),
-                sampleRate = sampleRate,
-                language = language,
-                conversationContext = conversationContext,
-                dictionaryContext = dictionaryContext,
-                contentContext = contentContext
-            )
+            val (text, modeUsed, modelUsed) = transcriptionMutex.withLock {
+                cactusTranscribe(
+                    audio = buffer.readByteArray(),
+                    sampleRate = sampleRate,
+                    language = language,
+                    conversationContext = conversationContext,
+                    dictionaryContext = dictionaryContext,
+                    contentContext = contentContext,
+                    timeout = timeout
+                )
+            }
             if (text != null) _lastSuccessfulMode = modeUsed
             val duration = Clock.System.now() - start
             logger.d { "Transcription completed in $duration" }

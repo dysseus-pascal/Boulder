@@ -9,6 +9,7 @@ import coredevices.util.transcription.TranscriptionSessionStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.io.IOException
+import kotlin.time.Duration
 
 class FakeTranscriptionService : TranscriptionService {
     private val behaviorQueue = ArrayDeque<Behavior>()
@@ -32,7 +33,8 @@ class FakeTranscriptionService : TranscriptionService {
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        encoding: AudioEncoding
+        encoding: AudioEncoding,
+        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         val behavior = behaviorQueue.removeFirst()
         when (behavior) {

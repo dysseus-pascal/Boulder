@@ -2,6 +2,7 @@ package coredevices.util.transcription
 
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Duration
 
 interface TranscriptionService {
     /**
@@ -27,7 +28,8 @@ interface TranscriptionService {
         conversationContext: STTConversationContext? = null,
         dictionaryContext: List<String>? = null,
         contentContext: String? = null,
-        encoding: AudioEncoding = AudioEncoding.PCM_16BIT
+        encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
+        timeout: Duration = Duration.INFINITE
     ): Flow<TranscriptionSessionStatus>
 }
 

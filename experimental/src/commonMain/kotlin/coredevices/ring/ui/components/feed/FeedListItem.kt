@@ -109,7 +109,7 @@ fun FeedListItem(
                     )
                 }
                 when (feedItem.entry?.status) {
-                    null -> Text("Processing...")
+                    null -> Text("Pending...")
                     RecordingEntryStatus.pending -> Text("Transcribing...", overflow = TextOverflow.Ellipsis)
                     RecordingEntryStatus.completed, RecordingEntryStatus.agent_processing, RecordingEntryStatus.agent_error -> Text(
                         feedItem.entry!!.transcription ?: "No transcription",

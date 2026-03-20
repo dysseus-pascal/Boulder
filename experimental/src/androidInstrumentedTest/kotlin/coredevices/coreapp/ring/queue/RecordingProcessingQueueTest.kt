@@ -31,6 +31,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
 import coredevices.ring.external.vermillion.VermillionApi
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
@@ -210,10 +211,11 @@ class RecordingProcessingQueueTest {
 
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
+        singleOf(::RecordingPreprocessor)
 
         // Background scope with short reschedule delay
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
     private fun createFakeAudioFile(fileId: String) {
@@ -236,8 +238,8 @@ class RecordingProcessingQueueTest {
 
     private suspend fun awaitAttempts(taskId: Long, minAttempts: Int, timeout: kotlin.time.Duration = 15.seconds) {
         withTimeout(timeout) {
-            queue.currentTaskId.first { it == taskId }
-            queue.currentTaskId.first { it == null } // Wait for task to finish processing attempt
+            queue.activeTaskIds.first { taskId in it }
+            queue.activeTaskIds.first { taskId !in it } // Wait for task to finish processing attempt
             taskDao.getTaskByIdFlow(taskId).first { it != null && it.attempts >= minAttempts }
         }
     }
@@ -255,6 +257,7 @@ class RecordingProcessingQueueTest {
             queueTaskRepository = koin.get(),
             recordingOperationFactory = koin.get(),
             scope = RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)),
+            recordingPreprocessor = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }

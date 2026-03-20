@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.io.Buffer
 import kotlinx.io.readByteString
+import kotlin.time.Duration
 
 class GCloudTranscriptionService: TranscriptionService {
     private val gcTranscription = GCloudTranscription(BuildKonfig.GCLOUD_DICTATION_URL)
@@ -27,7 +28,8 @@ class GCloudTranscriptionService: TranscriptionService {
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        encoding: AudioEncoding
+        encoding: AudioEncoding,
+        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             TODO("Transcription from default mic is not implemented yet. Please provide audio stream frames.")

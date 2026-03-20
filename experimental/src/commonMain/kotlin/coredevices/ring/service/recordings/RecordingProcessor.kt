@@ -96,8 +96,9 @@ class RecordingProcessor(
         audioStreamFlow,
         sampleRate,
         language = language,
-        encoding = encoding
-    ).flowOn(Dispatchers.IO).timeout(transcriptionTimeout)
+        encoding = encoding,
+        timeout = transcriptionTimeout
+    ).flowOn(Dispatchers.IO)
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {
         withContext(Dispatchers.IO) {

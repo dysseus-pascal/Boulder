@@ -35,11 +35,13 @@ class RecordingProcessingQueue(
     private val scope: RecordingBackgroundScope,
     private val recordingPreprocessor: RecordingPreprocessor,
     rescheduleDelay: Duration = 1.minutes,
+    maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
     repository = queueTaskRepository,
     scope = scope,
     label = "RecordingProcessing",
-    rescheduleDelay = rescheduleDelay
+    rescheduleDelay = rescheduleDelay,
+    maxConcurrency = maxConcurrency,
 ) {
     companion object {
         private val logger = Logger.withTag("RecordingProcessingQueue")
@@ -170,7 +172,9 @@ class RecordingProcessingQueue(
     }
 
     private suspend fun scheduleTask(task: RecordingProcessingTask): Long {
-        val id = queueTaskRepository.insertTask(task)
+        val id = withContext(Dispatchers.IO) {
+            queueTaskRepository.insertTask(task)
+        }
         super.scheduleTask(id)
         return id
     }
@@ -216,14 +220,16 @@ class RecordingProcessingQueue(
     suspend fun queueTextProcessing(
         transcription: String
     ) {
-        val task = ProcessingTask.TextRecording(
-            transcription = transcription
-        )
-        scheduleTask(
-            RecordingProcessingTask(
-                task = task
+        for (i in 1..5) { //FIXME: Testing
+            val task = ProcessingTask.TextRecording(
+                transcription = transcription
             )
-        )
+            scheduleTask(
+                RecordingProcessingTask(
+                    task = task
+                )
+            )
+        }
     }
 
     inner class TaskHandle(val taskId: Long, initialStage: RecordingProcessingStage?) {

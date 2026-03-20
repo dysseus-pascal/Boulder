@@ -10,6 +10,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.data.entity.room.RingTransfer
 import coredevices.ring.data.entity.room.RingTransferStatus
 import coredevices.ring.database.room.RingDatabase
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 class RecordingRepository(
@@ -17,10 +18,11 @@ class RecordingRepository(
     private val recordingEntryDao: RecordingEntryDao,
     private val db: RingDatabase
 ) {
-    suspend fun createRecording(firestoreId: String? = null): Long {
+    suspend fun createRecording(firestoreId: String? = null, localTimestamp: Instant = Clock.System.now()): Long {
         return localRecordingDao.insertRecording(
             LocalRecording(
-                firestoreId = firestoreId
+                firestoreId = firestoreId,
+                localTimestamp = localTimestamp,
             )
         )
     }

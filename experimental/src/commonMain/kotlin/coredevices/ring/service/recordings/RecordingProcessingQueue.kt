@@ -25,6 +25,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 class RecordingProcessingQueue(
     private val recordingStorage: RecordingStorage,
@@ -125,7 +126,9 @@ class RecordingProcessingQueue(
         val recordingId = if (handle.stage is RecordingProcessingStage.RecordingEntityCreated) {
             (handle.stage as RecordingProcessingStage.RecordingEntityCreated).recordingEntityId
         } else {
-            val id = recordingRepository.createRecording()
+            val id = recordingRepository.createRecording(
+                localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created
+            )
             queueTaskRepository.updateTaskRecordingId(
                 taskId = handle.taskId,
                 recordingId = id
@@ -220,16 +223,14 @@ class RecordingProcessingQueue(
     suspend fun queueTextProcessing(
         transcription: String
     ) {
-        for (i in 1..5) { //FIXME: Testing
-            val task = ProcessingTask.TextRecording(
-                transcription = transcription
+        val task = ProcessingTask.TextRecording(
+            transcription = transcription
+        )
+        scheduleTask(
+            RecordingProcessingTask(
+                task = task
             )
-            scheduleTask(
-                RecordingProcessingTask(
-                    task = task
-                )
-            )
-        }
+        )
     }
 
     inner class TaskHandle(val taskId: Long, initialStage: RecordingProcessingStage?) {

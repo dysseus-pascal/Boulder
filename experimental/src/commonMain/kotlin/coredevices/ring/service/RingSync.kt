@@ -78,19 +78,23 @@ sealed interface RingEvent {
 
     interface FirmwareUpdate: RingEvent {
         val newVersion: String
+        val isFailsafe: Boolean
         data class Started(
             override val ringId: String,
-            override val newVersion: String
+            override val newVersion: String,
+            override val isFailsafe: Boolean
         ) : FirmwareUpdate
 
         data class Failed(
             override val ringId: String,
-            override val newVersion: String
+            override val newVersion: String,
+            override val isFailsafe: Boolean
         ) : FirmwareUpdate
 
         data class Success(
             override val ringId: String,
-            override val newVersion: String
+            override val newVersion: String,
+            override val isFailsafe: Boolean
         ) : FirmwareUpdate
     }
 }
@@ -497,15 +501,35 @@ class RingSync(
                                         }
 
                                         is SatelliteStatus.FirmwareUpdating -> {
+                                            val isFailsafe = satelliteStatus.satellite.state.value?.isInFailsafeMode ?: false
                                             when (satelliteStatus) {
                                                 is SatelliteStatus.FirmwareUpdating.Started -> {
                                                     logger.i {
-                                                        "Satellite ${satelliteStatus.satellite.id} started firmware update to version ${satelliteStatus.newVersion}"
+                                                        "Satellite ${satelliteStatus.satellite.id} started firmware update to version ${satelliteStatus.newVersion} isFailsafe = $isFailsafe"
+                                                    }
+                                                    if (isFailsafe && transferRange != null) {
+                                                        logger.e {
+                                                            "Satellite is in failsafe mode but we have an active transfer range, transfer might be interrupted. Marking current transfer as failed and clearing transfer range."
+                                                        }
+                                                        withContext(Dispatchers.IO) {
+                                                            val pending = ringTransferRepository.getPendingTransfersByRange(transferRange!!)
+                                                            pending.forEach { transfer ->
+                                                                ringTransferRepository.updateTransferStatus(transfer.id, RingTransferStatus.Failed)
+                                                            }
+                                                            if (pending.isNotEmpty()) {
+                                                                logger.w {
+                                                                    "Marked ${pending.size} transfers as failed due to satellite entering failsafe mode during active transfer. Transfer range was ${transferRange!!.first} to ${transferRange!!.last}"
+                                                                }
+                                                                sendBugReportPrompt()
+                                                            }
+                                                        }
+                                                        transferRange = null
                                                     }
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Started(
                                                             ringId = satelliteStatus.satellite.id,
-                                                            newVersion = satelliteStatus.newVersion
+                                                            newVersion = satelliteStatus.newVersion,
+                                                            isFailsafe = isFailsafe
                                                         )
                                                     )
                                                 }
@@ -517,7 +541,8 @@ class RingSync(
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Success(
                                                             ringId = satelliteStatus.satellite.id,
-                                                            newVersion = satelliteStatus.newVersion
+                                                            newVersion = satelliteStatus.newVersion,
+                                                            isFailsafe = isFailsafe
                                                         )
                                                     )
                                                 }
@@ -529,7 +554,8 @@ class RingSync(
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Failed(
                                                             ringId = satelliteStatus.satellite.id,
-                                                            newVersion = satelliteStatus.newVersion
+                                                            newVersion = satelliteStatus.newVersion,
+                                                            isFailsafe = isFailsafe,
                                                         )
                                                     )
                                                 }

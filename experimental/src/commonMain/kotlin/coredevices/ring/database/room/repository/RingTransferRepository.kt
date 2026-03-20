@@ -94,6 +94,11 @@ class RingTransferRepository(
         }
     }
 
+    suspend fun getPendingTransfersByRange(range: IntRange): List<RingTransfer> {
+        val transfers = ringTransferDao.getValidTransfersByRange(range.first, range.last)
+        return transfers.filter { it.status == RingTransferStatus.Started }
+    }
+
     suspend fun markTransfersAsPreviousIndexIteration() {
         ringTransferDao.markTransfersAsPreviousIndexIteration()
     }

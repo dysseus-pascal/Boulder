@@ -530,6 +530,7 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
+                        nextBugReportContext.nextContext = null
                         navBarNav.navigateTo(
                             CommonRoutes.BugReport(
                                 pebble = true,

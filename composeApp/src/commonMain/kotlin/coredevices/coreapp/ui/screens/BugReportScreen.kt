@@ -44,6 +44,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -115,6 +116,7 @@ fun BugReportScreen(
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
+        var isWatch by remember { mutableStateOf(pebble) }
         val bugReportProcessor = koinInject<BugReportProcessor>()
         val nextBugReportContext = koinInject<NextBugReportContext>()
         val (userMessage, setUserMessage) = remember { mutableStateOf("") }
@@ -186,9 +188,9 @@ fun BugReportScreen(
                     sendRecording = sendRecording,
                     expOutputPath = recordingPath,
                     imageAttachments = imageAttachments ?: emptyList(),
-                    fetchPebbleLogs = pebble,
-                    fetchPebbleCoreDump = pebble,
-                    includeExperimentalDebugInfo = !pebble,
+                    fetchPebbleLogs = isWatch,
+                    fetchPebbleCoreDump = isWatch,
+                    includeExperimentalDebugInfo = !isWatch,
                     shareLocally = shareLocally,
                 )
 
@@ -345,6 +347,22 @@ fun BugReportScreen(
                         capitalization = KeyboardCapitalization.Sentences
                     )
                 )
+                Text("This is a:", modifier = Modifier.padding(top = 8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    FilterChip(
+                        selected = !isWatch,
+                        onClick = { isWatch = false },
+                        label = { Text("Index bug") }
+                    )
+                    FilterChip(
+                        selected = isWatch,
+                        onClick = { isWatch = true },
+                        label = { Text("Watch bug") }
+                    )
+                }
                 if (user == null) {
                     Text(
                         "You must sign in to submit a bug report",

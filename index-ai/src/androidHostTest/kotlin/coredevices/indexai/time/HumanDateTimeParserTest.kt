@@ -421,6 +421,13 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteTime24HourWithoutAt() {
+        val result = parser.parse("15:00")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(15, 0), result.time)
+    }
+
+    @Test
     fun testAbsoluteTimeWithSpaceBeforeAmPm() {
         val result = parser.parse("at 3:30 pm")
         assertIs<InterpretedDateTime.AbsoluteTime>(result)
@@ -558,6 +565,20 @@ class HumanDateTimeParserTest {
     @Test
     fun testAbsoluteDateTimeTodayAt3pm() {
         val result = parser.parse("today at 3pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 15, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTime3pmToday() {
+        val result = parser.parse("at 3pm today")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 15, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTime3pmTodayFullTime() {
+        val result = parser.parse("3:00PM today")
         assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
         assertEquals(LocalDateTime(2025, 1, 15, 15, 0), result.dateTime)
     }

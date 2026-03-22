@@ -34,7 +34,7 @@ class ReminderTool: BuiltInMcpTool(
                     "date_time_human" to JsonObject(
                         mapOf(
                             "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
+                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format, use English keywords e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
                         ).toJson()
                     ),
                     "message" to JsonObject(

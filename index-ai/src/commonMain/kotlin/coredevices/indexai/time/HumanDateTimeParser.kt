@@ -199,7 +199,7 @@ class HumanDateTimeParser(
         }
 
         // Pattern: "at 3pm tomorrow", "at 3pm today"
-        val timeDayWordPattern = Regex("""at\s+(.+?)\s+(today|tomorrow)""")
+        val timeDayWordPattern = Regex("""(?:at\s+)?(.+?)\s+(today|tomorrow)""")
         timeDayWordPattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
             val dayWord = match.groupValues[2]
@@ -219,7 +219,7 @@ class HumanDateTimeParser(
         }
 
         // Pattern: "at 3pm next Monday", "at 3pm on Monday"
-        val timeDayOfWeekPattern = Regex("""at\s+(.+?)\s+(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
+        val timeDayOfWeekPattern = Regex("""(?:at\s+)?(.+?)\s+(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
         timeDayOfWeekPattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
             val dayName = match.groupValues[2]
@@ -241,7 +241,7 @@ class HumanDateTimeParser(
         }
 
         // Pattern: "at 3pm on January 15", "at 3pm on January 15, 2026"
-        val timeMonthDayPattern = Regex("""at\s+(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?""")
+        val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?""")
         timeMonthDayPattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
             val monthName = match.groupValues[2]

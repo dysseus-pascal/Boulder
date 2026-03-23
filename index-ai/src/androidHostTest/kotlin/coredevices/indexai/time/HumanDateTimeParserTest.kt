@@ -455,6 +455,55 @@ class HumanDateTimeParserTest {
         assertEquals(LocalDateTime(2025, 1, 16, 15, 0), result.dateTime)
     }
 
+    @Test
+    fun testAbsoluteFuzzyDateTimeMorning() {
+        val result = parser.parse("tomorrow morning")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 9, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeThisMorning() {
+        val result = parser.parse("this morning")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 9, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeEvening() {
+        val result = parser.parse("tomorrow evening")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 19, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeThisEvening() {
+        val result = parser.parse("this evening")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 19, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeAfternoon() {
+        val result = parser.parse("tomorrow afternoon")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 14, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeThisAfternoon() {
+        val result = parser.parse("this afternoon")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 14, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteFuzzyDateTimeNight() {
+        val result = parser.parse("tomorrow night")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 21, 0), result.dateTime)
+    }
+
     // ===== ABSOLUTE DATE TESTS =====
 
     @Test

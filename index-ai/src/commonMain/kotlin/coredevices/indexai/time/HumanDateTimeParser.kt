@@ -185,8 +185,28 @@ class HumanDateTimeParser(
         }
     }
 
+    private fun parseTimeOfDay(timeOfDay: String): LocalTime? {
+        return when (timeOfDay.lowercase()) {
+            "morning" -> LocalTime(9, 0)
+            "afternoon" -> LocalTime(14, 0)
+            "evening" -> LocalTime(19, 0)
+            "night" -> LocalTime(21, 0)
+            else -> null
+        }
+    }
+
     private fun parseAbsoluteDateTime(input: String): InterpretedDateTime.AbsoluteDateTime? {
         // Try patterns that combine date and time
+
+        // Pattern: "tomorrow morning", "today evening", "tomorrow afternoon"
+        val dayWordTimeOfDayPattern = Regex("""(today|tomorrow|this)\s+(morning|afternoon|evening|night)""")
+        dayWordTimeOfDayPattern.find(input)?.let { match ->
+            val dayWord = match.groupValues[1].let { if (it == "this") "today" else it }
+            val timeOfDay = match.groupValues[2]
+            val date = parseDayWord(dayWord) ?: return null
+            val time = parseTimeOfDay(timeOfDay) ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
 
         // Pattern: "tomorrow at 3pm", "today at 3pm"
         val dayWordTimePattern = Regex("""(today|tomorrow)\s+at\s+(.+)""")

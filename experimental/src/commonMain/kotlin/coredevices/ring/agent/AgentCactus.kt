@@ -14,6 +14,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,7 @@ class AgentCactus(
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
 ) : KoinComponent, Agent {
 
-    private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1).apply {
+    private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST).apply {
         tryEmit(conversation)
     }
     override val conversation: SharedFlow<List<ConversationMessageDocument>> get() = _conversation
@@ -112,6 +113,11 @@ class AgentCactus(
                 Message.user("/no_think $input")
             )
 
+            _conversation.emit(_conversation.first() + ConversationMessageDocument(
+                role = MessageRole.user,
+                content = input
+            ))
+
             inferenceBoost.acquire()
             val result = try {
                 cactus.complete(
@@ -135,30 +141,20 @@ class AgentCactus(
                 Triple(name, arguments, call)
             } ?: emptyList()
 
-            _conversation.emit(
-                _conversation.first().toMutableList().apply {
-                    addAll(listOf(
-                        ConversationMessageDocument(
-                            role = MessageRole.user,
-                            content = input
-                        ),
-                        ConversationMessageDocument(
-                            role = MessageRole.assistant,
-                            content = result.text.ifBlank { null },
-                            tool_calls = toolCalls.map { (name, args, _) ->
-                                ToolCall(
-                                    id = name,
-                                    type = "function",
-                                    function = FunctionToolCall(
-                                        name = name,
-                                        arguments = args.toString()
-                                    )
-                                )
-                            },
+            _conversation.emit(_conversation.first() + ConversationMessageDocument(
+                role = MessageRole.assistant,
+                content = result.text.ifBlank { null },
+                tool_calls = toolCalls.map { (name, args, _) ->
+                    ToolCall(
+                        id = name,
+                        type = "function",
+                        function = FunctionToolCall(
+                            name = name,
+                            arguments = args.toString()
                         )
-                    ))
-                }
-            )
+                    )
+                },
+            ))
 
             if (toolCalls.isNotEmpty() && !skipToolExecution) {
                 for ((name, arguments, _) in toolCalls) {

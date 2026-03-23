@@ -164,14 +164,13 @@ class RecordingProcessor(
             // Reset conversation to before processing so task retry works correctly
             logger.e(e) { "Error during agent processing" }
             convUpdJob.cancel()
-            updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
             throw RecoverableTaskException("Network error during agent processing: ${e.message}", e)
         } catch (e: Throwable) {
             logger.e(e) { "Error during agent processing" }
         } finally {
             convUpdJob.cancelAndJoin()
+            updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
         }
-        convUpdJob.cancelAndJoin()
         val userMessageId = conversationMessageDao.getLastMessageForRecordingByRole(
             recordingId,
             MessageRole.user

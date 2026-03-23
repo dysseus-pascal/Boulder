@@ -114,9 +114,12 @@ fun AppStoreCollectionScreen(
     }
     val currentHearts = currentHearts()
     val apps = remember(viewModel.loadedApps, sharedViewModel.showScaled.value, sharedViewModel.showIncompatible.value, sharedViewModel.hearted.value) {
-        viewModel.loadedApps?.map {
-            it.filter { app ->
-                if (!sharedViewModel.showScaled.value && !app.isNativelyCompatible) {
+        viewModel.loadedApps?.map { pagingData ->
+            val seenIds = mutableSetOf<String>()
+            pagingData.filter { app ->
+                if (!seenIds.add("${app.storeId}-${app.uuid}")) {
+                    false
+                } else if (!sharedViewModel.showScaled.value && !app.isNativelyCompatible) {
                     false
                 } else if (!sharedViewModel.showIncompatible.value && !app.isCompatible) {
                     false

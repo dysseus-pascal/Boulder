@@ -21,9 +21,9 @@ import kotlin.time.Instant
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-actual class NativeReminder actual constructor(
-    actual override val time: Instant?,
-    actual override val message: String
+class AndroidBuiltInReminder(
+    override val time: Instant?,
+    override val message: String
 ): ListAssignableReminder, KoinComponent {
     private val context: Context by inject()
     private val db: RingDatabase by inject()
@@ -31,13 +31,13 @@ actual class NativeReminder actual constructor(
 
     private var _reminderId: Int? = null
     val reminderId: Int? get() = _reminderId
-    actual override val listTitle: String? = null
+    override val listTitle: String? = null
 
     private constructor(time: Instant?, message: String, workId: Int): this(time, message) {
         _reminderId = workId
     }
 
-    actual override suspend fun schedule(): String {
+    override suspend fun schedule(): String {
         require(time == null || time > Clock.System.now()) { "Time must be in the future" }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -77,7 +77,7 @@ actual class NativeReminder actual constructor(
         return id.toString()
     }
 
-    actual override suspend fun cancel() {
+    override suspend fun cancel() {
         val reminderId = _reminderId ?: return
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -96,13 +96,13 @@ actual class NativeReminder actual constructor(
         _reminderId = null
     }
 
-    actual override suspend fun scheduleToList(listName: String): String {
+    override suspend fun scheduleToList(listName: String): String {
         return schedule()
     }
 
-    actual companion object {
-        actual fun fromData(data: LocalReminderData): NativeReminder {
-            return NativeReminder(data.time, data.message, data.id)
+    companion object {
+        fun fromData(data: LocalReminderData): AndroidBuiltInReminder {
+            return AndroidBuiltInReminder(data.time, data.message, data.id)
         }
     }
 }

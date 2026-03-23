@@ -23,16 +23,16 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Instant
 
-actual class NativeReminder actual constructor(
-    actual override val time: Instant?,
-    actual override val message: String
+class IOSRemindersReminder(
+    override val time: Instant?,
+    override val message: String
 ) : ListAssignableReminder, KoinComponent {
     private val db: RingDatabase by inject()
 
     private var _reminderId: Int? = null
     val reminderId: Int? get() = _reminderId
     private var _listTitle: String? = null
-    actual override val listTitle: String?
+    override val listTitle: String?
         get() = _listTitle
 
     private constructor(time: Instant?, message: String, reminderId: Int) : this(time, message) {
@@ -70,7 +70,7 @@ actual class NativeReminder actual constructor(
         return ekReminder.calendarItemIdentifier
     }
 
-    actual override suspend fun schedule(): String {
+    override suspend fun schedule(): String {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }
         val calendar = eventStore.defaultCalendarForNewReminders()
@@ -78,11 +78,11 @@ actual class NativeReminder actual constructor(
         return scheduleForCalendar(eventStore, calendar, message, time?.toNSDate())
     }
 
-    actual override suspend fun cancel() {
+    override suspend fun cancel() {
 
     }
 
-    actual override suspend fun scheduleToList(listName: String): String {
+    override suspend fun scheduleToList(listName: String): String {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }
         @Suppress("UNCHECKED_CAST")
@@ -93,12 +93,12 @@ actual class NativeReminder actual constructor(
         return scheduleForCalendar(eventStore, calendar, message, time?.toNSDate())
     }
 
-    actual companion object {
+    companion object {
         private const val REMINDER_TAG_PREFIX = "coredevices-reminder-"
-        private val logger = Logger.withTag("NativeReminder")
+        private val logger = Logger.withTag("IOSRemindersReminder")
 
-        actual fun fromData(data: LocalReminderData): NativeReminder {
-            return NativeReminder(data.time, data.message, data.id)
+        fun fromData(data: LocalReminderData): IOSRemindersReminder {
+            return IOSRemindersReminder(data.time, data.message, data.id)
         }
     }
 }

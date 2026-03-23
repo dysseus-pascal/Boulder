@@ -74,15 +74,17 @@ class RecordingProcessor(
     }
 
     private suspend fun updateConversation(localRecordingId: Long, conversation: List<ConversationMessageDocument>) {
-        val existingMessages = conversationMessageDao.getMessagesForRecording(localRecordingId).first()
-        val newMessages = conversation.drop(existingMessages.size).map {
-            ConversationMessageEntity(
-                recordingId = localRecordingId,
-                document = it
-            )
-        }
-        if (newMessages.isNotEmpty()) {
-            conversationMessageDao.insertMessages(newMessages)
+        withContext(Dispatchers.IO) {
+            val existingMessages = conversationMessageDao.getMessagesForRecording(localRecordingId).first()
+            val newMessages = conversation.drop(existingMessages.size).map {
+                ConversationMessageEntity(
+                    recordingId = localRecordingId,
+                    document = it
+                )
+            }
+            if (newMessages.isNotEmpty()) {
+                conversationMessageDao.insertMessages(newMessages)
+            }
         }
     }
 

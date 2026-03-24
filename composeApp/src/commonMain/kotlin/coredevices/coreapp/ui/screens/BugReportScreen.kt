@@ -78,6 +78,7 @@ import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInDialog
+import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.util.emailOrNull
 import coredevices.util.isIOS
@@ -117,6 +118,8 @@ fun BugReportScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
         var isWatch by remember { mutableStateOf(pebble) }
+        val coreConfigFlow: CoreConfigFlow = koinInject()
+        val coreConfig by coreConfigFlow.flow.collectAsState()
         val bugReportProcessor = koinInject<BugReportProcessor>()
         val nextBugReportContext = koinInject<NextBugReportContext>()
         val (userMessage, setUserMessage) = remember { mutableStateOf("") }
@@ -347,21 +350,23 @@ fun BugReportScreen(
                         capitalization = KeyboardCapitalization.Sentences
                     )
                 )
-                Text("This is a:", modifier = Modifier.padding(top = 8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    FilterChip(
-                        selected = !isWatch,
-                        onClick = { isWatch = false },
-                        label = { Text("Index bug") }
-                    )
-                    FilterChip(
-                        selected = isWatch,
-                        onClick = { isWatch = true },
-                        label = { Text("Watch bug") }
-                    )
+                if (coreConfig.enableIndex) {
+                    Text("This is a:", modifier = Modifier.padding(top = 8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        FilterChip(
+                            selected = !isWatch,
+                            onClick = { isWatch = false },
+                            label = { Text("Index bug") }
+                        )
+                        FilterChip(
+                            selected = isWatch,
+                            onClick = { isWatch = true },
+                            label = { Text("Watch bug") }
+                        )
+                    }
                 }
                 if (user == null) {
                     Text(

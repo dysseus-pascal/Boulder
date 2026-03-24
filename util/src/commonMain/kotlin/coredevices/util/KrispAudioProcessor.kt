@@ -71,7 +71,7 @@ class KrispAudioProcessor: AutoCloseable {
             input.copyInto(output)
             return
         }
-        session.process(input, output, noiseSuppressionLevel = 90.0f)
+        session.process(input, output, noiseSuppressionLevel = 95.0f)
     }
 
     override fun close() {

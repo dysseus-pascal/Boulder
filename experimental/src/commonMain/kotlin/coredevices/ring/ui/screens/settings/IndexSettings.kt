@@ -70,6 +70,7 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.isIOS
 import kotlinx.coroutines.flow.flow
 import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.stringResource
@@ -711,16 +712,39 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
+    val platform = koinInject<Platform>()
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        IntegrationItem(
-            title = "Built-in",
-            hasReminder = true,
-            hasNotes = true,
-            selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
-            selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-            onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
-            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
-        )
+        if (platform.isIOS) {
+            IntegrationItem(
+                title = "Built-in",
+                hasReminder = false,
+                hasNotes = true,
+                selectedReminderProvider = false,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+                onSelectReminderProvider = {},
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            )
+            IntegrationItem(
+                title = "iOS",
+                hasReminder = true,
+                hasNotes = false,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedNoteProvider = false,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectNoteProvider = {}
+            )
+        } else {
+            IntegrationItem(
+                title = "Built-in",
+                hasReminder = true,
+                hasNotes = true,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            )
+        }
         if (gTasksAuth) {
             IntegrationItem(
                 title = GTasksIntegration.DEFINITION.title,

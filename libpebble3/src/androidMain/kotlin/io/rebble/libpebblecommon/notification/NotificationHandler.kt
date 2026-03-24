@@ -332,17 +332,21 @@ Processed as:
     private fun Bundle.dump(indent: Int): String {
         val newlineIndent = "\n${" ".repeat(indent)}"
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
-            try {
-                val value = get(it)
-                when {
-                    value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
-                        value.toString().obfuscate(privateLogger)
-                    }"
+            if (it in EXTRA_KEYS_SKIP_VALUE) {
+                "$it = <skipped>"
+            } else {
+                try {
+                    val value = get(it)
+                    when {
+                        value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                            value.toString().obfuscate(privateLogger)
+                        }"
 
-                    else -> "$it = ${get(it)}"
+                        else -> "$it = ${get(it)}"
+                    }
+                } catch (_: Exception) {
+                    "$it = unknown (crashed)"
                 }
-            } catch (_: Exception) {
-                "$it = unknown (crashed)"
             }
         }
     }
@@ -377,7 +381,11 @@ private fun LibPebbleNotification.isPebbleTestNotification(): Boolean = packageN
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 private val EXTRA_KEYS_NON_STRING_SENSITIVE =
-    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list", "android.largeIcon")
+    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
+
+// Keys whose values are large binary objects (bitmaps, icons) — skip get() entirely to avoid OOM
+private val EXTRA_KEYS_SKIP_VALUE =
+    setOf("android.largeIcon", "android.picture", "android.backgroundImage", "android.icon", "android.smallIcon")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

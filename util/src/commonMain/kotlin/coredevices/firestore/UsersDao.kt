@@ -6,8 +6,10 @@ import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
@@ -50,14 +52,17 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
 
     override fun init() {
         GlobalScope.launch {
-            // Wait for Firebase to restore persisted auth state before proceeding
-            Firebase.auth.authStateChanged.first()
             Firebase.auth.authStateChanged
                 .onStart { emit(Firebase.auth.currentUser) }
                 .distinctUntilChanged { old, new -> old?.uid == new?.uid }
                 .flatMapLatest { firebaseUser ->
                     logger.v { "User changed: $firebaseUser" }
                     if (firebaseUser == null) {
+                        // Firebase may emit null briefly on process start before it finishes
+                        // loading persisted auth state from disk (~1s). Delay here so flatMapLatest
+                        // can cancel us if the real user arrives, avoiding a spurious signInAnonymously()
+                        // that would clobber a real account with a fresh anonymous one.
+                        delay(2.seconds)
                         _user.emit(null)
                         logger.i { "Logging into firebase anonymously" }
                         try {

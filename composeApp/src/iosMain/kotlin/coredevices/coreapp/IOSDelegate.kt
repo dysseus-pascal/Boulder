@@ -51,10 +51,14 @@ import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSData
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
 import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.isLowPowerModeEnabled
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundFetchResult
 import platform.UIKit.UIUserNotificationSettings
@@ -145,6 +149,14 @@ object IOSDelegate : KoinComponent {
         }
         setupCrashlytics()
         initLogging()
+        NSNotificationCenter.defaultCenter.addObserverForName(
+            name = NSProcessInfoPowerStateDidChangeNotification,
+            `object` = null,
+            queue = null,
+        ) { _ ->
+            val isLowPowerMode = NSProcessInfo.processInfo.isLowPowerModeEnabled()
+            logger.i { "Power state changed: isLowPowerMode=$isLowPowerMode" }
+        }
         val crashedPreviously = Firebase.crashlytics.didCrashOnPreviousExecution()
         if (crashedPreviously) {
             logger.e { "Previous app crash detected!" }

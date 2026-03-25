@@ -1,7 +1,12 @@
 package coredevices.coreapp
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build.VERSION.SDK_INT
+import android.os.PowerManager
 import android.os.StrictMode
 import androidx.compose.foundation.layout.add
 import androidx.work.Constraints
@@ -69,6 +74,12 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         }
         initLogging()
         logger.i { "onCreate() version = ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${BuildConfig.BUILD_TYPE}" }
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                logger.i { "Power state changed: isPowerSaveMode=${powerManager.isPowerSaveMode}" }
+            }
+        }, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
         setupExceptionHandler()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()

@@ -88,10 +88,14 @@ import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
+import size
 
 expect fun isThirdPartyTest(): Boolean
 expect fun getExperimentalDebugInfoDirectory(): String
@@ -114,6 +118,7 @@ fun BugReportScreen(
     coreNav: CoreNav,
     pebble: Boolean,
     recordingPath: String?,
+    screenshotPath: String?,
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
@@ -190,7 +195,25 @@ fun BugReportScreen(
                     attachments = attachments ?: emptyList(),
                     sendRecording = sendRecording,
                     expOutputPath = recordingPath,
-                    imageAttachments = imageAttachments ?: emptyList(),
+                    imageAttachments = (imageAttachments ?: emptyList()) +
+                            if (screenshotPath != null) {
+                                try {
+                                    val screenshotFile = Path(screenshotPath)
+                                    listOf(
+                                        DocumentAttachment(
+                                            fileName = "watch-screenshot.png",
+                                            mimeType = "image/png",
+                                            source = SystemFileSystem.source(screenshotFile)
+                                                .buffered(),
+                                            size = screenshotFile.size(),
+                                        )
+                                    )
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                            } else {
+                                emptyList()
+                            },
                     fetchPebbleLogs = isWatch,
                     fetchPebbleCoreDump = isWatch,
                     includeExperimentalDebugInfo = !isWatch,

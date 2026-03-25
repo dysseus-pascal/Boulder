@@ -117,6 +117,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                     coreNav = coreNav,
                     pebble = route.pebble,
                     recordingPath = route.recordingPath,
+                    screenshotPath = route.screenshotPath,
                 )
             }
             composable<CommonRoutes.AlphaTestInstructionsRoute> {

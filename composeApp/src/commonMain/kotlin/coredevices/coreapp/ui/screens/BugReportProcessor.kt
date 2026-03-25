@@ -123,7 +123,7 @@ class BugReportProcessor(
     private val coreConfigFlow: CoreConfigFlow,
     private val permissionRequester: PermissionRequester,
     private val companionDevice: CompanionDevice,
-    ) {
+) {
     private val logger = Logger.withTag("BugReportProcessor")
 
     private fun getPKJSSummary(): String {

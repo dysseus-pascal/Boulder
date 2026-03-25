@@ -108,10 +108,22 @@ class RecordingProcessor(
         }
     }
 
-    private fun watchConversationUpdates(scope: CoroutineScope, agent: Agent, localRecordingId: Long): Job {
+    private fun watchConversationUpdates(scope: CoroutineScope, agent: Agent, localRecordingId: Long, recordingEntryId: Long?): Job {
+        var updatedMessageId = false
         return agent.conversation.drop(1).onEach { // Skip the initial value as this will be the same as what we have already stored, or invalid
             logger.d { "Agent conversation updated, ${it.size} messages:\n${it.joinToString("\n") { it.role.toString() + ": " + it.content }}" }
             updateConversation(localRecordingId, it)
+            if (recordingEntryId != null && !updatedMessageId) {
+                val userMessageId = conversationMessageDao.getLastMessageForRecordingByRole(
+                    localRecordingId,
+                    MessageRole.user
+                ).firstOrNull()?.id
+                logger.d { "User message ID for recording entry update: $userMessageId\nconv: ${conversationMessageDao.getMessagesForRecording(localRecordingId)}" }
+                userMessageId?.let {
+                    updateRecordingEntryMessage(recordingEntryId, it)
+                    updatedMessageId = true
+                }
+            }
         }.flowOn(Dispatchers.IO).launchIn(scope)
     }
 
@@ -155,7 +167,8 @@ class RecordingProcessor(
         val convUpdJob = watchConversationUpdates(
             CoroutineScope(currentCoroutineContext()),
             agent,
-            recordingId
+            recordingId,
+            recordingEntryId
         )
         val convEndIdx = agent.conversation.first().size
         try {
@@ -170,16 +183,6 @@ class RecordingProcessor(
         } finally {
             convUpdJob.cancelAndJoin()
             updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
-        }
-        val userMessageId = conversationMessageDao.getLastMessageForRecordingByRole(
-            recordingId,
-            MessageRole.user
-        ).first()?.id
-        logger.d { "User message ID for recording entry update: $userMessageId\nconv: ${conversationMessageDao.getMessagesForRecording(recordingId)}" }
-        userMessageId?.let {
-            recordingEntryId?.let {
-                updateRecordingEntryMessage(recordingEntryId, userMessageId)
-            }
         }
         val conv = agent.conversation.firstOrNull() ?: emptyList()
         val noToolRan = conv.drop(convEndIdx).all { it.role != MessageRole.tool }

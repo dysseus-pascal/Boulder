@@ -97,6 +97,7 @@ import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.SearchPagingSource
 import coredevices.pebble.services.StoreCategory
+import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -375,16 +376,23 @@ fun LockerScreen(
                             }
                         }
                     }?.collectAsLazyPagingItems()
+                    val hasUnfilteredStoreResults = (remember(viewModel.searchPager, lockerUuids) {
+                        viewModel.searchPager?.map { pagingData ->
+                            pagingData.filter { app -> app.uuid !in lockerUuids }
+                        }
+                    }?.collectAsLazyPagingItems()?.itemCount ?: 0) > 0
 
                     Column {
                         SearchResultsList(
                             lockerEntries = lockerEntries,
                             storeResults = filteredStoreResults,
+                            hasUnfilteredStoreResults = hasUnfilteredStoreResults,
                             navBarNav = navBarNav,
                             topBarParams = topBarParams,
                             lazyListState = searchListState,
                             modifier = Modifier.weight(1f),
                             appType = viewModel.type.value,
+                            sharedViewModel = sharedViewModel,
                         )
                     }
                 } else {
@@ -685,11 +693,13 @@ fun String.toColorKmp(): Color {
 fun SearchResultsList(
     lockerEntries: List<CommonApp>,
     storeResults: LazyPagingItems<CommonApp>?,
+    hasUnfilteredStoreResults: Boolean,
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     lazyListState: LazyListState,
     modifier: Modifier = Modifier,
     appType: AppType,
+    sharedViewModel: SharedLockerViewModel,
 ) {
     val scope = rememberCoroutineScope()
     val isLoadingFirstPage = storeResults == null || (storeResults.loadState.refresh is LoadState.Loading && storeResults.itemCount == 0)
@@ -742,6 +752,18 @@ fun SearchResultsList(
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
+                    }
+                } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        PebbleElevatedButton(
+                            text = "Clear filters for more results",
+                            onClick = {
+                                sharedViewModel.hearted.value = false
+                                sharedViewModel.showScaled.value = true
+                                sharedViewModel.showIncompatible.value = true
+                            },
+                            primaryColor = true,
+                        )
                     }
                 }
             }
@@ -820,6 +842,18 @@ fun SearchResultsList(
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
+                    }
+                } else if (storeResults.itemCount == 0 && hasUnfilteredStoreResults) {
+                    item {
+                        PebbleElevatedButton(
+                            text = "Clear filters for more results",
+                            onClick = {
+                                sharedViewModel.hearted.value = false
+                                sharedViewModel.showScaled.value = true
+                                sharedViewModel.showIncompatible.value = true
+                            },
+                            primaryColor = true,
+                        )
                     }
                 }
             }

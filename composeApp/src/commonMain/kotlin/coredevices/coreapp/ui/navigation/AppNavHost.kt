@@ -61,6 +61,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                         } catch (e: IllegalArgumentException) {
                             logger.w(e) { "Failed to navigate to $route" }
                         }
+                        deepLinks.clearPendingDeepLink()
                     }
                 }
                 scope.launch {

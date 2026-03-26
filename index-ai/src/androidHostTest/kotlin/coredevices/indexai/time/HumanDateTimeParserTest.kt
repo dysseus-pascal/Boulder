@@ -179,6 +179,92 @@ class HumanDateTimeParserTest {
         assertEquals(3.hours, result.duration)
     }
 
+    // ===== COMPOUND DURATION TESTS =====
+
+    @Test
+    fun testCompoundInHoursAndMinutes() {
+        val result = parser.parse("in 1 hour and 10 minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundInHoursMinutesNoAnd() {
+        val result = parser.parse("in 1 hour 10 minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundWordHoursAndMinutes() {
+        val result = parser.parse("in one hour and ten minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundWordHoursMinutesNoAnd() {
+        val result = parser.parse("one hour ten minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundWordHoursMinutesCommaNoAnd() {
+        val result = parser.parse("one hour, ten minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundTwoHoursThirtyMinutes() {
+        val result = parser.parse("in 2 hours and 30 minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(150.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundTwoHoursThirtyMinutesNoAnd() {
+        val result = parser.parse("in 2 hours 30 minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(150.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundFromNow() {
+        val result = parser.parse("1 hour and 30 minutes from now")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(90.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundFromNowNoAnd() {
+        val result = parser.parse("1 hour 30 minutes from now")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(90.minutes, result.duration)
+    }
+
+    @Test
+    fun testCompoundDayAndHours() {
+        val result = parser.parse("in 1 day and 3 hours")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(27.hours, result.duration)
+    }
+
+    @Test
+    fun testCompoundMinutesAndSeconds() {
+        val result = parser.parse("in 45 minutes and 30 seconds")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(45.minutes + 30.seconds, result.duration)
+    }
+
+    @Test
+    fun testCompoundStandaloneNoIn() {
+        val result = parser.parse("1 hour 10 minutes")
+        assertIs<InterpretedDateTime.Relative>(result)
+        assertEquals(70.minutes, result.duration)
+    }
+
     // ===== WORD NUMBER TESTS =====
 
     @Test

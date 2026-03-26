@@ -70,6 +70,25 @@ class HumanDateTimeParser(
             return InterpretedDateTime.Relative(12.hours)
         }
 
+        // Compound patterns must be tried before single-unit patterns to avoid partial matches
+        inCompoundPattern.find(input)?.let { match ->
+            val a1 = parseQuantifier(match.groupValues[1]) ?: return null
+            val a2 = parseQuantifier(match.groupValues[3]) ?: return null
+            return combineRelative(a1, match.groupValues[2], a2, match.groupValues[4])
+        }
+
+        fromNowCompoundPattern.find(input)?.let { match ->
+            val a1 = parseQuantifier(match.groupValues[1]) ?: return null
+            val a2 = parseQuantifier(match.groupValues[3]) ?: return null
+            return combineRelative(a1, match.groupValues[2], a2, match.groupValues[4])
+        }
+
+        standaloneCompoundPattern.find(input)?.let { match ->
+            val a1 = parseQuantifier(match.groupValues[1]) ?: return null
+            val a2 = parseQuantifier(match.groupValues[3]) ?: return null
+            return combineRelative(a1, match.groupValues[2], a2, match.groupValues[4])
+        }
+
         inPattern.find(input)?.let { match ->
             val amount = parseQuantifier(match.groupValues[1]) ?: return null
             val unit = match.groupValues[2]
@@ -89,6 +108,13 @@ class HumanDateTimeParser(
         }
 
         return null
+    }
+
+    private fun combineRelative(a1: Long, unit1: String, a2: Long, unit2: String): InterpretedDateTime.Relative? {
+        val r1 = toRelative(a1, unit1) ?: return null
+        val r2 = toRelative(a2, unit2) ?: return null
+        if (r1.period != null || r2.period != null) return null
+        return InterpretedDateTime.Relative(r1.duration + r2.duration)
     }
 
     private fun parseQuantifier(quantifier: String): Long? {
@@ -401,9 +427,14 @@ class HumanDateTimeParser(
         private const val UNIT_EXPR = """(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)"""
         private const val UNIT_CAPTURE = """(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)"""
 
+        private const val COMPOUND_SEP = """(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s+)"""
+
         // Relative patterns
         private val halfHourPattern = Regex("""(?:in\s+)?half\s+an?\s+hour(?:\s+from\s+now)?""")
         private val halfDayPattern = Regex("""(?:in\s+)?half\s+a\s+day(?:\s+from\s+now)?""")
+        private val inCompoundPattern = Regex("""in\s+$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$COMPOUND_SEP$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE""")
+        private val fromNowCompoundPattern = Regex("""$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$COMPOUND_SEP$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE\s+from\s+now""")
+        private val standaloneCompoundPattern = Regex("""^$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$COMPOUND_SEP$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$""")
         private val inPattern = Regex("""in\s+$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE""")
         private val fromNowPattern = Regex("""$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE\s+from\s+now""")
         private val standaloneDurationPattern = Regex("""^$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$""")
@@ -443,6 +474,8 @@ class HumanDateTimeParser(
             // Relative durations
             Regex("""(?:in\s+)?half\s+an?\s+hour(?:\s+from\s+now)?"""),
             Regex("""(?:in\s+)?half\s+a\s+day(?:\s+from\s+now)?"""),
+            Regex("""in\s+$QUANTIFIER_EXPR\s+$UNIT_EXPR$COMPOUND_SEP$QUANTIFIER_EXPR\s+$UNIT_EXPR"""),
+            Regex("""$QUANTIFIER_EXPR\s+$UNIT_EXPR$COMPOUND_SEP$QUANTIFIER_EXPR\s+$UNIT_EXPR\s+from\s+now"""),
             Regex("""in\s+$QUANTIFIER_EXPR\s+$UNIT_EXPR"""),
             Regex("""$QUANTIFIER_EXPR\s+$UNIT_EXPR\s+from\s+now"""),
             // "at <time>" (standalone)

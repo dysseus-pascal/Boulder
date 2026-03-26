@@ -75,7 +75,7 @@ interface RingTransferDao {
         (:includeDiscarded OR transfer_id IS NULL OR transfer_status != 'Discarded')
         AND
         (transfer_id IS NOT NULL OR feedItem_rootRecordingId IS NOT NULL)
-        ORDER BY COALESCE(transfer_createdAt, feedItem_localTimestamp) DESC
+        ORDER BY COALESCE(feedItem_localTimestamp, transfer_createdAt) DESC
     """)
     fun getPaginatedTransfersWithFeedItem(includeDiscarded: Boolean): PagingSource<Int, RingTransferFeedItem>
 

@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.NotificationAdd
@@ -136,6 +137,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.ConnectingPebbleDevice
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.DisconnectingPebbleDevice
 import io.rebble.libpebblecommon.connection.DiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
@@ -1495,6 +1497,28 @@ fun WatchDetails(
                 modifier = Modifier.padding(15.dp)
             )
         }
+    }
+    if (watch !is CommonConnectedDevice && watch.connectionFailureInfo?.reason == ConnectionFailureReason.CreateBondFailed) {
+        var showPairingErrorDialog by remember { mutableStateOf(false) }
+        if (showPairingErrorDialog) {
+            AlertDialog(
+                onDismissRequest = { showPairingErrorDialog = false },
+                title = { Text("Error Pairing") },
+                text = { Text("Please go to system bluetooth settings, and unpair this device") },
+                confirmButton = {
+                    TextButton(onClick = { showPairingErrorDialog = false }) { Text("OK") }
+                }
+            )
+        }
+        PebbleElevatedButton(
+            text = "Error Pairing",
+            icon = Icons.Default.Error,
+            onClick = {
+                showPairingErrorDialog = true
+            },
+            primaryColor = true,
+            modifier = Modifier.padding(vertical = 5.dp),
+        )
     }
     Row {
         Box(modifier = Modifier.weight(1f)) {

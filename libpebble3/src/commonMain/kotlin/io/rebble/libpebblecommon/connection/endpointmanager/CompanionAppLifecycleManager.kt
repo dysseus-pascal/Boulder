@@ -17,9 +17,15 @@ import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +34,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlin.coroutines.cancellation.CancellationException
 
 class CompanionAppLifecycleManager(
@@ -46,6 +55,7 @@ class CompanionAppLifecycleManager(
 
     private lateinit var device: CompanionAppDevice
 
+    private var activeAppScope: CoroutineScope = CoroutineScope(Job().also { it.cancel() })
 
     private val runningApps: MutableStateFlow<List<CompanionApp>> = MutableStateFlow(emptyList())
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
@@ -55,21 +65,41 @@ class CompanionAppLifecycleManager(
         get() = runningApps.asStateFlow()
 
     private suspend fun handleAppStop() {
+        activeAppScope.cancel()
         runningApps.value.forEach { it.stop() }
         runningApps.value = emptyList()
     }
 
     private suspend fun handleNewRunningApp(lockerEntry: LockerEntry) {
         try {
+            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+                logger.e(throwable) { "Unhandled exception in CompanionAppLifecycleManager-${lockerEntry.id}: ${throwable.message}" }
+            }
+            activeAppScope = connectionScope +
+                    Job() +
+                    CoroutineName("CompanionAppLifecycleManager-${lockerEntry.id}") +
+                    exceptionHandler
+
             val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, lockerEntry.version, locker))
             if (runningApps.value.isNotEmpty()) {
                 logger.w { "App ${lockerEntry.id} is already running, stopping it before starting a new one" }
                 runningApps.value.forEach { it.stop() }
             }
 
-            runningApps.value = createCompanionApps(pbw, lockerEntry).also { apps ->
-                apps.forEach {
-                    it.start()
+            val newApps = createCompanionApps(pbw, lockerEntry)
+            runningApps.value = newApps
+
+            val appIncomingChannels = newApps.map { Channel<AppMessageData>(Channel.BUFFERED) }
+
+            newApps.zip(appIncomingChannels).forEach { (app, channel) ->
+                app.start(channel.receiveAsFlow())
+            }
+
+            activeAppScope.launch {
+                device.inboundAppMessages(lockerEntry.id).collect { message ->
+                    for (channel in appIncomingChannels) {
+                        channel.trySend(message)
+                    }
                 }
             }
         } catch (e: CancellationException) {

@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -57,8 +58,8 @@ class PebbleKitClassic(
         }
     }
 
-    private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        device.inboundAppMessages(uuid).onEach { appMessageData ->
+    private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
+        messages.onEach { appMessageData ->
             logger.d { "Got inbound message" }
 
             val pebbleDictionary = appMessageData.data.toPebbleDictionary()
@@ -126,13 +127,13 @@ class PebbleKitClassic(
         }
     }
 
-    override suspend fun start() {
+    override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PebbleKitClassic: ${throwable.message}" }
         }
         val scope = connectionScope + Job() + CoroutineName("PebbleKitClassic-$uuid") + exceptionHandler
         runningScope = scope
-        launchIncomingAppMessageHandler(device, scope)
+        launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandlers(device, scope)
     }
 

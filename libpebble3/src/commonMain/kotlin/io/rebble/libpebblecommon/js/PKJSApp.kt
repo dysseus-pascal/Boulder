@@ -19,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -87,8 +88,8 @@ class PKJSApp(
         jsRunner?.debugForceGC() ?: error("JsRunner not initialized")
     }
 
-    private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        device.inboundAppMessages(uuid).onEach { appMessageData ->
+    private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
+        messages.onEach { appMessageData ->
             jsRunner?.let { runner ->
                 if (!runner.readyState.value) {
                     logger.w { "JsRunner not ready, waiting" }
@@ -165,14 +166,14 @@ class PKJSApp(
             )
         }
 
-    override suspend fun start() {
+    override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PKJSApp: ${throwable.message}" }
         }
         val scope = connectionScope + Job() + CoroutineName("PKJSApp-$uuid") + exceptionHandler
         runningScope = scope
         jsRunner = injectJsRunner(scope)
-        launchIncomingAppMessageHandler(device, scope)
+        launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")
     }

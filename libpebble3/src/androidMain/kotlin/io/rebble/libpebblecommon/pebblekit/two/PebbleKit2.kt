@@ -26,7 +26,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -126,6 +128,8 @@ class PebbleKit2(
                 is AppMessageResult.NACK -> TransmissionResult.FailedWatchNacked
             }
         } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+
             TransmissionResult.FailedDifferentAppOpen
         }
     }

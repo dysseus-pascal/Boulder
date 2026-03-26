@@ -55,6 +55,10 @@ class NotionNoteClientIntegrationTest {
             TODO("Not yet implemented")
         }
 
+        override suspend fun updateLastConnectedWatch(serial: String) {
+            TODO("Not yet implemented")
+        }
+
         override fun init() {
             TODO("Not yet implemented")
         }

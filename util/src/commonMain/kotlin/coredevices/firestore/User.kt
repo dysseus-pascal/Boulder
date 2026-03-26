@@ -15,4 +15,6 @@ data class User(
     val rebbleUserToken: String? = null,
     @SerialName("pebble_user_token")
     val pebbleUserToken: String? = null,
+    @SerialName("last_connected_watch")
+    val lastConnectedWatch: String? = null,
 )

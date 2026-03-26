@@ -35,6 +35,7 @@ interface UsersDao {
         todoBlockId: String
     )
     suspend fun initUserDevToken(rebbleUserToken: String?)
+    suspend fun updateLastConnectedWatch(serial: String)
     fun init()
 }
 
@@ -136,6 +137,17 @@ class UsersDaoImpl(db: FirebaseFirestore): CollectionDao("users", db), UsersDao 
         }
         if (user.user.rebbleUserToken != rebbleUserToken) {
             userDoc?.update(mapOf("rebble_user_token" to rebbleUserToken))
+        }
+    }
+
+    override suspend fun updateLastConnectedWatch(serial: String) {
+        val user = user.first()
+        if (user == null) {
+            logger.w { "updateLastConnectedWatch: user is null" }
+            return
+        }
+        if (user.user.lastConnectedWatch != serial) {
+            userDoc?.update(mapOf("last_connected_watch" to serial))
         }
     }
 }

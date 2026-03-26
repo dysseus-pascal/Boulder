@@ -187,6 +187,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
         override suspend fun updateTodoBlockId(todoBlockId: String) {}
         override suspend fun initUserDevToken(rebbleUserToken: String?) {}
+        override suspend fun updateLastConnectedWatch(serial: String) {}
         override fun init() {}
     }
     single { usersDao } bind UsersDao::class

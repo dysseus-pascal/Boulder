@@ -7,6 +7,7 @@ import coredevices.analytics.heartbeatWatchConnectGoalName
 import coredevices.analytics.heartbeatWatchConnectedName
 import coredevices.database.WeatherLocationDao
 import coredevices.database.insertDefaultWeatherLocationOnce
+import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.util.AppResumed
@@ -49,6 +50,7 @@ class PebbleAppDelegate(
     private val weatherLocationDao: WeatherLocationDao,
     private val settings: Settings,
     private val appstoreSourceInitializer: AppstoreSourceInitializer,
+    private val usersDao: UsersDao,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -105,6 +107,9 @@ class PebbleAppDelegate(
                         }
                         if (watch is ConnectedPebble.Firmware && watch.firmwareUpdateState is FirmwareUpdater.FirmwareUpdateStatus.InProgress) {
                             firmwareUpdateUiTracker.firmwareUpdateIsInProgress(watch.identifier)
+                        }
+                        if (watch is CommonConnectedDevice) {
+                            usersDao.updateLastConnectedWatch(watch.serial)
                         }
                     }
                     watches.groupBy { it.watchType() }.forEach { (watchType, watches) ->

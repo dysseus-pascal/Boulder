@@ -196,6 +196,9 @@ private object UsersDaoTestImpl: UsersDao {
     override suspend fun initUserDevToken(rebbleUserToken: String?) {
     }
 
+    override suspend fun updateLastConnectedWatch(serial: String) {
+    }
+
     override fun init() {
         TODO("Not yet implemented")
     }

@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.pebblekit2.common.model.PebbleDictionary
 import io.rebble.pebblekit2.common.model.PebbleDictionaryItem
 import io.rebble.pebblekit2.common.model.ReceiveResult
+import io.rebble.pebblekit2.common.model.TransmissionResult
 import io.rebble.pebblekit2.common.model.WatchIdentifier
 import io.rebble.pebblekit2.server.DefaultPebbleListenerConnector
 import kotlinx.atomicfu.atomic
@@ -22,6 +23,8 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -107,9 +110,24 @@ class PebbleKit2(
         return targetPackages.contains(pkg)
     }
 
-    suspend fun sendMessage(pebbleDictionary: PebbleDictionary): AppMessageResult {
+    suspend fun sendMessage(pebbleDictionary: PebbleDictionary): TransmissionResult {
         val transactionId = (nextTransactionId.getAndIncrement() % UByte.MAX_VALUE.toInt()).toUByte()
-        return device.sendAppMessage(AppMessageData(transactionId, uuid, pebbleDictionary.toAppMessageDict()))
+
+        return try {
+            val runningScope = runningScope ?: return TransmissionResult.FailedDifferentAppOpen
+            // Send through async to ensure that cancelling of the running scope (presumably because app got closed)
+            // immediately cancels the sending
+            val res = runningScope.async {
+                device.sendAppMessage(AppMessageData(transactionId, uuid, pebbleDictionary.toAppMessageDict()))
+            }.await()
+
+            when (res) {
+                is AppMessageResult.ACK -> TransmissionResult.Success
+                is AppMessageResult.NACK -> TransmissionResult.FailedWatchNacked
+            }
+        } catch (e: CancellationException) {
+            TransmissionResult.FailedDifferentAppOpen
+        }
     }
 
     private fun launchIncomingAppMessageHandler(scope: CoroutineScope, messages: Flow<AppMessageData>) {

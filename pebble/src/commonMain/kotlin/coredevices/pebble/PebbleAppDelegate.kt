@@ -51,12 +51,19 @@ class PebbleAppDelegate(
     private val settings: Settings,
     private val appstoreSourceInitializer: AppstoreSourceInitializer,
     private val usersDao: UsersDao,
+    private val platform: Platform,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
     fun init() {
         logger.d { "init()" }
         permissionsRequester.init()
+        if (platform == Platform.Android) {
+            // We need to init on android synchronously, so that koin graph is ready when e.g.
+            // notification listener is created.
+            // iOS waits until onboarding is done (see below)
+            libPebble.init()
+        }
         GlobalScope.launch {
             appstoreSourceInitializer.initAppstoreSourcesDB()
             weatherLocationDao.insertDefaultWeatherLocationOnce(settings)
@@ -65,7 +72,9 @@ class PebbleAppDelegate(
             // want to control when those are shown).
             doneInitialOnboarding.doneInitialOnboarding.await()
             logger.d { "actually initializing libpebble.." }
-            libPebble.init()
+            if (platform == Platform.IOS) {
+                libPebble.init()
+            }
             GlobalScope.launch {
                 appResumed.appResumed.collect {
                     libPebble.doStuffAfterPermissionsGranted()

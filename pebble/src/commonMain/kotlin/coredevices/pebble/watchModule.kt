@@ -110,7 +110,7 @@ val watchModule = module {
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
-    singleOf(::FirestoreLockerDao)
+    single { FirestoreLockerDao { get() } }
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class
     single { MobileGeocoder() } bind Geocoder::class

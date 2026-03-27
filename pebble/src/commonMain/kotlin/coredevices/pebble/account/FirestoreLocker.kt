@@ -35,7 +35,8 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
+class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore) {
+    private val firestore get() = firestoreProvider()
     suspend fun addLockerEntryForUser(
         uid: String,
         entry: FirestoreLockerEntry

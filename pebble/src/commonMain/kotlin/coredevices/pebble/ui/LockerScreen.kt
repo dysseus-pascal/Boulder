@@ -714,7 +714,7 @@ fun SearchResultsList(
                 item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
                 items(
                     items = lockerEntries,
-                    key = { "${it.storeId}-${it.uuid}" },
+                    key = { "locker_${it.storeId}-${it.uuid}" },
                 ) { entry ->
                     NativeWatchfaceCard(
                         entry,
@@ -735,7 +735,7 @@ fun SearchResultsList(
             } else {
                 items(
                     count = storeResults.itemCount,
-                    key = storeResults.itemKey { "${it.storeId}-${it.uuid}" },
+                    key = storeResults.itemKey { "store_${it.storeId}-${it.uuid}" },
                 ) { index ->
                     storeResults[index]?.let { entry ->
                         NativeWatchfaceCard(
@@ -781,7 +781,7 @@ fun SearchResultsList(
                 }
                 items(
                     items = lockerEntries,
-                    key = { it.uuid }
+                    key = { "locker_${it.uuid}" }
                 ) { entry ->
                     NativeWatchfaceListItem(
                         entry,
@@ -816,7 +816,7 @@ fun SearchResultsList(
             } else {
                 items(
                     count = storeResults!!.itemCount,
-                    key = storeResults.itemKey { it.uuid.toString() },
+                    key = storeResults.itemKey { "store_${it.uuid}" },
                 ) { index ->
                     storeResults[index]?.let { entry ->
                         NativeWatchfaceListItem(

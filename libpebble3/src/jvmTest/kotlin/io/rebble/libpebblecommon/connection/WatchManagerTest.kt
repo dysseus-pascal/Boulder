@@ -195,7 +195,7 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
 
-        override suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
+        override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
             TODO("Not yet implemented")
         }
     }

@@ -167,7 +167,7 @@ interface WebServices {
     suspend fun fetchLocker(): LockerModelWrapper?
     suspend fun removeFromLocker(id: Uuid): Boolean
     suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult
-    suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
+    fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
 }
 
 interface TokenProvider {

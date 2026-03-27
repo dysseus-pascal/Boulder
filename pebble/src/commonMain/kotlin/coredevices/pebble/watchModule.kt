@@ -21,6 +21,7 @@ import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.CactusTranscription
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
+import coredevices.pebble.services.MemfaultChunkQueue
 import coredevices.pebble.services.NullTranscriptionProvider
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleBootConfigService
@@ -157,7 +158,8 @@ val watchModule = module {
     singleOf(::RealPebbleDeepLinkHandler) bind PebbleDeepLinkHandler::class
     factoryOf(::PebbleHttpClient) bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
-    factoryOf(::Memfault)
+    singleOf(::Memfault)
+    singleOf(::MemfaultChunkQueue)
     factoryOf(::Cohorts)
     factoryOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)

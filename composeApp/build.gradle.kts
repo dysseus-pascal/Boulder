@@ -152,6 +152,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)

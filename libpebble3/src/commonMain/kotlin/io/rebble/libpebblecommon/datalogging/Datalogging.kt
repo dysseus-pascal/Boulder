@@ -36,9 +36,17 @@ class Datalogging(
         if (uuid == SYSTEM_APP_UUID) {
             when (tag) {
                 MEMFAULT_CHUNKS_TAG -> {
-                    val chunk = MemfaultChunk()
-                    chunk.fromBytes(DataBuffer(data.toUByteArray()))
-                    webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
+                    // A single SendDataItems payload can contain multiple items,
+                    // each itemSize bytes. Parse each one as a MemfaultChunk.
+                    val size = itemSize.toInt()
+                    var offset = 0
+                    while (offset + size <= data.size) {
+                        val itemData = data.copyOfRange(offset, offset + size)
+                        val chunk = MemfaultChunk()
+                        chunk.fromBytes(DataBuffer(itemData.toUByteArray()))
+                        webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
+                        offset += size
+                    }
                 }
             }
         }

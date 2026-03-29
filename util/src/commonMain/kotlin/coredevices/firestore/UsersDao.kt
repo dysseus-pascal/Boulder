@@ -46,7 +46,7 @@ data class PebbleUser(
     val user: User,
 )
 
-class UsersDaoImpl(db: FirebaseFirestore, private val settings: Settings): CollectionDao("users", db), UsersDao {
+class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Settings): CollectionDao("users", dbProvider), UsersDao {
     private val userDoc get() = authenticatedId?.let { db.document(it) }
     private val logger = Logger.withTag("UsersDaoImpl")
 

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.time.Instant
 
-class FirestoreRecordingsDao(db: FirebaseFirestore): CollectionDao("recordings", db) {
+class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao("recordings", dbProvider) {
     suspend fun addRecording(
         recording: RecordingDocument
     ): DocumentReference {

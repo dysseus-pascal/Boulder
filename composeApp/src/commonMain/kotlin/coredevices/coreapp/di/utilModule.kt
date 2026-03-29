@@ -75,7 +75,7 @@ val utilModule = module {
     single { get<CoreDatabase>().weatherLocationDao() }
     single { get<CoreDatabase>().heartsDao() }
     single { get<CoreDatabase>().memfaultChunkDao() }
-    singleOf(::UserConfigDao)
+    single { UserConfigDao { get() } }
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     single { ModelManager(get(), get(), getOrNull()) }
@@ -99,5 +99,5 @@ val utilModule = module {
         )
     } bind TranscriptionService::class
     singleOf(::WisprFlowTranscriptionService)
-    singleOf(::UsersDaoImpl) bind UsersDao::class
+    single<UsersDao> { UsersDaoImpl({ get() }, get()) }
 }

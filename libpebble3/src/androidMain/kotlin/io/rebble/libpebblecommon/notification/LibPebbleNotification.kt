@@ -120,8 +120,8 @@ data class LibPebbleNotification(
                         title { action.title }
                         if (action.type == ActionType.Reply) {
                             val combined =
-                                action.remoteInput?.suggestedResponses.orEmpty() +
-                                    userCannedResponses
+                                userCannedResponses +
+                                        action.remoteInput?.suggestedResponses.orEmpty()
                             cannedResponse { trimCannedResponses(combined) }
                         }
                     }

@@ -180,7 +180,7 @@ class SystemService(
                         pongCallback = null
                     }
 
-                    is TimeMessage.GetTimeRequest-> {
+                    is TimeMessage.GetTimeUtcRequest-> {
                         updateTime()
                     }
                 }

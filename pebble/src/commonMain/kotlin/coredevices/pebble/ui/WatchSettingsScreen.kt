@@ -25,20 +25,35 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DoNotDisturb
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -48,9 +63,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -93,6 +105,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
+import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
@@ -113,7 +126,6 @@ import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -150,28 +162,28 @@ enum class TopLevelType(val displayName: String) {
     }
 }
 
-enum class Section(val title: String /*val type: TopLevelType*/) {
-    About("About"),
-    Support("Support"),
-    Defaults("Defaults"),
-    QuickLaunch("Quick Launch"), // watch only
-    NotificationsWatch("Notifications"), // watch only
-    Settings("Settings"),
-    Apps("Apps"),
-    Calendar("Calendar"),
-    Health("Health"),
-    Speech("Speech Recognition"),
-    Display("Display"), // watch only
-    Weather("Weather"),
-    Notifications("Notifications"),
-    Time("Time"), // watch only
-    Timeline("Timeline"), // watch only
-    QuietTime("Quiet Time"),
-    Connectivity("Connectivity"),
-    Logging("Logging"),
-    Other("Other"), // watch only
-    Analytics("Analytics"),
-    Debug("Debug"),
+enum class Section(val title: String, val icon: ImageVector) {
+    About("About", Icons.Default.Info),
+    Support("Support", Icons.Default.SupportAgent),
+    Defaults("Defaults", Icons.Default.Tune),
+    QuickLaunch("Quick Launch", Icons.Default.RocketLaunch), // watch only
+    NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
+    General("General", Icons.Default.Settings),
+    Apps("Apps", Icons.Default.Apps),
+    Calendar("Calendar", Icons.Default.CalendarMonth),
+    Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
+    Speech("Speech Recognition", Icons.Default.Mic),
+    Display("Display", Icons.Default.DarkMode), // watch only
+    Weather("Weather", Icons.Default.Cloud),
+    Notifications("Notifications", Icons.Default.Notifications),
+    Time("Time", Icons.Default.Schedule), // watch only
+    Timeline("Timeline", Icons.Default.Timeline), // watch only
+    QuietTime("Quiet Time", Icons.Default.DoNotDisturb),
+    Connectivity("Connectivity", Icons.Default.Wifi),
+    Logging("Logging", Icons.AutoMirrored.Filled.List),
+    Other("Other", Icons.Default.MoreHoriz), // watch only
+    Analytics("Analytics", Icons.Default.Timeline),
+    Debug("Debug", Icons.Default.BugReport),
 }
 
 data class SettingsItem(
@@ -180,6 +192,7 @@ data class SettingsItem(
     val section: Section,
     val keywords: String = "",
     val show: () -> Boolean = { true },
+    val badge: String? = null,
     val item: @Composable () -> Unit,
     val isDebugSetting: Boolean,
 )
@@ -225,140 +238,109 @@ class WatchSettingsScreenViewModel : ViewModel() {
     var selectedTopLevelType by mutableStateOf(TopLevelType.Phone)
 }
 
+data class SettingsItemsState(
+    val rawSettingsItems: List<SettingsItem>,
+    val debugOptionsEnabled: Boolean,
+    val anyWatchSupportsSettingsSync: Boolean,
+    val coreConfig: CoreConfig,
+)
+
 @Composable
-fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        val viewModel = koinViewModel<WatchSettingsScreenViewModel>()
-        val libPebble = rememberLibPebble()
-        val libPebbleConfig by libPebble.config.collectAsState()
-        val coreConfigHolder: CoreConfigHolder = koinInject()
-        val coreConfig by coreConfigHolder.config.collectAsState()
-        val themeProvider: ThemeProvider = koinInject()
-        val settings: Settings = koinInject()
-        val currentTheme by themeProvider.theme.collectAsState()
-        val pebbleFeatures = koinInject<PebbleFeatures>()
-        val pebbleAccount = koinInject<PebbleAccount>()
-        val localSnackbarHostState = remember { SnackbarHostState() }
-        val loggedIn by pebbleAccount.loggedIn.collectAsState()
-        val coreUser by Firebase.auth.authStateChanged.map {
-            it?.emailOrNull
-        }.distinctUntilChanged()
-            .collectAsState(Firebase.auth.currentUser?.emailOrNull)
-        val scope = rememberCoroutineScope()
-        val appContext = koinInject<AppContext>()
-        val appVersion = koinInject<CoreAppVersion>()
-        val platform = koinInject<Platform>()
-        val modelManager: ModelManager = koinInject()
-        val nextBugReportContext: NextBugReportContext = koinInject()
-        val appUpdate: AppUpdate = koinInject()
-        val updateState by appUpdate.updateAvailable.collectAsState()
-        val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
-        val coreBackgroundSync: CoreBackgroundSync = koinInject()
-        if (showCopyTokenDialog) {
-            PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
-        }
-        var showBtClassicInfoDialog by remember { mutableStateOf(false) }
-        var showHealthStatsDialog by remember { mutableStateOf(false) }
-        var showSignInDialog by remember { mutableStateOf(false) }
-        var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
-        var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
-        val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
-        val recommendedSTTModel = modelManager.getRecommendedSTTModel()
-        pendingSTTModeDialog?.let { pendingSTTMode ->
-            ModelDownloadPromptDialog(
-                isLite = recommendedSTTModel is RecommendedModel.Lite,
-                onGetRecommended = {
-                    scope.launch {
-                        val models = modelManager.getAvailableSTTModels()
-                        val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
-                            ?: run {
-                                topBarParams.showSnackbar("Error occurred. Please try again later.")
-                                logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
-                                pendingSTTModeDialog = null
-                                return@launch
-                            }
-                        if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
-                            topBarParams.showSnackbar("Error starting download. Please try again later.")
-                            logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
-                        } else {
-                            coreConfigHolder.update(
-                                coreConfig.copy(
-                                    sttConfig = STTConfig(
-                                        mode = pendingSTTMode,
-                                        modelName = recommendedModel.slug
-                                    )
+fun rememberSettingsItemsState(navBarNav: NavBarNav, topBarParams: TopBarParams): SettingsItemsState? {
+    val libPebble = rememberLibPebble()
+    val libPebbleConfig by libPebble.config.collectAsState()
+    val coreConfigHolder: CoreConfigHolder = koinInject()
+    val coreConfig by coreConfigHolder.config.collectAsState()
+    val themeProvider: ThemeProvider = koinInject()
+    val settings: Settings = koinInject()
+    val currentTheme by themeProvider.theme.collectAsState()
+    val pebbleFeatures = koinInject<PebbleFeatures>()
+    val pebbleAccount = koinInject<PebbleAccount>()
+    val loggedIn by pebbleAccount.loggedIn.collectAsState()
+    val coreUser by Firebase.auth.authStateChanged.map {
+        it?.emailOrNull
+    }.distinctUntilChanged()
+        .collectAsState(Firebase.auth.currentUser?.emailOrNull)
+    val scope = rememberCoroutineScope()
+    val appContext = koinInject<AppContext>()
+    val appVersion = koinInject<CoreAppVersion>()
+    val platform = koinInject<Platform>()
+    val modelManager: ModelManager = koinInject()
+    val nextBugReportContext: NextBugReportContext = koinInject()
+    val appUpdate: AppUpdate = koinInject()
+    val updateState by appUpdate.updateAvailable.collectAsState()
+    val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
+    val coreBackgroundSync: CoreBackgroundSync = koinInject()
+    if (showCopyTokenDialog) {
+        PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
+    }
+    var showBtClassicInfoDialog by remember { mutableStateOf(false) }
+    var showHealthStatsDialog by remember { mutableStateOf(false) }
+    var showSignInDialog by remember { mutableStateOf(false) }
+    var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
+    var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
+    val recommendedSTTModel = modelManager.getRecommendedSTTModel()
+    pendingSTTModeDialog?.let { pendingSTTMode ->
+        ModelDownloadPromptDialog(
+            isLite = recommendedSTTModel is RecommendedModel.Lite,
+            onGetRecommended = {
+                scope.launch {
+                    val models = modelManager.getAvailableSTTModels()
+                    val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
+                        ?: run {
+                            topBarParams.showSnackbar("Error occurred. Please try again later.")
+                            logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
+                            pendingSTTModeDialog = null
+                            return@launch
+                        }
+                    if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
+                        topBarParams.showSnackbar("Error starting download. Please try again later.")
+                        logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
+                    } else {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                sttConfig = STTConfig(
+                                    mode = pendingSTTMode,
+                                    modelName = recommendedModel.slug
                                 )
                             )
-                        }
-                        pendingSTTModeDialog = null
+                        )
                     }
-                },
-                onDismiss = {
                     pendingSTTModeDialog = null
                 }
-            )
-        }
-        var modelSnackbarJob by remember { mutableStateOf<Job?>(null) }
-        LaunchedEffect(modelDownloadStatus) {
-            when (modelDownloadStatus) {
-                is ModelDownloadStatus.Idle -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                }
-                is ModelDownloadStatus.Cancelled -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                }
-                is ModelDownloadStatus.Failed -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                    localSnackbarHostState.showSnackbar("Failed to download model")
-                }
-                is ModelDownloadStatus.Downloading -> {
-                    if (modelSnackbarJob?.isActive != true) {
-                        modelSnackbarJob = scope.launch {
-                            localSnackbarHostState.showSnackbar(
-                                "Downloading model...",
-                                duration = SnackbarDuration.Indefinite
-                            )
-                        }
-                    }
-                }
+            },
+            onDismiss = {
+                pendingSTTModeDialog = null
             }
-        }
-        if (showHealthStatsDialog) {
-            HealthStatsDialog(
-                libPebble = libPebble,
-                onDismissRequest = { showHealthStatsDialog = false },
-            )
-        }
-        if (showSignInDialog) {
-            SignInDialog(
-                onDismiss = { showSignInDialog = false }
-            )
-        }
-        if (showBtClassicInfoDialog) {
-            M3Dialog(
-                onDismissRequest = { showBtClassicInfoDialog = false },
-                title = { Text("Prefer BT Classic") },
-                buttons = {
-                    OutlinedButton(
-                        onClick = { showBtClassicInfoDialog = false }
-                    ) {
-                        Text("Ok")
-                    }
-                },
-            ) {
-                Box(Modifier.heightIn(max = 400.dp)) {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
-                        Text(
-                            text = """When enabled, the app will first connect (and pair) to your watch over
+        )
+    }
+    if (showHealthStatsDialog) {
+        HealthStatsDialog(
+            libPebble = libPebble,
+            onDismissRequest = { showHealthStatsDialog = false },
+        )
+    }
+    if (showSignInDialog) {
+        SignInDialog(
+            onDismiss = { showSignInDialog = false }
+        )
+    }
+    if (showBtClassicInfoDialog) {
+        M3Dialog(
+            onDismissRequest = { showBtClassicInfoDialog = false },
+            title = { Text("Prefer BT Classic") },
+            buttons = {
+                OutlinedButton(
+                    onClick = { showBtClassicInfoDialog = false }
+                ) {
+                    Text("Ok")
+                }
+            },
+        ) {
+            Box(Modifier.heightIn(max = 400.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = """When enabled, the app will first connect (and pair) to your watch over
 BLE, then disconnect and reconnect using Bluetooth Classic - this will
 prompt your to pair your watch again (BLE and BT Classic use separate
  pairings).
@@ -366,74 +348,61 @@ prompt your to pair your watch again (BLE and BT Classic use separate
 If you are already connected over BLE, you will need to disconnect/reconnect
 for this to take effect.
 
-The watch will show "No LE" on the bluetooth settings screen once 
+The watch will show "No LE" on the bluetooth settings screen once
 connected over BT Classic while BLE is also paired (and will show "LE only"
 if you choose to go back to BLE while classic is still paired).
 
 This should improve connection reliability, but if it does not work,
 please disable the option.""".trimIndent(),
-                            fontSize = 12.sp,
-                        )
-                    }
+                        fontSize = 12.sp,
+                    )
                 }
             }
         }
-        val listState = rememberLazyListState()
-
-        LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(viewModel.searchState)
-            topBarParams.actions {}
-            topBarParams.title("Settings")
-            launch {
-                topBarParams.scrollToTop.collect {
-                    if (listState.firstVisibleItemIndex > 0) {
-                        listState.animateScrollToItem(0)
-                    } else {
-                        viewModel.selectedTopLevelType = TopLevelType.Phone
-                    }
-                }
+    }
+    val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
+    LaunchedEffect(modelDownloadStatus) {
+        when (modelDownloadStatus) {
+            is ModelDownloadStatus.Failed -> {
+                topBarParams.showSnackbar("Failed to download model")
             }
+            else -> {}
         }
-        var themeDropdownExpanded by remember { mutableStateOf(false) }
-        val permissionRequester: PermissionRequester = koinInject()
-        val missingPermissions by permissionRequester.missingPermissions.collectAsState()
-        val uiContext = rememberUiContext()
-        val analyticsBackend: AnalyticsBackend = koinInject()
-        val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
-        val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
-        val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
-        val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
-        val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
-        val appUpdateTracker: AppUpdateTracker = koinInject()
-        val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
-        val hasOfflineModels = remember {
-            modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
+    }
+    var themeDropdownExpanded by remember { mutableStateOf(false) }
+    val permissionRequester: PermissionRequester = koinInject()
+    val missingPermissions by permissionRequester.missingPermissions.collectAsState()
+    val uiContext = rememberUiContext()
+    val analyticsBackend: AnalyticsBackend = koinInject()
+    val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
+    val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
+    val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
+    val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
+    val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
+    val appUpdateTracker: AppUpdateTracker = koinInject()
+    val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
+    val hasOfflineModels = remember {
+        modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
+    }
+    LaunchedEffect(Unit) {
+        appUpdateTracker.acknowledgeCurrentVersion()
+    }
+    val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
+    val healthSettings = healthSettingsNullable ?: return null
+    val weatherFetcher: WeatherFetcher = koinInject()
+    val watches by libPebble.watches.collectAsState(null)
+    val watchesCastable = watches ?: return null
+    val anyWatchSupportsSettingsSync = remember(watchesCastable) {
+        watchesCastable.any {
+            it is KnownPebbleDevice && it.capabilities.contains(
+                ProtocolCapsFlag.SupportsBlobDbVersion
+            )
         }
-        LaunchedEffect(Unit) {
-            appUpdateTracker.acknowledgeCurrentVersion()
-        }
-        val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
-        val healthSettings = healthSettingsNullable
-        if (healthSettings == null) {
-            return
-        }
-        val weatherFetcher: WeatherFetcher = koinInject()
-        val watches by libPebble.watches.collectAsState(null)
-        val watchesCastable = watches
-        if (watchesCastable == null) {
-            return
-        }
-        val anyWatchSupportsSettingsSync = remember(watchesCastable) {
-            watchesCastable.any {
-                it is KnownPebbleDevice && it.capabilities.contains(
-                    ProtocolCapsFlag.SupportsBlobDbVersion
-                )
-            }
-        }
-        val watchPrefs = watchPrefs()
-        val coreAnalytics: CoreAnalytics = koinInject()
+    }
+    val watchPrefs = watchPrefs()
+    val coreAnalytics: CoreAnalytics = koinInject()
 
-        val rawSettingsItems = remember(
+    val rawSettingsItems = remember(
             libPebbleConfig,
             debugOptionsEnabled,
             missingPermissions,
@@ -555,7 +524,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -579,7 +548,7 @@ please disable the option.""".trimIndent(),
                     title = "Background Refresh Interval",
                     description = "How often to check for updates, update apps from store, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     selectedItem = RegularSyncInterval.from(coreConfig.regularSyncInterval),
                     items = RegularSyncInterval.entries,
                     onItemSelected = {
@@ -592,7 +561,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Enable Index Feed",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     checked = coreConfig.enableIndex,
                     onCheckChanged = {
                         coreConfigHolder.update(
@@ -846,7 +815,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     checked = libPebbleConfig.bleConfig.reversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1302,7 +1271,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign Out - Pebble Account",
                     description = "Sign out of your Pebble account",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = {
                         scope.launch {
                             try {
@@ -1321,7 +1290,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign In - Pebble Account",
                     description = "Sign in to backup your Pebble account to backup apps, settings, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = { showSignInDialog = true },
                     show = { coreUser == null },
                 ),
@@ -1329,7 +1298,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign Out - Rebble",
                     description = "Sign out of your Rebble account",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = {
                         scope.launch {
                             pebbleAccount.setToken(null, null)
@@ -1366,22 +1335,54 @@ please disable the option.""".trimIndent(),
             ) + watchPrefs
         }
 
-        val availableTopLevelTypes = remember(anyWatchSupportsSettingsSync, coreConfig) {
+    return SettingsItemsState(
+        rawSettingsItems = rawSettingsItems,
+        debugOptionsEnabled = debugOptionsEnabled,
+        anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
+        coreConfig = coreConfig,
+    )
+}
+
+@Composable
+fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        val viewModel = koinViewModel<WatchSettingsScreenViewModel>()
+        val platform = koinInject<Platform>()
+        val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
+
+        val listState = rememberLazyListState()
+
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(viewModel.searchState)
+            topBarParams.actions {}
+            topBarParams.title("Settings")
+            launch {
+                topBarParams.scrollToTop.collect {
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else {
+                        viewModel.selectedTopLevelType = TopLevelType.Phone
+                    }
+                }
+            }
+        }
+
+        val availableTopLevelTypes = remember(state.anyWatchSupportsSettingsSync, state.coreConfig) {
             TopLevelType.entries.filter {
                 when (it) {
                     TopLevelType.Phone -> true
-                    TopLevelType.Watch -> anyWatchSupportsSettingsSync
-                    TopLevelType.All -> coreConfig.showAllSettingsTab
+                    TopLevelType.Watch -> state.anyWatchSupportsSettingsSync
+                    TopLevelType.All -> state.coreConfig.showAllSettingsTab
                     TopLevelType.Notifications -> false
                 }
             }
         }
 
         val validSettingsItems =
-            remember(rawSettingsItems, viewModel.selectedTopLevelType, debugOptionsEnabled) {
-                rawSettingsItems.filter {
+            remember(state.rawSettingsItems, viewModel.selectedTopLevelType, state.debugOptionsEnabled) {
+                state.rawSettingsItems.filter {
                     viewModel.selectedTopLevelType.show(it.topLevelType) &&
-                            (debugOptionsEnabled || !it.isDebugSetting)
+                            (state.debugOptionsEnabled || !it.isDebugSetting)
                 }
             }
 
@@ -1390,7 +1391,6 @@ please disable the option.""".trimIndent(),
         val filteredItems by remember(
             validSettingsItems,
             viewModel.searchState.query,
-            coreUser,
         ) {
             derivedStateOf {
                 if (searchQuery.isEmpty()) {
@@ -1415,53 +1415,12 @@ please disable the option.""".trimIndent(),
         val groupedItemsToDisplay = remember(filteredItems) {
             filteredItems.groupBy { it.section }.entries.sortedBy { it.key.ordinal }
         }
-        val indexForSection = remember(groupedItemsToDisplay) {
-            val map = mutableMapOf<Section, Int>()
-            var currentIndex = 0
-            groupedItemsToDisplay.forEach { (section, items) ->
-                map[section] = currentIndex
-                // +1 for stickyHeader, +items.size for the items, +1 for the Spacer at the end
-                currentIndex += 1 + items.size + 1
-            }
-            map
-        }
 
-        Scaffold(
-            floatingActionButton = {
-                if (viewModel.selectedTopLevelType == TopLevelType.Notifications) {
-                    return@Scaffold
-                }
-                var showSectionsMenu by remember { mutableStateOf(false) }
-                FloatingActionButton(
-                    onClick = { showSectionsMenu = true }
-                ) {
-                    Icon(Icons.Default.AutoStories, "Jump")
-                }
-                if (showSectionsMenu) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { showSectionsMenu = false }
-                    ) {
-                        sectionsToShowInList.forEach { section ->
-                            DropdownMenuItem(
-                                text = { Text(section.title) },
-                                onClick = {
-                                    showSectionsMenu = false
-                                    scope.launch {
-                                        listState.animateScrollToItem(
-                                            indexForSection.getValue(section)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            },
-            snackbarHost = { SnackbarHost(localSnackbarHostState) }
-        ) {
+        val isSearching = searchQuery.isNotEmpty()
+
+        Scaffold {
             Column {
-                // Only show tab buttons at top of there is more than one
+                // Only show tab buttons at top if there is more than one
                 if (availableTopLevelTypes.size > 1) {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -1505,35 +1464,111 @@ please disable the option.""".trimIndent(),
                     return@Column
                 }
 
-                LazyColumn(state = listState) {
-                    groupedItemsToDisplay.forEach { (section, items) ->
-                        stickyHeader {
-                            Box(
-                                modifier = Modifier.fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                            ) {
-                                Text(
-                                    section.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(
-                                        horizontal = 16.dp,
-                                        vertical = 8.dp,
+                if (isSearching) {
+                    // When searching, show all matching settings grouped by section (like before)
+                    LazyColumn(state = listState) {
+                        groupedItemsToDisplay.forEach { (section, items) ->
+                            stickyHeader {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.background)
+                                ) {
+                                    Text(
+                                        section.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(
+                                            horizontal = 16.dp,
+                                            vertical = 8.dp,
+                                        )
                                     )
-                                )
+                                }
+                            }
+                            items(
+                                items = items,
+                                key = { it.title },
+                            ) { item ->
+                                item.item()
+                            }
+                            item {
+                                Spacer(Modifier.height(8.dp))
                             }
                         }
+                    }
+                } else {
+                    // When not searching, show category list
+                    LazyColumn(state = listState) {
                         items(
-                            items = items,
-                            key = { it.title },
-                        ) { item ->
-                            item.item()
-                        }
-                        item {
-                            Spacer(Modifier.height(8.dp))
+                            items = sectionsToShowInList,
+                            key = { it.name },
+                        ) { section ->
+                            val sectionBadgeCount = filteredItems
+                                .filter { it.section == section && it.badge != null && it.show() }
+                                .sumOf { it.badge?.toIntOrNull() ?: 0 }
+                            ListItem(
+                                leadingContent = {
+                                    Icon(
+                                        section.icon,
+                                        contentDescription = null,
+                                    )
+                                },
+                                headlineContent = { Text(section.title) },
+                                trailingContent = if (sectionBadgeCount > 0) {
+                                    {
+                                        Badge {
+                                            Text("$sectionBadgeCount")
+                                        }
+                                    }
+                                } else null,
+                                shadowElevation = ELEVATION,
+                                modifier = Modifier.clickable {
+                                    navBarNav.navigateTo(
+                                        PebbleNavBarRoutes.WatchSettingsCategoryRoute(
+                                            section = section.name,
+                                            topLevelType = viewModel.selectedTopLevelType.name,
+                                        )
+                                    )
+                                }
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun WatchSettingsCategoryScreen(
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+    section: Section,
+    topLevelType: TopLevelType,
+) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
+
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(null)
+            topBarParams.actions {}
+            topBarParams.title(section.title)
+        }
+
+        val filteredItems = remember(state.rawSettingsItems, topLevelType, state.debugOptionsEnabled) {
+            state.rawSettingsItems.filter {
+                it.section == section &&
+                        topLevelType.show(it.topLevelType) &&
+                        (state.debugOptionsEnabled || !it.isDebugSetting) &&
+                        it.show()
+            }
+        }
+
+        LazyColumn {
+            items(
+                items = filteredItems,
+                key = { it.title },
+            ) { item ->
+                item.item()
             }
         }
     }
@@ -1557,6 +1592,7 @@ fun basicSettingsActionItem(
     section = section,
     keywords = keywords,
     show = show,
+    badge = badge,
     isDebugSetting = isDebugSetting,
     item = {
         ListItem(

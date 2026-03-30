@@ -103,6 +103,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data object OfflineModelsRoute : NavBarRoute
+
+    @Serializable
+    data class WatchSettingsCategoryRoute(val section: String, val topLevelType: String) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -234,6 +237,15 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.OfflineModelsRoute> {
         ModelManagementScreen(nav, topBarParams)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.WatchSettingsCategoryRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.WatchSettingsCategoryRoute = it.toRoute()
+        WatchSettingsCategoryScreen(
+            nav,
+            topBarParams,
+            Section.valueOf(route.section),
+            TopLevelType.valueOf(route.topLevelType),
+        )
     }
 }
 

@@ -161,7 +161,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 GenericWebViewScreen(
                     coreNav = coreNav,
                     title = "Getting Started & Troubleshooting",
-                    url = "https://ndocs.repebble.com/getting-started",
+                    url = "https://pbl.zip/in-app-getting-started-and-troubleshooting",
                 )
             }
             composable<CommonRoutes.OnboardingRoute> {

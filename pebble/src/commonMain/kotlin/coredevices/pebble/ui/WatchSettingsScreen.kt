@@ -164,7 +164,7 @@ enum class TopLevelType(val displayName: String) {
 
 enum class Section(val title: String, val icon: ImageVector) {
     About("About", Icons.Default.Info),
-    Support("Support", Icons.Default.SupportAgent),
+    Support("Get Help", Icons.Default.SupportAgent),
     Defaults("Defaults", Icons.Default.Tune),
     QuickLaunch("Quick Launch", Icons.Default.RocketLaunch), // watch only
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only

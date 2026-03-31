@@ -193,9 +193,16 @@ data class SettingsItem(
     val keywords: String = "",
     val show: () -> Boolean = { true },
     val badge: String? = null,
-    val item: @Composable () -> Unit,
+    private val item: @Composable () -> Unit,
     val isDebugSetting: Boolean,
-)
+    val onDisplayed: (@Composable () -> Unit)? = null,
+) {
+    @Composable
+    fun Item() {
+        onDisplayed?.invoke()
+        item()
+    }
+}
 
 private val ELEVATION = 2.dp
 
@@ -384,9 +391,6 @@ please disable the option.""".trimIndent(),
     val hasOfflineModels = remember {
         modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
     }
-    LaunchedEffect(Unit) {
-        appUpdateTracker.acknowledgeCurrentVersion()
-    }
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
     val weatherFetcher: WeatherFetcher = koinInject()
@@ -473,7 +477,12 @@ please disable the option.""".trimIndent(),
                         navBarNav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                    badge = if (showChangelogBadge) "1" else null
+                    badge = if (showChangelogBadge) "1" else null,
+                    onDisplayed = {
+                        LaunchedEffect(Unit) {
+                            appUpdateTracker.acknowledgeCurrentVersion()
+                        }
+                    },
                 ),
                 basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
@@ -1488,7 +1497,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 items = items,
                                 key = { it.title },
                             ) { item ->
-                                item.item()
+                                item.Item()
                             }
                             item {
                                 Spacer(Modifier.height(8.dp))
@@ -1568,7 +1577,7 @@ fun WatchSettingsCategoryScreen(
                 items = filteredItems,
                 key = { it.title },
             ) { item ->
-                item.item()
+                item.Item()
             }
         }
     }
@@ -1586,6 +1595,7 @@ fun basicSettingsActionItem(
     show: () -> Boolean = { true },
     badge: String? = null,
     isDebugSetting: Boolean = false,
+    onDisplayed: (@Composable () -> Unit)? = null
 ) = SettingsItem(
     title = title,
     topLevelType = topLevelType,
@@ -1632,7 +1642,8 @@ fun basicSettingsActionItem(
                 } else this
             },
         )
-    }
+    },
+    onDisplayed = onDisplayed,
 )
 
 fun basicSettingsToggleItem(

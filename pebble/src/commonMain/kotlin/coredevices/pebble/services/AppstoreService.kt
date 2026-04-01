@@ -85,10 +85,14 @@ class AppstoreService(
 
     private fun supportsBulkFetch(): Boolean = !source.isRebbleFeed()
 
+    /**
+     * Fetch apps for the given locker entries from this appstore source.
+     * Returns null if the fetch failed entirely (as opposed to an empty list meaning no apps found).
+     */
     suspend fun fetchAppStoreApps(
         entries: List<FirestoreLockerEntry>,
         useCache: Boolean = true,
-    ): List<LockerEntry> {
+    ): List<LockerEntry>? {
         return if (pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()) {
             fetchAppStoreAppsFromPwsLocker()
         } else if (!supportsBulkFetch()) {
@@ -98,11 +102,11 @@ class AppstoreService(
         }
     }
 
-    private suspend fun fetchAppStoreAppsFromPwsLocker(): List<LockerEntry> {
+    private suspend fun fetchAppStoreAppsFromPwsLocker(): List<LockerEntry>? {
         val locker = pebbleWebServices.fetchPebbleLocker()
         if (locker == null) {
             logger.w { "Failed to fetch Pebble locker" }
-            return emptyList()
+            return null
         } else {
             return locker.applications
         }
@@ -120,7 +124,7 @@ class AppstoreService(
 
     private suspend fun fetchAppStoreAppsInBulk(
         entries: List<FirestoreLockerEntry>,
-    ): List<LockerEntry> {
+    ): List<LockerEntry>? {
         val entriesByAppstoreId = entries.associateBy { it.appstoreId }
         return entries.chunked(500).also {
             logger.d { "Bulk fetching locker entries in ${it.size} chunks" }
@@ -137,10 +141,10 @@ class AppstoreService(
                             sourceUrl = matchingEntry?.appstoreSource ?: source.url,
                             timelineToken = matchingEntry?.timelineToken,
                         )
-                    } ?: emptyList()
+                    } ?: return null
             } catch (e: IOException) {
                 logger.w(e) { "Error loading app store app" }
-                emptyList()
+                return null
             }
         }
     }

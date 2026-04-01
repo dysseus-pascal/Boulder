@@ -137,7 +137,7 @@ class RealFirestoreLocker(
                 return@flatMap emptyList()
             }
             val appstore: AppstoreService = get { parametersOf(source) }
-            appstore.fetchAppStoreApps(lockerForSource, useCache = false)
+            appstore.fetchAppStoreApps(lockerForSource, useCache = false) ?: emptyList()
         }
         logger.d { "Adding ${appsToAdd.size} apps to locker from firestore update" }
         libPebbleLockerProxy.addAppsToLocker(appsToAdd)
@@ -166,9 +166,15 @@ class RealFirestoreLocker(
         val designatedSourceByUuid = fsLocker.associate { it.uuid.toString() to it.appstoreSource }
         val allSources = get<AppstoreSourceDao>().getAllEnabledSources()
         logger.v { "sources: $allSources" }
+        val failedSources = mutableSetOf<String>()
         val apps = allSources.flatMap { source ->
             val appstore: AppstoreService = get { parametersOf(source) }
             val appsForSource = appstore.fetchAppStoreApps(fsLocker, useCache = !forceRefresh)
+            if (appsForSource == null) {
+                logger.w { "Failed to fetch apps from source ${source.url}" }
+                failedSources.add(source.url)
+                return@flatMap emptyList()
+            }
             if (source.url == REBBLE_FEED_URL) {
                 appsForSource.filter { f -> fsLocker.none { e -> Uuid.parse(f.uuid) == e.uuid } }.forEach { entry ->
                     // Add to firestore locker
@@ -208,11 +214,16 @@ class RealFirestoreLocker(
         }
 
         val dedupedApps = dedupedSourcedApps.map { it.entry }
+        val fetchedUuids = dedupedApps.map { Uuid.parse(it.uuid) }.toSet()
+        val uuidsFromFailedSources = fsLocker
+            .filter { it.appstoreSource in failedSources }
+            .map { it.uuid }
+            .toSet()
         return LockerModelWrapper(
             locker = LockerModel(
                 applications = dedupedApps
             ),
-            failedToFetchUuids = fsLocker.map { it.uuid }.toSet().minus(dedupedApps.map { Uuid.parse(it.uuid) }.toSet()),
+            failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
         )
     }
 

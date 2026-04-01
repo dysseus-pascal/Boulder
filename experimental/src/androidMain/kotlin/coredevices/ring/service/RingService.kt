@@ -23,8 +23,10 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.util.trace.RingTraceSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,6 +68,7 @@ class RingService: Service(), KoinComponent {
     private val recordingEntryDao: RecordingEntryDao by inject()
     private val conversationMessageDao: ConversationMessageDao by inject()
     private val firestoreRecordingDao: FirestoreRecordingsDao by inject()
+    private val trace: RingTraceSession by inject()
     private val ringBackgroundManager: RingBackgroundManager by inject()
     private val indexNotificationManager: IndexNotificationManager by inject()
     private val recordingProcessingQueue: RecordingProcessingQueue by inject()
@@ -123,8 +126,9 @@ class RingService: Service(), KoinComponent {
                 remoteRecording.updated < it.updated.toEpochMilliseconds()
             }
             logger.i { "Found ${uploadOrUpdate.size} local recordings to upload or update" }
+            val disp = Dispatchers.IO.limitedParallelism(4)
             uploadOrUpdate.map { localRecording ->
-                scope.launch(Dispatchers.IO.limitedParallelism(4)) {
+                scope.launch(disp) {
                     try {
                         val doc = localRecording.toDocument(
                             entries = recordingEntryDao.getEntriesForRecording(localRecording.id).first().map {
@@ -144,14 +148,30 @@ class RingService: Service(), KoinComponent {
                             },
                             metadata = null
                         )
+                        trace.markEvent("local_recording_upload_start", TraceEventData.LocalRecordingUpload(
+                            recordingId = localRecording.id,
+                            firestoreId = null
+                        ))
                         if (localRecording.firestoreId == null) {
                             val remoteId = firestoreRecordingDao.addRecording(doc).id
                             recordingRepository.updateRecordingFirestoreId(localRecording.id, remoteId)
+                            trace.markEvent("local_recording_upload_end", TraceEventData.LocalRecordingUpload(
+                                recordingId = localRecording.id,
+                                firestoreId = remoteId
+                            ))
                         } else {
                             firestoreRecordingDao.getRecording(localRecording.firestoreId!!)
                                 .set(doc)
+                            trace.markEvent("local_recording_upload_end", TraceEventData.LocalRecordingUpload(
+                                recordingId = localRecording.id,
+                                firestoreId = localRecording.firestoreId
+                            ))
                         }
                     } catch (e: Exception) {
+                        trace.markEvent("local_recording_upload_fail", TraceEventData.LocalRecordingUpload(
+                            recordingId = localRecording.id,
+                            firestoreId = localRecording.firestoreId,
+                        ))
                         logger.e(e) { "Error uploading local recording ${localRecording.id}" }
                     }
                 }

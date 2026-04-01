@@ -34,6 +34,8 @@ import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
 import coredevices.ring.data.entity.room.RingTransfer
+import coredevices.ring.data.entity.room.TraceEntryEntity
+import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
@@ -41,6 +43,8 @@ import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
 import coredevices.ring.database.room.dao.RingTransferDao
 import coredevices.ring.database.room.dao.RingTransferFeedItem
+import coredevices.ring.database.room.dao.TraceEntryDao
+import coredevices.ring.database.room.dao.TraceSessionDao
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -63,13 +67,15 @@ import kotlin.uuid.Uuid
         HttpMcpGroupAssociation::class,
         HttpMcpServerEntity::class,
         McpSandboxGroupEntity::class,
-        RecordingProcessingTaskEntity::class
+        RecordingProcessingTaskEntity::class,
+        TraceSessionEntity::class,
+        TraceEntryEntity::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 23,
+    version = 24,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -93,6 +99,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22),
         AutoMigration(from = 22, to = 23),
+        AutoMigration(from = 23, to = 24),
     ]
 )
 @TypeConverters(Converters::class)
@@ -110,6 +117,8 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun httpMcpServerDao(): HttpMcpServerDao
     abstract fun mcpSandboxGroupDao(): McpSandboxGroupDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
+    abstract fun traceSessionDao(): TraceSessionDao
+    abstract fun traceEntryDao(): TraceEntryDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")

@@ -12,13 +12,14 @@ import coredevices.haversine.removeDCBias
 import coredevices.util.transcription.TranscriptionService
 import coredevices.resampler.Resampler
 import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RingTransferRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
 import coredevices.util.isIOS
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -108,7 +109,8 @@ class RingSync(
     private val indexNotificationManager: IndexNotificationManager,
     private val ringTransferRepository: RingTransferRepository,
     private val coreAnalytics: CoreAnalytics,
-    private val scope: RecordingBackgroundScope
+    private val scope: RecordingBackgroundScope,
+    private val trace: RingTraceSession,
 ): KoinComponent {
     companion object {
         private val logger = Logger.withTag("RingSync")
@@ -199,7 +201,9 @@ class RingSync(
                     logger.d { "Paired is true, starting scan/sync job" }
                     while (isActive) {
                         logger.d { "Waiting for Bluetooth to become available..." }
+                        trace.markEvent("wait_for_bluetooth")
                         waitForBluetoothAvailable()
+                        trace.markEvent("bluetooth_available")
                         logger.d { "Bluetooth is available, starting Ring sync job" }
                         try {
                             satelliteManager.startScanning()
@@ -222,6 +226,12 @@ class RingSync(
                                                 when (transferStatus) {
                                                     is TransferStatus.TransferStarted -> {
                                                         logger.i { "Transfer started for ${transferStatus.satellite.id}" }
+                                                        trace.markEvent("transfer_started",
+                                                            TraceEventData.TransferStarted(
+                                                                transferStatus.satellite.id,
+                                                                transferStatus.rollover
+                                                            )
+                                                        )
                                                         if (transferStatus.rollover) {
                                                             logger.i { "Rollover detected, marking previous transfers as old index iteration" }
                                                             withContext(Dispatchers.IO) {
@@ -234,12 +244,32 @@ class RingSync(
                                                             // Extend the range to include the new end
                                                             transferRange!!.first..transferStatus.willTransferRange.last
                                                         }
+                                                        trace.markEvent("stt_early_init_start")
                                                         val transcriptionService =
                                                             get<TranscriptionService>()
+                                                        launch {
+                                                            if (transcriptionService.onInitialized.receive()) {
+                                                                trace.markEvent("stt_early_init_success")
+                                                            } else {
+                                                                trace.markEvent("stt_early_init_failed")
+                                                            }
+                                                        }
                                                         transcriptionService.earlyInit()
                                                     }
 
                                                     is TransferStatus.TransferTypeDetermined -> {
+                                                        trace.markEvent("transfer_type_determined",
+                                                            TraceEventData.TransferTypeDetermined(
+                                                                satellite = transferStatus.satellite.id,
+                                                                isAudio = transferStatus.isAudio,
+                                                                buttonSequence = transferStatus.buttonSequence,
+                                                                collectionStartIndex = transferStatus.collectionStartIndex,
+                                                                collectionIndex = transferStatus.collectionIndex,
+                                                                final = transferStatus.final,
+                                                                advertisementReceivedTimestamp = transferStatus.advertisementReceivedTimestamp,
+                                                                lifetimeCollectionCount = transferStatus.lifetimeCollectionCount?.toInt()
+                                                            )
+                                                        )
                                                         logger.i { "Transfer type determined for ${transferStatus.collectionIndex}: collectionStartIndex = ${transferStatus.collectionStartIndex}, isAudio = ${transferStatus.isAudio}, sequence = ${transferStatus.buttonSequence}, final = ${transferStatus.final}" }
                                                         logger.i { "Lifetime collection count: ${transferStatus.lifetimeCollectionCount}" }
                                                         transferStatus.satellite.state.value?.serialNumber?.let { serial ->
@@ -271,6 +301,12 @@ class RingSync(
                                                                 transfer?.let {
                                                                     // If we never received any data for this transfer, mark it as failed
                                                                     if (transfer.status == RingTransferStatus.Started) {
+                                                                        trace.markEvent("past_transfer_failed",
+                                                                            TraceEventData.PastTransferFailed(
+                                                                                satellite = transferStatus.satellite.id,
+                                                                                transferId = transfer.id
+                                                                            )
+                                                                        )
                                                                         withContext(Dispatchers.IO) {
                                                                             logger.i {
                                                                                 "Seeing started transfer for current idx, marking past transfer " +
@@ -301,6 +337,12 @@ class RingSync(
 
                                                     is TransferStatus.TransferFailed -> {
                                                         transferRange = null
+                                                        trace.markEvent("transfer_dropped_recoverable",
+                                                            TraceEventData.TransferDroppedRecoverable(
+                                                                satellite = transferStatus.satellite.id,
+                                                                collectionIndex = transferStatus.collectionIndex,
+                                                            )
+                                                        )
                                                         logger.e(transferStatus.exception) { "Transfer dropped: ${transferStatus.collectionIndex}" }
                                                     }
 
@@ -333,6 +375,13 @@ class RingSync(
                                                             }
                                                             transfer?.id
                                                         }
+                                                        trace.markEvent("transfer_dropped_unrecoverable",
+                                                            TraceEventData.TransferDroppedUnrecoverable(
+                                                                satellite = transferStatus.satellite.id,
+                                                                transferId = tid,
+                                                                indices = transferStatus.collection?.indices?.toList()
+                                                            )
+                                                        )
                                                         _ringEvents.emit(
                                                             RingEvent.Transfer.Failure(
                                                                 ringId = transferStatus.satellite.id,
@@ -352,6 +401,18 @@ class RingSync(
                                                             logger.d {
                                                                 "Transfer in progress for ${transferStatus.satellite.id}, index ${transferStatus.currentCollectionIndex - range.first} / ${range.last - range.first + 1}, progress: $progress"
                                                             }
+                                                            trace.markEvent("transfer_progress",
+                                                                TraceEventData.TransferProgress(
+                                                                    transferId = withContext(Dispatchers.IO) {
+                                                                        ringTransferRepository.getLastValidTransferByStartIndex(
+                                                                            transferStatus.collectionStartIndex
+                                                                        )?.id ?: -1L
+                                                                    },
+                                                                    startIndex = range.first,
+                                                                    endIndex = range.last,
+                                                                    reportedProgress = progress
+                                                                )
+                                                            )
                                                             _ringEvents.emit(
                                                                 RingEvent.Transfer.InProgress(
                                                                     ringId = transferStatus.satellite.id,
@@ -368,6 +429,17 @@ class RingSync(
 
                                                     is TransferStatus.TransferComplete -> {
                                                         val range = transferRange
+                                                        trace.markEvent("transfer_completed",
+                                                            TraceEventData.TransferCompleted(
+                                                                transferId = withContext(Dispatchers.IO) {
+                                                                    ringTransferRepository.getLastValidTransferByStartIndex(
+                                                                        transferStatus.collectionStartCount.toInt()
+                                                                    )?.id ?: -1L
+                                                                },
+                                                                audioDurationSeconds = transferStatus.samples.size / transferStatus.sampleRate.toFloat(),
+                                                                buttonReleaseTimestamp = transferStatus.buttonReleaseTimestamp
+                                                            )
+                                                        )
                                                         if (range != null) {
                                                             val progress =
                                                                 (transferStatus.collectionIndex - range.first + 1).toFloat() /
@@ -446,6 +518,7 @@ class RingSync(
                                                             logger.d { "Saving transfer..." }
                                                             id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
                                                             if (audioDuration >= 0.5) {
+                                                                trace.markEvent("saving_recording_start")
                                                                 val samplesResampled = resample(
                                                                     transferStatus.samples,
                                                                     transferStatus.sampleRate.toInt()
@@ -473,6 +546,7 @@ class RingSync(
                                                                         }
                                                                     }
                                                                 ).awaitAll()
+                                                                trace.markEvent("saving_recording_end")
 
                                                                 withContext(Dispatchers.IO) {
                                                                     ringTransferRepository.markTransferCompleteAndSetFileId(
@@ -486,6 +560,7 @@ class RingSync(
                                                                 }
                                                             } else {
                                                                 logger.i { "Discarding transfer due to short duration: $audioDuration seconds" }
+                                                                trace.markEvent("transfer_discarded")
                                                                 withContext(Dispatchers.IO) {
                                                                     ringTransferRepository.updateTransferStatus(transfer.id, RingTransferStatus.Discarded)
                                                                 }

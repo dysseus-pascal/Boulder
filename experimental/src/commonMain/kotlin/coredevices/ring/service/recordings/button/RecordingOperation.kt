@@ -1,6 +1,5 @@
 package coredevices.ring.service.recordings.button
 
-import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -8,13 +7,14 @@ import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
-import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
@@ -41,6 +41,7 @@ open class DefaultRecordingOperation(
     private val recordingId: Long,
     private val transferId: Long?,
     private val fileId: String,
+    private val trace: RingTraceSession,
     private val forcedTool: (suspend (messageText: String) -> ToolCallResult)?
 ) : RecordingOperation, KoinComponent {
     companion object {
@@ -55,13 +56,22 @@ open class DefaultRecordingOperation(
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         val entryId = withContext(Dispatchers.IO) {
             if (handle?.stage is RecordingProcessingStage.RecordingEntryCreated) {
-                (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
+                val id = (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
+                trace.markEvent(
+                    "recording_entry_reused",
+                    TraceEventData.RecordingEntryInfo(id, recordingId, transferId ?: -1)
+                )
+                id
             } else {
                 val newId = recordingEntryDao.insertRecordingEntry(
                     RecordingEntryEntity(
                         recordingId = recordingId,
                         fileName = fileId
                     )
+                )
+                trace.markEvent(
+                    "recording_entry_created",
+                    TraceEventData.RecordingEntryInfo(newId, recordingId, transferId ?: -1)
                 )
                 handle?.updateStage(RecordingProcessingStage.RecordingEntryCreated(
                     recordingEntryId = newId,
@@ -80,10 +90,25 @@ open class DefaultRecordingOperation(
         coroutineScope {
             launch(Dispatchers.IO) {
                 try {
+                    trace.markEvent("persist_recording_start", TraceEventData.PersistRecordingStart(
+                        recordingId = recordingId,
+                        transferId = transferId,
+                        fileId = fileId
+                    ))
                     recordingStorage.persistRecording(fileId)
+                    trace.markEvent("persist_recording_end", TraceEventData.PersistRecordingStart(
+                        recordingId = recordingId,
+                        transferId = transferId,
+                        fileId = fileId
+                    ))
                 } catch (e: Exception) {
                     //TODO: Better sync handling, e.g. retry later
                     logger.e(e) { "Error persisting recording $fileId" }
+                    trace.markEvent("persist_recording_fail", TraceEventData.PersistRecordingStart(
+                        recordingId = recordingId,
+                        transferId = transferId,
+                        fileId = fileId
+                    ))
                 }
             }
             val mcpSession = mcpSessionFactory.createForSandboxGroup(
@@ -91,12 +116,32 @@ open class DefaultRecordingOperation(
                 this
             )
             val transcription = try {
-                recordingProcessor.transcribe(
+                trace.markEvent("transcription_start", TraceEventData.TranscriptionStart(
+                    recordingId = recordingId,
+                    recordingEntryId = entryId,
+                    transferId = transferId ?: -1
+                ))
+                val txt = recordingProcessor.transcribe(
                     audioSource = source,
                     sampleRate = meta.cachedMetadata.sampleRate,
                 ).flowOn(Dispatchers.IO)
                     .first { it is TranscriptionSessionStatus.Transcription } as TranscriptionSessionStatus.Transcription
+                trace.markEvent("transcription_end", TraceEventData.TranscriptionEnd(
+                    recordingId = recordingId,
+                    recordingEntryId = entryId,
+                    transferId = transferId ?: -1,
+                    transcriptLength = txt.text.length,
+                    modelUsed = txt.modelUsed,
+                ))
+                txt
             } catch (e: TranscriptionException.TranscriptionNetworkError) {
+                trace.markEvent("transcription_fail", TraceEventData.TranscriptionFail(
+                    recordingId = recordingId,
+                    recordingEntryId = entryId,
+                    transferId = transferId ?: -1,
+                    modelUsed = e.modelUsed,
+                    reason = "Network error: ${e.message}"
+                ))
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.transcription_error,
@@ -109,6 +154,13 @@ open class DefaultRecordingOperation(
                 )
                 throw RecoverableTaskException("Network error during transcription", e)
             } catch (e: Exception) {
+                trace.markEvent("transcription_fail", TraceEventData.TranscriptionFail(
+                    recordingId = recordingId,
+                    recordingEntryId = entryId,
+                    transferId = transferId ?: -1,
+                    modelUsed = (e as? TranscriptionException)?.modelUsed,
+                    reason = e.message ?: "Unknown"
+                ))
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.transcription_error,
@@ -132,7 +184,17 @@ open class DefaultRecordingOperation(
             )
 
             try {
+                trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(
+                    entryId,
+                    recordingId,
+                    transferId ?: -1
+                ))
                 mcpSession.openSession()
+                trace.markEvent("mcp_session_open_end", TraceEventData.RecordingEntryInfo(
+                    entryId,
+                    recordingId,
+                    transferId ?: -1
+                ))
                 logger.d { "Agent running..." }
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,

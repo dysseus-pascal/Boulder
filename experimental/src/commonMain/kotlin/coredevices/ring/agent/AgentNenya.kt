@@ -35,7 +35,7 @@ class AgentNenya(
     conversation: List<ConversationMessageDocument>,
     private val useSearchMode: Boolean = false
 ): KoinComponent, Agent {
-
+    override val label = "Nenya"
     // We don't use StateFlow because we want to suspend on emit if there's backpressure
     private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST).apply {
         tryEmit(conversation)

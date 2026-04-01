@@ -3,15 +3,16 @@ package coredevices.util.transcription
 import co.touchlab.kermit.Logger
 import com.cactus.Cactus
 import coredevices.util.AudioEncoding
-import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.writeWavHeader
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -21,9 +22,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -64,6 +63,7 @@ class CactusTranscriptionService(
     val configuredModel get() = sttConfig.value.modelName
     private var _lastSuccessfulMode: CactusSTTMode? = null
     val lastSuccessfulMode get() = _lastSuccessfulMode
+    override val onInitialized = Channel<Boolean>(Channel.RENDEZVOUS)
 
     private fun getCacheFilePath(): Path {
         SystemFileSystem.createDirectories(cacheDir, mustCreate = false)
@@ -111,8 +111,10 @@ class CactusTranscriptionService(
         return scope.launch(Dispatchers.IO) {
             try {
                 initIfNeeded()
+                onInitialized.trySend(model != null)
             } catch (e: Throwable) {
                 logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
+                onInitialized.trySend(false)
             }
         }
     }
@@ -131,6 +133,8 @@ class CactusTranscriptionService(
                 return
             }
             initJob = performInit()
+        } else {
+            onInitialized.trySend(true)
         }
     }
 

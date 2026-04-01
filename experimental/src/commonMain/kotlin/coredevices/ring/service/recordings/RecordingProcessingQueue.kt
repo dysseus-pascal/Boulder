@@ -6,6 +6,7 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.data.ProcessingTask
 import coredevices.ring.data.RecordingProcessingTask
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
@@ -13,6 +14,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.PersistentQueueScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -35,6 +37,7 @@ class RecordingProcessingQueue(
     private val recordingOperationFactory: RecordingOperationFactory,
     private val scope: RecordingBackgroundScope,
     private val recordingPreprocessor: RecordingPreprocessor,
+    private val trace: RingTraceSession,
     rescheduleDelay: Duration = 1.minutes,
     maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
@@ -81,7 +84,9 @@ class RecordingProcessingQueue(
         buttonSequence: String?
     ) {
         try {
+            trace.markEvent("recording_preprocessing_start", TraceEventData.TransferIdInfo(transferId ?: -1))
             recordingPreprocessor.preprocess(fileId)
+            trace.markEvent("recording_preprocessing_end", TraceEventData.TransferIdInfo(transferId ?: -1))
         } catch (e: Exception) {
             logger.e(e) { "Preprocessing failed for file $fileId: ${e.message}, skipping preprocessing" }
         }
@@ -119,6 +124,7 @@ class RecordingProcessingQueue(
     private suspend fun handleRecording(handle: TaskHandle, task: ProcessingTask.AudioRecording) {
         val (buttonSequence, transferId) = task
         logger.v { "Handling transfer $transferId" }
+        trace.markEvent("handling_audio_task_start", TraceEventData.HandlingAudioTask(transferId))
         val transfer = transferRepository.getRingTransferById(transferId)
             ?: throw IllegalStateException("Transfer $transferId not found")
         val fileId = transfer.fileId
@@ -133,6 +139,10 @@ class RecordingProcessingQueue(
                 taskId = handle.taskId,
                 recordingId = id
             )
+            trace.markEvent("recording_entity_created", TraceEventData.RecordingEntityCreated(
+                recordingId = id,
+                transferId = transferId
+            ))
             handle.updateStage(
                 RecordingProcessingStage.RecordingEntityCreated(id)
             )
@@ -149,6 +159,7 @@ class RecordingProcessingQueue(
             transferId = transferId,
             buttonSequence = buttonSequence
         )
+        trace.markEvent("handling_audio_task_end", TraceEventData.HandlingAudioTask(transferId))
     }
 
     private suspend fun handleChat(
@@ -194,6 +205,9 @@ class RecordingProcessingQueue(
             transferId = transferId,
             buttonSequence = buttonSequence,
         )
+        trace.markEvent("scheduling_audio_task",
+            TraceEventData.SchedulingAudioTask(transferId, buttonSequence)
+        )
         scheduleTask(
             RecordingProcessingTask(
                 task = task
@@ -213,6 +227,7 @@ class RecordingProcessingQueue(
             fileId = fileId,
             buttonSequence = buttonSequence,
         )
+        trace.markEvent("scheduling_local_audio_task")
         scheduleTask(
             RecordingProcessingTask(
                 task = task
@@ -226,6 +241,7 @@ class RecordingProcessingQueue(
         val task = ProcessingTask.TextRecording(
             transcription = transcription
         )
+        trace.markEvent("scheduling_text_task")
         scheduleTask(
             RecordingProcessingTask(
                 task = task

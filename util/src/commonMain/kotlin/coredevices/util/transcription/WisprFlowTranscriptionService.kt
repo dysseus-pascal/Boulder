@@ -61,6 +61,8 @@ class WisprFlowTranscriptionService(
 
     private var pendingConnection: Deferred<PreconnectedSession>? = null
 
+    override val onInitialized: Channel<Boolean> = Channel()
+
     private suspend fun resolveAccessToken(): String? {
         return withTimeout(10.seconds) {
             wisprFlowAuth.getAccessToken()

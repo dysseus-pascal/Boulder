@@ -53,6 +53,7 @@ import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.RingCompanionDeviceManager
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.PermissionRequester
@@ -120,10 +121,17 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().recordingProcessingTaskDao()
     }
+    single {
+        get<RingDatabase>().traceSessionDao()
+    }
+    single {
+        get<RingDatabase>().traceEntryDao()
+    }
     singleOf(::RecordingRepository)
     singleOf(::RingTransferRepository)
     singleOf(::RecordingProcessingTaskRepository)
     singleOf(::PreferencesImpl) bind Preferences::class
+    singleOf(::RingTraceSession)
 
     single {
         ApiConfig(
@@ -151,7 +159,7 @@ val experimentalModule = module {
     } bind VermillionApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
-    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get()) }
+    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RecordingStorage)
     singleOf(::RecordingPreprocessor)

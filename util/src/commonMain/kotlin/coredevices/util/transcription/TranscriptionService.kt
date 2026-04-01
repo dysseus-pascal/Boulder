@@ -1,6 +1,7 @@
 package coredevices.util.transcription
 
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration
 
@@ -14,7 +15,9 @@ interface TranscriptionService {
     /**
      * Begin initialization of transcription service in the background.
      */
-    fun earlyInit() {}
+    fun earlyInit() {
+        onInitialized.trySend(true)
+    }
 
     /**
      * Transcribe audio stream frames to text.
@@ -31,6 +34,8 @@ interface TranscriptionService {
         encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
         timeout: Duration = Duration.INFINITE
     ): Flow<TranscriptionSessionStatus>
+
+    val onInitialized: Channel<Boolean>
 }
 
 sealed interface STTLanguage {

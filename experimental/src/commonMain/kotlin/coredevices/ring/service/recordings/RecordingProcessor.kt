@@ -14,6 +14,8 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
+import coredevices.ring.data.entity.room.TraceEventData
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ class RecordingProcessor(
     private val transcriptionService: TranscriptionService,
     private val conversationMessageDao: ConversationMessageDao,
     private val recordingEntryDao: RecordingEntryDao,
+    private val trace: RingTraceSession
 ) {
     sealed interface RecordingStatus {
         /**
@@ -111,6 +114,11 @@ class RecordingProcessor(
     private fun watchConversationUpdates(scope: CoroutineScope, agent: Agent, localRecordingId: Long, recordingEntryId: Long?): Job {
         var updatedMessageId = false
         return agent.conversation.drop(1).onEach { // Skip the initial value as this will be the same as what we have already stored, or invalid
+            trace.markEvent("agent_conversation_update", TraceEventData.AgentConversationUpdate(
+                recordingId = localRecordingId,
+                recordingEntryId = recordingEntryId,
+                messageCount = it.size
+            ))
             logger.d { "Agent conversation updated, ${it.size} messages:\n${it.joinToString("\n") { it.role.toString() + ": " + it.content }}" }
             updateConversation(localRecordingId, it)
             if (recordingEntryId != null && !updatedMessageId) {
@@ -164,6 +172,14 @@ class RecordingProcessor(
         forcedTool: (suspend () -> ToolCallResult)? = null,
         text: String
     ) {
+        trace.markEvent("agent_processing_start",
+            TraceEventData.AgentProcessingStart(
+                recordingId = recordingId,
+                recordingEntryId = recordingEntryId,
+                forcedToolPresent = forcedTool != null,
+                agent = agent.label,
+            )
+        )
         val convUpdJob = watchConversationUpdates(
             CoroutineScope(currentCoroutineContext()),
             agent,
@@ -177,6 +193,14 @@ class RecordingProcessor(
             // Reset conversation to before processing so task retry works correctly
             logger.e(e) { "Error during agent processing" }
             convUpdJob.cancel()
+            trace.markEvent("agent_processing_failed",
+                TraceEventData.AgentProcessingFailed(
+                    recordingId = recordingId,
+                    recordingEntryId = recordingEntryId,
+                    agent = agent.label,
+                    reason = "Network error: ${e.message}"
+                )
+            )
             throw RecoverableTaskException("Network error during agent processing: ${e.message}", e)
         } catch (e: Throwable) {
             logger.e(e) { "Error during agent processing" }
@@ -200,5 +224,13 @@ class RecordingProcessor(
             )
         }
         updateConversation(recordingId, agent.conversation.first())
+        trace.markEvent("agent_processing_end",
+            TraceEventData.AgentProcessingEnd(
+                recordingId = recordingId,
+                recordingEntryId = recordingEntryId,
+                forcedToolUsed = forcedTool != null && noToolRan,
+                agent = agent.label,
+            )
+        )
     }
 }

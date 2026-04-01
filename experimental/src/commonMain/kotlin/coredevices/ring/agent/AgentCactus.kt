@@ -32,7 +32,7 @@ class AgentCactus(
     conversation: List<ConversationMessageDocument>,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
 ) : KoinComponent, Agent {
-
+    override val label = "Cactus"
     private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST).apply {
         tryEmit(conversation)
     }

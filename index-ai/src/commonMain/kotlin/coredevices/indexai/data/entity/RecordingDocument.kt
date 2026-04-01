@@ -148,5 +148,7 @@ enum class RecordingEntryStatus {
      */
     completed,
     transcription_error,
-    agent_error
+    agent_error;
+
+    fun isError(): Boolean = this == transcription_error || this == agent_error
 }

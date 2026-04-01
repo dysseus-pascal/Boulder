@@ -11,6 +11,7 @@ import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.vermillion.VermillionApi
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 
 class RecordingOperationFactory(
     private val agentFactory: AgentFactory,
@@ -18,7 +19,8 @@ class RecordingOperationFactory(
     private val mcpSessionFactory: McpSessionFactory,
     private val prefs: Preferences,
     private val vermillionApi: VermillionApi,
-    private val recordingStorage: RecordingStorage
+    private val recordingStorage: RecordingStorage,
+    private val trace: RingTraceSession
 ) {
     companion object {
         private val secondaryOperationSequence = listOf(ButtonPress.Short, ButtonPress.Long)
@@ -45,6 +47,7 @@ class RecordingOperationFactory(
                 recordingId = recordingId,
                 transferId = transferId,
                 fileId = fileId,
+                trace = trace,
                 forcedTool = forcedNoteTool
             )
         }
@@ -81,6 +84,7 @@ class RecordingOperationFactory(
                     recordingId = recordingId,
                     transferId = transferId,
                     fileId = fileId,
+                    trace = trace,
                     forcedTool = forcedTool
                 )
             }
@@ -92,6 +96,7 @@ class RecordingOperationFactory(
                     fileId = fileId,
                     recordingId = recordingId,
                     transferId = transferId,
+                    trace = trace,
                     forcedTool = null
                 )
             }
@@ -107,6 +112,7 @@ class RecordingOperationFactory(
                         recordingId = recordingId,
                         transferId = transferId,
                         fileId = fileId,
+                        trace = trace,
                         forcedTool = forcedTool,
                     ),
                 )

@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import NextBugReportContext
 import PlatformShareLauncher
 import PlatformUiContext
@@ -113,7 +114,6 @@ import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
-import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
 import coredevices.pebble.services.LanguagePackRepository
@@ -127,8 +127,6 @@ import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
 import coredevices.util.rememberUiContext
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.ActiveDevice
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
@@ -156,23 +154,19 @@ import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
 import kotlinx.io.files.SystemFileSystem
-import kotlinx.io.writeString
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import theme.CoreAppColorScheme
-import theme.ThemeProvider
 import theme.coreOrange
 import theme.currentColorScheme
-import theme.greyScheme
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -1471,15 +1465,6 @@ fun WatchDetails(
             contentDescription = "Update PebbleOS",
             primaryColor = true,
             modifier = Modifier.padding(vertical = 5.dp),
-        )
-    } else if (loggedIn == null && watch is CommonConnectedDevice && !watch.watchType.isCoreDevice()) {
-        PebbleElevatedButton(
-            text = "Login to Rebble to check for PebbleOS updates",
-            onClick = {
-                uriHandler.openUri(REBBLE_LOGIN_URI)
-            },
-            primaryColor = true,
-            modifier = Modifier.padding(5.dp),
         )
     } else if (firmwareUpdateAvailable is FirmwareUpdateCheckResult.UpdateCheckFailed) {
         Card(

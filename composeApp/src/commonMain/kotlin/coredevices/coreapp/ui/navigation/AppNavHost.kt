@@ -1,6 +1,5 @@
 package coredevices.coreapp.ui.navigation
 
-import BugReportButton
 import CommonRoutes
 import CoreNav
 import CoreRoute
@@ -25,6 +24,7 @@ import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
+import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
@@ -166,6 +166,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
             composable<CommonRoutes.OnboardingRoute> {
                 OnboardingScreen(
+                    coreNav = coreNav,
+                )
+            }
+            composable<CommonRoutes.WatchOnboardingRoute> {
+                WatchOnboardingScreen(
                     coreNav = coreNav,
                 )
             }

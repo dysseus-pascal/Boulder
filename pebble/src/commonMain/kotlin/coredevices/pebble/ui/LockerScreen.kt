@@ -1029,63 +1029,72 @@ fun NativeWatchfaceCard(
                 )
             }
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                val imageModifier =
-                    Modifier.padding(6.dp)
-                        .align(Alignment.Center)
-                        .clip(RoundedCornerShape(9.dp))
-                AppImage(
-                    entry,
-                    modifier = imageModifier,
-                    size = NATIVE_SCREENSHOT_HEIGHT,
+        NativeWatchfaceMainContent(entry, highlightInLocker, topBarParams)
+    }
+}
+
+@Composable
+fun NativeWatchfaceMainContent(
+    entry: CommonApp,
+    highlightInLocker: Boolean,
+    topBarParams: TopBarParams?,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            val imageModifier =
+                Modifier.padding(6.dp)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(9.dp))
+            AppImage(
+                entry,
+                modifier = imageModifier,
+                size = NATIVE_SCREENSHOT_HEIGHT,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 5.dp, end = 5.dp),
+        ) {
+            if (entry.type == AppType.Watchapp) {
+                AsyncImage(
+                    model = entry.listImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp).padding(end = 3.dp)
                 )
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 5.dp, end = 5.dp),
-            ) {
-                if (entry.type == AppType.Watchapp) {
-                    AsyncImage(
-                        model = entry.listImageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp).padding(end = 3.dp)
+            Text(
+                entry.title,
+                fontSize = 12.sp,
+                lineHeight = 12.sp,
+                maxLines = 1,
+                fontWeight = FontWeight.Bold,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.heightIn(min = 18.dp)
+            )
+        }
+        Row(modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 5.dp, end = 5.dp)) {
+            if (highlightInLocker) {
+                val inMyCollection = entry.inMyCollection()
+                if (inMyCollection) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.PlaylistAddCheck,
+                        contentDescription = "In My Collection",
+                        modifier = Modifier.size(19.dp)
+                            .padding(top = 1.dp, bottom = 5.dp),
+                        tint = coreDarkGreen,
                     )
                 }
-                Text(
-                    entry.title,
-                    fontSize = 12.sp,
-                    lineHeight = 12.sp,
-                    maxLines = 1,
-                    fontWeight = FontWeight.Bold,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.heightIn(min = 18.dp)
-                )
             }
-            Row(modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 5.dp, end = 5.dp)) {
-                if (highlightInLocker) {
-                    val inMyCollection = entry.inMyCollection()
-                    if (inMyCollection) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.PlaylistAddCheck,
-                            contentDescription = "In My Collection",
-                            modifier = Modifier.size(19.dp)
-                                .padding(top = 1.dp, bottom = 5.dp),
-                            tint = coreDarkGreen,
-                        )
-                    }
-                }
-                Text(
-                    entry.developerName,
-                    color = Color.Gray,
-                    fontSize = 10.sp,
-                    lineHeight = 10.sp,
-                    maxLines = 1,
-                    modifier = Modifier.padding(bottom = 7.dp)
-                        .weight(1f),
-                )
-                entry.CompatibilityWarning(topBarParams)
-            }
+            Text(
+                entry.developerName,
+                color = Color.Gray,
+                fontSize = 10.sp,
+                lineHeight = 10.sp,
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 7.dp)
+                    .weight(1f),
+            )
+            topBarParams?.let { entry.CompatibilityWarning(topBarParams) }
         }
     }
 }

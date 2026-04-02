@@ -61,6 +61,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
@@ -80,6 +81,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
@@ -98,6 +101,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.description
 import coredevices.util.name
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -263,6 +267,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
         val params by viewModel.paramsFlow.collectAsState(Params())
+        val settings: Settings = koinInject()
 
         val coreConfigHolder: CoreConfigHolder = koinInject()
         val coreConfig by coreConfigHolder.config.collectAsState()
@@ -319,6 +324,22 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                 }
             }
         }
+
+        val watchesFlow = remember {
+            libPebble.watches
+                .map { it.sortedWith(PebbleDeviceComparator) }
+        }
+        val watches by watchesFlow.collectAsState(
+            initial = libPebble.watches.value.sortedWith(
+                PebbleDeviceComparator
+            )
+        )
+//        var hasSeenWatchOnboarding by remember { mutableStateOf(false)}//settings.hasSeenWatchOnboarding())} FIXME
+//        if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
+//            hasSeenWatchOnboarding = true
+//            settings.setHasSeenWatchOnboarding(true)
+//            coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+//        }
 
         Scaffold(
             topBar = {
@@ -522,6 +543,10 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         }
     }
 }
+
+private const val HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY = "hasSeenWatchOnboarding"
+fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
+fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
 
 /**
  * NavController crashes if we navigate before it is ready

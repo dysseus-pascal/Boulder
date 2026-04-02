@@ -219,6 +219,11 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             useCache: Boolean
         ): List<AppStoreHomeResult> = emptyList()
 
+        override suspend fun fetchPebbleAppStoreHomes(
+            hardwarePlatform: WatchType?,
+            useCache: Boolean
+        ): Map<AppType, AppStoreHomeResult?> = emptyMap()
+
         override suspend fun searchAppStore(
             search: String,
             appType: AppType,

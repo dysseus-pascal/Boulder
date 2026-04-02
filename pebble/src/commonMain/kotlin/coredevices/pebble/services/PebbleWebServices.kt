@@ -62,9 +62,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -245,6 +245,7 @@ interface PebbleWebServices {
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
+    suspend fun fetchPebbleAppStoreHomes(hardwarePlatform: WatchType?, useCache: Boolean): Map<AppType, AppStoreHomeResult?>
     suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<Pair<AppstoreSource, StoreSearchResult>>
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
     suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
@@ -373,6 +374,20 @@ class RealPebbleWebServices(
             if (home == null) return@mapNotNull null
             AppStoreHomeResult(it, home)
         }
+    }
+
+    override suspend fun fetchPebbleAppStoreHomes(
+        hardwarePlatform: WatchType?,
+        useCache: Boolean,
+    ) : Map<AppType, AppStoreHomeResult?> {
+        return getAllSources(enabledOnly = false).firstOrNull {
+            it.url == PEBBLE_FEED_URL
+        }?.let { source ->
+            val service = appstoreServiceForSource(source)
+            AppType.entries.associateWith { appType ->
+                service.fetchAppStoreHome(appType, hardwarePlatform, useCache)?.let { AppStoreHomeResult(source, it) }
+            }
+        } ?: emptyMap()
     }
 
     override suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
@@ -607,6 +622,18 @@ data class AppStoreHome(
     val applications: List<StoreApplication>,
     val categories: List<StoreCategory>,
     val collections: List<StoreCollection>,
+    val onboarding: StoreOnboarding? = null,
+)
+
+@Serializable
+data class StoreOnboarding(
+    val aplite: List<String>,
+    val basalt: List<String>,
+    val chalk: List<String>,
+    val diorite: List<String>,
+    val emery: List<String>,
+    val flint: List<String>,
+    val gabbro: List<String>,
 )
 
 @Serializable

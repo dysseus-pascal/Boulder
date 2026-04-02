@@ -824,7 +824,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.General,
+                    section = Section.Connectivity,
                     checked = libPebbleConfig.bleConfig.reversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1315,6 +1315,16 @@ please disable the option.""".trimIndent(),
                     },
                     show = { loggedIn != null },
                 ),
+//                basicSettingsActionItem(
+//                    title = "Reset Watch Onboarding",
+//                    topLevelType = TopLevelType.Phone,
+//                    section = Section.General,
+//                    action = {
+//                        settings.setHasSeenWatchOnboarding(false)
+//                        topBarParams.showSnackbar("Watch onboarding will show again")
+//                    },
+//                    show = { debugOptionsEnabled },
+//                ),
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",

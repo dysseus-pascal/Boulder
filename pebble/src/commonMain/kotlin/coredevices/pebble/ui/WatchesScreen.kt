@@ -350,6 +350,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                             .padding(12.dp),
                     ) {
+                        // TODO fix design (don't have it look like a button...)
                         Text(
                             text = "Press + to add a watch",
                             modifier = Modifier
@@ -553,7 +554,7 @@ fun PebbleDevice.stateText(
     }
     val stateText = when (this) {
         is ConnectedPebbleDevice -> "Connected$installingState"
-        is ConnectedPebbleDeviceInRecovery -> "Connected (Recovery)$installingState"
+        is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$installingState"
         is ConnectingPebbleDevice -> {
             when {
                 rebootingAfterFirmwareUpdate -> if (negotiating) {

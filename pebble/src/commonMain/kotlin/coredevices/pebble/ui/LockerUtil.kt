@@ -71,6 +71,7 @@ import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
@@ -86,6 +87,8 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -355,13 +358,23 @@ fun WatchType.modelDescription() = when (this) {
 @Composable
 fun lastConnectedWatch(): KnownPebbleDevice? {
     val libPebble = rememberLibPebble()
-    val watchesFiltered = remember {
-        libPebble.watches
-    }
-    val watches by watchesFiltered.collectAsState()
+    val watches by libPebble.watches.collectAsState()
     val lastConnectedWatch = remember(watches) {
         watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
             .firstOrNull()
+    }
+    return lastConnectedWatch
+}
+
+@Composable
+fun connectedWatch(): CommonConnectedDevice? {
+    val libPebble = rememberLibPebble()
+    val watchesFiltered = remember {
+        libPebble.watches.map { it.filterIsInstance<CommonConnectedDevice>() }
+    }
+    val watches by watchesFiltered.collectAsState(null)
+    val lastConnectedWatch = remember(watches) {
+        watches?.firstOrNull()
     }
     return lastConnectedWatch
 }

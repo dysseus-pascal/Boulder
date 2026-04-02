@@ -34,7 +34,6 @@ import com.russhwolf.settings.set
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButtons
-import coredevices.ui.SignInDialog
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester

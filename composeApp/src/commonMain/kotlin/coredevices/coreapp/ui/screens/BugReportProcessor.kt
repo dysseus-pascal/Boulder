@@ -11,6 +11,8 @@ import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
 import coredevices.coreapp.util.FileLogWriter
+import coredevices.ring.database.room.dao.TraceEntryDao
+import coredevices.ring.database.room.dao.TraceSessionDao
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
@@ -49,6 +51,10 @@ import kotlinx.io.writeString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
@@ -528,6 +534,48 @@ class BugReportProcessor(
                 }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to collect experimental debug info files" }
+            }
+
+            try {
+                val traceSessionDao = KoinPlatform.getKoin().getOrNull<TraceSessionDao>()
+                val traceEntryDao = KoinPlatform.getKoin().getOrNull<TraceEntryDao>()
+                if (traceSessionDao != null && traceEntryDao != null) {
+                    val sessions = traceSessionDao.getLastNTraceSessions(20, 0)
+                    if (sessions.isNotEmpty()) {
+                        val sessionEntries = sessions.map { session ->
+                            session to traceEntryDao.getEntriesForSession(session.id)
+                        }
+                        val traceJson = buildJsonArray {
+                            sessionEntries.forEach { (session, entries) ->
+                                addJsonObject {
+                                    put("session_id", session.id)
+                                    put("timestamp", session.started.toString())
+                                    putJsonArray("trace") {
+                                        entries.forEach { entry ->
+                                            addJsonObject {
+                                                put("id", entry.id)
+                                                put("time_mark", entry.timeMark)
+                                                put("type", entry.type)
+                                                entry.data?.let { put("data", Json.parseToJsonElement(it)) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        val traceBytes = Json.encodeToString(traceJson).encodeToByteArray()
+                        attachments.add(
+                            DocumentAttachment(
+                                fileName = "ring_trace_sessions.json",
+                                mimeType = "application/json",
+                                source = sourceFromByteArray(traceBytes),
+                                size = traceBytes.size.toLong(),
+                            )
+                        )
+                    } // if sessions.isNotEmpty()
+                } // if daos != null
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to collect ring trace sessions" }
             }
         }
 

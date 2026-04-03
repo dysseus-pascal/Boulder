@@ -83,7 +83,7 @@ data class CoreConfig(
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val indexPermissionsConfirmed: Boolean = false,
-    val weatherUnits: WeatherUnit = WeatherUnit.Metric,
+    val weatherUnits: WeatherUnit = deviceDefaultWeatherUnit(),
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
     val interceptPKJSWeather: Boolean = true,

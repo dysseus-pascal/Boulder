@@ -205,6 +205,7 @@ enum class BoolWatchPref(
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
+    QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true),
     ;
 
     override val type = WatchPrefType.TypeBoolean

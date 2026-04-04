@@ -117,6 +117,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
     BoolWatchPref.MenuScrollWrapAround -> Section.Display
     EnumWatchPref.MenuScrollVibe -> Section.Display
+    BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {

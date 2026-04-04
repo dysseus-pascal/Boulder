@@ -711,9 +711,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
             HorizontalDivider()
 
             if (watch is ConnectedPebbleDevice) {
-                val languagePackInstalledAtConnectionTime = watch.installedLanguagePack
-                val languagePackRecentlyInstalledSinceConnection = (watch.languagePackInstallState as? LanguagePackInstallState.Idle)?.successfullyInstalledLanguage
-                val languagePackInstalled = languagePackRecentlyInstalledSinceConnection ?: languagePackInstalledAtConnectionTime?.let { "${it.isoLocal} (v${it.version})" }
+                val languagePackInstalled = watch.languagePackInstalled()
                 val languageText = when  {
                     languagePackInstalled.isNullOrBlank() -> "Language"
                     else -> "Language: $languagePackInstalled"
@@ -1074,6 +1072,12 @@ data class TestNotificationContent(
     val icon: TimelineIcon? = TimelineIcon.GenericSms,
     val color: TimelineColor? = TimelineColor.Orange,
 )
+
+fun ConnectedPebbleDevice.languagePackInstalled(): String? {
+    val languagePackInstalledAtConnectionTime = installedLanguagePack
+    val languagePackRecentlyInstalledSinceConnection = (languagePackInstallState as? LanguagePackInstallState.Idle)?.successfullyInstalledLanguage
+    return languagePackRecentlyInstalledSinceConnection ?: languagePackInstalledAtConnectionTime?.let { "${it.isoLocal} (v${it.version})" }
+}
 
 private const val CUSTOM_NOTIFICATION_CONTENT_KEY = "custom_notification_content"
 

@@ -93,6 +93,6 @@ data class CoreConfig(
 
 @Serializable
 data class STTConfig(
-    val mode: CactusSTTMode = CactusSTTMode.LocalFirst,
+    val mode: CactusSTTMode = CactusSTTMode.RemoteOnly,
     val modelName: String? = null,
 )

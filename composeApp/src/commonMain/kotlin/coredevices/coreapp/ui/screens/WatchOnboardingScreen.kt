@@ -17,13 +17,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,36 +39,46 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
-import com.russhwolf.settings.Settings
 import coredevices.pebble.Platform
-import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreOnboarding
 import coredevices.pebble.ui.CommonAppType
+import coredevices.pebble.ui.LanguageDialog
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NativeWatchfaceMainContent
+import coredevices.pebble.ui.SettingsItemsState
+import coredevices.pebble.ui.SnackbarDisplay
+import coredevices.pebble.ui.TITLE_ENABLE_HEALTH
+import coredevices.pebble.ui.TITLE_OFFLINE_SPEECH_RECOGNITION
 import coredevices.pebble.ui.allCollectionUuids
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.connectedWatch
+import coredevices.pebble.ui.languagePackInstalled
+import coredevices.pebble.ui.rememberSettingsItemsState
+import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.installing
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
-//class OnboardingViewModel : ViewModel() {
-//    val stage = mutableStateOf(OnboardingStage.Welcome)
-//    val requestedPermissions = mutableStateOf(emptySet<Permission>())
-//}
+import theme.onboardingScheme
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = Logger.withTag("OnboardingScreen")
 
@@ -69,134 +86,202 @@ private val logger = Logger.withTag("OnboardingScreen")
 fun WatchOnboardingScreen(
     coreNav: CoreNav,
 ) {
-//    val viewModel = koinViewModel<OnboardingViewModel>()
     val scope = rememberCoroutineScope()
-    val settings: Settings = koinInject()
-    val libPebble = rememberLibPebble()
     val connectedWatch = connectedWatch()
     val pebbleWebServices: PebbleWebServices = koinInject()
+    var loadingHomes by remember { mutableStateOf(true) }
     val pebbleStoreHomes = remember { mutableStateMapOf<AppType, AppStoreHomeResult?>() }
-
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarDisplay =
+        remember { SnackbarDisplay { scope.launch { snackbarHostState.showSnackbar(message = it) } } }
+    val settings = rememberSettingsItemsState(
+        navBarNav = null,
+        snackbarDisplay = snackbarDisplay,
+    )
     if (connectedWatch != null) {
         LaunchedEffect(Unit) {
+            launch {
+                delay(6.seconds)
+                // Don't block entire screen on loading apps - but try to make it feel
+                // "together" by showing everything at once
+                loadingHomes = false
+            }
             val results = pebbleWebServices.fetchPebbleAppStoreHomes(
                 connectedWatch.watchType.watchType,
                 useCache = true
             )
             pebbleStoreHomes.clear()
             pebbleStoreHomes.putAll(results)
+            loadingHomes = false
         }
     }
 
-    Scaffold(
-        // TODO setStatusBarTheme(dark) - needs white text (but doing that without changes probably breaks stuff)
-        containerColor = MaterialTheme.colorScheme.primary,
-    ) { windowInsets ->
-        Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = "Get Started!",
-                    fontSize = 35.sp,
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    "Let's get started by setting up your Pebble..",
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(15.dp))
-
-                if (connectedWatch == null) {
+    MaterialTheme(colorScheme = onboardingScheme) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { windowInsets ->
+            Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     Text(
-                        "Waiting for your Pebble to connect..",
-                        textAlign = TextAlign.Center
+                        text = "Get Started!",
+                        fontSize = 35.sp,
                     )
 
-                    Spacer(modifier = Modifier.height(15.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    PebbleElevatedButton(
-                        text = "Skip",
-                        onClick = { coreNav.goBack() },
-                        primaryColor = false,
-                    )
-                    return@Scaffold
-                }
-
-                if (connectedWatch is ConnectedPebbleDeviceInRecovery) {
-                    val firmwareUpdateAvailable = connectedWatch.firmwareUpdateAvailable.result
-                    if (firmwareUpdateAvailable !is FirmwareUpdateCheckResult.FoundUpdate) {
-                        Text(
-                            "Checking for PebbleOS updates..",
-                            textAlign = TextAlign.Center
-                        )
+                    if (connectedWatch == null) {
+                        SectionText("Waiting for your Pebble to connect..")
 
                         Spacer(modifier = Modifier.height(15.dp))
-
-                        PebbleElevatedButton(
-                            text = "Skip",
-                            onClick = { coreNav.goBack() },
-                            primaryColor = false,
-                        )
-                        return@Scaffold
                     }
 
-                    Text(
-                        "Update your watch to the latest version of PebbleOS",
-                        textAlign = TextAlign.Center
-                    )
+                    if (connectedWatch is ConnectedPebbleDeviceInRecovery) {
+                        val firmwareUpdateAvailable = connectedWatch.firmwareUpdateAvailable.result
+                        if (firmwareUpdateAvailable !is FirmwareUpdateCheckResult.FoundUpdate) {
+                            SectionText("Checking for PebbleOS updates..")
 
-                    Spacer(modifier = Modifier.height(15.dp))
+                            Spacer(modifier = Modifier.height(15.dp))
 
-                    PebbleElevatedButton(
-                        text = "Update PebbleOS",
-                        onClick = {
+                            PebbleElevatedButton(
+                                text = "Skip",
+                                onClick = { coreNav.goBack() },
+                                primaryColor = true,
+                            )
+                            return@Scaffold
+                        }
+
+                        LaunchedEffect(Unit) {
                             logger.d { "Starting firmware update from onboarding screen" }
                             connectedWatch.updateFirmware(firmwareUpdateAvailable)
-                        },
-                        icon = Icons.Default.SystemUpdateAlt,
-                        contentDescription = "Update PebbleOS",
-                        primaryColor = true,
-                        modifier = Modifier.padding(vertical = 5.dp),
-                    )
+                        }
 
+                        SectionText("Updating your watch to the latest version of PebbleOS...")
+                        Spacer(modifier = Modifier.height(15.dp))
+                        val progress = (connectedWatch.firmwareUpdateState as? FirmwareUpdater.FirmwareUpdateStatus.InProgress)?.progress?.collectAsState()
+                        if (progress != null) {
+                            logger.v { "progress: ${progress.value}" }
+                            CoreLinearProgressIndicator(
+                                progress = { progress.value },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            )
+                        }
+                        SectionDivider()
+                    }
+
+                    if (connectedWatch is ConnectedPebbleDevice) {
+                        if (loadingHomes) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp),
+                            )
+                            return@Scaffold
+                        }
+
+                        OnboardingAppCarousel(
+                            header = "Add some Watchfaces",
+                            storeHome = pebbleStoreHomes[AppType.Watchface],
+                            connectedWatch,
+                        )
+
+                        SectionDivider()
+
+                        OnboardingAppCarousel(
+                            header = "Add some Apps",
+                            storeHome = pebbleStoreHomes[AppType.Watchapp],
+                            connectedWatch,
+                        )
+
+                        SectionDivider()
+
+                        val languagePackInstalled = connectedWatch.languagePackInstalled()
+                        val installingLanguagePack =
+                            connectedWatch.languagePackInstallState.installing()
+                        SectionText("Install a language pack")
+                        Spacer(modifier = Modifier.height(15.dp))
+                        if (installingLanguagePack != null) {
+                            Text("Installing $installingLanguagePack")
+                            Spacer(modifier = Modifier.height(15.dp))
+                        } else if (languagePackInstalled != null) {
+                            Text("Currently installed: $languagePackInstalled")
+                            Spacer(modifier = Modifier.height(15.dp))
+                        }
+                        PebbleElevatedButton(
+                            text = "Choose Language",
+                            onClick = { showLanguageDialog = true },
+                            primaryColor = true,
+                            icon = Icons.Outlined.Language,
+                            enabled = installingLanguagePack == null,
+                        )
+                        if (showLanguageDialog) {
+                            LanguageDialog(
+                                connectedWatch,
+                                onDismissRequest = { showLanguageDialog = false })
+                        }
+
+                        SectionDivider()
+
+                        // Support settings sync
+                        if (connectedWatch.capabilities.contains(ProtocolCapsFlag.SupportsBlobDbVersion)) {
+                            SectionText("Configure your watch")
+                            Spacer(modifier = Modifier.height(15.dp))
+
+                            settings.Show(BoolWatchPref.Clock24h.displayName)
+                            settings.Show(TITLE_ENABLE_HEALTH)
+
+                            SectionDivider()
+                        }
+                    }
+
+                    SectionText("Speech Recognition")
                     Spacer(modifier = Modifier.height(15.dp))
+                    settings.Show(TITLE_OFFLINE_SPEECH_RECOGNITION)
+                    SectionDivider()
 
                     PebbleElevatedButton(
                         text = "Skip",
                         onClick = { coreNav.goBack() },
-                        primaryColor = false,
-                    )
-                    return@Scaffold
-                }
-
-
-                if (connectedWatch is ConnectedPebbleDevice) {
-                    OnboardingAppCarousel(
-                        header = "Add some Watchfaces",
-                        storeHome = pebbleStoreHomes[AppType.Watchface],
-                        connectedWatch,
-                    )
-                    OnboardingAppCarousel(
-                        header = "Add some Watchapps",
-                        storeHome = pebbleStoreHomes[AppType.Watchapp],
-                        connectedWatch,
+                        primaryColor = true,
                     )
                 }
-
-                PebbleElevatedButton(
-                    text = "Done",
-                    onClick = { coreNav.goBack() },
-                    primaryColor = false,
-                )
             }
         }
     }
+}
+
+@Composable
+private fun SectionText(text: String) {
+    Text(
+        text = text,
+        textAlign = TextAlign.Center,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+    )
+}
+
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 25.dp),
+        color = Color.White,
+    )
+}
+
+@Composable
+private fun SettingsItemsState?.Show(title: String) {
+    if (this == null) {
+        return
+    }
+    val setting = remember(this) {
+        rawSettingsItems.find { it.title == title }
+    }
+    if (setting == null) {
+        return
+    }
+    setting.Item()
 }
 
 @Composable
@@ -229,10 +314,7 @@ fun OnboardingAppCarousel(
     if (apps.isNullOrEmpty()) {
         return
     }
-    Text(
-        header,
-        textAlign = TextAlign.Center
-    )
+    SectionText(header)
 
     Spacer(modifier = Modifier.height(15.dp))
 
@@ -241,18 +323,26 @@ fun OnboardingAppCarousel(
             .fillMaxWidth()
             .wrapContentHeight()
             .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
         contentPadding = PaddingValues(horizontal = 5.dp),
     ) {
-        items(apps, key = { it.uuid } ) { entry ->
+        items(apps, key = { it.uuid }) { entry ->
             var added by remember { mutableStateOf(false) }
             val commonAppStore = entry.commonAppType as? CommonAppType.Store ?: return@items
             Card(
                 modifier = Modifier.padding(3.dp)
-                    .width(125.dp)
+                    .width(125.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.91f),
+                    contentColor = Color.Black,
+                ),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    NativeWatchfaceMainContent(entry = entry, highlightInLocker = false, topBarParams = null)
+                    NativeWatchfaceMainContent(
+                        entry = entry,
+                        highlightInLocker = false,
+                        topBarParams = null
+                    )
                     PebbleElevatedButton(
                         text = "Add",
                         onClick = {
@@ -265,16 +355,15 @@ fun OnboardingAppCarousel(
                                 logger.v { "Add to locker from watch onboarding ${commonAppStore.storeApp?.title} result=$addResult" }
                             }
                         },
-                        primaryColor = false,
+                        primaryColor = true,
                         enabled = !added,
+                        icon = Icons.Default.Add,
                     )
                     Spacer(modifier = Modifier.height(5.dp))
                 }
             }
         }
     }
-
-    Spacer(modifier = Modifier.height(15.dp))
 }
 
 fun StoreOnboarding.forType(watchType: WatchType): List<String>? = when (watchType) {

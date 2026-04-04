@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import CoreNav
 import CoreRoute
 import NoOpCoreNav
@@ -12,14 +13,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Notes
@@ -94,8 +95,8 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.M3Dialog
-import coredevices.util.CoreConfigHolder
 import coredevices.util.CoreConfigFlow
+import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.description
@@ -334,12 +335,12 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                 PebbleDeviceComparator
             )
         )
-//        var hasSeenWatchOnboarding by remember { mutableStateOf(false)}//settings.hasSeenWatchOnboarding())} FIXME
-//        if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
-//            hasSeenWatchOnboarding = true
-//            settings.setHasSeenWatchOnboarding(true)
-//            coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
-//        }
+        var hasSeenWatchOnboarding by remember { mutableStateOf(settings.hasSeenWatchOnboarding())}
+        if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
+            hasSeenWatchOnboarding = true
+            settings.setHasSeenWatchOnboarding(true)
+            coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+        }
 
         Scaffold(
             topBar = {
@@ -545,8 +546,8 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
 }
 
 private const val HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY = "hasSeenWatchOnboarding"
-fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
-fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
+private fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
+private fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
 
 /**
  * NavController crashes if we navigate before it is ready

@@ -204,7 +204,9 @@ data class SettingsItem(
     }
 }
 
-private val ELEVATION = 2.dp
+private val ELEVATION = 0.dp
+val TITLE_ENABLE_HEALTH = "Enable Health"
+val TITLE_OFFLINE_SPEECH_RECOGNITION = "Offline Speech Recognition"
 
 @Composable
 fun settingsBadgeTotal(): Int {
@@ -253,7 +255,7 @@ data class SettingsItemsState(
 )
 
 @Composable
-fun rememberSettingsItemsState(navBarNav: NavBarNav, topBarParams: TopBarParams): SettingsItemsState? {
+fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarDisplay): SettingsItemsState? {
     val libPebble = rememberLibPebble()
     val libPebbleConfig by libPebble.config.collectAsState()
     val coreConfigHolder: CoreConfigHolder = koinInject()
@@ -295,13 +297,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav, topBarParams: TopBarParams)
                     val models = modelManager.getAvailableSTTModels()
                     val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
                         ?: run {
-                            topBarParams.showSnackbar("Error occurred. Please try again later.")
+                            snackbarDisplay.showSnackbar("Error occurred. Please try again later.")
                             logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
                             pendingSTTModeDialog = null
                             return@launch
                         }
                     if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
-                        topBarParams.showSnackbar("Error starting download. Please try again later.")
+                        snackbarDisplay.showSnackbar("Error starting download. Please try again later.")
                         logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
                     } else {
                         coreConfigHolder.update(
@@ -371,7 +373,7 @@ please disable the option.""".trimIndent(),
     LaunchedEffect(modelDownloadStatus) {
         when (modelDownloadStatus) {
             is ModelDownloadStatus.Failed -> {
-                topBarParams.showSnackbar("Failed to download model")
+                snackbarDisplay.showSnackbar("Failed to download model")
             }
             else -> {}
         }
@@ -419,7 +421,7 @@ please disable the option.""".trimIndent(),
             loggedIn,
             watchPrefs,
         ) {
-            listOf(
+            listOfNotNull(
                 basicSettingsActionItem(
                     title = "App Update Available",
                     description = "Please update the Pebble App!",
@@ -437,7 +439,7 @@ please disable the option.""".trimIndent(),
                     },
                     show = { updateState is AppUpdateState.UpdateAvailable },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Permissions",
                     description = if (missingPermissions.isEmpty()) {
                         "All permissions granted!"
@@ -450,11 +452,11 @@ please disable the option.""".trimIndent(),
                     section = Section.About,
                     action = if (missingPermissions.isNotEmpty()) {
                         {
-                            navBarNav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
+                            nav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
                         }
                     } else null,
                     badge = if (missingPermissions.isEmpty()) null else "${missingPermissions.size}",
-                ),
+                ) },
                 SettingsItem(
                     title = "App Version",
                     topLevelType = TopLevelType.Phone,
@@ -469,12 +471,12 @@ please disable the option.""".trimIndent(),
                     },
                     isDebugSetting = false,
                 ),
-                basicSettingsActionItem(
-                    title = "What's new in the app",
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "What’s new in the app",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
+                        nav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
                     badge = if (showChangelogBadge) "1" else null,
@@ -483,53 +485,53 @@ please disable the option.""".trimIndent(),
                             appUpdateTracker.acknowledgeCurrentVersion()
                         }
                     },
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.PebbleOsChangelogRoute)
+                        nav.navigateTo(CommonRoutes.PebbleOsChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Getting Started & Troubleshooting",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.TroubleshootingRoute)
+                        nav.navigateTo(CommonRoutes.TroubleshootingRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "New Bug Report",
                     description = "Please report a bug if anything went wrong!",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
                         nextBugReportContext.nextContext = null
-                        navBarNav.navigateTo(
+                        nav.navigateTo(
                             CommonRoutes.BugReport(
                                 pebble = true,
                             )
                         )
                     },
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "View My Bug Reports",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
+                        nav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
                     },
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
-                    action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
-                ),
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
+                ) },
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
@@ -582,8 +584,8 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
-                    title = "Dump notifications to logs",
-                    description = "Detailed notification logging, to diagnose processing/deduplication issues",
+                    title = "Show notifications in logs",
+                    description = "Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Logging,
                     checked = libPebbleConfig.notificationConfig.dumpNotificationContent,
@@ -599,16 +601,16 @@ please disable the option.""".trimIndent(),
                     show = { pebbleFeatures.supportsNotificationLogging() },
                 ),
                 basicSettingsToggleItem(
-                    title = "Obfuscate sensitive content in logs",
-                    description = "Remove any personal information (notification content, calendar events, app names, etc) from logs before they are written",
+                    title = "Show sensitive content in logs",
+                    description = "Include unredacted personal information (notification content, calendar events, app names, etc) in logs",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Logging,
-                    checked = libPebbleConfig.notificationConfig.obfuscateContent,
+                    checked = !libPebbleConfig.notificationConfig.obfuscateContent,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    obfuscateContent = it
+                                    obfuscateContent = !it
                                 )
                             )
                         )
@@ -685,16 +687,16 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Quick replies",
                     description = "Preset messages for notification replies on the watch (canned messages)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
+                ) },
                 SettingsItem(
                     title = "Vibration Pattern",
                     topLevelType = TopLevelType.Phone,
@@ -887,18 +889,18 @@ please disable the option.""".trimIndent(),
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Calendars",
                     description = "Configure which calendars to display",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Calendar,
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
-                ),
+                ) },
                 basicSettingsToggleItem(
-                    title = "Enable Health",
+                    title = TITLE_ENABLE_HEALTH,
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.trackingEnabled,
@@ -1010,16 +1012,16 @@ please disable the option.""".trimIndent(),
                     itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Locations",
                     description = "Configure weather locations",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Weather,
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.WeatherRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.WeatherRoute)
                     },
                     show = { coreConfig.fetchWeather }
-                ),
+                ) },
                 basicSettingsToggleItem(
                     title = "Use LAN developer connection",
                     description = "Allow connecting to developer connection over LAN, this is not secure and should only be used on trusted networks",
@@ -1065,7 +1067,7 @@ please disable the option.""".trimIndent(),
                     isDebugSetting = true,
                 ),
                 basicSettingsDropdownItem(
-                    title = "Offline Speech Recognition",
+                    title = TITLE_OFFLINE_SPEECH_RECOGNITION,
                     keywords = "cactus stt speech recognition offline",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
@@ -1093,7 +1095,7 @@ please disable the option.""".trimIndent(),
                         }
                     },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Manage Offline Models",
                     description = if (coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly) {
                         "Note: Offline speech recognition is lower accuracy, consider using" +
@@ -1106,9 +1108,9 @@ please disable the option.""".trimIndent(),
                     section = Section.Speech,
                     show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
-                ),
+                ) },
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
                     description = "Allow connection even when there are other Pebble apps installed on this phone. Warning: this will likely make the connection unreliable if you are using BLE! We don't recommend enabling this",
@@ -1315,16 +1317,15 @@ please disable the option.""".trimIndent(),
                     },
                     show = { loggedIn != null },
                 ),
-//                basicSettingsActionItem(
-//                    title = "Reset Watch Onboarding",
-//                    topLevelType = TopLevelType.Phone,
-//                    section = Section.General,
-//                    action = {
-//                        settings.setHasSeenWatchOnboarding(false)
-//                        topBarParams.showSnackbar("Watch onboarding will show again")
-//                    },
-//                    show = { debugOptionsEnabled },
-//                ),
+                navBarNav?.let {basicSettingsActionItem(
+                    title = "Show Watch Onboarding",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    action = {
+                        navBarNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+                    },
+                    show = { debugOptionsEnabled },
+                ) },
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",
@@ -1373,7 +1374,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
-            topBarParams.actions {}
+            topBarParams.actions { }
             topBarParams.title("Settings")
             launch {
                 topBarParams.scrollToTop.collect {

@@ -43,6 +43,8 @@ import coredevices.util.requestIsFullScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import theme.onboardingScheme
+
 
 enum class OnboardingStage {
     Welcome,
@@ -80,10 +82,8 @@ fun OnboardingScreen(
         viewModel.requestedPermissions.value += permission
     }
 
-    Scaffold(
-        // TODO setStatusBarTheme(dark) - needs white text (but doing that without changes probably breaks stuff)
-        containerColor = MaterialTheme.colorScheme.primary,
-    ) { windowInsets ->
+    MaterialTheme(colorScheme = onboardingScheme) {
+    Scaffold { windowInsets ->
         Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
             when (viewModel.stage.value) {
                 OnboardingStage.Welcome -> {
@@ -102,7 +102,7 @@ fun OnboardingScreen(
                             onClick = {
                                 viewModel.stage.value = OnboardingStage.Permissions
                             },
-                            primaryColor = false,
+                            primaryColor = true,
                         )
                     }
                 }
@@ -156,7 +156,7 @@ fun OnboardingScreen(
                                                 )
                                             }
                                         },
-                                        primaryColor = false,
+                                        primaryColor = true,
                                     )
                                 }
                             }
@@ -179,12 +179,13 @@ fun OnboardingScreen(
                         Text("Sign in to backup your Pebble account to backup apps, settings, etc", textAlign = TextAlign.Center)
                         SignInButtons(
                             onDismiss = { viewModel.stage.value = OnboardingStage.Done },
-                            primaryColor = false,
+                            primaryColor = true,
                         )
                         PebbleElevatedButton(
                             text = "Skip",
                             onClick = { viewModel.stage.value = OnboardingStage.Done },
-                            primaryColor = false,
+                            primaryColor = true,
+    
                         )
                     }
                 }
@@ -198,12 +199,13 @@ fun OnboardingScreen(
                         PebbleElevatedButton(
                             text = "Connect a Pebble!",
                             onClick = ::exitOnboarding,
-                            primaryColor = false,
+                            primaryColor = true,
                         )
                     }
                 }
             }
         }
+    }
     }
 }
 

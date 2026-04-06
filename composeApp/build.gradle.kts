@@ -222,6 +222,10 @@ kotlin {
     }
 }
 
+compose.resources {
+    packageOfResClass = "coreapp.composeapp.generated.resources"
+}
+
 android {
     namespace = "coredevices.coreapp"
     compileSdk = libs.versions.android.compileSdk.get().toInt()

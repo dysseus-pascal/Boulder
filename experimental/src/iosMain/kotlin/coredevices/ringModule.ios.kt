@@ -50,8 +50,7 @@ actual val platformRingModule = module {
     single {
         val prefs = get<Preferences>()
         KMPHaversineSatelliteManager(
-            userIdProvider = { Firebase.auth.currentUser?.uid },
-            targetSatelliteIdProvider = { prefs.ringPaired.value },
+            pairedSatelliteIdProvider = { prefs.ringPaired.value },
             debugDelegate = get(),
             collectionIndexStorage = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,

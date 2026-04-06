@@ -39,8 +39,7 @@ actual val platformRingModule = module {
     single {
         val prefs = get<Preferences>()
         KMPHaversineSatelliteManager(
-            userIdProvider = { Firebase.auth.currentUser?.uid },
-            targetSatelliteIdProvider = { prefs.ringPaired.value },
+            pairedSatelliteIdProvider = { prefs.ringPaired.value?.replace(":", "") },
             debugDelegate = get(),
             collectionIndexStorage = get(),
             context = get(),

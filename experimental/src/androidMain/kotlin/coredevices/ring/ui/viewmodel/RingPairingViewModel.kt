@@ -145,7 +145,11 @@ class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit,
                         }
                         try {
                             val bt = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
-                            bt.adapter.getRemoteDevice(result.id!!).createBond()
+                            bt.adapter.getRemoteDevice(
+                                result.id!!
+                                    .toList()
+                                    .chunked(2).joinToString(":") { it.joinToString("") }
+                            ).createBond()
                         } catch (e: SecurityException) {
                             logger.e(e) { "Failed to request bonding, likely missing BLUETOOTH_CONNECT permission" }
                             onShowSnackbar("Failed to request pairing, please grant Bluetooth permissions and try again")
@@ -174,6 +178,7 @@ class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit,
                             onShowSnackbar("Error bonding")
                             logPairFailedEvent("bonding_error")
                             _pairingState.value = PairingState.Idle
+                            preferences.setRingPaired(null)
                             return@launch
                         }
                         is BondingEvent.Bonded -> {
@@ -187,6 +192,7 @@ class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit,
                             logger.d { "Ring unbonded: ${bond.deviceId}" }
                             onShowSnackbar("Ring unbonded: ${bond.deviceId}")
                             _pairingState.value = PairingState.Idle
+                            preferences.setRingPaired(null)
                             return@launch
                         }
                     }

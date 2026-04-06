@@ -168,8 +168,12 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
-        Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
-        logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
+        try {
+            Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
+            logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to initialize telemetry environment" }
+        }
     }
 
     private fun getCactusCacheDir(): File {

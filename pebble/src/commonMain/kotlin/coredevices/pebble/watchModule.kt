@@ -41,6 +41,7 @@ import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.SharedLockerViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
+import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
@@ -166,6 +167,7 @@ val watchModule = module {
     factoryOf(::WeatherFetcher)
     factoryOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
+    singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)
     factoryOf(::YahooWeatherInterceptor)

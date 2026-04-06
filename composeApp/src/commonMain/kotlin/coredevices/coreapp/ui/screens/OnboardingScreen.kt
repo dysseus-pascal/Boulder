@@ -1,7 +1,9 @@
 package coredevices.coreapp.ui.screens
 
 import CoreNav
+import NoOpCoreNav
 import PlatformUiContext
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -31,7 +35,10 @@ import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.pebble_logo
 import coredevices.pebble.ui.PebbleRoutes
+import coredevices.pebble.ui.PreviewWrapper
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButtons
 import coredevices.util.DoneInitialOnboarding
@@ -41,8 +48,11 @@ import coredevices.util.name
 import coredevices.util.rememberUiContext
 import coredevices.util.requestIsFullScreen
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.dsl.module
 import theme.onboardingScheme
 
 
@@ -59,6 +69,17 @@ class OnboardingViewModel : ViewModel() {
 }
 
 private val logger = Logger.withTag("OnboardingScreen")
+
+@Preview
+@Composable
+fun OnboardingScreenPreview() {
+    PreviewWrapper(extraModule = module {
+        single { OnboardingViewModel() }
+    }) {
+        OnboardingScreen(NoOpCoreNav)
+    }
+}
+
 
 @Composable
 fun OnboardingScreen(
@@ -92,13 +113,15 @@ fun OnboardingScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Text(
-                            text = "Pebble",
-                            fontSize = 35.sp,
-                            modifier = Modifier.padding(bottom = 25.dp),
+                        Image(
+                            painter = painterResource(Res.drawable.pebble_logo),
+                            contentDescription = "description",
+                            colorFilter = ColorFilter.tint(Color.White),
+                            modifier = Modifier.height(50.dp),
                         )
+                        Spacer(modifier = Modifier.height(15.dp))
                         PebbleElevatedButton(
-                            text = "Next",
+                            text = "Get Started",
                             onClick = {
                                 viewModel.stage.value = OnboardingStage.Permissions
                             },

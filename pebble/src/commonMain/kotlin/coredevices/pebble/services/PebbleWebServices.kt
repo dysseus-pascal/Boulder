@@ -58,6 +58,7 @@ import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
@@ -384,8 +385,15 @@ class RealPebbleWebServices(
             it.url == PEBBLE_FEED_URL
         }?.let { source ->
             val service = appstoreServiceForSource(source)
-            AppType.entries.associateWith { appType ->
-                service.fetchAppStoreHome(appType, hardwarePlatform, useCache)?.let { AppStoreHomeResult(source, it) }
+            coroutineScope {
+                AppType.entries.associateWith { appType ->
+                    async {
+                        logger.v { "starting home download for $appType" }
+                        service.fetchAppStoreHome(appType, hardwarePlatform, useCache)?.let { AppStoreHomeResult(source, it) }.also {
+                            logger.v { "finished home download for $appType" }
+                        }
+                    }
+                }.mapValues { (_, deferred) -> deferred.await() }
             }
         } ?: emptyMap()
     }

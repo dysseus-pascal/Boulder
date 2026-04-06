@@ -103,13 +103,18 @@ import coredevices.util.description
 import coredevices.util.name
 import coredevices.util.rememberUiContext
 import io.rebble.libpebblecommon.connection.CommonConnectedDevice
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -122,8 +127,23 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
-    val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
+fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
+    it is KnownPebbleDevice
+}
+
+class WatchOnboardingFinished {
+    val finished: Channel<Unit> = Channel<Unit>(capacity = 1)
+}
+
+class WatchHomeViewModel(
+    coreConfig: CoreConfigFlow,
+    libPebble: LibPebble,
+) : ViewModel() {
+    val selectedTab = mutableStateOf(if (libPebble.haveSeenFullyConnectedWatch()) {
+        WatchHomeNavTab.WatchFaces
+    } else {
+        WatchHomeNavTab.Watches
+    })
     private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
     private val searchStateFlow = MutableStateFlow<SearchState?>(null)
     private val titleFlow = MutableStateFlow("")
@@ -166,6 +186,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
         val indexEnabled = viewModel.indexEnabled.collectAsState()
+        val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
 
         // Create a SaveableStateHolder to preserve state for each tab
         val saveableStateHolder = rememberSaveableStateHolder()
@@ -195,6 +216,13 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
 
         val currentTab = viewModel.selectedTab.value
         val pebbleNavHostController = navControllers[currentTab]!!
+
+        LaunchedEffect(Unit) {
+            watchOnboardingFinished.finished.receiveAsFlow().collect {
+                logger.d { "Onboarding finished - switching to apps tab" }
+                viewModel.selectedTab.value = WatchHomeNavTab.WatchFaces
+            }
+        }
 
         DisposableEffect(pebbleNavHostController) {
             val listener =

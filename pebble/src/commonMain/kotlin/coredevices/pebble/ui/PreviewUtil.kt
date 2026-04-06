@@ -50,6 +50,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
+import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -75,6 +76,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
@@ -139,9 +142,10 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { themeProvider } bind ThemeProvider::class
     single { NotificationScreenViewModel() }
-    single { WatchHomeViewModel(get()) }
+    singleOf(::WatchHomeViewModel)
     single { NotificationAppScreenViewModel() }
     single { NotificationAppsScreenViewModel() }
+    single { DoneInitialOnboarding() }
     val storeSourceDao = object : AppstoreSourceDao {
         override suspend fun insertSource(source: AppstoreSource): Long = 0
 
@@ -387,13 +391,17 @@ val WrapperTopBarParams = TopBarParams(
 )
 
 @Composable
-fun PreviewWrapper(content: @Composable () -> Unit) {
+fun PreviewWrapper(extraModule: Module? = null, content: @Composable () -> Unit) {
     val previewHandler = AsyncImagePreviewHandler {
         ColorImage(Color.Red.toArgb())
     }
     val module = fakePebbleModule()
     KoinApplication(application = {
-        modules(module)
+        if (extraModule != null) {
+            modules(module, extraModule)
+        } else {
+            modules(module)
+        }
     }) {
         CompositionLocalProvider(LocalAsyncImagePreviewHandler provides previewHandler) {
             AppTheme {

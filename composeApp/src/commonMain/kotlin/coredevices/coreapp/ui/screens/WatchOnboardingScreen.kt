@@ -2,6 +2,7 @@ package coredevices.coreapp.ui.screens
 
 import CoreNav
 import androidx.compose.foundation.layout.Arrangement
+import theme.AppTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,6 +60,7 @@ import coredevices.pebble.ui.SettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
 import coredevices.pebble.ui.TITLE_ENABLE_HEALTH
 import coredevices.pebble.ui.TITLE_OFFLINE_SPEECH_RECOGNITION
+import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.allCollectionUuids
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.connectedWatch
@@ -68,6 +72,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.locker.AppType
@@ -93,6 +98,8 @@ fun WatchOnboardingScreen(
     val pebbleStoreHomes = remember { mutableStateMapOf<AppType, AppStoreHomeResult?>() }
     var showLanguageDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    var startedUpdate by remember { mutableStateOf(false) }
+    val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
     val snackbarDisplay =
         remember { SnackbarDisplay { scope.launch { snackbarHostState.showSnackbar(message = it) } } }
     val settings = rememberSettingsItemsState(
@@ -135,7 +142,11 @@ fun WatchOnboardingScreen(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     if (connectedWatch == null) {
-                        SectionText("Waiting for your Pebble to connect..")
+                        if (startedUpdate) {
+                            SectionText("Waiting for your Pebble to restart..")
+                        } else {
+                            SectionText("Waiting for your Pebble to connect..")
+                        }
 
                         Spacer(modifier = Modifier.height(15.dp))
                     }
@@ -148,7 +159,7 @@ fun WatchOnboardingScreen(
                             Spacer(modifier = Modifier.height(15.dp))
 
                             PebbleElevatedButton(
-                                text = "Skip",
+                                text = "Skip Setup",
                                 onClick = { coreNav.goBack() },
                                 primaryColor = true,
                             )
@@ -157,6 +168,7 @@ fun WatchOnboardingScreen(
 
                         LaunchedEffect(Unit) {
                             logger.d { "Starting firmware update from onboarding screen" }
+                            startedUpdate = true
                             connectedWatch.updateFirmware(firmwareUpdateAvailable)
                         }
 
@@ -164,16 +176,27 @@ fun WatchOnboardingScreen(
                         Spacer(modifier = Modifier.height(15.dp))
                         val progress = (connectedWatch.firmwareUpdateState as? FirmwareUpdater.FirmwareUpdateStatus.InProgress)?.progress?.collectAsState()
                         if (progress != null) {
-                            logger.v { "progress: ${progress.value}" }
                             CoreLinearProgressIndicator(
                                 progress = { progress.value },
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
                             )
                         }
+                        Spacer(modifier = Modifier.height(15.dp))
+                        SectionText("Updating your watch to the latest version of PebbleOS...")
                         SectionDivider()
                     }
 
-                    if (connectedWatch is ConnectedPebbleDevice) {
+                    if (connectedWatch !is ConnectedPebbleDevice) {
+                        SectionText("Once your Pebble is connected, we'll get it set up")
+
+                        Spacer(modifier = Modifier.height(15.dp))
+
+                        PebbleElevatedButton(
+                            text = "Skip Setup",
+                            onClick = { coreNav.goBack() },
+                            primaryColor = true,
+                        )
+                    } else {
                         if (loadingHomes) {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp),
@@ -185,17 +208,15 @@ fun WatchOnboardingScreen(
                             header = "Add some Watchfaces",
                             storeHome = pebbleStoreHomes[AppType.Watchface],
                             connectedWatch,
+                            footerText = null,
                         )
-
-                        SectionDivider()
 
                         OnboardingAppCarousel(
                             header = "Add some Apps",
                             storeHome = pebbleStoreHomes[AppType.Watchapp],
                             connectedWatch,
+                            footerText = "Get more apps from the Pebble App Store!",
                         )
-
-                        SectionDivider()
 
                         val languagePackInstalled = connectedWatch.languagePackInstalled()
                         val installingLanguagePack =
@@ -209,6 +230,14 @@ fun WatchOnboardingScreen(
                             Text("Currently installed: $languagePackInstalled")
                             Spacer(modifier = Modifier.height(15.dp))
                         }
+                        val languagePackInstallState = connectedWatch.languagePackInstallState as? LanguagePackInstallState.Installing
+                        if (languagePackInstallState != null) {
+                            val progress by languagePackInstallState.progress.collectAsState()
+                            CoreLinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            )
+                        }
                         PebbleElevatedButton(
                             text = "Choose Language",
                             onClick = { showLanguageDialog = true },
@@ -217,9 +246,11 @@ fun WatchOnboardingScreen(
                             enabled = installingLanguagePack == null,
                         )
                         if (showLanguageDialog) {
-                            LanguageDialog(
-                                connectedWatch,
-                                onDismissRequest = { showLanguageDialog = false })
+                            AppTheme {
+                                LanguageDialog(
+                                    connectedWatch,
+                                    onDismissRequest = { showLanguageDialog = false })
+                            }
                         }
 
                         SectionDivider()
@@ -231,21 +262,28 @@ fun WatchOnboardingScreen(
 
                             settings.Show(BoolWatchPref.Clock24h.displayName)
                             settings.Show(TITLE_ENABLE_HEALTH)
-
-                            SectionDivider()
+                            Spacer(modifier = Modifier.height(15.dp))
                         }
+
+                        SectionText("Speech Recognition")
+                        Spacer(modifier = Modifier.height(15.dp))
+                        settings.Show(TITLE_OFFLINE_SPEECH_RECOGNITION)
+                        SectionDivider()
+
+                        Text("Configure more in Settings", textAlign = TextAlign.Center)
+                        SectionDivider()
+
+                        PebbleElevatedButton(
+                            text = "Finished",
+                            onClick = {
+                                scope.launch {
+                                    watchOnboardingFinished.finished.trySend(Unit)
+                                    coreNav.goBack()
+                                }
+                            },
+                            primaryColor = true,
+                        )
                     }
-
-                    SectionText("Speech Recognition")
-                    Spacer(modifier = Modifier.height(15.dp))
-                    settings.Show(TITLE_OFFLINE_SPEECH_RECOGNITION)
-                    SectionDivider()
-
-                    PebbleElevatedButton(
-                        text = "Skip",
-                        onClick = { coreNav.goBack() },
-                        primaryColor = true,
-                    )
                 }
             }
         }
@@ -289,15 +327,18 @@ fun OnboardingAppCarousel(
     header: String,
     storeHome: AppStoreHomeResult?,
     watch: ConnectedPebbleDevice,
+    footerText: String?,
 ) {
     if (storeHome == null) {
         return
     }
     val platform: Platform = koinInject()
     val allCollectionUuids = allCollectionUuids()
+    // Only use inital list of in-collection IDs (i.e. don't remove from list when they add from this screen)
+    val initialAllCollectionUuids = remember(allCollectionUuids != null) { allCollectionUuids.orEmpty() }
     val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
     val watchType = watch.watchType.watchType
-    val apps = remember(storeHome, watchType, allCollectionUuids) {
+    val apps = remember(storeHome, watchType, initialAllCollectionUuids) {
         storeHome.result.onboarding?.forType(watchType)?.mapNotNull { appId ->
             storeHome.result.applications.find { app ->
                 app.id == appId
@@ -308,7 +349,7 @@ fun OnboardingAppCarousel(
                 storeHome.result.categories
             )
         }?.filter {
-            it.isNativelyCompatible && it.uuid !in allCollectionUuids
+            it.isNativelyCompatible && it.uuid !in initialAllCollectionUuids
         }?.take(5)
     }
     if (apps.isNullOrEmpty()) {
@@ -343,27 +384,50 @@ fun OnboardingAppCarousel(
                         highlightInLocker = false,
                         topBarParams = null
                     )
-                    PebbleElevatedButton(
-                        text = "Add",
-                        onClick = {
-                            added = true
-                            GlobalScope.launch {
-                                val addResult = nativeLockerAddUtil.addAppToLocker(
-                                    commonAppStore,
-                                    commonAppStore.storeSource
-                                )
-                                logger.v { "Add to locker from watch onboarding ${commonAppStore.storeApp?.title} result=$addResult" }
-                            }
-                        },
-                        primaryColor = true,
-                        enabled = !added,
-                        icon = Icons.Default.Add,
-                    )
+                    if (entry.uuid in allCollectionUuids.orEmpty()) {
+                        PebbleElevatedButton(
+                            text = "Remove",
+                            onClick = {
+                                added = false
+                                GlobalScope.launch {
+                                    nativeLockerAddUtil.removeFromLocker(
+                                        commonAppStore.storeSource,
+                                        entry.uuid,
+                                    )
+                                    logger.v { "Remove from locker from watch onboarding ${commonAppStore.storeApp?.title}" }
+                                }
+                            },
+                            primaryColor = true,
+                            icon = Icons.Default.RemoveCircle,
+                        )
+                    } else {
+                        PebbleElevatedButton(
+                            text = "Add",
+                            onClick = {
+                                added = true
+                                GlobalScope.launch {
+                                    val addResult = nativeLockerAddUtil.addAppToLocker(
+                                        commonAppStore,
+                                        commonAppStore.storeSource
+                                    )
+                                    logger.v { "Add to locker from watch onboarding ${commonAppStore.storeApp?.title} result=$addResult" }
+                                }
+                            },
+                            primaryColor = true,
+                            enabled = !added,
+                            icon = Icons.Default.Add,
+                        )
+                    }
                     Spacer(modifier = Modifier.height(5.dp))
                 }
             }
         }
     }
+    footerText?.let {
+        Spacer(modifier = Modifier.height(15.dp))
+        Text(footerText, textAlign = TextAlign.Center)
+    }
+    SectionDivider()
 }
 
 fun StoreOnboarding.forType(watchType: WatchType): List<String>? = when (watchType) {

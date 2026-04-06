@@ -72,6 +72,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -103,6 +104,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfig
@@ -113,6 +115,7 @@ import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
@@ -125,10 +128,12 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -180,9 +185,8 @@ enum class Section(val title: String, val icon: ImageVector) {
     Timeline("Timeline", Icons.Default.Timeline), // watch only
     QuietTime("Quiet Time", Icons.Default.DoNotDisturb),
     Connectivity("Connectivity", Icons.Default.Wifi),
-    Logging("Logging", Icons.AutoMirrored.Filled.List),
     Other("Other", Icons.Default.MoreHoriz), // watch only
-    Analytics("Analytics", Icons.Default.Timeline),
+    Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
 }
 
@@ -205,7 +209,7 @@ data class SettingsItem(
 }
 
 private val ELEVATION = 0.dp
-val TITLE_ENABLE_HEALTH = "Enable Health"
+val TITLE_ENABLE_HEALTH = "Enable Health Tracking"
 val TITLE_OFFLINE_SPEECH_RECOGNITION = "Offline Speech Recognition"
 
 @Composable
@@ -289,28 +293,38 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
+    val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
     pendingSTTModeDialog?.let { pendingSTTMode ->
+        val recommendedModel by produceState<ModelInfo?>(null) {
+            withContext(Dispatchers.Default) {
+                val models = modelManager.getAvailableSTTModels()
+                value = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
+                    ?: run {
+                        snackbarDisplay.showSnackbar("Error occurred. Please try again later.")
+                        logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
+                        pendingSTTModeDialog = null
+                        null
+                    }
+            }
+        }
+        val recommendedModelFinal = recommendedModel
+        if (recommendedModelFinal == null) {
+            return@let
+        }
         ModelDownloadPromptDialog(
             isLite = recommendedSTTModel is RecommendedModel.Lite,
+            downloadSizeInMb = recommendedModelFinal.sizeInMB,
             onGetRecommended = {
                 scope.launch {
-                    val models = modelManager.getAvailableSTTModels()
-                    val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
-                        ?: run {
-                            snackbarDisplay.showSnackbar("Error occurred. Please try again later.")
-                            logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
-                            pendingSTTModeDialog = null
-                            return@launch
-                        }
-                    if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
+                    if (!modelManager.downloadSTTModel(recommendedModelFinal, allowMetered = true)) {
                         snackbarDisplay.showSnackbar("Error starting download. Please try again later.")
-                        logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
+                        logger.e { "Failed to start download for recommended model ${recommendedModelFinal.slug}" }
                     } else {
                         coreConfigHolder.update(
                             coreConfig.copy(
                                 sttConfig = STTConfig(
                                     mode = pendingSTTMode,
-                                    modelName = recommendedModel.slug
+                                    modelName = recommendedModelFinal.slug
                                 )
                             )
                         )
@@ -390,8 +404,10 @@ please disable the option.""".trimIndent(),
     val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
     val appUpdateTracker: AppUpdateTracker = koinInject()
     val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
-    val hasOfflineModels = remember {
-        modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
+    val hasOfflineModels by produceState(false) {
+        withContext(Dispatchers.Default) {
+            value = modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
+        }
     }
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
@@ -583,76 +599,16 @@ please disable the option.""".trimIndent(),
                         )
                     },
                 ),
-                basicSettingsToggleItem(
-                    title = "Show notifications in logs",
-                    description = "Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
-                    checked = libPebbleConfig.notificationConfig.dumpNotificationContent,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    dumpNotificationContent = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationLogging() },
-                ),
-                basicSettingsToggleItem(
-                    title = "Show sensitive content in logs",
-                    description = "Include unredacted personal information (notification content, calendar events, app names, etc) in logs",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
-                    checked = !libPebbleConfig.notificationConfig.obfuscateContent,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    obfuscateContent = !it
-                                )
-                            )
-                        )
-                    },
-                ),
-                basicSettingsNumberItem(
-                    title = "Store notifications for",
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Quick replies",
+                    description = "Preset messages for notification replies on the watch (canned messages)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
-                    description = "How long notifications are stored for. This enabled better deduplicating, and powers the notification history view",
-                    value = libPebbleConfig.notificationConfig.storeNotifiationsForDays.toLong(),
-                    onValueChange = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    storeNotifiationsForDays = it.toInt()
-                                )
-                            )
-                        )
+                    action = {
+                        nav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
-                    min = 0,
-                    max = 7,
-                    unit = "Days"
-                ),
-                basicSettingsToggleItem(
-                    title = "Store disabled notifications",
-                    description = "Store notifications from disabled apps/channels, to allow viewing them in history",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    storeDisabledNotifications = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
+                ) },
                 basicSettingsToggleItem(
                     title = "Always send notifications",
                     description = "Send notifications to the watch even when the phone screen is on",
@@ -687,16 +643,6 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "Quick replies",
-                    description = "Preset messages for notification replies on the watch (canned messages)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    action = {
-                        nav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ) },
                 SettingsItem(
                     title = "Vibration Pattern",
                     topLevelType = TopLevelType.Phone,
@@ -764,6 +710,43 @@ please disable the option.""".trimIndent(),
                             libPebbleConfig.copy(
                                 notificationConfig = libPebbleConfig.notificationConfig.copy(
                                     addShowsUserInterfaceActions = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsNumberItem(
+                    title = "Store notifications for",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    description = "How long notifications are stored for. This enabled better deduplicating, and powers the notification history view",
+                    value = libPebbleConfig.notificationConfig.storeNotifiationsForDays.toLong(),
+                    onValueChange = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeNotifiationsForDays = it.toInt()
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                    min = 0,
+                    max = 7,
+                    unit = "Days"
+                ),
+                basicSettingsToggleItem(
+                    title = "Store disabled notifications",
+                    description = "Store notifications from disabled apps/channels, to allow viewing them in history",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeDisabledNotifications = it
                                 )
                             )
                         )
@@ -1088,10 +1071,19 @@ please disable the option.""".trimIndent(),
                     },
                     itemText = { mode ->
                         when (mode) {
-                            CactusSTTMode.RemoteOnly -> "Disabled"
-                            CactusSTTMode.RemoteFirst -> "Fallback only"
-                            CactusSTTMode.LocalOnly -> "Forced"
-                            CactusSTTMode.LocalFirst -> "Preferred"
+                            CactusSTTMode.RemoteOnly -> "Cloud Only"
+                            CactusSTTMode.RemoteFirst -> "Cloud (with Local Fallback)"
+                            CactusSTTMode.LocalOnly -> "Local Only"
+                            CactusSTTMode.LocalFirst -> "Local (with Cloud Fallback)"
+                        }
+                    },
+                    extraSupportingContent = {
+                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.progress?.let { progress ->
+                            logger.v { "xx model download progress = $progress" }
+                            CoreLinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            )
                         }
                     },
                 ),
@@ -1127,10 +1119,87 @@ please disable the option.""".trimIndent(),
                     show = { pebbleFeatures.supportsDetectingOtherPebbleApps() },
                 ),
                 basicSettingsToggleItem(
+                    title = "Send app crashes",
+                    description = "This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableFirebase.value,
+                    onCheckChanged = {
+                        enableFirebase.value = it
+                        settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("crashlytics_collection_disabled")
+                        }
+                        Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Send watch analytics",
+                    description = "Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableMemfault.value,
+                    onCheckChanged = {
+                        enableMemfault.value = it
+                        if (!it) {
+                            coreAnalytics.logEvent("memfault_collection_disabled")
+                        }
+                        settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Send app analytics",
+                    description = "This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableMixpanel.value,
+                    onCheckChanged = {
+                        enableMixpanel.value = it
+                        settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("mixpanel_collection_disabled")
+                        }
+                        analyticsBackend.setEnabled(it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show notifications in phone logs",
+                    description = "Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = libPebbleConfig.notificationConfig.dumpNotificationContent,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    dumpNotificationContent = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationLogging() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show sensitive content in phone logs",
+                    description = "Include unredacted personal information (notification content, calendar events, app names, etc) in logs",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = !libPebbleConfig.notificationConfig.obfuscateContent,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    obfuscateContent = !it
+                                )
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
                     title = "Verbose connection logging",
                     description = "Detailed connectivity state machine logging (please don't enable this unless we ask you to)",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
+                    section = Section.Diagnostics,
                     checked = libPebbleConfig.watchConfig.verboseWatchManagerLogging,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1147,7 +1216,7 @@ please disable the option.""".trimIndent(),
                     title = "Verbose PPoG logging",
                     description = "Detailed Pebble Protocol over GATT logging (please don't enable this unless we ask you to)",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
+                    section = Section.Diagnostics,
                     checked = libPebbleConfig.bleConfig.verbosePpogLogging,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1159,50 +1228,6 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     isDebugSetting = true,
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect app crashes",
-                    description = "This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableFirebase.value,
-                    onCheckChanged = {
-                        enableFirebase.value = it
-                        settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("crashlytics_collection_disabled")
-                        }
-                        Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect watch analytics",
-                    description = "Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableMemfault.value,
-                    onCheckChanged = {
-                        enableMemfault.value = it
-                        if (!it) {
-                            coreAnalytics.logEvent("memfault_collection_disabled")
-                        }
-                        settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect app analytics",
-                    description = "This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableMixpanel.value,
-                    onCheckChanged = {
-                        enableMixpanel.value = it
-                        settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("mixpanel_collection_disabled")
-                        }
-                        analyticsBackend.setEnabled(it)
-                    },
                 ),
                 basicSettingsActionItem(
                     title = "Post test notification",
@@ -1785,6 +1810,7 @@ fun <T> basicSettingsDropdownItem(
     keywords: String = "",
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
+    extraSupportingContent: (@Composable () -> Unit)? = null,
 ) = SettingsItem(
     title = title,
     topLevelType = topLevelType,
@@ -1824,8 +1850,11 @@ fun <T> basicSettingsDropdownItem(
                 }
             },
             supportingContent = {
-                if (description != null) {
-                    Text(description, fontSize = 11.sp)
+                Row {
+                    if (description != null) {
+                        Text(description, fontSize = 11.sp)
+                    }
+                    extraSupportingContent?.invoke()
                 }
             },
             shadowElevation = ELEVATION,

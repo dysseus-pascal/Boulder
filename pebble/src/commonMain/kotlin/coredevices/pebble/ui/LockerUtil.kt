@@ -247,9 +247,9 @@ fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
 }
 
 @Composable
-fun allCollectionUuids(): List<Uuid> {
+fun allCollectionUuids(): List<Uuid>? {
     val libPebble = rememberLibPebble()
-    val allCollectionUuids by libPebble.getAllLockerUuids().collectAsState(emptyList())
+    val allCollectionUuids by libPebble.getAllLockerUuids().collectAsState(null)
     return allCollectionUuids
 }
 
@@ -261,7 +261,7 @@ fun CommonApp.inMyCollection(): Boolean {
             is CommonAppType.Locker -> true
             is CommonAppType.System -> true
             is CommonAppType.Store -> {
-                uuid in collectionUuids
+                uuid in collectionUuids.orEmpty()
             }
         }
     }
@@ -688,14 +688,16 @@ class NativeLockerAddUtil(
     suspend fun removeFromLocker(
         source: AppstoreSource?,
         uuid: Uuid,
-    ) {
+    ): Boolean {
+        val removed = libPebble.removeApp(uuid)
         if (source == null) {
-            return
+            return removed
         }
         val useLockerApiToRemove = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
         if (useLockerApiToRemove) {
             webServices.removeFromLegacyLocker(uuid)
         }
+        return removed
     }
 }
 

@@ -68,6 +68,7 @@ import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
+import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
@@ -103,7 +104,11 @@ fun IndexSettings(coreNav: CoreNav) {
     val musicControlMode by viewModel.musicControlMode.collectAsState()
     val secondaryMode by viewModel.secondaryMode.collectAsState()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
+    var showSignInDialog by remember { mutableStateOf(false) }
 
+    if (showSignInDialog) {
+        SignInDialog(onDismiss = { showSignInDialog = false })
+    }
     if (showModelDialog != null) {
         ModelDownloadDialog(
             onDismissRequest = { success ->
@@ -211,9 +216,12 @@ fun IndexSettings(coreNav: CoreNav) {
                             else -> "Pair"
                         }
                         Button(
-                            enabled = accountUsername != null,
                             onClick = {
-                                coreNav.navigateTo(RingRoutes.RingPairing)
+                                if (accountUsername == null) {
+                                    showSignInDialog = true
+                                } else {
+                                    coreNav.navigateTo(RingRoutes.RingPairing)
+                                }
                             },
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {

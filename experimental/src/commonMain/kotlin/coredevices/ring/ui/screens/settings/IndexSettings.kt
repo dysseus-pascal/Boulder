@@ -238,18 +238,30 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             item {
+                val isAndroid = platform.isAndroid
                 ListItem(
-                    modifier = Modifier.clickable {
+                    modifier = Modifier.clickable(enabled = isAndroid) {
                         viewModel.showMusicControlDialog()
                     },
-                    headlineContent = { Text("Music Play/Pause") },
+                    headlineContent = {
+                        Text(
+                            if (isAndroid) "Music Play/Pause" else "Music Play/Pause (Only on Android)",
+                            color = if (isAndroid) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    },
                     supportingContent = {
                         Text(
-                            when (musicControlMode) {
-                                MusicControlMode.Disabled -> "Disabled"
-                                MusicControlMode.SingleClick -> "Single Click"
-                                MusicControlMode.DoubleClick -> "Double Click"
-                            }
+                            when {
+                                !isAndroid -> "Not available on this platform"
+                                else -> when (musicControlMode) {
+                                    MusicControlMode.Disabled -> "Disabled"
+                                    MusicControlMode.SingleClick -> "Single click: Play/Pause · Double click: Next track"
+                                    MusicControlMode.DoubleClick -> "Double click: Play/Pause · Triple click: Next track"
+                                }
+                            },
+                            color = if (isAndroid) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                         )
                     }
                 )
@@ -496,7 +508,7 @@ fun MusicControlDialog(
                     Column {
                         Text("Single click")
                         Text(
-                            "Play/Pause music with a single click on the ring button.",
+                            "Single click: Play/Pause. Double click: Next track.",
                             fontSize = 12.sp,
                         )
                     }
@@ -521,7 +533,7 @@ fun MusicControlDialog(
                     Column {
                         Text("Double click")
                         Text(
-                            "Play/Pause music with a double click on the ring button.",
+                            "Double click: Play/Pause. Triple click: Next track.",
                             fontSize = 12.sp,
                         )
                     }

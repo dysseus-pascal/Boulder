@@ -60,6 +60,7 @@ private suspend fun waitForBluetoothAvailable() {
 }
 
 expect fun onPlayPause()
+expect fun onNextTrack()
 
 sealed interface RingEvent {
     val ringId: String

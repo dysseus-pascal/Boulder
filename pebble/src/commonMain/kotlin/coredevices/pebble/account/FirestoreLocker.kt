@@ -95,6 +95,7 @@ class RealFirestoreLocker(
 
     private val _locker = MutableStateFlow<List<FirestoreLockerEntry>?>(null)
     override val locker: StateFlow<List<FirestoreLockerEntry>?> = _locker.asStateFlow()
+    private var fullSyncInProgress = false
 
     override fun init() {
         GlobalScope.launch {
@@ -106,6 +107,10 @@ class RealFirestoreLocker(
                 dao.observeLockerEntriesForUser(user.uid)
                     .catch { e -> logger.w(e) { "catching error in observe" } }
                     .collect {
+                        if (fullSyncInProgress) {
+                            logger.v { "Skipping firestore change during full sync (${it.documentChanges.size} changes)" }
+                            return@collect
+                        }
                         logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
                         val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
                         handleFirestoreChanges(lockerData)
@@ -162,6 +167,8 @@ class RealFirestoreLocker(
             logger.w { "fetchLocker: locker is null" }
             return null
         }
+        fullSyncInProgress = true
+        try {
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
         val designatedSourceByUuid = fsLocker.associate { it.uuid.toString() to it.appstoreSource }
         val allSources = get<AppstoreSourceDao>().getAllEnabledSources()
@@ -225,6 +232,16 @@ class RealFirestoreLocker(
             ),
             failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
         )
+        } finally {
+            // Re-read locker from Firestore since we skipped listener updates during sync
+            try {
+                val snapshot = dao.observeLockerEntriesForUser(user.uid).first()
+                _locker.value = snapshot.documents.map { doc -> doc.data() }
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to refresh locker after sync" }
+            }
+            fullSyncInProgress = false
+        }
     }
 
     override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {

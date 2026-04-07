@@ -920,7 +920,7 @@ fun StoreApplication.asLockerEntryPlatform(
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
     val app = this
     if (app.latestRelease == null) {
-        logger.w { "no latest release" }
+        logger.v { "no latest release for ${app.uuid}" }
         return null
     }
     if (app.uuid == null) {

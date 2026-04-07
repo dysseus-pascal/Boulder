@@ -44,9 +44,11 @@ import androidx.compose.material.icons.filled.Battery4Bar
 import androidx.compose.material.icons.filled.Battery5Bar
 import androidx.compose.material.icons.filled.Battery6Bar
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NetworkPing
@@ -57,6 +59,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeveloperBoard
@@ -70,16 +73,21 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -178,227 +186,246 @@ private val logger = Logger.withTag("WatchesScreen")
 
 @Composable
 fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        val libPebble = rememberLibPebble()
-        val scope = rememberCoroutineScope()
-        val firmwareUpdateUiTracker = koinInject<FirmwareUpdateUiTracker>()
-        val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
-        val otherPebbleAppsInstalledFlow =
-            remember { libPebble.otherPebbleCompanionAppsInstalled() }
-        val otherPebbleAppsInstalled by otherPebbleAppsInstalledFlow.collectAsState()
-        val isScanningBle by libPebble.isScanningBle.collectAsState()
-        val permissionRequester: PermissionRequester = koinInject()
-        val requiredScanPermission = remember { scanPermission() }
-        val pebbleFeatures = koinInject<PebbleFeatures>()
-        val coreConfigFlow = koinInject<CoreConfigFlow>()
-        val coreConfig by coreConfigFlow.flow.collectAsState()
-        val showOtherPebbleAppsWarningAndPreventConnection = otherPebbleAppsInstalled.isNotEmpty() && !coreConfig.ignoreOtherPebbleApps
-        val companionDevice: CompanionDevice = koinInject()
-        val companionDevicePreviouslyCrashed = remember { companionDevice.cdmPreviouslyCrashed() }
+    val libPebble = rememberLibPebble()
+    val isScanningBle by libPebble.isScanningBle.collectAsState()
+    val scope = rememberCoroutineScope()
+    val permissionRequester: PermissionRequester = koinInject()
+    val requiredScanPermission = remember { scanPermission() }
+    val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
+    var addFabExpanded by remember { mutableStateOf(false) }
 
-        fun scan(uiContext: PlatformUiContext) {
-            scope.launch {
-                if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
-                        requiredScanPermission
-                    )
+    fun scan(uiContext: PlatformUiContext) {
+        scope.launch {
+            if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
+                    requiredScanPermission
+                )
+            ) {
+                val result =
+                    permissionRequester.requestPermission(requiredScanPermission, uiContext)
+                if (result != PermissionResult.Granted) {
+                    logger.w { "Failed to grant scan permission" }
+                    return@launch
+                }
+            }
+            libPebble.startBleScan()
+        }
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            if (!bluetoothEnabled.enabled()) {
+                FloatingActionButton(
+                    onClick = { topBarParams.showSnackbar("Enable Bluetooth to connect a Pebble") }
                 ) {
-                    val result =
-                        permissionRequester.requestPermission(requiredScanPermission, uiContext)
-                    if (result != PermissionResult.Granted) {
-                        logger.w { "Failed to grant scan permission" }
-                        return@launch
+                    Icon(Icons.Filled.BluetoothDisabled, "Bluetooth is disabled")
+                }
+            } else if (isScanningBle) {
+                FloatingActionButton(
+                    onClick = { libPebble.stopBleScan() }
+                ) {
+                    Icon(Icons.Filled.Stop, "Stop Scanning")
+                }
+            } else {
+                FloatingActionButtonMenu(
+//                    modifier = Modifier.padding(16.dp),
+                    expanded = addFabExpanded,
+                    button = {
+                        ToggleFloatingActionButton(
+                            checked = addFabExpanded,
+                            onCheckedChange = { addFabExpanded = !addFabExpanded },
+                        ) {
+                            Icon(
+                                imageVector = if (addFabExpanded) Icons.Filled.Close else Icons.Filled.Add,
+                                contentDescription = "Add a Pebble",
+                                tint = Color.White,
+                            )
+                        }
+                    },
+                ) {
+                    val uiContext = rememberUiContext()
+                    // TODO bt classic / index go here
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            addFabExpanded = false
+                            if (uiContext != null) {
+                                scan(uiContext)
+                            }
+                        },
+                        icon = { Icon(Icons.Default.Watch, contentDescription = "Watch") },
+                        text = { Text("Add Watch") },
+                    )
+                }
+            }
+        },
+    ) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+            val firmwareUpdateUiTracker = koinInject<FirmwareUpdateUiTracker>()
+            val otherPebbleAppsInstalledFlow =
+                remember { libPebble.otherPebbleCompanionAppsInstalled() }
+            val otherPebbleAppsInstalled by otherPebbleAppsInstalledFlow.collectAsState()
+            val pebbleFeatures = koinInject<PebbleFeatures>()
+            val coreConfigFlow = koinInject<CoreConfigFlow>()
+            val coreConfig by coreConfigFlow.flow.collectAsState()
+            val showOtherPebbleAppsWarningAndPreventConnection =
+                otherPebbleAppsInstalled.isNotEmpty() && !coreConfig.ignoreOtherPebbleApps
+            val companionDevice: CompanionDevice = koinInject()
+            val companionDevicePreviouslyCrashed =
+                remember { companionDevice.cdmPreviouslyCrashed() }
+
+            val title = stringResource(Res.string.devices)
+            val listState = rememberLazyListState()
+
+            LaunchedEffect(Unit) {
+                topBarParams.searchAvailable(null)
+                topBarParams.title(title)
+                launch {
+                    topBarParams.scrollToTop.collect {
+                        listState.animateScrollToItem(0)
                     }
                 }
-                libPebble.startBleScan()
+                if (libPebble.watches.value.isEmpty()) {
+                    addFabExpanded = true
+                }
+
+                if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
+                    firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
+                    libPebble.checkForFirmwareUpdates()
+                }
             }
-        }
 
-        val title = stringResource(Res.string.devices)
-        val listState = rememberLazyListState()
+            val watchesFlow = remember {
+                libPebble.watches
+                    .map { it.sortedWith(PebbleDeviceComparator) }
+            }
+            val watches by watchesFlow.collectAsState(
+                initial = libPebble.watches.value.sortedWith(
+                    PebbleDeviceComparator
+                )
+            )
 
-        LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(null)
-            topBarParams.actions {
-                if (isScanningBle) {
-                    TopBarIconButtonWithToolTip(
-                        onClick = { libPebble.stopBleScan() },
-                        enabled = bluetoothEnabled.enabled(),
-                        icon = Icons.Filled.Stop,
-                        description = "Stop Scanning",
-                    )
-                } else {
-                    val uiContext = rememberUiContext()
-                    if (uiContext != null) {
-                        TopBarIconButtonWithToolTip(
-                            onClick = { scan(uiContext) },
-                            enabled = bluetoothEnabled.enabled(),
-                            icon = Icons.Filled.Add,
-                            description = "Scan For Watches",
+            Column {
+                if (!bluetoothEnabled.enabled()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = "Enable bluetooth to connect to your watch.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(15.dp)
                         )
                     }
                 }
-            }
-            topBarParams.title(title)
-            launch {
-                topBarParams.scrollToTop.collect {
-                    listState.animateScrollToItem(0)
+                if (pebbleFeatures.supportsDetectingOtherPebbleApps() && showOtherPebbleAppsWarningAndPreventConnection) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        val otherAppNames = otherPebbleAppsInstalled.joinToString { it.name }
+                        Text(
+                            text = "One or more other PebbleOS companions apps are installed. Please " +
+                                    "uninstall them ($otherAppNames) to avoid connectivity problems.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(15.dp)
+                        )
+                    }
                 }
-            }
-
-            if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
-                firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
-                libPebble.checkForFirmwareUpdates()
-            }
-        }
-
-        val watchesFlow = remember {
-            libPebble.watches
-                .map { it.sortedWith(PebbleDeviceComparator) }
-        }
-        val watches by watchesFlow.collectAsState(
-            initial = libPebble.watches.value.sortedWith(
-                PebbleDeviceComparator
-            )
-        )
-
-        Column {
-            if (!bluetoothEnabled.enabled()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
+                if (companionDevicePreviouslyCrashed) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = "If the app crashes every time you press Connect, try checking" +
+                                    " \"Disable Companion Device Manager\" in Settings",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(15.dp)
+                        )
+                    }
+                }
+                if (isScanningBle) {
                     Text(
-                        text = "Enable bluetooth to connect to your watch.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(15.dp)
+                        text = "Scanning for watches...",
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
-                }
-            }
-            if (pebbleFeatures.supportsDetectingOtherPebbleApps() && showOtherPebbleAppsWarningAndPreventConnection) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
-                ) {
-                    val otherAppNames = otherPebbleAppsInstalled.joinToString { it.name }
-                    Text(
-                        text = "One or more other PebbleOS companions apps are installed. Please " +
-                                "uninstall them ($otherAppNames) to avoid connectivity problems.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(15.dp)
-                    )
-                }
-            }
-            if (companionDevicePreviouslyCrashed) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        text = "If the app crashes every time you press Connect, try checking" +
-                                " \"Disable Companion Device Manager\" in Settings",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(15.dp)
-                    )
-                }
-            }
-            if (isScanningBle) {
-                Text(
-                    text = "Scanning for watches...",
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
-                )
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
-                )
-                ElevatedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 6.dp
-                    ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        text = "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
-                        modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            } else {
-                if (watches.isEmpty()) {
                     ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = 6.dp
                         ),
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                            .padding(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
                     ) {
-                        // TODO fix design (don't have it look like a button...)
                         Text(
-                            text = "Press + to add a watch",
-                            modifier = Modifier
-                                .padding(22.dp),
+                            text = "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
+                            modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
                             textAlign = TextAlign.Center,
                         )
                     }
-
-                    if (!pebbleFeatures.supportsDetectingOtherPebbleApps()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                text = "If you have any other Pebble apps installed on your phone, please uninstall them - " +
-                                        "connection to the watch will not work while they are installed.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(15.dp)
-                            )
+                } else {
+                    if (watches.isEmpty()) {
+                        if (!pebbleFeatures.supportsDetectingOtherPebbleApps()) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "If you have any other Pebble apps installed on your phone, please uninstall them - " +
+                                            "connection to the watch will not work while they are installed.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(15.dp)
+                                )
+                            }
                         }
                     }
                 }
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                state = listState,
-            ) {
-                itemsIndexed(
-                    items = watches,
-                    key = { _, watch -> watch.identifier.asString }
-                ) { index, watch ->
-                    WatchItem(
-                        watch = watch,
-                        bluetoothState = bluetoothEnabled,
-                        allowedToConnect = !showOtherPebbleAppsWarningAndPreventConnection,
-                        navBarNav = navBarNav,
-                    )
-                    if (index < watches.lastIndex) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    state = listState,
+                ) {
+                    itemsIndexed(
+                        items = watches,
+                        key = { _, watch -> watch.identifier.asString }
+                    ) { index, watch ->
+                        WatchItem(
+                            watch = watch,
+                            bluetoothState = bluetoothEnabled,
+                            allowedToConnect = !showOtherPebbleAppsWarningAndPreventConnection,
+                            navBarNav = navBarNav,
                         )
+                        if (index < watches.lastIndex) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            )
+                        }
                     }
                 }
             }

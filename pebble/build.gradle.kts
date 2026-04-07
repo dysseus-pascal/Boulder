@@ -78,6 +78,7 @@ kotlin {
                 optIn("androidx.compose.material3.ExperimentalMaterial3Api")
                 optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
             }
         }
         commonMain {
@@ -85,7 +86,7 @@ kotlin {
                 implementation(project(":libpebble3"))
                 implementation(compose.runtime)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)

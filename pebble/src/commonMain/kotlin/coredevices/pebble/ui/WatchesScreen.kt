@@ -278,6 +278,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             LaunchedEffect(Unit) {
                 topBarParams.searchAvailable(null)
                 topBarParams.title(title)
+                topBarParams.actions {}
                 launch {
                     topBarParams.scrollToTop.collect {
                         listState.animateScrollToItem(0)

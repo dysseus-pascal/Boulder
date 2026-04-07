@@ -84,6 +84,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import com.russhwolf.settings.Settings
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coredevices.database.AppstoreCollectionDao
@@ -295,16 +296,22 @@ fun LockerScreen(
                 StoreHomeDisplay(source, homeFiltered, categories)
             } ?: emptyList()
         }
+        val settings: Settings = koinInject()
+        val showDebugOptions = settings.showDebugOptions()
+        LaunchedEffect(showDebugOptions) {
+            topBarParams.actions {
+                if (showDebugOptions) {
+                    TopBarIconButtonWithToolTip(
+                        onClick = openInstallAppDialog,
+                        icon = Icons.Filled.UploadFile,
+                        description = "Sideload App",
+                    )
+                }
+            }
+        }
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(viewModel.searchState)
-            topBarParams.actions {
-                TopBarIconButtonWithToolTip(
-                    onClick = openInstallAppDialog,
-                    icon = Icons.Filled.UploadFile,
-                    description = "Sideload App",
-                )
-            }
             topBarParams.title(title)
             viewModel.maybeRefreshStore(sharedViewModel.watchType.value)
             launch {

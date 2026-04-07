@@ -283,6 +283,7 @@ class AppstoreService(
             }
         }
         val home = try {
+            logger.v { "fetchAppStoreHome fetching ${source.url}/v1/home/$typeString" }
             httpClient.get(
                 url = Url("${source.url}/v1/home/$typeString")
             ) {

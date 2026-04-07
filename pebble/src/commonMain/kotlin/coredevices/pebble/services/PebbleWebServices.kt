@@ -370,10 +370,13 @@ class RealPebbleWebServices(
     override suspend fun fetchUsersMeCore(): CoreUsersMe? = get({ "https://appstore-api.repebble.com/api/v1/users/me" }, auth = HttpClientAuthType.Core)
 
     override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
-        return getAllSources(enabledOnly).mapNotNull {
-            val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
-            if (home == null) return@mapNotNull null
-            AppStoreHomeResult(it, home)
+        return coroutineScope {
+            getAllSources(enabledOnly).map {
+                async {
+                    val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
+                    home?.let { h -> AppStoreHomeResult(it, h) }
+                }
+            }.awaitAll().filterNotNull()
         }
     }
 
@@ -388,10 +391,7 @@ class RealPebbleWebServices(
             coroutineScope {
                 AppType.entries.associateWith { appType ->
                     async {
-                        logger.v { "starting home download for $appType" }
-                        service.fetchAppStoreHome(appType, hardwarePlatform, useCache)?.let { AppStoreHomeResult(source, it) }.also {
-                            logger.v { "finished home download for $appType" }
-                        }
+                        service.fetchAppStoreHome(appType, hardwarePlatform, useCache)?.let { AppStoreHomeResult(source, it) }
                     }
                 }.mapValues { (_, deferred) -> deferred.await() }
             }

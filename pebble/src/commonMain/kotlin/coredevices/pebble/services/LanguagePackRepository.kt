@@ -32,7 +32,7 @@ class LanguagePackRepository(
     }
 
     suspend fun languagePacksForWatch(watch: ConnectedPebbleDevice): List<LanguagePack> = withContext(Dispatchers.IO) {
-        val locale = Locale.current.platformLocale.toString()
+        val locale = Locale.current.toLanguageTag()
         val hardwarePlatform = watch.watchInfo.platform
         languagePacks
             .filter { it.hardware == null || it.hardware == hardwarePlatform.languagePackPlatform().revision }

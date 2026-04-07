@@ -93,7 +93,7 @@ val watchModule = module {
             get(),
             get(),
             get(),
-            Firebase.auth.authStateChanged
+            Firebase.auth.idTokenChanged
                 .map { it?.getIdToken(false) }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),

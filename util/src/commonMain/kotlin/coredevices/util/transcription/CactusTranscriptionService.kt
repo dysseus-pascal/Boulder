@@ -111,7 +111,7 @@ class CactusTranscriptionService(
         return scope.launch(Dispatchers.IO) {
             try {
                 initIfNeeded()
-                onInitialized.trySend(model != null)
+                onInitialized.trySend(model != null || sttConfig.value.mode == CactusSTTMode.RemoteOnly)
             } catch (e: Throwable) {
                 logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
                 onInitialized.trySend(false)

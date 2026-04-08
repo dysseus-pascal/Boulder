@@ -21,4 +21,10 @@ interface TraceEntryDao {
 
     @Query("SELECT * FROM TraceEntryEntity WHERE transferId = :transferId ORDER BY timeMark ASC")
     suspend fun getEntriesForTransfer(transferId: Long): List<TraceEntryEntity>
+
+    @Query("SELECT * FROM TraceEntryEntity WHERE sessionId = :sessionId AND timeMark < :timeMark AND type = :type ORDER BY timeMark DESC LIMIT 1")
+    suspend fun getEntryBeforeTimeMarkOfType(sessionId: Long, timeMark: Long, type: String): TraceEntryEntity?
+
+    @Query("SELECT * FROM TraceEntryEntity WHERE sessionId = :sessionId AND timeMark > :startTimeMark AND timeMark < :endTimeMark AND type = :type ORDER BY timeMark ASC LIMIT 1")
+    suspend fun getEntryBetweenTimeMarksOfType(sessionId: Long, startTimeMark: Long, endTimeMark: Long, type: String): TraceEntryEntity?
 }

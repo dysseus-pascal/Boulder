@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
@@ -32,6 +33,7 @@ import org.koin.core.parameter.parametersOf
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 data class TraceMilestone(
     val label: String,
@@ -54,6 +56,17 @@ class RecordingTraceTimelineViewModel(
         }
     }
 
+    private fun extractButtonTimestamps(entries: List<TraceEntryEntity>): Pair<Instant?, Instant?> {
+        return entries.firstOrNull { it.type == "transfer_completed" }?.data?.let {
+            val data = Json.decodeFromString<TraceEventData>(it)
+            if (data is TraceEventData.TransferCompleted) {
+                data.buttonReleaseTimestamp?.minus((data.audioDurationSeconds * 1000f).roundToInt().milliseconds) to data.buttonReleaseTimestamp
+            } else {
+                null to null
+            }
+        } ?: (null to null)
+    }
+
     private suspend fun loadTraceTimeline() = withContext(Dispatchers.IO) {
         var entries = traceEntryDao.getEntriesForRecording(recordingId).toMutableList()
         val transferId = entries.firstOrNull { it.transferId != null }?.transferId
@@ -68,18 +81,42 @@ class RecordingTraceTimelineViewModel(
         val sessions = traceSessionDao.getSessionsByIds(sessionIds)
         val firstSessionStart = sessions.minOf { it.started }
         val sessionIdToSession = sessions.associateBy { it.id }
-        val (buttonPressTimestamp, buttonReleaseTimestamp) = entries.firstOrNull { it.type == "transfer_completed" }?.data?.let {
-            val data = Json.decodeFromString<TraceEventData>(it)
-            if (data is TraceEventData.TransferCompleted) {
-                data.buttonReleaseTimestamp?.minus((data.audioDurationSeconds * 1000f).roundToInt().milliseconds) to data.buttonReleaseTimestamp
-            } else {
-                null to null
-            }
-        } ?: (null to null)
+        val (buttonPressTimestamp, buttonReleaseTimestamp) = extractButtonTimestamps(entries)
         val firstSessionToButtonPressOffset = buttonPressTimestamp?.let { buttonTs ->
             buttonTs - firstSessionStart
         }
-        val fallbackOffset = entries.firstOrNull()?.timeMark
+        val firstEntry = entries.firstOrNull()
+        val fallbackOffset = firstEntry?.timeMark
+        val transferStart = firstEntry?.timeMark?.let { time ->
+            traceEntryDao.getEntryBeforeTimeMarkOfType(
+                sessionId = firstEntry.sessionId,
+                timeMark = time,
+                type = "transfer_started"
+            )
+        }
+        // Get extra implied entries that may not be directly linked to the recording but are relevant for the timeline
+        val extraEntries = listOfNotNull(
+            traceEntryDao.getEntryBetweenTimeMarksOfType(
+                sessionId = firstEntry?.sessionId ?: 0L,
+                startTimeMark = firstEntry?.timeMark ?: 0L,
+                endTimeMark = entries.lastOrNull()?.timeMark ?: 0L,
+                type = "stt_early_init_start"
+            ),
+            traceEntryDao.getEntryBetweenTimeMarksOfType(
+                sessionId = firstEntry?.sessionId ?: 0L,
+                startTimeMark = firstEntry?.timeMark ?: 0L,
+                endTimeMark = entries.lastOrNull()?.timeMark ?: 0L,
+                type = "stt_early_init_success"
+            ),
+            traceEntryDao.getEntryBetweenTimeMarksOfType(
+                sessionId = firstEntry?.sessionId ?: 0L,
+                startTimeMark = firstEntry?.timeMark ?: 0L,
+                endTimeMark = entries.lastOrNull()?.timeMark ?: 0L,
+                type = "stt_early_init_failed"
+            ),
+            transferStart
+        )
+        entries.addAll(extraEntries)
         val milestones = entries.map { entry ->
             val label = formatEventType(entry.type)
             val sessionStart = sessionIdToSession[entry.sessionId]?.started!!
@@ -134,7 +171,10 @@ class RecordingTraceTimelineViewModel(
     }
 
     private fun formatEventType(type: String): String {
-        return type.split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+        return when(type) {
+            "transfer_started" -> "Transfer Session Started (Packet received)"
+            else -> type.split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+        }
     }
 }
 

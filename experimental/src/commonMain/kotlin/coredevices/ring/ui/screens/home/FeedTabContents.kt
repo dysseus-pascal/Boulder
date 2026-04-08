@@ -152,6 +152,7 @@ fun FeedTabContents(
                 topBarParams = topBarParams,
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxWidth()
                     .animateBounds(this@LookaheadScope),
                 onItemSelected = { id ->
                     coreNav.navigateTo(RingRoutes.RecordingDetails(id))

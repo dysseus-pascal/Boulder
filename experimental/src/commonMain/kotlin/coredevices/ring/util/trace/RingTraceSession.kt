@@ -17,6 +17,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlin.time.Clock
 import kotlin.time.TimeSource
 
@@ -57,12 +63,17 @@ class RingTraceSession(
     fun markEvent(type: String, data: TraceEventData? = null) {
         val timeMark = startMark.elapsedNow().inWholeMilliseconds
         sessionScope.launch {
+            val dataSerial = data?.let { serialize(it) }
+            val recordingId = dataSerial?.jsonObject?.get("recordingId")?.jsonPrimitive?.longOrNull
+            val transferId = dataSerial?.jsonObject?.get("transferId")?.jsonPrimitive?.longOrNull
             val traceEntry = TraceEntryEntity(
                 id = 0L,
                 sessionId = -1L,
                 timeMark = timeMark,
                 type = type,
-                data = data?.let { serialize(it) }
+                data = dataSerial?.toString(),
+                recordingId = recordingId,
+                transferId = transferId,
             )
             pendingMutex.withLock {
                 pending.add(traceEntry)
@@ -83,7 +94,7 @@ class RingTraceSession(
         sessionScope.cancel()
     }
 
-    private inline fun <reified T : TraceEventData> serialize(data: T): String {
-        return Json.encodeToString<T>(data)
+    private inline fun <reified T : TraceEventData> serialize(data: T): JsonElement {
+        return Json.encodeToJsonElement<T>(data)
     }
 }

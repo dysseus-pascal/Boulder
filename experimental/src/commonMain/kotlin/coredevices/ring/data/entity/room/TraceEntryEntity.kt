@@ -1,5 +1,6 @@
 package coredevices.ring.data.entity.room
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -10,7 +11,8 @@ import kotlin.time.Instant
 
 @Entity(
     indices = [
-        Index("sessionId")
+        Index("sessionId"),
+        Index("recordingId")
     ],
     foreignKeys = [
         ForeignKey(
@@ -27,6 +29,11 @@ data class TraceEntryEntity(
     val timeMark: Long,
     val type: String,
     val data: String?,
+
+    @ColumnInfo(defaultValue = "NULL")
+    val recordingId: Long?,
+    @ColumnInfo(defaultValue = "NULL")
+    val transferId: Long?,
 )
 
 @Serializable

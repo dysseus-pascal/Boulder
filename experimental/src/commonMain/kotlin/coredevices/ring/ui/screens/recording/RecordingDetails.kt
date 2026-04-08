@@ -47,6 +47,7 @@ import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.ring.ui.components.chat.ChatInput
+import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.components.recording.recordingConversation
 import coredevices.ring.ui.viewmodel.MessagePlaybackState
 import coredevices.ring.ui.viewmodel.RecordingDetailsViewModel
@@ -73,6 +74,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
     val moreMenuExpanded by viewModel.moreMenuExpanded.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
     val showDebugDetails by viewModel.showDebugDetails.collectAsState()
+    val showTraceTimeline by viewModel.showTraceTimeline.collectAsState()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -127,6 +129,15 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                                 viewModel.dismissMoreMenu()
                             }
                         )
+                        if (showDebugDetails) {
+                            DropdownMenuItem(
+                                text = { Text(if (showTraceTimeline) "Hide Trace Timeline" else "Show Trace Timeline") },
+                                onClick = {
+                                    viewModel.toggleTraceTimeline()
+                                    viewModel.dismissMoreMenu()
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -156,7 +167,8 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                         entries = state.entries,
                         playbackState = playbackState,
                         togglePlayback = viewModel::togglePlayback,
-                        showDebugDetails = showDebugDetails
+                        showDebugDetails = showDebugDetails,
+                        showTraceTimeline = showTraceTimeline,
                     )
                 }
             }
@@ -173,6 +185,7 @@ private fun RecordingDetailsContents(
     playbackState: MessagePlaybackState,
     togglePlayback: (RecordingEntryEntity) -> Unit,
     showDebugDetails: Boolean,
+    showTraceTimeline: Boolean
 ) {
     LazyColumn {
         if (showDebugDetails) {
@@ -212,6 +225,11 @@ private fun RecordingDetailsContents(
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+        if (showTraceTimeline) {
+            item {
+                RecordingTraceTimeline(recording.id)
             }
         }
     }

@@ -15,4 +15,10 @@ interface TraceEntryDao {
 
     @Query("SELECT * FROM TraceEntryEntity WHERE sessionId = :sessionId ORDER BY timeMark ASC")
     suspend fun getEntriesForSession(sessionId: Long): List<TraceEntryEntity>
+
+    @Query("SELECT * FROM TraceEntryEntity WHERE recordingId = :recordingId ORDER BY timeMark ASC")
+    suspend fun getEntriesForRecording(recordingId: Long): List<TraceEntryEntity>
+
+    @Query("SELECT * FROM TraceEntryEntity WHERE transferId = :transferId ORDER BY timeMark ASC")
+    suspend fun getEntriesForTransfer(transferId: Long): List<TraceEntryEntity>
 }

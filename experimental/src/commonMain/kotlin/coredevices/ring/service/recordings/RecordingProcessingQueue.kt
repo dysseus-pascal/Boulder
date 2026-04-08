@@ -130,7 +130,12 @@ class RecordingProcessingQueue(
         val fileId = transfer.fileId
             ?: throw IllegalStateException("Transfer $transferId has no associated fileId")
         val recordingId = if (handle.stage is RecordingProcessingStage.RecordingEntityCreated) {
-            (handle.stage as RecordingProcessingStage.RecordingEntityCreated).recordingEntityId
+            val res = (handle.stage as RecordingProcessingStage.RecordingEntityCreated).recordingEntityId
+            trace.markEvent("recording_entity_reused", TraceEventData.RecordingEntityCreated(
+                recordingId = res,
+                transferId = transferId
+            ))
+            res
         } else {
             val id = recordingRepository.createRecording(
                 localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created

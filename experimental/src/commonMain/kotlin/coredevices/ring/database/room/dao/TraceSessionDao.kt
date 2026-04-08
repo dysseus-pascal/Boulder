@@ -15,4 +15,7 @@ interface TraceSessionDao {
 
     @Query("SELECT * FROM TraceSessionEntity ORDER BY started DESC LIMIT :limit OFFSET :offset")
     suspend fun getLastNTraceSessions(limit: Int, offset: Int): List<TraceSessionEntity>
+
+    @Query("SELECT * FROM TraceSessionEntity WHERE id IN (:ids) ORDER BY started ASC")
+    suspend fun getSessionsByIds(ids: Set<Long>): List<TraceSessionEntity>
 }

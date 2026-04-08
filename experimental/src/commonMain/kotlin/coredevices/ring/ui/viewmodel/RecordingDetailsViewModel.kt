@@ -69,6 +69,11 @@ class RecordingDetailsViewModel(
 
     val moreMenuExpanded = MutableStateFlow(false)
     val playbackState = MutableStateFlow<MessagePlaybackState>(MessagePlaybackState.Stopped)
+    val showTraceTimeline = MutableStateFlow(false)
+
+    fun toggleTraceTimeline() {
+        showTraceTimeline.value = !showTraceTimeline.value
+    }
 
     init {
         playbackState.drop(1).onEach {

@@ -102,15 +102,14 @@ class PlatformHealthSync(
 
     /** Run a sync: query new data from Room DB, map to HealthKMP records, write. */
     suspend fun sync() {
-        if (!_syncing.compareAndSet(expect = false, update = true)) return
         if (!tracker.enabled.value) return
-        if (!hasPermission()) {
-            logger.w { "No health sync permission during sync attempt!" }
-            tracker.setEnabled(false)
-            return
-        }
-
+        if (!_syncing.compareAndSet(expect = false, update = true)) return
         try {
+            if (!hasPermission()) {
+                logger.w { "No health sync permission during sync attempt!" }
+                tracker.setEnabled(false)
+                return
+            }
             syncStepsAndHeartRate()
             syncOverlays()
             logger.d { "Health platform sync completed" }
@@ -200,7 +199,7 @@ class PlatformHealthSync(
         // Write sleep sessions separately so exercise failures don't block sleep
         val sleepRecords = buildSleepSessions(sleepOverlays)
         if (sleepRecords.isNotEmpty()) {
-            logger.d { "Writing ${sleepRecords.size} sleep sessions to health platform" }
+            logger.v { "Writing ${sleepRecords.size} sleep sessions to health platform" }
             val result = healthManager.writeData(sleepRecords)
             if (result.isSuccess) {
                 maxSyncedTimestamp = maxOf(maxSyncedTimestamp, sleepOverlays.maxOf { it.startTime })

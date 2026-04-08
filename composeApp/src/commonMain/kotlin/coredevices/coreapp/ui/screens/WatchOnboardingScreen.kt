@@ -56,10 +56,11 @@ import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.ui.LanguageDialog
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NativeWatchfaceMainContent
+import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
+import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
+import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
-import coredevices.pebble.ui.TITLE_ENABLE_HEALTH
-import coredevices.pebble.ui.TITLE_OFFLINE_SPEECH_RECOGNITION
 import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.allCollectionUuids
 import coredevices.pebble.ui.asCommonApp
@@ -260,14 +261,15 @@ fun WatchOnboardingScreen(
                             SectionText("Configure your watch")
                             Spacer(modifier = Modifier.height(15.dp))
 
-                            settings.Show(BoolWatchPref.Clock24h.displayName)
-                            settings.Show(TITLE_ENABLE_HEALTH)
+                            settings.Show(BoolWatchPref.Clock24h.id)
+                            settings.Show(EnableHealthTracking)
+                            settings.Show(EnableHealthPlatformSync)
                             Spacer(modifier = Modifier.height(15.dp))
                         }
 
                         SectionText("Speech Recognition")
                         Spacer(modifier = Modifier.height(15.dp))
-                        settings.Show(TITLE_OFFLINE_SPEECH_RECOGNITION)
+                        settings.Show(OfflineSpeechRecognition)
                         SectionDivider()
 
                         Text("Configure more in Settings", textAlign = TextAlign.Center)
@@ -309,14 +311,14 @@ private fun SectionDivider() {
 }
 
 @Composable
-private fun SettingsItemsState?.Show(title: String) {
+private fun SettingsItemsState?.Show(id: String) {
     if (this == null) {
         return
     }
     val setting = remember(this) {
-        rawSettingsItems.find { it.title == title }
+        rawSettingsItems.find { it.id == id }
     }
-    if (setting == null) {
+    if (setting == null || !setting.show()) {
         return
     }
     setting.Item()

@@ -12,6 +12,9 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.push.PushMessaging
+import coredevices.pebble.health.PlatformHealthSync
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
 import coredevices.firestore.UsersDao
@@ -57,6 +60,7 @@ class CommonAppDelegate(
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val firestoreLocker: FirestoreLocker,
     private val libPebble: LibPebble,
+    private val platformHealthSync: PlatformHealthSync,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -138,6 +142,7 @@ class CommonAppDelegate(
         }
         firestoreLocker.init()
         oneTimeSetLockerOrderMode()
+        platformHealthSync.startAutoSync(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }
@@ -158,27 +163,29 @@ class CommonAppDelegate(
             if (doFullSync) {
                 settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
             }
-            val jobs = if (doFullSync) {
-                listOf(
+            val jobs = buildList {
+                add(
                     scope.launch {
+                        weatherFetcher.fetchWeather(scope)
+                    }
+                )
+                add(
+                    scope.launch {
+                        platformHealthSync.sync()
+                        libPebble.requestHealthData()
+                    }
+                )
+                if (doFullSync) {
+                    add(scope.launch {
                         coreAnalytics.processHeartbeat()
-                    },
-                    scope.launch {
+                    })
+                    add(scope.launch {
                         pebbleAppDelegate.performBackgroundWork(scope)
-                    },
-                    scope.launch {
+                    })
+                    add(scope.launch {
                         appUpdate.updateAvailable.value
-                    },
-                    scope.launch {
-                        weatherFetcher.fetchWeather(scope)
-                    },
-                )
-            } else {
-                listOf(
-                    scope.launch {
-                        weatherFetcher.fetchWeather(scope)
-                    },
-                )
+                    })
+                }
             }
             jobs.joinAll()
         } finally {

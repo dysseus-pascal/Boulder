@@ -123,6 +123,7 @@ fun WatchPref<*>.section(): Section = when (this) {
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref
     return basicSettingsNumberItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -142,6 +143,7 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
     val pref = item.pref as ColorWatchPref
     val default = item.valueOrDefault()
     return SettingsItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -169,6 +171,7 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
 
 private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): SettingsItem {
     return basicSettingsToggleItem(
+        id = item.pref.id,
         title = item.pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),
@@ -183,6 +186,7 @@ private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): S
 private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as EnumWatchPref
     return basicSettingsDropdownItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -230,6 +234,7 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
     val default = item.valueOrDefault()
     val defaultQl = options.firstOrNull { it.uuid == default.uuid } ?: options[0]
     return basicSettingsDropdownItem(
+        id = item.pref.id,
         title = item.pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),

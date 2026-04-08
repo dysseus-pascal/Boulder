@@ -99,7 +99,12 @@ import coredevices.coreapp.util.AppUpdateState
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.account.PebbleAccount
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
+import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
+import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
@@ -190,7 +195,14 @@ enum class Section(val title: String, val icon: ImageVector) {
     Debug("Debug", Icons.Default.BugReport),
 }
 
+object SettingsIds {
+    const val OfflineSpeechRecognition = "OfflineSpeechRecognition"
+    const val EnableHealthTracking = "EnableHealthTracking"
+    const val EnableHealthPlatformSync = "EnableHealthPlatformSync"
+}
+
 data class SettingsItem(
+    val id: String? = null,
     val title: String,
     val topLevelType: TopLevelType,
     val section: Section,
@@ -209,8 +221,6 @@ data class SettingsItem(
 }
 
 private val ELEVATION = 0.dp
-val TITLE_ENABLE_HEALTH = "Enable Health Tracking"
-val TITLE_OFFLINE_SPEECH_RECOGNITION = "Offline Speech Recognition"
 
 @Composable
 fun settingsBadgeTotal(): Int {
@@ -423,6 +433,10 @@ please disable the option.""".trimIndent(),
     }
     val watchPrefs = watchPrefs()
     val coreAnalytics: CoreAnalytics = koinInject()
+    val platformHealthSync: PlatformHealthSync = koinInject()
+    val healthSyncTracker: HealthSyncTracker = koinInject()
+    val healthPlatformSyncEnabled by healthSyncTracker.enabled.collectAsState()
+    val healthIsSyncing by platformHealthSync.syncing.collectAsState()
 
     val rawSettingsItems = remember(
             libPebbleConfig,
@@ -883,7 +897,8 @@ please disable the option.""".trimIndent(),
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ) },
                 basicSettingsToggleItem(
-                    title = TITLE_ENABLE_HEALTH,
+                    id = EnableHealthTracking,
+                    title = "Enable Health Tracking",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.trackingEnabled,
@@ -900,6 +915,7 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.activityInsightsEnabled,
+                    show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(
@@ -913,12 +929,51 @@ please disable the option.""".trimIndent(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.sleepInsightsEnabled,
+                    show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(
                                 sleepInsightsEnabled = it
                             )
                         )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = EnableHealthPlatformSync,
+                    title = if (platform == Platform.IOS) "Sync to Apple Health" else "Sync to Health Connect",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthPlatformSyncEnabled,
+                    description = "Write steps, heart rate, sleep, and workouts to your phone's health platform",
+                    show = { healthSettings.trackingEnabled && platformHealthSync.isAvailable() },
+                    onCheckChanged = { enabled ->
+                        scope.launch {
+                            if (enabled) {
+                                val granted = platformHealthSync.requestPermissions()
+                                if (!granted) {
+                                    logger.w { "Health platform permissions not granted" }
+                                    return@launch
+                                }
+                            } else {
+                                healthSyncTracker.setEnabled(false)
+                            }
+                        }
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "Sync Now",
+                    description = if (healthIsSyncing) "Syncing..." else "Sync Pebble health data to phone",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    show = { healthPlatformSyncEnabled },
+                    action = if (healthIsSyncing) {
+                        null
+                    } else {
+                        {
+                            scope.launch {
+                                platformHealthSync.sync()
+                            }
+                        }
                     },
                 ),
                 basicSettingsActionItem(
@@ -1050,7 +1105,8 @@ please disable the option.""".trimIndent(),
                     isDebugSetting = true,
                 ),
                 basicSettingsDropdownItem(
-                    title = TITLE_OFFLINE_SPEECH_RECOGNITION,
+                    id = OfflineSpeechRecognition,
+                    title = "Offline Speech Recognition",
                     keywords = "cactus stt speech recognition offline",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
@@ -1683,6 +1739,7 @@ fun basicSettingsActionItem(
 )
 
 fun basicSettingsToggleItem(
+    id: String? = null,
     title: String,
     topLevelType: TopLevelType,
     section: Section,
@@ -1693,6 +1750,7 @@ fun basicSettingsToggleItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -1721,6 +1779,7 @@ fun basicSettingsToggleItem(
 )
 
 fun basicSettingsNumberItem(
+    id: String? = null,
     title: String,
     topLevelType: TopLevelType,
     section: Section,
@@ -1735,6 +1794,7 @@ fun basicSettingsNumberItem(
     isDebugSetting: Boolean = false,
     defaultValue: Long? = null,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -1799,6 +1859,7 @@ fun basicSettingsNumberItem(
 )
 
 fun <T> basicSettingsDropdownItem(
+    id: String? = null,
     title: String,
     description: String? = null,
     topLevelType: TopLevelType,
@@ -1812,6 +1873,7 @@ fun <T> basicSettingsDropdownItem(
     isDebugSetting: Boolean = false,
     extraSupportingContent: (@Composable () -> Unit)? = null,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -2021,3 +2083,4 @@ enum class WeatherSyncInterval(
         fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
     }
 }
+

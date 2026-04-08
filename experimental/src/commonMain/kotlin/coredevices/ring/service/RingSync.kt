@@ -516,55 +516,57 @@ class RingSync(
                                                                 transfer.id,
                                                                 transferInfo
                                                             )
-                                                            logger.d { "Saving transfer..." }
-                                                            id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
-                                                            if (audioDuration >= 0.5) {
-                                                                trace.markEvent("saving_recording_start")
-                                                                val samplesResampled = resample(
+                                                        }
+                                                        logger.d { "Saving transfer..." }
+                                                        id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
+                                                        if (audioDuration >= 0.5) {
+                                                            trace.markEvent("saving_recording_start")
+                                                            val samplesResampled = withContext(Dispatchers.Default) {
+                                                                resample(
                                                                     transferStatus.samples,
                                                                     transferStatus.sampleRate.toInt()
                                                                 )
-                                                                val nwSampleRate = TARGET_SAMPLE_RATE
-                                                                listOf(
-                                                                    async(Dispatchers.IO) {
-                                                                        recordingStorage.openRecordingSink(
-                                                                            id,
-                                                                            nwSampleRate,
-                                                                            "audio/raw"
-                                                                        ).use { sink ->
-                                                                            samplesResampled.forEach(sink::writeShortLe)
-                                                                        }
-                                                                    },
-                                                                    async(Dispatchers.IO) {
-                                                                        recordingStorage.openCleanRecordingSink(
-                                                                            id,
-                                                                            transferStatus.sampleRate.toInt(),
-                                                                            "audio/raw"
-                                                                        ).use { sink ->
-                                                                            transferStatus.samples.forEach(
-                                                                                sink::writeShortLe
-                                                                            )
-                                                                        }
+                                                            }
+                                                            val nwSampleRate = TARGET_SAMPLE_RATE
+                                                            listOf(
+                                                                async(Dispatchers.IO) {
+                                                                    recordingStorage.openRecordingSink(
+                                                                        id,
+                                                                        nwSampleRate,
+                                                                        "audio/raw"
+                                                                    ).use { sink ->
+                                                                        samplesResampled.forEach(sink::writeShortLe)
                                                                     }
-                                                                ).awaitAll()
-                                                                trace.markEvent("saving_recording_end")
+                                                                },
+                                                                async(Dispatchers.IO) {
+                                                                    recordingStorage.openCleanRecordingSink(
+                                                                        id,
+                                                                        transferStatus.sampleRate.toInt(),
+                                                                        "audio/raw"
+                                                                    ).use { sink ->
+                                                                        transferStatus.samples.forEach(
+                                                                            sink::writeShortLe
+                                                                        )
+                                                                    }
+                                                                }
+                                                            ).awaitAll()
+                                                            trace.markEvent("saving_recording_end")
 
-                                                                withContext(Dispatchers.IO) {
-                                                                    ringTransferRepository.markTransferCompleteAndSetFileId(
-                                                                        transfer.id,
-                                                                        id
-                                                                    )
-                                                                    recordingProcessingQueue.queueAudioProcessing(
-                                                                        transfer.id,
-                                                                        transferStatus.buttonSequence,
-                                                                    )
-                                                                }
-                                                            } else {
-                                                                logger.i { "Discarding transfer due to short duration: $audioDuration seconds" }
-                                                                trace.markEvent("transfer_discarded")
-                                                                withContext(Dispatchers.IO) {
-                                                                    ringTransferRepository.updateTransferStatus(transfer.id, RingTransferStatus.Discarded)
-                                                                }
+                                                            withContext(Dispatchers.IO) {
+                                                                ringTransferRepository.markTransferCompleteAndSetFileId(
+                                                                    transfer.id,
+                                                                    id
+                                                                )
+                                                                recordingProcessingQueue.queueAudioProcessing(
+                                                                    transfer.id,
+                                                                    transferStatus.buttonSequence,
+                                                                )
+                                                            }
+                                                        } else {
+                                                            logger.i { "Discarding transfer due to short duration: $audioDuration seconds" }
+                                                            trace.markEvent("transfer_discarded")
+                                                            withContext(Dispatchers.IO) {
+                                                                ringTransferRepository.updateTransferStatus(transfer.id, RingTransferStatus.Discarded)
                                                             }
                                                         }
                                                     }

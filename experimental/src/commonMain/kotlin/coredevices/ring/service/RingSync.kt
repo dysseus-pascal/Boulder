@@ -9,7 +9,6 @@ import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.haversine.SatelliteStatus
 import coredevices.haversine.TransferStatus
 import coredevices.haversine.removeDCBias
-import coredevices.util.transcription.TranscriptionService
 import coredevices.resampler.Resampler
 import coredevices.ring.data.entity.room.RingTransferStatus
 import coredevices.ring.data.entity.room.TraceEventData
@@ -20,6 +19,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
 import coredevices.util.isIOS
+import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -45,7 +45,6 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
-import kotlinx.io.writeShortLe
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.coroutines.cancellation.CancellationException
@@ -53,7 +52,19 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+import kotlin.time.measureTime
 import kotlin.uuid.Uuid
+
+private fun ShortArray.toByteArrayLe(): ByteArray {
+    val bytes = ByteArray(size * 2)
+    for (i in indices) {
+        val s = this[i].toInt()
+        bytes[i * 2] = s.toByte()
+        bytes[i * 2 + 1] = (s shr 8).toByte()
+    }
+    return bytes
+}
 
 private suspend fun waitForBluetoothAvailable() {
     Bluetooth.availability.first { it is Bluetooth.Availability.Available }
@@ -522,32 +533,40 @@ class RingSync(
                                                         if (audioDuration >= 0.5) {
                                                             trace.markEvent("saving_recording_start")
                                                             val samplesResampled = withContext(Dispatchers.Default) {
-                                                                resample(
+                                                                val t = TimeSource.Monotonic.markNow()
+                                                                val samples = resample(
                                                                     transferStatus.samples,
                                                                     transferStatus.sampleRate.toInt()
                                                                 )
+                                                                val dur = t.elapsedNow()
+                                                                logger.d { "Resampling took ${dur.inWholeMilliseconds} ms" }
+                                                                samples
                                                             }
                                                             val nwSampleRate = TARGET_SAMPLE_RATE
                                                             listOf(
                                                                 async(Dispatchers.IO) {
-                                                                    recordingStorage.openRecordingSink(
-                                                                        id,
-                                                                        nwSampleRate,
-                                                                        "audio/raw"
-                                                                    ).use { sink ->
-                                                                        samplesResampled.forEach(sink::writeShortLe)
+                                                                    val t = TimeSource.Monotonic.measureTime {
+                                                                        recordingStorage.openRecordingSink(
+                                                                            id,
+                                                                            nwSampleRate,
+                                                                            "audio/raw"
+                                                                        ).use { sink ->
+                                                                            sink.write(samplesResampled.toByteArrayLe())
+                                                                        }
                                                                     }
+                                                                    logger.d { "Saved recording in ${t.inWholeMilliseconds} ms" }
                                                                 },
                                                                 async(Dispatchers.IO) {
-                                                                    recordingStorage.openCleanRecordingSink(
-                                                                        id,
-                                                                        transferStatus.sampleRate.toInt(),
-                                                                        "audio/raw"
-                                                                    ).use { sink ->
-                                                                        transferStatus.samples.forEach(
-                                                                            sink::writeShortLe
-                                                                        )
+                                                                    val t = TimeSource.Monotonic.measureTime {
+                                                                        recordingStorage.openCleanRecordingSink(
+                                                                            id,
+                                                                            transferStatus.sampleRate.toInt(),
+                                                                            "audio/raw"
+                                                                        ).use { sink ->
+                                                                            sink.write(transferStatus.samples.toByteArrayLe())
+                                                                        }
                                                                     }
+                                                                    logger.d { "Saved clean recording in ${t.inWholeMilliseconds} ms" }
                                                                 }
                                                             ).awaitAll()
                                                             trace.markEvent("saving_recording_end")

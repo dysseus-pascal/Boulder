@@ -11,16 +11,30 @@ class Resampler(private val sampleRateIn: Int, private val sampleRateOut: Int) {
         // Half the number of sinc lobes on each side of the center sample.
         // 16 taps (32 total kernel width) is a good balance for speech.
         private const val SINC_HALF_TAPS = 16
+        private const val TAPS_PER_PHASE = SINC_HALF_TAPS * 2
+        // Number of quantized fractional positions for the polyphase filter bank
+        private const val NUM_PHASES = 256
     }
 
     // Cutoff relative to the lower of the two rates to prevent aliasing
     private val cutoff: Double = minOf(sampleRateIn, sampleRateOut).toDouble() / sampleRateIn
 
+    // Precomputed polyphase filter bank: for each quantized fractional offset,
+    // store the 32 kernel weights (sinc * kaiser window * cutoff).
+    // This eliminates all sin/sqrt/bessel calls from the per-sample loop.
+    private val filterBank = Array(NUM_PHASES) { phase ->
+        val frac = phase.toDouble() / NUM_PHASES
+        DoubleArray(TAPS_PER_PHASE) { t ->
+            val j = t - SINC_HALF_TAPS + 1
+            val x = (j - frac) * cutoff
+            sincKernel(x) * cutoff * kaiserWindow(j - frac, SINC_HALF_TAPS)
+        }
+    }
+
     // Kaiser window approximation (beta=6 gives ~-60 dB sidelobe, good for speech)
     private fun kaiserWindow(n: Double, halfWidth: Int): Double {
         val alpha = n / halfWidth
         if (abs(alpha) >= 1.0) return 0.0
-        // I0 approximation: Kaiser beta=6
         val beta = 6.0
         return bessel0(beta * kotlin.math.sqrt(1.0 - alpha * alpha)) / bessel0(beta)
     }
@@ -47,23 +61,20 @@ class Resampler(private val sampleRateIn: Int, private val sampleRateOut: Int) {
         val ratio = sampleRateOut.toDouble() / sampleRateIn
         val outputLength = ceil(input.size * ratio).toInt()
         val output = ShortArray(outputLength)
+        val lastIdx = input.size - 1
 
         for (i in 0 until outputLength) {
             val inputPos = i / ratio
             val center = floor(inputPos).toInt()
             val frac = inputPos - center
 
+            val phaseIdx = (frac * NUM_PHASES).toInt().coerceIn(0, NUM_PHASES - 1)
+            val kernel = filterBank[phaseIdx]
+
             var sample = 0.0
-            for (j in -SINC_HALF_TAPS + 1..SINC_HALF_TAPS) {
-                val idx = center + j
-                val inputSample = when {
-                    idx < 0 -> input[0].toDouble()
-                    idx >= input.size -> input[input.size - 1].toDouble()
-                    else -> input[idx].toDouble()
-                }
-                val x = (j - frac) * cutoff
-                val w = kaiserWindow(j - frac, SINC_HALF_TAPS)
-                sample += inputSample * sincKernel(x) * cutoff * w
+            for (t in 0 until TAPS_PER_PHASE) {
+                val idx = (center + t - SINC_HALF_TAPS + 1).coerceIn(0, lastIdx)
+                sample += input[idx].toDouble() * kernel[t]
             }
 
             output[i] = sample.toInt()

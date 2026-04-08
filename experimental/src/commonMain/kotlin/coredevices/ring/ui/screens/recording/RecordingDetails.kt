@@ -169,6 +169,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                         togglePlayback = viewModel::togglePlayback,
                         showDebugDetails = showDebugDetails,
                         showTraceTimeline = showTraceTimeline,
+                        onRetry = viewModel::retryRecording
                     )
                 }
             }
@@ -185,7 +186,8 @@ private fun RecordingDetailsContents(
     playbackState: MessagePlaybackState,
     togglePlayback: (RecordingEntryEntity) -> Unit,
     showDebugDetails: Boolean,
-    showTraceTimeline: Boolean
+    showTraceTimeline: Boolean,
+    onRetry: () -> Unit
 ) {
     LazyColumn {
         if (showDebugDetails) {
@@ -216,7 +218,13 @@ private fun RecordingDetailsContents(
             }
         }
         try {
-            recordingConversation(messages = messages, recordingEntries = entries, onPlayPause = togglePlayback, playbackState = playbackState)
+            recordingConversation(
+                messages = messages,
+                recordingEntries = entries,
+                onPlayPause = togglePlayback,
+                playbackState = playbackState,
+                onRetry = onRetry
+            )
         } catch (e: Exception) {
             Firebase.crashlytics.recordException(e)
             item {

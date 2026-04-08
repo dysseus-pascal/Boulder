@@ -9,12 +9,17 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.database.dao.ConversationMessageDao
+import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.ring.database.Preferences
+import coredevices.ring.database.room.dao.RingTransferDao
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -22,6 +27,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 
 class RecordingDetailsViewModel(
@@ -32,7 +38,9 @@ class RecordingDetailsViewModel(
     private val audioPlayer: AudioPlayer,
     private val snackbarHostState: SnackbarHostState,
     private val uiContext: PlatformUiContext,
-    private val prefs: Preferences
+    private val prefs: Preferences,
+    private val recordingProcessingQueue: RecordingProcessingQueue,
+    private val ringTransferDao: RingTransferDao,
 ): ViewModel() {
     companion object {
         private val logger = Logger.withTag(RecordingDetailsViewModel::class.simpleName!!)
@@ -129,6 +137,32 @@ class RecordingDetailsViewModel(
                     message = "No recording file to export"
                 )
             }
+        }
+    }
+
+    fun retryRecording() {
+        viewModelScope.launch {
+            val state = itemState.value as? ItemState.Loaded ?: return@launch
+            val entry = state.entries.firstOrNull() ?: return@launch
+            val transfers = withContext(Dispatchers.IO) { ringTransferDao.getByRecordingId(recordingId) }
+            val transfer = transfers.firstOrNull()
+            if (transfer != null) {
+                recordingProcessingQueue.retryRecording(
+                    transferId = transfer.id,
+                    buttonSequence = null,
+                    recordingId = recordingId,
+                    recordingEntryId = entry.id,
+                )
+            } else {
+                val fileId = entry.fileName ?: return@launch
+                recordingProcessingQueue.retryLocalRecording(
+                    fileId = fileId,
+                    buttonSequence = null,
+                    recordingId = recordingId,
+                    recordingEntryId = entry.id,
+                )
+            }
+            snackbarHostState.showSnackbar("Retrying...")
         }
     }
 

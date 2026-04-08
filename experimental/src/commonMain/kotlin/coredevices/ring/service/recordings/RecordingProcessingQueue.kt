@@ -254,6 +254,50 @@ class RecordingProcessingQueue(
         )
     }
 
+    suspend fun retryRecording(
+        transferId: Long,
+        buttonSequence: String?,
+        recordingId: Long,
+        recordingEntryId: Long,
+    ) {
+        val stage = RecordingProcessingStage.RecordingEntryCreated(
+            recordingEntryId = recordingEntryId,
+            recordingEntityId = recordingId,
+        )
+        val task = ProcessingTask.AudioRecording(
+            transferId = transferId,
+            buttonSequence = buttonSequence,
+        )
+        scheduleTask(
+            RecordingProcessingTask(
+                task = task,
+                lastSuccessfulStage = stage.toJson(),
+            )
+        )
+    }
+
+    suspend fun retryLocalRecording(
+        fileId: String,
+        buttonSequence: String?,
+        recordingId: Long,
+        recordingEntryId: Long,
+    ) {
+        val stage = RecordingProcessingStage.RecordingEntryCreated(
+            recordingEntryId = recordingEntryId,
+            recordingEntityId = recordingId,
+        )
+        val task = ProcessingTask.LocalAudioRecording(
+            fileId = fileId,
+            buttonSequence = buttonSequence,
+        )
+        scheduleTask(
+            RecordingProcessingTask(
+                task = task,
+                lastSuccessfulStage = stage.toJson(),
+            )
+        )
+    }
+
     inner class TaskHandle(val taskId: Long, initialStage: RecordingProcessingStage?) {
         val stage: RecordingProcessingStage? get() = _stage
         private var _stage: RecordingProcessingStage? = initialStage

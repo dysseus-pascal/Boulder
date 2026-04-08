@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +67,7 @@ fun FeedListItem(
     feedItem: RecordingFeedItem,
     onSelected: (() -> Unit)?,
     onHold: (() -> Unit)?,
+    onRetry: (() -> Unit)?,
 ) {
     var parentCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var userBubbleCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -120,6 +122,15 @@ fun FeedListItem(
             Column {
                 Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     if (feedItem?.entry?.status?.isError() == true) {
+                        if (onRetry != null) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Retry",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp).clickable { onRetry() }
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
                         Icon(
                             Icons.Default.Error,
                             contentDescription = "Error",

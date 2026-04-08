@@ -97,6 +97,9 @@ fun FeedList(topBarParams: TopBarParams?, modifier: Modifier = Modifier, onItemS
                                     contextualActions = viewModel.getContextualActions(item.data)
                                 }
                                 showContextMenu = true
+                            },
+                            onRetry = {
+                                viewModel.retryFeedItem(item.data)
                             }
                         )
                         Box(Modifier.fillMaxWidth()) {

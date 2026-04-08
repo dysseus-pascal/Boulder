@@ -11,11 +11,13 @@ import coredevices.ring.data.InflightIndexNotification
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.RingTransfer
 import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.components.chat.actionText
+import coredevices.ring.util.trace.RingTraceSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -78,6 +80,7 @@ class IndexNotificationManager(
     private val conversationMessageDao: ConversationMessageDao,
     private val platformIndexNotificationManager: PlatformIndexNotificationManager,
     private val prefs: Preferences,
+    private val trace: RingTraceSession,
 ) {
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
@@ -87,6 +90,15 @@ class IndexNotificationManager(
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
     private var lastBugReportPrompt: Instant? = null
+
+
+    private suspend fun traceNotificationSent(recordingId: Long?, transferId: Long, stage: String) {
+        trace.markEvent("notification_sent", TraceEventData.NotificationSent(
+            recordingId = recordingId,
+            transferId = transferId,
+            stage = stage
+        ))
+    }
 
     private suspend fun makeInflightNotification(notifId: Int, transfer: RingTransfer, entry: RecordingEntryEntity?): InflightIndexNotification {
         val remoteTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) }
@@ -384,6 +396,18 @@ class IndexNotificationManager(
                 }
                 if (notif != null) {
                     platformIndexNotificationManager.notify(notif)
+                    traceNotificationSent(
+                        transfer.recordingId,
+                        transfer.id,
+                        when (notification) {
+                            is InflightIndexNotification.Transferring -> "transferring"
+                            is InflightIndexNotification.Transcribing -> "transcribing"
+                            is InflightIndexNotification.AgentRunning -> "agent_running"
+                            is InflightIndexNotification.AgentComplete -> "agent_complete"
+                            is InflightIndexNotification.Error -> "error"
+                            is InflightIndexNotification.Discarded -> "dismissed_discarded"
+                        }
+                    )
                 } else {
                     inflightNotifications[transfer.id]?.id?.let { platformIndexNotificationManager.cancel(it) }
                 }

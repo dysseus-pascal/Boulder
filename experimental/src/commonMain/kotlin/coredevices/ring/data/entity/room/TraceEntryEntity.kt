@@ -175,4 +175,10 @@ sealed class TraceEventData {
         val recordingEntryId: Long?,
         val messageCount: Int,
     ): TraceEventData()
+    @Serializable @SerialName("notification_sent")
+    data class NotificationSent(
+        val recordingId: Long?,
+        val transferId: Long,
+        val stage: String,
+    ): TraceEventData()
 }

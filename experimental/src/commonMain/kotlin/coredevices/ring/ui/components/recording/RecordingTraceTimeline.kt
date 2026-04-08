@@ -166,6 +166,7 @@ class RecordingTraceTimelineViewModel(
             is TraceEventData.AgentProcessingEnd -> data.agent
             is TraceEventData.AgentProcessingFailed -> data.reason
             is TraceEventData.AgentConversationUpdate -> "${data.messageCount} msgs"
+            is TraceEventData.NotificationSent -> data.stage
             else -> null
         }
     }

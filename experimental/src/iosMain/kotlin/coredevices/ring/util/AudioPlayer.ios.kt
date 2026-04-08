@@ -59,6 +59,7 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
             AudioEncoding.PCM_FLOAT_32BIT -> sizeHint / 4
         }
         playJob?.cancel()
+        playbackState.value = PlaybackState.Stopped
         val avAudioEngine = AVAudioEngine()
         val avAudioPlayerNode = AVAudioPlayerNode()
         val avFormat = AudioEncoding.PCM_FLOAT_32BIT.toAVAudioFormat(sampleRate.toInt()) // Force float format as iOS doesn't like int16

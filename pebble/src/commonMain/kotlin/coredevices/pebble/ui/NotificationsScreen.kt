@@ -239,14 +239,11 @@ fun AppIconImage(
     when (platform) {
         // iOS: load from web service
         Platform.IOS -> {
-            val url = derivedStateOf {
-                bootConfig?.config?.notifications?.iconUrlFor(
-                    app.packageName,
-                    120
-                )
+            val url = remember(app.packageName) {
+                "https://notif-app-icons.repebble.com/ios/${app.packageName}/140.jpg"
             }
             AsyncImage(
-                model = url.value,
+                model = url,
                 contentDescription = contentDescription,
                 modifier = modifier,
             )

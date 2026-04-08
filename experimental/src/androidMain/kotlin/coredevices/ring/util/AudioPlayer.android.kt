@@ -77,9 +77,12 @@ actual class AudioPlayer : AutoCloseable, KoinComponent {
         sizeHint: Long
     ) {
         logger.d { "Beginning playback" }
-        audioTrack?.release()
         released.set(true)
+        try {
+            audioTrack?.stop()
+        } catch (_: Exception) {} // Best-effort stop, we might be here because track is released
         streamJob?.cancel()
+        audioTrack?.release()
 
         var bufferSize = AudioTrack.getMinBufferSize(sampleRate.toInt(), AudioFormat.CHANNEL_OUT_MONO, encoding.toAudioFormat())
         if (bufferSize == AudioTrack.ERROR || bufferSize == AudioTrack.ERROR_BAD_VALUE) {
@@ -92,7 +95,7 @@ actual class AudioPlayer : AutoCloseable, KoinComponent {
             .setLegacyStreamType(AudioManager.STREAM_MUSIC)
             .build()
 
-        audioTrack = AudioTrack.Builder()
+        val newTrack = AudioTrack.Builder()
             .setAudioAttributes(audioAttributes)
             .setAudioFormat(
                 AudioFormat.Builder()
@@ -106,17 +109,18 @@ actual class AudioPlayer : AutoCloseable, KoinComponent {
             .apply {
                 setVolume(AUDIO_PLAYER_VOLUME)
             }
+        audioTrack = newTrack
         released.set(false)
         audioManager.requestAudioFocus(
             AudioFocusRequest.Builder(
                 AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
             ).build()
         )
-        streamJob = scope.launch(Dispatchers.IO) {
-            handleRawStream(audioTrack!!, samples, sampleRate, sizeHint.toInt())
-        }
+        newTrack.play()
         playbackState.value = PlaybackState.Playing(0.0)
-        audioTrack?.play()
+        streamJob = scope.launch(Dispatchers.IO) {
+            handleRawStream(newTrack, samples, sampleRate, sizeHint.toInt())
+        }
     }
 
     actual fun stop() {

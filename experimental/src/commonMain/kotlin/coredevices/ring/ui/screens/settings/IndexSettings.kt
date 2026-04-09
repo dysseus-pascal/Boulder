@@ -60,8 +60,8 @@ import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
-import coredevices.ring.external.vermillion.VermillionSettingsDialog
-import coredevices.ring.external.vermillion.VermillionSettingsViewModel
+import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
+import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
@@ -83,7 +83,7 @@ import coreapp.util.generated.resources.Res as UtilRes
 @Composable
 fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
-    val vermillionViewModel = koinViewModel<VermillionSettingsViewModel>()
+    val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val useCactusAgent by viewModel.useCactusAgent.collectAsState()
     val showModelDialog by viewModel.showModelDownloadDialog.collectAsState()
     val showMusicControlDialog by viewModel.showMusicControlDialog.collectAsState()
@@ -92,8 +92,10 @@ fun IndexSettings(coreNav: CoreNav) {
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val platform = koinInject<Platform>()
-    val vermillionToken by vermillionViewModel.token.collectAsState()
-    val vermillionDialogOpen by vermillionViewModel.dialogOpen.collectAsState()
+    val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
+    val webhookToken by webhookViewModel.authToken.collectAsState()
+    val webhookIsLinked = !webhookUrl.isNullOrBlank() && !webhookToken.isNullOrBlank()
+    val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
     val experimentalDevicesEnabled by koinInject<EnableExperimentalDevices>().enabled.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
@@ -146,8 +148,8 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeSecondaryModeDialog()
             },
-            vermillionEnabled = vermillionToken != null,
-            vermillionShown = experimentalDevicesEnabled
+            webhookEnabled = webhookIsLinked,
+            webhookShown = experimentalDevicesEnabled
         )
     }
     if (showNoteShortcutDialog) {
@@ -163,8 +165,8 @@ fun IndexSettings(coreNav: CoreNav) {
             }
         )
     }
-    if (vermillionDialogOpen) {
-        VermillionSettingsDialog(vermillionViewModel)
+    if (webhookDialogOpen) {
+        IndexWebhookSettingsDialog(webhookViewModel)
     }
 
     Scaffold(
@@ -285,7 +287,7 @@ fun IndexSettings(coreNav: CoreNav) {
                             when (secondaryMode) {
                                 SecondaryMode.Disabled -> "Disabled"
                                 SecondaryMode.Search -> "Search"
-                                SecondaryMode.Vermillion -> "Vermillion"
+                                SecondaryMode.IndexWebhook -> "Webhook"
                             }
                         )
                     }
@@ -387,11 +389,11 @@ fun IndexSettings(coreNav: CoreNav) {
             if (experimentalDevicesEnabled) {
                 item {
                     ListItem(
-                        modifier = Modifier.clickable(onClick = vermillionViewModel::openDialog),
-                        headlineContent = { Text("Vermillion") },
+                        modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
+                        headlineContent = { Text("Webhook") },
                         supportingContent = {
                             Text(
-                                if (vermillionToken != null) "Linked, tap to modify"
+                                if (webhookIsLinked) "Configured, tap to modify"
                                 else "Not Linked"
                             )
                         }
@@ -556,8 +558,8 @@ fun SecondaryModeDialog(
     currentMode: SecondaryMode,
     onModeSelected: (SecondaryMode) -> Unit,
     onDismissRequest: () -> Unit,
-    vermillionEnabled: Boolean,
-    vermillionShown: Boolean,
+    webhookEnabled: Boolean,
+    webhookShown: Boolean,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
@@ -632,33 +634,33 @@ fun SecondaryModeDialog(
                     }
                 }
             }
-            if (vermillionShown) {
-                item(SecondaryMode.Vermillion) {
+            if (webhookShown) {
+                item(SecondaryMode.IndexWebhook) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = vermillionEnabled) {
-                                targetMode = SecondaryMode.Vermillion
+                            .clickable(enabled = webhookEnabled) {
+                                targetMode = SecondaryMode.IndexWebhook
                             }
                     ) {
                         RadioButton(
-                            selected = targetMode == SecondaryMode.Vermillion,
+                            selected = targetMode == SecondaryMode.IndexWebhook,
                             onClick = {
-                                targetMode = SecondaryMode.Vermillion
+                                targetMode = SecondaryMode.IndexWebhook
                             },
-                            enabled = vermillionEnabled
+                            enabled = webhookEnabled
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text("Vermillion")
+                            Text("Webhook")
                             Text(
-                                "Additionally send recorded audio to Vermillion on a double click & hold.",
+                                "Send recording data to your webhook on a double click & hold.",
                                 fontSize = 12.sp,
                             )
-                            if (!vermillionEnabled) {
+                            if (!webhookEnabled) {
                                 Text(
-                                    "Link Vermillion account first.",
+                                    "Configure webhook first.",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.error
                                 )

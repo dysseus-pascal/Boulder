@@ -8,7 +8,8 @@ import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.repository.McpSandboxRepository
-import coredevices.ring.external.vermillion.VermillionApi
+import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -18,7 +19,8 @@ class RecordingOperationFactory(
     private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val prefs: Preferences,
-    private val vermillionApi: VermillionApi,
+    private val indexWebhookApi: IndexWebhookApi,
+    private val indexWebhookPreferences: IndexWebhookPreferences,
     private val recordingStorage: RecordingStorage,
     private val trace: RingTraceSession
 ) {
@@ -100,11 +102,13 @@ class RecordingOperationFactory(
                     forcedTool = null
                 )
             }
-            SecondaryMode.Vermillion -> {
-                VermillionUploadRecordingOperation(
-                    vermillionApi = vermillionApi,
+            SecondaryMode.IndexWebhook -> {
+                IndexWebhookUploadRecordingOperation(
+                    webhookApi = indexWebhookApi,
+                    webhookPreferences = indexWebhookPreferences,
                     recordingStorage = recordingStorage,
                     fileId = fileId,
+                    recordingId = recordingId,
                     decorated = DefaultRecordingOperation(
                         mcpSandboxRepository = mcpSandboxRepository,
                         mcpSessionFactory = mcpSessionFactory,

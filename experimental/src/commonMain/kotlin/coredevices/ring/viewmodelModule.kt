@@ -1,6 +1,6 @@
 package coredevices.ring
 
-import coredevices.ring.external.vermillion.VermillionSettingsViewModel
+import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.components.recording.RecordingTraceTimelineViewModel
 import coredevices.ring.ui.screens.settings.McpSandboxSettingsViewModel
@@ -20,7 +20,7 @@ internal val viewmodelModule = module {
     viewModelOf(::ListenDialogViewModel)
     viewModelOf(::NotesViewModel)
     viewModelOf(::ReminderDetailsViewModel)
-    viewModelOf(::VermillionSettingsViewModel)
+    viewModelOf(::IndexWebhookSettingsViewModel)
     viewModelOf(::McpSandboxSettingsViewModel)
     viewModelOf(::RecordingTraceTimelineViewModel)
 }

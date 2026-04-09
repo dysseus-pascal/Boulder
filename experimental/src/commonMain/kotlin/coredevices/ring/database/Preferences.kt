@@ -191,7 +191,7 @@ enum class MusicControlMode(val id: Int) {
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
     Search(1),
-    Vermillion(2);
+    IndexWebhook(2);
 
     companion object {
         fun fromId(id: Int): SecondaryMode {

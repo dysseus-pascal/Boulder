@@ -29,7 +29,8 @@ import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
-import coredevices.ring.external.vermillion.VermillionApi
+import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -203,11 +204,12 @@ class RecordingProcessingQueueTest {
         singleOf(::McpSessionFactory)
 
         single {
-            object : VermillionApi {
-                override fun uploadIfEnabled(samples: ShortArray, sampleRate: Int, recordingId: String) {}
+            object : IndexWebhookApi {
+                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {}
                 override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
             }
-        } bind VermillionApi::class
+        } bind IndexWebhookApi::class
+        singleOf(::IndexWebhookPreferences)
 
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)

@@ -33,9 +33,9 @@ import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
-import coredevices.ring.external.vermillion.VermillionApi
-import coredevices.ring.external.vermillion.VermillionApiImpl
-import coredevices.ring.external.vermillion.VermillionPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
+import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.ring.service.FirestoreRingDebugDelegate
@@ -148,15 +148,15 @@ val experimentalModule = module {
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
-    singleOf(::VermillionPreferences)
+    singleOf(::IndexWebhookPreferences)
     single {
-        VermillionApiImpl(
+        IndexWebhookApiImpl(
             get(),
             get(),
             get(),
             get<RecordingBackgroundScope>()
         )
-    } bind VermillionApi::class
+    } bind IndexWebhookApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }

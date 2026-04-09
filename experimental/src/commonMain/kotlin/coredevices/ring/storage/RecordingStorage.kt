@@ -1,6 +1,8 @@
 package coredevices.ring.storage
 
 import co.touchlab.kermit.Logger
+import coredevices.ring.audio.M4aDecoder
+import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.util.openReadChannel
@@ -17,6 +19,9 @@ import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readByteArray
+import kotlinx.io.readShortLe
+import kotlinx.io.writeShortLe
 
 /**
  * Platform-specific path for caching recordings before they are persisted
@@ -37,7 +42,12 @@ class RecordingStorage(private val cachedMetadataDao: CachedRecordingMetadataDao
     companion object {
         private val logger = Logger.withTag(RecordingStorage::class.simpleName!!)
         private const val FS_WRITE_BUFFER_SIZE = 8192
+        private const val PCM_MIME = "audio/raw"
+        private const val M4A_MIME = "audio/mp4"
     }
+
+    private val m4aEncoder = M4aEncoder()
+    private val m4aDecoder = M4aDecoder()
     init {
         ensureDirectories() // Ensure full paths created on first access
     }
@@ -98,24 +108,40 @@ class RecordingStorage(private val cachedMetadataDao: CachedRecordingMetadataDao
             val path = "recordings/${Firebase.auth.currentUser!!.uid}/$id"
             val ref = Firebase.storage.reference(path)
 
-            // Grab metadata from firebase and insert/update in local db
+            // Grab metadata from firebase to learn the original PCM sample rate
             val fbMeta = ref.getMetadata()
             val sampleRate = fbMeta?.customMetadata?.get("sampleRate")?.toInt()
                 ?: error("Sample rate for recording $id not in firebase metadata")
-            val contentType = fbMeta.contentType
-                ?: error("Content type for recording $id not in firebase metadata")
-            cachedMetadata = CachedRecordingMetadata(id, sampleRate, contentType)
-            cachedMetadataDao.insertOrReplace(cachedMetadata)
 
-            val channel = ref.openReadChannel()
-            val sink = SystemFileSystem.sink(cachedPath).buffered()
-            sink.use { output ->
-                val buf = ByteArray(FS_WRITE_BUFFER_SIZE)
-                while (!channel.exhausted()) {
-                    val read = channel.readAvailable(buf)
-                    output.write(buf, 0, read)
+            // Download the M4A payload to a temporary file in the cache directory
+            val m4aTempPath = Path(getRecordingsCacheDirectory(), "$id.download.m4a")
+            try {
+                val channel = ref.openReadChannel()
+                SystemFileSystem.sink(m4aTempPath).buffered().use { output ->
+                    val buf = ByteArray(FS_WRITE_BUFFER_SIZE)
+                    while (!channel.exhausted()) {
+                        val read = channel.readAvailable(buf)
+                        output.write(buf, 0, read)
+                    }
+                }
+
+                // Decode M4A back to raw PCM and persist to the cache path
+                val m4aBytes = SystemFileSystem.source(m4aTempPath).buffered().use { src ->
+                    src.readByteArray()
+                }
+                val decoded = m4aDecoder.decode(m4aBytes)
+                SystemFileSystem.sink(cachedPath).buffered().use { sink ->
+                    for (s in decoded.samples) sink.writeShortLe(s)
+                }
+            } finally {
+                if (SystemFileSystem.exists(m4aTempPath)) {
+                    SystemFileSystem.delete(m4aTempPath)
                 }
             }
+
+            // Cached file is raw PCM regardless of upload format
+            cachedMetadata = CachedRecordingMetadata(id, sampleRate, PCM_MIME)
+            cachedMetadataDao.insertOrReplace(cachedMetadata)
         }
         val size = SystemFileSystem.metadataOrNull(cachedPath)?.size
             ?: error("Failed to get size of recording $id")
@@ -152,17 +178,46 @@ class RecordingStorage(private val cachedMetadataDao: CachedRecordingMetadataDao
             require(SystemFileSystem.exists(source)) {
                 "Recording $idToMove does not exist in cache"
             }
-            Firebase.storage.reference(destination)
-                .putFile(
-                    getFirebaseStorageFile(source),
-                    FirebaseStorageMetadata(
-                        contentType = cachedMetadata.mimeType,
-                        customMetadata = mutableMapOf(
-                            "sampleRate" to cachedMetadata.sampleRate.toString()
+
+            // Read raw PCM samples from cache and encode to M4A for upload
+            val samples = readPcmFile(source)
+            val m4aBytes = m4aEncoder.encode(samples, cachedMetadata.sampleRate)
+            val m4aTempPath = Path(getRecordingsCacheDirectory(), "$idToMove.upload.m4a")
+            SystemFileSystem.sink(m4aTempPath).buffered().use { it.write(m4aBytes) }
+
+            try {
+                Firebase.storage.reference(destination)
+                    .putFile(
+                        getFirebaseStorageFile(m4aTempPath),
+                        FirebaseStorageMetadata(
+                            contentType = M4A_MIME,
+                            customMetadata = mutableMapOf(
+                                "sampleRate" to cachedMetadata.sampleRate.toString()
+                            )
                         )
                     )
-                )
+            } finally {
+                if (SystemFileSystem.exists(m4aTempPath)) {
+                    SystemFileSystem.delete(m4aTempPath)
+                }
+            }
         }
+    }
+
+    /**
+     * Read a raw PCM 16-bit little-endian mono file into a ShortArray.
+     */
+    private fun readPcmFile(path: Path): ShortArray {
+        val size = SystemFileSystem.metadataOrNull(path)?.size
+            ?: error("Failed to get size of recording at $path")
+        val numSamples = (size / 2).toInt()
+        val samples = ShortArray(numSamples)
+        SystemFileSystem.source(path).buffered().use { src ->
+            for (i in 0 until numSamples) {
+                samples[i] = src.readShortLe()
+            }
+        }
+        return samples
     }
 
     /**

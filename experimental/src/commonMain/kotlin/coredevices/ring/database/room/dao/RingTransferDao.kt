@@ -88,7 +88,7 @@ interface RingTransferDao {
     fun getTransferWithFeedItemByIdFlow(transferId: Long): Flow<RingTransferFeedItem?>
 
     @Query("SELECT * FROM RingTransfer WHERE recordingId = :recordingId")
-    fun getByRecordingId(recordingId: Long): List<RingTransfer>
+    suspend fun getByRecordingId(recordingId: Long): List<RingTransfer>
 }
 
 data class TransferInfoUpdate(

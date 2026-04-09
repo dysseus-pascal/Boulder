@@ -16,6 +16,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
+import coredevices.ring.util.M4AReader
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +102,23 @@ class RecordingDetailsViewModel(
         item.fileName?.let {
             playbackState.value = MessagePlaybackState.Buffering(item.userMessageId ?: -1)
             val (samples, info) = recordingStorage.openRecordingSource("$it-clean")
-            audioPlayer.playRaw(samples, info.cachedMetadata.sampleRate.toLong(), AudioEncoding.PCM_16BIT, info.size)
+            withContext(Dispatchers.IO) {
+                when (info.cachedMetadata.mimeType) {
+                    "audio/raw" -> audioPlayer.playRaw(samples, info.cachedMetadata.sampleRate.toLong(), AudioEncoding.PCM_16BIT, info.size)
+                    "audio/m4a" -> {
+                        try {
+                            M4AReader(samples).use { reader ->
+                                audioPlayer.playAAC(reader.readADTS(), reader.sampleRate.toLong())
+                            }
+                        } catch (e: Exception) {
+                            logger.e(e) { "Error playing M4A audio" }
+                            snackbarHostState.showSnackbar("Unable to play audio: $e")
+                            playbackState.value = MessagePlaybackState.Stopped
+                        }
+                    }
+                }
+            }
+
         }
     }
 

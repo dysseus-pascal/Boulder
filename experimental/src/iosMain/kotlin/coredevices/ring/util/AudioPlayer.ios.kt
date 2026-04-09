@@ -2,11 +2,15 @@ package coredevices.ring.util
 
 import coredevices.util.AudioEncoding
 import kotlinx.cinterop.ObjCObjectVar
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.allocPointerTo
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.alloc
 import kotlinx.cinterop.pointed
+import kotlinx.cinterop.ptr
 import kotlinx.cinterop.refTo
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,9 +27,15 @@ import platform.AVFAudio.AVAudioFormat
 import platform.AVFAudio.AVAudioPCMBuffer
 import platform.AVFAudio.AVAudioPCMFormatFloat32
 import platform.AVFAudio.AVAudioPCMFormatInt16
+import platform.AVFAudio.AVAudioPlayer
+import platform.AVFAudio.AVAudioPlayerDelegateProtocol
 import platform.AVFAudio.AVAudioPlayerNode
+import platform.Foundation.NSData
 import platform.Foundation.NSError
 import platform.posix.memcpy
+import kotlinx.io.readByteArray
+import platform.Foundation.create
+import platform.darwin.NSObject
 import kotlin.coroutines.resume
 
 fun AudioEncoding.toAVAudioFormat(sampleRate: Int, channels: Int = 1) = when (this) {
@@ -112,6 +122,40 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
                 avAudioEngine.stop()
                 playbackState.value = PlaybackState.Stopped
             }
+        }
+    }
+
+    actual fun playAAC(samples: Source, sampleRate: Long) {
+        playJob?.cancel()
+        playbackState.value = PlaybackState.Stopped
+        playJob = scope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                samples.use { it.readByteArray() }
+            }
+            val nsData = bytes.usePinned { pinned ->
+                NSData.create(bytes = pinned.addressOf(0), length = bytes.size.toULong())
+            }
+            val player = memScoped {
+                val error = alloc<ObjCObjectVar<NSError?>>()
+                AVAudioPlayer(data = nsData, error = error.ptr)
+            }
+            player.setVolume(AUDIO_PLAYER_VOLUME)
+            player.prepareToPlay()
+            playbackState.value = PlaybackState.Playing(0.0)
+            suspendCancellableCoroutine<Unit> { cont ->
+                val delegate = object : NSObject(), AVAudioPlayerDelegateProtocol {
+                    override fun audioPlayerDidFinishPlaying(player: AVAudioPlayer, successfully: Boolean) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                    override fun audioPlayerDecodeErrorDidOccur(player: AVAudioPlayer, error: NSError?) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                }
+                player.delegate = delegate
+                cont.invokeOnCancellation { player.stop() }
+                player.play()
+            }
+            playbackState.value = PlaybackState.Stopped
         }
     }
 

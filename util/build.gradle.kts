@@ -53,6 +53,16 @@ val properties = Properties().apply {
 }
 
 val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+val useKrispStubsForTests =
+    (properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: project.properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: System.getenv("USE_KRISP_STUBS_FOR_TESTS")
+        ?: "true") == "true"
+val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':').lowercase() }
+val isTestLikeInvocation = requestedTaskNames.any { taskName ->
+    taskName.contains("test") || taskName == "check"
+}
+val useKrispArtifact = enableKrisp && !(useKrispStubsForTests && isTestLikeInvocation)
 
 kotlin {
 
@@ -133,7 +143,7 @@ kotlin {
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
-                if (enableKrisp) {
+                if (useKrispArtifact) {
                     implementation(libs.coredevices.krispPrivate)
                 } else {
                     implementation(project(":krisp-stubs"))

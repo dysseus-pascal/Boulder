@@ -81,6 +81,7 @@ class PebbleAppDelegate(
             GlobalScope.launch {
                 appResumed.appResumed.collect {
                     libPebble.doStuffAfterPermissionsGranted()
+                    libPebble.updateTimeIfNeeded()
                 }
             }
             GlobalScope.launch {

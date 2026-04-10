@@ -121,6 +121,9 @@ class FakeLibPebble : LibPebble {
     override fun checkForFirmwareUpdates() {
     }
 
+    override suspend fun updateTimeIfNeeded() {
+    }
+
     // Scanning interface
     override val bluetoothEnabled: StateFlow<BluetoothState> =
         MutableStateFlow(BluetoothState.Enabled)
@@ -592,6 +595,7 @@ class FakeConnectedDevice(
     )
 
     override suspend fun updateTime() {}
+    override suspend fun updateTimeIfNeeded() {}
 
     override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> {
         return MutableSharedFlow()

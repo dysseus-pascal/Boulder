@@ -101,6 +101,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 
     fun doStuffAfterPermissionsGranted()
     fun checkForFirmwareUpdates()
+    suspend fun updateTimeIfNeeded()
 }
 
 sealed class UserFacingError {
@@ -408,6 +409,10 @@ class LibPebble3(
 
     override fun checkForFirmwareUpdates() {
         forEachConnectedWatchInAnyState { checkforFirmwareUpdate() }
+    }
+
+    override suspend fun updateTimeIfNeeded() {
+        forEachConnectedWatch { updateTimeIfNeeded() }
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {

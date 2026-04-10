@@ -11,10 +11,21 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     }
 
     actual val approvedIds: StateFlow<Set<String>> = MutableStateFlow(emptySet())
+    actual val approvedContacts: StateFlow<List<SettingsBeeperContact>> = MutableStateFlow(emptyList())
+    actual val hasPermission: StateFlow<Boolean> = MutableStateFlow(true)
 
-    actual fun toggleContact(contactId: String) {
+    actual fun addContact(roomId: String, contact: SettingsBeeperContact) {
+    }
+
+    actual fun removeContact(roomId: String) {
     }
 
     actual fun persist() {
+    }
+
+    actual fun refreshPermission() {
+    }
+
+    actual fun loadApprovedContacts() {
     }
 }

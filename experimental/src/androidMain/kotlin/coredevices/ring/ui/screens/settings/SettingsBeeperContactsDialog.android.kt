@@ -2,7 +2,9 @@ package coredevices.ring.ui.screens.settings
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.core.database.getStringOrNull
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
@@ -25,27 +27,153 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     private val contentResolver: ContentResolver by lazy { context.contentResolver }
     private val prefs: Preferences by inject()
 
+    private val _hasPermission = MutableStateFlow(checkBeeperPermission())
+    actual val hasPermission: StateFlow<Boolean> = _hasPermission.asStateFlow()
+
+    private fun checkBeeperPermission(): Boolean {
+        return context.checkSelfPermission("com.beeper.android.permission.READ_PERMISSION") == PackageManager.PERMISSION_GRANTED
+    }
+
+    actual fun refreshPermission() {
+        _hasPermission.value = checkBeeperPermission()
+    }
+
     private val _approvedIds = MutableStateFlow(
         prefs.approvedBeeperContacts.value.toHashSet()
     )
     actual val approvedIds: StateFlow<Set<String>> = _approvedIds.asStateFlow()
 
+    private val _approvedContacts = MutableStateFlow<List<SettingsBeeperContact>>(emptyList())
+    actual val approvedContacts: StateFlow<List<SettingsBeeperContact>> = _approvedContacts.asStateFlow()
+
+    actual fun loadApprovedContacts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ids = _approvedIds.value
+            if (ids.isEmpty()) {
+                _approvedContacts.value = emptyList()
+                return@launch
+            }
+            try {
+                val results = mutableListOf<SettingsBeeperContact>()
+                val foundRoomIds = mutableSetOf<String>()
+
+                // First, try loading as roomIds (new format)
+                val roomIdCandidates = ids.filter { it.startsWith("!") }
+                if (roomIdCandidates.isNotEmpty()) {
+                    val uri = BeeperAPI.CHATS_URI.toUri().buildUpon()
+                        .appendQueryParameter("roomIds", roomIdCandidates.joinToString(","))
+                        .build()
+                    loadChatsFromUri(uri, results, foundRoomIds)
+                }
+
+                // Then, try loading as contact/sender IDs (old format) via contacts API
+                val contactIdCandidates = ids.filter { it.startsWith("@") }
+                if (contactIdCandidates.isNotEmpty()) {
+                    val contactsUri = BeeperAPI.CONTACTS_URI.toUri().buildUpon()
+                        .appendQueryParameter("senderIds", contactIdCandidates.joinToString(","))
+                        .build()
+                    contentResolver.query(contactsUri, null, null, null, null)?.use { c ->
+                        val idIdx = c.getColumnIndexOrThrow("id")
+                        val nameIdx = c.getColumnIndexOrThrow("displayName")
+                        val protocolIdx = c.getColumnIndexOrThrow("protocol")
+                        val roomIdsIdx = c.getColumnIndex("roomIds")
+                        while (c.moveToNext()) {
+                            val contactId = c.getString(idIdx)
+                            val name = c.getString(nameIdx)
+                            val protocol = c.getString(protocolIdx)
+                            val roomIds = if (roomIdsIdx >= 0) c.getStringOrNull(roomIdsIdx) else null
+                            val firstRoom = roomIds?.split(",")?.firstOrNull()
+                            if (firstRoom != null && !foundRoomIds.contains(firstRoom)) {
+                                foundRoomIds.add(firstRoom)
+                                results.add(SettingsBeeperContact(
+                                    id = contactId,
+                                    name = name,
+                                    protocol = protocol,
+                                    roomId = firstRoom
+                                ))
+                                // Migrate: replace old contact ID with roomId in approved set
+                                val updated = HashSet(_approvedIds.value)
+                                updated.remove(contactId)
+                                updated.add(firstRoom)
+                                _approvedIds.value = updated
+                            }
+                        }
+                    }
+                }
+
+                _approvedContacts.value = results
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Permission denied loading approved contacts")
+                _approvedContacts.value = emptyList()
+            }
+        }
+    }
+
+    private fun loadChatsFromUri(uri: Uri, results: MutableList<SettingsBeeperContact>, foundRoomIds: MutableSet<String>) {
+        contentResolver.query(
+            uri,
+            arrayOf("roomId", "title", "timestamp", "oneToOne", "protocol", "senderEntityId"),
+            null, null, "timestamp DESC"
+        )?.use { c ->
+            val roomIdIdx = c.getColumnIndexOrThrow("roomId")
+            val titleIdx = c.getColumnIndex("title")
+            val tsIdx = c.getColumnIndexOrThrow("timestamp")
+            val oneToOneIdx = c.getColumnIndex("oneToOne")
+            val protocolIdx = c.getColumnIndex("protocol")
+            val senderIdx = c.getColumnIndex("senderEntityId")
+            while (c.moveToNext()) {
+                val roomId = c.getString(roomIdIdx)
+                val title = if (titleIdx >= 0) c.getStringOrNull(titleIdx) else null
+                val timestamp = c.getLong(tsIdx)
+                val isOneToOne = if (oneToOneIdx >= 0) c.getInt(oneToOneIdx) == 1 else true
+                val protocol = if (protocolIdx >= 0) c.getStringOrNull(protocolIdx) ?: "" else ""
+                val senderId = if (senderIdx >= 0) c.getStringOrNull(senderIdx) else null
+                foundRoomIds.add(roomId)
+                results.add(SettingsBeeperContact(
+                    id = senderId ?: roomId,
+                    name = title ?: roomId,
+                    protocol = protocol,
+                    roomId = roomId,
+                    chatTitle = if (!isOneToOne) title else null,
+                    isGroupChat = !isOneToOne,
+                    lastMessageTimestamp = timestamp
+                ))
+            }
+        }
+    }
+
     actual fun getContacts(query: String?): PagingSource<Int, SettingsBeeperContact> {
         return BeeperContactsPagingSource(contentResolver, query, _approvedIds.value)
     }
 
-    actual fun toggleContact(contactId: String) {
+    actual fun addContact(roomId: String, contact: SettingsBeeperContact) {
+        Log.d(TAG, "addContact: roomId=$roomId")
         val updated = HashSet(_approvedIds.value)
-        if (!updated.remove(contactId)) {
-            updated.add(contactId)
-        }
+        updated.add(roomId)
         _approvedIds.value = updated
+        val currentList = _approvedContacts.value.toMutableList()
+        if (currentList.none { it.roomId == roomId }) {
+            currentList.add(0, contact)
+            _approvedContacts.value = currentList
+        }
+    }
+
+    actual fun removeContact(roomId: String) {
+        Log.d(TAG, "removeContact: roomId=$roomId")
+        val updated = HashSet(_approvedIds.value)
+        updated.remove(roomId)
+        _approvedIds.value = updated
+        _approvedContacts.value = _approvedContacts.value.filter { (it.roomId ?: it.id) != roomId }
     }
 
     actual fun persist() {
         viewModelScope.launch {
             prefs.setApprovedBeeperContacts(_approvedIds.value.toList())
         }
+    }
+
+    companion object {
+        private const val TAG = "BeeperContacts"
     }
 }
 
@@ -55,28 +183,44 @@ class BeeperContactsPagingSource(
     private val approvedIds: Set<String>
 ) : PagingSource<Int, SettingsBeeperContact>() {
 
+    companion object {
+        private const val TAG = "BeeperContacts"
+    }
+
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, SettingsBeeperContact> {
         val offset = params.key ?: 0
         val limit = params.loadSize
 
         return try {
-            val contacts = withContext(Dispatchers.IO) {
-                fetchContactsWithTimestamps(limit, offset)
+            val contacts: List<ContactWithTimestamp> = if (query.isNullOrBlank()) {
+                withContext(Dispatchers.IO) { fetchChatsDirectly(limit, offset) }
+            } else {
+                withContext(Dispatchers.IO) { fetchContactsWithTimestamps(limit, offset) }
             }
 
-            // Deduplicate by id, keeping the one with the most recent timestamp
-            val deduped = contacts
-                .groupBy { it.id }
-                .map { (_, dupes) -> dupes.maxByOrNull { it.timestamp } ?: dupes.first() }
+            // Deduplicate by roomId
+            val seenRoomIds = mutableSetOf<String>()
+            val deduped = contacts.filter { c ->
+                val roomId = c.roomId
+                if (roomId == null) true else seenRoomIds.add(roomId)
+            }
 
-            // Sort: approved first, then by recency within each group
+            // Sort: approved first (keyed by roomId), then by recency
             val sorted = deduped.sortedWith(
-                compareByDescending<ContactWithTimestamp> { approvedIds.contains(it.id) }
+                compareByDescending<ContactWithTimestamp> { approvedIds.contains(it.roomId ?: it.id) }
                     .thenByDescending { it.timestamp }
             )
 
             val result = sorted.map {
-                SettingsBeeperContact(id = it.id, name = it.name, protocol = it.protocol)
+                SettingsBeeperContact(
+                    id = it.id,
+                    name = it.name,
+                    protocol = it.protocol,
+                    roomId = it.roomId,
+                    chatTitle = it.chatTitle,
+                    isGroupChat = it.isGroupChat,
+                    lastMessageTimestamp = it.timestamp
+                )
             }
 
             LoadResult.Page(
@@ -84,33 +228,90 @@ class BeeperContactsPagingSource(
                 prevKey = if (offset == 0) null else (offset - limit).coerceAtLeast(0),
                 nextKey = if (contacts.isEmpty()) null else offset + contacts.size
             )
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Permission denied querying Beeper")
+            LoadResult.Error(e)
         } catch (e: Exception) {
+            Log.e(TAG, "load() failed: ${e.message}", e)
             LoadResult.Error(e)
         }
     }
+
+    private data class ChatInfo(
+        val roomId: String,
+        val timestamp: Long,
+        val title: String?,
+        val isOneToOne: Boolean
+    )
 
     private data class ContactWithTimestamp(
         val id: String,
         val name: String,
         val protocol: String,
+        val roomId: String?,
+        val chatTitle: String?,
+        val isGroupChat: Boolean,
         val timestamp: Long
     )
 
+    /** Fast path: query chats API directly, already sorted by timestamp DESC */
+    private fun fetchChatsDirectly(limit: Int, offset: Int): List<ContactWithTimestamp> {
+        val uri = BeeperAPI.CHATS_URI.toUri().buildUpon()
+            .appendQueryParameter("limit", limit.toString())
+            .appendQueryParameter("offset", offset.toString())
+            .build()
+
+        val results = mutableListOf<ContactWithTimestamp>()
+
+        contentResolver.query(
+            uri,
+            arrayOf("roomId", "title", "timestamp", "oneToOne", "protocol", "senderEntityId"),
+            null, null, "timestamp DESC"
+        )?.use { c ->
+            val roomIdIdx = c.getColumnIndexOrThrow("roomId")
+            val titleIdx = c.getColumnIndex("title")
+            val tsIdx = c.getColumnIndexOrThrow("timestamp")
+            val oneToOneIdx = c.getColumnIndex("oneToOne")
+            val protocolIdx = c.getColumnIndex("protocol")
+            val senderIdx = c.getColumnIndex("senderEntityId")
+
+            while (c.moveToNext()) {
+                val roomId = c.getString(roomIdIdx)
+                val title = if (titleIdx >= 0) c.getStringOrNull(titleIdx) else null
+                val timestamp = c.getLong(tsIdx)
+                val isOneToOne = if (oneToOneIdx >= 0) c.getInt(oneToOneIdx) == 1 else true
+                val protocol = if (protocolIdx >= 0) c.getStringOrNull(protocolIdx) ?: "" else ""
+                val senderId = if (senderIdx >= 0) c.getStringOrNull(senderIdx) else null
+
+                results.add(ContactWithTimestamp(
+                    id = senderId ?: roomId,
+                    name = title ?: roomId,
+                    protocol = protocol,
+                    roomId = roomId,
+                    chatTitle = if (!isOneToOne) title else null,
+                    isGroupChat = !isOneToOne,
+                    timestamp = timestamp
+                ))
+            }
+        }
+
+        return results
+    }
+
+    /** Slow path: search contacts by name, then resolve each to their latest chat */
     private fun fetchContactsWithTimestamps(limit: Int, offset: Int): List<ContactWithTimestamp> {
         val uriBuilder = BeeperAPI.CONTACTS_URI.toUri().buildUpon()
             .appendQueryParameter("limit", limit.toString())
             .appendQueryParameter("offset", offset.toString())
 
         if (!query.isNullOrBlank()) {
-            uriBuilder.appendQueryParameter("query", Uri.encode(query))
+            uriBuilder.appendQueryParameter("query", query)
         }
 
         val uri = uriBuilder.build()
-        val proj = arrayOf("id", "displayName", "protocol", "roomIds")
-        val cursor = contentResolver.query(uri, proj, null, null, null)
         val contacts = mutableListOf<ContactWithTimestamp>()
 
-        cursor?.use { c ->
+        contentResolver.query(uri, arrayOf("id", "displayName", "protocol", "roomIds"), null, null, null)?.use { c ->
             val idIdx = c.getColumnIndexOrThrow("id")
             val nameIdx = c.getColumnIndexOrThrow("displayName")
             val protocolIdx = c.getColumnIndexOrThrow("protocol")
@@ -122,38 +323,59 @@ class BeeperContactsPagingSource(
                 val protocol = c.getString(protocolIdx)
                 val roomIds = if (roomIdsIdx >= 0) c.getStringOrNull(roomIdsIdx) else null
 
-                val timestamp = if (!roomIds.isNullOrBlank()) {
-                    getLatestTimestamp(roomIds)
-                } else {
-                    0L
-                }
+                val chatInfo = if (!roomIds.isNullOrBlank()) {
+                    getLatestChatInfo(roomIds)
+                } else null
 
-                contacts.add(ContactWithTimestamp(id = id, name = name, protocol = protocol, timestamp = timestamp))
+                contacts.add(ContactWithTimestamp(
+                    id = id,
+                    name = name,
+                    protocol = protocol,
+                    roomId = chatInfo?.roomId,
+                    chatTitle = chatInfo?.title,
+                    isGroupChat = chatInfo?.isOneToOne == false,
+                    timestamp = chatInfo?.timestamp ?: 0L
+                ))
             }
         }
 
         return contacts
     }
 
-    private fun getLatestTimestamp(roomIds: String): Long {
+    /** Returns ChatInfo for the most recent one-to-one chat, or most recent group chat as fallback */
+    private fun getLatestChatInfo(roomIds: String): ChatInfo? {
         val chatsUri = BeeperAPI.CHATS_URI.toUri().buildUpon()
             .appendQueryParameter("roomIds", roomIds)
             .build()
 
-        var latest = 0L
+        var bestChat: ChatInfo? = null
+
         contentResolver.query(
             chatsUri,
-            arrayOf("timestamp"),
-            null,
-            null,
-            "timestamp DESC"
+            arrayOf("roomId", "timestamp", "oneToOne", "title"),
+            null, null, "timestamp DESC"
         )?.use { c ->
+            val roomIdIdx = c.getColumnIndexOrThrow("roomId")
             val tsIdx = c.getColumnIndexOrThrow("timestamp")
-            if (c.moveToFirst()) {
-                latest = c.getLong(tsIdx)
+            val oneToOneIdx = c.getColumnIndex("oneToOne")
+            val titleIdx = c.getColumnIndex("title")
+
+            while (c.moveToNext()) {
+                val roomId = c.getString(roomIdIdx)
+                val timestamp = c.getLong(tsIdx)
+                val isOneToOne = if (oneToOneIdx >= 0) c.getInt(oneToOneIdx) == 1 else true
+                val title = if (titleIdx >= 0) c.getStringOrNull(titleIdx) else null
+
+                if (isOneToOne) {
+                    return ChatInfo(roomId, timestamp, title, true)
+                }
+                if (bestChat == null || timestamp > bestChat!!.timestamp) {
+                    bestChat = ChatInfo(roomId, timestamp, title, false)
+                }
             }
         }
-        return latest
+
+        return bestChat
     }
 
     override fun getRefreshKey(state: PagingState<Int, SettingsBeeperContact>): Int? {

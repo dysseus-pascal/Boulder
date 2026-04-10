@@ -14,35 +14,74 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.time.Instant
 
 class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao("recordings", dbProvider) {
+    private val collection get() = authenticatedId?.let { db.collection("$it/recordings") }
+        ?: throw IllegalStateException("Not authenticated — cannot access recordings")
+
     suspend fun addRecording(
         recording: RecordingDocument
     ): DocumentReference {
-        return db.collection("$authenticatedId/recordings").add(recording)
+        return collection.add(recording)
+    }
+
+    suspend fun setRecording(id: String, recording: RecordingDocument) {
+        collection.document(id).set(recording)
     }
 
     fun changesFlow(): Flow<QuerySnapshot> {
-        return db.collection("$authenticatedId/recordings").snapshots
+        return collection.snapshots
     }
 
     suspend fun recordingsSince(since: Instant): QuerySnapshot {
-        return db.collection("$authenticatedId/recordings")
-            .where {
-                "updated" greaterThan since.toEpochMilliseconds()
-            }
+        return collection
+            .where { "updated" greaterThan since.toEpochMilliseconds() }
             .get()
     }
 
     suspend fun getPaginated(limit: Int, startAfter: DocumentSnapshot? = null, source: Source = Source.DEFAULT): QuerySnapshot {
-        return db.collection("$authenticatedId/recordings")
+        return collection
             .orderBy("timestamp", Direction.DESCENDING)
             .limit(limit)
             .let { if (startAfter != null) it.startAfter(startAfter) else it }
             .get(source)
     }
 
-    fun getRecording(
-        id: String
-    ): DocumentReference {
-        return db.collection("$authenticatedId/recordings").document(id)
+    fun getRecording(id: String): DocumentReference {
+        return collection.document(id)
+    }
+
+    suspend fun getCount(): Int {
+        var count = 0
+        var cursor: DocumentSnapshot? = null
+        while (true) {
+            val snapshot = getPaginated(500, cursor)
+            val docs = snapshot.documents
+            if (docs.isEmpty()) break
+            count += docs.size
+            cursor = docs.lastOrNull()
+        }
+        return count
+    }
+
+    suspend fun deleteRecordingsByIds(ids: List<String>) {
+        for (chunk in ids.chunked(500)) {
+            val batch = db.batch()
+            for (id in chunk) {
+                batch.delete(collection.document(id))
+            }
+            batch.commit()
+        }
+    }
+
+    suspend fun deleteAllRecordings() {
+        while (true) {
+            val snapshot = getPaginated(500)
+            val docs = snapshot.documents
+            if (docs.isEmpty()) break
+            val batch = db.batch()
+            for (doc in docs) {
+                batch.delete(collection.document(doc.id))
+            }
+            batch.commit()
+        }
     }
 }

@@ -18,11 +18,18 @@ class RecordingRepository(
     private val recordingEntryDao: RecordingEntryDao,
     private val db: RingDatabase
 ) {
-    suspend fun createRecording(firestoreId: String? = null, localTimestamp: Instant = Clock.System.now()): Long {
+    suspend fun createRecording(
+        firestoreId: String? = null,
+        localTimestamp: Instant = Clock.System.now(),
+        assistantTitle: String? = null,
+        updated: Long? = null
+    ): Long {
         return localRecordingDao.insertRecording(
             LocalRecording(
                 firestoreId = firestoreId,
                 localTimestamp = localTimestamp,
+                assistantTitle = assistantTitle,
+                updated = updated?.let { Instant.fromEpochMilliseconds(it) } ?: Clock.System.now()
             )
         )
     }
@@ -39,6 +46,12 @@ class RecordingRepository(
     suspend fun updateRecordingFirestoreId(id: Long, firestoreId: String) =
         localRecordingDao.updateRecordingFirestoreId(id, firestoreId)
 
+    /** Explicitly set `LocalRecording.updated`. Used by restore paths to pin the
+     *  timestamp to the document's `updated` value after inserting entries/messages
+     *  (which would otherwise auto-bump it to now via the DAO wrappers). */
+    suspend fun setRecordingUpdated(id: Long, updated: Instant) =
+        localRecordingDao.setUpdated(id, updated)
+
     suspend fun getRecording(id: Long): LocalRecording? =
         localRecordingDao.getRecording(id)
 
@@ -50,4 +63,10 @@ class RecordingRepository(
 
     fun getPaginatedFeedItems() =
         localRecordingDao.getPaginatedFeedItems()
+
+    suspend fun getAllFirestoreIds(): Set<String> =
+        localRecordingDao.getAllFirestoreIds().toHashSet()
+
+    suspend fun deleteAllLocalRecordings() =
+        localRecordingDao.deleteAll()
 }

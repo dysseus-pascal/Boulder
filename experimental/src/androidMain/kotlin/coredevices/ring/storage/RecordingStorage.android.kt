@@ -19,7 +19,7 @@ internal actual fun getRecordingsDataDirectory(): Path {
     return Path(context.filesDir.resolve("recordings").absolutePath)
 }
 
-internal actual fun getFirebaseStorageFile(path: Path): File {
+actual fun getFirebaseStorageFile(path: Path): File {
     val file = java.io.File(path.toString())
     return File(Uri.fromFile(file))
 }

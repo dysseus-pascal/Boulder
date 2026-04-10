@@ -203,6 +203,8 @@ kotlin {
                 implementation(libs.androidx.glance.material3)
                 implementation(compose.uiTooling)
                 implementation(libs.identity.google)
+                implementation(libs.androidx.credentials)
+                implementation(libs.zxing.core)
             }
         }
 

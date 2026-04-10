@@ -190,7 +190,7 @@ class RecordingDetailsViewModel(
     }
 }
 
-expect suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path)
+expect suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mimeType: String = "audio/wav")
 
 sealed class MessagePlaybackState {
     data class Playing(val id: Long, val percentageComplete: Double): MessagePlaybackState()

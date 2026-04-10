@@ -12,7 +12,7 @@ import platform.UIKit.UIDocumentPickerViewController
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
 
-actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path) {
+actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mimeType: String) {
     val url = NSURL.fileURLWithPath(path.toString())
     val picker = UIDocumentPickerViewController(forExportingURLs = listOf(url), asCopy = true)
 

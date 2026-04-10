@@ -4,6 +4,16 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class EncryptionInfo(
+    @SerialName("key_fingerprint")
+    val keyFingerprint: String,
+    @SerialName("created_at")
+    val createdAt: String,
+    @SerialName("key_backup_location")
+    val keyBackupLocation: String,
+)
+
+@Serializable
 data class User(
     @SerialName("notion_token")
     val notionToken: String? = null,
@@ -17,4 +27,5 @@ data class User(
     val pebbleUserToken: String? = null,
     @SerialName("last_connected_watch")
     val lastConnectedWatch: String? = null,
+    val encryption: EncryptionInfo? = null,
 )

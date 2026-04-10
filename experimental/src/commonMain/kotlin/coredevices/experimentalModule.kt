@@ -51,6 +51,7 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.RingCompanionDeviceManager
 import coredevices.ring.util.trace.RingTraceSession
@@ -162,6 +163,7 @@ val experimentalModule = module {
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RecordingStorage)
+    singleOf(::DocumentEncryptor)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
     singleOf(::RingBackgroundManager)

@@ -27,6 +27,9 @@ interface Preferences {
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
     val noteShortcut: StateFlow<NoteShortcutType>
+    val backupEnabled: StateFlow<Boolean>
+    val useEncryption: StateFlow<Boolean>
+    val encryptionKeyFingerprint: StateFlow<String?>
 
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
@@ -40,6 +43,9 @@ interface Preferences {
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
     fun setNoteShortcut(shortcut: NoteShortcutType)
+    fun setBackupEnabled(enabled: Boolean)
+    fun setUseEncryption(enabled: Boolean)
+    fun setEncryptionKeyFingerprint(fingerprint: String?)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -95,6 +101,12 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     private val _noteShortcut = MutableStateFlow<NoteShortcutType>(settings.getStringOrNull("note_shortcut")
         ?.let { Json.decodeFromString(it) } ?: NoteShortcutType.SendToMe)
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
+    private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
+    override val backupEnabled = _backupEnabled.asStateFlow()
+    private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
+    override val useEncryption = _useEncryption.asStateFlow()
+    private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
+    override val encryptionKeyFingerprint = _encryptionKeyFingerprint.asStateFlow()
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -173,6 +185,25 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         val json = Json.encodeToString(shortcut)
         settings.putString("note_shortcut", json)
         _noteShortcut.value = shortcut
+    }
+
+    override fun setBackupEnabled(enabled: Boolean) {
+        settings.putBoolean("backup_enabled", enabled)
+        _backupEnabled.value = enabled
+    }
+
+    override fun setUseEncryption(enabled: Boolean) {
+        settings.putBoolean("use_encryption", enabled)
+        _useEncryption.value = enabled
+    }
+
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {
+        if (fingerprint != null) {
+            settings.putString("encryption_key_fingerprint", fingerprint)
+        } else {
+            settings.remove("encryption_key_fingerprint")
+        }
+        _encryptionKeyFingerprint.value = fingerprint
     }
 }
 

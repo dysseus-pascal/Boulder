@@ -5,7 +5,10 @@ import CoreNav
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -22,12 +25,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -36,6 +42,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -65,8 +73,14 @@ import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
+import kotlinx.coroutines.launch
+import coredevices.ring.ui.components.QrCodeImage
+import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.M3Dialog
+import coredevices.util.rememberUiContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.SignInDialog
 import coredevices.util.Platform
@@ -107,6 +121,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val secondaryMode by viewModel.secondaryMode.collectAsState()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
+    var showBackupDialog by remember { mutableStateOf(false) }
 
     if (showSignInDialog) {
         SignInDialog(onDismiss = { showSignInDialog = false })
@@ -167,6 +182,12 @@ fun IndexSettings(coreNav: CoreNav) {
     }
     if (webhookDialogOpen) {
         IndexWebhookSettingsDialog(webhookViewModel)
+    }
+    if (showBackupDialog) {
+        BackupDialog(
+            viewModel = viewModel,
+            onDismiss = { showBackupDialog = false }
+        )
     }
 
     Scaffold(
@@ -345,6 +366,13 @@ fun IndexSettings(coreNav: CoreNav) {
                         )
                     },
                     trailingContent = {}
+                )
+            }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable { showBackupDialog = true },
+                    headlineContent = { Text("Backup") },
+                    supportingContent = { Text("Sync, manage, or delete cloud backup") }
                 )
             }
             item {
@@ -721,6 +749,404 @@ fun NoteShortcutDialog(
                     Text(label)
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun BackupDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    val userId by viewModel.userId.collectAsState()
+    val syncing by viewModel.syncingFeedHistory.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
+    val backupDownloading by viewModel.backupDownloading.collectAsState()
+    val backupDownloadStatus by viewModel.backupDownloadStatus.collectAsState()
+    val importing by viewModel.importing.collectAsState()
+    val importStatus by viewModel.importStatus.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val backupCount by viewModel.backupCount.collectAsState()
+    val backupLoading by viewModel.backupLoading.collectAsState()
+    val backupStatus by viewModel.backupStatus.collectAsState()
+    val backupEnabled by viewModel.backupEnabled.collectAsState()
+    val hasLocalKey by viewModel.hasLocalKey.collectAsState()
+    val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
+    val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
+    val generatedKey by viewModel.generatedKey.collectAsState()
+    val uiContext = rememberUiContext()
+    val clipboardManager = LocalClipboardManager.current
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteInput by remember { mutableStateOf("") }
+    var showDeleteLocalConfirm by remember { mutableStateOf(false) }
+    var deleteLocalInput by remember { mutableStateOf("") }
+    var showOverwriteKeyConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadBackupCount()
+        viewModel.checkLocalKey()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearBackupStatus()
+            viewModel.clearEncryptionKeyStatus()
+        }
+    }
+
+    if (showOverwriteKeyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showOverwriteKeyConfirm = false },
+            title = { Text("Overwrite Encryption Key?") },
+            text = {
+                Text("An encryption key already exists. Generating a new one will overwrite it. Previously encrypted backups will not be decryptable with the new key.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOverwriteKeyConfirm = false
+                    uiContext?.let { viewModel.generateAndStoreKey(it) }
+                }) {
+                    Text("Overwrite", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverwriteKeyConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (generatedKey != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearGeneratedKey() },
+            title = { Text("Encryption Key Backup") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Save this key securely. You will need it to decrypt your backups.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        QrCodeImage(
+                            data = generatedKey!!,
+                            size = 220.dp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(generatedKey!!))
+                }) {
+                    Text("Copy Key")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.clearGeneratedKey() }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
+            title = { Text("Delete Backup") },
+            text = {
+                Column {
+                    Text(
+                        "This will permanently delete all your cloud backup data. This cannot be undone.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Type \"delete\" to confirm:")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = deleteInput,
+                        onValueChange = { deleteInput = it },
+                        singleLine = true,
+                        placeholder = { Text("delete") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteInput.equals("delete", ignoreCase = true) && !backupLoading,
+                    onClick = {
+                        viewModel.deleteBackup()
+                        showDeleteConfirm = false
+                        deleteInput = ""
+                    }
+                ) {
+                    Text("Delete", color = if (deleteInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false; deleteInput = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showDeleteLocalConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteLocalConfirm = false; deleteLocalInput = "" },
+            title = { Text("Delete Local Feed") },
+            text = {
+                Column {
+                    Text(
+                        "This will delete all recordings from the local feed on this device. Cloud backup is not affected. You can restore from cloud with Sync or from a backup zip with Import.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Type \"delete\" to confirm:")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = deleteLocalInput,
+                        onValueChange = { deleteLocalInput = it },
+                        singleLine = true,
+                        placeholder = { Text("delete") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteLocalInput.equals("delete", ignoreCase = true) && !backupLoading,
+                    onClick = {
+                        viewModel.deleteLocalFeed()
+                        showDeleteLocalConfirm = false
+                        deleteLocalInput = ""
+                    }
+                ) {
+                    Text("Delete", color = if (deleteLocalInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteLocalConfirm = false; deleteLocalInput = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup") },
+        buttons = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        }
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState())
+        ) {
+            // Backup count
+            ListItem(
+                headlineContent = { Text("Items in backup") },
+                supportingContent = {
+                    if (backupLoading && backupCount == null) {
+                        Text("Loading...")
+                    } else {
+                        Column {
+                            Text("${backupCount ?: "—"} recordings across all devices")
+                            if (userId != null) {
+                                Text("ID: $userId", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                },
+                trailingContent = {
+                    if (backupLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Backup enabled toggle
+            ListItem(
+                modifier = Modifier.clickable { viewModel.setBackupEnabled(!backupEnabled) },
+                headlineContent = { Text("Backup enabled") },
+                supportingContent = { Text("Automatically sync recordings to cloud") },
+                trailingContent = {
+                    Switch(
+                        checked = backupEnabled,
+                        onCheckedChange = { viewModel.setBackupEnabled(it) }
+                    )
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Sync now
+            ListItem(
+                modifier = Modifier.clickable(enabled = !syncing) {
+                    viewModel.downloadFeedHistory()
+                },
+                headlineContent = { Text("Sync now") },
+                supportingContent = {
+                    Text(syncStatus ?: "Upload local & download cloud recordings")
+                },
+                trailingContent = {
+                    if (syncing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Download full backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupDownloading && !syncing && uiContext != null) {
+                    uiContext?.let { viewModel.downloadFullBackup(it) }
+                },
+                headlineContent = { Text("Download Full Backup") },
+                supportingContent = {
+                    Text(backupDownloadStatus ?: "Download all recordings and data as a zip file")
+                },
+                trailingContent = {
+                    if (backupDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+
+            // Import backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
+                    scope.launch {
+                        val path = uiContext?.let { pickZipFile(it) }
+                        if (path != null) {
+                            viewModel.importBackup(path)
+                        }
+                    }
+                },
+                headlineContent = { Text("Import Backup") },
+                supportingContent = {
+                    Text(importStatus ?: "Restore recordings from a backup zip file")
+                },
+                trailingContent = {
+                    if (importing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Delete backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupLoading) {
+                    showDeleteConfirm = true
+                },
+                headlineContent = {
+                    Text("Delete my backup", color = MaterialTheme.colorScheme.error)
+                },
+                supportingContent = {
+                    Text(backupStatus ?: "Permanently delete all cloud data")
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // --- Encryption section ---
+            Text(
+                "Encryption",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // Generate encryption key
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
+                    if (hasLocalKey) {
+                        showOverwriteKeyConfirm = true
+                    } else {
+                        uiContext?.let { viewModel.generateAndStoreKey(it) }
+                    }
+                },
+                headlineContent = { Text("Generate Encryption Key") },
+                supportingContent = {
+                    Text(
+                        encryptionKeyStatus
+                            ?: if (hasLocalKey) "Key exists — tap to regenerate"
+                            else "Create AES-256 encryption key"
+                    )
+                },
+                trailingContent = {
+                    if (encryptionKeyLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+
+            // Read key from password manager
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
+                    uiContext?.let { viewModel.readKeyFromCloudKeychain(it) }
+                },
+                headlineContent = { Text("Restore Key from Password Manager") },
+                supportingContent = {
+                    Text("Read key from Google Password Manager or iCloud Keychain")
+                }
+            )
+
+            // Enable/disable encryption
+            val useEncryption by viewModel.useEncryption.collectAsState()
+            val migrationStatus by viewModel.migrationStatus.collectAsState()
+            val migrating by viewModel.migrating.collectAsState()
+
+            if (hasLocalKey) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !migrating) {
+                        if (!useEncryption) {
+                            viewModel.enableEncryption()
+                        } else {
+                            viewModel.disableEncryption()
+                        }
+                    },
+                    headlineContent = {
+                        Text(if (useEncryption) "Disable Encryption" else "Enable Encryption")
+                    },
+                    supportingContent = {
+                        Text(
+                            migrationStatus
+                                ?: if (useEncryption) "All new uploads are encrypted"
+                                else "Encrypt all recordings before uploading to cloud"
+                        )
+                    },
+                    trailingContent = {
+                        if (migrating) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // --- Danger zone ---
+            Text(
+                "Danger Zone",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupLoading) {
+                    showDeleteLocalConfirm = true
+                },
+                headlineContent = {
+                    Text("Delete local feed", color = MaterialTheme.colorScheme.error)
+                },
+                supportingContent = {
+                    Text("Remove all recordings from this device (cloud unaffected)")
+                }
+            )
         }
     }
 }

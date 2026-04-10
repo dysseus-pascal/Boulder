@@ -95,7 +95,8 @@ data class RecordingDocument(
      */
     @SerialName("assistant_session")
     val assistantSession: AssistantSessionDocument? = null,
-    val metadata: NoteMetadata? = null
+    val metadata: NoteMetadata? = null,
+    val encrypted: EncryptedEnvelope? = null,
 ) {
     fun firstUserMessage(): String {
         return assistantSession?.messages?.firstOrNull { it.role == MessageRole.user }?.content

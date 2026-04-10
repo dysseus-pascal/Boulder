@@ -130,6 +130,12 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val noteShortcut: StateFlow<NoteShortcutType>
         get() = TODO("Not yet implemented")
+    override val backupEnabled: StateFlow<Boolean>
+        get() = MutableStateFlow(true)
+    override val useEncryption: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
+    override val encryptionKeyFingerprint: StateFlow<String?>
+        get() = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         TODO("Not yet implemented")
@@ -179,6 +185,9 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
+    override fun setBackupEnabled(enabled: Boolean) {}
+    override fun setUseEncryption(enabled: Boolean) {}
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
 }
 
 private object UsersDaoTestImpl: UsersDao {

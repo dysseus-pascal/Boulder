@@ -1,8 +1,15 @@
 package coredevices.ring.service.recordings
 
 import co.touchlab.kermit.Logger
+import coredevices.indexai.data.entity.RecordingDocument
+import coredevices.indexai.data.entity.RecordingEntry
+import coredevices.indexai.database.dao.ConversationMessageDao
+import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.util.JsonSnake
+import coredevices.ring.database.Preferences
+import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.data.ProcessingTask
 import coredevices.ring.data.RecordingProcessingTask
@@ -18,6 +25,14 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.PersistentQueueScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -49,6 +64,90 @@ class RecordingProcessingQueue(
 ) {
     companion object {
         private val logger = Logger.withTag("RecordingProcessingQueue")
+    }
+
+    private val uploadingIds = mutableSetOf<Long>()
+
+    init {
+        // Observe local recordings and sync to Firestore. Mirrors the old RingService
+        // logic: on every emission, for each LocalRecording either (a) upload if it has
+        // no firestoreId, or (b) fetch the remote doc and compare `updated` timestamps,
+        // re-uploading when the local copy is newer. This catches incremental updates
+        // (entries/messages added after the initial row was created), which the
+        // firestoreId-only filter silently dropped.
+        val preferences: Preferences = get()
+        recordingRepository.getAllRecordings().drop(1).debounce(300).onEach { recordings ->
+            if (!preferences.backupEnabled.value) return@onEach
+            val firestoreRecordingsDao: FirestoreRecordingsDao = get()
+            val recordingEntryDao: RecordingEntryDao = get()
+            val conversationMessageDao: ConversationMessageDao = get()
+
+            val uploadOrUpdate = recordings.filter { localRecording ->
+                if (localRecording.id in uploadingIds) return@filter false
+                val firestoreId = localRecording.firestoreId ?: return@filter true
+                try {
+                    val remoteRecording = firestoreRecordingsDao.getRecording(firestoreId)
+                        .get().data<RecordingDocument>()
+                    remoteRecording.updated < localRecording.updated.toEpochMilliseconds()
+                } catch (e: Exception) {
+                    logger.e(e) { "Error fetching remote recording $firestoreId, will attempt to re-upload" }
+                    true
+                }
+            }
+            if (uploadOrUpdate.isEmpty()) return@onEach
+            logger.i { "Found ${uploadOrUpdate.size} local recordings to upload or update" }
+
+            for (localRecording in uploadOrUpdate) {
+                if (!uploadingIds.add(localRecording.id)) continue // already in-flight
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val entries = recordingEntryDao.getEntriesForRecording(localRecording.id).first()
+                        val messages = conversationMessageDao.getMessagesForRecording(localRecording.id).first()
+                        var doc = localRecording.toDocument(
+                            entries = entries.map {
+                                RecordingEntry(
+                                    timestamp = it.timestamp,
+                                    fileName = it.fileName,
+                                    status = it.status,
+                                    transcription = it.transcription,
+                                    transcribedUsingModel = it.transcribedUsingModel,
+                                    error = it.error,
+                                    ringTransferInfo = it.ringTransferInfo,
+                                    userMessageId = it.userMessageId
+                                )
+                            },
+                            messages = messages.map { it.document },
+                            metadata = null
+                        )
+                        if (preferences.useEncryption.value) {
+                            val encryptor: DocumentEncryptor = get()
+                            val key = encryptor.getKey()
+                            if (key != null) {
+                                doc = encryptor.encryptDocument(doc, key)
+                                logger.i { "Encrypted recording ${localRecording.id} before upload" }
+                            } else {
+                                logger.w { "Encryption enabled but no key available — uploading unencrypted" }
+                            }
+                        }
+                        val existingFirestoreId = localRecording.firestoreId
+                        if (existingFirestoreId == null) {
+                            val remoteId = firestoreRecordingsDao.addRecording(doc).id
+                            recordingRepository.updateRecordingFirestoreId(localRecording.id, remoteId)
+                            logger.i { "Uploaded recording ${localRecording.id} → $remoteId" }
+                        } else {
+                            firestoreRecordingsDao.setRecording(existingFirestoreId, doc)
+                            logger.i { "Updated recording ${localRecording.id} → $existingFirestoreId" }
+                        }
+                    } catch (e: Exception) {
+                        logger.e(e) { "Error uploading recording ${localRecording.id} to Firestore" }
+                    } finally {
+                        uploadingIds.remove(localRecording.id)
+                    }
+                }
+            }
+        }.flowOn(Dispatchers.IO).catch {
+            logger.e(it) { "Error in local recording upload observer" }
+        }.launchIn(scope)
     }
 
     override suspend fun processTask(task: RecordingProcessingTask) {

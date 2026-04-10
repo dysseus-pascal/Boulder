@@ -9,6 +9,7 @@ import coredevices.ring.agent.builtin_servlets.js.AndroidWebviewJsEngine
 import coredevices.ring.agent.builtin_servlets.js.JsEngine
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.ring.database.IntegrationTokenStorageImpl
+import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.PlatformIndexNotificationManager
@@ -49,6 +50,7 @@ actual val platformRingModule = module {
     }
     singleOf(::PlatformIndexNotificationManager)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
+    singleOf(::EncryptionKeyManager)
     factoryOf(::AndroidWebviewJsEngine) bind JsEngine::class
     factoryOf(::AudioRecorder)
     factoryOf(::AudioPlayer)

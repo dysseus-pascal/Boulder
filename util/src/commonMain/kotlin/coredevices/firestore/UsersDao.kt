@@ -38,6 +38,7 @@ interface UsersDao {
     )
     suspend fun initUserDevToken(rebbleUserToken: String?)
     suspend fun updateLastConnectedWatch(serial: String)
+    suspend fun updateEncryptionInfo(info: EncryptionInfo) {}
     fun init()
 }
 
@@ -176,6 +177,11 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
         if (user.user.lastConnectedWatch != serial) {
             userDoc?.update(mapOf("last_connected_watch" to serial))
         }
+    }
+
+    override suspend fun updateEncryptionInfo(info: EncryptionInfo) {
+        val doc = userDoc ?: throw IllegalStateException("Not signed in — cannot store encryption info")
+        doc.update("encryption" to info)
     }
 }
 

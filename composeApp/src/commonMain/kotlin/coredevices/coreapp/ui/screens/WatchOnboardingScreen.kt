@@ -268,10 +268,12 @@ fun WatchOnboardingScreen(
                             Spacer(modifier = Modifier.height(15.dp))
                         }
 
-                        SectionText("Speech Recognition")
-                        Spacer(modifier = Modifier.height(15.dp))
-                        settings.Show(OfflineSpeechRecognition)
-                        SectionDivider()
+                        if (connectedWatch.capabilities.contains(ProtocolCapsFlag.SupportsAppDictation)) {
+                            SectionText("Speech Recognition")
+                            Spacer(modifier = Modifier.height(15.dp))
+                            settings.Show(OfflineSpeechRecognition)
+                            SectionDivider()
+                        }
 
                         Text("Configure more in Settings", textAlign = TextAlign.Center)
                         SectionDivider()

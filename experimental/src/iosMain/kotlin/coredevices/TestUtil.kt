@@ -79,6 +79,13 @@ object TestUtil {
                             override suspend fun openUrl(url: String) {
 
                             }
+
+                            override suspend fun runWithBgTask(
+                                name: String,
+                                task: suspend () -> Unit
+                            ) {
+                                task()
+                            }
                         }
                     } bind Platform::class
                     single { UsersDaoTestImpl } bind UsersDao::class

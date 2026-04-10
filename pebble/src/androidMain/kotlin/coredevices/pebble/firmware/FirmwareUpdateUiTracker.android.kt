@@ -15,8 +15,6 @@ import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.NOTIFICATION_INTEN
 import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.updateNowUri
 import coredevices.util.R
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import org.koin.core.component.KoinComponent

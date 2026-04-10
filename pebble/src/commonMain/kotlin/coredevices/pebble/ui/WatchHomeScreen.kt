@@ -290,7 +290,12 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         viewModel.selectedTab.value = tab
                         if (controller.waitUntilReady(1.seconds)) {
                             logger.v { "Deep link route: ${it.route}" }
-                            controller.navigate(it.route)
+                            // Pop back to the tab's start destination so we never end
+                            // up with a nested instance of the same screen.
+                            controller.popBackStack(tab.route, inclusive = false)
+                            if (it.route != tab.route) {
+                                controller.navigate(it.route)
+                            }
                         }
                     }
                 }

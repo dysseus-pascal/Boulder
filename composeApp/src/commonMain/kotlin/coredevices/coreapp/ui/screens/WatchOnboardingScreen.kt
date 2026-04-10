@@ -182,8 +182,6 @@ fun WatchOnboardingScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
                             )
                         }
-                        Spacer(modifier = Modifier.height(15.dp))
-                        SectionText("Updating your watch to the latest version of PebbleOS...")
                         SectionDivider()
                     }
 

@@ -2,7 +2,6 @@ package coredevices.coreapp.ui.screens
 
 import CoreNav
 import androidx.compose.foundation.layout.Arrangement
-import theme.AppTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.Card
@@ -66,12 +64,14 @@ import coredevices.pebble.ui.allCollectionUuids
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.connectedWatch
 import coredevices.pebble.ui.languagePackInstalled
+import coredevices.pebble.ui.launchApp
 import coredevices.pebble.ui.rememberSettingsItemsState
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
@@ -83,6 +83,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import theme.AppTheme
 import theme.onboardingScheme
 import kotlin.time.Duration.Companion.seconds
 
@@ -208,6 +209,7 @@ fun WatchOnboardingScreen(
                             storeHome = pebbleStoreHomes[AppType.Watchface],
                             connectedWatch,
                             footerText = null,
+                            snackbarDisplay = snackbarDisplay,
                         )
 
                         OnboardingAppCarousel(
@@ -215,6 +217,7 @@ fun WatchOnboardingScreen(
                             storeHome = pebbleStoreHomes[AppType.Watchapp],
                             connectedWatch,
                             footerText = "Get more apps from the Pebble App Store!",
+                            snackbarDisplay = snackbarDisplay,
                         )
 
                         val languagePackInstalled = connectedWatch.languagePackInstalled()
@@ -328,11 +331,13 @@ fun OnboardingAppCarousel(
     storeHome: AppStoreHomeResult?,
     watch: ConnectedPebbleDevice,
     footerText: String?,
+    snackbarDisplay: SnackbarDisplay,
 ) {
     if (storeHome == null) {
         return
     }
     val platform: Platform = koinInject()
+    val libPebble: LibPebble = koinInject()
     val allCollectionUuids = allCollectionUuids()
     // Only use inital list of in-collection IDs (i.e. don't remove from list when they add from this screen)
     val initialAllCollectionUuids = remember(allCollectionUuids != null) { allCollectionUuids.orEmpty() }
@@ -411,6 +416,15 @@ fun OnboardingAppCarousel(
                                         commonAppStore.storeSource
                                     )
                                     logger.v { "Add to locker from watch onboarding ${commonAppStore.storeApp?.title} result=$addResult" }
+                                    if (!addResult) {
+                                        snackbarDisplay.showSnackbar("Failed to add app")
+                                        return@launch
+                                    }
+                                    libPebble.launchApp(
+                                        entry = entry,
+                                        snackbarDisplay = NoOpSnackbarDisplay,
+                                        connectedIdentifier = watch.identifier,
+                                    )
                                 }
                             },
                             primaryColor = true,
@@ -429,6 +443,11 @@ fun OnboardingAppCarousel(
     }
     SectionDivider()
 }
+
+object NoOpSnackbarDisplay : SnackbarDisplay {
+    override fun showSnackbar(message: String) {}
+}
+
 
 fun StoreOnboarding.forType(watchType: WatchType): List<String>? = when (watchType) {
     WatchType.APLITE -> aplite

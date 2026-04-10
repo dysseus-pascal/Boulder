@@ -504,7 +504,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                         if (watch != null) {
                                             libPebble.launchApp(
                                                 entry = entry,
-                                                topBarParams = topBarParams,
+                                                snackbarDisplay = topBarParams,
                                                 connectedIdentifier = watch.identifier,
                                             )
                                         }
@@ -884,7 +884,7 @@ fun AppCapability.description(): String = when (this) {
 
 suspend fun LibPebble.launchApp(
     entry: CommonApp,
-    topBarParams: TopBarParams,
+    snackbarDisplay: SnackbarDisplay,
     connectedIdentifier: PebbleIdentifier
 ): Boolean {
     logger.d { "launchApp: ${entry.uuid} - ${entry.title}" }
@@ -895,30 +895,30 @@ suspend fun LibPebble.launchApp(
     if (!entry.isSynced()) {
         try {
             withTimeout(15.seconds) {
-                topBarParams.showSnackbar("Waiting to sync $typeText to watch...")
+                snackbarDisplay.showSnackbar("Waiting to sync $typeText to watch...")
                 setAppOrder(entry.uuid, orderIndexForInsert(entry.type))
             }
         } catch (_: TimeoutCancellationException) {
             logger.w { "timed out waiting for order change to sync to watch" }
-            topBarParams.showSnackbar("$typeText failed to sync to watch")
+            snackbarDisplay.showSnackbar("$typeText failed to sync to watch")
             return false
         }
     }
     if (!waitUntilAppSyncedToWatch(entry.uuid, connectedIdentifier, 15.seconds)) {
         logger.w { "timed out waiting for blobdb item to sync to watch" }
-        topBarParams.showSnackbar("$typeText failed to sync to watch")
+        snackbarDisplay.showSnackbar("$typeText failed to sync to watch")
         return false
     }
     // Give it a small bit of time to settle
     delay(0.5.seconds)
-    topBarParams.showSnackbar("Loading $typeText")
+    snackbarDisplay.showSnackbar("Loading $typeText")
     val launched = withTimeoutOrNull(30.seconds) {
         launchApp(entry.uuid)
         true
     }
     logger.d { "launched = $launched" }
     if (launched == null) {
-        topBarParams.showSnackbar("$typeText failed to load")
+        snackbarDisplay.showSnackbar("$typeText failed to load")
         return false
     }
     return true

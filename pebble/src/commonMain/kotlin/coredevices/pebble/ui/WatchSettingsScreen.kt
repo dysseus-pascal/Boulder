@@ -2,6 +2,7 @@ package coredevices.pebble.ui
 
 import AppUpdateTracker
 import CommonRoutes
+import PlatformUiContext
 import CoreAppVersion
 import NextBugReportContext
 import androidx.compose.foundation.background
@@ -976,6 +977,16 @@ please disable the option.""".trimIndent(),
                                 platformHealthSync.sync()
                             }
                         }
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "Open Google Fit",
+                    description = "View your synced health data in Google Fit",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    show = { healthPlatformSyncEnabled && platform == Platform.Android },
+                    action = {
+                        openGoogleFitApp(uiContext)
                     },
                 ),
                 basicSettingsActionItem(
@@ -2050,6 +2061,8 @@ fun STTLanguageDialog(
 }
 
 expect fun makeTokenClipEntry(token: String): ClipEntry
+
+expect fun openGoogleFitApp(uiContext: PlatformUiContext?)
 
 object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"

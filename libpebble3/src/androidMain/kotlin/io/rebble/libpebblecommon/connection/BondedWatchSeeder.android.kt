@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -15,6 +16,7 @@ private val PEBBLE_NAME_REGEX =
 
 private val logger = Logger.withTag("BondedWatchSeeder")
 
+@SuppressLint("MissingPermission")
 internal actual suspend fun seedBondedWatches(
     appContext: AppContext,
     knownWatchDao: KnownWatchDao,

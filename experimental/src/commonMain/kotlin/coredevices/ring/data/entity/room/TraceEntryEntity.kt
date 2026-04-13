@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlin.time.Instant
 
 @Entity(
@@ -34,6 +35,29 @@ data class TraceEntryEntity(
     val recordingId: Long?,
     @ColumnInfo(defaultValue = "NULL")
     val transferId: Long?,
+)
+
+@Serializable
+data class TraceEventDocument(
+    val id: Long,
+    @SerialName("time_mark") val time_mark: Long,
+    val type: String,
+    val data: TraceEventData? = null,
+)
+
+fun TraceEntryEntity.toDocument(): TraceEventDocument =
+    TraceEventDocument(id = id, time_mark = timeMark, type = type, data = data?.let { Json.decodeFromString(it) })
+
+@Serializable
+data class TraceSessionDocument(
+    @SerialName("session_id") val sessionId: Long,
+    val timestamp: String,
+    val trace: List<TraceEventDocument>,
+)
+
+@Serializable
+data class TraceDocument(
+    val sessions: List<TraceSessionDocument>,
 )
 
 @Serializable

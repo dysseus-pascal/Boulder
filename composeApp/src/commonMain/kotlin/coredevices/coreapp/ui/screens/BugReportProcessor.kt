@@ -11,14 +11,13 @@ import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
 import coredevices.coreapp.util.FileLogWriter
-import coredevices.ring.database.room.dao.TraceEntryDao
-import coredevices.ring.database.room.dao.TraceSessionDao
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
+import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
@@ -51,10 +50,6 @@ import kotlinx.io.writeString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
@@ -537,33 +532,11 @@ class BugReportProcessor(
             }
 
             try {
-                val traceSessionDao = KoinPlatform.getKoin().getOrNull<TraceSessionDao>()
-                val traceEntryDao = KoinPlatform.getKoin().getOrNull<TraceEntryDao>()
-                if (traceSessionDao != null && traceEntryDao != null) {
-                    val sessions = traceSessionDao.getLastNTraceSessions(20, 0)
+                val exporter = KoinPlatform.getKoin().getOrNull<TraceSessionExporter>()
+                if (exporter != null) {
+                    val sessions = exporter.exportLastNSessions(20)
                     if (sessions.isNotEmpty()) {
-                        val sessionEntries = sessions.map { session ->
-                            session to traceEntryDao.getEntriesForSession(session.id)
-                        }
-                        val traceJson = buildJsonArray {
-                            sessionEntries.forEach { (session, entries) ->
-                                addJsonObject {
-                                    put("session_id", session.id)
-                                    put("timestamp", session.started.toString())
-                                    putJsonArray("trace") {
-                                        entries.forEach { entry ->
-                                            addJsonObject {
-                                                put("id", entry.id)
-                                                put("time_mark", entry.timeMark)
-                                                put("type", entry.type)
-                                                entry.data?.let { put("data", Json.parseToJsonElement(it)) }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        val traceBytes = Json.encodeToString(traceJson).encodeToByteArray()
+                        val traceBytes = Json.encodeToString(sessions).encodeToByteArray()
                         attachments.add(
                             DocumentAttachment(
                                 fileName = "ring_trace_sessions.json",
@@ -572,8 +545,8 @@ class BugReportProcessor(
                                 size = traceBytes.size.toLong(),
                             )
                         )
-                    } // if sessions.isNotEmpty()
-                } // if daos != null
+                    }
+                }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to collect ring trace sessions" }
             }

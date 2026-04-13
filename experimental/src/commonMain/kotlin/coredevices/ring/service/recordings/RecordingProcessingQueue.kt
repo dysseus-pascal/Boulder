@@ -3,6 +3,7 @@ package coredevices.ring.service.recordings
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
+import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.util.JsonSnake
@@ -10,6 +11,8 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
+import coredevices.ring.database.firestore.dao.FirestoreTracesDao
+import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.data.ProcessingTask
 import coredevices.ring.data.RecordingProcessingTask
@@ -130,13 +133,31 @@ class RecordingProcessingQueue(
                             }
                         }
                         val existingFirestoreId = localRecording.firestoreId
-                        if (existingFirestoreId == null) {
+                        val firestoreRecordingId = if (existingFirestoreId == null) {
                             val remoteId = firestoreRecordingsDao.addRecording(doc).id
                             recordingRepository.updateRecordingFirestoreId(localRecording.id, remoteId)
                             logger.i { "Uploaded recording ${localRecording.id} → $remoteId" }
+                            remoteId
                         } else {
                             firestoreRecordingsDao.setRecording(existingFirestoreId, doc)
                             logger.i { "Updated recording ${localRecording.id} → $existingFirestoreId" }
+                            existingFirestoreId
+                        }
+                        val isFinal = entries.isNotEmpty() && entries.all {
+                            it.status == RecordingEntryStatus.completed || it.status.isError()
+                        }
+                        if (isFinal) {
+                            try {
+                                val exporter: TraceSessionExporter = get()
+                                val sessions = exporter.exportForRecording(localRecording.id)
+                                if (sessions.isNotEmpty()) {
+                                    val firestoreTracesDao: FirestoreTracesDao = get()
+                                    firestoreTracesDao.setTrace(firestoreRecordingId, sessions)
+                                    logger.i { "Uploaded trace (${sessions.size} sessions) for recording ${localRecording.id} → $firestoreRecordingId" }
+                                }
+                            } catch (e: Exception) {
+                                logger.e(e) { "Error uploading trace for recording ${localRecording.id}" }
+                            }
                         }
                     } catch (e: Exception) {
                         logger.e(e) { "Error uploading recording ${localRecording.id} to Firestore" }

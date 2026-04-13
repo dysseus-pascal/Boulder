@@ -146,4 +146,8 @@ class RingTransferRepository(
     fun getTransferWithFeedItemFlow(transferId: Long): Flow<RingTransferFeedItem?> {
         return ringTransferDao.getTransferWithFeedItemByIdFlow(transferId)
     }
+
+    suspend fun getTransfersByRecordingId(recordingId: Long): List<RingTransfer> {
+        return ringTransferDao.getByRecordingId(recordingId)
+    }
 }

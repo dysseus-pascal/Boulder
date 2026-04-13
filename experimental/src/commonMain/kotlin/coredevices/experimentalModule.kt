@@ -55,6 +55,7 @@ import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.RingCompanionDeviceManager
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.PermissionRequester
@@ -133,6 +134,7 @@ val experimentalModule = module {
     singleOf(::RecordingProcessingTaskRepository)
     singleOf(::PreferencesImpl) bind Preferences::class
     singleOf(::RingTraceSession)
+    singleOf(::TraceSessionExporter)
 
     single {
         ApiConfig(

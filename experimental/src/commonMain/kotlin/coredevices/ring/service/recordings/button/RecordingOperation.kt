@@ -10,6 +10,7 @@ import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -52,6 +53,7 @@ open class DefaultRecordingOperation(
     private val recordingEntryDao: RecordingEntryDao by inject()
     private val recordingProcessor: RecordingProcessor by inject()
     private val ringTransferRepository: RingTransferRepository by inject()
+    private val recordingBackgroundScope: RecordingBackgroundScope by inject()
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         val entryId = withContext(Dispatchers.IO) {
@@ -87,30 +89,34 @@ open class DefaultRecordingOperation(
             )
         }
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
-        coroutineScope {
-            launch(Dispatchers.IO) {
-                try {
-                    trace.markEvent("persist_recording_start", TraceEventData.PersistRecordingStart(
-                        recordingId = recordingId,
-                        transferId = transferId,
-                        fileId = fileId
-                    ))
-                    recordingStorage.persistRecording(fileId)
-                    trace.markEvent("persist_recording_end", TraceEventData.PersistRecordingStart(
-                        recordingId = recordingId,
-                        transferId = transferId,
-                        fileId = fileId
-                    ))
-                } catch (e: Exception) {
-                    //TODO: Better sync handling, e.g. retry later
-                    logger.e(e) { "Error persisting recording $fileId" }
-                    trace.markEvent("persist_recording_fail", TraceEventData.PersistRecordingStart(
-                        recordingId = recordingId,
-                        transferId = transferId,
-                        fileId = fileId
-                    ))
-                }
+        // Fire-and-forget Firebase upload on the long-lived background scope. The local
+        // cache file is already fully written by the time we get here, so the rest of the
+        // operation (transcription / agent) doesn't depend on this completing, and a
+        // failure should not block — or be cancelled by — the processing queue slot.
+        recordingBackgroundScope.launch(Dispatchers.IO) {
+            try {
+                trace.markEvent("persist_recording_start", TraceEventData.PersistRecordingStart(
+                    recordingId = recordingId,
+                    transferId = transferId,
+                    fileId = fileId
+                ))
+                recordingStorage.persistRecording(fileId)
+                trace.markEvent("persist_recording_end", TraceEventData.PersistRecordingStart(
+                    recordingId = recordingId,
+                    transferId = transferId,
+                    fileId = fileId
+                ))
+            } catch (e: Exception) {
+                //TODO: Better sync handling, e.g. retry later
+                logger.e(e) { "Error persisting recording $fileId" }
+                trace.markEvent("persist_recording_fail", TraceEventData.PersistRecordingStart(
+                    recordingId = recordingId,
+                    transferId = transferId,
+                    fileId = fileId
+                ))
             }
+        }
+        coroutineScope {
             val mcpSession = mcpSessionFactory.createForSandboxGroup(
                 mcpSandboxRepository.getDefaultGroupId(),
                 this

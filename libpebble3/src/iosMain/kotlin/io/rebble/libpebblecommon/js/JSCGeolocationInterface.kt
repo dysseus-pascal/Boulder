@@ -18,13 +18,20 @@ class JSCGeolocationInterface(
     )
     override val name = "_PebbleGeo"
 
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
-        "getCurrentPosition" -> getCurrentPosition((args[0] as Number).toDouble())
-        "watchPosition" -> watchPosition((args[0] as Number).toDouble(), (args[1] as Number).toDouble())
-        "clearWatch" -> { clearWatch((args[0] as Number).toInt()); null }
-        "getRequestCallbackID" -> getRequestCallbackID()
-        "getWatchCallbackID" -> getWatchCallbackID()
-        else -> error("Unknown method: $method")
+    override fun dispatch(method: String, args: List<Any?>): Int? {
+        fun num(i: Int) = args.getOrNull(i) as? Number
+        return when (method) {
+            "getCurrentPosition" -> num(0)?.toDouble()?.let { getCurrentPosition(it) }
+            "watchPosition" -> {
+                val timeout = num(0)?.toDouble()
+                val maxAge = num(1)?.toDouble()
+                if (timeout != null && maxAge != null) watchPosition(timeout, maxAge) else null
+            }
+            "clearWatch" -> { num(0)?.toInt()?.let { clearWatch(it) }; null }
+            "getRequestCallbackID" -> getRequestCallbackID()
+            "getWatchCallbackID" -> getWatchCallbackID()
+            else -> error("Unknown method: $method")
+        }
     }
 
     override fun close() {

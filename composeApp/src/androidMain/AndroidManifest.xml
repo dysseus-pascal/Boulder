@@ -96,6 +96,21 @@
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false">
         </service>
+        <!--
+            Workaround for a bug in com.viktormykhailiv:health-kmp 1.0.1:
+            HealthConnectPermissionActivity stores its permission set in intent extras and
+            calls requestPermissions.launch(permissions) in onCreate. If Android recreates
+            the activity (process death, resume from recents) the extras are lost, the set
+            is empty, and HealthPermissionsRequestContract throws
+            "At least one permission is required!" — crashing the app. noHistory +
+            excludeFromRecents prevent the activity from being resumed/recreated without
+            its original launching intent.
+        -->
+        <activity
+            android:name="com.viktormykhailiv.kmp.health.HealthConnectPermissionActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            tools:replace="android:noHistory,android:excludeFromRecents" />
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

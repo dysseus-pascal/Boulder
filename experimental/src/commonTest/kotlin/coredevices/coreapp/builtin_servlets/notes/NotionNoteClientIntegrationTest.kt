@@ -59,6 +59,13 @@ class NotionNoteClientIntegrationTest {
             TODO("Not yet implemented")
         }
 
+        override suspend fun updateRingLifetimeCollectionCount(
+            serial: String,
+            count: Int
+        ) {
+            TODO("Not yet implemented")
+        }
+
         override fun init() {
             TODO("Not yet implemented")
         }

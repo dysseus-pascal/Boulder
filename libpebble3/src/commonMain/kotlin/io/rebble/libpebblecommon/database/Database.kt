@@ -29,6 +29,7 @@ import io.rebble.libpebblecommon.database.entity.AppPrefsEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryEntity
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntrySyncEntity
@@ -129,7 +130,7 @@ abstract class Database : RoomDatabase() {
     abstract fun timelinePinDao(): TimelinePinRealDao
     abstract fun calendarDao(): CalendarDao
     abstract fun timelineReminderDao(): TimelineReminderRealDao
-    abstract fun healthSettingsDao(): HealthSettingsEntryDao
+    abstract fun healthSettingsDao(): HealthSettingsEntryRealDao
     abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
     abstract fun notificationsDao(): NotificationDao
     abstract fun contactDao(): ContactDao

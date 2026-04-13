@@ -20,7 +20,7 @@ import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
 import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
-import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
+import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
@@ -58,7 +58,7 @@ data class BlobDbDaos(
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
-    private val healthSettingsDao: HealthSettingsEntryDao,
+    private val healthSettingsDao: HealthSettingsEntryRealDao,
     private val healthStatDao: HealthStatDao,
     private val vibePatternDao: VibePatternDao,
     private val platformConfig: PlatformConfig,
@@ -216,7 +216,20 @@ class BlobDB(
                     if (message.database == BlobDatabase.WatchPrefs && !deviceHasPreviouslySyncedSettings) {
                         markDeviceHasSyncedSettings()
                     }
-                    val dao = blobDatabases.get().find { it.databaseId() == message.database }
+                    // The watch firmware sends health settings (activityPreferences, unitsDistance)
+                    // via the WatchPrefs BlobDB, but the phone stores them in HealthParams.
+                    // Route these keys to the health settings DAO.
+                    val effectiveDatabase = if (message.database == BlobDatabase.WatchPrefs) {
+                        val key = message.key.toByteArray().decodeToString().trimEnd('\u0000')
+                        if (key == "activityPreferences" || key == "unitsDistance") {
+                            BlobDatabase.HealthParams
+                        } else {
+                            message.database
+                        }
+                    } else {
+                        message.database
+                    }
+                    val dao = blobDatabases.get().find { it.databaseId() == effectiveDatabase }
                     val result = dao?.handleWrite(
                         write = message,
                         transport = identifier.asString,

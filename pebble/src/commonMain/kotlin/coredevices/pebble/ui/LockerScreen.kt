@@ -599,6 +599,7 @@ fun LockerScreen(
                                             collection,
                                             sharedViewModel.watchType.value,
                                             lockerEntries,
+                                            sharedViewModel.showIncompatible.value,
                                             sharedViewModel.showScaled.value,
                                             viewModel.type.value,
                                             sharedViewModel.hearted.value,
@@ -616,6 +617,7 @@ fun LockerScreen(
                                                 )
                                             }.filter { app ->
                                                 app.type == viewModel.type.value &&
+                                                        (sharedViewModel.showIncompatible.value || app.isCompatible) &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
                                                 (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) &&
                                                 app.storeId !in excludedStoreIds &&

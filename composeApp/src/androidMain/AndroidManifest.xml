@@ -109,8 +109,7 @@
         <activity
             android:name="com.viktormykhailiv.kmp.health.HealthConnectPermissionActivity"
             android:noHistory="true"
-            android:excludeFromRecents="true"
-            tools:replace="android:noHistory,android:excludeFromRecents" />
+            android:excludeFromRecents="true" />
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

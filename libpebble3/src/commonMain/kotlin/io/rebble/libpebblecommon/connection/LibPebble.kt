@@ -405,6 +405,7 @@ class LibPebble3(
         phoneCalendarSyncer.handlePermissionsGranted()
         missedCallSyncer.init()
         phoneContactsSyncer.init()
+        watchManager.seedBondedWatchesIfNeeded()
     }
 
     override fun checkForFirmwareUpdates() {

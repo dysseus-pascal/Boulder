@@ -284,7 +284,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         listState.animateScrollToItem(0)
                     }
                 }
-                if (libPebble.watches.value.isEmpty()) {
+                if (libPebble.watches.value.none { it.isFullyConnected() }) {
                     addFabExpanded = true
                 }
 

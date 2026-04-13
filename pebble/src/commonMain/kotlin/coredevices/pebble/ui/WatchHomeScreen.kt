@@ -105,9 +105,10 @@ import coredevices.util.rememberUiContext
 import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.PebbleDevice
+import io.rebble.libpebblecommon.connection.UNKNOWN_WATCH_SERIAL_OR_VERSION
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -128,8 +129,10 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
-    it is KnownPebbleDevice
+    it.isFullyConnected()
 }
+
+fun PebbleDevice.isFullyConnected() = this is KnownPebbleDevice && runningFwVersion != UNKNOWN_WATCH_SERIAL_OR_VERSION
 
 class WatchOnboardingFinished {
     val finished: Channel<Unit> = Channel<Unit>(capacity = 1)

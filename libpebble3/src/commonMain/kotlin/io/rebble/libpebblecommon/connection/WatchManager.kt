@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapNotNull
@@ -48,6 +50,8 @@ import kotlinx.coroutines.flow.runningReduce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
@@ -165,6 +169,8 @@ class WatchManager(
     private val connectionFailureHandler: ConnectionFailureHandler,
     private val analytics: LibPebbleAnalytics,
     private val blobDbDatabaseManager: BlobDbDatabaseManager,
+    private val settings: Settings,
+    private val appContext: AppContext,
 ) : WatchConnector, Watches {
     private val logger = Logger.withTag("WatchManager")
     private val allWatches: MutableStateFlow<Map<PebbleIdentifier, Watch>> = MutableStateFlow(
@@ -225,6 +231,69 @@ class WatchManager(
         }
     }
 
+    private val seedBondedMutex = Mutex()
+
+    fun seedBondedWatchesIfNeeded() {
+        if (settings.getBoolean(SEEDED_BONDED_KEY, false)) return
+        libPebbleCoroutineScope.launch {
+            seedBondedMutex.withLock {
+                // Re-check inside the lock — another caller may have finished while we waited.
+                if (settings.getBoolean(SEEDED_BONDED_KEY, false)) return@withLock
+                // Only seed if there are no known watches yet — approximates "fresh install".
+                // If the user already has watches this isn't a reinstall scenario, so just flip
+                // the flag and never try again.
+                if (allWatches.value.isNotEmpty()) {
+                    logger.d { "Skipping bonded watch seed: ${allWatches.value.size} watches already known" }
+                    settings.putBoolean(SEEDED_BONDED_KEY, true)
+                    return@withLock
+                }
+                // getBondedDevices returns empty when BT is off; wait until enabled.
+                bluetoothStateProvider.state.first { it == BluetoothState.Enabled }
+                val inserted = try {
+                    seedBondedWatches(appContext, knownWatchDao)
+                } catch (e: Exception) {
+                    logger.e(e) { "Bonded watch seed failed; giving up" }
+                    settings.putBoolean(SEEDED_BONDED_KEY, true)
+                    return@withLock
+                }
+                if (inserted == null) {
+                    logger.d { "Bonded watch seed skipped (will retry next launch)" }
+                    return@withLock
+                }
+                settings.putBoolean(SEEDED_BONDED_KEY, true)
+                if (inserted.isEmpty()) {
+                    logger.d { "Bonded watch seed ran; no new watches" }
+                    return@withLock
+                }
+                logger.i { "Seeded ${inserted.size} bonded watches" }
+                allWatches.update { current ->
+                    current + inserted
+                        .filterNot { current.containsKey(it.identifier()) }
+                        .associate { item ->
+                            val id = item.identifier()
+                            id to Watch(
+                                identifier = id,
+                                name = item.name,
+                                nickname = item.nickname,
+                                scanResult = null,
+                                connectGoal = item.connectGoal,
+                                knownWatchProps = item.asProps(),
+                                activeConnection = null,
+                                asPersisted = item,
+                                forget = false,
+                                firmwareUpdateAvailable = FirmwareUpdateCheckState(
+                                    checkingForUpdates = false,
+                                    result = null,
+                                ),
+                                lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
+                                connectionFailureInfo = null,
+                            )
+                        }
+                }
+            }
+        }
+    }
+
     private suspend fun persistIfNeeded(
         watch: Watch,
     ) {
@@ -272,6 +341,7 @@ class WatchManager(
 
     fun init() {
         logger.d("watchmanager init()")
+        seedBondedWatchesIfNeeded()
         libPebbleCoroutineScope.launch {
             val activeConnectionStates = allWatches.flowOfAllDevices()
             combine(
@@ -691,6 +761,7 @@ class WatchManager(
     companion object {
         private val DISCONNECT_TIMEOUT = 3.seconds
         private val APP_START_WAIT_TO_CONNECT = 2.5.seconds
+        private const val SEEDED_BONDED_KEY = "seeded_bonded_watches_v1"
     }
 }
 

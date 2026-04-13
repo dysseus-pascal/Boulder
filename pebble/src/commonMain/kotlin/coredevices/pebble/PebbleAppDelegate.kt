@@ -78,6 +78,11 @@ class PebbleAppDelegate(
             if (platform == Platform.IOS) {
                 libPebble.init()
             }
+            if (platform == Platform.Android) {
+                // Onboarding on Android grants BT permissions, which may have been missing when
+                // libPebble.init() ran synchronously above. Kick off post-permission work now.
+                libPebble.doStuffAfterPermissionsGranted()
+            }
             GlobalScope.launch {
                 appResumed.appResumed.collect {
                     libPebble.doStuffAfterPermissionsGranted()

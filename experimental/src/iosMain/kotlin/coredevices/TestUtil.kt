@@ -215,6 +215,12 @@ private object UsersDaoTestImpl: UsersDao {
     override suspend fun updateLastConnectedWatch(serial: String) {
     }
 
+    override suspend fun updateRingLifetimeCollectionCount(
+        serial: String,
+        count: Int
+    ) {
+    }
+
     override fun init() {
         TODO("Not yet implemented")
     }

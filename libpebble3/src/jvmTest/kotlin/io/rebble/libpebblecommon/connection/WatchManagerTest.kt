@@ -24,6 +24,8 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
+import com.russhwolf.settings.PropertiesSettings
+import java.util.Properties
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CompletableDeferred
@@ -264,6 +266,8 @@ class WatchManagerTest {
             connectionFailureHandler = connectionFailureHandler,
             analytics = analytics,
             blobDbDatabaseManager = blobDbManager,
+            settings = PropertiesSettings(Properties()),
+            appContext = AppContext(),
         )
     }
 

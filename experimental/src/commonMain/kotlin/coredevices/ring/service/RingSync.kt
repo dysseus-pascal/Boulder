@@ -3,6 +3,7 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import com.juul.kable.Bluetooth
 import coredevices.analytics.CoreAnalytics
+import coredevices.firestore.UsersDao
 import coredevices.haversine.DataDecodeException
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.haversine.KMPHaversineSatelliteManager
@@ -121,6 +122,7 @@ class RingSync(
     private val indexNotificationManager: IndexNotificationManager,
     private val ringTransferRepository: RingTransferRepository,
     private val coreAnalytics: CoreAnalytics,
+    private val usersDao: UsersDao,
     private val scope: RecordingBackgroundScope,
     private val trace: RingTraceSession,
 ): KoinComponent {
@@ -287,6 +289,7 @@ class RingSync(
                                                         transferStatus.satellite.state.value?.serialNumber?.let { serial ->
                                                             transferStatus.lifetimeCollectionCount?.let { count ->
                                                                 coreAnalytics.updateRingLifetimeCollectionCount(serial, count.toInt())
+                                                                usersDao.updateRingLifetimeCollectionCount(serial, count.toInt())
                                                             } ?: logger.w {
                                                                 "No lifetime collection count available to update for serial $serial"
                                                             }

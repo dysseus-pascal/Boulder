@@ -27,5 +27,7 @@ data class User(
     val pebbleUserToken: String? = null,
     @SerialName("last_connected_watch")
     val lastConnectedWatch: String? = null,
+    @SerialName("ring_lifetime_collection_counts")
+    val ringLifetimeCollectionCounts: Map<String, Int>? = null,
     val encryption: EncryptionInfo? = null,
 )

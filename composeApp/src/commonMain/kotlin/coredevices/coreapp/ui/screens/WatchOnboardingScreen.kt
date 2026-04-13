@@ -100,7 +100,8 @@ fun WatchOnboardingScreen(
     val pebbleStoreHomes = remember { mutableStateMapOf<AppType, AppStoreHomeResult?>() }
     var showLanguageDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    var startedUpdate by remember { mutableStateOf(false) }
+    var haveUpdatedFirmware by remember { mutableStateOf(false) }
+    var haveStartedFwupSinceLastConnection by remember { mutableStateOf(false) }
     val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
     val snackbarDisplay =
         remember { SnackbarDisplay { scope.launch { snackbarHostState.showSnackbar(message = it) } } }
@@ -144,7 +145,8 @@ fun WatchOnboardingScreen(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     if (connectedWatch == null) {
-                        if (startedUpdate) {
+                        haveStartedFwupSinceLastConnection = false
+                        if (haveUpdatedFirmware) {
                             SectionText("Waiting for your Pebble to restart..")
                         } else {
                             SectionText("Waiting for your Pebble to connect..")
@@ -168,10 +170,13 @@ fun WatchOnboardingScreen(
                             return@Scaffold
                         }
 
-                        LaunchedEffect(Unit) {
-                            logger.d { "Starting firmware update from onboarding screen" }
-                            startedUpdate = true
-                            connectedWatch.updateFirmware(firmwareUpdateAvailable)
+                        LaunchedEffect(haveStartedFwupSinceLastConnection) {
+                            if (!haveStartedFwupSinceLastConnection) {
+                                logger.d { "Starting firmware update from onboarding screen" }
+                                haveStartedFwupSinceLastConnection = true
+                                haveUpdatedFirmware = true
+                                connectedWatch.updateFirmware(firmwareUpdateAvailable)
+                            }
                         }
 
                         SectionText("Updating your watch to the latest version of PebbleOS...")

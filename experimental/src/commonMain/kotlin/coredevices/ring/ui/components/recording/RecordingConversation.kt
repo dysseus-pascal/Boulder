@@ -71,9 +71,9 @@ fun LazyListScope.recordingConversation(
                             onPlayPause = {
                                 onPlayPause(recording)
                             },
-                            playing = playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1),
-                            buffering = playbackState is MessagePlaybackState.Buffering && playbackState.id == (recording.userMessageId ?: -1),
-                            playbackPercentage = if (playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1)) playbackState.percentageComplete else 0.0,
+                            playing = playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1L),
+                            buffering = playbackState is MessagePlaybackState.Buffering && playbackState.id == (recording.userMessageId ?: -1L),
+                            playbackPercentage = if (playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1L)) playbackState.percentageComplete else 0.0,
                             content = {
                                 Text(
                                     text = "<No transcription available>",

@@ -240,7 +240,6 @@ buildkonfig {
     defaultConfigs {
         buildConfigField(FieldSpec.Type.STRING, "NENYA_URL", "https://nenya-staging-460977838956.us-west1.run.app")
         buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth-460977838956.us-west1.run.app")
-        buildConfigField(FieldSpec.Type.STRING, "GCLOUD_DICTATION_URL", "https://gcloud-dictation-460977838956.us-central1.run.app/recognize")
 
         buildConfigField(FieldSpec.Type.STRING, "TESTS_NOTION_TOKEN", System.getenv("TESTS_NOTION_TOKEN") ?: properties.getProperty("TESTS_NOTION_TOKEN") ?: "")
     }

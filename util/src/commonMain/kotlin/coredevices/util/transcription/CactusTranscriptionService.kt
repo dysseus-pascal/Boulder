@@ -2,6 +2,7 @@ package coredevices.util.transcription
 
 import co.touchlab.kermit.Logger
 import com.cactus.Cactus
+import com.cactus.TranscriptionResult
 import coredevices.util.AudioEncoding
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
@@ -56,6 +57,27 @@ class CactusTranscriptionService(
     private var lastInitedModel: String? = null
     private val scope = CoroutineScope(Dispatchers.Default)
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
+
+    /**
+     * Run cactus.transcribe() with cancellation support.
+     * Since the native transcribe call is blocking and can't be interrupted by coroutine
+     * cancellation, we monitor the calling coroutine's Job and call cactus.stop() if it
+     * gets cancelled while the native call is in progress.
+     */
+    private suspend fun cancellableTranscribe(cactus: Cactus, audioPath: String): TranscriptionResult {
+        val callerJob = kotlin.coroutines.coroutineContext[Job]
+        val completionHandle = callerJob?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                logger.d { "Calling cactus.stop() due to cancellation: ${cause.message}" }
+                cactus.stop()
+            }
+        }
+        return try {
+            cactus.transcribe(audioPath = audioPath)
+        } finally {
+            completionHandle?.dispose()
+        }
+    }
 
     val lastModelUsed get() = lastInitedModel
     val isModelReady get() = model != null
@@ -182,9 +204,9 @@ class CactusTranscriptionService(
                 CactusSTTMode.LocalOnly -> {
                     val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                     inferenceBoost.acquire()
-                    val result = try {
+                    val result: TranscriptionResult = try {
                         withTimeout(timeout) {
-                            cactus.transcribe(audioPath = path.toString())
+                            cancellableTranscribe(cactus, path.toString())
                         }
                     } finally {
                         inferenceBoost.release()
@@ -215,9 +237,9 @@ class CactusTranscriptionService(
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
                         val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                         inferenceBoost.acquire()
-                        val result = try {
+                        val result: TranscriptionResult = try {
                             withTimeout(timeout) {
-                                cactus.transcribe(audioPath = path.toString())
+                                cancellableTranscribe(cactus, path.toString())
                             }
                         } finally {
                             inferenceBoost.release()
@@ -233,8 +255,10 @@ class CactusTranscriptionService(
                     try {
                         val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                         inferenceBoost.acquire()
-                        val result = try {
-                            cactus.transcribe(audioPath = path.toString())
+                        val result: TranscriptionResult = try {
+                            withTimeout(timeout) {
+                                cancellableTranscribe(cactus, path.toString())
+                            }
                         } finally {
                             inferenceBoost.release()
                         }
@@ -243,6 +267,8 @@ class CactusTranscriptionService(
                             modeUsed = sttMode,
                             modelUsed = sttConfig.value.modelName
                         )
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         logger.w(e) { "Local transcription failed, falling back to remote: ${e.message}" }
                         val result = wisprFlow.transcribe(
@@ -251,7 +277,8 @@ class CactusTranscriptionService(
                             language = language,
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
-                            contentContext = contentContext
+                            contentContext = contentContext,
+                            timeout = timeout
                         ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
                         LocalTranscriptionResult(
                             text = result.text,

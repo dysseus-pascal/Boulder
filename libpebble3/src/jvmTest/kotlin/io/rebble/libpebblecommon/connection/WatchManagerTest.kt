@@ -200,6 +200,10 @@ class WatchManagerTest {
         override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
             TODO("Not yet implemented")
         }
+
+        override fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo) {
+            TODO("Not yet implemented")
+        }
     }
     private val blePlatformConfig =
         BlePlatformConfig(delayBleConnectionsAfterAppStart = false, delayBleDisconnections = false)

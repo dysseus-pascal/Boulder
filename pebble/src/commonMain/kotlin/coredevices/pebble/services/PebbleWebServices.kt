@@ -265,6 +265,7 @@ class RealPebbleWebServices(
     private val firmwareUpdateCheck: FirmwareUpdateCheck,
     private val bootConfig: BootConfigProvider,
     private val memfaultChunkQueue: MemfaultChunkQueue,
+    private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
     private val coreConfig: CoreConfigFlow,
@@ -360,6 +361,14 @@ class RealPebbleWebServices(
 
     override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
         memfaultChunkQueue.enqueue(watchInfo.serialForMemfault(), chunk)
+    }
+
+    override fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo) {
+        analyticsHeartbeatQueue.enqueue(
+            serial = watchInfo.serial,
+            fwVersion = watchInfo.runningFwVersion.stringVersion,
+            payload = payload,
+        )
     }
 
     override suspend fun addToLegacyLocker(uuid: String): Boolean =

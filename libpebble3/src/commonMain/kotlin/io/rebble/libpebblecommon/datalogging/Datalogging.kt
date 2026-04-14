@@ -32,7 +32,7 @@ class Datalogging(
             return
         }
 
-        // Handle Memfault chunks (system app only)
+        // Handle system-app datalogging tags
         if (uuid == SYSTEM_APP_UUID) {
             when (tag) {
                 MEMFAULT_CHUNKS_TAG -> {
@@ -45,6 +45,20 @@ class Datalogging(
                         val chunk = MemfaultChunk()
                         chunk.fromBytes(DataBuffer(itemData.toUByteArray()))
                         webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
+                        offset += size
+                    }
+                }
+                ANALYTICS_HEARTBEAT_TAG -> {
+                    // Fixed-size native_heartbeat_record items (no inner length prefix).
+                    val size = itemSize.toInt()
+                    if (size <= 0) {
+                        logger.w { "Analytics heartbeat with itemSize=$size; ignoring" }
+                        return
+                    }
+                    var offset = 0
+                    while (offset + size <= data.size) {
+                        val itemData = data.copyOfRange(offset, offset + size)
+                        webServices.uploadAnalyticsHeartbeat(itemData, watchInfo)
                         offset += size
                     }
                 }
@@ -66,6 +80,7 @@ class Datalogging(
 
     companion object {
         private val MEMFAULT_CHUNKS_TAG: UInt = 86u
+        private val ANALYTICS_HEARTBEAT_TAG: UInt = 87u
     }
 }
 

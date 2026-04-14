@@ -10,6 +10,7 @@ import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
+import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
@@ -54,12 +55,14 @@ class PebbleAppDelegate(
     private val usersDao: UsersDao,
     private val platform: Platform,
     private val memfaultChunkQueue: MemfaultChunkQueue,
+    private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
     fun init() {
         logger.d { "init()" }
         memfaultChunkQueue.startProcessing(GlobalScope)
+        analyticsHeartbeatQueue.startProcessing(GlobalScope)
         permissionsRequester.init()
         if (platform == Platform.Android) {
             // We need to init on android synchronously, so that koin graph is ready when e.g.
@@ -232,6 +235,9 @@ class PebbleAppDelegate(
             },
             scope.launch {
                 memfaultChunkQueue.uploadPendingFromDb()
+            },
+            scope.launch {
+                analyticsHeartbeatQueue.uploadPendingFromDb()
             },
         )
         jobs.joinAll()

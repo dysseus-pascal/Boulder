@@ -37,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
@@ -221,6 +222,17 @@ object IOSDelegate : KoinComponent {
             application.registerForRemoteNotifications()
         }
         commonAppDelegate.init()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            while (true) {
+                try {
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                } catch (e: Exception) {
+                    logger.e(e) { "Periodic background sync failed" }
+                }
+                delay(coreConfigHolder.config.value.weatherSyncInterval)
+            }
+        }
         return true
     }
 
@@ -253,6 +265,14 @@ object IOSDelegate : KoinComponent {
     fun sceneDidBecomeActive() {
         logger.v { "sceneDidBecomeActive" }
         pebbleAppDelegate.onAppResumed()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            try {
+                commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+            } catch (e: Exception) {
+                logger.e(e) { "Foreground sync failed" }
+            }
+        }
     }
 
     fun sceneWillResignActive() {

@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
 import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
@@ -43,6 +44,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
@@ -90,8 +92,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         WeatherAppEntrySyncEntity::class,
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
+        NotificationRuleEntity::class,
     ],
-    version = 34,
+    version = 35,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -117,6 +120,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 31, to = 32),
         AutoMigration(from = 32, to = 33),
         AutoMigration(from = 33, to = 34),
+        AutoMigration(from = 34, to = 35),
     ],
     exportSchema = true,
 )
@@ -140,11 +144,13 @@ abstract class Database : RoomDatabase() {
     abstract fun watchPrefDao(): WatchPrefRealDao
     abstract fun weatherAppDao(): WeatherAppRealDao
     abstract fun appPrefsDao(): AppPrefsEntryDao
+    abstract fun notificationRuleDao(): NotificationRuleDao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")
 @DeleteTable(tableName = "WatchSettingsSyncEntity")
 class AutoMigration30 : AutoMigrationSpec
+
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
 expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {

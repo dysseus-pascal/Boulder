@@ -238,8 +238,8 @@ val properties = Properties().apply {
 buildkonfig {
     packageName = "coredevices.ring"
     defaultConfigs {
-        buildConfigField(FieldSpec.Type.STRING, "NENYA_URL", "https://nenya-staging-460977838956.us-west1.run.app")
-        buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth-460977838956.us-west1.run.app")
+        buildConfigField(FieldSpec.Type.STRING, "NENYA_URL", "https://nenya.repebble.com")
+        buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth.repebble.com")
 
         buildConfigField(FieldSpec.Type.STRING, "TESTS_NOTION_TOKEN", System.getenv("TESTS_NOTION_TOKEN") ?: properties.getProperty("TESTS_NOTION_TOKEN") ?: "")
     }

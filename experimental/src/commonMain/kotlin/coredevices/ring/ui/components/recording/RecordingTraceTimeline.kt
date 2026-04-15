@@ -32,8 +32,6 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 
 data class TraceMilestone(
     val label: String,
@@ -56,15 +54,14 @@ class RecordingTraceTimelineViewModel(
         }
     }
 
-    private fun extractButtonTimestamps(entries: List<TraceEntryEntity>): Pair<Instant?, Instant?> {
-        return entries.firstOrNull { it.type == "transfer_completed" }?.data?.let {
-            val data = Json.decodeFromString<TraceEventData>(it)
-            if (data is TraceEventData.TransferCompleted) {
-                data.buttonReleaseTimestamp?.minus((data.audioDurationSeconds * 1000f).roundToInt().milliseconds) to data.buttonReleaseTimestamp
-            } else {
-                null to null
-            }
-        } ?: (null to null)
+    private fun extractButtonTimeMarks(entries: List<TraceEntryEntity>): Pair<Long?, Long?> {
+        val transferCompleted = entries.firstOrNull { it.type == "transfer_completed" } ?: return null to null
+        val data = transferCompleted.data?.let {
+            Json.decodeFromString<TraceEventData>(it)
+        } as? TraceEventData.TransferCompleted ?: return null to null
+        val audioDurationMs = (data.audioDurationSeconds * 1000f).roundToInt().toLong()
+        val buttonPressTimeMark = transferCompleted.timeMark - audioDurationMs
+        return buttonPressTimeMark to audioDurationMs
     }
 
     private suspend fun loadTraceTimeline() = withContext(Dispatchers.IO) {
@@ -77,14 +74,7 @@ class RecordingTraceTimelineViewModel(
             entries = entries.distinctBy { it.id }.toMutableList()
             entries.sortBy { e -> e.timeMark }
         }
-        val sessionIds = entries.map { it.sessionId }.toSet()
-        val sessions = traceSessionDao.getSessionsByIds(sessionIds)
-        val firstSessionStart = sessions.minOf { it.started }
-        val sessionIdToSession = sessions.associateBy { it.id }
-        val (buttonPressTimestamp, buttonReleaseTimestamp) = extractButtonTimestamps(entries)
-        val firstSessionToButtonPressOffset = buttonPressTimestamp?.let { buttonTs ->
-            buttonTs - firstSessionStart
-        }
+        val (buttonPressTimeMark, audioDurationMs) = extractButtonTimeMarks(entries)
         val firstEntry = entries.firstOrNull()
         val fallbackOffset = firstEntry?.timeMark
         val transferStart = firstEntry?.timeMark?.let { time ->
@@ -119,10 +109,8 @@ class RecordingTraceTimelineViewModel(
         entries.addAll(extraEntries)
         val milestones = entries.map { entry ->
             val label = formatEventType(entry.type)
-            val sessionStart = sessionIdToSession[entry.sessionId]?.started!!
-            val relativeMsSession = entry.timeMark + (sessionStart - firstSessionStart).inWholeMilliseconds
-            val relativeMs = firstSessionToButtonPressOffset?.let { offset ->
-                relativeMsSession - offset.inWholeMilliseconds
+            val relativeMs = buttonPressTimeMark?.let { bpTm ->
+                entry.timeMark - bpTm
             } ?: (entry.timeMark - fallbackOffset!!)
             TraceMilestone(
                 label = label,
@@ -141,14 +129,12 @@ class RecordingTraceTimelineViewModel(
         if (milestones.isNotEmpty()) {
             milestones.add(0, TraceMilestone(
                 label = "Button Press",
-                relativeMs = if (firstSessionToButtonPressOffset != null) 0 else null,
+                relativeMs = if (buttonPressTimeMark != null) 0 else null,
                 isError = false
             ))
             milestones.add(1, TraceMilestone(
                 label = "Button Release",
-                relativeMs = if (buttonReleaseTimestamp != null && buttonPressTimestamp != null) {
-                    (buttonReleaseTimestamp - buttonPressTimestamp).inWholeMilliseconds
-                } else null,
+                relativeMs = audioDurationMs,
                 isError = false
             ))
         }

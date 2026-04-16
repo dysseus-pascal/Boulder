@@ -239,7 +239,7 @@ class RingSync(
                                                 var id: String? = null
                                                 when (transferStatus) {
                                                     is TransferStatus.TransferStarted -> {
-                                                        logger.i { "Transfer started for ${transferStatus.satellite.id}" }
+                                                        logger.i { "Transfer started for ${transferStatus.satellite.id}: serial ${transferStatus.satellite.state.value?.programmedSerialNumber}" }
                                                         trace.markEvent("transfer_started",
                                                             TraceEventData.TransferStarted(
                                                                 transferStatus.satellite.id,
@@ -286,7 +286,10 @@ class RingSync(
                                                         )
                                                         logger.i { "Transfer type determined for ${transferStatus.collectionIndex}: collectionStartIndex = ${transferStatus.collectionStartIndex}, isAudio = ${transferStatus.isAudio}, sequence = ${transferStatus.buttonSequence}, final = ${transferStatus.final}" }
                                                         logger.i { "Lifetime collection count: ${transferStatus.lifetimeCollectionCount}" }
-                                                        transferStatus.satellite.state.value?.serialNumber?.let { serial ->
+                                                        (
+                                                                transferStatus.satellite.state.value?.programmedSerialNumber
+                                                                    ?: transferStatus.satellite.state.value?.serialNumber
+                                                        )?.let { serial ->
                                                             transferStatus.lifetimeCollectionCount?.let { count ->
                                                                 coreAnalytics.updateRingLifetimeCollectionCount(serial, count.toInt())
                                                                 usersDao.updateRingLifetimeCollectionCount(serial, count.toInt())
@@ -511,7 +514,7 @@ class RingSync(
                                                         logTransferEvent(
                                                             latency,
                                                             transferStatus.satellite.lastAdvertisement?.rssi?.roundToInt(),
-                                                            transferStatus.satellite.state.value?.serialNumber,
+                                                            transferStatus.satellite.state.value?.programmedSerialNumber ?: transferStatus.satellite.state.value?.serialNumber,
                                                             audioDuration.seconds,
                                                             transferStatus.collectionStartCount.toInt(),
                                                             transferStatus.collectionIndex
@@ -704,7 +707,7 @@ class RingSync(
             appendLine()
             appendLine("Ring Summary")
             appendLine("ID: ${it.id}")
-            appendLine("Serial: ${state?.serialNumber}")
+            appendLine("Serial: ${state?.programmedSerialNumber ?: state?.serialNumber} (is programmed: ${state?.programmedSerialNumber != null})")
             appendLine("Name: ${it.name}")
             appendLine("Last Seen: ${it.lastAdvertisement?.timestamp}")
             appendLine("Last RSSI: ${it.lastAdvertisement?.rssi}")

@@ -95,6 +95,7 @@ class IndexNotificationManager(
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
     private var lastBugReportPrompt: Instant? = null
+    private val transferToRecordingId = mutableMapOf<Long, Long?>()
 
 
     private suspend fun traceNotificationSent(recordingId: Long?, transferId: Long, stage: String) {
@@ -238,6 +239,9 @@ class IndexNotificationManager(
                     transfer ?: return@mapNotNull null
 
                     val lastEntry = rec?.entry
+                    rec?.id?.let {
+                        transferToRecordingId[transfer.id] = it
+                    }
                     val notif = makeInflightNotification(
                         inflightNotifications[id]?.id ?: nextNotificationId(),
                         transfer,
@@ -428,10 +432,14 @@ class IndexNotificationManager(
                         }
                     }.onCompletion {
                         inflightNotificationJobs.remove(id)
+                        val recordingId = transferToRecordingId[transfer.id]
+                        val recordingIdTxt = recordingId?.let {
+                            "recording $it"
+                        } ?: "transfer $id"
                         if (it is CancellationException) {
-                            logger.w { "Notification job for recording $id cancelled: ${it.message}" }
+                            logger.w { "Notification job for $recordingIdTxt cancelled: ${it.message}" }
                         } else {
-                            logger.d { "Notification job for recording $id completed" }
+                            logger.d { "Notification job for $recordingIdTxt completed" }
                         }
                     }.collect()
             }

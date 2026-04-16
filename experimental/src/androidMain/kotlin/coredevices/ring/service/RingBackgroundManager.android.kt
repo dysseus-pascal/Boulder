@@ -3,6 +3,7 @@ package coredevices.ring.service
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import co.touchlab.kermit.Logger
 import coredevices.ring.database.Preferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +14,10 @@ import org.koin.core.component.inject
 actual class RingBackgroundManager: KoinComponent {
     private val context: Context by inject()
     private val commonPrefs: Preferences by inject()
+
+    companion object {
+        private val logger = Logger.withTag("RingBackgroundManager")
+    }
 
     actual fun startBackground() {
         ContextCompat.startForegroundService(context, Intent(context, RingService::class.java))
@@ -27,8 +32,12 @@ actual class RingBackgroundManager: KoinComponent {
 
     actual fun startBackgroundIfEnabled() {
         val paired = commonPrefs.ringPaired.value
+        logger.d { "Checking if background service should be started. Paired: $paired, isRunning: ${isRunning.value}" }
         if (!isRunning.value && paired != null) {
+            logger.d { "Starting background service." }
             startBackground()
+        } else {
+            logger.d { "Not starting background service." }
         }
     }
 

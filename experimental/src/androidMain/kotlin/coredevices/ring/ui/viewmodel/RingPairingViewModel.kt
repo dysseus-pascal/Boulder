@@ -37,6 +37,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.parameter.parametersOf
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit, private val bondingEvents: Flow<BondingEvent>, private val context: Context): ViewModel(),
@@ -184,7 +185,8 @@ class RingPairingViewModel(private val onShowSnackbar: suspend (String) -> Unit,
                         is BondingEvent.Bonded -> {
                             logger.d { "Successfully bonded with ring: ${bond.deviceId}" }
                             preferences.setRingPaired(result.id!!)
-                            delay(1.seconds) // Scanning again doesn't work immediately after bonding
+                            delay(300.milliseconds) // Scanning again doesn't work immediately after bonding
+                            preferences.ringPaired.first { it == result.id }
                             backgroundManager.startBackgroundIfEnabled()
                             targetRing(result.id)
                         }

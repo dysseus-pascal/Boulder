@@ -31,6 +31,7 @@ import coredevices.pebble.watchModule
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.OAuthRedirectHandler
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.CoroutineScope
@@ -80,17 +81,22 @@ object IOSDelegate : KoinComponent {
     private val doneInitialOnboarding: DoneInitialOnboarding by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
+    private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
     private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun handleOpenUrl(url: NSURL): Boolean {
-        logger.d("IOSDelegate handleOpenUrl $url")
-        val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
-        val coreDeepLinkHandler: CoreDeepLinkHandler = get()
         val uri = url.toUri()
-        return GIDSignIn.sharedInstance.handleURL(url) ||
-                uri?.let {
-                    pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
-                } ?: false
+        if (!oAuthRedirectHandler.handleOAuthRedirect(uri)) {
+            logger.d("IOSDelegate handleOpenUrl $url")
+            val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
+            val coreDeepLinkHandler: CoreDeepLinkHandler = get()
+            return GIDSignIn.sharedInstance.handleURL(url) ||
+                    uri?.let {
+                        pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
+                    } ?: false
+        } else {
+            return true
+        }
     }
 
     private fun initPebble() {

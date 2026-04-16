@@ -11,6 +11,7 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.firestoreModule
@@ -127,7 +128,7 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val debugDetailsEnabled: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
-    override val approvedBeeperContacts: StateFlow<List<String>>
+    override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
         get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
@@ -172,7 +173,7 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
         TODO("Not yet implemented")
     }
 

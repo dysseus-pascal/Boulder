@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.messaging.BeeperAPI
 import coredevices.ring.database.Preferences
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,7 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     }
 
     private val _approvedIds = MutableStateFlow(
-        prefs.approvedBeeperContacts.value.toHashSet()
+        prefs.approvedBeeperContacts.value.map { it.roomId }.toHashSet()
     )
     actual val approvedIds: StateFlow<Set<String>> = _approvedIds.asStateFlow()
 
@@ -48,11 +49,15 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
 
     actual fun loadApprovedContacts() {
         viewModelScope.launch(Dispatchers.IO) {
+            val savedContacts = prefs.approvedBeeperContacts.value
             val ids = _approvedIds.value
-            if (ids.isEmpty()) {
+            if (ids.isEmpty() && savedContacts.isEmpty()) {
                 _approvedContacts.value = emptyList()
                 return@launch
             }
+            // Build a map of roomId -> saved nickname/name for merging
+            val savedByRoom = savedContacts.associateBy { it.roomId }
+
             try {
                 val results = mutableListOf<SettingsBeeperContact>()
                 val foundRoomIds = mutableSetOf<String>()
@@ -101,10 +106,25 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
                     }
                 }
 
-                _approvedContacts.value = results
+                // Merge saved nicknames into loaded contacts
+                _approvedContacts.value = results.map { contact ->
+                    val saved = savedByRoom[contact.roomId]
+                    if (saved != null) {
+                        contact.copy(nickname = saved.nickname)
+                    } else contact
+                }
             } catch (e: SecurityException) {
                 Log.w(TAG, "Permission denied loading approved contacts")
-                _approvedContacts.value = emptyList()
+                // Fall back to showing saved contacts without live Beeper data
+                _approvedContacts.value = savedContacts.map {
+                    SettingsBeeperContact(
+                        id = it.roomId,
+                        name = it.name.ifEmpty { it.roomId },
+                        protocol = "",
+                        roomId = it.roomId,
+                        nickname = it.nickname
+                    )
+                }
             }
         }
     }
@@ -166,9 +186,35 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
         _approvedContacts.value = _approvedContacts.value.filter { (it.roomId ?: it.id) != roomId }
     }
 
+    actual fun setNickname(roomId: String, nickname: String?) {
+        Log.d(TAG, "setNickname: roomId=$roomId, nickname=$nickname")
+        _approvedContacts.value = _approvedContacts.value.map { contact ->
+            if ((contact.roomId ?: contact.id) == roomId) {
+                contact.copy(nickname = nickname)
+            } else contact
+        }
+    }
+
     actual fun persist() {
         viewModelScope.launch {
-            prefs.setApprovedBeeperContacts(_approvedIds.value.toList())
+            // Start from the saved contacts as the base to preserve entries
+            // that Beeper didn't resolve this session
+            val savedByRoom = prefs.approvedBeeperContacts.value.associateBy { it.roomId }
+            val resolvedByRoom = _approvedContacts.value.associate { contact ->
+                val roomId = contact.roomId ?: contact.id
+                roomId to ApprovedBeeperContact(
+                    roomId = roomId,
+                    name = contact.name,
+                    nickname = contact.nickname
+                )
+            }
+            // Merge: use resolved data where available, keep saved data for unresolved,
+            // but only for IDs still in the approved set
+            val approvedIds = _approvedIds.value
+            val merged = approvedIds.mapNotNull { id ->
+                resolvedByRoom[id] ?: savedByRoom[id]
+            }
+            prefs.setApprovedBeeperContacts(merged.ifEmpty { null })
         }
     }
 

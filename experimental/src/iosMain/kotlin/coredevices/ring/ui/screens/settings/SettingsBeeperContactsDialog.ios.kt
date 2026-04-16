@@ -20,6 +20,9 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     actual fun removeContact(roomId: String) {
     }
 
+    actual fun setNickname(roomId: String, nickname: String?) {
+    }
+
     actual fun persist() {
     }
 

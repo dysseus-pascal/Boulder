@@ -8,6 +8,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.database.Preferences
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -22,6 +23,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             "tools."
 ), KoinComponent {
     private val context: Context by inject()
+    private val prefs: Preferences by inject()
 
     companion object {
         private val logger = Logger.withTag("SendBeeperMessageTool")
@@ -38,9 +40,11 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             val resultUri = context.contentResolver.insert(uri, ContentValues())
 
             if (resultUri?.getQueryParameter("messageId") != null) {
+                val contact = prefs.approvedBeeperContacts.value.find { it.roomId == contactId }
+                val displayName = contact?.nickname ?: contact?.name ?: "contact"
                 ToolCallResult(
                     "{}",
-                    SemanticResult.GenericSuccess
+                    SemanticResult.MessageSent(displayName)
                 )
             } else {
                 ToolCallResult(

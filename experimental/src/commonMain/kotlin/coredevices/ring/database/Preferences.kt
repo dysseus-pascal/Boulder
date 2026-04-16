@@ -1,6 +1,7 @@
 package coredevices.ring.database
 
 import com.russhwolf.settings.Settings
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
@@ -22,7 +23,7 @@ interface Preferences {
     val musicControlMode: StateFlow<MusicControlMode>
     val lastSyncIndex: StateFlow<Int?>
     val debugDetailsEnabled: StateFlow<Boolean>
-    val approvedBeeperContacts: StateFlow<List<String>>
+    val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
@@ -38,7 +39,7 @@ interface Preferences {
     fun setMusicControlMode(mode: MusicControlMode)
     suspend fun setLastSyncIndex(index: Int?)
     fun setDebugDetailsEnabled(enabled: Boolean)
-    suspend fun setApprovedBeeperContacts(contacts: List<String>?)
+    suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
@@ -79,9 +80,18 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     private val _debugDetailsEnabled = MutableStateFlow(settings.getBoolean("debug_details_enabled", false))
     override val debugDetailsEnabled = _debugDetailsEnabled.asStateFlow()
     private val _approvedBeeperContacts = MutableStateFlow(
-        settings.getStringOrNull("approved_beeper_contacts")
-            ?.let { Json.decodeFromString<List<String>>(it) }
-            ?: emptyList()
+        settings.getStringOrNull("approved_beeper_contacts")?.let { raw ->
+            try {
+                Json.decodeFromString<List<ApprovedBeeperContact>>(raw)
+            } catch (_: Exception) {
+                // Migrate from old format (plain list of roomId strings)
+                try {
+                    Json.decodeFromString<List<String>>(raw).map {
+                        ApprovedBeeperContact(roomId = it, name = "")
+                    }
+                } catch (_: Exception) { emptyList() }
+            }
+        } ?: emptyList()
     )
     override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
     private val _secondaryMode = MutableStateFlow(
@@ -154,7 +164,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _debugDetailsEnabled.value = enabled
     }
 
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
         withContext(Dispatchers.IO) {
             if (contacts != null) {
                 val json = Json.encodeToString(contacts)

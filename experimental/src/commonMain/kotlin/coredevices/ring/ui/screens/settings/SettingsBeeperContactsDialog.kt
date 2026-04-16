@@ -65,6 +65,7 @@ expect class SettingsBeeperContactsDialogViewModel(): ViewModel {
     val hasPermission: StateFlow<Boolean>
     fun addContact(roomId: String, contact: SettingsBeeperContact)
     fun removeContact(roomId: String)
+    fun setNickname(roomId: String, nickname: String?)
     fun persist()
     fun refreshPermission()
     fun loadApprovedContacts()
@@ -77,7 +78,8 @@ data class SettingsBeeperContact(
     val roomId: String? = null,
     val chatTitle: String? = null,
     val isGroupChat: Boolean = false,
-    val lastMessageTimestamp: Long = 0L
+    val lastMessageTimestamp: Long = 0L,
+    val nickname: String? = null
 )
 
 @Composable
@@ -165,6 +167,9 @@ private fun ApprovedContactsView(
     approvedContacts: List<SettingsBeeperContact>,
     onAdd: () -> Unit
 ) {
+    var editingNicknameFor by remember { mutableStateOf<String?>(null) }
+    var nicknameText by remember { mutableStateOf("") }
+
     Text(
         "Contacts Index is allowed to message. Try saying \"Message Alice - What's up?\"",
         style = MaterialTheme.typography.bodySmall,
@@ -184,6 +189,7 @@ private fun ApprovedContactsView(
             modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)
         ) {
             items(approvedContacts, key = { it.roomId ?: it.id }) { contact ->
+                val roomId = contact.roomId ?: contact.id
                 val displayName = if (contact.isGroupChat) {
                     contact.chatTitle ?: contact.name
                 } else {
@@ -195,21 +201,66 @@ private fun ApprovedContactsView(
                     append(cleanProtocol)
                     if (identifier != null) append(" ($identifier)")
                 }
-                ListItem(
-                    headlineContent = { Text(displayName) },
-                    supportingContent = { Text(protocolLine) },
-                    trailingContent = {
-                        IconButton(onClick = {
-                            viewModel.removeContact(contact.roomId ?: contact.id)
-                        }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Remove",
-                                tint = MaterialTheme.colorScheme.error
+                val isEditing = editingNicknameFor == roomId
+                Column {
+                    ListItem(
+                        modifier = Modifier.clickable {
+                            if (isEditing) {
+                                editingNicknameFor = null
+                            } else {
+                                editingNicknameFor = roomId
+                                nicknameText = contact.nickname ?: ""
+                            }
+                        },
+                        headlineContent = { Text(displayName) },
+                        supportingContent = {
+                            Column {
+                                Text(protocolLine)
+                                if (contact.nickname != null && !isEditing) {
+                                    Text(
+                                        "Nickname: ${contact.nickname}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            IconButton(onClick = {
+                                viewModel.removeContact(roomId)
+                            }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    )
+                    if (isEditing) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            TextField(
+                                value = nicknameText,
+                                onValueChange = { nicknameText = it },
+                                label = { Text("Nickname") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
                             )
+                            TextButton(onClick = {
+                                viewModel.setNickname(
+                                    roomId,
+                                    nicknameText.trim().ifEmpty { null }
+                                )
+                                editingNicknameFor = null
+                            }) {
+                                Text("Save")
+                            }
                         }
                     }
-                )
+                }
             }
         }
     }

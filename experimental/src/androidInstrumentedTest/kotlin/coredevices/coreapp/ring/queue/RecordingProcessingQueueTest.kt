@@ -21,6 +21,7 @@ import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.database.MusicControlMode
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.RingDatabase
@@ -78,7 +79,7 @@ class FakePreferences : Preferences {
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
-    override val approvedBeeperContacts: StateFlow<List<String>> = MutableStateFlow(emptyList())
+    override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.Native)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
@@ -91,7 +92,7 @@ class FakePreferences : Preferences {
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {}
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProvider(provider: ReminderProvider) {}
     override fun setNoteProvider(provider: NoteProvider) {}

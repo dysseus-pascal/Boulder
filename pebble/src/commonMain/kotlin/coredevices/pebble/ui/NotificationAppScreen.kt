@@ -184,12 +184,6 @@ fun NotificationAppScreen(
                 // (Notification filtering pending on-device support on iOS)
                 if (platform == Platform.Android) {
                     item {
-                        NotificationRulesSection(
-                            app = appWrapper.app,
-                            notificationApps = notificationApps,
-                        )
-                    }
-                    item {
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             ElevatedCard(
                                 elevation = CardDefaults.cardElevation(
@@ -248,6 +242,12 @@ fun NotificationAppScreen(
                                 }
                             }
                         }
+                    }
+                    item {
+                        NotificationRulesSection(
+                            app = appWrapper.app,
+                            notificationApps = notificationApps,
+                        )
                     }
                 }
 

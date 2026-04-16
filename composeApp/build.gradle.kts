@@ -169,6 +169,11 @@ kotlin {
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.rules)
             implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.ktor.client.okhttp)
+            implementation(project(":experimental"))
+            implementation(project(":util"))
+            implementation(project(":index-ai"))
+            implementation(project(":mcp"))
         }
         androidUnitTest.dependencies {
             implementation(libs.ktor.client.okhttp)

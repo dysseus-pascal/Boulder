@@ -42,6 +42,9 @@ class FakeTraceSessionDao : TraceSessionDao {
 
     override suspend fun getLastNTraceSessions(limit: Int, offset: Int): List<TraceSessionEntity> =
         sessions.sortedByDescending { it.started }.drop(offset).take(limit)
+
+    override suspend fun getSessionsByIds(ids: Set<Long>): List<TraceSessionEntity> =
+        sessions.filter { it.id in ids }.sortedBy { it.started }
 }
 
 class FakeTraceEntryDao : TraceEntryDao {
@@ -56,6 +59,23 @@ class FakeTraceEntryDao : TraceEntryDao {
 
     override suspend fun insertAll(traceEntries: List<TraceEntryEntity>): List<Long> =
         traceEntries.map { insertTraceEntry(it) }
+
+    override suspend fun getEntriesForSession(sessionId: Long): List<TraceEntryEntity> =
+        entries.filter { it.sessionId == sessionId }.sortedBy { it.timeMark }
+
+    override suspend fun getEntriesForRecording(recordingId: Long): List<TraceEntryEntity> =
+        entries.filter { it.recordingId == recordingId }.sortedBy { it.timeMark }
+
+    override suspend fun getEntriesForTransfer(transferId: Long): List<TraceEntryEntity> =
+        entries.filter { it.transferId == transferId }.sortedBy { it.timeMark }
+
+    override suspend fun getEntryBeforeTimeMarkOfType(sessionId: Long, timeMark: Long, type: String): TraceEntryEntity? =
+        entries.filter { it.sessionId == sessionId && it.timeMark < timeMark && it.type == type }
+            .maxByOrNull { it.timeMark }
+
+    override suspend fun getEntryBetweenTimeMarksOfType(sessionId: Long, startTimeMark: Long, endTimeMark: Long, type: String): TraceEntryEntity? =
+        entries.filter { it.sessionId == sessionId && it.timeMark > startTimeMark && it.timeMark < endTimeMark && it.type == type }
+            .minByOrNull { it.timeMark }
 }
 
 // endregion

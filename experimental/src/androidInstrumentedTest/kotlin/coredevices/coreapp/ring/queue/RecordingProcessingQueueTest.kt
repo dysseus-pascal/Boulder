@@ -37,7 +37,10 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.TranscriptionService
@@ -84,6 +87,9 @@ class FakePreferences : Preferences {
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.Native)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
+    override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+    override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
+    override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -97,6 +103,9 @@ class FakePreferences : Preferences {
     override fun setReminderProvider(provider: ReminderProvider) {}
     override fun setNoteProvider(provider: NoteProvider) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
+    override fun setBackupEnabled(enabled: Boolean) {}
+    override fun setUseEncryption(enabled: Boolean) {}
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
 }
 
 class FakeServletRepository : ServletRepository {
@@ -175,13 +184,18 @@ class RecordingProcessingQueueTest {
         single { get<RingDatabase>().httpMcpServerDao() }
         single { get<RingDatabase>().mcpSandboxGroupDao() }
         single { get<RingDatabase>().recordingProcessingTaskDao() }
+        single { get<RingDatabase>().traceSessionDao() }
+        single { get<RingDatabase>().traceEntryDao() }
 
         // Repositories
         singleOf(::RecordingProcessingTaskRepository)
         singleOf(::RecordingRepository)
         singleOf(::RingTransferRepository)
         singleOf(::McpSandboxRepository)
+        single { EncryptionKeyManager(context.applicationContext) }
+        singleOf(::DocumentEncryptor)
         singleOf(::RecordingStorage)
+        singleOf(::RingTraceSession)
 
         // Fakes
         single<NenyaClient> { fakeNenya }
@@ -192,6 +206,7 @@ class RecordingProcessingQueueTest {
             object : Platform {
                 override val name = "Android"
                 override suspend fun openUrl(url: String) {}
+                override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }
         }
         // Real BuiltinServletRepository needed by McpSessionFactory (never actually resolves tools
@@ -218,7 +233,7 @@ class RecordingProcessingQueueTest {
 
         // Background scope with short reschedule delay
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
     private fun createFakeAudioFile(fileId: String) {
@@ -261,6 +276,7 @@ class RecordingProcessingQueueTest {
             recordingOperationFactory = koin.get(),
             scope = RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)),
             recordingPreprocessor = koin.get(),
+            trace = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }

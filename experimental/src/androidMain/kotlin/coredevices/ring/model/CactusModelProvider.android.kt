@@ -180,7 +180,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         try {
             Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
             logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             logger.e(e) { "Failed to initialize telemetry environment" }
         }
     }

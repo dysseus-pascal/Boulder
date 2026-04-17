@@ -4,12 +4,15 @@ import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
 import com.viktormykhailiv.kmp.health.HealthManagerFactory
 import coredevices.pebble.account.BootConfigProvider
+import coredevices.pebble.account.FirestoreKnownWatchesDao
+import coredevices.pebble.account.FirestoreKnownWatchesSync
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
 import coredevices.pebble.account.RealBootConfigProvider
+import coredevices.pebble.account.RealFirestoreKnownWatchesSync
 import coredevices.pebble.account.RealFirestoreLocker
 import coredevices.pebble.account.RealPebbleAccount
 import coredevices.pebble.firmware.Cohorts
@@ -117,8 +120,10 @@ val watchModule = module {
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
     single { FirestoreLockerDao { get() } }
+    single { FirestoreKnownWatchesDao { get() } }
     single { HealthManagerFactory().createManager() }
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
+    singleOf(::RealFirestoreKnownWatchesSync) bind FirestoreKnownWatchesSync::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class
     single { MobileGeocoder() } bind Geocoder::class
     single<HealthDataApi> { get<LibPebble>() }

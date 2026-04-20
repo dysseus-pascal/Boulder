@@ -1,8 +1,10 @@
 package coredevices.pebble.services
 
 import CommonApiConfig
+import CoreAppVersion
 import co.touchlab.kermit.Logger
 import coredevices.database.AnalyticsHeartbeatEntity
+import coredevices.pebble.Platform
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.ktor.client.HttpClient
@@ -22,6 +24,8 @@ import kotlinx.serialization.json.putJsonObject
 class AnalyticsIngest(
     private val httpClient: HttpClient,
     private val apiConfig: CommonApiConfig,
+    private val platform: Platform,
+    private val appVersion: CoreAppVersion,
 ) {
     private val logger = Logger.withTag("AnalyticsIngest")
 
@@ -66,6 +70,8 @@ class AnalyticsIngest(
         }
         put("tz_offset", row.tzOffsetMinutes)
         put("analytics_data", Base64.encode(row.payload))
+        put("mobile_version", appVersion.version)
+        put("mobile_os", platform.storeString())
         userToken?.let {
             put("firebase_token", userToken)
         }

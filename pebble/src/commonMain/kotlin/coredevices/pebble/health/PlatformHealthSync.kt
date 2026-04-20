@@ -78,15 +78,12 @@ class PlatformHealthSync(
 
     /** Request write permissions. Returns true if granted. */
     suspend fun requestPermissions(): Boolean {
-        // kmp-health's Google-Fit fallback (used on Android devices without Health Connect)
-        // throws IllegalArgumentException synchronously for data types it doesn't support
-        // (e.g. Exercise) — not wrapped in the Result, so we catch it here.
         val result = try {
             healthManager.requestAuthorization(
                 readTypes = RequestedReadTypes,
                 writeTypes = RequestedWriteTypes,
             )
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             logger.w(e) { "Health platform doesn't support requested types" }
             tracker.setEnabled(false)
             return false
@@ -106,7 +103,7 @@ class PlatformHealthSync(
                 readTypes = RequestedReadTypes,
                 writeTypes = RequestedWriteTypes,
             )
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             logger.w(e) { "Health platform doesn't support requested types" }
             return false
         }

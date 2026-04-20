@@ -77,6 +77,8 @@ import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
@@ -100,7 +102,7 @@ val watchModule = module {
             get(),
             get(),
             get(),
-            Firebase.auth.idTokenChanged
+            flow { emitAll(Firebase.auth.idTokenChanged) }
                 .map { try { it?.getIdToken(false) } catch (e: Exception) { Logger.w(e) { "Failed to get ID token" }; null } }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),

@@ -175,7 +175,10 @@ object IOSDelegate : KoinComponent {
         ) { task ->
             if (task == null) return@registerForTaskWithIdentifier
 
-            // Create a job for this specific execution
+            // Schedule the next task immediately, before doing work.
+            // If scheduled in finally, a SIGKILL mid-task breaks the chain.
+            requestBgRefresh(force = false, coreConfigHolder.config.value)
+
             val job = bgTaskScope.launch {
                 try {
                     logger.d { "Background refresh task started" }
@@ -185,10 +188,6 @@ object IOSDelegate : KoinComponent {
                 } catch (e: Exception) {
                     logger.e(e) { "Background refresh task failed" }
                     task.setTaskCompletedWithSuccess(false)
-                } finally {
-                    // Use NonCancellable to ensure the reschedule happens
-                    // even if the job was just cancelled by the expirationHandler
-                    requestBgRefresh(force = false, coreConfigHolder.config.value)
                 }
             }
 

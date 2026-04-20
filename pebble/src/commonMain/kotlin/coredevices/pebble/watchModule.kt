@@ -101,7 +101,7 @@ val watchModule = module {
             get(),
             get(),
             Firebase.auth.idTokenChanged
-                .map { it?.getIdToken(false) }
+                .map { try { it?.getIdToken(false) } catch (e: Exception) { Logger.w(e) { "Failed to get ID token" }; null } }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),
             get(),

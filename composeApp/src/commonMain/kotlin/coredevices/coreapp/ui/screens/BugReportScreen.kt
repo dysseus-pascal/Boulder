@@ -6,6 +6,7 @@ import DocumentAttachment
 import NextBugReportContext
 import PlatformShareLauncher
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,18 +23,23 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.InsertPhoto
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.BottomAppBar
@@ -57,12 +63,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -74,7 +83,10 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
+import coredevices.pebble.ui.toPngBytes
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInDialog
@@ -166,6 +178,15 @@ fun BugReportScreen(
         val snackbarHostState = remember { SnackbarHostState() }
         var showSignInDialog by remember { mutableStateOf(false) }
 
+        // Watch screenshot capture
+        val libPebble = rememberLibPebble()
+        val watches by libPebble.watches.collectAsState()
+        val connectedScreenshotWatch = remember(watches) {
+            watches.filterIsInstance<ConnectedPebble.Screenshot>().firstOrNull()
+        }
+        var watchScreenshot by remember { mutableStateOf<ImageBitmap?>(null) }
+        var screenshotLoading by remember { mutableStateOf(false) }
+
         fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
 
@@ -187,6 +208,7 @@ fun BugReportScreen(
                     return@launch
                 }
 
+                val capturedPngBytes = watchScreenshot?.toPngBytes()
                 val params = BugReportGenerationParams(
                     userMessage = userMessage,
                     userName = currentUser?.userName,
@@ -196,7 +218,17 @@ fun BugReportScreen(
                     sendRecording = sendRecording,
                     expOutputPath = recordingPath,
                     imageAttachments = (imageAttachments ?: emptyList()) +
-                            if (screenshotPath != null) {
+                            if (capturedPngBytes != null) {
+                                // Use the in-session screenshot capture (takes priority over screenshotPath)
+                                listOf(
+                                    DocumentAttachment(
+                                        fileName = "watch-screenshot.png",
+                                        mimeType = "image/png",
+                                        source = kotlinx.io.Buffer().apply { write(capturedPngBytes) },
+                                        size = capturedPngBytes.size.toLong(),
+                                    )
+                                )
+                            } else if (screenshotPath != null) {
                                 try {
                                     val screenshotFile = Path(screenshotPath)
                                     listOf(
@@ -315,7 +347,7 @@ fun BugReportScreen(
                         )
                         Spacer(Modifier.weight(1.0f))
                         Button(
-                            enabled = !sending && !showSuccess && user != null && canSendReports,
+                            enabled = !sending && !showSuccess && !screenshotLoading && user != null && canSendReports,
                             onClick = {
                                 keyboardController?.hide()
                                 sendLogs(shareLocally = false)
@@ -381,7 +413,10 @@ fun BugReportScreen(
                     ) {
                         FilterChip(
                             selected = !isWatch,
-                            onClick = { isWatch = false },
+                            onClick = {
+                                isWatch = false
+                                watchScreenshot = null
+                            },
                             label = { Text("Index bug") }
                         )
                         FilterChip(
@@ -419,6 +454,85 @@ fun BugReportScreen(
                         )
                     }
                 }
+                // Watch screenshot capture
+                if (isWatch && connectedScreenshotWatch != null) {
+                    fun captureScreenshot() {
+                        screenshotLoading = true
+                        scope.launch {
+                            try {
+                                watchScreenshot = connectedScreenshotWatch.takeScreenshot()
+                            } catch (e: Exception) {
+                                Logger.withTag("BugReportScreen").e(e) { "Failed to capture screenshot" }
+                            } finally {
+                                screenshotLoading = false
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    if (watchScreenshot == null && !screenshotLoading) {
+                        OutlinedButton(
+                            onClick = { captureScreenshot() },
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        ) {
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(ButtonDefaults.IconSize)
+                            )
+                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                            Text("Take Watch Screenshot")
+                        }
+                    } else if (screenshotLoading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Text("Capturing screenshot...", fontSize = 14.sp)
+                        }
+                    } else {
+                        watchScreenshot?.let { screenshot ->
+                            ElevatedCard(
+                                shape = CutCornerShape(0.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(8.dp),
+                                ) {
+                                    val height = 120.dp
+                                    val width = height / screenshot.height * screenshot.width
+                                    Image(
+                                        bitmap = screenshot,
+                                        contentDescription = "Watch screenshot",
+                                        modifier = Modifier.height(height).width(width),
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    ) {
+                                        IconButton(
+                                            onClick = { captureScreenshot() },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(Icons.Default.Refresh, "Retake", modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(
+                                            onClick = { watchScreenshot = null },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(Icons.Default.Close, "Remove", modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 PebbleElevatedButton(
                     onClick = {
                         scope.launch {

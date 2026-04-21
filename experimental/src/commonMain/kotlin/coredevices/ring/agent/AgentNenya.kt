@@ -193,7 +193,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                     it.role != MessageRole.tool || it.tool_call_id != null // filter out tool messages that are not tool call responses (e.g. fake search completion message above)
                 },
                 toolSpecs = emptyList(),
-                additionalContext = "Provide a concise summary of the search results to be shown on a small smartwatch screen, with no additional commentary and no markdown formatting.",
+                additionalContext = "Provide a concise answer to the query after searching the internet, to be shown on a small display. The answer should have no additional commentary or markdown formatting.",
                 searchMode = true
             )
         } catch (e: IOException) {

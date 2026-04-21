@@ -10,7 +10,7 @@ import kotlin.math.round
 /**
  * Represents a grouped sleep session combining multiple sleep/deep sleep entries
  */
-internal data class SleepSession(
+data class SleepSession(
     var start: Long,
     var end: Long,
     var totalSleep: Long = 0,
@@ -24,7 +24,7 @@ internal data class SleepSession(
  * Only Sleep type entries count toward total sleep duration.
  * DeepSleep is tracked separately as it's a subset of the total sleep (portion of sleep that was deep).
  */
-internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
+fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
     val sessions = mutableListOf<SleepSession>()
 
     sleepEntries.sortedBy { it.startTime }.forEach { entry ->
@@ -69,7 +69,7 @@ internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<Sle
  *
  * @return The longest sleep session (main sleep, not naps) or null if no sleep data
  */
-internal suspend fun fetchAndGroupDailySleep(
+suspend fun fetchAndGroupDailySleep(
     healthDao: HealthDao,
     dayStartEpochSec: Long,
     timeZone: kotlinx.datetime.TimeZone

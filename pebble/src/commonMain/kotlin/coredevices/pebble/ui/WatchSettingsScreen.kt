@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -112,6 +113,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.ui.ConfirmDialog
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfig
@@ -269,6 +271,7 @@ data class SettingsItemsState(
     val debugOptionsEnabled: Boolean,
     val anyWatchSupportsSettingsSync: Boolean,
     val coreConfig: CoreConfig,
+    val healthTrackingEnabled: Boolean,
 )
 
 @Composable
@@ -302,6 +305,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     }
     var showBtClassicInfoDialog by remember { mutableStateOf(false) }
     var showHealthStatsDialog by remember { mutableStateOf(false) }
+    val showFakeHealthDataDialog = remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
@@ -356,6 +360,15 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             onDismissRequest = { showHealthStatsDialog = false },
         )
     }
+    ConfirmDialog(
+        show = showFakeHealthDataDialog,
+        title = "Populate fake health data",
+        text = "This will wipe all existing health data and replace it with 30 days of fake data. This cannot be undone.",
+        confirmText = "Wipe & Populate",
+        onConfirm = {
+            scope.launch { libPebble.populateDebugHealthData() }
+        },
+    )
     if (showSignInDialog) {
         SignInDialog(
             onDismiss = { showSignInDialog = false }
@@ -989,6 +1002,17 @@ please disable the option.""".trimIndent(),
                         openGoogleFitApp(uiContext)
                     },
                 ),
+                basicSettingsToggleItem(
+                    title = "Show Health Tab",
+                    description = "Show Health instead of Notifications in the bottom bar",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = coreConfig.preferHealthTab,
+                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
+                    },
+                ),
                 basicSettingsActionItem(
                     title = "View debug stats",
                     description = "Health statistics and averages",
@@ -997,6 +1021,17 @@ please disable the option.""".trimIndent(),
                     keywords = "health steps sleep stats debug",
                     action = {
                         showHealthStatsDialog = true
+                    },
+                    show = { debugOptionsEnabled },
+                ),
+                basicSettingsActionItem(
+                    title = "Populate fake health data",
+                    description = "Warning: this will wipe all existing health data!",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    keywords = "health debug fake data populate",
+                    action = {
+                        showFakeHealthDataDialog.value = true
                     },
                     show = { debugOptionsEnabled },
                 ),
@@ -1454,6 +1489,7 @@ please disable the option.""".trimIndent(),
         debugOptionsEnabled = debugOptionsEnabled,
         anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
         coreConfig = coreConfig,
+        healthTrackingEnabled = healthSettings.trackingEnabled,
     )
 }
 
@@ -1610,8 +1646,41 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         }
                     }
                 } else {
+                    val notificationsDisplaced = state.coreConfig.enableIndex &&
+                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
+                    val healthDisplaced = state.coreConfig.enableIndex &&
+                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
+
                     // When not searching, show category list
                     LazyColumn(state = listState) {
+                        if (notificationsDisplaced) {
+                            item(key = "displaced_notifications") {
+                                ListItem(
+                                    leadingContent = {
+                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
+                                    },
+                                    headlineContent = { Text("Notifications") },
+                                    shadowElevation = ELEVATION,
+                                    modifier = Modifier.clickable {
+                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
+                                    },
+                                )
+                            }
+                        }
+                        if (healthDisplaced) {
+                            item(key = "displaced_health") {
+                                ListItem(
+                                    leadingContent = {
+                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
+                                    },
+                                    headlineContent = { Text("Health") },
+                                    shadowElevation = ELEVATION,
+                                    modifier = Modifier.clickable {
+                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
+                                    },
+                                )
+                            }
+                        }
                         items(
                             items = sectionsToShowInList,
                             key = { it.name },

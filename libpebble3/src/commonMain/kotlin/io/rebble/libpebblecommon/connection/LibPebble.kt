@@ -25,6 +25,8 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -32,6 +34,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.services.SleepSession
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -134,10 +137,56 @@ interface HealthApi {
     val healthDataUpdated: SharedFlow<Unit>
 }
 
+/**
+ * Represents the most recent heart rate reading from the watch.
+ */
+data class LatestHeartRate(
+    val bpm: Int,
+    val timestampEpochSec: Long,
+)
+
 interface HealthDataApi {
     suspend fun getLatestTimestamp(): Long?
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
     suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
+
+    /** Returns minute-level health data for the given epoch-second range. */
+    suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
+    suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
+
+    /** Returns a single aggregate (total steps, calories, distance, active minutes) for the entire range. */
+    suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates?
+
+    /** Returns the average heart rate (BPM) for non-zero readings in the range, or null if no data. */
+    suspend fun getAverageHeartRate(start: Long, end: Long): Double?
+
+    /** Returns sleep overlay entries (Sleep + DeepSleep types) in the range. */
+    suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns the main sleep session for a given day, using the 6PM-2PM search window.
+     *  @param dayStartEpochSec start-of-day in epoch seconds (midnight local time) */
+    suspend fun getDailySleepSession(dayStartEpochSec: Long): SleepSession?
+
+    /** Returns the most recent non-zero heart rate reading, or null if none exists. */
+    suspend fun getLatestHeartRateReading(): LatestHeartRate?
+
+    /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
+    suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
+
+    /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
+    suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns hourly typical (historical average) step counts for the given weekday.
+     *  @param dayOfWeek kotlinx.datetime.DayOfWeek ordinal (0=Monday, 6=Sunday) */
+    suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>
+
+    /** Returns the 30-day average sleep duration in seconds. */
+    suspend fun getTypicalSleepSeconds(): Long
+
+    /** Wipes all health data and populates 30 days of fake data for testing. */
+    suspend fun populateDebugHealthData()
 }
 
 interface Weather {

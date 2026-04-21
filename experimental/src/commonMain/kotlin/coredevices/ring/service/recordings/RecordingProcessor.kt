@@ -111,6 +111,15 @@ class RecordingProcessor(
         }
     }
 
+    private suspend fun linkUserMessageToEntry(recordingId: Long, recordingEntryId: Long?) {
+        if (recordingEntryId == null) return
+        val userMessageId = conversationMessageDao.getLastMessageForRecordingByRole(
+            recordingId,
+            MessageRole.user
+        ).firstOrNull()?.id
+        userMessageId?.let { updateRecordingEntryMessage(recordingEntryId, it) }
+    }
+
     private fun watchConversationUpdates(scope: CoroutineScope, agent: Agent, localRecordingId: Long, recordingEntryId: Long?): Job {
         var updatedMessageId = false
         return agent.conversation.drop(1).onEach { // Skip the initial value as this will be the same as what we have already stored, or invalid
@@ -224,6 +233,7 @@ class RecordingProcessor(
             )
         }
         updateConversation(recordingId, agent.conversation.first())
+        linkUserMessageToEntry(recordingId, recordingEntryId)
         trace.markEvent("agent_processing_end",
             TraceEventData.AgentProcessingEnd(
                 recordingId = recordingId,

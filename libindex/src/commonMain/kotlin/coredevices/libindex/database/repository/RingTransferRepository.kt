@@ -1,25 +1,25 @@
-package coredevices.ring.database.room.repository
+package coredevices.libindex.database.repository
 
 import androidx.paging.PagingSource
+import androidx.room.RoomDatabase
 import androidx.room.Transactor
 import androidx.room.useWriterConnection
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.RingTransferInfo
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.data.entity.room.RingTransferStatus
-import coredevices.ring.database.room.RingDatabase
-import coredevices.ring.database.room.dao.RingTransferDao
-import coredevices.ring.database.room.dao.RingTransferFeedItem
-import coredevices.ring.database.room.dao.TransferInfoUpdate
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.dao.RingTransferFeedItem
+import coredevices.libindex.database.dao.TransferInfoUpdate
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
 class RingTransferRepository(
     private val ringTransferDao: RingTransferDao,
-    private val db: RingDatabase
+    private val db: RoomDatabase
 ) {
     companion object {
-        private val logger = Logger.withTag("RingTransferRepository")
+        private val logger = Logger.Companion.withTag("RingTransferRepository")
     }
 
     suspend fun createRingTransfer(
@@ -133,10 +133,12 @@ class RingTransferRepository(
         id: Long,
         transferInfo: RingTransferInfo
     ) {
-        ringTransferDao.updateTransferInfo(TransferInfoUpdate(
-            id = id,
-            info = transferInfo
-        ))
+        ringTransferDao.updateTransferInfo(
+            TransferInfoUpdate(
+                id = id,
+                info = transferInfo
+            )
+        )
     }
 
     fun getPaginatedTransfersWithFeedItem(includeDiscarded: Boolean = false): PagingSource<Int, RingTransferFeedItem> {

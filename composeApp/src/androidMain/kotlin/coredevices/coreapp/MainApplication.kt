@@ -29,6 +29,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import coredevices.ExperimentalDevices
 import coredevices.coreapp.di.androidDefaultModule
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
@@ -53,6 +54,7 @@ private val logger = Logger.withTag("MainApplication")
 class MainApplication : Application(), SingletonImageLoader.Factory {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
+    private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
 
@@ -83,6 +85,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
             }
         }, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
         setupExceptionHandler()
+        experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()
         configureStrictMode()

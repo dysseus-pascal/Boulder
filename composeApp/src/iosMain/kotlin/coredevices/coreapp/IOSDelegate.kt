@@ -210,7 +210,7 @@ object IOSDelegate : KoinComponent {
                 showPushNotification = false
             )
         )
-
+        experimentalDevices.appInit()
         initPebble()
         GlobalScope.launch(Dispatchers.Main) {
             // Don't do this before we request permissions (it requests permissions - we want to

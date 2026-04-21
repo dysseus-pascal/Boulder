@@ -13,7 +13,6 @@ import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.BackgroundRingService
 import coredevices.ring.service.PlatformIndexNotificationManager
 import coredevices.ring.service.RingSync
-import coredevices.ring.ui.viewmodel.IosRingPairingViewModel
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
 import dev.gitlive.firebase.Firebase
@@ -62,5 +61,4 @@ actual val platformRingModule = module {
     singleOf(::BackgroundRingService)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
     single { EncryptionKeyManager() }
-    viewModelOf(::IosRingPairingViewModel)
 }

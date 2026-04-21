@@ -93,6 +93,8 @@ import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
 import coreapp.pebble.generated.resources.settings
 import coreapp.util.generated.resources.back
+import coredevices.libindex.LibIndex
+import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
@@ -281,6 +283,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         }
         val snackbarHostState = remember { SnackbarHostState() }
         val libPebble = rememberLibPebble()
+        val libIndex = koinInject<LibIndex>()
         LaunchedEffect(Unit) {
             scope.launch {
                 libPebble.userFacingErrors.collect { error ->
@@ -392,11 +395,21 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                 PebbleDeviceComparator
             )
         )
+        val ringsFlow = remember {
+            libIndex.rings
+        }
+        val rings by ringsFlow.collectAsState(initial = libIndex.rings.value)
         var hasSeenWatchOnboarding by remember { mutableStateOf(settings.hasSeenWatchOnboarding())}
+        var hasSeenRingOnboarding by remember { mutableStateOf(settings.hasSeenRingOnboarding())}
         if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
             hasSeenWatchOnboarding = true
             settings.setHasSeenWatchOnboarding(true)
             coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+        }
+        if (rings.any { it is InterviewedIndexDevice && !hasSeenRingOnboarding }) {
+            hasSeenRingOnboarding = true
+            settings.setHasSeenRingOnboarding(true)
+            coreNav.navigateTo(CommonRoutes.RingOnboardingRoute)
         }
 
         Scaffold(
@@ -603,8 +616,11 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
 }
 
 private const val HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY = "hasSeenWatchOnboarding"
+private const val HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY = "hasSeenRingOnboarding"
 private fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
 private fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
+private fun Settings.hasSeenRingOnboarding() = getBoolean(HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY, false)
+private fun Settings.setHasSeenRingOnboarding(seen: Boolean) = set(HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY, seen)
 
 /**
  * NavController crashes if we navigate before it is ready

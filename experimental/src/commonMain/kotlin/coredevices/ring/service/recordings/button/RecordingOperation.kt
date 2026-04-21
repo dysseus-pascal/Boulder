@@ -9,7 +9,7 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.McpSandboxRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage

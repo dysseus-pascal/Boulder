@@ -9,14 +9,12 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.database.dao.ConversationMessageDao
-import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.dao.RingTransferDao
+import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
-import coredevices.ring.util.M4AReader
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.Dispatchers

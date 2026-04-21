@@ -1,6 +1,7 @@
 package coredevices.ring.database
 
 import com.russhwolf.settings.Settings
+import coredevices.libindex.database.BasePreferences
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
@@ -14,14 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-interface Preferences {
+interface Preferences: BasePreferences {
     val useCactusAgent: StateFlow<Boolean>
     val useCactusTranscription: StateFlow<Boolean>
     val cactusMode: CactusSTTMode
-    val ringPaired: StateFlow<String?>
     val ringPairedOld: StateFlow<Boolean>
     val musicControlMode: StateFlow<MusicControlMode>
-    val lastSyncIndex: StateFlow<Int?>
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
@@ -35,9 +34,7 @@ interface Preferences {
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
     fun setCactusMode(mode: CactusSTTMode)
-    fun setRingPaired(id: String?)
     fun setMusicControlMode(mode: MusicControlMode)
-    suspend fun setLastSyncIndex(index: Int?)
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)

@@ -184,6 +184,7 @@ kotlin {
                 implementation(project(":resampler"))
                 implementation(libs.coredevices.haversine)
                 implementation(project(":cactus"))
+                implementation(project(":libindex"))
                 implementation(libs.settings)
                 implementation(libs.kable)
                 implementation(libs.uri)

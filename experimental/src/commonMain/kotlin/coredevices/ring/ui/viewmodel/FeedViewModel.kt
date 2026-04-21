@@ -14,9 +14,9 @@ import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.builtin_servlets.clock.setTimer
 import coredevices.ring.agent.integrations.UIEmailIntegration
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.database.room.dao.RingTransferDao
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -60,9 +60,9 @@ class FeedViewModel(
         data
             .map {
                 if (it.feedItem != null) {
-                    FeedData.Item(it.feedItem)
+                    FeedData.Item(it.feedItem!!)
                 } else if (it.ringTransfer != null) {
-                    FeedData.TransferPlaceholder(it.ringTransfer)
+                    FeedData.TransferPlaceholder(it.ringTransfer!!)
                 } else {
                     error("Both feedItem and ringTransfer are null")
                 }

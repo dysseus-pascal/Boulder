@@ -11,10 +11,10 @@ import coredevices.haversine.SatelliteStatus
 import coredevices.haversine.TransferStatus
 import coredevices.haversine.removeDCBias
 import coredevices.resampler.Resampler
-import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -193,7 +193,7 @@ class RingSync(
         logger.d { "startSyncJob()" }
         syncJob?.cancel()
         if (get<Platform>().isIOS) {
-            //XXX: Pre-initialize transcription service to reduce latency on first use for demo
+            //XXX: Pre-initialize transcription servicRingSync.kte to reduce latency on first use for demo
             val transcriptionService = get<TranscriptionService>()
             transcriptionService.earlyInit()
         }
@@ -526,7 +526,7 @@ class RingSync(
                                                             buttonReleased = buttonReleaseTimestamp?.toEpochMilliseconds(),
                                                             transferCompleted = transferCompleteTimestamp.toEpochMilliseconds(),
                                                             buttonReleaseAdvertisementLatencyMs = buttonReleaseTimestamp
-                                                                ?.let { transfer.transferInfo.advertisementReceived - it.toEpochMilliseconds() },
+                                                                ?.let { transfer.transferInfo!!.advertisementReceived - it.toEpochMilliseconds() },
                                                         )
                                                         withContext(Dispatchers.IO) {
                                                             ringTransferRepository.updateTransferInfo(

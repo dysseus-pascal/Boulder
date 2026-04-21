@@ -1,4 +1,4 @@
-package coredevices.ring.data.entity.room
+package coredevices.libindex.database.entity
 
 import androidx.room.Embedded
 import androidx.room.Entity

@@ -5,7 +5,7 @@ import coredevices.ring.data.entity.room.TraceSessionDocument
 import coredevices.ring.data.entity.room.toDocument
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 
 class TraceSessionExporter(
     private val traceEntryDao: TraceEntryDao,

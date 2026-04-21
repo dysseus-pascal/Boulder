@@ -15,7 +15,6 @@ import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.PlatformIndexNotificationManager
 import coredevices.ring.service.RingSync
 import coredevices.ring.ui.screens.settings.SettingsBeeperContactsDialogViewModel
-import coredevices.ring.ui.viewmodel.RingPairingViewModel
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
 import dev.gitlive.firebase.Firebase
@@ -59,6 +58,5 @@ actual val platformRingModule = module {
         val dbFile = context.applicationContext.getDatabasePath("coreapp_room.db")
         Room.databaseBuilder<RingDatabase>(context = context.applicationContext, name = dbFile.absolutePath)
     } bind RoomDatabase.Builder::class
-    viewModelOf(::RingPairingViewModel)
     viewModelOf(::SettingsBeeperContactsDialogViewModel)
 }

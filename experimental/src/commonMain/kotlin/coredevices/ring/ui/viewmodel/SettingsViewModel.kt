@@ -23,6 +23,11 @@ import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.firestore.EncryptionInfo
 import coredevices.firestore.UsersDao
+import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
+import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.integrations.GTasksIntegration
+import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.storage.BackupZipWriter
@@ -87,6 +92,8 @@ class SettingsViewModel(
     private val encryptionKeyManager: EncryptionKeyManager,
     private val recordingStorage: RecordingStorage,
     private val documentEncryptor: DocumentEncryptor,
+    private val noteIntegrationFactory: NoteIntegrationFactory,
+    private val gTasksIntegration: GTasksIntegration
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -129,10 +136,34 @@ class SettingsViewModel(
             initialValue = null
         )
 
+    private val _availableNoteProviders = MutableStateFlow<List<NoteProvider>>(emptyList())
+    val availableNoteProviders = _availableNoteProviders.asStateFlow()
+    private val _availableReminderProviders = MutableStateFlow<List<ReminderProvider>>(emptyList())
+    val availableReminderProviders = _availableReminderProviders.asStateFlow()
+
     init {
         viewModelScope.launch {
             preferences.useCactusAgent.collectLatest { useCactus ->
                 _useCactusAgent.value = useCactus
+            }
+        }
+        viewModelScope.launch {
+            updateAvailableNoteProviders()
+            updateAvailableReminderProviders()
+        }
+    }
+
+    private suspend fun updateAvailableNoteProviders() {
+        _availableNoteProviders.value = NoteProvider.entries.filter {
+            noteIntegrationFactory.createNoteClient(it).isAuthorized()
+        }
+    }
+
+    private suspend fun updateAvailableReminderProviders() {
+        _availableReminderProviders.value = buildList {
+            add(ReminderProvider.Native)
+            if (gTasksIntegration.isAuthorized()) {
+                add(ReminderProvider.GoogleTasks)
             }
         }
     }
@@ -190,6 +221,10 @@ class SettingsViewModel(
     }
 
     fun showNoteShortcutDialog() {
+        viewModelScope.launch {
+            updateAvailableNoteProviders()
+            updateAvailableReminderProviders()
+        }
         _showNoteShortcutDialog.value = true
     }
 
@@ -857,7 +892,6 @@ class SettingsViewModel(
 
                     // 3. Add manifest
                     val manifest = backupJson.encodeToString(
-                        BackupManifest.serializer(),
                         BackupManifest(
                             version = 1,
                             userId = user.uid,

@@ -1,4 +1,4 @@
-package coredevices.ring.database.room.dao
+package coredevices.libindex.database.dao
 
 import androidx.paging.PagingSource
 import androidx.room.Dao
@@ -10,8 +10,8 @@ import androidx.room.Transaction
 import androidx.room.Update
 import coredevices.indexai.data.entity.RingTransferInfo
 import coredevices.indexai.database.dao.RecordingFeedItem
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 

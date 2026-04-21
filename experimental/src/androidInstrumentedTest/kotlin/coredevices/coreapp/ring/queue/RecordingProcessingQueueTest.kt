@@ -29,7 +29,7 @@ import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope

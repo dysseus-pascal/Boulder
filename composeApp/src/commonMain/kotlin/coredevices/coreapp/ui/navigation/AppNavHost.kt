@@ -23,6 +23,7 @@ import coredevices.ExperimentalDevices
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
+import coredevices.coreapp.ui.screens.RingOnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
 import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
@@ -171,6 +172,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
             composable<CommonRoutes.WatchOnboardingRoute> {
                 WatchOnboardingScreen(
+                    coreNav = coreNav,
+                )
+            }
+            composable<CommonRoutes.RingOnboardingRoute> {
+                RingOnboardingScreen(
                     coreNav = coreNav,
                 )
             }

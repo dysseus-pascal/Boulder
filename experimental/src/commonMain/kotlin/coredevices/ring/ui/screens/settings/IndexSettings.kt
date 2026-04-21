@@ -7,9 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +51,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,31 +63,29 @@ import coreapp.util.generated.resources.settings
 import coredevices.EnableExperimentalDevices
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
-import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
+import coredevices.ring.ui.components.QrCodeImage
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
-import kotlinx.coroutines.launch
-import coredevices.ring.ui.components.QrCodeImage
-import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ring.ui.viewmodel.SettingsViewModel
+import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ui.M3Dialog
-import coredevices.util.rememberUiContext
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
+import coredevices.util.rememberUiContext
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -122,6 +121,8 @@ fun IndexSettings(coreNav: CoreNav) {
     val noteShortcut by viewModel.noteShortcut.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
+    val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
+    val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
 
     if (showSignInDialog) {
         SignInDialog(onDismiss = { showSignInDialog = false })
@@ -170,6 +171,8 @@ fun IndexSettings(coreNav: CoreNav) {
     if (showNoteShortcutDialog) {
         val shortcut = viewModel.noteShortcut.collectAsState()
         NoteShortcutDialog(
+            availableNoteProviders = availableNoteProviders,
+            availableReminderProviders = availableReminderProviders,
             currentShortcut = shortcut.value,
             onShortcutSelected = {
                 viewModel.setNoteShortcut(it)
@@ -233,23 +236,7 @@ fun IndexSettings(coreNav: CoreNav) {
                         else -> "No Ring Paired"
                     },
                     buttons = {
-                        val text = when {
-                            accountUsername == null -> "Log in before pairing"
-                            ringPaired -> "Pair different device"
-                            else -> "Pair"
-                        }
-                        Button(
-                            onClick = {
-                                if (accountUsername == null) {
-                                    showSignInDialog = true
-                                } else {
-                                    coreNav.navigateTo(RingRoutes.RingPairing)
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(text)
-                        }
+
                     },
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -461,14 +448,6 @@ fun IndexSettings(coreNav: CoreNav) {
                             coreNav.navigateTo(RingRoutes.RingSyncInspector)
                         },
                         headlineContent = { Text("Ring Sync Inspector") }
-                    )
-                }
-                item {
-                    ListItem(
-                        modifier = Modifier.clickable {
-                            coreNav.navigateTo(RingRoutes.RingDebug)
-                        },
-                        headlineContent = { Text("Ring Debug") }
                     )
                 }
             }
@@ -703,15 +682,23 @@ fun SecondaryModeDialog(
 
 @Composable
 fun NoteShortcutDialog(
+    availableNoteProviders: List<NoteProvider>,
+    availableReminderProviders: List<ReminderProvider>,
     currentShortcut: NoteShortcutType,
     onShortcutSelected: (NoteShortcutType) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var targetShortcut by remember { mutableStateOf(currentShortcut) }
-    val options = buildList {
-        add(NoteShortcutType.SendToMe)
-        NoteProvider.entries.forEach { add(NoteShortcutType.SendToNoteProvider(it)) }
-        ReminderProvider.entries.forEach { add(NoteShortcutType.SendToReminderProvider(it)) }
+    val options = remember {
+        buildList {
+            add(NoteShortcutType.SendToMe)
+            availableNoteProviders.forEach {
+                add(NoteShortcutType.SendToNoteProvider(it))
+            }
+            availableReminderProviders.forEach {
+                add(NoteShortcutType.SendToReminderProvider(it))
+            }
+        }
     }
     M3Dialog(
         onDismissRequest = onDismissRequest,

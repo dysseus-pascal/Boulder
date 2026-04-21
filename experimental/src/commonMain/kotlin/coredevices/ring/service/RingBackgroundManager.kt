@@ -6,5 +6,6 @@ expect class RingBackgroundManager() {
     fun startBackground()
     fun stopBackground()
     fun startBackgroundIfEnabled()
+    fun monitorToStartBackground()
     val isRunning: StateFlow<Boolean>
 }

@@ -33,7 +33,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
-import coredevices.ring.data.entity.room.RingTransfer
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
@@ -41,8 +41,8 @@ import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
-import coredevices.ring.database.room.dao.RingTransferDao
-import coredevices.ring.database.room.dao.RingTransferFeedItem
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.dao.RingTransferFeedItem
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
 import kotlinx.serialization.SerializationException

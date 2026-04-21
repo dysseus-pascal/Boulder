@@ -1,8 +1,7 @@
-package coredevices.ring.service
+package coredevices.libindex.database
 
 import co.touchlab.kermit.Logger
 import coredevices.haversine.CollectionIndexStorage
-import coredevices.ring.database.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -10,11 +9,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class PrefsCollectionIndexStorage(
-    private val prefs: Preferences,
+    private val prefs: BasePreferences,
 ): CollectionIndexStorage {
     private val scope = CoroutineScope(Dispatchers.IO)
     companion object {
-        private val logger = Logger.withTag("PrefsCollectionIndexStorage")
+        private val logger = Logger.Companion.withTag("PrefsCollectionIndexStorage")
     }
     override val lastSuccessfulCollectionIndex: StateFlow<Int?>
         get() = prefs.lastSyncIndex

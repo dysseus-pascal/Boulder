@@ -1455,6 +1455,15 @@ please disable the option.""".trimIndent(),
                     },
                     show = { debugOptionsEnabled },
                 ) },
+                navBarNav?.let {basicSettingsActionItem(
+                    title = "Show Ring Onboarding",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    action = {
+                        navBarNav.navigateTo(CommonRoutes.RingOnboardingRoute)
+                    },
+                    show = { debugOptionsEnabled },
+                ) },
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",

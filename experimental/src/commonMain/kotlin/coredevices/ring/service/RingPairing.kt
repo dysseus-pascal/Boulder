@@ -3,8 +3,9 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import coredevices.analytics.CoreAnalytics
 import coredevices.haversine.KMPHaversineSatelliteManager
+import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.util.Platform
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase

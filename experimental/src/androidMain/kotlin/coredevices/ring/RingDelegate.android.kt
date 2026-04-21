@@ -35,7 +35,7 @@ actual class RingDelegate(
      * Called by activity onCreate / didFinishLaunching to initialize the Ring module.
      */
     actual suspend fun init() {
-        ringBackgroundManager.startBackgroundIfEnabled()
+        ringBackgroundManager.monitorToStartBackground()
         //enableWidget(context)
     }
 }

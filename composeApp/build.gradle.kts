@@ -223,6 +223,7 @@ kotlin {
             implementation(libs.kmpnotifier)
             implementation(libs.kmpio)
             implementation(project(":libpebble3"))
+            implementation(project(":libindex"))
             implementation(libs.health.kmp)
         }
     }

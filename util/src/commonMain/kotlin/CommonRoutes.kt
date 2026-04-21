@@ -42,6 +42,8 @@ object CommonRoutes {
 
     @Serializable
     data object WatchOnboardingRoute : CoreRoute
+    @Serializable
+    data object RingOnboardingRoute : CoreRoute
 }
 
 @Stable

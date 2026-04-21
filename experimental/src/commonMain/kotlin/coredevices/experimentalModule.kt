@@ -5,13 +5,14 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.indexai.agent.ServletRepository
+import coredevices.libindex.database.BasePreferences
+import coredevices.libindex.di.libIndexModule
 import coredevices.ring.BuildKonfig
 import coredevices.ring.agent.AgentCactus
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
-import coredevices.util.transcription.InferenceBoost
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.AgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
@@ -32,7 +33,7 @@ import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
@@ -42,7 +43,7 @@ import coredevices.ring.service.FirestoreRingDebugDelegate
 import coredevices.ring.service.IndexButtonActionHandler
 import coredevices.ring.service.IndexButtonSequenceRecorder
 import coredevices.ring.service.IndexNotificationManager
-import coredevices.ring.service.PrefsCollectionIndexStorage
+import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingBackgroundManager
 import coredevices.ring.service.RingPairing
@@ -53,7 +54,6 @@ import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.storage.RecordingStorage
-import coredevices.ring.util.RingCompanionDeviceManager
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
@@ -67,6 +67,7 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 
 class HackyPermissionRequesterProvider(val getter: () -> PermissionRequester) {
@@ -74,6 +75,8 @@ class HackyPermissionRequesterProvider(val getter: () -> PermissionRequester) {
 }
 
 val experimentalModule = module {
+    //TODO: remove and init LibIndex as library when its decoupled from global koin
+    includes(libIndexModule)
     includes(platformRingModule)
     includes(mcpModule)
     includes(firestoreModule)
@@ -130,9 +133,11 @@ val experimentalModule = module {
         get<RingDatabase>().traceEntryDao()
     }
     singleOf(::RecordingRepository)
-    singleOf(::RingTransferRepository)
+    single {
+        RingTransferRepository(get(), get<RingDatabase>())
+    }
     singleOf(::RecordingProcessingTaskRepository)
-    singleOf(::PreferencesImpl) bind Preferences::class
+    singleOf(::PreferencesImpl) binds arrayOf(Preferences::class, BasePreferences::class)
     singleOf(::RingTraceSession)
     singleOf(::TraceSessionExporter)
 
@@ -173,9 +178,6 @@ val experimentalModule = module {
     singleOf(::RingPairing)
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
-    factory { params ->
-        RingCompanionDeviceManager(params.get())
-    }
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
     factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
     single { CactusModelProvider() }

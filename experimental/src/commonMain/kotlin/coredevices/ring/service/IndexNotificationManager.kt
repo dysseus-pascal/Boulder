@@ -9,12 +9,12 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.IndexTimestamp
 import coredevices.ring.data.InflightIndexNotification
 import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.util.trace.RingTraceSession
@@ -37,7 +37,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
@@ -48,7 +47,6 @@ import kotlinx.datetime.format
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.DurationUnit
 import kotlin.time.Instant

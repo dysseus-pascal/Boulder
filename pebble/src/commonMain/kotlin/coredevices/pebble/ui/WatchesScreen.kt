@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.NotificationAdd
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
@@ -67,6 +68,7 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -119,6 +121,15 @@ import com.russhwolf.settings.serialization.encodeValue
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.devices
 import coredevices.firestore.UsersDao
+import coredevices.libindex.IndexDevices
+import coredevices.libindex.LibIndex
+import coredevices.libindex.device.DiscoveredIndexDevice
+import coredevices.libindex.device.IndexDevice
+import coredevices.libindex.device.KnownIndexDevice
+import coredevices.libindex.device.IndexIdentifier
+import coredevices.libindex.device.IndexPairingResult
+import coredevices.libindex.device.IndexPairingState
+import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
@@ -161,7 +172,11 @@ import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -172,6 +187,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
+import org.koin.dsl.module
 import theme.CoreAppColorScheme
 import theme.coreOrange
 import theme.currentColorScheme
@@ -187,12 +203,17 @@ private val logger = Logger.withTag("WatchesScreen")
 @Composable
 fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val libPebble = rememberLibPebble()
-    val isScanningBle by libPebble.isScanningBle.collectAsState()
+    val libIndex = koinInject<LibIndex>()
+    val isScanningBle by combine(libPebble.isScanningBle, libIndex.isScanning) {
+        scanningBle, scanningIndex -> scanningBle || scanningIndex
+    }.collectAsState(false)
     val scope = rememberCoroutineScope()
     val permissionRequester: PermissionRequester = koinInject()
     val requiredScanPermission = remember { scanPermission() }
     val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
     var addFabExpanded by remember { mutableStateOf(false) }
+    val showPairIndex by libIndex.rings.map { it.filter { it !is DiscoveredIndexDevice }.isEmpty() }
+        .collectAsState(initial = true)
 
     fun scan(uiContext: PlatformUiContext) {
         scope.launch {
@@ -211,6 +232,23 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
     }
 
+    fun scanIndex(uiContext: PlatformUiContext) {
+        scope.launch {
+            if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
+                    requiredScanPermission
+                )
+            ) {
+                val result =
+                    permissionRequester.requestPermission(requiredScanPermission, uiContext)
+                if (result != PermissionResult.Granted) {
+                    logger.w { "Failed to grant scan permission" }
+                    return@launch
+                }
+            }
+            libIndex.startScan()
+        }
+    }
+
     Scaffold(
         floatingActionButton = {
             if (!bluetoothEnabled.enabled()) {
@@ -221,7 +259,10 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             } else if (isScanningBle) {
                 FloatingActionButton(
-                    onClick = { libPebble.stopBleScan() }
+                    onClick = {
+                        libPebble.stopBleScan()
+                        libIndex.stopScan()
+                    }
                 ) {
                     Icon(Icons.Filled.Stop, "Stop Scanning")
                 }
@@ -243,7 +284,19 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     },
                 ) {
                     val uiContext = rememberUiContext()
-                    // TODO bt classic / index go here
+                    // TODO bt classic goes here
+                    if (showPairIndex) {
+                        FloatingActionButtonMenuItem(
+                            onClick = {
+                                addFabExpanded = false
+                                if (uiContext != null) {
+                                    scanIndex(uiContext)
+                                }
+                            },
+                            icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },
+                            text = { Text("Add Index 01") },
+                        )
+                    }
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
@@ -303,6 +356,13 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     PebbleDeviceComparator
                 )
             )
+            val entriesFlow = remember {
+                combine(watchesFlow, libIndex.rings) { sortedWatches, rings ->
+                    rings.map { DeviceListEntry.Ring(it) } +
+                    sortedWatches.map { DeviceListEntry.Watch(it) }
+                }
+            }
+            val entries by entriesFlow.collectAsState(initial = emptyList())
 
             Column {
                 if (!bluetoothEnabled.enabled()) {
@@ -361,7 +421,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
                 if (isScanningBle) {
                     Text(
-                        text = "Scanning for watches...",
+                        text = "Scanning for devices...",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
                     CircularProgressIndicator(
@@ -406,6 +466,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         }
                     }
                 }
+                val scope = rememberCoroutineScope()
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -413,16 +474,22 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     state = listState,
                 ) {
                     itemsIndexed(
-                        items = watches,
-                        key = { _, watch -> watch.identifier.asString }
-                    ) { index, watch ->
-                        WatchItem(
-                            watch = watch,
-                            bluetoothState = bluetoothEnabled,
-                            allowedToConnect = !showOtherPebbleAppsWarningAndPreventConnection,
-                            navBarNav = navBarNav,
-                        )
-                        if (index < watches.lastIndex) {
+                        items = entries,
+                        key = { _, entry -> entry.key }
+                    ) { index, entry ->
+                        when (entry) {
+                            is DeviceListEntry.Watch -> WatchItem(
+                                watch = entry.device,
+                                bluetoothState = bluetoothEnabled,
+                                allowedToConnect = !showOtherPebbleAppsWarningAndPreventConnection,
+                                navBarNav = navBarNav,
+                            )
+                            is DeviceListEntry.Ring -> RingItem(
+                                ring = entry.device,
+                                scope = scope,
+                            )
+                        }
+                        if (index < entries.lastIndex) {
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                             )
@@ -437,10 +504,177 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 @Preview
 @Composable
 fun WatchesPreview() {
-    PreviewWrapper {
+    PreviewWrapper(
+        module {
+            single<LibIndex> {
+                object : LibIndex {
+                    override val rings: IndexDevices = MutableStateFlow(
+                        listOf(
+                            object : DiscoveredIndexDevice {
+                                override val identifier = IndexIdentifier("1234")
+                                override val name = "Index 01"
+                                override val rssi = -50
+                                override val pairingState: IndexPairingState =
+                                    IndexPairingState.NotPaired
+
+                                override suspend fun pair(): IndexPairingResult {
+                                    TODO("Not yet implemented")
+                                }
+                            },
+                            object : InterviewedIndexDevice {
+                                override val identifier = IndexIdentifier("5678")
+                                override val name = "Index 01 02"
+                                override val firmwareVersion = "1.0.0"
+                                override val serialNumber = "SN12345678"
+                            }
+                        )
+                    )
+
+                    override fun init() {
+                        TODO("Not yet implemented")
+                    }
+
+                    override val isScanning: StateFlow<Boolean> = MutableStateFlow(false)
+
+                    override fun startScan() {
+                        TODO("Not yet implemented")
+                    }
+
+                    override fun stopScan() {
+                        TODO("Not yet implemented")
+                    }
+                }
+            }
+        }
+    ) {
         WatchesScreen(
             navBarNav = NoOpNavBarNav,
             topBarParams = WrapperTopBarParams,
+        )
+    }
+}
+
+sealed interface DeviceListEntry {
+    val key: String
+
+    data class Watch(val device: PebbleDevice) : DeviceListEntry {
+        override val key get() = "watch-${device.identifier.asString}"
+    }
+
+    data class Ring(val device: IndexDevice) : DeviceListEntry {
+        override val key get() = "ring-${device.identifier.asString}"
+    }
+}
+
+@Composable
+fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = ring.name,
+                fontSize = 23.sp,
+                fontWeight = if (ring is DiscoveredIndexDevice) FontWeight.Normal else FontWeight.Bold,
+            )
+        },
+        supportingContent = {
+            val stateText = when (ring) {
+                is DiscoveredIndexDevice -> "Available to pair"
+                else -> "Ready"
+            }
+            Column {
+                Text(
+                    text = stateText,
+                    fontSize = 16.sp,
+                    fontWeight = if (ring is DiscoveredIndexDevice) FontWeight.Normal else FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 3.dp),
+                )
+                if (ring is DiscoveredIndexDevice) {
+                    when (ring.pairingState) {
+                        is IndexPairingState.Error -> Text(
+                            text = "Pairing failure",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(vertical = 3.dp),
+                        )
+
+                        IndexPairingState.Pairing -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 5.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Pairing...")
+                            }
+                        }
+
+                        IndexPairingState.NotPaired -> {
+                        }
+                    }
+                    if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    ring.pair()
+                                }
+                            },
+                            modifier = Modifier.padding(top = 5.dp)
+                        ) {
+                            Text("Pair")
+                        }
+                    }
+                }
+            }
+        },
+        trailingContent = {
+            if (ring is KnownIndexDevice) {
+                RingMenu(ring)
+            }
+        },
+    )
+}
+
+@Composable
+private fun RingMenu(ring: KnownIndexDevice) {
+    var showMenu by remember { mutableStateOf(false) }
+    var showRemoveDialog by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(onClick = { showMenu = !showMenu }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+        }
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Remove") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    showRemoveDialog = true
+                },
+            )
+        }
+    }
+
+    if (showRemoveDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveDialog = false },
+            title = { Text("Remove ${ring.name}?") },
+            text = { Text("Are you sure?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    ring.remove()
+                    showRemoveDialog = false
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveDialog = false }) { Text("Cancel") }
+            },
         )
     }
 }

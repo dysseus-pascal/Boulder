@@ -5,9 +5,12 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import co.touchlab.kermit.Logger
 import coredevices.ring.database.Preferences
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -39,6 +42,16 @@ actual class RingBackgroundManager: KoinComponent {
         } else {
             logger.d { "Not starting background service." }
         }
+    }
+
+    actual fun monitorToStartBackground() {
+        commonPrefs.ringPaired.onEach { paired ->
+            logger.d { "ringPaired changed: $paired" }
+            if (paired != null) {
+                logger.d { "ringPaired is not null, checking if we should start background service." }
+                startBackgroundIfEnabled()
+            }
+        }.launchIn(GlobalScope)
     }
 
     fun onServiceStarted() {

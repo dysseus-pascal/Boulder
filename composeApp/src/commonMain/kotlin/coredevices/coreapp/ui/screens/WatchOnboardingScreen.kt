@@ -301,7 +301,7 @@ fun WatchOnboardingScreen(
 }
 
 @Composable
-private fun SectionText(text: String) {
+fun SectionText(text: String) {
     Text(
         text = text,
         textAlign = TextAlign.Center,
@@ -311,7 +311,7 @@ private fun SectionText(text: String) {
 }
 
 @Composable
-private fun SectionDivider() {
+fun SectionDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(vertical = 25.dp),
         color = Color.White,

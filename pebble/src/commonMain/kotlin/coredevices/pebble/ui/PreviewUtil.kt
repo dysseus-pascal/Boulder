@@ -25,6 +25,7 @@ import coredevices.database.HeartEntity
 import coredevices.database.HeartsDao
 import coredevices.firestore.PebbleUser
 import coredevices.firestore.UsersDao
+import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
@@ -365,6 +366,13 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         }
     } } bind AppUpdate::class
     single { object : CompanionDevice {
+        override suspend fun registerDevice(
+            identifier: IndexIdentifier,
+            uiContext: PlatformUiContext
+        ) {
+
+        }
+
         override suspend fun registerDevice(
             identifier: PebbleIdentifier,
             uiContext: PlatformUiContext

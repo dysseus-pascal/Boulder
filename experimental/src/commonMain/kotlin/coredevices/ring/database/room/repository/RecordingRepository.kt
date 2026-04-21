@@ -1,14 +1,8 @@
 package coredevices.ring.database.room.repository
 
-import androidx.room.Transactor
-import androidx.room.useWriterConnection
 import coredevices.indexai.data.entity.LocalRecording
-import coredevices.indexai.data.entity.RecordingEntryEntity
-import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.data.entity.room.RingTransferStatus
 import coredevices.ring.database.room.RingDatabase
 import kotlin.time.Clock
 import kotlin.time.Instant

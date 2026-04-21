@@ -19,7 +19,7 @@ import coredevices.ring.data.RecordingProcessingTask
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.recordings.button.RecordingOperationFactory

@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import com.eygraber.uri.Uri
 import com.mmk.kmpnotifier.notification.NotifierManager
+import coredevices.libindex.LibIndex
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
@@ -50,8 +51,13 @@ class ExperimentalDevices(
     private val sandboxRepository: McpSandboxRepository,
     private val preferences: Preferences,
     private val shortcutActionHandler: ShortcutActionHandler,
+    private val libIndex: LibIndex
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
+    fun appInit() {
+        libIndex.init()
+    }
+
     suspend fun init() {
         withContext(Dispatchers.IO) {
             sandboxRepository.seedDatabase()

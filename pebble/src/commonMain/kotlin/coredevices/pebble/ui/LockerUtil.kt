@@ -333,12 +333,12 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
         IconButton(
             modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
             onClick = {
-                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
+                topBarParams.showSnackbar("Not natively compatible with this watch, but can be scaled")
             },
         ) {
             Icon(
                 Icons.Filled.AspectRatio,
-                contentDescription = "Not natively compatible, but can be scaled",
+                contentDescription = "Not natively compatible with this watch, but can be scaled",
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -517,6 +517,16 @@ fun LockerWrapper.asCommonApp(
 fun WatchType.performsScaling(): Boolean = when (this) {
     WatchType.EMERY, WatchType.GABBRO -> true
     else -> false
+}
+
+fun WatchType.shortName(): String = when (this) {
+    WatchType.APLITE -> "OG"
+    WatchType.BASALT -> "PT"
+    WatchType.CHALK -> "PTR"
+    WatchType.DIORITE -> "P2"
+    WatchType.FLINT -> "P2D"
+    WatchType.EMERY -> "PT2"
+    WatchType.GABBRO -> "PR2"
 }
 
 fun StoreApplication.asCommonApp(
@@ -817,19 +827,20 @@ fun AppsFilterRow(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             if (sharedLockerViewModel.watchType.value.performsScaling()) {
+                val shortName = sharedLockerViewModel.watchType.value.shortName()
                 FilterChip(
-                    selected = sharedLockerViewModel.showScaled.value,
+                    selected = !sharedLockerViewModel.showScaled.value,
                     onClick = {
                         sharedLockerViewModel.showScaled.value =
                             !sharedLockerViewModel.showScaled.value
                     },
-                    label = { Text("Show Scaled") },
+                    label = { Text("Made for $shortName") },
                     modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (sharedLockerViewModel.showScaled.value) {
+                    leadingIcon = if (!sharedLockerViewModel.showScaled.value) {
                         {
                             Icon(
                                 imageVector = Icons.Filled.Done,
-                                contentDescription = "Show Scaled",
+                                contentDescription = "Made for $shortName",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }

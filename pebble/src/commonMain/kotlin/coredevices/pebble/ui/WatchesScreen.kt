@@ -120,6 +120,7 @@ import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.devices
+import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.LibIndex
@@ -568,6 +569,7 @@ sealed interface DeviceListEntry {
 
 @Composable
 fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
+    val coreAnalytics = koinInject<CoreAnalytics>()
     ListItem(
         headlineContent = {
             Text(
@@ -618,7 +620,19 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    ring.pair()
+                                    val result = try {
+                                        ring.pair()
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                    when (result) {
+                                        is IndexPairingResult.Success -> {
+                                            coreAnalytics.logEvent("ring.pair_success")
+                                        }
+                                        is IndexPairingResult.PairingFailure, null -> {
+                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
+                                        }
+                                    }
                                 }
                             },
                             modifier = Modifier.padding(top = 5.dp)

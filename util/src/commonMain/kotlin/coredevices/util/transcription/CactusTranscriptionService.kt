@@ -7,7 +7,6 @@ import coredevices.util.AudioEncoding
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.writeWavHeader
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,8 +36,13 @@ import kotlinx.io.readByteArray
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
+
+expect suspend fun withHighPriorityThread(block: suspend () -> Unit)
 
 class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
@@ -107,6 +111,28 @@ class CactusTranscriptionService(
         }.launchIn(scope)
     }
 
+    private var lastTranscriptionAt: TimeMark? = null
+    private val warmupMutex = Mutex()
+    private val silentPcm = ByteArray(32_000) // 1s, 16kHz, int16 mono
+
+    private suspend fun warmUpIfIdle() {
+        // Warm up only when we haven't recently warmed up / transcribed
+        if ((lastTranscriptionAt?.elapsedNow() ?: Duration.INFINITE) < 2.minutes) {
+            lastTranscriptionAt = TimeSource.Monotonic.markNow()
+            return
+        }
+        logger.d { "Warming up Cactus STT model with silent audio" }
+        lastTranscriptionAt = TimeSource.Monotonic.markNow()
+        warmupMutex.withLock {
+            val cactus = model ?: return
+            withHighPriorityThread {
+                withTimeout(2.seconds) {
+                    cactus.transcribe(pcmData = silentPcm)
+                }
+            }
+        }
+    }
+
     private suspend fun initIfNeeded() {
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
@@ -133,6 +159,7 @@ class CactusTranscriptionService(
         return scope.launch(Dispatchers.IO) {
             try {
                 initIfNeeded()
+                warmUpIfIdle()
                 onInitialized.trySend(model != null || sttConfig.value.mode == CactusSTTMode.RemoteOnly)
             } catch (e: Throwable) {
                 logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
@@ -156,7 +183,10 @@ class CactusTranscriptionService(
             }
             initJob = performInit()
         } else {
-            onInitialized.trySend(true)
+            scope.launch {
+                warmUpIfIdle()
+                onInitialized.trySend(true)
+            }
         }
     }
 

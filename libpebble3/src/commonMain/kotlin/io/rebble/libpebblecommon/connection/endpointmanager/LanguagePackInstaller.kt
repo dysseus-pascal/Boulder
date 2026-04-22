@@ -50,7 +50,7 @@ class RealLanguagePackInstaller(
                 url != null -> {
                     val downloadedPath = firmwareDownloader.downloadFirmware(url, "pbl")
                     if (downloadedPath == null) {
-                        _state.value = LanguagePackInstallState.Idle("Failed to download language pack")
+                        _state.value = LanguagePackInstallState.Idle(previousError = "Failed to download language pack")
                         return@launch
                     }
                     downloadedPath
@@ -61,7 +61,7 @@ class RealLanguagePackInstaller(
             val metadata = SystemFileSystem.metadataOrNull(path)
             if (metadata == null || metadata.size < 1) {
                 logger.e { "Failed to get metadata for $path" }
-                _state.value = LanguagePackInstallState.Idle("Failed to get metadata for $path")
+                _state.value = LanguagePackInstallState.Idle(previousError = "Failed to get metadata for $path")
                 return@launch
             }
             _state.value = LanguagePackInstallState.Installing(progressFlow.asStateFlow(), name)
@@ -92,7 +92,7 @@ class RealLanguagePackInstaller(
                 throw e
             } catch (e: Exception) {
                 logger.e(e) { "Error installing language pack" }
-                _state.value = LanguagePackInstallState.Idle("Error installing language pack")
+                _state.value = LanguagePackInstallState.Idle(previousError = "Error installing language pack")
                 return@launch
             } finally {
                 source.close()

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 
 interface UsersDao {
     val user: Flow<PebbleUser?>
@@ -72,27 +73,26 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     logger.v { "User changed: $firebaseUser" }
                     if (firebaseUser == null) {
                         if (isInitialStartup) {
-                            val delayDuration = if (hadNonAnonymousAccount) {
-                                10.seconds // Process restart, had real account
-                            } else {
-                                2.seconds // Process restart, fresh install
+                            if (hadNonAnonymousAccount) {
+                                // User had a real account — don't create an anonymous one,
+                                // that would orphan all their Firestore data under the old UID.
+                                // Keep waiting for Firebase to restore auth state.
+                                logger.i { "User is null but hadNonAnonymousAccount=true, waiting for real account restoration" }
+                                _user.emit(null)
+                                while (true) {
+                                    delay(1.minutes)
+                                    logger.w { "Still waiting for real account restoration (hadNonAnonymousAccount=true)" }
+                                }
                             }
-                            logger.i { "User is null, hadNonAnonymousAccount=$hadNonAnonymousAccount, isInitialStartup=$isInitialStartup, delay=$delayDuration before anonymous sign-in" }
-                            // Firebase may emit null briefly on process start before it finishes
-                            // loading persisted auth state from disk. Delay here so flatMapLatest
-                            // can cancel us if the real user arrives, avoiding a spurious signInAnonymously()
-                            // that would clobber a real account with a fresh anonymous one.
-                            // Use a longer delay if user previously had a real account, as Firebase
-                            // auth restoration can be slow after process kills.
-                            delay(delayDuration)
-                            logger.w { "Delay expired without real user arriving (hadNonAnonymousAccount=$hadNonAnonymousAccount), falling back to anonymous sign-in" }
+                            logger.i { "User is null, hadNonAnonymousAccount=false, isInitialStartup=true, delay=2s before anonymous sign-in" }
+                            delay(2.seconds)
+                            logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
+                        } else {
+                            hadNonAnonymousAccount = false
                         }
-                        hadNonAnonymousAccount = false
                         _user.emit(null)
                         logger.i { "Logging into firebase anonymously" }
                         try {
-                            // Signing in will trigger a new emission of this flow - don't let it
-                            // cancel the sign-in...
                             withContext(NonCancellable) {
                                 Firebase.auth.signInAnonymously()
                             }

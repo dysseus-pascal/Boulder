@@ -36,6 +36,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
@@ -120,6 +121,30 @@ class RecordingProcessor(
         userMessageId?.let { updateRecordingEntryMessage(recordingEntryId, it) }
     }
 
+    // Pre-seed the user message so the transcription stays visible if the agent fails
+    // and we roll back its in-memory conversation to keep task retry idempotent.
+    private suspend fun persistUserMessageIfAbsent(
+        recordingId: Long,
+        recordingEntryId: Long?,
+        text: String,
+        expectedDbSize: Int
+    ) {
+        withContext(Dispatchers.IO) {
+            val existingDbSize = conversationMessageDao.getMessagesForRecording(recordingId).first().size
+            if (existingDbSize != expectedDbSize) return@withContext
+            val userMessageId = conversationMessageDao.insertMessage(
+                ConversationMessageEntity(
+                    recordingId = recordingId,
+                    document = ConversationMessageDocument(
+                        role = MessageRole.user,
+                        content = text
+                    )
+                )
+            )
+            recordingEntryId?.let { updateRecordingEntryMessage(it, userMessageId) }
+        }
+    }
+
     private fun watchConversationUpdates(scope: CoroutineScope, agent: Agent, localRecordingId: Long, recordingEntryId: Long?): Job {
         var updatedMessageId = false
         return agent.conversation.drop(1).onEach { // Skip the initial value as this will be the same as what we have already stored, or invalid
@@ -189,13 +214,14 @@ class RecordingProcessor(
                 agent = agent.label,
             )
         )
+        val convEndIdx = agent.conversation.first().size
+        persistUserMessageIfAbsent(recordingId, recordingEntryId, text, convEndIdx)
         val convUpdJob = watchConversationUpdates(
             CoroutineScope(currentCoroutineContext()),
             agent,
             recordingId,
             recordingEntryId
         )
-        val convEndIdx = agent.conversation.first().size
         try {
             agent.send(text, mcpSession)
         } catch (e: AgentNetworkException) {

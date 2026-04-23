@@ -455,7 +455,8 @@ class RingSync(
                                                                     )?.id ?: -1L
                                                                 },
                                                                 audioDurationSeconds = transferStatus.samples.size / transferStatus.sampleRate.toFloat(),
-                                                                buttonReleaseTimestamp = transferStatus.buttonReleaseTimestamp
+                                                                buttonReleaseTimestamp = transferStatus.buttonReleaseTimestamp,
+                                                                transferCompleteTimestamp = transferStatus.transferCompleteTimestamp,
                                                             )
                                                         )
                                                         if (range != null) {

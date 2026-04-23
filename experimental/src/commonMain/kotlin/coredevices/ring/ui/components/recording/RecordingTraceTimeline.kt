@@ -60,7 +60,18 @@ class RecordingTraceTimelineViewModel(
             Json.decodeFromString<TraceEventData>(it)
         } as? TraceEventData.TransferCompleted ?: return null to null
         val audioDurationMs = (data.audioDurationSeconds * 1000f).roundToInt().toLong()
-        val buttonPressTimeMark = transferCompleted.timeMark - audioDurationMs
+        // transfer_completed.timeMark is monotonic at BLE-transfer-finish, which is seconds after
+        // the button was released. Use transferCompleteTimestamp (wall-clock at the same moment)
+        // to map buttonReleaseTimestamp into the monotonic domain. Both wall-clock points sit
+        // within the short active BLE window, so deep-sleep drift between clocks is irrelevant.
+        val buttonReleaseTimestamp = data.buttonReleaseTimestamp
+        val transferCompleteTimestamp = data.transferCompleteTimestamp
+        val buttonPressTimeMark = if (buttonReleaseTimestamp != null && transferCompleteTimestamp != null) {
+            val wallDeltaMs = (buttonReleaseTimestamp - transferCompleteTimestamp).inWholeMilliseconds
+            transferCompleted.timeMark + wallDeltaMs - audioDurationMs
+        } else {
+            transferCompleted.timeMark - audioDurationMs
+        }
         return buttonPressTimeMark to audioDurationMs
     }
 

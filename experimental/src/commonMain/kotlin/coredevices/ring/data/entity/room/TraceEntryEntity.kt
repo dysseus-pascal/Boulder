@@ -111,6 +111,7 @@ sealed class TraceEventData {
         val transferId: Long,
         val audioDurationSeconds: Float,
         val buttonReleaseTimestamp: Instant?,
+        val transferCompleteTimestamp: Instant? = null,
     ): TraceEventData()
 
     @Serializable @SerialName("scheduling_audio_task")

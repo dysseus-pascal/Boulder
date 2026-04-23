@@ -1,7 +1,6 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
-import com.juul.kable.Bluetooth
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.haversine.DataDecodeException
@@ -35,7 +34,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -65,10 +63,6 @@ private fun ShortArray.toByteArrayLe(): ByteArray {
         bytes[i * 2 + 1] = (s shr 8).toByte()
     }
     return bytes
-}
-
-private suspend fun waitForBluetoothAvailable() {
-    Bluetooth.availability.first { it is Bluetooth.Availability.Available }
 }
 
 expect fun onPlayPause()
@@ -130,6 +124,7 @@ class RingSync(
         private val logger = Logger.withTag("RingSync")
         const val TARGET_SAMPLE_RATE = 16000
         private val SCAN_INTERVAL = 3.seconds
+        private val SCAN_ERROR_BACKOFF = 3.seconds
         val SATELLITE_HW_VER = Pair(11, 0)
         val badCollectionsDir: Path = Path(SystemTemporaryDirectory, "bad_collections").also {
             SystemFileSystem.createDirectories(it, mustCreate = false)
@@ -214,12 +209,12 @@ class RingSync(
                     var transferRange: IntRange? = null
                     logger.d { "Paired is true, starting scan/sync job" }
                     while (isActive) {
-                        logger.d { "Waiting for Bluetooth to become available..." }
-                        trace.markEvent("wait_for_bluetooth")
-                        waitForBluetoothAvailable()
-                        trace.markEvent("bluetooth_available")
-                        logger.d { "Bluetooth is available, starting Ring sync job" }
                         try {
+                            logger.d { "Waiting for Bluetooth to become available..." }
+                            trace.markEvent("wait_for_bluetooth")
+                            satelliteManager.awaitBluetoothReady()
+                            trace.markEvent("bluetooth_available")
+                            logger.d { "Bluetooth is available, starting Ring sync job" }
                             satelliteManager.startScanning()
                                 .flowOn(Dispatchers.IO)
                                 .catch {
@@ -679,6 +674,7 @@ class RingSync(
                             throw e
                         } catch (e: Exception) {
                             logger.e(e) { "Error in Ring sync collector: ${e.message}" }
+                            delay(SCAN_ERROR_BACKOFF)
                         }
                     }
                 } else {

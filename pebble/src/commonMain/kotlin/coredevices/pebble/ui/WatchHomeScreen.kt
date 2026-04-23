@@ -408,6 +408,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         }
         if (rings.any { it is InterviewedIndexDevice && !hasSeenRingOnboarding }) {
             hasSeenRingOnboarding = true
+            coreConfigHolder.update(coreConfig.copy(enableIndex = true))
             settings.setHasSeenRingOnboarding(true)
             coreNav.navigateTo(CommonRoutes.RingOnboardingRoute)
         }

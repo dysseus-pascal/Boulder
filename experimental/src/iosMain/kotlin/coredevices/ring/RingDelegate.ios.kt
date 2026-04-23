@@ -1,14 +1,17 @@
 package coredevices.ring
 
 import co.touchlab.kermit.Logger
-import coredevices.ring.database.Preferences
+import com.russhwolf.settings.Settings
+import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.service.RingBackgroundManager
+import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
-import platform.CoreBluetooth.CBCentralManager
-import platform.UserNotifications.UNUserNotificationCenter
 
 actual class RingDelegate(
-    private val ringBackgroundManager: RingBackgroundManager
+    private val ringBackgroundManager: RingBackgroundManager,
+    private val coreConfigHolder: CoreConfigHolder,
+    private val recordingsDao: FirestoreRecordingsDao,
+    private val settings: Settings
 ) {
     companion object {
         private val logger = Logger.withTag("RingDelegate")
@@ -17,6 +20,7 @@ actual class RingDelegate(
      * Called by activity onCreate / didFinishLaunching to initialize the Ring module.
      */
     actual suspend fun init() {
+        listenForUserPresent(recordingsDao, coreConfigHolder, settings)
         ringBackgroundManager.startBackgroundIfEnabled()
     }
 

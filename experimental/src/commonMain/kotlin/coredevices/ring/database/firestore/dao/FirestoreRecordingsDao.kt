@@ -62,6 +62,11 @@ class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao
         return count
     }
 
+    suspend fun hasAnyRecordings(): Boolean {
+        val snapshot = getPaginated(1)
+        return snapshot.documents.isNotEmpty()
+    }
+
     suspend fun deleteRecordingsByIds(ids: List<String>) {
         for (chunk in ids.chunked(500)) {
             val batch = db.batch()

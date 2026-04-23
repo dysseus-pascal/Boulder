@@ -167,7 +167,7 @@ class WeatherFetcher(
             tomorrowHighTemp = tomorrow.maxTemp?.toShort() ?: TEMP_NO_VALUE,
             tomorrowLowTemp = tomorrow.minTemp.toShort(),
             lastUpdateTimeUtcSecs = clock.now().epochSeconds,
-            isCurrentLocation = true,
+            isCurrentLocation = location.currentLocation,
             locationName = location.name,
             forecastShort = current.phrase32Char,
         )

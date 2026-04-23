@@ -54,8 +54,10 @@ import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.ui.LanguageDialog
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NativeWatchfaceMainContent
+import coredevices.pebble.ui.SettingsIds.EnableActivityInsights
 import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
 import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
+import coredevices.pebble.ui.SettingsIds.EnableSleepInsights
 import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
@@ -269,6 +271,8 @@ fun WatchOnboardingScreen(
 
                             settings.Show(BoolWatchPref.Clock24h.id)
                             settings.Show(EnableHealthTracking)
+                            settings.Show(EnableActivityInsights)
+                            settings.Show(EnableSleepInsights)
                             settings.Show(EnableHealthPlatformSync)
                             Spacer(modifier = Modifier.height(15.dp))
                         }

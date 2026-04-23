@@ -105,8 +105,10 @@ import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.ui.SettingsIds.EnableActivityInsights
 import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
 import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
+import coredevices.pebble.ui.SettingsIds.EnableSleepInsights
 import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
@@ -203,6 +205,8 @@ enum class Section(val title: String, val icon: ImageVector) {
 object SettingsIds {
     const val OfflineSpeechRecognition = "OfflineSpeechRecognition"
     const val EnableHealthTracking = "EnableHealthTracking"
+    const val EnableActivityInsights = "EnableActivityInsights"
+    const val EnableSleepInsights = "EnableSleepInsights"
     const val EnableHealthPlatformSync = "EnableHealthPlatformSync"
 }
 
@@ -927,6 +931,7 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    id = EnableActivityInsights,
                     title = "Activity Insights",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
@@ -941,6 +946,7 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    id = EnableSleepInsights,
                     title = "Sleep Insights",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,

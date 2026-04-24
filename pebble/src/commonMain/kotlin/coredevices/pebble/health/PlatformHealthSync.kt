@@ -137,7 +137,7 @@ class PlatformHealthSync(
 
         for (entity in records) {
             val startTime = Instant.fromEpochSeconds(entity.timestamp)
-            val endTime = startTime + 10.minutes
+            val endTime = startTime + 1.minutes
 
             // Steps
             if (entity.steps > 0) {

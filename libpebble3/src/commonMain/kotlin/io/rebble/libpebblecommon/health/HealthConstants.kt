@@ -20,7 +20,7 @@ object HealthConstants {
      * Sleep search window configuration.
      * Sleep sessions are searched from 6 PM the previous day to 2 PM the current day.
      */
-    const val SLEEP_WINDOW_START_OFFSET_HOURS = 18 // 6 PM yesterday
+    const val SLEEP_WINDOW_START_OFFSET_HOURS = 6  // 6 PM yesterday
     const val SLEEP_WINDOW_END_OFFSET_HOURS = 14   // 2 PM today
 
     /**

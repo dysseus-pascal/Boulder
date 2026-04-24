@@ -342,7 +342,9 @@ class HealthViewModel(
         _activity.value = buildActivityState(ordered.map { it?.steps ?: 0L }, labels, daysWithData, start, end)
 
         val sleepEntries = libPebble.getSleepEntries(start, end)
-        val entriesByDay = sleepEntries.groupBy { Instant.fromEpochSeconds(it.startTime).toLocalDateTime(tz).date.toString() }
+        // Bucket sleep by "sleep day" not calendar date: an entry starting 11 PM Sat belongs to Sun
+        // (matches the [6 PM yesterday, 2 PM today] window used for the daily card).
+        val entriesByDay = sleepEntries.groupBy { Instant.fromEpochSeconds(it.startTime + 6 * 3600L).toLocalDateTime(tz).date.toString() }
         val stackedSleep = ordered.mapIndexed { i, agg ->
             val de = if (agg != null) entriesByDay[agg.day] ?: emptyList() else emptyList()
             StackedSleepEntry(
@@ -370,7 +372,7 @@ class HealthViewModel(
         _activity.value = buildActivityState(weeklySteps, labels, daysWithData, start, end)
 
         val sleepEntries = libPebble.getSleepEntries(start, end)
-        val entriesByDay = sleepEntries.groupBy { Instant.fromEpochSeconds(it.startTime).toLocalDateTime(tz).date.toString() }
+        val entriesByDay = sleepEntries.groupBy { Instant.fromEpochSeconds(it.startTime + 6 * 3600L).toLocalDateTime(tz).date.toString() }
         val stackedSleep = weeks.map { (label, days) ->
             var total = 0f; var deep = 0f
             for (d in days) {

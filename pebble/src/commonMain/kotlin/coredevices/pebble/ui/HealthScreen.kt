@@ -260,10 +260,12 @@ private fun SleepStatsRow(st: SleepUiState) {
 private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
     val scrub = rememberScrubState()
     val idx = scrub.scrubIndex
-    val sv = if (idx != null && idx < st.hourlyHR.size) st.hourlyHR[idx]?.roundToInt() else null
+    val sv = if (idx != null && idx < st.hrSamples.size) st.hrSamples[idx]?.roundToInt() else null
+    val minPerBucket = if (st.hrSamples.isNotEmpty()) 1440 / st.hrSamples.size else 60
+    val tStr = if (idx != null) { val m = idx * minPerBucket; "${m / 60}:${(m % 60).toString().padStart(2, '0')}" } else ""
 
     val hv = when { sv != null -> "$sv"; st.latestHR != null -> "${st.latestHR}"; st.averageHR != null -> "${st.averageHR}"; else -> "--" }
-    val hs = when { sv != null -> "bpm at $idx:00"; st.latestHR != null -> "latest bpm"; else -> "avg bpm" }
+    val hs = when { sv != null -> "bpm at $tStr"; st.latestHR != null -> "latest bpm"; else -> "avg bpm" }
 
     HealthCard(HRBgColor) {
         CardHeader(
@@ -276,8 +278,8 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
         if (st.isLoading) { ChartPlaceholder("Loading...", "") }
         else if (st.averageHR == null) { ChartPlaceholder("No heart rate data", "Heart rate is measured automatically by your watch") }
         else {
-            if (range == HealthTimeRange.Daily && st.hourlyHR.any { it != null }) {
-                val tm = rememberTextMeasurer(); HRLineChart(st.hourlyHR, scrub, tm)
+            if (range == HealthTimeRange.Daily && st.hrSamples.any { it != null }) {
+                val tm = rememberTextMeasurer(); HRLineChart(st.hrSamples, scrub, tm)
             }
             if (st.zoneMinutes.isNotEmpty()) HRZoneBar(st.zoneMinutes)
         }

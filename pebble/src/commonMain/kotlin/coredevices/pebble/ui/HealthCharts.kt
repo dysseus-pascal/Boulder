@@ -325,7 +325,8 @@ internal fun HRLineChart(hrs: List<Double?>, scrub: ScrubState, tm: androidx.com
             val x = si * sx; drawLine(ScrubLineColor, Offset(x, 0f), Offset(x, cH), 1.5.dp.toPx())
             hrs[si]?.let { val y = cH - ((it - mn) / rg * cH).toFloat(); drawCircle(Color.White, 5.dp.toPx(), Offset(x, y)); drawCircle(HRLineColor, 3.5.dp.toPx(), Offset(x, y)) }
         }
-        for (i in hrs.indices step 6) { drawText(tm.measure("$i", ls), topLeft = Offset(i * sx, cH + 2.dp.toPx())) }
+        val pointsPerHour = (hrs.size / 24).coerceAtLeast(1)
+        for (i in hrs.indices step pointsPerHour * 6) { drawText(tm.measure("${i / pointsPerHour}", ls), topLeft = Offset(i * sx, cH + 2.dp.toPx())) }
     }
 }
 

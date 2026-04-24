@@ -82,7 +82,7 @@ data class SleepSegmentUi(
 data class HeartRateUiState(
     val averageHR: Int? = null,
     val latestHR: Int? = null,
-    val hourlyHR: List<Double?> = emptyList(),
+    val hrSamples: List<Double?> = emptyList(),
     val zoneMinutes: Map<Int, Long> = emptyMap(),
     val isLoading: Boolean = true,
 )
@@ -170,11 +170,14 @@ class HealthViewModel(
         val sessions = sessionsD.await()
 
         val hourlySteps = LongArray(24)
-        val hourlyHR = Array<MutableList<Int>>(24) { mutableListOf() }
+        val hrBuckets = Array<MutableList<Int>>(288) { mutableListOf() } // 5-minute resolution
         for (entry in healthData) {
             val hour = ((entry.timestamp - dayStart) / 3600).toInt().coerceIn(0, 23)
             hourlySteps[hour] += entry.steps
-            if (entry.heartRate > 0) hourlyHR[hour].add(entry.heartRate)
+            if (entry.heartRate > 0) {
+                val bucket = ((entry.timestamp - dayStart) / 300).toInt().coerceIn(0, 287)
+                hrBuckets[bucket].add(entry.heartRate)
+            }
         }
 
         val sessionUis = sessions.map { ov ->
@@ -217,7 +220,7 @@ class HealthViewModel(
         _heartRate.value = HeartRateUiState(
             averageHR = avgHRD.await()?.roundToInt(),
             latestHR = latestHRD.await()?.bpm,
-            hourlyHR = hourlyHR.map { if (it.isEmpty()) null else it.average() },
+            hrSamples = hrBuckets.map { if (it.isEmpty()) null else it.average() },
             zoneMinutes = zonesD.await(),
             isLoading = false,
         )

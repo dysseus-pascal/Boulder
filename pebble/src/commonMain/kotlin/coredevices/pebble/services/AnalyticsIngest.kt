@@ -55,7 +55,12 @@ class AnalyticsIngest(
 
     @OptIn(ExperimentalEncodingApi::class)
     private suspend fun buildEnvelope(row: AnalyticsHeartbeatEntity): JsonObject = buildJsonObject {
-        val userToken = Firebase.auth.currentUser?.getIdToken(false)
+        val userToken = try {
+            Firebase.auth.currentUser?.getIdToken(false)
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to get ID token" }
+            null
+        }
         putJsonObject("global_properties") {
             putJsonObject("identity") {
                 put("serial_number", row.serial)

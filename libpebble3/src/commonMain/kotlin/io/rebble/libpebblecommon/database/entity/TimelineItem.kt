@@ -148,6 +148,7 @@ data class BaseAction(
     val actionID: UByte,
     val type: Type,
     val attributes: List<BaseAttribute>,
+    val internalType: String? = null,
 ) {
     fun asAction(): TimelineItem.Action =
         TimelineItem.Action(actionID, type, attributes.map { it.asAttribute() })

@@ -1,7 +1,9 @@
 package io.rebble.libpebblecommon.di
 
 import android.app.Application
+import io.rebble.libpebblecommon.calendar.AndroidCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
+import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
@@ -60,6 +62,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidNotificationActionHandler) bind PlatformNotificationActionHandler::class
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
+    singleOf(::AndroidCalendarActionHandler) bind PlatformCalendarActionHandler::class
     singleOf(::AndroidSystemCallLog) bind SystemCallLog::class
     singleOf(::AndroidSystemMusicControl) bind SystemMusicControl::class
     singleOf(::AndroidSystemGeolocation) bind SystemGeolocation::class

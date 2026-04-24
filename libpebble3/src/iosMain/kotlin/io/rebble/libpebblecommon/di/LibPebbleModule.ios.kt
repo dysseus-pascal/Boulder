@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.di
 
+import io.rebble.libpebblecommon.calendar.IosCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
+import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.SystemCallLog
@@ -47,6 +49,7 @@ actual val platformModule: Module = module {
     singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
+    singleOf(::IosCalendarActionHandler) bind PlatformCalendarActionHandler::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class

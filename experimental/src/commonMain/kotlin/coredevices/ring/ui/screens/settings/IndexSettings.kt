@@ -60,7 +60,6 @@ import coreapp.ring.generated.resources.Res
 import coreapp.ring.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
-import coredevices.EnableExperimentalDevices
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -109,7 +108,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val webhookToken by webhookViewModel.authToken.collectAsState()
     val webhookIsLinked = !webhookUrl.isNullOrBlank() && !webhookToken.isNullOrBlank()
     val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
-    val experimentalDevicesEnabled by koinInject<EnableExperimentalDevices>().enabled.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
@@ -165,7 +163,6 @@ fun IndexSettings(coreNav: CoreNav) {
                 viewModel.closeSecondaryModeDialog()
             },
             webhookEnabled = webhookIsLinked,
-            webhookShown = experimentalDevicesEnabled
         )
     }
     if (showNoteShortcutDialog) {
@@ -401,19 +398,17 @@ fun IndexSettings(coreNav: CoreNav) {
                     }
                 )
             }
-            if (experimentalDevicesEnabled) {
-                item {
-                    ListItem(
-                        modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
-                        headlineContent = { Text("Webhook") },
-                        supportingContent = {
-                            Text(
-                                if (webhookIsLinked) "Configured, tap to modify"
-                                else "Not Linked"
-                            )
-                        }
-                    )
-                }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
+                    headlineContent = { Text("Webhook") },
+                    supportingContent = {
+                        Text(
+                            if (webhookIsLinked) "Configured, tap to modify"
+                            else "Not Linked"
+                        )
+                    }
+                )
             }
             item {
                 ListItem(
@@ -566,7 +561,6 @@ fun SecondaryModeDialog(
     onModeSelected: (SecondaryMode) -> Unit,
     onDismissRequest: () -> Unit,
     webhookEnabled: Boolean,
-    webhookShown: Boolean,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
@@ -641,37 +635,35 @@ fun SecondaryModeDialog(
                     }
                 }
             }
-            if (webhookShown) {
-                item(SecondaryMode.IndexWebhook) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = webhookEnabled) {
-                                targetMode = SecondaryMode.IndexWebhook
-                            }
-                    ) {
-                        RadioButton(
-                            selected = targetMode == SecondaryMode.IndexWebhook,
-                            onClick = {
-                                targetMode = SecondaryMode.IndexWebhook
-                            },
-                            enabled = webhookEnabled
+            item(SecondaryMode.IndexWebhook) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = webhookEnabled) {
+                            targetMode = SecondaryMode.IndexWebhook
+                        }
+                ) {
+                    RadioButton(
+                        selected = targetMode == SecondaryMode.IndexWebhook,
+                        onClick = {
+                            targetMode = SecondaryMode.IndexWebhook
+                        },
+                        enabled = webhookEnabled
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Webhook")
+                        Text(
+                            "Send recording data to your webhook on a double click & hold.",
+                            fontSize = 12.sp,
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text("Webhook")
+                        if (!webhookEnabled) {
                             Text(
-                                "Send recording data to your webhook on a double click & hold.",
+                                "Configure webhook first.",
                                 fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
                             )
-                            if (!webhookEnabled) {
-                                Text(
-                                    "Configure webhook first.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
                         }
                     }
                 }

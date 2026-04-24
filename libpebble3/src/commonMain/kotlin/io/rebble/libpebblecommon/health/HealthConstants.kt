@@ -6,18 +6,10 @@ package io.rebble.libpebblecommon.health
 object HealthConstants {
     /**
      * Sleep overlay types that should be counted in sleep statistics.
-     * Includes regular sleep and deep sleep, but not naps.
+     * Matches firmware's ActivityMetricSleepSeconds, which sums Sleep + Nap
+     * containers with DeepSleep / DeepNap as nested subset intervals.
      */
     val SLEEP_TYPES = listOf(
-        OverlayType.Sleep.value,
-        OverlayType.DeepSleep.value,
-    )
-
-    /**
-     * All sleep-related overlay types including naps.
-     * Used for logging and data processing where naps should be included.
-     */
-    val ALL_SLEEP_TYPES = listOf(
         OverlayType.Sleep.value,
         OverlayType.DeepSleep.value,
         OverlayType.Nap.value,
@@ -53,9 +45,3 @@ fun OverlayType.isSleepType(): Boolean =
     this == OverlayType.Nap ||
     this == OverlayType.DeepNap
 
-/**
- * Extension function to check if an OverlayType represents sleep for statistics.
- * Only includes regular sleep and deep sleep (not naps).
- */
-fun OverlayType.isStatsSleepType(): Boolean =
-    this == OverlayType.Sleep || this == OverlayType.DeepSleep

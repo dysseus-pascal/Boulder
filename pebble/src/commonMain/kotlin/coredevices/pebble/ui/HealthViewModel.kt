@@ -58,7 +58,7 @@ data class ActivitySessionUi(
 
 data class StackedSleepEntry(
     val label: String,
-    val lightHours: Float,
+    val totalHours: Float,
     val deepHours: Float,
 )
 
@@ -304,8 +304,14 @@ class HealthViewModel(
         stackedData: List<StackedSleepEntry>, daysWithData: Int,
         sleepEntries: List<io.rebble.libpebblecommon.database.entity.OverlayDataEntity>, tz: TimeZone,
     ): SleepUiState {
-        val totalSleep = sleepEntries.filter { OverlayType.fromValue(it.type) == OverlayType.Sleep }.sumOf { it.duration }
-        val totalDeep = sleepEntries.filter { OverlayType.fromValue(it.type) == OverlayType.DeepSleep }.sumOf { it.duration }
+        val totalSleep = sleepEntries.filter {
+            val t = OverlayType.fromValue(it.type)
+            t == OverlayType.Sleep || t == OverlayType.Nap
+        }.sumOf { it.duration }
+        val totalDeep = sleepEntries.filter {
+            val t = OverlayType.fromValue(it.type)
+            t == OverlayType.DeepSleep || t == OverlayType.DeepNap
+        }.sumOf { it.duration }
 
         val sleepOverlays = sleepEntries.filter { OverlayType.fromValue(it.type) == OverlayType.Sleep && it.duration > 1800 }
         val avgFallAsleep = if (sleepOverlays.isNotEmpty()) {
@@ -342,8 +348,14 @@ class HealthViewModel(
             val de = if (agg != null) entriesByDay[agg.day] ?: emptyList() else emptyList()
             StackedSleepEntry(
                 label = labels.getOrElse(i) { "$i" },
-                lightHours = de.filter { OverlayType.fromValue(it.type) == OverlayType.Sleep }.sumOf { it.duration } / 3600f,
-                deepHours = de.filter { OverlayType.fromValue(it.type) == OverlayType.DeepSleep }.sumOf { it.duration } / 3600f,
+                totalHours = de.filter {
+                    val t = OverlayType.fromValue(it.type)
+                    t == OverlayType.Sleep || t == OverlayType.Nap
+                }.sumOf { it.duration } / 3600f,
+                deepHours = de.filter {
+                    val t = OverlayType.fromValue(it.type)
+                    t == OverlayType.DeepSleep || t == OverlayType.DeepNap
+                }.sumOf { it.duration } / 3600f,
             )
         }
         _sleep.value = buildSleepState(stackedSleep, daysWithData, sleepEntries, tz)
@@ -361,15 +373,21 @@ class HealthViewModel(
         val sleepEntries = libPebble.getSleepEntries(start, end)
         val entriesByDay = sleepEntries.groupBy { Instant.fromEpochSeconds(it.startTime).toLocalDateTime(tz).date.toString() }
         val stackedSleep = weeks.map { (label, days) ->
-            var light = 0f; var deep = 0f
+            var total = 0f; var deep = 0f
             for (d in days) {
                 if (d == null) continue
                 val de = entriesByDay[d.day] ?: continue
-                light += de.filter { OverlayType.fromValue(it.type) == OverlayType.Sleep }.sumOf { it.duration } / 3600f
-                deep += de.filter { OverlayType.fromValue(it.type) == OverlayType.DeepSleep }.sumOf { it.duration } / 3600f
+                total += de.filter {
+                    val t = OverlayType.fromValue(it.type)
+                    t == OverlayType.Sleep || t == OverlayType.Nap
+                }.sumOf { it.duration } / 3600f
+                deep += de.filter {
+                    val t = OverlayType.fromValue(it.type)
+                    t == OverlayType.DeepSleep || t == OverlayType.DeepNap
+                }.sumOf { it.duration } / 3600f
             }
             val count = days.count { it != null }.coerceAtLeast(1)
-            StackedSleepEntry(label, light / count, deep / count)
+            StackedSleepEntry(label, total / count, deep / count)
         }
         _sleep.value = buildSleepState(stackedSleep, daysWithData, sleepEntries, tz)
         _heartRate.value = buildHeartRateState(start, end)

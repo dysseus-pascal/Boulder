@@ -184,7 +184,7 @@ internal fun BarChart(values: List<Long>, labels: List<String>, color: Color, sc
 @Composable
 internal fun StackedBarChart(data: List<StackedSleepEntry>, scrub: ScrubState, tm: androidx.compose.ui.text.TextMeasurer, typicalLine: Float = 0f) {
     if (data.isEmpty()) return
-    val mx = data.maxOf { it.lightHours + it.deepHours }.coerceAtLeast(0.1f)
+    val mx = data.maxOf { it.totalHours }.coerceAtLeast(0.1f)
     val ls = TextStyle(fontSize = 9.sp, color = AxisLabelColor)
     val si = scrub.scrubIndex
 
@@ -193,7 +193,7 @@ internal fun StackedBarChart(data: List<StackedSleepEntry>, scrub: ScrubState, t
         val bW = (size.width - sp * (data.size - 1)) / data.size
         drawRect(ChartOverlayColor, Offset.Zero, Size(size.width, cH))
 
-        val totalHeights = data.map { (it.lightHours + it.deepHours) / mx * cH }
+        val totalHeights = data.map { it.totalHours / mx * cH }
         val deepHeights = data.map { it.deepHours / mx * cH }
 
         data.forEachIndexed { i, _ ->

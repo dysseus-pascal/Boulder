@@ -214,7 +214,7 @@ private fun SleepCard(st: SleepUiState, range: HealthTimeRange) {
     val scrub = rememberScrubState()
     val idx = scrub.scrubIndex
     val scrubEntry = if (idx != null && range != HealthTimeRange.Daily && idx < st.stackedData.size) st.stackedData[idx] else null
-    val dh = scrubEntry?.let { it.lightHours + it.deepHours } ?: st.totalSleepHours
+    val dh = scrubEntry?.totalHours ?: st.totalSleepHours
     val dd = scrubEntry?.deepHours ?: st.deepSleepHours
 
     val sleepLabel = when (range) {

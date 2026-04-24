@@ -19,42 +19,37 @@ data class SleepSession(
 
 /**
  * Groups consecutive sleep entries into sessions.
- * Sleep and DeepSleep entries that are close together (within 1 hour) are part of the same session.
+ * Entries within SLEEP_SESSION_GAP_HOURS of each other are part of the same session.
  *
- * Only Sleep type entries count toward total sleep duration.
- * DeepSleep is tracked separately as it's a subset of the total sleep (portion of sleep that was deep).
+ * Container overlays (Sleep, Nap) count toward totalSleep.
+ * Subset overlays (DeepSleep, DeepNap) are nested inside their containers and count
+ * toward deepSleep — they represent the same time already in totalSleep, not additional time.
+ * This matches the firmware's ActivitySession model.
  */
 fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
     val sessions = mutableListOf<SleepSession>()
 
     sleepEntries.sortedBy { it.startTime }.forEach { entry ->
         val overlayType = OverlayType.fromValue(entry.type)
+        val isContainer = overlayType == OverlayType.Sleep || overlayType == OverlayType.Nap
+        val isDeep = overlayType == OverlayType.DeepSleep || overlayType == OverlayType.DeepNap
         val entryEnd = entry.startTime + entry.duration
 
-        // Find if this entry belongs to an existing session (within 1 hour of last entry)
         val existingSession = sessions.lastOrNull()?.takeIf {
             entry.startTime <= it.end + SLEEP_SESSION_GAP_SECONDS
         }
 
         if (existingSession != null) {
-            // Add to existing session
             existingSession.end = maxOf(existingSession.end, entryEnd)
-            // Only Sleep entries count toward total duration
-            if (overlayType == OverlayType.Sleep) {
-                existingSession.totalSleep += entry.duration
-            }
-            // DeepSleep is tracked separately (it's a subset of total sleep)
-            if (overlayType == OverlayType.DeepSleep) {
-                existingSession.deepSleep += entry.duration
-            }
+            if (isContainer) existingSession.totalSleep += entry.duration
+            if (isDeep) existingSession.deepSleep += entry.duration
         } else {
-            // Start new session
             sessions.add(
                 SleepSession(
                     start = entry.startTime,
                     end = entryEnd,
-                    totalSleep = if (overlayType == OverlayType.Sleep) entry.duration else 0,
-                    deepSleep = if (overlayType == OverlayType.DeepSleep) entry.duration else 0
+                    totalSleep = if (isContainer) entry.duration else 0,
+                    deepSleep = if (isDeep) entry.duration else 0,
                 )
             )
         }
@@ -100,8 +95,13 @@ suspend fun fetchAndGroupDailySleep(
         "Grouped into ${sessions.size} sessions:\n$sessionsInfo"
     }
 
-    // Find the longest sleep session (main sleep, not naps)
-    return sessions.maxByOrNull { it.totalSleep }
+    // Pick the main sleep session (longest) to anchor bedtime/wake-up and the timeline,
+    // then fold nap sessions' totals in so the displayed numbers match the firmware's
+    // per-day "sleep" metric (Sleep + Nap containers).
+    val mainSession = sessions.maxByOrNull { it.totalSleep } ?: return null
+    mainSession.totalSleep = sessions.sumOf { it.totalSleep }
+    mainSession.deepSleep = sessions.sumOf { it.deepSleep }
+    return mainSession
 }
 
 private const val SLEEP_SESSION_GAP_SECONDS = HealthConstants.SLEEP_SESSION_GAP_HOURS * 3600L

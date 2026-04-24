@@ -126,8 +126,10 @@ class CommonAppDelegate(
         GlobalScope.launch(Dispatchers.Default) {
             usersDao.initUserDevToken(pebbleAccountProvider.get().devToken.value)
         }
-        Firebase.auth.currentUser?.emailOrNull?.let {
-            analyticsBackend.setUser(email = it)
+        GlobalScope.launch(Dispatchers.Default) {
+            Firebase.auth.currentUser?.emailOrNull?.let {
+                analyticsBackend.setUser(email = it)
+            }
         }
         initCactus()
         pushMessaging.init()

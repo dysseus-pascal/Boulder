@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -290,6 +291,7 @@ internal fun HRZoneBar(zones: Map<Int, Long>) {
     val z1 = zones[1] ?: 0L; val z2 = zones[2] ?: 0L; val z3 = zones[3] ?: 0L
     val z1f = z1.toFloat() / total; val z2f = z2.toFloat() / total; val z3f = z3.toFloat() / total
 
+    fun fmt(mins: Long, frac: Float) = "${mins / 60}:${(mins % 60).toString().padStart(2, '0')} (${(frac * 100).roundToInt()}%)"
     Column(Modifier.fillMaxWidth().background(HRBgColor).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Canvas(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp))) {
             val w1 = z1f * size.width; val w2 = z2f * size.width; val w3 = z3f * size.width
@@ -299,7 +301,7 @@ internal fun HRZoneBar(zones: Map<Int, Long>) {
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceEvenly) {
-            LegendDot(HRZone1Color, "Zone 1: ${z1}m"); LegendDot(HRZone2Color, "Zone 2: ${z2}m"); LegendDot(HRZone3Color, "Zone 3: ${z3}m")
+            LegendDot(HRZone1Color, "Z1: ${fmt(z1, z1f)}"); LegendDot(HRZone2Color, "Z2: ${fmt(z2, z2f)}"); LegendDot(HRZone3Color, "Z3: ${fmt(z3, z3f)}")
         }
     }
 }

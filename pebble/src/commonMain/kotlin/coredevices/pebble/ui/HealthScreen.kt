@@ -203,7 +203,7 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
             StatsRow(ActivityBgColor,
                 "${prefix}Distance" to formatDistance(st.totalDistanceM, imperial),
                 "${prefix}Calories" to "${st.totalCaloriesKcal}",
-                "${prefix}Active" to "${st.totalActiveMinutes}m",
+                "${prefix}Active" to "${st.totalActiveMinutes / 60}:${(st.totalActiveMinutes % 60).toString().padStart(2, '0')}",
             )
         }
     }

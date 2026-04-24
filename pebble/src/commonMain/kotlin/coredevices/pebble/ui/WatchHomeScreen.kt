@@ -334,7 +334,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val coreConfig by coreConfigHolder.config.collectAsState()
         val permissionRequester: PermissionRequester = koinInject()
         val missingPermissions = permissionRequester.missingPermissions.collectAsState()
-        val missingRequiredPermissions by remember {
+        val missingRequiredPermissions by remember(missingPermissions) {
             derivedStateOf {
                 missingPermissions.value.filter {
                     it in listOf(

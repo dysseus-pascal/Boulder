@@ -48,7 +48,21 @@ sealed interface STTLanguage {
      * ISO 639-1 language codes, e.g. "en", "es", "fr".
      */
     data class Specific(val languageCodes: Set<String>) : STTLanguage
+
+    companion object {
+        /**
+         * Resolve an ISO 639-1 language code into an [STTLanguage]. Null/blank -> [Automatic].
+         */
+        fun fromCodeOrAutomatic(code: String?): STTLanguage =
+            code?.takeIf { it.isNotBlank() }?.let { Specific(setOf(it)) } ?: Automatic
+    }
 }
+
+/**
+ * Curated list of ISO 639-1 language codes for user-selectable spoken language settings.
+ * Pairs are (code, English display name).
+ */
+expect val SpokenLanguageOptions: List<Pair<String, String>>
 
 data class STTConversationMessage(
     val role: STTConvoRole,

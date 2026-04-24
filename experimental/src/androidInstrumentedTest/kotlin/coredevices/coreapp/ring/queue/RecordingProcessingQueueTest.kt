@@ -16,6 +16,8 @@ import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
@@ -226,6 +228,8 @@ class RecordingProcessingQueueTest {
             }
         } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)
+
+        single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)

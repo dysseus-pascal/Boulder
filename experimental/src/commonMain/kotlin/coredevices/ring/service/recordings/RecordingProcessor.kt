@@ -3,6 +3,7 @@ package coredevices.ring.service.recordings
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
 import coredevices.util.AudioEncoding
+import coredevices.util.CoreConfigFlow
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
@@ -45,7 +46,8 @@ class RecordingProcessor(
     private val transcriptionService: TranscriptionService,
     private val conversationMessageDao: ConversationMessageDao,
     private val recordingEntryDao: RecordingEntryDao,
-    private val trace: RingTraceSession
+    private val trace: RingTraceSession,
+    private val coreConfigFlow: CoreConfigFlow,
 ) {
     sealed interface RecordingStatus {
         /**
@@ -194,7 +196,7 @@ class RecordingProcessor(
             audioStreamFlow = audioStreamFlow,
             sampleRate = sampleRate,
             encoding = encoding,
-            language = STTLanguage.Automatic, // TODO: Allow language to be specified by callerencoding = encoding
+            language = STTLanguage.fromCodeOrAutomatic(coreConfigFlow.value.sttConfig.spokenLanguage),
         )
     }
 

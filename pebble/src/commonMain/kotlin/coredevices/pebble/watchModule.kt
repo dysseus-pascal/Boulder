@@ -212,7 +212,8 @@ val watchModule = module {
     single {
         CactusTranscription(
             get(),
-            lazy { get<LibPebble3>() }
+            lazy { get<LibPebble3>() },
+            get(),
         )
     } bind TranscriptionProvider::class
 

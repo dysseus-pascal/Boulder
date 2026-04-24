@@ -61,6 +61,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -123,6 +125,7 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
 import coredevices.util.WeatherUnit
+import coredevices.util.transcription.SpokenLanguageOptions
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
@@ -313,8 +316,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
+    var showSpokenLanguageDialog by remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
+    if (showSpokenLanguageDialog) {
+        SpokenLanguagePickerDialog(
+            selectedCode = coreConfig.sttConfig.spokenLanguage,
+            onLanguageSelected = { code ->
+                coreConfigHolder.update(
+                    coreConfig.copy(
+                        sttConfig = coreConfig.sttConfig.copy(spokenLanguage = code)
+                    )
+                )
+                showSpokenLanguageDialog = false
+            },
+            onDismissRequest = { showSpokenLanguageDialog = false },
+        )
+    }
     pendingSTTModeDialog?.let { pendingSTTMode ->
         val recommendedModel by produceState<ModelInfo?>(null) {
             withContext(Dispatchers.Default) {
@@ -1213,6 +1231,16 @@ please disable the option.""".trimIndent(),
                         nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
                 ) },
+                basicSettingsActionItem(
+                    title = "Spoken Language",
+                    description = coreConfig.sttConfig.spokenLanguage
+                        ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
+                        ?: "Automatic",
+                    keywords = "language stt speech recognition locale iso",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    action = { showSpokenLanguageDialog = true },
+                ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
                     description = "Allow connection even when there are other Pebble apps installed on this phone. Warning: this will likely make the connection unreliable if you are using BLE! We don't recommend enabling this",
@@ -2141,6 +2169,88 @@ fun STTLanguageDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun SpokenLanguagePickerDialog(
+    selectedCode: String?,
+    onLanguageSelected: (String?) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val options = remember { SpokenLanguageOptions }
+    val filtered = remember(query, options) {
+        if (query.isBlank()) {
+            options
+        } else {
+            val q = query.trim().lowercase()
+            options.filter { (code, name) ->
+                name.lowercase().contains(q) || code.lowercase().contains(q)
+            }
+        }
+    }
+    val showAutomatic = query.isBlank() || "automatic".contains(query.trim().lowercase())
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Language, contentDescription = null) },
+        title = { Text("Spoken Language") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+        },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("Search languages") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                if (showAutomatic) {
+                    item(key = "__automatic__") {
+                        SpokenLanguageRow(
+                            label = "Automatic",
+                            selected = selectedCode == null,
+                            onClick = { onLanguageSelected(null) },
+                        )
+                    }
+                }
+                items(filtered, key = { it.first }) { (code, name) ->
+                    SpokenLanguageRow(
+                        label = name,
+                        selected = selectedCode == code,
+                        onClick = { onLanguageSelected(code) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Note: Selecting a language may improve accuracy for that language but not all languages on this list are guaranteed to be supported.",
+                fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpokenLanguageRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.width(8.dp))
+        Text(label)
     }
 }
 

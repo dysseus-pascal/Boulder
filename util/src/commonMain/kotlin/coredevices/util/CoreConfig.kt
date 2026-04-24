@@ -96,4 +96,6 @@ data class CoreConfig(
 data class STTConfig(
     val mode: CactusSTTMode = CactusSTTMode.RemoteOnly,
     val modelName: String? = null,
+    /** ISO 639-1 language code. Null means auto-detect. */
+    val spokenLanguage: String? = null,
 )

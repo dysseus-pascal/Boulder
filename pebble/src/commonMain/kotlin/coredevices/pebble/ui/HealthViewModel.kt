@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
-import io.rebble.libpebblecommon.health.HealthConstants
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.OverlayType
 import io.rebble.libpebblecommon.services.SleepSession
@@ -397,8 +396,9 @@ class HealthViewModel(
 
 internal fun buildDailySleepSegments(dayStart: Long, session: SleepSession?): List<SleepSegmentUi> {
     if (session == null) return emptyList()
-    val ws = dayStart - (HealthConstants.SLEEP_WINDOW_START_OFFSET_HOURS * 3600L)
-    val we = dayStart + (HealthConstants.SLEEP_WINDOW_END_OFFSET_HOURS * 3600L)
+    // Chart x-axis spans 6 PM yesterday → 12 PM today; must match labels in DailySleepTimeline.
+    val ws = dayStart - 6 * 3600L
+    val we = dayStart + 12 * 3600L
     val wd = (we - ws).toFloat()
     if (wd <= 0) return emptyList()
     val sf = ((session.start - ws) / wd).coerceIn(0f, 1f)

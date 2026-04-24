@@ -33,7 +33,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.rebble.libpebblecommon.health.HealthConstants
 import io.rebble.libpebblecommon.health.OverlayType
 
 internal val ActivityHeaderColor = Color(0xFF00A982)
@@ -229,7 +228,7 @@ internal fun StackedBarChart(data: List<StackedSleepEntry>, scrub: ScrubState, t
 internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, deepH: Float) {
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
     val scrubTime = scrubFraction?.let { frac ->
-        val windowHours = (HealthConstants.SLEEP_WINDOW_START_OFFSET_HOURS + HealthConstants.SLEEP_WINDOW_END_OFFSET_HOURS).toFloat()
+        val windowHours = 18f
         val hourOfDay = (18f + frac * windowHours) % 24f
         val h = hourOfDay.toInt(); val m = ((hourOfDay - h) * 60).toInt()
         val ampm = if (h < 12 || h == 24) "AM" else "PM"

@@ -27,6 +27,8 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
+internal expect fun exerciseWriteTypes(): List<HealthDataType>
+
 class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
@@ -60,15 +62,7 @@ class PlatformHealthSync(
             HealthDataType.Steps,
             HealthDataType.HeartRate,
             HealthDataType.Sleep,
-            HealthDataType.Exercise(
-                activeEnergyBurned = false,
-                cyclingPower = false,
-                cyclingSpeed = false,
-                flightsClimbed = false,
-                distanceWalkingRunning = true,
-                runningSpeed = false,
-            ),
-        )
+        ) + exerciseWriteTypes()
     }
 
     /** Check if the health platform is available on this device. */

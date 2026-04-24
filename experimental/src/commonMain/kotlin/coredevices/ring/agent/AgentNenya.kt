@@ -119,9 +119,9 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         if (!resp.statusCode.isSuccess()) {
             throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
         }
-        _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage())
+        _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
         var toolIterations = 0
-        var lastMessage = resp.response.conversation.last().toConversationMessage()
+        var lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
         while (toolIterations++ < MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
             // Tools need to be run
             val responses = lastMessage.tool_calls!!.map {
@@ -173,8 +173,8 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                     throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
                 }
             }
-            _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage())
-            lastMessage = resp.response.conversation.last().toConversationMessage()
+            _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
+            lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
         }
         if (toolIterations >= MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
             throw Exception("Exceeded maximum tool iterations")
@@ -206,7 +206,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
             }
         }
-        val text = resp.response?.conversation?.last()!!.toConversationMessage().content
+        val text = resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used).content
             ?.replace("**", "") // remove markdown bolding
         _conversation.emit(
             _conversation.first() + ConversationMessageDocument(

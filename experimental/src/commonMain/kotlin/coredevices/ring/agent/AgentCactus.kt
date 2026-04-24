@@ -154,6 +154,7 @@ class AgentCactus(
                         )
                     )
                 },
+                language_model_used = "cactus-${modelProvider.getLMModelPath().substringAfterLast("/")}"
             ))
 
             if (toolCalls.isNotEmpty() && !skipToolExecution) {

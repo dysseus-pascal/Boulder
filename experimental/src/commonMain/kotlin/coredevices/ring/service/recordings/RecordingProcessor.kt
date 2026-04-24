@@ -254,7 +254,9 @@ class RecordingProcessor(
                     role = MessageRole.tool,
                     content = toolResult.resultString,
                     semantic_result = toolResult.semanticResult,
-                    tool_call_id = Uuid.random().toString()
+                    tool_call_id = Uuid.random().toString(),
+                    language_model_used = null,
+                    is_forced_tool = true
                 )
             )
         }

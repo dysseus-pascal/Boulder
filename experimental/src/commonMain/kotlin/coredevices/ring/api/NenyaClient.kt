@@ -31,7 +31,8 @@ import kotlin.time.Duration.Companion.seconds
 data class RunResponse(
     val success: Boolean,
     val message: String? = null,
-    val conversation: List<OpenAIConversationMessage> = emptyList()
+    val conversation: List<OpenAIConversationMessage> = emptyList(),
+    val language_model_used: String? = null
 )
 
 @Serializable
@@ -47,19 +48,17 @@ data class OpenAIConversationMessage(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val tool_call_id: String? = null
 ) {
-    fun toConversationMessage() = ConversationMessageDocument(
+    fun toConversationMessage(model: String? = null) = ConversationMessageDocument(
         role = role,
         content = content
             ?.filter { it.type == ContentPartType.text }
             ?.ifEmpty { null }
             ?.joinToString("\n") { it.text ?: "" },
         tool_calls = tool_calls,
-        tool_call_id = tool_call_id
+        tool_call_id = tool_call_id,
+        language_model_used = model,
     )
 }
-
-fun List<OpenAIConversationMessage>.toConversationMessages() =
-    this.map { it.toConversationMessage() }
 
 data class RunResult(val statusCode: HttpStatusCode, val response: RunResponse?)
 

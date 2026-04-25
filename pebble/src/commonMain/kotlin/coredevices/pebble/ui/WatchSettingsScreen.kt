@@ -1001,6 +1001,9 @@ please disable the option.""".trimIndent(),
                     min = if (healthSettings.imperialUnits) 39 else 100,
                     max = if (healthSettings.imperialUnits) 87 else 220,
                     unit = if (healthSettings.imperialUnits) "in" else "cm",
+                    valueFormatter = if (healthSettings.imperialUnits) {
+                        { v -> "${v / 12}' ${v % 12}\"" }
+                    } else null,
                 ),
                 basicSettingsNumberItem(
                     id = SettingsIds.HealthWeight,
@@ -2006,6 +2009,7 @@ fun basicSettingsNumberItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
     defaultValue: Long? = null,
+    valueFormatter: ((Long) -> String)? = null,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2043,7 +2047,7 @@ fun basicSettingsNumberItem(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "$sliderPosition $unit",
+                            text = valueFormatter?.invoke(sliderPosition) ?: "$sliderPosition $unit",
                             fontSize = 14.sp,
                             modifier = Modifier.padding(vertical = 6.dp),
                         )

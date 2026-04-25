@@ -232,12 +232,14 @@ class RingSync(
                                             }
                                             try {
                                                 var id: String? = null
+                                                val satelliteSerial = transferStatus.satellite.state.value?.programmedSerialNumber ?: transferStatus.satellite.state.value?.serialNumber
+                                                ?: transferStatus.satellite.id
                                                 when (transferStatus) {
                                                     is TransferStatus.TransferStarted -> {
                                                         logger.i { "Transfer started for ${transferStatus.satellite.id}: serial ${transferStatus.satellite.state.value?.programmedSerialNumber}" }
                                                         trace.markEvent("transfer_started",
                                                             TraceEventData.TransferStarted(
-                                                                transferStatus.satellite.id,
+                                                                satelliteSerial,
                                                                 transferStatus.rollover
                                                             )
                                                         )
@@ -269,7 +271,7 @@ class RingSync(
                                                     is TransferStatus.TransferTypeDetermined -> {
                                                         trace.markEvent("transfer_type_determined",
                                                             TraceEventData.TransferTypeDetermined(
-                                                                satellite = transferStatus.satellite.id,
+                                                                satellite = satelliteSerial,
                                                                 isAudio = transferStatus.isAudio,
                                                                 buttonSequence = transferStatus.buttonSequence,
                                                                 collectionStartIndex = transferStatus.collectionStartIndex,
@@ -316,7 +318,7 @@ class RingSync(
                                                                     if (transfer.status == RingTransferStatus.Started) {
                                                                         trace.markEvent("past_transfer_failed",
                                                                             TraceEventData.PastTransferFailed(
-                                                                                satellite = transferStatus.satellite.id,
+                                                                                satellite = satelliteSerial,
                                                                                 transferId = transfer.id
                                                                             )
                                                                         )
@@ -352,7 +354,7 @@ class RingSync(
                                                         transferRange = null
                                                         trace.markEvent("transfer_dropped_recoverable",
                                                             TraceEventData.TransferDroppedRecoverable(
-                                                                satellite = transferStatus.satellite.id,
+                                                                satellite = satelliteSerial,
                                                                 collectionIndex = transferStatus.collectionIndex,
                                                             )
                                                         )
@@ -390,7 +392,7 @@ class RingSync(
                                                         }
                                                         trace.markEvent("transfer_dropped_unrecoverable",
                                                             TraceEventData.TransferDroppedUnrecoverable(
-                                                                satellite = transferStatus.satellite.id,
+                                                                satellite = satelliteSerial,
                                                                 transferId = tid,
                                                                 indices = transferStatus.collection?.indices?.toList()
                                                             )

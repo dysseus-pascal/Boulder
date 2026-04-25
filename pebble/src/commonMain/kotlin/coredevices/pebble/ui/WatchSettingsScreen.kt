@@ -136,6 +136,7 @@ import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
+import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -211,6 +212,11 @@ object SettingsIds {
     const val EnableActivityInsights = "EnableActivityInsights"
     const val EnableSleepInsights = "EnableSleepInsights"
     const val EnableHealthPlatformSync = "EnableHealthPlatformSync"
+    const val HealthHeight = "HealthHeight"
+    const val HealthWeight = "HealthWeight"
+    const val HealthAge = "HealthAge"
+    const val HealthGenderId = "HealthGender"
+    const val HealthImperialUnits = "HealthImperialUnits"
 }
 
 data class SettingsItem(
@@ -975,6 +981,88 @@ please disable the option.""".trimIndent(),
                             healthSettings.copy(
                                 sleepInsightsEnabled = it
                             )
+                        )
+                    },
+                ),
+                basicSettingsNumberItem(
+                    id = SettingsIds.HealthHeight,
+                    title = "Height",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for accurate calorie and distance estimates",
+                    value = if (healthSettings.imperialUnits) (healthSettings.heightMm / 25.4).roundToLong()
+                            else (healthSettings.heightMm / 10).toLong(),
+                    onValueChange = { v ->
+                        val mm = if (healthSettings.imperialUnits) (v * 25.4).roundToLong().toShort()
+                                 else (v * 10).toShort()
+                        libPebble.updateHealthSettings(healthSettings.copy(heightMm = mm))
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = if (healthSettings.imperialUnits) 39 else 100,
+                    max = if (healthSettings.imperialUnits) 87 else 220,
+                    unit = if (healthSettings.imperialUnits) "in" else "cm",
+                ),
+                basicSettingsNumberItem(
+                    id = SettingsIds.HealthWeight,
+                    title = "Weight",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for accurate calorie estimates",
+                    value = if (healthSettings.imperialUnits) (healthSettings.weightDag / 45.359).roundToLong()
+                            else (healthSettings.weightDag / 100).toLong(),
+                    onValueChange = { v ->
+                        val dag = if (healthSettings.imperialUnits) (v * 45.359).roundToLong().toShort()
+                                  else (v * 100).toShort()
+                        libPebble.updateHealthSettings(healthSettings.copy(weightDag = dag))
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = if (healthSettings.imperialUnits) 66 else 30,
+                    max = if (healthSettings.imperialUnits) 441 else 200,
+                    unit = if (healthSettings.imperialUnits) "lb" else "kg",
+                ),
+                basicSettingsNumberItem(
+                    id = SettingsIds.HealthAge,
+                    title = "Age",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for heart-rate zone calculations",
+                    value = healthSettings.ageYears.toLong(),
+                    onValueChange = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(ageYears = it.toInt())
+                        )
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = 1,
+                    max = 120,
+                    unit = "years",
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.HealthGenderId,
+                    title = "Gender",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.gender,
+                    items = HealthGender.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(gender = it)
+                        )
+                    },
+                    itemText = { it.name },
+                    show = { healthSettings.trackingEnabled },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HealthImperialUnits,
+                    title = "Imperial Units",
+                    description = "Display distance and pace in miles instead of kilometres",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.imperialUnits,
+                    show = { healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(imperialUnits = it)
                         )
                     },
                 ),

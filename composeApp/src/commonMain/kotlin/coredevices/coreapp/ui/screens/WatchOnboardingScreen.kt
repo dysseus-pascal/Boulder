@@ -58,6 +58,11 @@ import coredevices.pebble.ui.SettingsIds.EnableActivityInsights
 import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
 import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
 import coredevices.pebble.ui.SettingsIds.EnableSleepInsights
+import coredevices.pebble.ui.SettingsIds.HealthAge
+import coredevices.pebble.ui.SettingsIds.HealthGenderId
+import coredevices.pebble.ui.SettingsIds.HealthHeight
+import coredevices.pebble.ui.SettingsIds.HealthImperialUnits
+import coredevices.pebble.ui.SettingsIds.HealthWeight
 import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
@@ -273,6 +278,11 @@ fun WatchOnboardingScreen(
                             settings.Show(EnableHealthTracking)
                             settings.Show(EnableActivityInsights)
                             settings.Show(EnableSleepInsights)
+                            settings.Show(HealthHeight)
+                            settings.Show(HealthWeight)
+                            settings.Show(HealthAge)
+                            settings.Show(HealthGenderId)
+                            settings.Show(HealthImperialUnits)
                             settings.Show(EnableHealthPlatformSync)
                             Spacer(modifier = Modifier.height(15.dp))
                         }

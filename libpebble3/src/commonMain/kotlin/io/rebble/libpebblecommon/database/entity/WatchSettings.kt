@@ -155,8 +155,8 @@ class ActivityPrefsBlobItem(
     ageYears: Byte,
     gender: Byte,
 ) : StructMappable(endianness = Endian.Little) {
-    val heightMm = SUShort(m, heightMm)
-    val weightDag = SUShort(m, weightDag)
+    val heightMm = SUShort(m, heightMm, endianness = Endian.Little)
+    val weightDag = SUShort(m, weightDag, endianness = Endian.Little)
     val trackingEnabled = SByte(m, if (trackingEnabled) 0x01 else 0x00)
     val activityInsightsEnabled = SByte(m, if (activityInsightsEnabled) 0x01 else 0x00)
     val sleepInsightsEnabled = SByte(m, if (sleepInsightsEnabled) 0x01 else 0x00)

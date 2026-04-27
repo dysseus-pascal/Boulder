@@ -412,7 +412,7 @@ enum class EnumWatchPref(
     MotionSensitivity(
         id = "motionSensitivity",
         displayName = "Motion Sensitivity",
-        defaultValue = MotionSensitivityLevel.High,
+        defaultValue = MotionSensitivityLevel.Medium,
         options = MotionSensitivityLevel.entries,
         isDebugSetting = true,
     ),

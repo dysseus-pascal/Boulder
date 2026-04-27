@@ -6,10 +6,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.OverlayType
+import io.rebble.libpebblecommon.metadata.supportsHrm
+
 import io.rebble.libpebblecommon.services.SleepSession
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -95,6 +98,10 @@ class HealthViewModel(
 
     val imperialUnits = libPebble.healthSettings
         .map { it.imperialUnits }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val hasHrmWatch = libPebble.watches
+        .map { devs -> devs.any { it is KnownPebbleDevice && it.color?.supportsHrm() == true } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _activity = MutableStateFlow(ActivityUiState())

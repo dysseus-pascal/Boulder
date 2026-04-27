@@ -53,6 +53,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val hr by vm.heartRate.collectAsState()
     val dl by vm.dateLabel.collectAsState()
     val imperial by vm.imperialUnits.collectAsState()
+    val hasHrmWatch by vm.hasHrmWatch.collectAsState()
 
     LaunchedEffect(Unit) {
         topBarParams.title("Health")
@@ -66,7 +67,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         DateNavigator(dl, vm.dateOffset, vm::navigateBack, vm::navigateForward)
         ActivityCard(act, vm.selectedTimeRange, imperial)
         SleepCard(slp, vm.selectedTimeRange)
-        HeartRateCard(hr, vm.selectedTimeRange)
+        if (hasHrmWatch) HeartRateCard(hr, vm.selectedTimeRange)
         TextButton(
             onClick = { nav.navigateTo(PebbleNavBarRoutes.WatchSettingsCategoryRoute(section = "Health", topLevelType = "Phone")) },
             modifier = Modifier.align(Alignment.CenterHorizontally),

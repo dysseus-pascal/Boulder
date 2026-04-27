@@ -4,7 +4,6 @@ import co.touchlab.kermit.Logger
 import com.juul.kable.Scanner
 import coredevices.libindex.Scanning
 import io.rebble.libpebblecommon.connection.BleScanResult
-import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.asPebbleBleIdentifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +20,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class RealScanning(
-    private val indexDeviceRepository: IndexDeviceRepository,
+    private val indexDeviceManager: IndexDeviceManager,
 ): Scanning {
     private var bleScanJob: Job? = null
     private val _isScanning = MutableStateFlow(false)
@@ -55,7 +54,7 @@ class RealScanning(
     override fun startScan() {
         Logger.d("index startScan")
         bleScanJob?.cancel()
-        indexDeviceRepository.clearScanResults()
+        indexDeviceManager.clearScanResults()
         val scanResults = scan()
         _isScanning.value = true
         bleScanJob = scope.launch {
@@ -65,7 +64,7 @@ class RealScanning(
             }
             try {
                 scanResults.collect {
-                    indexDeviceRepository.addScanResult(
+                    indexDeviceManager.addScanResult(
                         IndexScanResult(
                             identifier = IndexIdentifier.fromPlatformAddress(it.identifier.asString),
                             name = it.name,

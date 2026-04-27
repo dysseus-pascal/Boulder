@@ -21,12 +21,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-class IndexDeviceRepository(
+class IndexDeviceManager(
     private val satelliteManager: KMPHaversineSatelliteManager,
     private val scope: LibIndexCoroutineScope,
     private val deviceFactory: IndexDeviceFactory,
     private val prefs: BasePreferences,
-    private val context: AppContext
+    // Not present on some platforms (iOS)
+    private val associations: IndexPlatformBluetoothAssociations?,
 ): Rings {
     private val _rings = MutableStateFlow(emptyList<IndexDevice>())
     override val rings: IndexDevices = _rings
@@ -74,15 +75,12 @@ class IndexDeviceRepository(
     }
 
     fun init() {
-        prefs.ringPaired.filterNotNull().flatMapLatest {
-            getBluetoothDevicePairEvents(context, IndexIdentifier(it))
-        }.onEach {
-            logger.d { "Received bond state change for paired ring ${it.device.asString}, bondState=${it.bondState}, unbondReason=${it.unbondReason}" }
-            if (it.bondState == BOND_NONE) {
-                logger.d { "Paired ring ${it.device.asString} was unpaired, clearing paired state" }
+        associations?.bondStateChanges?.onEach { evt ->
+            if (evt.state == IndexBondState.NotBonded && evt.identifier.asString == prefs.ringPaired.value) {
+                logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, removing paired state" }
                 prefs.setRingPaired(null)
             }
-        }
+        }?.launchIn(scope)
         prefs.ringPaired
             .runningFold<String?, Pair<String?, String?>>(null to null) { (_, prev), new -> prev to new }
             .drop(1)

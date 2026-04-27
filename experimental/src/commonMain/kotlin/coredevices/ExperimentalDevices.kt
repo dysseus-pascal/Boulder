@@ -18,6 +18,7 @@ import androidx.navigation.NavGraphBuilder
 import com.eygraber.uri.Uri
 import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.libindex.LibIndex
+import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
@@ -31,9 +32,12 @@ import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.navigation.addRingRoutes
 import coredevices.ring.ui.screens.home.FeedTabContents
 import coredevices.util.Permission
+import coredevices.util.PermissionRequester
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
@@ -51,11 +55,18 @@ class ExperimentalDevices(
     private val sandboxRepository: McpSandboxRepository,
     private val preferences: Preferences,
     private val shortcutActionHandler: ShortcutActionHandler,
-    private val libIndex: LibIndex
+    private val libIndex: LibIndex,
+    private val permissionRequester: PermissionRequester
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
-        libIndex.init()
+        libIndex.init(
+            permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
+                (Permission.Bluetooth in old && Permission.Bluetooth !in new) || (Permission.Bluetooth !in old && Permission.Bluetooth in new)
+            }.map {
+                Permission.Bluetooth !in it
+            }
+        )
     }
 
     suspend fun init() {
@@ -74,10 +85,6 @@ class ExperimentalDevices(
 
     fun handleDeepLink(uri: Uri): Boolean {
         return shortcutActionHandler.handleDeepLink(uri)
-    }
-
-    fun requiredRuntimePermissions(): Set<Permission> {
-        return ringDelegate.requiredRuntimePermissions()
     }
 
     fun addExperimentalRoutes(builder: NavGraphBuilder, coreNav: CoreNav) {

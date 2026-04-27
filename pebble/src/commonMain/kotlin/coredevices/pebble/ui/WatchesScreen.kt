@@ -175,6 +175,7 @@ import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -531,7 +532,7 @@ fun WatchesPreview() {
                         )
                     )
 
-                    override fun init() {
+                    override fun init(bluetoothPermissionChanged: Flow<Boolean>) {
                         TODO("Not yet implemented")
                     }
 
@@ -652,6 +653,9 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
 }
 
 @Composable
+expect fun RemovePairingMenuItem(ring: KnownIndexDevice, onShowRemoveDialog: () -> Unit, onHideMenu: () -> Unit)
+
+@Composable
 private fun RingMenu(ring: KnownIndexDevice) {
     var showMenu by remember { mutableStateOf(false) }
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -664,13 +668,13 @@ private fun RingMenu(ring: KnownIndexDevice) {
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
         ) {
-            DropdownMenuItem(
-                text = { Text("Remove") },
-                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-                onClick = {
-                    showMenu = false
+            RemovePairingMenuItem(
+                ring = ring,
+                onShowRemoveDialog = {
                     showRemoveDialog = true
+                    showMenu = false
                 },
+                onHideMenu = { showMenu = false }
             )
         }
     }

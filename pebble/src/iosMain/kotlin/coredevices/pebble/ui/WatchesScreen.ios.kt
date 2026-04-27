@@ -1,7 +1,14 @@
 package coredevices.pebble.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
+import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.Permission
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
@@ -106,4 +113,19 @@ actual fun getIPAddress(): Pair<String?, String?> {
             freeifaddrs(ifap.value)
         }
     }
+}
+
+@Composable
+actual fun RemovePairingMenuItem(
+    ring: KnownIndexDevice,
+    onShowRemoveDialog: () -> Unit,
+    onHideMenu: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text("Remove") },
+        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+        onClick = {
+            onShowRemoveDialog()
+        },
+    )
 }

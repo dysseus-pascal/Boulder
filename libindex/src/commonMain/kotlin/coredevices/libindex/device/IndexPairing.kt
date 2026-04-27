@@ -35,7 +35,7 @@ class RealIndexPairing(
     private val indexStorage: PrefsCollectionIndexStorage,
     private val transferRepo: RingTransferRepository,
     private val prefs: BasePreferences,
-    private val deviceRepo: IndexDeviceRepository,
+    private val deviceRepo: IndexDeviceManager,
     private val deviceFactory: IndexDeviceFactory
 ): IndexPairing {
     companion object {

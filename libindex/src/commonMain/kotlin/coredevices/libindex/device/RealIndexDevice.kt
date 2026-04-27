@@ -32,6 +32,7 @@ class RealDiscoveredIndexDevice(
 class RealInterviewedIndexDevice(
     indexDevice: KnownIndexDevice,
     override val name: String,
+    override val updating: Boolean,
     private val state: KMPHaversineSatelliteState
 ): KnownIndexDevice by indexDevice, InterviewedIndexDevice {
     override val firmwareVersion: String = state.firmwareVersion
@@ -61,13 +62,14 @@ class IndexDeviceFactory(
         satellite: KMPHaversineSatellite? = null,
         satelliteState: KMPHaversineSatelliteState? = null,
         pairingState: IndexPairingState = IndexPairingState.NotPaired,
+        isUpdating: Boolean = false,
     ): IndexDevice {
         val base = RealIndexDevice(identifier, name)
         val known = if (isPaired) RealKnownIndexDevice(base, prefs) else null
 
         return when {
             known != null && satellite != null && satelliteState != null ->
-                RealInterviewedIndexDevice(known, satellite.name ?: "Index 01", satelliteState)
+                RealInterviewedIndexDevice(known, satellite.name ?: "Index 01", isUpdating, satelliteState)
 
             known != null -> known
 

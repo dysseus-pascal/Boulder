@@ -49,7 +49,7 @@ class IndexDeviceManager(
         }
     }
 
-    private fun updateRing(satellite: KMPHaversineSatellite) {
+    private fun updateRing(satellite: KMPHaversineSatellite, isUpdating: Boolean? = null) {
         _rings.update { prev ->
             val existingIdx = prev.indexOfFirst { satellite.id.equals(it.identifier.asString, ignoreCase = true) }
             val existing = if (existingIdx != -1) prev[existingIdx] as? KnownIndexDevice else null
@@ -65,6 +65,8 @@ class IndexDeviceManager(
                                 isPaired = true,
                                 satellite = satellite,
                                 satelliteState = satellite.state.value!!,
+                                isUpdating = isUpdating
+                                    ?: (existing is InterviewedIndexDevice && (existing as InterviewedIndexDevice).updating)
                             )
                         )
                     }
@@ -121,9 +123,13 @@ class IndexDeviceManager(
                         it.state.filterNotNull().first()
                     } ?: return@onEach
 
-                    updateRing(it)
+                    updateRing(it, isUpdating = null)
                 }
             }.launchIn(scope)
+    }
+
+    fun markFirmwareUpdatingState(identifier: KMPHaversineSatellite, isUpdating: Boolean) {
+        updateRing(identifier, isUpdating)
     }
 
     fun addScanResult(result: IndexScanResult) {

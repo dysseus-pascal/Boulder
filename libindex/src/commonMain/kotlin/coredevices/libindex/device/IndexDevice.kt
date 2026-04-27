@@ -55,4 +55,5 @@ interface DiscoveredIndexDevice: IndexDevice {
 interface InterviewedIndexDevice: IndexDevice {
     val firmwareVersion: String
     val serialNumber: String
+    val updating: Boolean
 }

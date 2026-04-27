@@ -14,6 +14,7 @@ import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.libindex.device.IndexDeviceManager
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -119,6 +120,7 @@ class RingSync(
     private val usersDao: UsersDao,
     private val scope: RecordingBackgroundScope,
     private val trace: RingTraceSession,
+    private val deviceManager: IndexDeviceManager
 ): KoinComponent {
     companion object {
         private val logger = Logger.withTag("RingSync")
@@ -608,6 +610,7 @@ class RingSync(
                                                     logger.i {
                                                         "Satellite ${satelliteStatus.satellite.id} started firmware update to version ${satelliteStatus.newVersion} isFailsafe = $isFailsafe"
                                                     }
+                                                    deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = true)
                                                     if (isFailsafe && transferRange != null) {
                                                         logger.e {
                                                             "Satellite is in failsafe mode but we have an active transfer range, transfer might be interrupted. Marking current transfer as failed and clearing transfer range."
@@ -639,6 +642,7 @@ class RingSync(
                                                     logger.i {
                                                         "Satellite ${satelliteStatus.satellite.id} firmware update to version ${satelliteStatus.newVersion} succeeded"
                                                     }
+                                                    deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = false)
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Success(
                                                             ringId = satelliteStatus.satellite.id,
@@ -652,6 +656,7 @@ class RingSync(
                                                     logger.e {
                                                         "Satellite ${satelliteStatus.satellite.id} firmware update to version ${satelliteStatus.newVersion} failed"
                                                     }
+                                                    deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = false)
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Failed(
                                                             ringId = satelliteStatus.satellite.id,

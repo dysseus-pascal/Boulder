@@ -81,6 +81,7 @@ import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
@@ -528,6 +529,7 @@ fun WatchesPreview() {
                                 override val name = "Index 01 02"
                                 override val firmwareVersion = "1.0.0"
                                 override val serialNumber = "SN12345678"
+                                override val updating: Boolean = false
                             }
                         )
                     )
@@ -582,6 +584,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
         supportingContent = {
             val stateText = when (ring) {
                 is DiscoveredIndexDevice -> "Available to pair"
+                is InterviewedIndexDevice if (ring.updating) -> "Updating..."
                 else -> "Ready"
             }
             Column {
@@ -641,6 +644,12 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                             Text("Pair")
                         }
                     }
+                } else if (ring is InterviewedIndexDevice && ring.updating) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    )
                 }
             }
         },

@@ -86,6 +86,10 @@ val lightScheme = lightColorScheme(
     scrim = Color.White,
     surfaceContainer = Color.White,
     surfaceContainerHighest = Color(0xFFF0F0F0),
+    surfaceContainerHigh = Color(0xFFF5F5F5),
+    surfaceContainerLow = Color(0xFFFAFAFA),
+    surfaceDim = Color(0xFFE0E0E0),
+    surfaceBright = Color(0xFFFFFBFF),
 )
 
 val onboardingScheme = lightColorScheme(

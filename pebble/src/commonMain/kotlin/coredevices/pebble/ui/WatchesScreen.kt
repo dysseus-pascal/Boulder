@@ -220,8 +220,9 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val requiredScanPermission = remember { scanPermission() }
     val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
     var addFabExpanded by remember { mutableStateOf(false) }
-    val showPairIndex by libIndex.rings.map { it.filter { it !is DiscoveredIndexDevice }.isEmpty() }
-        .collectAsState(initial = true)
+    val indexAlreadyPaired by libIndex.rings.map { rings -> rings.any { it !is DiscoveredIndexDevice } }
+        .collectAsState(initial = false)
+    var showIndexAlreadyPairedDialog by remember { mutableStateOf(false) }
 
     fun scan(uiContext: PlatformUiContext) {
         scope.launch {
@@ -293,18 +294,18 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 ) {
                     val uiContext = rememberUiContext()
                     // TODO bt classic goes here
-                    if (showPairIndex) {
-                        FloatingActionButtonMenuItem(
-                            onClick = {
-                                addFabExpanded = false
-                                if (uiContext != null) {
-                                    scanIndex(uiContext)
-                                }
-                            },
-                            icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },
-                            text = { Text("Add Index 01") },
-                        )
-                    }
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            addFabExpanded = false
+                            if (indexAlreadyPaired) {
+                                showIndexAlreadyPairedDialog = true
+                            } else if (uiContext != null) {
+                                scanIndex(uiContext)
+                            }
+                        },
+                        icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },
+                        text = { Text("Add Index 01") },
+                    )
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
@@ -506,6 +507,36 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             }
         }
+    }
+
+    val platform = koinInject<Platform>()
+    if (showIndexAlreadyPairedDialog) {
+        AlertDialog(
+            onDismissRequest = { showIndexAlreadyPairedDialog = false },
+            title = { Text("Index 01 already paired") },
+            text = {
+                Column {
+                    Text("An Index 01 is already paired to this phone. To pair a different Index 01, first unpair the existing one.")
+                    if (platform.isIOS) {
+                        Text("To unpair, first remove it from this app using the 3-dot menu, then go to Settings > Bluetooth, find the Index 01 in the list of devices, tap the info icon and choose \"Forget This Device\".")
+                        Text("After unpairing, reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                    } else {
+                        Text("To unpair, find the Index 01 in your Bluetooth settings and choose to forget/unpair it.")
+                        Text("After unpairing, reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PressPatternDot(
+                        Press.SOS,
+                        size = 30.dp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showIndexAlreadyPairedDialog = false }) { Text("OK") }
+            },
+        )
     }
 }
 

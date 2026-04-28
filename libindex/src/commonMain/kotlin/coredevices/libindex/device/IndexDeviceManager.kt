@@ -6,14 +6,16 @@ import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.Rings
 import coredevices.libindex.database.BasePreferences
+import coredevices.libindex.database.PrefsCollectionIndexStorage
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
-import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_NONE
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
@@ -28,6 +30,8 @@ class IndexDeviceManager(
     private val prefs: BasePreferences,
     // Not present on some platforms (iOS)
     private val associations: IndexPlatformBluetoothAssociations?,
+    private val indexStorage: PrefsCollectionIndexStorage,
+    private val transferRepo: RingTransferRepository,
 ): Rings {
     private val _rings = MutableStateFlow(emptyList<IndexDevice>())
     override val rings: IndexDevices = _rings
@@ -87,8 +91,17 @@ class IndexDeviceManager(
             if (evt.state == IndexBondState.NotBonded && evt.identifier.asString == prefs.ringPaired.value) {
                 logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, removing paired state" }
                 prefs.setRingPaired(null)
+            } else if (evt.state == IndexBondState.Bonded && evt.identifier.asString == prefs.ringPaired.value) {
+                logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, ring likely SOS'd, considering it a new iteration" }
+                indexStorage.setLastSuccessfulCollectionIndex(null)
+                transferRepo.markTransfersAsPreviousIndexIteration()
+            } else if (evt.state == IndexBondState.Bonded && prefs.ringPaired.value == null && evt.name?.contains("Pebble Index", ignoreCase = true) == true) {
+                logger.d { "Received bond state change for unpaired ring ${evt.identifier.asString}, state=${evt.state}, setting as paired ring" }
+                indexStorage.setLastSuccessfulCollectionIndex(null)
+                transferRepo.markTransfersAsPreviousIndexIteration()
+                prefs.setRingPaired(evt.identifier.asString)
             }
-        }?.launchIn(scope)
+        }?.flowOn(Dispatchers.IO)?.launchIn(scope)
         prefs.ringPaired
             .runningFold<String?, Pair<String?, String?>>(null to null) { (_, prev), new -> prev to new }
             .drop(1)

@@ -19,6 +19,7 @@ data class IndexAssociation(
 )
 
 data class IndexBondStateUpdate(
+    val name: String?,
     val state: IndexBondState,
     val identifier: IndexIdentifier
 )

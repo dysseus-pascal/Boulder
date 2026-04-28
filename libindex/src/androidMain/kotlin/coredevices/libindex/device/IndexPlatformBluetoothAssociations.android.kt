@@ -80,17 +80,21 @@ actual class IndexPlatformBluetoothAssociations(
             logger.d { "Received bond state change: ${device?.address ?: "<No address>"} -> $bondState reason = $reason" }
             val address = device?.address ?: return
             val identifier = IndexIdentifier.fromPlatformAddress(address)
+            val name = device.name
             val update = when (bondState) {
                 BluetoothDevice.BOND_BONDED -> IndexBondStateUpdate(
+                    name,
                     IndexBondState.Bonded,
                     identifier
                 )
                 BluetoothDevice.BOND_BONDING -> IndexBondStateUpdate(
+                    name,
                     IndexBondState.Bonding,
                     identifier
                 )
 
                 BluetoothDevice.BOND_NONE -> IndexBondStateUpdate(
+                    name,
                     IndexBondState.NotBonded,
                     identifier
                 )

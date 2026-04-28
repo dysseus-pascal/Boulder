@@ -32,7 +32,9 @@ val libIndexModule = module {
             get(),
             get(),
             get(),
-            getOrNull()
+            getOrNull(),
+            get(),
+            get()
         )
     } bind Rings::class
     singleOf(::RealScanning) bind Scanning::class

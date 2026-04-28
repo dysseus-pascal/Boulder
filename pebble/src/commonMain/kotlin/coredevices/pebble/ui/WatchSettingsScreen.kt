@@ -23,12 +23,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -58,6 +61,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -86,6 +90,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -946,7 +954,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                 ),
-                basicSettingsNumberItem(
+                basicSettingsToggleItem(
+                    id = SettingsIds.HealthImperialUnits,
+                    title = "Imperial Units",
+                    description = "Display distance and pace in miles instead of kilometres",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.imperialUnits,
+                    show = { healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(imperialUnits = it)
+                        )
+                    },
+                ),
+                basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthHeight,
                     title = "Height",
                     topLevelType = TopLevelType.Phone,
@@ -967,7 +989,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         { v -> "${v / 12}' ${v % 12}\"" }
                     } else null,
                 ),
-                basicSettingsNumberItem(
+                basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthWeight,
                     title = "Weight",
                     topLevelType = TopLevelType.Phone,
@@ -985,7 +1007,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     max = if (healthSettings.imperialUnits) 441 else 200,
                     unit = if (healthSettings.imperialUnits) "lb" else "kg",
                 ),
-                basicSettingsNumberItem(
+                basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthAge,
                     title = "Age",
                     topLevelType = TopLevelType.Phone,
@@ -1016,20 +1038,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = { it.name },
                     show = { healthSettings.trackingEnabled },
-                ),
-                basicSettingsToggleItem(
-                    id = SettingsIds.HealthImperialUnits,
-                    title = "Imperial Units",
-                    description = "Display distance and pace in miles instead of kilometres",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = healthSettings.imperialUnits,
-                    show = { healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(imperialUnits = it)
-                        )
-                    },
                 ),
                 basicSettingsToggleItem(
                     id = EnableHealthPlatformSync,
@@ -2013,6 +2021,145 @@ fun basicSettingsNumberItem(
                             fontSize = 14.sp,
                             modifier = Modifier.padding(vertical = 6.dp),
                         )
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (defaultValue != null) {
+                            TextButton(
+                                onClick = {
+                                    onValueChange(defaultValue)
+                                },
+                                enabled = value != defaultValue,
+                            ) {
+                                Text(
+                                    text = "Default: $defaultValue",
+                                    modifier = Modifier.widthIn(max = 150.dp),
+                                    maxLines = 1,
+                                    lineHeight = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            shadowElevation = ELEVATION,
+        )
+    },
+)
+
+fun basicSettingsNumberFieldItem(
+    id: String? = null,
+    title: String,
+    topLevelType: TopLevelType,
+    section: Section,
+    value: Long,
+    onValueChange: (Long) -> Unit,
+    min: Int,
+    max: Int,
+    unit: String,
+    description: String? = null,
+    keywords: String = "",
+    show: () -> Boolean = { true },
+    isDebugSetting: Boolean = false,
+    defaultValue: Long? = null,
+    valueFormatter: ((Long) -> String)? = null,
+) = SettingsItem(
+    id = id,
+    title = title,
+    topLevelType = topLevelType,
+    section = section,
+    keywords = keywords,
+    show = show,
+    isDebugSetting = isDebugSetting,
+    item = {
+        ListItem(
+            headlineContent = {
+                Text(title)
+            },
+            supportingContent = {
+                val minL = min.toLong()
+                val maxL = max.toLong()
+                var textFieldValue by remember(value) {
+                    val text = value.toString()
+                    mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
+                }
+                var isFocused by remember { mutableStateOf(false) }
+                LaunchedEffect(isFocused) {
+                    if (isFocused) {
+                        textFieldValue = textFieldValue.copy(
+                            selection = TextRange(0, textFieldValue.text.length),
+                        )
+                    } else if (textFieldValue.text.toLongOrNull() != value) {
+                        val text = value.toString()
+                        textFieldValue = TextFieldValue(
+                            text = text,
+                            selection = TextRange(text.length),
+                        )
+                    }
+                }
+                Column {
+                    if (description != null) {
+                        Text(description, fontSize = 11.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val newVal = (value - 1).coerceIn(minL, maxL)
+                                if (newVal != value) {
+                                    onValueChange(newVal)
+                                }
+                            },
+                            enabled = value > minL,
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease")
+                        }
+                        OutlinedTextField(
+                            value = textFieldValue,
+                            onValueChange = { input ->
+                                val filtered = input.text.filter { it.isDigit() }.take(6)
+                                val parsed = filtered.toLongOrNull()
+                                val finalText = if (parsed != null && parsed > maxL) {
+                                    maxL.toString()
+                                } else {
+                                    filtered
+                                }
+                                textFieldValue = input.copy(
+                                    text = finalText,
+                                    selection = TextRange(finalText.length),
+                                )
+                                val finalParsed = finalText.toLongOrNull()
+                                if (finalParsed != null && finalParsed in minL..maxL && finalParsed != value) {
+                                    onValueChange(finalParsed)
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            suffix = { Text(unit) },
+                            modifier = Modifier
+                                .width(110.dp)
+                                .onFocusChanged { focusState ->
+                                    isFocused = focusState.isFocused
+                                },
+                        )
+                        IconButton(
+                            onClick = {
+                                val newVal = (value + 1).coerceIn(minL, maxL)
+                                if (newVal != value) {
+                                    onValueChange(newVal)
+                                }
+                            },
+                            enabled = value < maxL,
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase")
+                        }
+                        if (valueFormatter != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = valueFormatter(value),
+                                fontSize = 14.sp,
+                            )
+                        }
                         Spacer(modifier = Modifier.weight(1f))
                         if (defaultValue != null) {
                             TextButton(

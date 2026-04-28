@@ -1,6 +1,7 @@
 package coredevices.coreapp.ui.screens
 
 import CoreNav
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,9 +41,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
@@ -134,14 +139,17 @@ fun WatchOnboardingScreen(
         }
     }
 
+    val scrollState = rememberScrollState()
     MaterialTheme(colorScheme = onboardingScheme) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { windowInsets ->
             Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(20.dp)
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxSize()
+                        .verticalScrollbar(scrollState)
+                        .padding(20.dp)
+                        .verticalScroll(scrollState),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
@@ -278,11 +286,11 @@ fun WatchOnboardingScreen(
                             settings.Show(EnableHealthTracking)
                             settings.Show(EnableActivityInsights)
                             settings.Show(EnableSleepInsights)
+                            settings.Show(HealthImperialUnits)
                             settings.Show(HealthHeight)
                             settings.Show(HealthWeight)
                             settings.Show(HealthAge)
                             settings.Show(HealthGenderId)
-                            settings.Show(HealthImperialUnits)
                             settings.Show(EnableHealthPlatformSync)
                             Spacer(modifier = Modifier.height(15.dp))
                         }
@@ -311,6 +319,25 @@ fun WatchOnboardingScreen(
                 }
             }
         }
+    }
+}
+
+private fun Modifier.verticalScrollbar(
+    scrollState: ScrollState,
+    width: Dp = 4.dp,
+    color: Color = Color.White.copy(alpha = 0.5f),
+): Modifier = drawWithContent {
+    drawContent()
+    if (scrollState.maxValue > 0) {
+        val viewportHeight = size.height
+        val totalHeight = viewportHeight + scrollState.maxValue.toFloat()
+        val scrollbarHeight = (viewportHeight / totalHeight) * viewportHeight
+        val scrollbarOffsetY = (scrollState.value.toFloat() / totalHeight) * viewportHeight
+        drawRect(
+            color = color,
+            topLeft = Offset(size.width - width.toPx(), scrollbarOffsetY),
+            size = Size(width.toPx(), scrollbarHeight),
+        )
     }
 }
 

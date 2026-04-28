@@ -21,11 +21,18 @@ class JSCGeolocationInterface(
     override fun dispatch(method: String, args: List<Any?>): Int? {
         fun num(i: Int) = args.getOrNull(i) as? Number
         return when (method) {
-            "getCurrentPosition" -> num(0)?.toDouble()?.let { getCurrentPosition(it) }
+            "getCurrentPosition" -> {
+                val id = num(0)?.toDouble() ?: return null
+                val maxAge = num(1)?.toDouble() ?: -1.0
+                val timeout = num(2)?.toDouble() ?: -1.0
+                val highAccuracy = num(3)?.toDouble() ?: 0.0
+                getCurrentPosition(id, maxAge, timeout, highAccuracy)
+            }
             "watchPosition" -> {
-                val timeout = num(0)?.toDouble()
-                val maxAge = num(1)?.toDouble()
-                if (timeout != null && maxAge != null) watchPosition(timeout, maxAge) else null
+                val id = num(0)?.toDouble() ?: return null
+                val interval = num(1)?.toDouble() ?: 500.0
+                val highAccuracy = num(2)?.toDouble() ?: 0.0
+                watchPosition(id, interval, highAccuracy)
             }
             "clearWatch" -> { num(0)?.toInt()?.let { clearWatch(it) }; null }
             "getRequestCallbackID" -> getRequestCallbackID()

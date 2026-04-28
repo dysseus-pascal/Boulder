@@ -382,11 +382,18 @@ class FakeLibPebble : LibPebble {
 
     override val healthDataUpdated: SharedFlow<Unit> = MutableStateFlow(Unit)
 
-    override suspend fun getCurrentPosition(): GeolocationPositionResult {
+    override suspend fun getCurrentPosition(
+        maximumAge: Duration?,
+        timeout: Duration?,
+        highAccuracy: Boolean,
+    ): GeolocationPositionResult {
         TODO("Not yet implemented")
     }
 
-    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> {
+    override suspend fun watchPosition(
+        interval: Duration,
+        highAccuracy: Boolean,
+    ): Flow<GeolocationPositionResult> {
         TODO("Not yet implemented")
     }
 

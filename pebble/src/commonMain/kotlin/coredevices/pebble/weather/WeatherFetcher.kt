@@ -28,6 +28,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -105,7 +106,7 @@ class WeatherFetcher(
         if (currentLocationRecord == null) {
             return locations
         }
-        val geolocation = systemGeolocation.getCurrentPosition()
+        val geolocation = systemGeolocation.getCurrentPosition(maximumAge = 30.minutes)
         return when (geolocation) {
             is GeolocationPositionResult.Error -> {
                 logger.i { "Couldn't get location: ${geolocation.message}" }

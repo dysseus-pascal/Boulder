@@ -7,6 +7,9 @@ import coredevices.libindex.database.repository.RingTransferRepository
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_NONE
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UNBOND_REASON_AUTH_CANCELLED
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UNBOND_REASON_AUTH_FAILED
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UNBOND_REASON_AUTH_REJECTED
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.TimeoutCancellationException
@@ -53,7 +56,24 @@ class RealIndexPairing(
                 }
                 if (result.bondState == BOND_NONE) {
                     logger.e { "Pairing failed for device ${device.identifier.asString}, bondState=${result.bondState}, unbondReason=${result.unbondReason}" }
-                    return@withTimeout PairingRequestResult.UserRejected
+                    return@withTimeout when (result.unbondReason) {
+                        UNBOND_REASON_AUTH_FAILED -> {
+                            logger.i { "Authentication failed when pairing with device ${device.identifier.asString}, assuming already paired" }
+                            PairingRequestResult.RingAlreadyPaired
+                        }
+                        UNBOND_REASON_AUTH_REJECTED -> {
+                            logger.i { "Device ${device.identifier.asString} rejected pairing request, assuming already paired" }
+                            PairingRequestResult.RingAlreadyPaired
+                        }
+                        UNBOND_REASON_AUTH_CANCELLED -> {
+                            logger.i { "User cancelled pairing request for device ${device.identifier.asString}" }
+                            PairingRequestResult.UserRejected
+                        }
+                        else -> {
+                            logger.w { "Unknown pairing failure for device ${device.identifier.asString}, unbondReason=${result.unbondReason}" }
+                            PairingRequestResult.Error(Exception("Pairing failed with unbondReason ${result.unbondReason}"))
+                        }
+                    }
                 } else {
                     logger.d { "Pairing succeeded for device ${device.identifier.asString}" }
                     return@withTimeout PairingRequestResult.Paired
@@ -81,7 +101,7 @@ class RealIndexPairing(
         )
         return when (val result = requestPairing(device)) {
             // Already paired = the phone is paired, so the UI should tell the user to unpair from Bluetooth settings / reset ring.
-            is PairingRequestResult.UserRejected, is PairingRequestResult.Error, is PairingRequestResult.AlreadyPaired, is PairingRequestResult.CreateBondFailed -> {
+            is PairingRequestResult.UserRejected, is PairingRequestResult.Error, is PairingRequestResult.RingAlreadyPaired, is PairingRequestResult.CreateBondFailed -> {
                 deviceRepo.update(
                     deviceFactory.create(
                         identifier = device.identifier,
@@ -117,7 +137,7 @@ sealed interface PairingRequestResult {
     object UserRejected: PairingRequestResult
     class Error(val cause: Throwable): PairingRequestResult
     object CreateBondFailed: PairingRequestResult
-    object AlreadyPaired: PairingRequestResult
+    object RingAlreadyPaired: PairingRequestResult
     object Paired: PairingRequestResult
 }
 

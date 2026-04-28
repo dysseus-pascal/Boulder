@@ -66,6 +66,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeveloperBoard
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -144,6 +145,7 @@ import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.displayName
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.ui.M3Dialog
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -212,8 +214,13 @@ private val logger = Logger.withTag("WatchesScreen")
 fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val libPebble = rememberLibPebble()
     val libIndex = koinInject<LibIndex>()
-    val isScanningBle by combine(libPebble.isScanningBle, libIndex.isScanning) {
-        scanningBle, scanningIndex -> scanningBle || scanningIndex
+    val pebbleFeatures = koinInject<PebbleFeatures>()
+    val isScanning by combine(
+        libPebble.isScanningBle,
+        libPebble.isScanningClassic,
+        libIndex.isScanning,
+    ) { scanningBle, scanningClassic, scanningIndex ->
+        scanningBle || scanningClassic || scanningIndex
     }.collectAsState(false)
     val scope = rememberCoroutineScope()
     val permissionRequester: PermissionRequester = koinInject()
@@ -223,37 +230,39 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val indexAlreadyPaired by libIndex.rings.map { rings -> rings.any { it !is DiscoveredIndexDevice } }
         .collectAsState(initial = false)
     var showIndexAlreadyPairedDialog by remember { mutableStateOf(false) }
+    var fabInfoDialog by remember { mutableStateOf<FabInfo?>(null) }
+
+    suspend fun ensureScanPermission(uiContext: PlatformUiContext): Boolean {
+        if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
+                requiredScanPermission
+            )
+        ) {
+            val result = permissionRequester.requestPermission(requiredScanPermission, uiContext)
+            if (result != PermissionResult.Granted) {
+                logger.w { "Failed to grant scan permission" }
+                return false
+            }
+        }
+        return true
+    }
 
     fun scan(uiContext: PlatformUiContext) {
         scope.launch {
-            if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
-                    requiredScanPermission
-                )
-            ) {
-                val result =
-                    permissionRequester.requestPermission(requiredScanPermission, uiContext)
-                if (result != PermissionResult.Granted) {
-                    logger.w { "Failed to grant scan permission" }
-                    return@launch
-                }
-            }
+            if (!ensureScanPermission(uiContext)) return@launch
             libPebble.startBleScan()
+        }
+    }
+
+    fun scanClassic(uiContext: PlatformUiContext) {
+        scope.launch {
+            if (!ensureScanPermission(uiContext)) return@launch
+            libPebble.startClassicScan()
         }
     }
 
     fun scanIndex(uiContext: PlatformUiContext) {
         scope.launch {
-            if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
-                    requiredScanPermission
-                )
-            ) {
-                val result =
-                    permissionRequester.requestPermission(requiredScanPermission, uiContext)
-                if (result != PermissionResult.Granted) {
-                    logger.w { "Failed to grant scan permission" }
-                    return@launch
-                }
-            }
+            if (!ensureScanPermission(uiContext)) return@launch
             libIndex.startScan()
         }
     }
@@ -266,10 +275,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 ) {
                     Icon(Icons.Filled.BluetoothDisabled, "Bluetooth is disabled")
                 }
-            } else if (isScanningBle) {
+            } else if (isScanning) {
                 FloatingActionButton(
                     onClick = {
                         libPebble.stopBleScan()
+                        libPebble.stopClassicScan()
                         libIndex.stopScan()
                     }
                 ) {
@@ -293,7 +303,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     },
                 ) {
                     val uiContext = rememberUiContext()
-                    // TODO bt classic goes here
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
@@ -306,6 +315,23 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },
                         text = { Text("Add Index 01") },
                     )
+                    if (pebbleFeatures.supportsBtClassic()) {
+                        FloatingActionButtonMenuItem(
+                            onClick = {
+                                addFabExpanded = false
+                                if (uiContext != null) {
+                                    scanClassic(uiContext)
+                                }
+                            },
+                            icon = { Icon(Icons.Default.Watch, contentDescription = "Classic Watch") },
+                            text = {
+                                FabMenuItemLabel(
+                                    text = "Add Classic Watch",
+                                    onInfoClick = { fabInfoDialog = FabInfo.ClassicWatch },
+                                )
+                            },
+                        )
+                    }
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
@@ -314,7 +340,12 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             }
                         },
                         icon = { Icon(Icons.Default.Watch, contentDescription = "Watch") },
-                        text = { Text("Add Watch") },
+                        text = {
+                            FabMenuItemLabel(
+                                text = "Add Watch",
+                                onInfoClick = { fabInfoDialog = FabInfo.Watch },
+                            )
+                        },
                     )
                 }
             }
@@ -325,7 +356,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             val otherPebbleAppsInstalledFlow =
                 remember { libPebble.otherPebbleCompanionAppsInstalled() }
             val otherPebbleAppsInstalled by otherPebbleAppsInstalledFlow.collectAsState()
-            val pebbleFeatures = koinInject<PebbleFeatures>()
             val coreConfigFlow = koinInject<CoreConfigFlow>()
             val coreConfig by coreConfigFlow.flow.collectAsState()
             val showOtherPebbleAppsWarningAndPreventConnection =
@@ -428,7 +458,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     }
                 }
-                if (isScanningBle) {
+                if (isScanning) {
                     Text(
                         text = "Scanning for devices...",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
@@ -530,13 +560,51 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         size = 30.dp,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
-                    Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                    Text(
+                        "You'll see the light flash red green blue repeatedly when successful.",
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                    )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showIndexAlreadyPairedDialog = false }) { Text("OK") }
             },
         )
+    }
+    fabInfoDialog?.let { info ->
+        M3Dialog(
+            onDismissRequest = { fabInfoDialog = null },
+            title = { Text(info.title) },
+            buttons = {
+                TextButton(onClick = { fabInfoDialog = null }) { Text("Close") }
+            },
+        ) {
+            Text(info.body)
+        }
+    }
+}
+
+private enum class FabInfo(val title: String, val body: String) {
+    Watch(
+        title = "Add Watch",
+        body = "Use this for any modern Pebble that connects over Bluetooth Low Energy:\n\n" +
+                "Pebble Time 2, Core 2 Duo, Pebble Round 2 & Pebble 2.",
+    ),
+    ClassicWatch(
+        title = "Add Classic Watch",
+        body = "Use this for legacy Pebbles that connect over Bluetooth Classic:\n\n" +
+                "Original Pebble, Pebble Steel, Pebble Time, Pebble Time Steel, and " +
+                "Pebble Time Round.",
+    ),
+}
+
+@Composable
+private fun FabMenuItemLabel(text: String, onInfoClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text)
+        IconButton(onClick = onInfoClick) {
+            Icon(Icons.Outlined.Info, contentDescription = "About $text")
+        }
     }
 }
 

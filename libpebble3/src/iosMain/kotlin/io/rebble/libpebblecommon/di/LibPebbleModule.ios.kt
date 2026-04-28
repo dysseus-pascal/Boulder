@@ -10,6 +10,8 @@ import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.classic.transport.ClassicScanner
+import io.rebble.libpebblecommon.connection.bt.classic.transport.IosClassicScanner
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
@@ -67,4 +69,5 @@ actual val platformModule: Module = module {
         delayBleConnectionsAfterAppStart = true,
         supportsPpogResetCharacteristic = true,
     ) }
+    singleOf(::IosClassicScanner) bind ClassicScanner::class
 }

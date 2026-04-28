@@ -5,14 +5,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.bt.classic.PEBBLE_NAME_REGEX
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.TransportType
-
-// Matches "Pebble XXXX", "Pebble Time XXXX", "Pebble Time Le XXXX" (XXXX = 4 hex chars).
-// Explicitly rejects other suffixed variants (e.g. "Pebble Index 1234").
-private val PEBBLE_NAME_REGEX =
-    Regex("""^Pebble(?: Time(?: Le)?)? [0-9A-Fa-f]{4}$""")
 
 private val logger = Logger.withTag("BondedWatchSeeder")
 
@@ -43,12 +39,12 @@ internal actual suspend fun seedBondedWatches(
 
         if (!PEBBLE_NAME_REGEX.matches(name)) continue
 
-        // KnownWatchItem.identifier() only supports BluetoothLe + Socket today (BluetoothClassic
-        // is a TODO in the entity), so skip classic-only bonds — they'd crash on later lookup.
         val transportType = when (device.type) {
-            BluetoothDevice.DEVICE_TYPE_LE, BluetoothDevice.DEVICE_TYPE_DUAL -> TransportType.BluetoothLe
+            BluetoothDevice.DEVICE_TYPE_LE -> TransportType.BluetoothLe
+            BluetoothDevice.DEVICE_TYPE_DUAL, BluetoothDevice.DEVICE_TYPE_CLASSIC ->
+                TransportType.BluetoothClassic
             else -> {
-                logger.d { "Skipping classic-only bonded Pebble $name (${device.address})" }
+                logger.d { "Skipping bonded Pebble $name (${device.address}) with unknown type=${device.type}" }
                 continue
             }
         }
@@ -66,7 +62,6 @@ internal actual suspend fun seedBondedWatches(
             runningFwVersion = UNKNOWN_WATCH_SERIAL_OR_VERSION,
             serial = UNKNOWN_WATCH_SERIAL_OR_VERSION,
             connectGoal = false,
-            btClassicMacAddress = address,
         )
         try {
             knownWatchDao.insertOrUpdate(item)

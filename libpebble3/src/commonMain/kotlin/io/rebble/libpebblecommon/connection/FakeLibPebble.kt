@@ -134,6 +134,7 @@ class FakeLibPebble : LibPebble {
         MutableStateFlow(BluetoothState.Enabled)
 
     override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(false)
+    override val isScanningClassic: StateFlow<Boolean> = MutableStateFlow(false)
 
     override fun startBleScan() {
         // No-op

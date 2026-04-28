@@ -268,6 +268,7 @@ fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
 interface Scanning {
     val bluetoothEnabled: StateFlow<BluetoothState>
     val isScanningBle: StateFlow<Boolean>
+    val isScanningClassic: StateFlow<Boolean>
     fun startBleScan()
     fun stopBleScan()
     fun startClassicScan()

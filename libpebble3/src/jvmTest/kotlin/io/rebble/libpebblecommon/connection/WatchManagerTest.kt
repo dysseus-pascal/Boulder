@@ -170,6 +170,8 @@ class WatchManagerTest {
             get() = TODO("Not yet implemented")
         override val isScanningBle: StateFlow<Boolean>
             get() = TODO("Not yet implemented")
+        override val isScanningClassic: StateFlow<Boolean>
+            get() = TODO("Not yet implemented")
 
         override fun startBleScan() {
         }
@@ -256,6 +258,7 @@ class WatchManagerTest {
             override suspend fun deleteSyncRecordsForStaleDevices() {
             }
         }
+        val testSettings = PropertiesSettings(Properties())
         return WatchManager(
             knownWatchDao = knownWatchDao,
             pebbleDeviceFactory = pebbleDeviceFactory,
@@ -270,8 +273,13 @@ class WatchManagerTest {
             connectionFailureHandler = connectionFailureHandler,
             analytics = analytics,
             blobDbDatabaseManager = blobDbManager,
-            settings = PropertiesSettings(Properties()),
+            settings = testSettings,
             appContext = AppContext(),
+            legacyBtClassicMigrator = LegacyBtClassicMigrator(
+                knownWatchDao = knownWatchDao,
+                settings = testSettings,
+                blePlatformConfig = blePlatformConfig,
+            ),
         )
     }
 

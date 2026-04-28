@@ -316,7 +316,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     if (showCopyTokenDialog) {
         PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
     }
-    var showBtClassicInfoDialog by remember { mutableStateOf(false) }
     var showHealthStatsDialog by remember { mutableStateOf(false) }
     val showFakeHealthDataDialog = remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
@@ -401,41 +400,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         SignInDialog(
             onDismiss = { showSignInDialog = false }
         )
-    }
-    if (showBtClassicInfoDialog) {
-        M3Dialog(
-            onDismissRequest = { showBtClassicInfoDialog = false },
-            title = { Text("Prefer BT Classic") },
-            buttons = {
-                OutlinedButton(
-                    onClick = { showBtClassicInfoDialog = false }
-                ) {
-                    Text("Ok")
-                }
-            },
-        ) {
-            Box(Modifier.heightIn(max = 400.dp)) {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text(
-                        text = """When enabled, the app will first connect (and pair) to your watch over
-BLE, then disconnect and reconnect using Bluetooth Classic - this will
-prompt your to pair your watch again (BLE and BT Classic use separate
- pairings).
-
-If you are already connected over BLE, you will need to disconnect/reconnect
-for this to take effect.
-
-The watch will show "No LE" on the bluetooth settings screen once
-connected over BT Classic while BLE is also paired (and will show "LE only"
-if you choose to go back to BLE while classic is still paired).
-
-This should improve connection reliability, but if it does not work,
-please disable the option.""".trimIndent(),
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-        }
     }
     val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
     LaunchedEffect(modelDownloadStatus) {
@@ -812,23 +776,21 @@ please disable the option.""".trimIndent(),
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
                 basicSettingsToggleItem(
-                    title = "Prefer BT Classic",
-                    description = "Connect using Bluetooth Classic to watches which support it (Pebble, Pebble Steel, Pebble Time/Steel/Round). This may improve connection reliability, but is currently experimental.",
+                    title = "Show legacy watches in BLE scan",
+                    description = "Allow Aplite/Basalt/Chalk watches to appear in BLE scan results. By default these only show via the Bluetooth Classic scan option.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Connectivity,
-                    checked = libPebbleConfig.watchConfig.preferBtClassicV2,
+                    checked = libPebbleConfig.watchConfig.allowLegacyWatchesInBleScan,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 watchConfig = libPebbleConfig.watchConfig.copy(
-                                    preferBtClassicV2 = it
+                                    allowLegacyWatchesInBleScan = it
                                 )
                             )
                         )
-                        if (it) {
-                            showBtClassicInfoDialog = true
-                        }
                     },
+                    isDebugSetting = true,
                     show = { pebbleFeatures.supportsBtClassic() },
                 ),
                 basicSettingsToggleItem(

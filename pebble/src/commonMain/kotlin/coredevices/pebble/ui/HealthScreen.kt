@@ -61,22 +61,35 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         topBarParams.searchAvailable(null)
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp), Arrangement.spacedBy(10.dp)) {
-        Spacer(Modifier.height(4.dp))
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)
+    ) {
         TimeRangeSelector(vm.selectedTimeRange, vm::onTimeRangeChanged)
         DateNavigator(dl, vm.dateOffset, vm::navigateBack, vm::navigateForward)
-        ActivityCard(act, vm.selectedTimeRange, imperial)
-        SleepCard(slp, vm.selectedTimeRange)
-        if (hasHrmWatch) HeartRateCard(hr, vm.selectedTimeRange)
-        TextButton(
-            onClick = { nav.navigateTo(PebbleNavBarRoutes.WatchSettingsCategoryRoute(section = "Health", topLevelType = "Phone")) },
-            modifier = Modifier.align(Alignment.CenterHorizontally),
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Health Settings")
+            ActivityCard(act, vm.selectedTimeRange, imperial)
+            SleepCard(slp, vm.selectedTimeRange)
+            if (hasHrmWatch) HeartRateCard(hr, vm.selectedTimeRange)
+            TextButton(
+                onClick = {
+                    nav.navigateTo(
+                        PebbleNavBarRoutes.WatchSettingsCategoryRoute(
+                            section = "Health",
+                            topLevelType = "Phone"
+                        )
+                    )
+                },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Health Settings")
+            }
+            Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(8.dp))
     }
 }
 

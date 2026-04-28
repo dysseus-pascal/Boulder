@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
 }
 
 room {
@@ -113,6 +115,10 @@ kotlin {
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(libs.compose.material3)
+                implementation(compose.materialIconsExtended)
             }
         }
 

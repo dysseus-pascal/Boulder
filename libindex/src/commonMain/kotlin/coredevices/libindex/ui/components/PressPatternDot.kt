@@ -1,4 +1,4 @@
-package coredevices.ring.ui.components
+package coredevices.libindex.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -30,7 +30,12 @@ import kotlinx.coroutines.delay
 enum class Press(val durationMs: Long, val mic: Boolean = false) {
     Short(140),
     Long(650),
-    HoldAndSpeak(1600, true)
+    HoldAndSpeak(1600, true),
+    Rest(200);
+
+    companion object {
+        val SOS = listOf(Short, Short, Short, Rest, Long, Long, Long, Rest, Short, Short, Short)
+    }
 }
 
 @Composable
@@ -51,6 +56,10 @@ fun PressPatternDot(
         if (pattern.isEmpty()) return@LaunchedEffect
         while (true) {
             pattern.forEachIndexed { index, press ->
+                if (press == Press.Rest) {
+                    delay(press.durationMs)
+                    return@forEachIndexed
+                }
                 pressed = true
                 if (press.mic) {
                     delay(micOffsetMs)

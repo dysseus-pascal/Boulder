@@ -131,7 +131,10 @@ import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.libindex.device.IndexPairingResult
 import coredevices.libindex.device.IndexPairingState
+import coredevices.libindex.device.PairingRequestResult
 import coredevices.libindex.device.InterviewedIndexDevice
+import coredevices.libindex.ui.components.Press
+import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
@@ -147,6 +150,8 @@ import coredevices.util.CoreConfigFlow
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
+import coredevices.util.Platform
+import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
 import io.rebble.libpebblecommon.connection.ActiveDevice
 import io.rebble.libpebblecommon.connection.AppContext
@@ -573,6 +578,8 @@ sealed interface DeviceListEntry {
 @Composable
 fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
     val coreAnalytics = koinInject<CoreAnalytics>()
+    val platform = koinInject<Platform>()
+    var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
     ListItem(
         headlineContent = {
             Text(
@@ -633,7 +640,16 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                                         is IndexPairingResult.Success -> {
                                             coreAnalytics.logEvent("ring.pair_success")
                                         }
-                                        is IndexPairingResult.PairingFailure, null -> {
+                                        is IndexPairingResult.PairingFailure -> {
+                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
+                                            if (
+                                                result.cause is PairingRequestResult.RingAlreadyPaired ||
+                                                (platform.isIOS && result.cause is PairingRequestResult.CreateBondFailed)
+                                            ) {
+                                                showRingAlreadyPairedDialog = true
+                                            }
+                                        }
+                                        null -> {
                                             coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
                                         }
                                     }
@@ -659,6 +675,56 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
             }
         },
     )
+
+    if (showRingAlreadyPairedDialog) {
+        val platform = koinInject<Platform>()
+        AlertDialog(
+            onDismissRequest = { showRingAlreadyPairedDialog = false },
+            title = {
+                if (platform.isIOS) {
+                    Text("Pairing issue detected")
+                } else {
+                    Text("Device already paired")
+                }
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = "Error",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(40.dp)
+                )
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                ) {
+                    if (platform.isIOS) {
+                        Text("This device is having trouble pairing. Please follow the instructions below to recover it:")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("1. Go to Settings > Bluetooth")
+                        Text("2. Find e.g. 'Pebble Index ABC' in the list of devices")
+                        Text("3. If it's there, tap the info icon and choose \"Forget This Device\". If it's not there, continue.")
+                        Text("4. Reset the ring by pressing the button in an 'SOS' sequence as shown below.")
+                    } else {
+                        Text("This device is already paired to another phone.")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Please reset the ring by pressing the button in an 'SOS' sequence as shown below, then try pairing again.")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PressPatternDot(
+                        Press.SOS,
+                        size = 30.dp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRingAlreadyPairedDialog = false }) { Text("OK") }
+            },
+        )
+    }
 }
 
 @Composable

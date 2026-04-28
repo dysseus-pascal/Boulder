@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -41,8 +40,8 @@ import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
-import coredevices.ring.ui.components.Press
-import coredevices.ring.ui.components.PressPatternDot
+import coredevices.libindex.ui.components.Press
+import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.screens.settings.AuthorizedIntegrations
 import coredevices.ring.ui.screens.settings.IndexDeviceListItem

@@ -25,6 +25,7 @@ actual suspend fun createBond(
                 peripheral.write(char, byteArrayOf(0x00), writeType = WriteType.WithResponse)
                 true
             } catch (e: Exception) {
+                Logger.withTag("IndexPairing").e(e) { "Failed to write to characteristic: ${e.message}" }
                 false
             }
         } ?: false

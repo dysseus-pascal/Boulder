@@ -77,6 +77,12 @@ class IndexDeviceManager(
     }
 
     fun init() {
+        prefs.ringPaired.value?.let { pairedId ->
+            if (associations?.associations?.value?.any { it.identifier == IndexIdentifier(pairedId) } == false) {
+                logger.d { "Paired ring $pairedId not found in bt associations, clearing paired state" }
+                prefs.setRingPaired(null)
+            }
+        }
         associations?.bondStateChanges?.onEach { evt ->
             if (evt.state == IndexBondState.NotBonded && evt.identifier.asString == prefs.ringPaired.value) {
                 logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, removing paired state" }

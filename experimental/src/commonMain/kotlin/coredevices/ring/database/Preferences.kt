@@ -61,6 +61,14 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
     )
     override val ringPaired = _ringPaired.asStateFlow()
+    private val _ringPairedName = MutableStateFlow(
+        try {
+            settings.getStringOrNull("ring_paired_name")
+        } catch (e: Exception) {
+            null
+        }
+    )
+    override val ringPairedName = _ringPairedName.asStateFlow()
     override val ringPairedOld = MutableStateFlow(
         try {
             settings.getBoolean("ring_paired", false)
@@ -138,6 +146,13 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.putString("ring_paired", id)
         } ?: settings.remove("ring_paired")
         _ringPaired.value = id
+    }
+
+    override fun setRingPairedName(name: String?) {
+        name?.let {
+            settings.putString("ring_paired_name", it)
+        } ?: settings.remove("ring_paired_name")
+        _ringPairedName.value = name
     }
 
     override fun setMusicControlMode(mode: MusicControlMode) {

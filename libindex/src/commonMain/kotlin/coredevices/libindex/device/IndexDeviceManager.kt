@@ -58,6 +58,9 @@ class IndexDeviceManager(
             val existingIdx = prev.indexOfFirst { satellite.id.equals(it.identifier.asString, ignoreCase = true) }
             val existing = if (existingIdx != -1) prev[existingIdx] as? KnownIndexDevice else null
             if (existingIdx != -1 && existing != null) {
+                if (prefs.ringPairedName.value != satellite.name) {
+                    prefs.setRingPairedName(satellite.name)
+                }
                 prev
                     .toMutableList()
                     .apply {
@@ -82,24 +85,31 @@ class IndexDeviceManager(
 
     fun init() {
         prefs.ringPaired.value?.let { pairedId ->
-            if (associations?.associations?.value?.any { it.identifier == IndexIdentifier(pairedId) } == false) {
+            val association = associations?.associations?.value?.firstOrNull { it.identifier == IndexIdentifier(pairedId) }
+            if (associations != null && association == null) {
                 logger.d { "Paired ring $pairedId not found in bt associations, clearing paired state" }
                 prefs.setRingPaired(null)
+                prefs.setRingPairedName(null)
+            } else if (association != null && association.deviceName != prefs.ringPairedName.value) {
+                prefs.setRingPairedName(association.deviceName)
             }
         }
         associations?.bondStateChanges?.onEach { evt ->
             if (evt.state == IndexBondState.NotBonded && evt.identifier.asString == prefs.ringPaired.value) {
                 logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, removing paired state" }
                 prefs.setRingPaired(null)
+                prefs.setRingPairedName(null)
             } else if (evt.state == IndexBondState.Bonded && evt.identifier.asString == prefs.ringPaired.value) {
                 logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, ring likely SOS'd, considering it a new iteration" }
                 indexStorage.setLastSuccessfulCollectionIndex(null)
                 transferRepo.markTransfersAsPreviousIndexIteration()
+                evt.name?.let { prefs.setRingPairedName(it) }
             } else if (evt.state == IndexBondState.Bonded && prefs.ringPaired.value == null && evt.name?.contains("Pebble Index", ignoreCase = true) == true) {
                 logger.d { "Received bond state change for unpaired ring ${evt.identifier.asString}, state=${evt.state}, setting as paired ring" }
                 indexStorage.setLastSuccessfulCollectionIndex(null)
                 transferRepo.markTransfersAsPreviousIndexIteration()
                 prefs.setRingPaired(evt.identifier.asString)
+                prefs.setRingPairedName(evt.name)
             }
         }?.flowOn(Dispatchers.IO)?.launchIn(scope)
         prefs.ringPaired
@@ -121,7 +131,7 @@ class IndexDeviceManager(
                         val existing = prev.indexOfFirst { it.identifier.asString.equals(new, ignoreCase = true) }
                         val known = deviceFactory.create(
                             identifier = IndexIdentifier(new),
-                            name = "Index 01",
+                            name = prefs.ringPairedName.value ?: "Index 01",
                             isPaired = true,
                         )
                         if (existing != -1 && prev[existing] is DiscoveredIndexDevice) {

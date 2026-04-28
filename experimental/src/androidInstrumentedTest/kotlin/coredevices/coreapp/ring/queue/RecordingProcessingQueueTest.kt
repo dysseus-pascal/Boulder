@@ -80,6 +80,7 @@ class FakePreferences : Preferences {
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
+    override val ringPairedName: StateFlow<String?> = MutableStateFlow(null)
     override val ringPairedOld: StateFlow<Boolean> = MutableStateFlow(false)
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
@@ -97,6 +98,7 @@ class FakePreferences : Preferences {
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
+    override fun setRingPairedName(name: String?) {}
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}

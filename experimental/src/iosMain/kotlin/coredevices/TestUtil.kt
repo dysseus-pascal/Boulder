@@ -120,6 +120,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val ringPaired: StateFlow<String?>
         get() = TODO("Not yet implemented")
+    override val ringPairedName: StateFlow<String?>
+        get() = TODO("Not yet implemented")
     override val ringPairedOld: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
     override val musicControlMode: StateFlow<MusicControlMode>
@@ -158,6 +160,10 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override fun setRingPaired(id: String?) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setRingPairedName(name: String?) {
         TODO("Not yet implemented")
     }
 

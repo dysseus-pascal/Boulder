@@ -82,6 +82,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.SettingsPageState
+import coredevices.pebble.services.isPebbleFeed
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -203,6 +204,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val sharedViewModel: SharedLockerViewModel = koinInject()
         sharedViewModel.Init()
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
+        val showContactDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
@@ -264,6 +266,13 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
             }
             topBarParams.title(entry?.type?.name ?: "")
+        }
+        if (showContactDialog.value && entry?.storeId != null) {
+            ContactDeveloperDialog(
+                appId = entry.storeId,
+                appTitle = entry.title,
+                onDismiss = { showContactDialog.value = false },
+            )
         }
         PullToRefreshBox(
             isRefreshing = viewModel.loadingFromStore,
@@ -724,6 +733,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             nameModifier = propertyNameModifier,
                             value = "External Link",
                             onClick = { urlLauncher.open(developerLink) }
+                        )
+                    }
+                    if (
+                        commonAppStore?.contactable == true &&
+                        commonAppStore.storeSource.isPebbleFeed() &&
+                        entry.storeId != null
+                    ) {
+                        PropertyRow(
+                            name = "CONTACT DEVELOPER",
+                            nameModifier = propertyNameModifier,
+                            value = "Send Message",
+                            onClick = { showContactDialog.value = true },
+                            onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                         )
                     }
                     commonAppStore?.changelog?.let { changelog ->

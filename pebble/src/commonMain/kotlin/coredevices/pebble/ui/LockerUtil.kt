@@ -449,6 +449,7 @@ sealed class CommonAppType {
         val developerLink: String?,
         val changelog: List<StoreChangelogEntry>,
         val settingsPageState: SettingsPageState?,
+        val contactable: Boolean,
     ) : CommonAppType()
 
     data class System(
@@ -560,6 +561,7 @@ fun StoreApplication.asCommonApp(
             developerLink = website,
             changelog = changelog,
             settingsPageState = latestRelease.settingsPageState,
+            contactable = contactable,
         ),
         type = appType,
         category = category,
@@ -620,6 +622,7 @@ fun StoreSearchResult.asCommonApp(
             publishedDate = null,
             changelog = emptyList(),
             settingsPageState = null,
+            contactable = false,
         ),
         type = appType,
         category = category,

@@ -808,6 +808,7 @@ data class StoreApplication(
     val uuid: String? = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
+    val contactable: Boolean = false,
 )
 
 @Serializable

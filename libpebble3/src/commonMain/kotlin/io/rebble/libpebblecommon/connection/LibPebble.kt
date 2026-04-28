@@ -34,7 +34,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
-import io.rebble.libpebblecommon.services.SleepSession
+import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -165,9 +165,9 @@ interface HealthDataApi {
     /** Returns sleep overlay entries (Sleep + DeepSleep types) in the range. */
     suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
 
-    /** Returns the main sleep session for a given day, using the 6PM-2PM search window.
+    /** Returns all sleep sessions for a given day plus aggregate totals, using the 6PM-2PM search window.
      *  @param dayStartEpochSec start-of-day in epoch seconds (midnight local time) */
-    suspend fun getDailySleepSession(dayStartEpochSec: Long): SleepSession?
+    suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep?
 
     /** Returns the most recent non-zero heart rate reading, or null if none exists. */
     suspend fun getLatestHeartRateReading(): LatestHeartRate?

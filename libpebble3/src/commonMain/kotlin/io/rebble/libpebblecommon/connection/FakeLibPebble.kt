@@ -24,7 +24,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
-import io.rebble.libpebblecommon.services.SleepSession
+import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -460,7 +460,7 @@ class FakeLibPebble : LibPebble {
     override suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates? = null
     override suspend fun getAverageHeartRate(start: Long, end: Long): Double? = null
     override suspend fun getSleepEntries(start: Long, end: Long) = emptyList<OverlayDataEntity>()
-    override suspend fun getDailySleepSession(dayStartEpochSec: Long): SleepSession? = null
+    override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? = null
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? = null
     override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()

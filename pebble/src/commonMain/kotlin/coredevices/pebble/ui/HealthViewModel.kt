@@ -13,7 +13,7 @@ import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.OverlayType
 import io.rebble.libpebblecommon.metadata.supportsHrm
 
-import io.rebble.libpebblecommon.services.SleepSession
+import io.rebble.libpebblecommon.services.DailySleep
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -210,8 +210,8 @@ class HealthViewModel(
         )
 
         val segments = buildDailySleepSegments(dayStart, sleepSession)
-        val bedtimeStr = sleepSession?.let { formatTimeOfDay(it.start, tz) } ?: ""
-        val wakeStr = sleepSession?.let { formatTimeOfDay(it.end, tz) } ?: ""
+        val bedtimeStr = sleepSession?.let { formatTimeOfDay(it.firstStart, tz) } ?: ""
+        val wakeStr = sleepSession?.let { formatTimeOfDay(it.lastEnd, tz) } ?: ""
 
         _sleep.value = SleepUiState(
             segments = segments,
@@ -406,20 +406,27 @@ class HealthViewModel(
 
 }
 
-internal fun buildDailySleepSegments(dayStart: Long, session: SleepSession?): List<SleepSegmentUi> {
-    if (session == null) return emptyList()
+internal fun buildDailySleepSegments(dayStart: Long, dailySleep: DailySleep?): List<SleepSegmentUi> {
+    if (dailySleep == null) return emptyList()
     // Chart x-axis spans 6 PM yesterday → 12 PM today; must match labels in DailySleepTimeline.
     val ws = dayStart - 6 * 3600L
     val we = dayStart + 12 * 3600L
     val wd = (we - ws).toFloat()
     if (wd <= 0) return emptyList()
-    val sf = ((session.start - ws) / wd).coerceIn(0f, 1f)
-    val tw = ((session.end - session.start) / wd).coerceIn(0f, 1f - sf)
-    val df = if (session.totalSleep > 0) session.deepSleep.toFloat() / session.totalSleep else 0f
-    return listOf(
-        SleepSegmentUi(sf, tw * (1f - df), false),
-        SleepSegmentUi(sf + tw * (1f - df), tw * df, true),
-    ).filter { it.widthFraction > 0f }
+
+    fun toSegment(start: Long, end: Long, isDeep: Boolean): SleepSegmentUi? {
+        val sf = ((start - ws) / wd).coerceIn(0f, 1f)
+        val ef = ((end - ws) / wd).coerceIn(0f, 1f)
+        val w = ef - sf
+        return if (w > 0f) SleepSegmentUi(sf, w, isDeep) else null
+    }
+
+    // Render light first, deep last — DailySleepTimeline draws segments in list order, so
+    // deep ends up on top of light at the same timestamps. Awake periods (between Sleep
+    // containers within a session, or between sessions) are simply uncovered space.
+    val intervals = dailySleep.intervals
+    return intervals.filter { !it.isDeep }.mapNotNull { toSegment(it.start, it.end, false) } +
+        intervals.filter { it.isDeep }.mapNotNull { toSegment(it.start, it.end, true) }
 }
 
 private fun formatTimeOfDay(epochSec: Long, tz: TimeZone): String {

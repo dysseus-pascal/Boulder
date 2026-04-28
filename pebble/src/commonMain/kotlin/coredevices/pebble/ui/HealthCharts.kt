@@ -237,7 +237,9 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
         "$h12:${m.toString().padStart(2, '0')} $ampm"
     }
     val scrubInSegment = scrubFraction?.let { frac ->
-        segments.firstOrNull { frac >= it.startFraction && frac <= it.startFraction + it.widthFraction }
+        // Deep segments are drawn after light segments and visually overlap; pick the last
+        // matching one so scrubbing reports "Deep sleep" wherever deep is rendered on top.
+        segments.lastOrNull { frac >= it.startFraction && frac <= it.startFraction + it.widthFraction }
     }
 
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {

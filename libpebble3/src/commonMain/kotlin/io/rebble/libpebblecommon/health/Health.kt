@@ -16,7 +16,7 @@ import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
-import io.rebble.libpebblecommon.services.SleepSession
+import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.calculateHealthAverages
 import io.rebble.libpebblecommon.services.groupSleepSessions
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
@@ -85,8 +85,8 @@ class Health(
 
         val daysOfData = maxOf(averages.stepDaysWithData, averages.sleepDaysWithData)
 
-        val lastNightSession = fetchAndGroupDailySleep(healthDao, todayStart, timeZone)
-        val lastNightSleepSeconds = lastNightSession?.totalSleep ?: 0L
+        val lastNightSleep = fetchAndGroupDailySleep(healthDao, todayStart, timeZone)
+        val lastNightSleepSeconds = lastNightSleep?.totalSleep ?: 0L
         val lastNightSleepHours =
             if (lastNightSleepSeconds > 0) lastNightSleepSeconds / 3600f else null
 
@@ -189,7 +189,7 @@ class Health(
     override suspend fun getSleepEntries(start: Long, end: Long) =
         healthDao.getOverlayEntries(start, end, HealthConstants.SLEEP_TYPES)
 
-    override suspend fun getDailySleepSession(dayStartEpochSec: Long): SleepSession? =
+    override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? =
         fetchAndGroupDailySleep(healthDao, dayStartEpochSec, TimeZone.currentSystemDefault())
 
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? {
@@ -327,22 +327,57 @@ class Health(
             val sleepStart = dayStart - (24 - bedtimeHour) * 3600L + bedtimeMinute * 60L
             val baseSleepHours = if (dow >= 5) random.nextInt(7, 10) else random.nextInt(5, 8)
             val totalSleepSec = baseSleepHours * 3600L + random.nextInt(0, 60) * 60L
-            val deepSleepSec = (totalSleepSec * random.nextDouble(0.15, 0.35)).toLong()
+            val deepFraction = random.nextDouble(0.15, 0.35)
 
-            val overlays = mutableListOf(
-                OverlayDataEntity(
-                    startTime = sleepStart, duration = totalSleepSec,
-                    type = OverlayType.Sleep.value,
+            val overlays = mutableListOf<OverlayDataEntity>()
+            fun addOverlay(start: Long, duration: Long, type: OverlayType) {
+                overlays += OverlayDataEntity(
+                    startTime = start, duration = duration, type = type.value,
                     steps = 0, restingKiloCalories = 0, activeKiloCalories = 0,
                     distanceCm = 0, offsetUTC = 0,
-                ),
-                OverlayDataEntity(
-                    startTime = sleepStart + random.nextInt(60, 120) * 60L,
-                    duration = deepSleepSec, type = OverlayType.DeepSleep.value,
-                    steps = 0, restingKiloCalories = 0, activeKiloCalories = 0,
-                    distanceCm = 0, offsetUTC = 0,
-                ),
-            )
+                )
+            }
+            // Drop n DeepSleep blocks roughly evenly inside [start, start+duration].
+            fun addDeepSleeps(start: Long, duration: Long, n: Int) {
+                if (n <= 0 || duration <= 0) return
+                val deepEach = (duration * deepFraction / n).toLong()
+                val slot = duration / (n + 1)
+                repeat(n) { i ->
+                    addOverlay(start + slot * (i + 1) - deepEach / 2, deepEach, OverlayType.DeepSleep)
+                }
+            }
+
+            // Mix in split-sleep and interrupted-sleep nights so the daily timeline shows
+            // off multi-session and within-session-awake-gap rendering.
+            when {
+                random.nextFloat() < 0.20f -> {
+                    // Split sleep: two sessions separated by > 1h (the grouper splits them).
+                    val firstDur = (totalSleepSec * 0.55).toLong()
+                    val gap = 5400L + random.nextInt(5400)  // 1.5h–3h
+                    val secondDur = totalSleepSec - firstDur
+                    val secondStart = sleepStart + firstDur + gap
+                    addOverlay(sleepStart, firstDur, OverlayType.Sleep)
+                    addDeepSleeps(sleepStart, firstDur, random.nextInt(1, 3))
+                    addOverlay(secondStart, secondDur, OverlayType.Sleep)
+                    addDeepSleeps(secondStart, secondDur, random.nextInt(1, 3))
+                }
+                random.nextFloat() < 0.25f -> {
+                    // Interrupted sleep: one session with a short awake gap inside it.
+                    val firstDur = (totalSleepSec * 0.6).toLong()
+                    val gap = (random.nextInt(14, 31) * 60).toLong()  // 14–30 min
+                    val secondDur = totalSleepSec - firstDur
+                    val secondStart = sleepStart + firstDur + gap
+                    addOverlay(sleepStart, firstDur, OverlayType.Sleep)
+                    addDeepSleeps(sleepStart, firstDur, random.nextInt(2, 4))
+                    addOverlay(secondStart, secondDur, OverlayType.Sleep)
+                    addDeepSleeps(secondStart, secondDur, random.nextInt(1, 3))
+                }
+                else -> {
+                    // Typical uninterrupted night with multiple deep-sleep cycles.
+                    addOverlay(sleepStart, totalSleepSec, OverlayType.Sleep)
+                    addDeepSleeps(sleepStart, totalSleepSec, random.nextInt(2, 4))
+                }
+            }
 
             // Add activity sessions on some days
             if (random.nextFloat() > 0.4f) {

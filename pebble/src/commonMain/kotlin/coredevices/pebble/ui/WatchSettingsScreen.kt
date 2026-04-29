@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -1885,7 +1886,7 @@ fun WatchSettingsCategoryScreen(
     section: Section,
     topLevelType: TopLevelType,
 ) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
         val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
 
         LaunchedEffect(Unit) {

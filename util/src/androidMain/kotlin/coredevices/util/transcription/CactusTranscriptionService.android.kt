@@ -26,4 +26,4 @@ actual suspend fun getFreeMemoryMB(): Long {
     return maxMemory - usedMemory
 }
 
-actual val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long = 200
+actual val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long = 20

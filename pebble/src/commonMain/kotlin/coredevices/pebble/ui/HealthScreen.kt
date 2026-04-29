@@ -274,12 +274,27 @@ private fun SleepStatsRow(st: SleepUiState) {
 private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
     val scrub = rememberScrubState()
     val idx = scrub.scrubIndex
-    val sv = if (idx != null && idx < st.hrSamples.size) st.hrSamples[idx]?.roundToInt() else null
     val minPerBucket = if (st.hrSamples.isNotEmpty()) 1440 / st.hrSamples.size else 60
+    // The chart draws a smoothed line straight through null buckets, so the user can scrub onto
+    // visible curve that maps to a null sample. Snap to the nearest non-null within ~1 hour.
+    val sv = if (idx != null && idx < st.hrSamples.size) {
+        val maxDist = (60 / minPerBucket).coerceAtLeast(1)
+        var found: Double? = null
+        for (d in 0..maxDist) {
+            found = st.hrSamples.getOrNull(idx - d) ?: st.hrSamples.getOrNull(idx + d)
+            if (found != null) break
+        }
+        found?.roundToInt()
+    } else null
     val tStr = if (idx != null) { val m = idx * minPerBucket; "${m / 60}:${(m % 60).toString().padStart(2, '0')}" } else ""
 
     val hv = when { sv != null -> "$sv"; st.latestHR != null -> "${st.latestHR}"; st.averageHR != null -> "${st.averageHR}"; else -> "--" }
-    val hs = when { sv != null -> "bpm at $tStr"; st.latestHR != null -> "latest bpm"; else -> "avg bpm" }
+    val hs = when {
+        sv != null && idx != null -> "bpm at $tStr"
+        idx != null -> "no data at $tStr"
+        st.latestHR != null -> "latest bpm"
+        else -> "avg bpm"
+    }
 
     HealthCard(HRBgColor) {
         CardHeader(

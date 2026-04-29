@@ -128,23 +128,34 @@ class AppstoreService(
         val entriesByAppstoreId = entries.associateBy { it.appstoreId }
         return entries.chunked(500).also {
             logger.d { "Bulk fetching locker entries in ${it.size} chunks" }
-        }.flatMap { lockerEntries ->
-            try {
-                logger.v { "Fetching chunk size = ${lockerEntries.size}" }
+        }.flatMapIndexed { chunkIndex, lockerEntries ->
+            logger.v { "Fetching chunk $chunkIndex size = ${lockerEntries.size}" }
+            val response = try {
                 httpClient.post(url = Url("${source.url}/v1/apps/bulk")) {
                     header("Content-Type", "application/json")
                     setBody(BulkFetchParams(lockerEntries.map { it.appstoreId }).encodeToJson())
-                }.takeIf { it.status.isSuccess() }?.body<BulkStoreResponse>()
-                    ?.data?.mapNotNull { app ->
-                        val matchingEntry = entriesByAppstoreId[app.id]
-                        app.toLockerEntry(
-                            sourceUrl = matchingEntry?.appstoreSource ?: source.url,
-                            timelineToken = matchingEntry?.timelineToken,
-                        )
-                    } ?: return null
+                }
             } catch (e: IOException) {
-                logger.w(e) { "Error loading app store app" }
+                logger.w(e) { "Bulk fetch chunk $chunkIndex: network error" }
                 return null
+            }
+            if (!response.status.isSuccess()) {
+                logger.w { "Bulk fetch chunk $chunkIndex: HTTP ${response.status}" }
+                return null
+            }
+            val parsed = try {
+                response.body<BulkStoreResponse>()
+            } catch (e: Exception) {
+                logger.w(e) { "Bulk fetch chunk $chunkIndex: failed to parse response (status=${response.status})" }
+                return null
+            }
+            logger.v { "Bulk fetch chunk $chunkIndex: got ${parsed.data.size} apps" }
+            parsed.data.mapNotNull { app ->
+                val matchingEntry = entriesByAppstoreId[app.id]
+                app.toLockerEntry(
+                    sourceUrl = matchingEntry?.appstoreSource ?: source.url,
+                    timelineToken = matchingEntry?.timelineToken,
+                )
             }
         }
     }

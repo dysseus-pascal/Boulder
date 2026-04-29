@@ -26,8 +26,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -35,6 +37,8 @@ import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+
+private val logger = Logger.withTag("FirestoreLocker")
 
 class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore) {
     private val firestore get() = firestoreProvider()
@@ -72,10 +76,20 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
         }
     }
 
+    // Only emit server-confirmed snapshots. Firestore's snapshot listener will fire an
+    // initial cached emission after auth re-init (often empty if the cache was invalidated)
+    // before the server response arrives — acting on that would mass-delete the user's
+    // pebble-store apps. includeMetadataChanges=true is required so we still get an event
+    // when the server confirms identical-to-cache content (otherwise the listener would
+    // never re-emit and we'd be stuck on the cached emission we filtered out).
     fun observeLockerEntriesForUser(uid: String): Flow<QuerySnapshot> = firestore.collection("lockers")
         .document(uid)
         .collection("entries")
-        .snapshots
+        .snapshots(includeMetadataChanges = true)
+        .filter {
+            logger.v { "observeLockerEntriesForUser: ${it.documents.size} isFromCache=${it.metadata.isFromCache}" }
+            !it.metadata.isFromCache
+        }
 }
 
 interface FirestoreLocker {
@@ -90,10 +104,6 @@ class RealFirestoreLocker(
     private val dao: FirestoreLockerDao,
     private val libPebbleLockerProxy: LibPebbleLockerProxy,
 ): KoinComponent, FirestoreLocker {
-    companion object {
-        private val logger = Logger.withTag("FirestoreLocker")
-    }
-
     private val _locker = MutableStateFlow<List<FirestoreLockerEntry>?>(null)
     override val locker: StateFlow<List<FirestoreLockerEntry>?> = _locker.asStateFlow()
     private var fullSyncInProgress = false
@@ -163,9 +173,13 @@ class RealFirestoreLocker(
 
     override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
-        val fsLocker = locker.value
-        if (fsLocker.isNullOrEmpty()) {
-            logger.w { "fetchLocker: locker is null or empty, skipping sync to avoid mass-deleting apps from a stale empty snapshot" }
+        // Short grace period for the server-confirmed snapshot during app boot. Returns
+        // immediately if locker.value is already populated.
+        val fsLocker = withTimeoutOrNull(2.seconds) {
+            locker.first { it != null }
+        }
+        if (fsLocker == null) {
+            logger.w { "fetchLocker: server-confirmed locker snapshot not yet received" }
             return null
         }
         fullSyncInProgress = true
@@ -234,10 +248,16 @@ class RealFirestoreLocker(
             failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
         )
         } finally {
-            // Re-read locker from Firestore since we skipped listener updates during sync
+            // Re-read locker from Firestore since we skipped listener updates during sync.
             try {
-                val snapshot = dao.observeLockerEntriesForUser(user.uid).first()
-                _locker.value = snapshot.documents.map { doc -> doc.data() }
+                val snapshot = withTimeoutOrNull(30.seconds) {
+                    dao.observeLockerEntriesForUser(user.uid).first()
+                }
+                if (snapshot != null) {
+                    _locker.value = snapshot.documents.map { doc -> doc.data() }
+                } else {
+                    logger.w { "Timed out waiting for server-confirmed snapshot after sync" }
+                }
             } catch (e: Exception) {
                 logger.w(e) { "Failed to refresh locker after sync" }
             }

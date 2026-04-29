@@ -164,8 +164,8 @@ class RealFirestoreLocker(
     override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = locker.value
-        if (fsLocker == null) {
-            logger.w { "fetchLocker: locker is null" }
+        if (fsLocker.isNullOrEmpty()) {
+            logger.w { "fetchLocker: locker is null or empty, skipping sync to avoid mass-deleting apps from a stale empty snapshot" }
             return null
         }
         fullSyncInProgress = true

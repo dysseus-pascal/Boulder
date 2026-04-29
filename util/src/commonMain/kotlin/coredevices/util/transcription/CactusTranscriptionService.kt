@@ -43,6 +43,8 @@ import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
 
 expect suspend fun withHighPriorityThread(block: suspend () -> Unit)
+expect suspend fun getFreeMemoryMB(): Long
+expect val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long
 
 class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
@@ -69,6 +71,16 @@ class CactusTranscriptionService(
      * gets cancelled while the native call is in progress.
      */
     private suspend fun cancellableTranscribe(cactus: Cactus, audioPath: String): TranscriptionResult {
+        val freeMemory = try {
+            getFreeMemoryMB()
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to get free memory" }
+            0L
+        }
+        if (freeMemory < PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB) {
+            logger.e { "Low free memory ($freeMemory MB), skipping local transcription" }
+            throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = sttConfig.value.modelName)
+        }
         val callerJob = kotlin.coroutines.coroutineContext[Job]
         val completionHandle = callerJob?.invokeOnCompletion { cause ->
             if (cause != null) {
@@ -122,6 +134,16 @@ class CactusTranscriptionService(
             return
         }
         logger.d { "Warming up Cactus STT model with silent audio" }
+        val freeMemory = try {
+            getFreeMemoryMB()
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to get free memory" }
+            0L
+        }
+        if (freeMemory < PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB) {
+            logger.w { "Low free memory ($freeMemory MB), skipping warmup" }
+            return
+        }
         lastTranscriptionAt = TimeSource.Monotonic.markNow()
         warmupMutex.withLock {
             val cactus = model ?: return

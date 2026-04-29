@@ -248,6 +248,7 @@ class RealPebbleConnector(
             unfaithful = watchInfo.isUnfaithful,
             previouslyConnected = previouslyConnected,
             capabilities = watchInfo.capabilities,
+            firmwareVersion = watchInfo.runningFwVersion,
         )
         appFetchService.init()
         timelineActionManager.init()

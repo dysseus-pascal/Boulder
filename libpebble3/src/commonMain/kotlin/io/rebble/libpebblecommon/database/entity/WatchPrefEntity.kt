@@ -165,6 +165,7 @@ class QLMappable(
 sealed interface WatchPref<T> {
     val id: String
     val displayName: String
+    val description: String?
     val type: WatchPrefType
     val defaultValue: T
     fun decodeValue(value: String): T
@@ -188,24 +189,25 @@ enum class BoolWatchPref(
     override val displayName: String,
     override val defaultValue: Boolean,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<Boolean> {
-    TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false),
+    TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
     Clock24h("clock24h", "24h clock", false),
-    StandbyMode("stationaryMode", "Standby Mode", true),
-    LeftHandedMode("displayOrientationLeftHanded", "Left-handed Mode", false),
+    StandbyMode("stationaryMode", "Standby Mode", true, description = "Watch will disable bluetooth when not in use (i.e. no movement is detected), to save power"),
+    LeftHandedMode("displayOrientationLeftHanded", "Left-handed Mode", false, description = "Button functions are reversed"),
     Backlight("lightEnabled", "Backlight", true),
-    AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true),
-    BacklightMotion("lightMotion", "Backlight Motion", true),
-    DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true),
+    AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
+    BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
+    DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true, description = "Adjust backlight intensity automatically to match environment (using light sensor)"),
     LanguageEnglish("langEnglish", "Language: English", false),
-    TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true),
-    QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false),
-    CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false),
+    TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
+    QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
+    CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
-    NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true),
-    NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
-    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
-    QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true),
+    NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
+    NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
+    QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     ;
@@ -220,6 +222,7 @@ enum class QuicklaunchWatchPref(
     override val displayName: String,
     override val defaultValue: QuickLaunchSetting,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<QuickLaunchSetting> {
     QlUp("qlUp", "Quick Launch: Hold Up", QuickLaunchSetting(false, null)),
     QlDown("qlDown", "Quick Launch: Hold Down", QuickLaunchSetting(false, null)),
@@ -340,6 +343,7 @@ enum class EnumWatchPref(
     override val defaultValue: WatchPrefEnum,
     val options: List<WatchPrefEnum>,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<WatchPrefEnum> {
     TextSize("textStyle", "Text Size", ContentSize.Default, ContentSize.entries),
     NotificationFilter(
@@ -435,6 +439,7 @@ enum class NumberWatchPref(
     val max: Int,
     val unit: String,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<Long> {
     BacklightTimeoutMs(
         id = "lightTimeoutMs",
@@ -448,6 +453,7 @@ enum class NumberWatchPref(
     AmbientLightThreshold(
         id = "lightAmbientThreshold",
         displayName = "Ambient Light Threshold",
+        description = "Controls how low ambient light needs to be to enable backlight (if using Ambient Light Sensor)",
         defaultValue = 150,
         type = WatchPrefType.TypeUInt32,
         min = 1,
@@ -458,6 +464,7 @@ enum class NumberWatchPref(
     DynamicBacklightMinThreshold(
         id = "dynBacklightMinThreshold",
         displayName = "Dynamic Backlight Min Threshold",
+        description = "Controls how ambient light sensor controls backlight intensity (if using Dynamic Backlight Intensity)",
         defaultValue = 5,
         type = WatchPrefType.TypeUInt32,
         min = 0,
@@ -477,6 +484,7 @@ enum class NumberWatchPref(
     NotificationTimeoutMs(
         id = "notifWindowTimeout",
         displayName = "Notification Timeout",
+        description = "Notifications time out (disappear) after this period (unless Quiet Time is enabled)",
         defaultValue = 3.minutes.inWholeMilliseconds,
         type = WatchPrefType.TypeUInt32,
         min = 0,
@@ -495,6 +503,7 @@ enum class ColorWatchPref(
     override val defaultValue: TimelineColor,
     val availableColors: List<TimelineColor>?,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<TimelineColor> {
     // Choosing a color not in the seelction list crashes the watch - don't sync yet
 //    SettingsMenuHighlightColor(

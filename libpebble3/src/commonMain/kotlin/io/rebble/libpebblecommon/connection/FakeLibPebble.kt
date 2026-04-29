@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.connection.LatestHeartRate
+import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -356,6 +357,15 @@ class FakeLibPebble : LibPebble {
             ageYears = 35,
             gender = HealthGender.Female,
             imperialUnits = false,
+            hrmEnabled = true,
+            hrmMeasurementInterval = HRMonitoringInterval.TenMin,
+            hrmActivityTrackingEnabled = false,
+            restingHr = 70,
+            elevatedHr = 100,
+            maxHr = 190,
+            hrZone1Threshold = 130,
+            hrZone2Threshold = 154,
+            hrZone3Threshold = 172,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}

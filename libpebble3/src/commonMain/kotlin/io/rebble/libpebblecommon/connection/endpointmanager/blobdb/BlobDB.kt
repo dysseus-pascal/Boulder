@@ -31,6 +31,7 @@ import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.web.withTimeoutOr
@@ -170,10 +171,12 @@ class BlobDB(
         unfaithful: Boolean,
         previouslyConnected: Boolean,
         capabilities: Set<ProtocolCapsFlag>,
+        firmwareVersion: FirmwareVersion,
     ) {
         val params = ValueParams(
             platform = watchType,
             capabilities = capabilities,
+            firmwareVersion = firmwareVersion,
             vibePatternDao = blobDatabases.getVibePatternDao(),
             notificationRuleDao = blobDatabases.getNotificationRuleDao(),
         )

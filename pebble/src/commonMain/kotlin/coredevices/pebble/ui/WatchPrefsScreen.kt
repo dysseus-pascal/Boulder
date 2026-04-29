@@ -1,5 +1,8 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -7,7 +10,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ConfirmDialog
 import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
@@ -128,6 +133,7 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
     return basicSettingsNumberItem(
         id = pref.id,
         title = pref.displayName,
+        description = pref.description,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
         value = item.valueOrDefault(),
@@ -156,14 +162,19 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
                     Text(pref.displayName)
                 },
                 supportingContent = {
-                    SelectColorOrNone(
-                        currentColorName = default.identifier,
-                        onChangeColor = { color ->
-                            libPebble.setWatchPref(item.copy(value = color))
-                        },
-                        availableColors = pref.availableColors,
-                        defaultToListTab = true,
-                    )
+                    Column {
+                        pref.description?.let { description ->
+                            Text(description, fontSize = 11.sp)
+                        }
+                        SelectColorOrNone(
+                            currentColorName = default.identifier,
+                            onChangeColor = { color ->
+                                libPebble.setWatchPref(item.copy(value = color))
+                            },
+                            availableColors = pref.availableColors,
+                            defaultToListTab = true,
+                        )
+                    }
                 },
                 shadowElevation = 2.dp,
             )
@@ -176,6 +187,7 @@ private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): S
     return basicSettingsToggleItem(
         id = item.pref.id,
         title = item.pref.displayName,
+        description = item.pref.description,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),
         checked = item.valueOrDefault(),
@@ -191,6 +203,7 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
     return basicSettingsDropdownItem(
         id = pref.id,
         title = pref.displayName,
+        description = pref.description,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
         selectedItem = item.valueOrDefault(),
@@ -239,6 +252,7 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
     return basicSettingsDropdownItem(
         id = item.pref.id,
         title = item.pref.displayName,
+        description = item.pref.description,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),
         selectedItem = defaultQl,

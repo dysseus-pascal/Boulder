@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
@@ -413,6 +414,17 @@ data class HealthSettings(
     val ageYears: Int,
     val gender: HealthGender,
     val imperialUnits: Boolean,
+    // ActivityHRMSettings
+    val hrmEnabled: Boolean,
+    val hrmMeasurementInterval: HRMonitoringInterval,
+    val hrmActivityTrackingEnabled: Boolean,
+    // HeartRatePreferences
+    val restingHr: Short,
+    val elevatedHr: Short,
+    val maxHr: Short,
+    val hrZone1Threshold: Short,
+    val hrZone2Threshold: Short,
+    val hrZone3Threshold: Short,
 )
 
 /** Time range for displaying health data */

@@ -2,9 +2,9 @@ package coredevices.pebble.ui
 
 import AppUpdateTracker
 import CommonRoutes
-import PlatformUiContext
 import CoreAppVersion
 import NextBugReportContext
+import PlatformUiContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -22,16 +22,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -42,10 +39,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -54,7 +52,6 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -64,7 +61,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -87,10 +83,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -124,8 +120,8 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
-import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.ConfirmDialog
+import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfig
@@ -133,7 +129,6 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
 import coredevices.util.WeatherUnit
-import coredevices.util.transcription.SpokenLanguageOptions
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
@@ -141,13 +136,15 @@ import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
+import coredevices.util.transcription.SpokenLanguageOptions
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
-import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
+import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -225,6 +222,9 @@ object SettingsIds {
     const val HealthAge = "HealthAge"
     const val HealthGenderId = "HealthGender"
     const val HealthImperialUnits = "HealthImperialUnits"
+    const val HrmEnabled = "HrmEnabled"
+    const val HrmMeasurementInterval = "HrmMeasurementInterval"
+    const val HrmActivityTracking = "HrmActivityTracking"
 }
 
 data class SettingsItem(
@@ -925,8 +925,60 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
                 basicSettingsToggleItem(
+                    id = SettingsIds.HrmEnabled,
+                    title = "Heart Rate Monitor",
+                    description = "Allow the watch to measure heart rate",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.hrmEnabled,
+                    show = { healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.HrmMeasurementInterval,
+                    title = "Background Sampling",
+                    description = "How often the watch checks your heart rate when you're not in a workout. This can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.hrmMeasurementInterval,
+                    items = HRMonitoringInterval.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmMeasurementInterval = it)
+                        )
+                    },
+                    itemText = {
+                        when (it) {
+                            HRMonitoringInterval.TenMin -> "Every 10 minutes"
+                            HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
+                            HRMonitoringInterval.OneHour -> "Every hour"
+                            HRMonitoringInterval.Disabled -> "Off"
+                        }
+                    },
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HrmActivityTracking,
+                    title = "HR During Activities",
+                    description = "Continuously track heart rate during detected walks and runs. This can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.hrmActivityTrackingEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmActivityTrackingEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
                     id = EnableActivityInsights,
                     title = "Activity Insights",
+                    description = "Receive notifications with insights about your activity",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.activityInsightsEnabled,
@@ -942,6 +994,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsToggleItem(
                     id = EnableSleepInsights,
                     title = "Sleep Insights",
+                    description = "Receive notifications with insights about your sleep",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.sleepInsightsEnabled,
@@ -957,7 +1010,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsToggleItem(
                     id = SettingsIds.HealthImperialUnits,
                     title = "Imperial Units",
-                    description = "Display distance and pace in miles instead of kilometres",
+                    description = "Use miles/feet/inches/lb instead of metric units",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.imperialUnits,

@@ -68,6 +68,9 @@ import coredevices.pebble.ui.SettingsIds.HealthGenderId
 import coredevices.pebble.ui.SettingsIds.HealthHeight
 import coredevices.pebble.ui.SettingsIds.HealthImperialUnits
 import coredevices.pebble.ui.SettingsIds.HealthWeight
+import coredevices.pebble.ui.SettingsIds.HrmActivityTracking
+import coredevices.pebble.ui.SettingsIds.HrmEnabled
+import coredevices.pebble.ui.SettingsIds.HrmMeasurementInterval
 import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
@@ -284,6 +287,9 @@ fun WatchOnboardingScreen(
 
                             settings.Show(BoolWatchPref.Clock24h.id)
                             settings.Show(EnableHealthTracking)
+                            settings.Show(HrmEnabled)
+                            settings.Show(HrmMeasurementInterval)
+                            settings.Show(HrmActivityTracking)
                             settings.Show(EnableActivityInsights)
                             settings.Show(EnableSleepInsights)
                             settings.Show(HealthImperialUnits)

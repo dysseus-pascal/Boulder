@@ -79,6 +79,10 @@ class RingTransferRepository(
         return ringTransferDao.getMostRecentTransfer()
     }
 
+    fun getMostRecentTransferFlow(): Flow<RingTransfer?> {
+        return ringTransferDao.getMostRecentTransferFlow()
+    }
+
     fun getTransfersAfterFlow(timestamp: Instant): Flow<List<RingTransfer>> {
         return ringTransferDao.getTransfersAfterFlow(timestamp)
     }

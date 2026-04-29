@@ -44,6 +44,9 @@ interface RingTransferDao {
     @Query("SELECT * FROM RingTransfer ORDER BY createdAt DESC LIMIT 1")
     suspend fun getMostRecentTransfer(): RingTransfer?
 
+    @Query("SELECT * FROM RingTransfer ORDER BY createdAt DESC LIMIT 1")
+    fun getMostRecentTransferFlow(): Flow<RingTransfer?>
+
     @Query("SELECT * FROM RingTransfer WHERE createdAt > :timestamp")
     fun getTransfersAfterFlow(timestamp: Instant): Flow<List<RingTransfer>>
 

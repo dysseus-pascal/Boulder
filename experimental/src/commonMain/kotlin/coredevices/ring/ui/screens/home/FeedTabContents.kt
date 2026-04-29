@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -24,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.service.RingEvent
 import coredevices.ring.service.RingSync
@@ -160,6 +164,7 @@ fun FeedTabContents(
             )
             RingSyncIndicator(modifier = Modifier.align(Alignment.End).padding(8.dp))
         }
+        ShortRecordingHint()
         Box(modifier = Modifier.padding(8.dp).fillMaxWidth()) {
             ChatInput(
                 modifier = Modifier.fillMaxWidth(),
@@ -170,6 +175,24 @@ fun FeedTabContents(
                 onTextSubmit = onAddChat
             )
         }
+    }
+}
+
+@Composable
+private fun ShortRecordingHint() {
+    val transferRepo = koinInject<RingTransferRepository>()
+    val mostRecentTransfer by remember { transferRepo.getMostRecentTransferFlow() }.collectAsState(null)
+    AnimatedVisibility(
+        visible = mostRecentTransfer?.status == RingTransferStatus.Discarded,
+        enter = fadeIn(),
+        exit = fadeOut(),
+    ) {
+        Text(
+            text = "Last recording was <1.5s",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        )
     }
 }
 

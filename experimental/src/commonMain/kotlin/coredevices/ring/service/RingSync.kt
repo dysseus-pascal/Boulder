@@ -536,7 +536,7 @@ class RingSync(
                                                         }
                                                         logger.d { "Saving transfer..." }
                                                         id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
-                                                        if (audioDuration >= 0.5) {
+                                                        if (audioDuration >= 1.5) {
                                                             trace.markEvent("saving_recording_start")
                                                             val samplesResampled = withContext(Dispatchers.Default) {
                                                                 val t = TimeSource.Monotonic.markNow()

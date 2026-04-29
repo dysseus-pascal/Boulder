@@ -120,6 +120,8 @@ class SettingsViewModel(
     val noteShortcut = preferences.noteShortcut
     private val currentRing = ringSync.lastRing
     val ringPaired = preferences.ringPaired
+    private val _panicPending = MutableStateFlow(false)
+    val panicPending = _panicPending.asStateFlow()
     val currentRingFirmware = currentRing.flatMapLatest { it?.state ?: emptyFlow() }
         .map { it?.firmwareVersion }
         .stateIn(
@@ -314,6 +316,19 @@ class SettingsViewModel(
             }
         }
         _syncStatus.value = "Upload complete"
+    }
+
+    fun panicRing() {
+        _panicPending.value = true
+        viewModelScope.launch {
+            try {
+                ringSync.lastRing.value?.panic()
+            } catch (e: Exception) {
+                Logger.withTag("Settings").e(e) { "Failed to panic ring: ${e.message}" }
+            } finally {
+                _panicPending.value = false
+            }
+        }
     }
 
     private suspend fun performFeedHistoryDownload() {

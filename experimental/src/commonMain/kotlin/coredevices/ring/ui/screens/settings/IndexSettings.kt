@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -111,6 +112,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
+    val panicPending by viewModel.panicPending.collectAsStateWithLifecycle()
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val preferences = koinInject<Preferences>()
@@ -437,6 +439,14 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             if (debugDetailsEnabled) {
+                item {
+                    ListItem(
+                        modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
+                            viewModel.panicRing()
+                        },
+                        headlineContent = { Text("Panic Ring", color = Color.Red) }
+                    )
+                }
                 item {
                     ListItem(
                         modifier = Modifier.clickable {

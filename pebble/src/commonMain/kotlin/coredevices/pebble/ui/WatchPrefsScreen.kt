@@ -30,6 +30,7 @@ import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting
 import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
+import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefEnum
 import io.rebble.libpebblecommon.locker.AppType
@@ -49,6 +50,7 @@ fun watchPrefs(): List<SettingsItem> {
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
                 is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
                 is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
+                is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
                 is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
             }
         }
@@ -95,6 +97,9 @@ fun WatchPref<*>.section(): Section = when (this) {
 //    ColorWatchPref.AppMenuHighlightColor -> Section.Display
     EnumWatchPref.TextSize -> Section.Notifications
     EnumWatchPref.MotionSensitivity -> Section.Display
+    EnumWatchPref.BacklightIntensity -> Section.Display
+    EnumWatchPref.BacklightTouch -> Section.Display
+    RgbColorWatchPref.BacklightColor -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
     NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
@@ -212,6 +217,37 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
             libPebble.setWatchPref(item.copy(value = it))
         },
         itemText = { it.displayName },
+        isDebugSetting = pref.isDebugSetting,
+    )
+}
+
+private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): SettingsItem {
+    val pref = item.pref as RgbColorWatchPref
+    return SettingsItem(
+        id = pref.id,
+        title = pref.displayName,
+        topLevelType = TopLevelType.Watch,
+        section = pref.section(),
+        item = {
+            ListItem(
+                headlineContent = { Text(pref.displayName) },
+                supportingContent = {
+                    Column {
+                        pref.description?.let { description ->
+                            Text(description, fontSize = 11.sp)
+                        }
+                        SelectRgbColor(
+                            currentRgb = item.valueOrDefault(),
+                            defaultRgb = pref.defaultValue,
+                            presets = pref.presets,
+                            onChangeColor = { rgb ->
+                                libPebble.setWatchPref(item.copy(value = rgb))
+                            },
+                        )
+                    }
+                },
+            )
+        },
         isDebugSetting = pref.isDebugSetting,
     )
 }

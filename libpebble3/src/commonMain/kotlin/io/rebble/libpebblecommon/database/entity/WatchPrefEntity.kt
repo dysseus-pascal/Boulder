@@ -177,8 +177,9 @@ sealed interface WatchPref<T> {
         fun enumeratePrefs(): List<WatchPref<*>> = BoolWatchPref.entries
             .plus(QuicklaunchWatchPref.entries)
             .plus(EnumWatchPref.entries)
-            .plus(NumberWatchPref.entries)
             .plus(ColorWatchPref.entries)
+            .plus(RgbColorWatchPref.entries)
+            .plus(NumberWatchPref.entries)
 
         fun from(id: String): WatchPref<*>? = enumeratePrefs().find { it.id == id }
     }
@@ -337,6 +338,22 @@ enum class MotionSensitivityLevel(override val code: UByte, override val display
     VeryHigh(100u, "Very High"),
 }
 
+// Codes are the percent intensity values the firmware UI exposes; see
+// pebble-firmware:src/fw/apps/system/settings/display.c (s_intensity_values/s_intensity_labels).
+enum class BacklightIntensityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Low(10u, "Low"),
+    Medium(25u, "Medium"),
+    High(50u, "High"),
+    Blinding(100u, "Blinding"),
+}
+
+// Matches BacklightTouchWake in pebble-firmware:src/fw/shell/prefs.h.
+enum class BacklightTouchWakeMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    DoubleTap(0u, "Double Tap"),
+    Tap(1u, "Tap"),
+    Off(2u, "Off"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -421,6 +438,20 @@ enum class EnumWatchPref(
         options = MotionSensitivityLevel.entries,
         isDebugSetting = true,
     ),
+    BacklightIntensity(
+        id = "lightIntensity",
+        displayName = "Backlight Intensity",
+        defaultValue = BacklightIntensityLevel.Medium,
+        options = BacklightIntensityLevel.entries,
+        description = "Maximum backlight brightness when on",
+    ),
+    BacklightTouch(
+        id = "lightTouch",
+        displayName = "Backlight on Tap",
+        description = "Turn on backlight when tapping the screen",
+        defaultValue = BacklightTouchWakeMode.DoubleTap,
+        options = BacklightTouchWakeMode.entries,
+    ),
     ;
 
     override val type = WatchPrefType.TypeUInt8
@@ -495,6 +526,51 @@ enum class NumberWatchPref(
 
     override fun decodeValue(value: String): Long = value.toLong()
     override fun encodeValue(value: Long): String = value.toString()
+}
+
+data class RgbColorPreset(val rgb: UInt, val displayName: String)
+
+// LED_WARM_WHITE in pebble-firmware:src/fw/drivers/led_controller.h — also the firmware
+// backlight default on color-backlight boards.
+private val LED_WARM_WHITE_RGB: UInt = 0x00F0D0B0u
+
+// Quick-pick presets shown above the RGB color picker. The wire value is a free-form 24-bit
+// RGB UInt — the user can also dial in any custom color via the sliders or hex field.
+private val BACKLIGHT_COLOR_PRESETS = listOf(
+    RgbColorPreset(0x00FF0000u, "Red"),
+    RgbColorPreset(0x00FF7F00u, "Orange"),
+    RgbColorPreset(0x00FFFF00u, "Yellow"),
+    RgbColorPreset(0x007FFF00u, "Lime"),
+    RgbColorPreset(0x0000FF00u, "Green"),
+    RgbColorPreset(0x0000FFFFu, "Cyan"),
+    RgbColorPreset(0x000000FFu, "Blue"),
+    RgbColorPreset(0x007F00FFu, "Purple"),
+    RgbColorPreset(0x00FF00FFu, "Magenta"),
+    RgbColorPreset(0x00FF66CCu, "Pink"),
+    RgbColorPreset(LED_WARM_WHITE_RGB, "Warm White"),
+    RgbColorPreset(0x00FFFFFFu, "Cool White"),
+)
+
+enum class RgbColorWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: UInt,
+    val presets: List<RgbColorPreset>,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<UInt> {
+    BacklightColor(
+        id = "lightColor",
+        displayName = "Backlight Color",
+        defaultValue = LED_WARM_WHITE_RGB,
+        presets = BACKLIGHT_COLOR_PRESETS,
+        description = "LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)",
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeUInt32
+    override fun decodeValue(value: String): UInt = value.toUIntOrNull() ?: defaultValue
+    override fun encodeValue(value: UInt): String = value.toString()
 }
 
 enum class ColorWatchPref(

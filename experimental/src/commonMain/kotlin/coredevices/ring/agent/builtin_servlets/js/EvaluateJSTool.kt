@@ -11,6 +11,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.toJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import coredevices.util.CoreConfigFlow
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -82,11 +83,12 @@ class EvaluateJSTool : BuiltInMcpTool(
 
     override suspend fun call(jsonInput: String): ToolCallResult {
         val evaluateJSArgs = JsonSnake.decodeFromString<EvaluateJSArgs>(jsonInput)
-        logger.v { "Evaluating JavaScript: ${evaluateJSArgs.js}" }
+        val obfuscate = get<CoreConfigFlow>().value.obfuscateSensitiveLogs
+        logger.v { "Evaluating JavaScript: ${if (obfuscate) "[${evaluateJSArgs.js.length} chars redacted]" else evaluateJSArgs.js}" }
         val jsEngine: JsEngine = get()
         val consoleOutput = jsEngine.evaluate(evaluateJSArgs.js)
         val result = JsonSnake.encodeToString(EvaluateJSResult(consoleOutput))
-        logger.v { "JavaScript evaluation result: $result" }
+        logger.v { "JavaScript evaluation result: ${if (obfuscate) "[redacted]" else result}" }
         return ToolCallResult(
             result,
             semanticResult = SemanticResult.SupportingData("JavaScript evaluation result")

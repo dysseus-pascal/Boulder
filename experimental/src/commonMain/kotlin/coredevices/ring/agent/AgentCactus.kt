@@ -13,6 +13,7 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
+import coredevices.util.CoreConfigFlow
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,6 +26,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 import kotlin.time.Clock
 
 class AgentCactus(
@@ -62,7 +64,7 @@ class AgentCactus(
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean
     ) {
-        logger.i { "CactusAgent received input: $input" }
+        logger.i { "CactusAgent received input: ${if (get<CoreConfigFlow>().value.obfuscateSensitiveLogs) "[${input.length} chars redacted]" else input}" }
 
         agentMutex.withLock {
             initializeIfNeeded()

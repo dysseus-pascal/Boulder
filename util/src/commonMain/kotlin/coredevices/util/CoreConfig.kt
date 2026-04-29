@@ -90,6 +90,7 @@ data class CoreConfig(
     val regularSyncInterval: Duration = 6.hours,
     val weatherSyncInterval: Duration = 1.hours,
     val preferHealthTab: Boolean = true,
+    val obfuscateSensitiveLogs: Boolean = true,
 )
 
 @Serializable

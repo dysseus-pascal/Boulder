@@ -1446,6 +1446,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                 )
                             )
                         )
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                obfuscateSensitiveLogs = !it
+                            )
+                        )
                     },
                 ),
                 basicSettingsToggleItem(

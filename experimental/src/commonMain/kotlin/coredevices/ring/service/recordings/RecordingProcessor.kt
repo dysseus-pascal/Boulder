@@ -155,14 +155,14 @@ class RecordingProcessor(
                 recordingEntryId = recordingEntryId,
                 messageCount = it.size
             ))
-            logger.d { "Agent conversation updated, ${it.size} messages:\n${it.joinToString("\n") { it.role.toString() + ": " + it.content }}" }
+            logger.d { "Agent conversation updated, ${it.size} messages:\n${if (coreConfigFlow.value.obfuscateSensitiveLogs) "[content redacted]" else it.joinToString("\n") { it.role.toString() + ": " + it.content }}" }
             updateConversation(localRecordingId, it)
             if (recordingEntryId != null && !updatedMessageId) {
                 val userMessageId = conversationMessageDao.getLastMessageForRecordingByRole(
                     localRecordingId,
                     MessageRole.user
                 ).firstOrNull()?.id
-                logger.d { "User message ID for recording entry update: $userMessageId\nconv: ${conversationMessageDao.getMessagesForRecording(localRecordingId)}" }
+                logger.d { "User message ID for recording entry update: $userMessageId\nconv: ${if (coreConfigFlow.value.obfuscateSensitiveLogs) "[content redacted]" else conversationMessageDao.getMessagesForRecording(localRecordingId)}" }
                 userMessageId?.let {
                     updateRecordingEntryMessage(recordingEntryId, it)
                     updatedMessageId = true

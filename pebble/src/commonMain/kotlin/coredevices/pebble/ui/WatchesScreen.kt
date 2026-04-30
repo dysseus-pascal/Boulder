@@ -1002,10 +1002,6 @@ fun PebbleDevice.stateText(
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion}"
     }
-    val btClassicText = when {
-        this is ActiveDevice && usingBtClassic -> " (BT Classic)"
-        else -> ""
-    }
     val stateText = when (this) {
         is ConnectedPebbleDevice -> "Connected$installingState"
         is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$installingState"
@@ -1026,7 +1022,7 @@ fun PebbleDevice.stateText(
         is DisconnectingPebbleDevice -> "Disconnecting"
         else -> "Unknown ($this)"
     }
-    return "$stateText$btClassicText"
+    return stateText
 }
 
 private fun PebbleDevice.isActive(): Boolean = when (this) {

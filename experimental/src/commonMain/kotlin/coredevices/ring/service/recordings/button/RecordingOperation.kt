@@ -1,6 +1,7 @@
 package coredevices.ring.service.recordings.button
 
 import co.touchlab.kermit.Logger
+import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
@@ -29,7 +30,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 interface RecordingOperation {
     suspend fun run(handle: RecordingProcessingQueue.TaskHandle? = null)
@@ -54,6 +58,18 @@ open class DefaultRecordingOperation(
     private val recordingProcessor: RecordingProcessor by inject()
     private val ringTransferRepository: RingTransferRepository by inject()
     private val recordingBackgroundScope: RecordingBackgroundScope by inject()
+    private var lastNotEnoughMemoryNotif: Instant? = null
+
+    fun sendNotEnoughMemoryNotification() {
+        val now = Clock.System.now()
+        if (lastNotEnoughMemoryNotif == null || now - lastNotEnoughMemoryNotif!! > 5.minutes) {
+            NotifierManager.getLocalNotifier().notify {
+                title = "Low Memory Warning"
+                body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
+            }
+            lastNotEnoughMemoryNotif = now
+        }
+    }
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         val entryId = withContext(Dispatchers.IO) {
@@ -160,6 +176,9 @@ open class DefaultRecordingOperation(
                 )
                 throw RecoverableTaskException("Network error during transcription", e)
             } catch (e: Exception) {
+                if (e is TranscriptionException.NotEnoughMemory) {
+                    sendNotEnoughMemoryNotification()
+                }
                 trace.markEvent("transcription_fail", TraceEventData.TranscriptionFail(
                     recordingId = recordingId,
                     recordingEntryId = entryId,

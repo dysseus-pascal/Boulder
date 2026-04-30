@@ -79,7 +79,7 @@ class CactusTranscriptionService(
         }
         if (freeMemory < PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB) {
             logger.e { "Low free memory ($freeMemory MB), skipping local transcription" }
-            throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = sttConfig.value.modelName)
+            throw TranscriptionException.NotEnoughMemory(modelUsed = sttConfig.value.modelName)
         }
         val callerJob = kotlin.coroutines.coroutineContext[Job]
         val completionHandle = callerJob?.invokeOnCompletion { cause ->

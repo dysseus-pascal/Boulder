@@ -20,3 +20,9 @@ internal actual fun exerciseWriteTypes(): List<HealthDataType> {
         ),
     )
 }
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun supportsSleepWriting(): Boolean {
+    val version = NSProcessInfo.processInfo.operatingSystemVersion.useContents { majorVersion }
+    return version >= 16
+}

@@ -12,3 +12,5 @@ internal actual fun exerciseWriteTypes(): List<HealthDataType> = listOf(
         runningSpeed = false,
     ),
 )
+
+internal actual fun supportsSleepWriting(): Boolean = true

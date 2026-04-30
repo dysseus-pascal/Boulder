@@ -29,6 +29,8 @@ import kotlin.time.Instant
 
 internal expect fun exerciseWriteTypes(): List<HealthDataType>
 
+internal expect fun supportsSleepWriting(): Boolean
+
 class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
@@ -202,7 +204,7 @@ class PlatformHealthSync(
         var maxSyncedTimestamp = lastTimestamp
 
         // Write sleep sessions separately so exercise failures don't block sleep
-        val sleepRecords = buildSleepSessions(sleepOverlays)
+        val sleepRecords = if (supportsSleepWriting()) buildSleepSessions(sleepOverlays) else emptyList()
         if (sleepRecords.isNotEmpty()) {
             logger.v { "Writing ${sleepRecords.size} sleep sessions to health platform" }
             val result = healthManager.writeData(sleepRecords)

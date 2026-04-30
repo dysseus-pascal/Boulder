@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import co.touchlab.kermit.Logger
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.Permission
+import io.rebble.libpebblecommon.connection.AppContext
 import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
 
@@ -46,6 +47,17 @@ actual fun getIPAddress(): Pair<String?, String?> {
         .map { it.hostAddress?.substringBefore("%") }
         .firstOrNull()
     return Pair(v4, v6)
+}
+
+actual fun openSystemBluetoothSettings(appContext: AppContext) {
+    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    try {
+        appContext.context.startActivity(intent)
+    } catch (e: Exception) {
+        Logger.withTag("openSystemBluetoothSettings").e(e) { "Failed to open Bluetooth settings" }
+    }
 }
 
 @Composable

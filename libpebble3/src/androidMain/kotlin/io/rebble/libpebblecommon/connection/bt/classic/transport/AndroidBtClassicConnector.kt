@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.util.UUID
 
 class AndroidBtClassicConnector(
@@ -44,7 +45,12 @@ class AndroidBtClassicConnector(
             return ClassicConnectionResult.Failure
         }
         socket = btSocket
-        btSocket.connect()
+        try {
+            btSocket.connect()
+        } catch (e: IOException) {
+            logger.w(e) { "Failed to connect BT classic socket" }
+            return ClassicConnectionResult.Failure
+        }
 
         connectionCoroutineScope.launch(Dispatchers.IO) {
             val data = ByteArray(500)
@@ -71,7 +77,7 @@ class AndroidBtClassicConnector(
     }
 
     override suspend fun disconnect() {
-        _disconnected.complete(ConnectionFailureReason.ClassicConnectionFailed)
+        _disconnected.complete(ConnectionFailureReason.ClassicDisconnected)
         socket?.close()
     }
 

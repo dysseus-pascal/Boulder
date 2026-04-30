@@ -1032,6 +1032,8 @@ private fun PebbleDevice.isActive(): Boolean = when (this) {
 
 expect fun postTestNotification(appContext: AppContext)
 
+expect fun openSystemBluetoothSettings(appContext: AppContext)
+
 expect fun ImageBitmap.toPngBytes(): ByteArray
 
 @Composable
@@ -1797,6 +1799,8 @@ fun WatchDetails(
     allowedToConnect: Boolean,
     navBarNav: NavBarNav,
 ) {
+    val appContext: AppContext = koinInject()
+    val pebbleFeatures = koinInject<PebbleFeatures>()
     val firmwareUpdateState = remember(watch) {
         if (watch is ConnectedPebble.Firmware) {
             watch.firmwareUpdateState
@@ -1938,26 +1942,26 @@ fun WatchDetails(
             )
         }
     }
-    if (watch !is CommonConnectedDevice && watch.connectionFailureInfo?.reason == ConnectionFailureReason.CreateBondFailed) {
-        var showPairingErrorDialog by remember { mutableStateOf(false) }
-        if (showPairingErrorDialog) {
-            AlertDialog(
-                onDismissRequest = { showPairingErrorDialog = false },
-                title = { Text("Error Pairing") },
-                text = { Text("Please go to system bluetooth settings, and unpair this device") },
-                confirmButton = {
-                    TextButton(onClick = { showPairingErrorDialog = false }) { Text("OK") }
-                }
-            )
-        }
-        PebbleElevatedButton(
-            text = "Error Pairing",
-            icon = Icons.Default.Error,
-            onClick = {
-                showPairingErrorDialog = true
-            },
-            primaryColor = true,
-            modifier = Modifier.padding(vertical = 5.dp),
+    val failureInfo = watch.connectionFailureInfo
+    if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.CreateBondFailed) {
+        ConnectionFailureGuidanceButton(
+            appContext = appContext,
+            pebbleFeatures = pebbleFeatures,
+            buttonText = "Error Pairing",
+            dialogTitle = "Error Pairing",
+            dialogText = "Please go to system bluetooth settings, and unpair this device.",
+        )
+    }
+    if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.ClassicConnectionFailed && failureInfo.times >= 5) {
+        ConnectionFailureGuidanceButton(
+            appContext = appContext,
+            pebbleFeatures = pebbleFeatures,
+            buttonText = "Connection failing",
+            dialogTitle = "Can't connect to watch",
+            dialogText = "Make sure your watch is powered on and nearby. " +
+                    "If it still won't connect, open Bluetooth settings, " +
+                    "remove (\"Forget\") this watch, and also unpair the phone " +
+                    "in watch settings (Settings > Bluetooth), then accept the new pairing request.",
         )
     }
     Row {
@@ -1990,6 +1994,45 @@ fun WatchDetails(
         }
         WatchMenu(watch, navBarNav)
     }
+}
+
+@Composable
+private fun ConnectionFailureGuidanceButton(
+    appContext: AppContext,
+    pebbleFeatures: PebbleFeatures,
+    buttonText: String,
+    dialogTitle: String,
+    dialogText: String,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val canDeepLink = pebbleFeatures.supportsLinkingToOsBtSettings()
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(dialogTitle) },
+            text = { Text(dialogText) },
+            confirmButton = {
+                if (canDeepLink) {
+                    TextButton(onClick = {
+                        openSystemBluetoothSettings(appContext)
+                        showDialog = false
+                    }) { Text("Open Bluetooth settings") }
+                } else {
+                    TextButton(onClick = { showDialog = false }) { Text("OK") }
+                }
+            },
+            dismissButton = if (canDeepLink) {
+                { TextButton(onClick = { showDialog = false }) { Text("Cancel") } }
+            } else null,
+        )
+    }
+    PebbleElevatedButton(
+        text = buttonText,
+        icon = Icons.Default.Error,
+        onClick = { showDialog = true },
+        primaryColor = true,
+        modifier = Modifier.padding(vertical = 5.dp),
+    )
 }
 
 fun Int.batteryIcon() = when {

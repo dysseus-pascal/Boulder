@@ -63,6 +63,7 @@ enum class ConnectionFailureReason {
     NotAnError_NeverAttmpedConnection,
     TimeoutInitializingPpog,
     ClassicConnectionFailed,
+    ClassicDisconnected,
 }
 
 sealed class PebbleConnectionResult {

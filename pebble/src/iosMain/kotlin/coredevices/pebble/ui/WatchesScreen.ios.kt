@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.Permission
+import io.rebble.libpebblecommon.connection.AppContext
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import kotlinx.cinterop.ByteVar
@@ -113,6 +114,9 @@ actual fun getIPAddress(): Pair<String?, String?> {
             freeifaddrs(ifap.value)
         }
     }
+}
+
+actual fun openSystemBluetoothSettings(appContext: AppContext) {
 }
 
 @Composable

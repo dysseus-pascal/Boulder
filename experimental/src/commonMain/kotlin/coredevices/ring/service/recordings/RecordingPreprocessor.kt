@@ -1,12 +1,10 @@
 package coredevices.ring.service.recordings
 
-import coredevices.util.KrispAudioProcessor
 import coredevices.ring.storage.RecordingStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
-import kotlinx.io.EOFException
 import kotlinx.io.readShortLe
 import kotlinx.io.writeShortLe
 import kotlin.math.sqrt
@@ -24,7 +22,7 @@ class RecordingPreprocessor(
     }
 
     suspend fun preprocess(fileId: String) {
-        withContext(Dispatchers.IO) {
+        /*withContext(Dispatchers.IO) {
             val audioProcessor = KrispAudioProcessor()
             audioProcessor.init()
             audioProcessor.use {
@@ -62,19 +60,33 @@ class RecordingPreprocessor(
                     }
                 }
             }
+        }*/
+
+        withContext(Dispatchers.IO) {
+            val (fileSource, info) = recordingStorage.openRecordingSource(fileId)
+            val source = Buffer()
+            fileSource.transferTo(source)
+
+            val allSamples = readAllSamples(source)
+            val frameDurationMs = 20
+            val gain = withContext(Dispatchers.Default) {
+                computeGain(allSamples, (info.cachedMetadata.sampleRate * frameDurationMs) / 1000)
+            }
+            recordingStorage.openRecordingSink(fileId, info.cachedMetadata.sampleRate, info.cachedMetadata.mimeType).use { sink ->
+                for (s in allSamples) {
+                    val amplified = (s * gain)
+                        .toInt()
+                        .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                        .toShort()
+                    sink.writeShortLe(amplified)
+                }
+            }
         }
     }
 
     private fun readAllSamples(source: Buffer): ShortArray {
-        val samples = mutableListOf<Short>()
-        while (true) {
-            try {
-                samples.add(source.readShortLe())
-            } catch (_: EOFException) {
-                break
-            }
-        }
-        return samples.toShortArray()
+        val count = (source.size / 2).toInt()
+        return ShortArray(count) { source.readShortLe() }
     }
 
     private fun computeGain(samples: ShortArray, frameSize: Int): Float {

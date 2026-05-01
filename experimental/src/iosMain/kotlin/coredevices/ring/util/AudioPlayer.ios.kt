@@ -30,13 +30,27 @@ import platform.AVFAudio.AVAudioPCMFormatInt16
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioPlayerDelegateProtocol
 import platform.AVFAudio.AVAudioPlayerNode
+import platform.AVFAudio.AVAudioSession
+import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.Foundation.NSData
 import platform.Foundation.NSError
 import platform.posix.memcpy
 import kotlinx.io.readByteArray
+import platform.AVFAudio.setActive
 import platform.Foundation.create
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
+
+private fun activateAudioSession() = memScoped {
+    val err = alloc<ObjCObjectVar<NSError?>>()
+    AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryPlayback, error = err.ptr)
+    AVAudioSession.sharedInstance().setActive(true, error = err.ptr)
+}
+
+private fun deactivateAudioSession() = memScoped {
+    val err = alloc<ObjCObjectVar<NSError?>>()
+    AVAudioSession.sharedInstance().setActive(false, error = err.ptr)
+}
 
 fun AudioEncoding.toAVAudioFormat(sampleRate: Int, channels: Int = 1) = when (this) {
     AudioEncoding.PCM_16BIT -> AVAudioFormat(
@@ -79,6 +93,7 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
                 avAudioEngine.attachNode(avAudioPlayerNode)
                 avAudioEngine.connect(avAudioPlayerNode, avAudioEngine.outputNode, avFormat)
                 avAudioEngine.prepare()
+                activateAudioSession()
                 val (result, error) = memScoped {
                     val error = allocPointerTo<ObjCObjectVar<NSError?>>()
                     val result = avAudioEngine.startAndReturnError(error.value)
@@ -120,6 +135,7 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
             it.invokeOnCompletion {
                 avAudioPlayerNode.stop()
                 avAudioEngine.stop()
+                deactivateAudioSession()
                 playbackState.value = PlaybackState.Stopped
             }
         }
@@ -139,6 +155,7 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
                 val error = alloc<ObjCObjectVar<NSError?>>()
                 AVAudioPlayer(data = nsData, error = error.ptr)
             }
+            activateAudioSession()
             player.setVolume(AUDIO_PLAYER_VOLUME)
             player.prepareToPlay()
             playbackState.value = PlaybackState.Playing(0.0)
@@ -156,6 +173,8 @@ actual class AudioPlayer actual constructor() : AutoCloseable {
                 player.play()
             }
             playbackState.value = PlaybackState.Stopped
+        }.also {
+            it.invokeOnCompletion { deactivateAudioSession() }
         }
     }
 

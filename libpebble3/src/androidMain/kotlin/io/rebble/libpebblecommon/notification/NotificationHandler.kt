@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import kotlin.coroutines.cancellation.CancellationException
+import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -159,20 +160,18 @@ class NotificationHandler(
                 return null
             }
         }
-        val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
-        val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
         val appProperties = NotificationProperties.lookup(sbn.packageName)
-        val showLocalOnlyNotifications = notificationConfig.value.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
-        val decision = when {
-            sbn.notification.isLocalOnly() && !showLocalOnlyNotifications -> NotSentLocalOnly
-            anyContactMuted -> NotSendContactMuted
-            !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
-            !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
-            checkRuleFiltered(appEntry, notification) -> NotSentRuleFiltered
-            inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
-            !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
-            else -> result.decision
-        }
+        val decision = decideNotification(
+            notification = notification,
+            appEntry = appEntry,
+            channel = channel,
+            appProperties = appProperties,
+            inflightNotifications = inflightNotifications.values,
+            notificationConfig = notificationConfig.value,
+            isLocalOnly = sbn.notification.isLocalOnly(),
+            isRuleFiltered = { checkRuleFiltered(appEntry, notification) },
+            screenIsOnAndUnlocked = ::screenIsOnAndUnlocked,
+        )
         val storeNotification = when {
             notificationConfig.value.storeNotifiationsForDays == 0 -> false
             notificationConfig.value.storeDisabledNotifications -> true
@@ -422,6 +421,33 @@ Processed as:
 
 private fun LibPebbleNotification.isPebbleTestNotification(): Boolean = packageName == "coredevices.coreapp" &&
         title == "Test Notification"
+
+internal suspend fun decideNotification(
+    notification: LibPebbleNotification,
+    appEntry: NotificationAppItem,
+    channel: ChannelItem?,
+    appProperties: NotificationProperties?,
+    inflightNotifications: Collection<LibPebbleNotification>,
+    notificationConfig: NotificationConfig,
+    isLocalOnly: Boolean,
+    isRuleFiltered: suspend () -> Boolean,
+    screenIsOnAndUnlocked: () -> Boolean,
+): NotificationDecision {
+    val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
+    val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
+    val showLocalOnlyNotifications = notificationConfig.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
+    val allowDuplicates = appProperties?.allowDuplicates ?: false
+    return when {
+        isLocalOnly && !showLocalOnlyNotifications -> NotSentLocalOnly
+        anyContactMuted -> NotSendContactMuted
+        !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
+        !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+        isRuleFiltered() -> NotSentRuleFiltered
+        !allowDuplicates && inflightNotifications.any { it.displayDataEquals(notification) } -> NotSentDuplicate
+        !notificationConfig.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
+        else -> SendToWatch
+    }
+}
 
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"

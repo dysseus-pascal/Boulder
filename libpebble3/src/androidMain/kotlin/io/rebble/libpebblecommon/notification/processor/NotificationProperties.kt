@@ -5,10 +5,11 @@ import io.rebble.libpebblecommon.timeline.TimelineColor
 
 enum class NotificationProperties(
     val pkgName: String,
-    val color: TimelineColor?,
-    val icon: TimelineIcon?,
+    val color: TimelineColor? = null,
+    val icon: TimelineIcon? = null,
     val addShowsUserInterfaceActions: Boolean = false,
     val showLocalOnlyNotifications: Boolean = false,
+    val allowDuplicates: Boolean = false,
 ) {
     Gmail(pkgName = "com.google.android.gm", color = TimelineColor.Red, icon = TimelineIcon.NotificationGmail),
     GoogleQuickSearchBox(pkgName = "com.google.android.googlequicksearchbox", color = TimelineColor.BlueMoon, icon = null),
@@ -77,6 +78,7 @@ enum class NotificationProperties(
     Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
     WSJ(pkgName = "wsj.reader_sp", color = TimelineColor.DarkGray, icon = TimelineIcon.NewsEvent),
     GooglePhoneDialer(pkgName = "com.google.android.dialer", color = TimelineColor.BlueMoon, icon = TimelineIcon.IncomingPhoneCall),
+    Ring(pkgName = "com.ringapp", allowDuplicates = true)
     ;
 
     companion object {

@@ -13,13 +13,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.OpenInNewOff
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.SpeakerNotesOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -34,11 +47,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.LibIndex
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.ring.ui.components.chat.ChatBubble
+import coredevices.ring.ui.components.chat.ResponseBubble
+import coredevices.ring.ui.components.chat.SemanticResultActionTaken
+import coredevices.ring.ui.components.chat.SemanticResultIcon
+import coredevices.ring.ui.components.feed.AnimatedAudioBars
+import coredevices.ring.ui.components.feed.AudioBars
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
@@ -48,6 +71,8 @@ import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.ui.SettingsIds
 import coredevices.pebble.ui.SnackbarDisplay
 import coredevices.pebble.ui.rememberSettingsItemsState
+import coredevices.ring.service.RingEvent
+import coredevices.ring.service.RingSync
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.screens.settings.AuthorizedIntegrations
 import coredevices.ring.ui.screens.settings.IndexDeviceListItem
@@ -56,6 +81,7 @@ import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import kotlin.time.Clock
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -243,9 +269,8 @@ fun RingOnboardingScreen(
 
                     SectionDivider()
 
-                    Text(
-                        "You can configure more in Settings later.",
-                        textAlign = TextAlign.Center,
+                    RingDemo(
+                        nav = coreNav,
                     )
 
                     SectionDivider()
@@ -255,6 +280,180 @@ fun RingOnboardingScreen(
                         onClick = { coreNav.goBack() },
                         primaryColor = true,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RingDemo(
+    modifier: Modifier = Modifier,
+    nav: CoreNav
+) {
+    val ringSync = koinInject<RingSync>()
+    val ringTransferDao = koinInject<RingTransferDao>()
+    val latestRingEvent by ringSync.ringEvents.collectAsStateWithLifecycle(null)
+    val latestTransfer by ringTransferDao.getLatestTransferFeedItemFlow().collectAsStateWithLifecycle(null)
+
+    val sessionStart = remember { Clock.System.now() }
+    val transfer = latestTransfer?.ringTransfer?.takeIf { it.createdAt >= sessionStart }
+    val feedItem = latestTransfer?.feedItem?.takeIf { transfer != null }
+
+    @Composable
+    fun NotWorkingText() {
+        Row(
+            modifier = Modifier.clickable {
+                nav.navigateTo(CommonRoutes.BugReport(
+                    pebble = false
+                ))
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Not working? Report a bug", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = "Click to open bug report",
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
+            )
+        }
+    }
+
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            when {
+                transfer == null -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Try it out! Hold the button and speak into the ring",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    NotWorkingText()
+                }
+
+                transfer.status == RingTransferStatus.Started -> {
+                    Text(
+                        "Receiving recording...",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val progress = (latestRingEvent as? RingEvent.Transfer.InProgress)
+                        ?.takeIf { it.transferId == transfer.id }
+                        ?.progress
+                    if (progress != null) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    NotWorkingText()
+                }
+
+                transfer.status == RingTransferStatus.Discarded -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Recording too short! Try holding the button a bit longer.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                }
+
+                transfer.status == RingTransferStatus.Failed -> {
+                    Icon(
+                        Icons.Default.Error,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Transfer failed",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    NotWorkingText()
+                }
+
+                else -> {
+                    // Completed — show feed-style chat bubbles
+                    val entryStatus = feedItem?.entry?.status
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ChatBubble(
+                            modifier = Modifier.align(Alignment.End).padding(start = 50.dp)
+                        ) {
+                            when {
+                                feedItem == null || entryStatus == RecordingEntryStatus.pending ->
+                                    AnimatedAudioBars()
+                                entryStatus == RecordingEntryStatus.transcription_error ->
+                                    AudioBars(randomSeed = feedItem.id.hashCode())
+                                else ->
+                                    Text(feedItem.entry?.transcription ?: "...")
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        ResponseBubble(
+                            modifier = Modifier.align(Alignment.Start),
+                            leading = {
+                                val result = feedItem?.semanticResult
+                                when {
+                                    result != null ->
+                                        SemanticResultIcon(result, modifier = Modifier.size(12.dp))
+                                    entryStatus == RecordingEntryStatus.transcription_error ->
+                                        Icon(Icons.Outlined.SpeakerNotesOff, null, Modifier.size(12.dp))
+                                    else ->
+                                        Icon(Icons.Outlined.HourglassEmpty, null, Modifier.size(12.dp))
+                                }
+                            }
+                        ) {
+                            when {
+                                feedItem?.semanticResult != null ->
+                                    SemanticResultActionTaken(feedItem.semanticResult!!)
+                                entryStatus == RecordingEntryStatus.transcription_error ->
+                                    Text("No action taken")
+                                else ->
+                                    Text("Thinking...")
+                            }
+                        }
+                    }
                 }
             }
         }

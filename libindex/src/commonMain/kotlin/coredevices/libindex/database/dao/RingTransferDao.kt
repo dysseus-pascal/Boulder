@@ -90,6 +90,14 @@ interface RingTransferDao {
     """)
     fun getTransferWithFeedItemByIdFlow(transferId: Long): Flow<RingTransferFeedItem?>
 
+    @Transaction
+    @Query("""
+        SELECT * FROM RingTransferFeedItem
+        ORDER BY COALESCE(feedItem_localTimestamp, transfer_createdAt) DESC
+        LIMIT 1
+    """)
+    fun getLatestTransferFeedItemFlow(): Flow<RingTransferFeedItem?>
+
     @Query("SELECT * FROM RingTransfer WHERE recordingId = :recordingId")
     suspend fun getByRecordingId(recordingId: Long): List<RingTransfer>
 }

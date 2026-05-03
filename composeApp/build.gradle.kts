@@ -224,6 +224,8 @@ kotlin {
             implementation(libs.kmpio)
             implementation(project(":libpebble3"))
             implementation(project(":libindex"))
+            implementation(project(":index-ai"))
+            api(project(":mcp"))
             implementation(libs.health.kmp)
         }
     }

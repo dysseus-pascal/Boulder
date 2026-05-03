@@ -1,6 +1,8 @@
 package coredevices.coreapp.ui.screens
 
+import CommonRoutes
 import CoreNav
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,16 +23,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.OpenInNewOff
+import androidx.compose.material.icons.filled.MobileOff
+import androidx.compose.material.icons.filled.Shower
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.SpeakerNotesOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -40,15 +50,23 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,23 +74,23 @@ import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.LibIndex
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.libindex.ui.components.Press
+import coredevices.libindex.ui.components.PressPatternDot
+import coredevices.pebble.ui.SettingsIds
+import coredevices.pebble.ui.SnackbarDisplay
+import coredevices.pebble.ui.rememberSettingsItemsState
+import coredevices.ring.data.NoteShortcutType
+import coredevices.ring.database.MusicControlMode
+import coredevices.ring.database.Preferences
+import coredevices.ring.database.SecondaryMode
+import coredevices.ring.service.RingEvent
+import coredevices.ring.service.RingSync
 import coredevices.ring.ui.components.chat.ChatBubble
 import coredevices.ring.ui.components.chat.ResponseBubble
 import coredevices.ring.ui.components.chat.SemanticResultActionTaken
 import coredevices.ring.ui.components.chat.SemanticResultIcon
 import coredevices.ring.ui.components.feed.AnimatedAudioBars
 import coredevices.ring.ui.components.feed.AudioBars
-import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.database.MusicControlMode
-import coredevices.ring.database.Preferences
-import coredevices.ring.database.SecondaryMode
-import coredevices.libindex.ui.components.Press
-import coredevices.libindex.ui.components.PressPatternDot
-import coredevices.pebble.ui.SettingsIds
-import coredevices.pebble.ui.SnackbarDisplay
-import coredevices.pebble.ui.rememberSettingsItemsState
-import coredevices.ring.service.RingEvent
-import coredevices.ring.service.RingSync
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.screens.settings.AuthorizedIntegrations
 import coredevices.ring.ui.screens.settings.IndexDeviceListItem
@@ -81,11 +99,11 @@ import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.Platform
 import coredevices.util.isAndroid
-import kotlin.time.Clock
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import theme.onboardingScheme
+import kotlin.time.Clock
 
 @Composable
 fun RingOnboardingScreen(
@@ -103,6 +121,8 @@ fun RingOnboardingScreen(
         navBarNav = null,
         snackbarDisplay = snackbarDisplay,
     )
+
+    var step by remember { mutableStateOf(0) }
 
     val rings by libIndex.rings.collectAsState()
     val ringPairedState = viewModel.ringPaired.collectAsStateWithLifecycle()
@@ -130,16 +150,37 @@ fun RingOnboardingScreen(
         )
     }
 
+    val scrollState = rememberScrollState()
+    LaunchedEffect(step) { scrollState.scrollTo(0) }
+
     MaterialTheme(colorScheme = onboardingScheme) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            floatingActionButton = {
+                if (step == 0 && scrollState.canScrollForward) {
+                    FloatingActionButton(
+                        onClick = { scope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll down")
+                    }
+                }
+            },
         ) { windowInsets ->
             Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(20.dp)
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(scrollState),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    Crossfade(targetState = step, label = "onboarding_step") { currentStep ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                    when (currentStep) {
+                    0 -> RingFaqStep(onContinue = { step = 1 })
+                    else -> {
+
                     Text(
                         text = "Get Started!",
                         fontSize = 32.sp,
@@ -280,6 +321,11 @@ fun RingOnboardingScreen(
                         onClick = { coreNav.goBack() },
                         primaryColor = true,
                     )
+
+                    } // else
+                    } // when
+                    } // Column (crossfade)
+                    } // Crossfade
                 }
             }
         }
@@ -458,6 +504,116 @@ private fun RingDemo(
             }
         }
     }
+}
+
+@Composable
+private fun RingFaqStep(onContinue: () -> Unit) {
+    Text(
+        text = "Before you begin",
+        fontSize = 28.sp,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "A few quick things to know about your Index 01.",
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Spacer(Modifier.height(24.dp))
+
+    FaqCard(
+        icon = Icons.Default.BugReport,
+        question = "What if I find a bug?",
+        answer = "Please report it! Functionality might break as we continue to develop features, but if you report bugs (Get Help -> Report a bug in Settings) we'll fix it as soon as we can.",
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.Shower,
+        question = "Can I wear it in the shower?",
+        answer = "We don't recommend it. Index 01 is splash resistant but not waterproof especially in hot or soapy water."
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.Mic,
+        question = "How do I use it?",
+        answer = "Hold the button, speak your note or request, then release and forget - or see the notification on your watch.",
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Outlined.Lightbulb,
+        question = "What can I ask?",
+        answer = "Notes, reminders, timers, alarms, quick questions — the AI on your phone figures out what to do and replies in the notification.",
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.Bluetooth,
+        question = "Is it always listening?",
+        answer = "Nope! Index 01 only listens while you're holding the button. When you release, it'll be processed by your phone if in range.",
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.MobileOff,
+        question = "What if I want to ditch my phone?",
+        answer = buildAnnotatedString {
+            append("Index 01 can hold up to 5 minutes of recordings and sleeps after 30 minutes when the phone isn't around. It'll sync to your phone when you're back in range, ")
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                append("just press the button to wake it!")
+            }
+        },
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.BatteryChargingFull,
+        question = "How do I charge it?",
+        answer = "You don't! Index 01 will last around two years with daily use.",
+    )
+    Spacer(Modifier.height(10.dp))
+    FaqCard(
+        icon = Icons.Default.WifiOff,
+        question = "Can it be used while offline / in bad cell service?",
+        answer = "You can opt to use local speech recognition and a local AI model, so it can work without a connection. We recommend setting it up as cloud with a local fallback for the best experience",
+    )
+    Spacer(Modifier.height(24.dp))
+    PebbleElevatedButton(
+        text = "Continue",
+        onClick = onContinue,
+        primaryColor = true,
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun FaqCard(icon: ImageVector, question: String, answer: AnnotatedString) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp).padding(top = 2.dp),
+                tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(question, style = MaterialTheme.typography.titleSmallEmphasized)
+                Spacer(Modifier.height(4.dp))
+                Text(answer, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FaqCard(icon: ImageVector, question: String, answer: String) {
+    FaqCard(icon, question, buildAnnotatedString { append(answer) })
 }
 
 @Composable

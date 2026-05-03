@@ -188,6 +188,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
@@ -244,6 +245,14 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         .collectAsState(initial = false)
     var showIndexAlreadyPairedDialog by remember { mutableStateOf(false) }
     var fabInfoDialog by remember { mutableStateOf<FabInfo?>(null) }
+    var showRingWakeHint by remember { mutableStateOf(false) }
+    LaunchedEffect(scanningStatus) {
+        showRingWakeHint = false
+        if (scanningStatus == ScanningStatus.ScanningRing) {
+            delay(15_000)
+            showRingWakeHint = true
+        }
+    }
 
     suspend fun ensureScanPermission(uiContext: PlatformUiContext): Boolean {
         if (requiredScanPermission != null && permissionRequester.missingPermissions.value.contains(
@@ -494,6 +503,22 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         ) {
                             Text(
                                 text = "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
+                                modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    if (scanningStatus == ScanningStatus.ScanningRing && showRingWakeHint && rings.isEmpty()) {
+                        ElevatedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 6.dp
+                            )
+                        ) {
+                            Text(
+                                text = "Can't find your Index 01? Press the button on the ring to wake it up.",
                                 modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
                                 textAlign = TextAlign.Center,
                             )

@@ -65,9 +65,7 @@ data class RunResult(val statusCode: HttpStatusCode, val response: RunResponse?)
 @Serializable
 private data class RunRequestData(
     val device_tool_specifications: List<ToolDeclaration>,
-    val input: String?,
     val conversation_history: List<ConversationMessageDocument>,
-    val timezone: String,
     val additional_context: String,
     val search_mode: Boolean = false,
 )
@@ -85,7 +83,6 @@ interface NenyaClient {
      * @return The result of the run.
      */
     suspend fun run(
-        input: String?,
         conversationHistory: List<ConversationMessageDocument> = emptyList(),
         toolSpecs: List<ToolDeclaration> = emptyList(),
         additionalContext: String = "",
@@ -99,7 +96,6 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
     private val logger = Logger.withTag("NenyaClientImpl")
 
     override suspend fun run(
-        input: String?,
         conversationHistory: List<ConversationMessageDocument>,
         toolSpecs: List<ToolDeclaration>,
         additionalContext: String,
@@ -110,16 +106,14 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
         var resp: HttpResponse? = null
         while (retries < NenyaClient.RETRY_COUNT) {
             resp = try {
-                client.post("$baseUrl/run") {
+                client.post("$baseUrl/v2/run") {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     firebaseAuth()
                     setBody(
                         RunRequestData(
                             device_tool_specifications = toolSpecs,
-                            input = input,
                             conversation_history = conversationHistory,
-                            timezone = timezone.id,
                             additional_context = additionalContext,
                             search_mode = searchMode
                         )

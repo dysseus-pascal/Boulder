@@ -51,6 +51,8 @@ Create a note with the user's input unless they specify a different action, do n
 Eagerly run tools to assist the user, including running multiple tools in succession to achieve an overall goal.
 Avoid asking follow-up questions unless necessary.
 Always lean towards creating a note, for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
+Use a single tool at a time, and wait for the result before deciding what to do next.
+Only take one action from a user request, for example don't create multiple reminders if the user only asked for one.
 """
         private const val MAX_TOOL_ITERATIONS = 3
     }
@@ -111,7 +113,6 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
             }
         }
         var resp = nenyaClient.run(
-            null,
             conversationHistory = conversation.first(),
             toolSpecs = toolDeclarations,
             additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty()
@@ -159,8 +160,8 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
             )
             resp = try {
                 nenyaClient.run(
-                    null,
                     conversation.first(),
+                    additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty(),
                     toolSpecs = toolDeclarations,
                 )
             } catch (e: IOException) {
@@ -188,7 +189,6 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         ))
         val resp = try {
             nenyaClient.run(
-                null,
                 conversationHistory = conversation.first().filter {
                     it.role != MessageRole.tool || it.tool_call_id != null // filter out tool messages that are not tool call responses (e.g. fake search completion message above)
                 },

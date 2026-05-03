@@ -1300,7 +1300,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     items = CactusSTTMode.entries,
                     selectedItem = coreConfig.sttConfig.mode,
                     onItemSelected = {
-                        if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
+                        if (it != CactusSTTMode.LocalOnly && coreUser == null ) {
+                            snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
+                            showSignInDialog = true
+                        } else if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
                             pendingSTTModeDialog = it
                         } else {
                             coreConfigHolder.update(

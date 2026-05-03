@@ -20,6 +20,7 @@ import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.agent.AgentAuthenticationException
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
@@ -210,13 +211,24 @@ class RecordingProcessingQueue(
         } catch (e: Exception) {
             logger.e(e) { "Preprocessing failed for file $fileId: ${e.message}, skipping preprocessing" }
         }
-        val operation = recordingOperationFactory.createForButtonSequence(
-            recordingId = recordingId,
-            fileId = fileId,
-            transferId = transferId,
-            forcedNoteTool = ::forcedNoteTool,
-            sequence = buttonSequence?.parseAsButtonSequence()
-        )
+        val operation = try {
+            recordingOperationFactory.createForButtonSequence(
+                recordingId = recordingId,
+                fileId = fileId,
+                transferId = transferId,
+                forcedNoteTool = ::forcedNoteTool,
+                sequence = buttonSequence?.parseAsButtonSequence()
+            )
+        } catch (e: AgentAuthenticationException) {
+            logger.e(e) { "Creation of recording operation failed" }
+            withContext(Dispatchers.IO) {
+                recordingRepository.createFailedRecordingEntry(
+                    recordingId = recordingId,
+                    errorMessage = "Login required for cloud processing"
+                )
+            }
+            return
+        }
         operation.run(handle)
     }
 

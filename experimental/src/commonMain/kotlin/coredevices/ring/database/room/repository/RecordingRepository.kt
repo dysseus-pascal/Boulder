@@ -1,6 +1,8 @@
 package coredevices.ring.database.room.repository
 
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.database.room.RingDatabase
@@ -63,4 +65,14 @@ class RecordingRepository(
 
     suspend fun deleteAllLocalRecordings() =
         localRecordingDao.deleteAll()
+
+    suspend fun createFailedRecordingEntry(recordingId: Long, errorMessage: String) =
+        recordingEntryDao.insertRecordingEntry(
+            RecordingEntryEntity(
+                recordingId = recordingId,
+                status = RecordingEntryStatus.agent_error,
+                transcription = "Error: $errorMessage",
+                error = errorMessage
+            )
+        )
 }

@@ -52,7 +52,7 @@ interface DiscoveredIndexDevice: IndexDevice {
     suspend fun pair(): IndexPairingResult
 }
 
-interface InterviewedIndexDevice: IndexDevice {
+interface InterviewedIndexDevice: KnownIndexDevice {
     val firmwareVersion: String
     val serialNumber: String
     val updating: Boolean

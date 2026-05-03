@@ -1,51 +1,42 @@
 package coredevices.ring.ui.viewmodel
 
+import PlatformUiContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import coredevices.firestore.EncryptionInfo
+import coredevices.firestore.UsersDao
 import coredevices.indexai.data.entity.ConversationMessageEntity
-import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
-import coredevices.ring.api.NotionApi
+import coredevices.libindex.device.IndexDeviceManager
+import coredevices.libindex.device.InterviewedIndexDevice
+import coredevices.libindex.device.KnownIndexDevice
+import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
+import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.repository.RecordingRepository
-import PlatformUiContext
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
-import coredevices.firestore.EncryptionInfo
-import coredevices.firestore.UsersDao
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
-import coredevices.ring.agent.integrations.GTasksIntegration
-import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.storage.BackupZipWriter
 import coredevices.ring.storage.RecordingStorage
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import kotlinx.io.buffered
-import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
-import kotlinx.io.readByteArray
-import kotlinx.io.write
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.Platform
-import coredevices.util.isAndroid
 import coredevices.util.emailOrNull
+import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
@@ -53,23 +44,27 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.emptyFlow
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readByteArray
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlin.time.Instant
 
 @Serializable
 private data class BackupManifest(
@@ -93,7 +88,8 @@ class SettingsViewModel(
     private val recordingStorage: RecordingStorage,
     private val documentEncryptor: DocumentEncryptor,
     private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val gTasksIntegration: GTasksIntegration
+    private val gTasksIntegration: GTasksIntegration,
+    private val indexDeviceManager: IndexDeviceManager,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -118,12 +114,14 @@ class SettingsViewModel(
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
-    private val currentRing = ringSync.lastRing
+    private val currentRing = indexDeviceManager.rings.map {
+        it.firstOrNull { ring -> ring is KnownIndexDevice }
+    }
     val ringPaired = preferences.ringPaired
     private val _panicPending = MutableStateFlow(false)
     val panicPending = _panicPending.asStateFlow()
-    val currentRingFirmware = currentRing.flatMapLatest { it?.state ?: emptyFlow() }
-        .map { it?.firmwareVersion }
+    val currentRingFirmware = currentRing
+        .mapNotNull { (it as? InterviewedIndexDevice)?.firmwareVersion }
         .stateIn(
             viewModelScope,
             started = SharingStarted.Lazily,

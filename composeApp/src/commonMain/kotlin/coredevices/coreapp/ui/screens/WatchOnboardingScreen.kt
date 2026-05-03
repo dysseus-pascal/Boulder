@@ -366,7 +366,7 @@ fun SectionDivider() {
 }
 
 @Composable
-private fun SettingsItemsState?.Show(id: String) {
+fun SettingsItemsState?.Show(id: String) {
     if (this == null) {
         return
     }

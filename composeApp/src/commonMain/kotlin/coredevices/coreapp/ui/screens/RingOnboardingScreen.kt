@@ -23,12 +23,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +45,9 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.libindex.ui.components.Press
 import coredevices.libindex.ui.components.PressPatternDot
+import coredevices.pebble.ui.SettingsIds
+import coredevices.pebble.ui.SnackbarDisplay
+import coredevices.pebble.ui.rememberSettingsItemsState
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.screens.settings.AuthorizedIntegrations
 import coredevices.ring.ui.screens.settings.IndexDeviceListItem
@@ -50,6 +56,7 @@ import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import theme.onboardingScheme
@@ -62,6 +69,14 @@ fun RingOnboardingScreen(
     val preferences: Preferences = koinInject()
     val platform: Platform = koinInject()
     val viewModel = koinViewModel<SettingsViewModel>()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val snackbarDisplay =
+        remember { SnackbarDisplay { scope.launch { snackbarHostState.showSnackbar(message = it) } } }
+    val settings = rememberSettingsItemsState(
+        navBarNav = null,
+        snackbarDisplay = snackbarDisplay,
+    )
 
     val rings by libIndex.rings.collectAsState()
     val ringPairedState = viewModel.ringPaired.collectAsStateWithLifecycle()
@@ -90,7 +105,9 @@ fun RingOnboardingScreen(
     }
 
     MaterialTheme(colorScheme = onboardingScheme) {
-        Scaffold { windowInsets ->
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { windowInsets ->
             Box(modifier = Modifier.padding(windowInsets).fillMaxSize()) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(20.dp)
@@ -114,6 +131,8 @@ fun RingOnboardingScreen(
                         buttons = {},
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
+
+                    settings.Show(SettingsIds.OfflineSpeechRecognition)
 
                     Spacer(modifier = Modifier.height(15.dp))
 

@@ -1,19 +1,16 @@
 package coredevices.pebble.health
 
-import com.viktormykhailiv.kmp.health.records.SleepSessionRecord
-import com.viktormykhailiv.kmp.health.records.SleepStageType
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.Instant
 
 class PlatformHealthSyncTest {
 
     @Test
     fun sleepContainerWithDeepSubintervals_emitsAlternatingLightAndDeep() {
         // 8h Sleep container with two DeepSleep periods nested inside (the reporter scenario).
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(
                 overlay(start = 0, duration = 28800, type = OverlayType.Sleep),
                 overlay(start = 3600, duration = 1800, type = OverlayType.DeepSleep),
@@ -22,61 +19,49 @@ class PlatformHealthSyncTest {
         )
         assertEquals(
             listOf(
-                stage(0, 3600, SleepStageType.Light),
-                stage(3600, 5400, SleepStageType.Deep),
-                stage(5400, 14400, SleepStageType.Light),
-                stage(14400, 18000, SleepStageType.Deep),
-                stage(18000, 28800, SleepStageType.Light),
+                light(0, 3600),
+                deep(3600, 5400),
+                light(5400, 14400),
+                deep(14400, 18000),
+                light(18000, 28800),
             ),
-            stages,
+            intervals,
         )
     }
 
     @Test
     fun sleepContainerWithNoDeeps_emitsSingleLight() {
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(overlay(start = 100, duration = 3600, type = OverlayType.Sleep))
         )
-        assertEquals(listOf(stage(100, 3700, SleepStageType.Light)), stages)
+        assertEquals(listOf(light(100, 3700)), intervals)
     }
 
     @Test
     fun deepFlushWithContainerStart_noEmptyLeadingLight() {
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(
                 overlay(start = 0, duration = 3600, type = OverlayType.Sleep),
                 overlay(start = 0, duration = 600, type = OverlayType.DeepSleep),
             )
         )
-        assertEquals(
-            listOf(
-                stage(0, 600, SleepStageType.Deep),
-                stage(600, 3600, SleepStageType.Light),
-            ),
-            stages,
-        )
+        assertEquals(listOf(deep(0, 600), light(600, 3600)), intervals)
     }
 
     @Test
     fun deepFlushWithContainerEnd_noEmptyTrailingLight() {
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(
                 overlay(start = 0, duration = 3600, type = OverlayType.Sleep),
                 overlay(start = 3000, duration = 600, type = OverlayType.DeepSleep),
             )
         )
-        assertEquals(
-            listOf(
-                stage(0, 3000, SleepStageType.Light),
-                stage(3000, 3600, SleepStageType.Deep),
-            ),
-            stages,
-        )
+        assertEquals(listOf(light(0, 3000), deep(3000, 3600)), intervals)
     }
 
     @Test
     fun splitSleep_twoContainers_eachCarvesItsOwnDeep() {
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(
                 overlay(start = 0, duration = 3600, type = OverlayType.Sleep),
                 overlay(start = 1000, duration = 500, type = OverlayType.DeepSleep),
@@ -86,32 +71,28 @@ class PlatformHealthSyncTest {
         )
         assertEquals(
             listOf(
-                stage(0, 1000, SleepStageType.Light),
-                stage(1000, 1500, SleepStageType.Deep),
-                stage(1500, 3600, SleepStageType.Light),
-                stage(7200, 8000, SleepStageType.Light),
-                stage(8000, 8600, SleepStageType.Deep),
-                stage(8600, 10800, SleepStageType.Light),
+                light(0, 1000),
+                deep(1000, 1500),
+                light(1500, 3600),
+                light(7200, 8000),
+                deep(8000, 8600),
+                light(8600, 10800),
             ),
-            stages,
+            intervals,
         )
     }
 
     @Test
     fun napContainerWithDeepNap_carvesOutDeep() {
-        val stages = computeSleepStages(
+        val intervals = computeSleepStageIntervals(
             listOf(
                 overlay(start = 0, duration = 1800, type = OverlayType.Nap),
                 overlay(start = 600, duration = 300, type = OverlayType.DeepNap),
             )
         )
         assertEquals(
-            listOf(
-                stage(0, 600, SleepStageType.Light),
-                stage(600, 900, SleepStageType.Deep),
-                stage(900, 1800, SleepStageType.Light),
-            ),
-            stages,
+            listOf(light(0, 600), deep(600, 900), light(900, 1800)),
+            intervals,
         )
     }
 }
@@ -127,8 +108,5 @@ private fun overlay(start: Long, duration: Long, type: OverlayType) = OverlayDat
     offsetUTC = 0,
 )
 
-private fun stage(startSec: Long, endSec: Long, type: SleepStageType) = SleepSessionRecord.Stage(
-    startTime = Instant.fromEpochSeconds(startSec),
-    endTime = Instant.fromEpochSeconds(endSec),
-    type = type,
-)
+private fun light(start: Long, end: Long) = SleepStageInterval(start, end, isDeep = false)
+private fun deep(start: Long, end: Long) = SleepStageInterval(start, end, isDeep = true)

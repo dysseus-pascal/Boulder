@@ -305,7 +305,13 @@ class PlatformHealthSync(
     private fun createSleepSession(overlays: List<OverlayDataEntity>): SleepSessionRecord {
         val sessionStart = Instant.fromEpochSeconds(overlays.minOf { it.startTime })
         val sessionEnd = Instant.fromEpochSeconds(overlays.maxOf { it.startTime + it.duration })
-        val stages = computeSleepStages(overlays)
+        val stages = computeSleepStageIntervals(overlays).map { interval ->
+            SleepSessionRecord.Stage(
+                startTime = Instant.fromEpochSeconds(interval.startSec),
+                endTime = Instant.fromEpochSeconds(interval.endSec),
+                type = if (interval.isDeep) SleepStageType.Deep else SleepStageType.Light,
+            )
+        }
         logger.d { "Sleep session: ${stages.size} stages, start=$sessionStart, end=$sessionEnd" }
         return SleepSessionRecord(
             startTime = sessionStart,
@@ -323,10 +329,12 @@ class PlatformHealthSync(
     }
 }
 
+internal data class SleepStageInterval(val startSec: Long, val endSec: Long, val isDeep: Boolean)
+
 // Pebble's overlay model: Sleep/Nap are container overlays spanning the whole session with
 // DeepSleep/DeepNap sub-overlays nested inside them. Carve the Deep periods out of each Light
 // container so both stage types reach Health Connect.
-internal fun computeSleepStages(overlays: List<OverlayDataEntity>): List<SleepSessionRecord.Stage> {
+internal fun computeSleepStageIntervals(overlays: List<OverlayDataEntity>): List<SleepStageInterval> {
     val (deepOverlays, lightOverlays) = overlays.partition {
         when (OverlayType.fromValue(it.type)) {
             OverlayType.DeepSleep, OverlayType.DeepNap -> true
@@ -337,9 +345,9 @@ internal fun computeSleepStages(overlays: List<OverlayDataEntity>): List<SleepSe
         .map { it.startTime to it.startTime + it.duration }
         .sortedBy { it.first }
 
-    val stages = mutableListOf<SleepSessionRecord.Stage>()
+    val intervals = mutableListOf<SleepStageInterval>()
     deepRanges.forEach { (s, e) ->
-        stages += sleepStage(s, e, SleepStageType.Deep)
+        intervals += SleepStageInterval(s, e, isDeep = true)
     }
     lightOverlays.forEach { container ->
         val containerEnd = container.startTime + container.duration
@@ -348,21 +356,14 @@ internal fun computeSleepStages(overlays: List<OverlayDataEntity>): List<SleepSe
             if (deepEnd <= cursor) continue
             if (deepStart >= containerEnd) break
             if (cursor < deepStart) {
-                stages += sleepStage(cursor, deepStart, SleepStageType.Light)
+                intervals += SleepStageInterval(cursor, deepStart, isDeep = false)
             }
             cursor = maxOf(cursor, deepEnd)
         }
         if (cursor < containerEnd) {
-            stages += sleepStage(cursor, containerEnd, SleepStageType.Light)
+            intervals += SleepStageInterval(cursor, containerEnd, isDeep = false)
         }
     }
-    stages.sortBy { it.startTime }
-    return stages
+    intervals.sortBy { it.startSec }
+    return intervals
 }
-
-private fun sleepStage(startSec: Long, endSec: Long, type: SleepStageType): SleepSessionRecord.Stage =
-    SleepSessionRecord.Stage(
-        startTime = Instant.fromEpochSeconds(startSec),
-        endTime = Instant.fromEpochSeconds(endSec),
-        type = type,
-    )

@@ -11,6 +11,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET
 import android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED
+import android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN
 import android.net.NetworkRequest
 import android.os.Build
 import androidx.annotation.RequiresPermission
@@ -46,6 +47,7 @@ actual class ModelDownloadManager(
     private fun buildNetworkRequest(allowMetered: Boolean): NetworkRequest {
         val builder = NetworkRequest.Builder()
             .addCapability(NET_CAPABILITY_INTERNET)
+            .removeCapability(NET_CAPABILITY_NOT_VPN)
         if (!allowMetered) {
             builder.addCapability(NET_CAPABILITY_NOT_METERED)
         }

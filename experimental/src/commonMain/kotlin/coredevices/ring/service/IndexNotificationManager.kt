@@ -226,7 +226,7 @@ class IndexNotificationManager(
         inflightNotificationJobs[id] = scope.launch {
             platform.runWithBgTask("transfer_notif_${transfer.id}") {
                 ringTransferRepo.getTransferWithFeedItemFlow(transfer.id).filterNotNull().flatMapLatest {
-                    val conv = it.ringTransfer?.recordingId?.let {conversationMessageDao.getMessagesForRecording(it) } ?: emptyFlow()
+                    val conv = it.ringTransfer?.recordingId?.let {conversationMessageDao.getMessagesForRecording(it) } ?: flowOf(null)
                     combine(
                         flowOf(it),
                         conv

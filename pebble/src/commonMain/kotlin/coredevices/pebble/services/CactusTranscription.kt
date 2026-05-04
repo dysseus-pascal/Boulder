@@ -33,7 +33,7 @@ class CactusTranscription(
 ): TranscriptionProvider {
     override suspend fun canServeSession(): Boolean {
         service.earlyInit()
-        return true
+        return service.isAvailable()
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)

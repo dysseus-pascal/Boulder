@@ -341,9 +341,11 @@ class RealPebbleWebServices(
     private suspend fun fetchUserHearts() {
         getAllSources(enabledOnly = true).forEach { source ->
             val hearts = appstoreServiceForSource(source).fetchHearts()
-            if (hearts != null) {
-                heartsDao.updateHeartsForSource(sourceId = source.id, newHearts = hearts)
+            if (hearts == null) {
+                logger.w { "Failed to fetch hearts for $source" }
+                return@forEach
             }
+            heartsDao.updateHeartsForSource(sourceId = source.id, newHearts = hearts)
         }
     }
 
@@ -382,7 +384,7 @@ class RealPebbleWebServices(
 
     override suspend fun fetchUsersMePebble(): UsersMeResponse? = get({ links.usersMe }, auth = HttpClientAuthType.Pebble)
 
-    override suspend fun fetchUsersMeCore(): CoreUsersMe? = get({ "https://appstore-api.repebble.com/api/v1/users/me" }, auth = HttpClientAuthType.Core)
+    override suspend fun fetchUsersMeCore(): CoreUsersMe? = httpClient.get("https://appstore-api.repebble.com/api/v1/users/me", auth = HttpClientAuthType.Core)
 
     override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
         return coroutineScope {

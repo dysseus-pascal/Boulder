@@ -1566,7 +1566,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
-                    description = "Sign out of your Pebble account",
+                    description = "Sign out of your Pebble account ($coreUser)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
                     action = {

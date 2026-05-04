@@ -305,41 +305,8 @@ class PlatformHealthSync(
     private fun createSleepSession(overlays: List<OverlayDataEntity>): SleepSessionRecord {
         val sessionStart = Instant.fromEpochSeconds(overlays.minOf { it.startTime })
         val sessionEnd = Instant.fromEpochSeconds(overlays.maxOf { it.startTime + it.duration })
-
-        // Build non-overlapping stages sorted by start time
-        val stages = overlays
-            .map { overlay ->
-                val stageType = when (OverlayType.fromValue(overlay.type)) {
-                    OverlayType.DeepSleep, OverlayType.DeepNap -> SleepStageType.Deep
-                    else -> SleepStageType.Light
-                }
-                SleepSessionRecord.Stage(
-                    startTime = Instant.fromEpochSeconds(overlay.startTime),
-                    endTime = Instant.fromEpochSeconds(overlay.startTime + overlay.duration),
-                    type = stageType,
-                )
-            }
-            .sortedBy { it.startTime }
-            .fold(mutableListOf<SleepSessionRecord.Stage>()) { acc, stage ->
-                val prev = acc.lastOrNull()
-                if (prev != null && stage.startTime < prev.endTime) {
-                    // Overlapping stage — trim its start to previous end, or skip if fully contained
-                    if (stage.endTime > prev.endTime) {
-                        acc += SleepSessionRecord.Stage(
-                            startTime = prev.endTime,
-                            endTime = stage.endTime,
-                            type = stage.type,
-                        )
-                    }
-                    // else: fully contained, skip
-                } else {
-                    acc += stage
-                }
-                acc
-            }
-
+        val stages = computeSleepStages(overlays)
         logger.d { "Sleep session: ${stages.size} stages, start=$sessionStart, end=$sessionEnd" }
-
         return SleepSessionRecord(
             startTime = sessionStart,
             endTime = sessionEnd,
@@ -355,3 +322,47 @@ class PlatformHealthSync(
         )
     }
 }
+
+// Pebble's overlay model: Sleep/Nap are container overlays spanning the whole session with
+// DeepSleep/DeepNap sub-overlays nested inside them. Carve the Deep periods out of each Light
+// container so both stage types reach Health Connect.
+internal fun computeSleepStages(overlays: List<OverlayDataEntity>): List<SleepSessionRecord.Stage> {
+    val (deepOverlays, lightOverlays) = overlays.partition {
+        when (OverlayType.fromValue(it.type)) {
+            OverlayType.DeepSleep, OverlayType.DeepNap -> true
+            else -> false
+        }
+    }
+    val deepRanges = deepOverlays
+        .map { it.startTime to it.startTime + it.duration }
+        .sortedBy { it.first }
+
+    val stages = mutableListOf<SleepSessionRecord.Stage>()
+    deepRanges.forEach { (s, e) ->
+        stages += sleepStage(s, e, SleepStageType.Deep)
+    }
+    lightOverlays.forEach { container ->
+        val containerEnd = container.startTime + container.duration
+        var cursor = container.startTime
+        for ((deepStart, deepEnd) in deepRanges) {
+            if (deepEnd <= cursor) continue
+            if (deepStart >= containerEnd) break
+            if (cursor < deepStart) {
+                stages += sleepStage(cursor, deepStart, SleepStageType.Light)
+            }
+            cursor = maxOf(cursor, deepEnd)
+        }
+        if (cursor < containerEnd) {
+            stages += sleepStage(cursor, containerEnd, SleepStageType.Light)
+        }
+    }
+    stages.sortBy { it.startTime }
+    return stages
+}
+
+private fun sleepStage(startSec: Long, endSec: Long, type: SleepStageType): SleepSessionRecord.Stage =
+    SleepSessionRecord.Stage(
+        startTime = Instant.fromEpochSeconds(startSec),
+        endTime = Instant.fromEpochSeconds(endSec),
+        type = type,
+    )

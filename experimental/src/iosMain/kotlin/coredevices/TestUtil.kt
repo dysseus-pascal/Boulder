@@ -206,6 +206,8 @@ private object PreferencesTestImpl: Preferences {
 
 private object UsersDaoTestImpl: UsersDao {
     override val user: Flow<PebbleUser?> = MutableStateFlow(PebbleUser(false, User()))
+    override val loginEvents: Flow<PebbleUser>
+        get() = TODO("Not yet implemented")
 
     override suspend fun updateNotionToken(notionToken: String?) {
     }

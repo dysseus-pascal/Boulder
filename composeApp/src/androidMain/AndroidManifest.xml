@@ -120,5 +120,18 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+        <!--
+            Required by the standalone Health Connect APK on Android 13. Without an activity
+            handling this intent, Health Connect silently denies permission grants
+            (MOB-6628, MOB-6731). Android 14+ uses VIEW_PERMISSION_USAGE above instead.
+        -->
+        <activity-alias
+            android:name="HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

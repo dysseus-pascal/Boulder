@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.cactus.Cactus
 import com.cactus.TranscriptionResult
 import coredevices.util.AudioEncoding
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.writeWavHeader
@@ -177,6 +178,9 @@ class CactusTranscriptionService(
         }
     }
 
+
+    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(CommonBuildKonfig.CACTUS_STT_MODEL)
+
     private fun performInit(): Job {
         return scope.launch(Dispatchers.IO) {
             try {
@@ -193,7 +197,7 @@ class CactusTranscriptionService(
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
             CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable()
-            CactusSTTMode.LocalOnly -> model != null
+            CactusSTTMode.LocalOnly -> model != null || modelExists()
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst -> wisprFlow.isAvailable() || model != null
         }
     }

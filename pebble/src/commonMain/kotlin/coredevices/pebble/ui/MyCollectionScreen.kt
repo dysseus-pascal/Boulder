@@ -68,15 +68,12 @@ fun MyCollectionScreen(
         topBarParams.title(appType.myCollectionName())
         topBarParams.actions {}
     }
-    val currentHearts = currentHearts()
     val lockerEntries = loadLockerEntries(
-        currentHearts = currentHearts,
         type = appType,
         searchQuery = searchState.query,
         watchType = sharedViewModel.watchType.value,
         showIncompatible = sharedViewModel.showIncompatible.value,
         showScaled = sharedViewModel.showScaled.value,
-        hearted = sharedViewModel.hearted.value,
         limit = 700,
     )
     if (lockerEntries == null) {

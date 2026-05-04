@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -160,13 +159,11 @@ fun Map<Int, Set<String>>?.hasHeart(sourceId: Int?, appId: String?): Boolean {
 
 @Composable
 fun loadLockerEntries(
-    currentHearts: Map<Int, Set<String>>?,
     type: AppType,
     searchQuery: String,
     watchType: WatchType,
     showIncompatible: Boolean,
     showScaled: Boolean,
-    hearted: Boolean,
     limit: Int,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
@@ -184,7 +181,7 @@ fun loadLockerEntries(
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(type, appstoreSources)
-    if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
+    if (entries == null || appstoreSources == null || categories == null) {
         return null
     }
     return remember(
@@ -194,7 +191,6 @@ fun loadLockerEntries(
         firestoreLockerContents,
         showIncompatible,
         showScaled,
-        hearted
     ) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
@@ -203,13 +199,6 @@ fun loadLockerEntries(
                 return@mapNotNull null
             }
             if (!showScaled && !app.isNativelyCompatible) {
-                return@mapNotNull null
-            }
-            if (hearted && !currentHearts.hasHeart(
-                    sourceId = appstoreSource?.id,
-                    appId = app.storeId
-                )
-            ) {
                 return@mapNotNull null
             }
             app
@@ -852,25 +841,6 @@ fun AppsFilterRow(
                     },
                 )
             }
-            FilterChip(
-                selected = sharedLockerViewModel.hearted.value,
-                onClick = {
-                    sharedLockerViewModel.hearted.value = !sharedLockerViewModel.hearted.value
-                },
-                label = { Text("Hearted") },
-                modifier = Modifier.padding(horizontal = 4.dp),
-                leadingIcon = if (sharedLockerViewModel.hearted.value) {
-                    {
-                        Icon(
-                            imageVector = Icons.Filled.Favorite,
-                            contentDescription = "Hearted",
-                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                        )
-                    }
-                } else {
-                    null
-                },
-            )
             if (showWatchfaceOrderSetting) {
                 val orderExpanded = remember { mutableStateOf(false) }
                 val selectedOrderMode = remember(sharedLockerViewModel.orderWatchfacesByLastUsed.value) {

@@ -140,7 +140,6 @@ private data class SearchParams(
 class SharedLockerViewModel : ViewModel() {
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
-    val hearted = mutableStateOf(false)
     val orderWatchfacesByLastUsed = mutableStateOf(true)
     val watchType = mutableStateOf(WatchType.EMERY)
     val showWatchTypeDropdown = mutableStateOf(false)
@@ -348,13 +347,11 @@ fun LockerScreen(
         }
         val currentHearts = currentHearts()
         val lockerEntries = loadLockerEntries(
-            currentHearts = currentHearts,
             type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
             watchType = sharedViewModel.watchType.value,
             showIncompatible = sharedViewModel.showIncompatible.value,
             showScaled = sharedViewModel.showScaled.value,
-            hearted = sharedViewModel.hearted.value,
             limit = 25,
         )
         val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value)
@@ -373,13 +370,12 @@ fun LockerScreen(
                 )
                 if (viewModel.searchState.query.isNotEmpty()) {
                     val lockerUuids = remember(lockerEntries) { lockerEntries.mapTo(HashSet()) { it.uuid } }
-                    val filteredStoreResults = remember(viewModel.searchPager, sharedViewModel.showIncompatible.value, sharedViewModel.showScaled.value, sharedViewModel.hearted.value, lockerUuids) {
+                    val filteredStoreResults = remember(viewModel.searchPager, sharedViewModel.showIncompatible.value, sharedViewModel.showScaled.value, lockerUuids) {
                         viewModel.searchPager?.map { pagingData ->
                             pagingData.filter { app ->
                                 app.uuid !in lockerUuids
                                         && (sharedViewModel.showIncompatible.value || app.isCompatible)
                                         && (sharedViewModel.showScaled.value || app.isNativelyCompatible)
-                                        && (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
                             }
                         }
                     }?.collectAsLazyPagingItems()
@@ -602,7 +598,6 @@ fun LockerScreen(
                                             sharedViewModel.showIncompatible.value,
                                             sharedViewModel.showScaled.value,
                                             viewModel.type.value,
-                                            sharedViewModel.hearted.value,
                                             excludedStoreIds,
                                             excludedUuids,
                                         ) {
@@ -619,7 +614,6 @@ fun LockerScreen(
                                                 app.type == viewModel.type.value &&
                                                         (sharedViewModel.showIncompatible.value || app.isCompatible) &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
-                                                (!sharedViewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) &&
                                                 app.storeId !in excludedStoreIds &&
                                                 app.uuid.toString() !in excludedUuids
                                             }
@@ -767,7 +761,6 @@ fun SearchResultsList(
                         PebbleElevatedButton(
                             text = "Clear filters for more results",
                             onClick = {
-                                sharedViewModel.hearted.value = false
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
                             },
@@ -857,7 +850,6 @@ fun SearchResultsList(
                         PebbleElevatedButton(
                             text = "Clear filters for more results",
                             onClick = {
-                                sharedViewModel.hearted.value = false
                                 sharedViewModel.showScaled.value = true
                                 sharedViewModel.showIncompatible.value = true
                             },

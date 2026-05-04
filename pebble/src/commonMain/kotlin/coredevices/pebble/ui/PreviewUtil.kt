@@ -176,6 +176,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     val storeCollectionDao = object : AppstoreCollectionDao {
         override suspend fun insertOrUpdateCollection(collection: AppstoreCollection): Long = 1
 
+        override suspend fun insertCollectionIfMissing(collection: AppstoreCollection): Long = 1
+
         override suspend fun getCollection(
             sourceId: Int,
             slug: String,

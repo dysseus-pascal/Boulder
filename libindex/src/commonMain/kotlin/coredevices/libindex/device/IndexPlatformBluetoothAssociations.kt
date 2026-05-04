@@ -1,5 +1,6 @@
 package coredevices.libindex.device
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -10,6 +11,7 @@ expect class IndexPlatformBluetoothAssociations {
 
     val associations: StateFlow<List<IndexAssociation>>
     val bondStateChanges: Flow<IndexBondStateUpdate>
+    val associationsReady: Deferred<Unit>
     fun init(bluetoothPermissionChanged: Flow<Boolean>)
 }
 

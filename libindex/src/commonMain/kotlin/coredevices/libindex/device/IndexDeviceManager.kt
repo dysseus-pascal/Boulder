@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
@@ -92,6 +93,20 @@ class IndexDeviceManager(
                 prefs.setRingPairedName(null)
             } else if (association != null && association.deviceName != prefs.ringPairedName.value) {
                 prefs.setRingPairedName(association.deviceName)
+            }
+        } ?: scope.launch {
+            associations?.associationsReady?.await()
+            logger.d { "No paired ring stored, looking for one in bt associations" }
+            val candidate = associations?.associations?.value
+                ?.firstOrNull { it.deviceName.contains("Pebble Index", ignoreCase = true) }
+            candidate?.let {
+                logger.d { "Found candidate ${it.deviceName} (${it.identifier.asString}) in bt associations, setting as paired ring" }
+                prefs.setRingPaired(it.identifier.asString)
+                prefs.setRingPairedName(it.deviceName)
+                scope.launch(Dispatchers.IO) {
+                    indexStorage.setLastSuccessfulCollectionIndex(null)
+                    transferRepo.markTransfersAsPreviousIndexIteration()
+                }
             }
         }
         associations?.bondStateChanges?.onEach { evt ->

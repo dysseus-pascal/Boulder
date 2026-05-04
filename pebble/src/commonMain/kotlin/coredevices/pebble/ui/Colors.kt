@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,7 +23,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.ColorLens
@@ -54,9 +60,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.database.entity.RgbColorPreset
 import io.rebble.libpebblecommon.timeline.TimelineColor
@@ -334,86 +342,101 @@ fun RgbColorPickerDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismissWithoutResult) {
-        Card(modifier = Modifier.padding(15.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Box(
+    val focusManager = LocalFocusManager.current
+    Dialog(
+        onDismissRequest = onDismissWithoutResult,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Card(modifier = Modifier.padding(15.dp)) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(previewColor)
-                        .padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center,
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
                 ) {
-                    Text(
-                        text = "#" + rgb.toString(16).padStart(6, '0').uppercase(),
-                        color = if (previewColor.luminance() > 0.55f) Color.Black else Color.White,
-                    )
-                }
-                if (presets.isNotEmpty()) {
-                    Text("Presets", modifier = Modifier.padding(bottom = 4.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(previewColor)
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        presets.chunked(PRESETS_PER_ROW).forEach { rowPresets ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                rowPresets.forEach { preset ->
-                                    PresetChip(
-                                        preset = preset,
-                                        isSelected = preset.rgb == rgb,
-                                        onClick = { setRgb(preset.rgb) },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                                // Pad the last row so chips stay aligned with rows above.
-                                repeat(PRESETS_PER_ROW - rowPresets.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "#" + rgb.toString(16).padStart(6, '0').uppercase(),
+                            color = if (previewColor.luminance() > 0.55f) Color.Black else Color.White,
+                        )
+                    }
+                    if (presets.isNotEmpty()) {
+                        Text("Presets", modifier = Modifier.padding(bottom = 4.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            presets.chunked(PRESETS_PER_ROW).forEach { rowPresets ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    rowPresets.forEach { preset ->
+                                        PresetChip(
+                                            preset = preset,
+                                            isSelected = preset.rgb == rgb,
+                                            onClick = { setRgb(preset.rgb) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    // Pad the last row so chips stay aligned with rows above.
+                                    repeat(PRESETS_PER_ROW - rowPresets.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                ChannelSlider("R", red, Color.Red) {
-                    red = it
-                    hexInput = rgb.toString(16).padStart(6, '0').uppercase()
-                }
-                ChannelSlider("G", green, Color.Green) {
-                    green = it
-                    hexInput = rgb.toString(16).padStart(6, '0').uppercase()
-                }
-                ChannelSlider("B", blue, Color.Blue) {
-                    blue = it
-                    hexInput = rgb.toString(16).padStart(6, '0').uppercase()
-                }
-                OutlinedTextField(
-                    value = hexInput,
-                    onValueChange = {
-                        hexInput = it.uppercase().take(6)
-                        applyHex(hexInput)
-                    },
-                    label = { Text("Hex") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                )
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    TextButton(
-                        onClick = onDismissWithoutResult,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Cancel") }
-                    TextButton(
-                        onClick = { setRgb(defaultRgb) },
-                        modifier = Modifier.weight(1f),
-                        enabled = rgb != (defaultRgb and 0x00FFFFFFu),
-                    ) { Text("Reset") }
-                    TextButton(
-                        onClick = { onColorSelected(rgb) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("OK") }
+                    ChannelSlider("R", red, Color.Red) {
+                        red = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    ChannelSlider("G", green, Color.Green) {
+                        green = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    ChannelSlider("B", blue, Color.Blue) {
+                        blue = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    OutlinedTextField(
+                        value = hexInput,
+                        onValueChange = {
+                            hexInput = it.uppercase().take(6)
+                            applyHex(hexInput)
+                        },
+                        label = { Text("Hex") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        TextButton(
+                            onClick = onDismissWithoutResult,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Cancel") }
+                        TextButton(
+                            onClick = { setRgb(defaultRgb) },
+                            modifier = Modifier.weight(1f),
+                            enabled = rgb != (defaultRgb and 0x00FFFFFFu),
+                        ) { Text("Reset") }
+                        TextButton(
+                            onClick = { onColorSelected(rgb) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("OK") }
+                    }
                 }
             }
         }

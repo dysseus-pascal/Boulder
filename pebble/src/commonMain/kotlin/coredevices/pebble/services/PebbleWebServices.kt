@@ -257,6 +257,7 @@ interface PebbleWebServices {
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
     suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
     suspend fun removeFromLegacyLocker(id: Uuid): Boolean
+    suspend fun fetchUserHearts()
     suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse?
 }
 
@@ -268,7 +269,6 @@ class RealPebbleWebServices(
     private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
-    private val coreConfig: CoreConfigFlow,
     private val heartsDao: HeartsDao,
 ) : WebServices, PebbleWebServices, KoinComponent {
     private val scope = CoroutineScope(Dispatchers.Default)
@@ -338,7 +338,8 @@ class RealPebbleWebServices(
         return firestoreLocker.fetchLocker(forceRefresh = true)
     }
 
-    private suspend fun fetchUserHearts() {
+    override suspend fun fetchUserHearts() {
+        logger.d { "Syncing hearts..." }
         getAllSources(enabledOnly = true).forEach { source ->
             val hearts = appstoreServiceForSource(source).fetchHearts()
             if (hearts == null) {

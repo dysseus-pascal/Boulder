@@ -12,6 +12,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
@@ -56,6 +57,7 @@ class PebbleAppDelegate(
     private val platform: Platform,
     private val memfaultChunkQueue: MemfaultChunkQueue,
     private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
+    private val pebbleWebServices: PebbleWebServices,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -85,6 +87,11 @@ class PebbleAppDelegate(
                 // Onboarding on Android grants BT permissions, which may have been missing when
                 // libPebble.init() ran synchronously above. Kick off post-permission work now.
                 libPebble.doStuffAfterPermissionsGranted()
+            }
+            GlobalScope.launch {
+                usersDao.loginEvents.collect {
+                    pebbleWebServices.fetchUserHearts()
+                }
             }
             GlobalScope.launch {
                 appResumed.appResumed.collect {

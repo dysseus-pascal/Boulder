@@ -28,6 +28,7 @@ import kotlin.time.Duration.Companion.minutes
 
 interface UsersDao {
     val user: Flow<PebbleUser?>
+    val loginEvents: Flow<PebbleUser>
     suspend fun updateNotionToken(
         notionToken: String?
     )
@@ -56,6 +57,16 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
     private val _user = MutableSharedFlow<PebbleUser?>(replay = 1)
     override val user: Flow<PebbleUser?> = _user.asSharedFlow()
 
+    // replay=1 so a subscriber that subscribes after the login event fires (e.g. one gated
+    // behind libPebble.init() / appstore source init) still receives it.
+    private val _loginEvents = MutableSharedFlow<PebbleUser>(replay = 1)
+    override val loginEvents: Flow<PebbleUser> = _loginEvents.asSharedFlow()
+
+    // Set when we observe a non-anonymous user with hadNonAnonymousAccount=false
+    // (i.e. an active manual login, not a Firebase auth-state restore on startup).
+    // Consumed once the corresponding PebbleUser has been emitted to _user.
+    private var pendingLoginEmission = false
+
     private var hadNonAnonymousAccount: Boolean
         get() = settings.getBoolean(KEY_HAD_NON_ANONYMOUS_ACCOUNT, false)
         set(value) { settings[KEY_HAD_NON_ANONYMOUS_ACCOUNT] = value }
@@ -66,9 +77,11 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
 
     override fun init() {
         GlobalScope.launch {
-            Firebase.auth.authStateChanged
+            Firebase.auth.idTokenChanged
                 .onStart { emit(Firebase.auth.currentUser) }
-                .distinctUntilChanged { old, new -> old?.uid == new?.uid }
+                .distinctUntilChanged { old, new ->
+                    old?.uid == new?.uid && old?.isAnonymous == new?.isAnonymous
+                }
                 .flatMapLatest { firebaseUser ->
                     logger.v { "User changed: $firebaseUser" }
                     if (firebaseUser == null) {
@@ -103,6 +116,10 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     } else {
                         isInitialStartup = false
                         if (!firebaseUser.isAnonymous) {
+                            if (!hadNonAnonymousAccount) {
+                                logger.i { "Active login detected (hadNonAnonymousAccount false→true)" }
+                                pendingLoginEmission = true
+                            }
                             logger.i { "Non-anonymous user restored/signed in, setting hadNonAnonymousAccount=true" }
                             hadNonAnonymousAccount = true
                         }
@@ -135,6 +152,11 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                 .collect { user ->
                     logger.d { "User changed.." }
                     _user.emit(user)
+                    if (pendingLoginEmission && user != null && !user.isAnonymousUser) {
+                        pendingLoginEmission = false
+                        logger.i { "Emitting loginEvents for active login" }
+                        _loginEvents.emit(user)
+                    }
                 }
         }
     }

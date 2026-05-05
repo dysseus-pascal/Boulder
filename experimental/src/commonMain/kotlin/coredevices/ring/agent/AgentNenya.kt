@@ -70,7 +70,7 @@ Only take one action from a user request, for example don't create multiple remi
         val tools = mcpSession.listTools()
         val toolDeclarations = tools.mapNotNull {
             val definition = it.tool.definition
-            val compositeName = "${it.integrationName}.${definition.name}"
+            val compositeName = "${it.integrationName}__${definition.name}"
             try {
                 ToolDeclaration(
                     function = FunctionDeclaration(
@@ -132,7 +132,7 @@ Only take one action from a user request, for example don't create multiple remi
                     logger.w { "Failed to deserialize tool call arguments for tool ${it.function!!.name}" }
                     emptyMap()
                 }
-                val compositeName = it.function!!.name.split(".", limit = 2)
+                val compositeName = it.function!!.name.split("__", limit = 2)
                 if (compositeName.size != 2) {
                     throw Exception("Invalid tool name: ${it.function!!.name}")
                 }

@@ -29,7 +29,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -135,27 +137,30 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                 }
             }
         }
-        val newServer = embeddedServer(CIO, rootConfig) {
-            connectors.add(EngineConnectorBuilder().apply {
-                host = "0.0.0.0"
-                port = PORT
-            })
-            connectionGroupSize = 1
-            workerGroupSize = 2
-            callGroupSize = 2
-        }
-        // Assign before starting so stop() can always reach the server,
-        // even if startSuspend() is cancelled by collectLatest.
-        server = newServer
-        try {
-            newServer.startSuspend()
-        } catch (e: CancellationException) {
-            newServer.stopSuspend()
-            throw e
-        } catch (e: Exception) {
-            newServer.stopSuspend()
-            server = null
-            logger.e(e) { "Failed to start dev connection server on port $PORT" }
+        while (currentCoroutineContext().isActive) {
+            val newServer = embeddedServer(CIO, rootConfig) {
+                connectors.add(EngineConnectorBuilder().apply {
+                    host = "0.0.0.0"
+                    port = PORT
+                })
+                connectionGroupSize = 1
+                workerGroupSize = 2
+                callGroupSize = 2
+            }
+            // Assign before starting so stop() can always reach the server,
+            // even if startSuspend() is cancelled by collectLatest.
+            server = newServer
+            try {
+                newServer.startSuspend()
+                logger.w { "Dev connection server exited unexpectedly, restarting on port $PORT" }
+            } catch (e: CancellationException) {
+                newServer.stopSuspend()
+                throw e
+            } catch (e: Exception) {
+                logger.e(e) { "Dev connection server crashed, restarting on port $PORT" }
+                newServer.stopSuspend()
+            }
+            delay(1000)
         }
     }
 

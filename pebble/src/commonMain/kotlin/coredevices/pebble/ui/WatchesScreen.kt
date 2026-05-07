@@ -328,6 +328,21 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
+                            if (uiContext != null) {
+                                scan(uiContext)
+                            }
+                        },
+                        icon = { Icon(Icons.Default.Watch, contentDescription = "Watch") },
+                        text = {
+                            FabMenuItemLabel(
+                                text = "Add Watch",
+                                onInfoClick = { fabInfoDialog = FabInfo.Watch },
+                            )
+                        },
+                    )
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            addFabExpanded = false
                             if (indexAlreadyPaired) {
                                 showIndexAlreadyPairedDialog = true
                             } else if (uiContext != null) {
@@ -354,21 +369,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             },
                         )
                     }
-                    FloatingActionButtonMenuItem(
-                        onClick = {
-                            addFabExpanded = false
-                            if (uiContext != null) {
-                                scan(uiContext)
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Watch, contentDescription = "Watch") },
-                        text = {
-                            FabMenuItemLabel(
-                                text = "Add Watch",
-                                onInfoClick = { fabInfoDialog = FabInfo.Watch },
-                            )
-                        },
-                    )
                 }
             }
         },

@@ -253,6 +253,9 @@ private val ELEVATION = 0.dp
 fun settingsBadgeTotal(): Int {
     val permissionRequester: PermissionRequester = koinInject()
     val missingPermissions by permissionRequester.missingPermissions.collectAsState()
+    val coreConfigHolder: CoreConfigHolder = koinInject()
+    val coreConfig by coreConfigHolder.config.collectAsState()
+    val permissionBadgeCount = if (coreConfig.hidePermissionWarningBadges) 0 else missingPermissions.size
     val appUpdate: AppUpdate = koinInject()
     val updateState by appUpdate.updateAvailable.collectAsState()
     val updatesAvailable = when (updateState) {
@@ -265,7 +268,7 @@ fun settingsBadgeTotal(): Int {
         true -> 1
         false -> 0
     }
-    return missingPermissions.size + updatesAvailable + appUpdated
+    return permissionBadgeCount + updatesAvailable + appUpdated
 }
 
 private val logger = Logger.withTag("WatchSettingsScreen")
@@ -502,7 +505,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             nav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
                         }
                     } else null,
-                    badge = if (missingPermissions.isEmpty()) null else "${missingPermissions.size}",
+                    badge = if (missingPermissions.isEmpty() || coreConfig.hidePermissionWarningBadges) null else "${missingPermissions.size}",
                 ) },
                 SettingsItem(
                     title = "App Version",

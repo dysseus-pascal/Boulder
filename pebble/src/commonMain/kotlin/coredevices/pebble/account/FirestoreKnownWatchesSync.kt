@@ -60,14 +60,6 @@ class RealFirestoreKnownWatchesSync(
                                 logger.w(e) { "failed to write known watch $serial" }
                             }
                         }
-                        for (serial in lastSynced.keys - snapshot.keys) {
-                            try {
-                                dao.delete(serial)
-                                lastSynced.remove(serial)
-                            } catch (e: Throwable) {
-                                logger.w(e) { "failed to delete known watch $serial" }
-                            }
-                        }
                     }
             }
         }

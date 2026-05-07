@@ -763,6 +763,7 @@ fun BackupDialog(
     val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
     val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
     val generatedKey by viewModel.generatedKey.collectAsState()
+    val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val uiContext = rememberUiContext()
     val clipboardManager = LocalClipboardManager.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -1051,7 +1052,7 @@ fun BackupDialog(
 
             // Generate encryption key
             ListItem(
-                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!hasLocalKey || debugDetailsEnabled)) {
                     if (hasLocalKey) {
                         showOverwriteKeyConfirm = true
                     } else {
@@ -1062,7 +1063,12 @@ fun BackupDialog(
                 supportingContent = {
                     Text(
                         encryptionKeyStatus
-                            ?: if (hasLocalKey) "Key exists — tap to regenerate"
+                            ?: if (hasLocalKey) buildString {
+                                append("Key exists")
+                                if (debugDetailsEnabled) {
+                                    append(" — tap to regenerate")
+                                }
+                            }
                             else "Create AES-256 encryption key"
                     )
                 },

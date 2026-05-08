@@ -37,6 +37,7 @@ class RealInterviewedIndexDevice(
 ): KnownIndexDevice by indexDevice, InterviewedIndexDevice {
     override val firmwareVersion: String = state.firmwareVersion
     override val serialNumber: String = state.programmedSerialNumber ?: state.serialNumber
+    override val mac: String = state.serialNumber
 }
 
 class RealKnownIndexDevice(

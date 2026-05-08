@@ -675,6 +675,7 @@ fun WatchesPreview() {
                                 override val firmwareVersion = "1.0.0"
                                 override val serialNumber = "SN12345678"
                                 override val updating: Boolean = false
+                                override val mac: String = "00:11:22:33:44:55"
                                 override fun remove() {
                                     TODO("Not yet implemented")
                                 }

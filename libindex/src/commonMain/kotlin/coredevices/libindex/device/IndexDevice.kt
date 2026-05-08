@@ -55,5 +55,6 @@ interface DiscoveredIndexDevice: IndexDevice {
 interface InterviewedIndexDevice: KnownIndexDevice {
     val firmwareVersion: String
     val serialNumber: String
+    val mac: String
     val updating: Boolean
 }

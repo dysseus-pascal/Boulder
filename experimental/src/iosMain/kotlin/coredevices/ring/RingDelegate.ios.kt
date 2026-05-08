@@ -2,6 +2,7 @@ package coredevices.ring
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.service.RingBackgroundManager
 import coredevices.util.CoreConfigHolder
@@ -11,7 +12,8 @@ actual class RingDelegate(
     private val ringBackgroundManager: RingBackgroundManager,
     private val coreConfigHolder: CoreConfigHolder,
     private val recordingsDao: FirestoreRecordingsDao,
-    private val settings: Settings
+    private val settings: Settings,
+    private val firestoreKnownRingsSync: FirestoreKnownRingsSync,
 ) {
     companion object {
         private val logger = Logger.withTag("RingDelegate")
@@ -22,6 +24,7 @@ actual class RingDelegate(
     actual suspend fun init() {
         listenForUserPresent(recordingsDao, coreConfigHolder, settings)
         ringBackgroundManager.startBackgroundIfEnabled()
+        firestoreKnownRingsSync.init()
     }
 
     actual fun requiredRuntimePermissions(): Set<Permission> {

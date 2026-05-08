@@ -85,6 +85,11 @@ data class SleepSegmentUi(
 data class HeartRateUiState(
     val averageHR: Int? = null,
     val latestHR: Int? = null,
+    val restingHR: Int? = null,
+    /** Per-day resting HR for the displayed range. Empty in daily/monthly views. */
+    val restingHRSeries: List<Int?> = emptyList(),
+    /** X-axis labels for [restingHRSeries]. Same size as the series. */
+    val restingHRLabels: List<String> = emptyList(),
     val hrSamples: List<Double?> = emptyList(),
     val zoneMinutes: Map<Int, Long> = emptyMap(),
     val isLoading: Boolean = true,
@@ -169,6 +174,7 @@ class HealthViewModel(
         val avgHRD = async { libPebble.getAverageHeartRate(dayStart, dayEnd) }
         val zonesD = async { libPebble.getHRZoneMinutes(dayStart, dayEnd) }
         val latestHRD = async { libPebble.getLatestHeartRateReading() }
+        val restingHRD = async { libPebble.getRestingHeartRate(dayStart) }
 
         val healthData = healthDataD.await()
         val aggregates = aggregatesD.await()
@@ -227,6 +233,7 @@ class HealthViewModel(
         _heartRate.value = HeartRateUiState(
             averageHR = avgHRD.await()?.roundToInt(),
             latestHR = latestHRD.await()?.bpm,
+            restingHR = restingHRD.await(),
             hrSamples = hrBuckets.map { if (it.isEmpty()) null else it.average() },
             zoneMinutes = zonesD.await(),
             isLoading = false,
@@ -241,12 +248,14 @@ class HealthViewModel(
 
         val labels = mutableListOf<String>()
         val ordered = mutableListOf<DailyMovementAggregate?>()
+        val dayStarts = mutableListOf<Long>()
         for (i in 0..6) {
             val d = startDate.plus(DatePeriod(days = i))
             labels.add("${d.dayOfWeek.shortName()} ${d.dayOfMonth}")
             ordered.add(aggsByDay[d.toString()])
+            dayStarts.add(d.atStartOfDayIn(tz).epochSeconds)
         }
-        loadAggregated(ordered, startEpoch, endEpoch, tz, labels)
+        loadAggregated(ordered, startEpoch, endEpoch, tz, labels, dayStarts, labels)
     }
 
     private suspend fun loadMonthly(monthStart: LocalDate, monthEnd: LocalDate, tz: TimeZone) {
@@ -301,9 +310,19 @@ class HealthViewModel(
         )
     }
 
-    private suspend fun buildHeartRateState(start: Long, end: Long): HeartRateUiState {
-        return HeartRateUiState(
+    private suspend fun buildHeartRateState(
+        start: Long,
+        end: Long,
+        dayStarts: List<Long> = emptyList(),
+        dayLabels: List<String> = emptyList(),
+    ): HeartRateUiState = coroutineScope {
+        val series = if (dayStarts.isEmpty()) emptyList()
+        else dayStarts.map { ds -> async { libPebble.getRestingHeartRate(ds) } }.map { it.await() }
+        HeartRateUiState(
             averageHR = libPebble.getAverageHeartRate(start, end)?.roundToInt(),
+            restingHR = series.lastOrNull { it != null },
+            restingHRSeries = series,
+            restingHRLabels = dayLabels,
             zoneMinutes = libPebble.getHRZoneMinutes(start, end),
             isLoading = false,
         )
@@ -347,6 +366,8 @@ class HealthViewModel(
     private suspend fun loadAggregated(
         ordered: List<DailyMovementAggregate?>, start: Long, end: Long, tz: TimeZone,
         labels: List<String>,
+        dayStarts: List<Long> = emptyList(),
+        dayLabels: List<String> = emptyList(),
     ) {
         val daysWithData = ordered.count { it != null }.coerceAtLeast(1)
         _activity.value = buildActivityState(ordered.map { it?.steps ?: 0L }, labels, daysWithData, start, end)
@@ -370,7 +391,7 @@ class HealthViewModel(
             )
         }
         _sleep.value = buildSleepState(stackedSleep, daysWithData, sleepEntries, tz)
-        _heartRate.value = buildHeartRateState(start, end)
+        _heartRate.value = buildHeartRateState(start, end, dayStarts, dayLabels)
     }
 
     private suspend fun loadAggregatedMonthly(

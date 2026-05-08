@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -49,6 +50,8 @@ class Health(
     companion object {
         private val HEALTH_STATS_AVERAGE_DAYS = 30
         private val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
+        private const val REST_HR_MIN_READINGS = 10
+        private const val REST_HR_LOWEST_MINUTES = 5
     }
 
     override val healthDataUpdated: SharedFlow<Unit> = healthDataProcessor.healthDataUpdated
@@ -196,6 +199,22 @@ class Health(
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? {
         val entry = healthDao.getLatestHeartRateReading() ?: return null
         return LatestHeartRate(bpm = entry.heartRate, timestampEpochSec = entry.timestamp)
+    }
+
+    override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? {
+        val sleep = getDailySleepSession(dayStartEpochSec) ?: return null
+        // Light-sleep containers (Sleep + Nap) cover the full sleep window; deep intervals are
+        // nested inside them, so we'd double-count if we summed all intervals. Use containers only.
+        val lightIntervals = sleep.intervals.filterNot { it.isDeep }
+        val readings = mutableListOf<Int>()
+        for (interval in lightIntervals) {
+            healthDao.getHealthDataForRange(interval.start, interval.end).forEach { row ->
+                if (row.heartRate > 0) readings.add(row.heartRate)
+            }
+        }
+        if (readings.size < REST_HR_MIN_READINGS) return null
+        val lowest = readings.sorted().take(REST_HR_LOWEST_MINUTES)
+        return (lowest.sum().toDouble() / lowest.size).roundToInt()
     }
 
     override suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long> =

@@ -172,6 +172,14 @@ interface HealthDataApi {
     /** Returns the most recent non-zero heart rate reading, or null if none exists. */
     suspend fun getLatestHeartRateReading(): LatestHeartRate?
 
+    /**
+     * Computes the resting heart rate (BPM) for the given day from sleep + HR samples. Returns
+     * null when there's no sleep session or not enough HR samples within it.
+     *
+     * @param dayStartEpochSec start-of-day in epoch seconds (midnight local time)
+     */
+    suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int?
+
     /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
     suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
 

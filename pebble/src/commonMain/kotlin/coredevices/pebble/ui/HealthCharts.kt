@@ -182,6 +182,28 @@ internal fun BarChart(values: List<Long>, labels: List<String>, color: Color, sc
 }
 
 @Composable
+internal fun DayScrubStrip(labels: List<String>, scrub: ScrubState, tm: androidx.compose.ui.text.TextMeasurer) {
+    val n = labels.size
+    if (n == 0) return
+    val si = scrub.scrubIndex
+    val ls = TextStyle(fontSize = 10.sp, color = AxisLabelColor)
+    Canvas(Modifier.fillMaxWidth().height(28.dp).scrubGesture(n, scrub)) {
+        val cellW = size.width / n
+        if (si != null && si in 0 until n) {
+            drawRect(ChartOverlayColor, Offset(si * cellW, 0f), Size(cellW, size.height))
+            val cx = si * cellW + cellW / 2f
+            drawLine(ScrubLineColor, Offset(cx, 0f), Offset(cx, size.height), 1.5.dp.toPx())
+        }
+        for (i in 0 until n) {
+            val measured = tm.measure(labels[i], ls)
+            val tx = i * cellW + (cellW - measured.size.width) / 2f
+            val ty = (size.height - measured.size.height) / 2f
+            drawText(measured, topLeft = Offset(tx, ty))
+        }
+    }
+}
+
+@Composable
 internal fun StackedBarChart(data: List<StackedSleepEntry>, scrub: ScrubState, tm: androidx.compose.ui.text.TextMeasurer, typicalLine: Float = 0f) {
     if (data.isEmpty()) return
     val mx = data.maxOf { it.totalHours }.coerceAtLeast(0.1f)

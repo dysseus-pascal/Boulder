@@ -473,6 +473,7 @@ class FakeLibPebble : LibPebble {
     override suspend fun getSleepEntries(start: Long, end: Long) = emptyList<OverlayDataEntity>()
     override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? = null
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? = null
+    override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? = null
     override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()
     override suspend fun getTypicalSteps(dayOfWeek: Int) = emptyList<Long>()

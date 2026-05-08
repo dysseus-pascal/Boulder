@@ -273,6 +273,7 @@ private fun SleepStatsRow(st: SleepUiState) {
 @Composable
 private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
     val scrub = rememberScrubState()
+    val rhrScrub = rememberScrubState()
     val idx = scrub.scrubIndex
     val minPerBucket = if (st.hrSamples.isNotEmpty()) 1440 / st.hrSamples.size else 60
     // The chart draws a smoothed line straight through null buckets, so the user can scrub onto
@@ -296,6 +297,20 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
         else -> "avg bpm"
     }
 
+    val rhrIdx = rhrScrub.scrubIndex
+        ?.takeIf { range == HealthTimeRange.Weekly && it < st.restingHRSeries.size }
+    val rhrValue = if (rhrIdx != null) st.restingHRSeries[rhrIdx] else st.restingHR
+    val rhrLabel = when {
+        rhrIdx != null && rhrIdx < st.restingHRLabels.size -> "Resting · ${st.restingHRLabels[rhrIdx]}"
+        rhrValue != null -> "Resting"
+        else -> null
+    }
+    val rhrDisplayValue = when {
+        rhrValue != null -> "$rhrValue"
+        rhrIdx != null -> "--"
+        else -> null
+    }
+
     HealthCard(HRBgColor) {
         CardHeader(
             color = HRHeaderColor,
@@ -303,12 +318,18 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
             label = "",
             subtitle = hs,
             mainValue = hv,
+            secondLabel = rhrLabel,
+            secondValue = rhrDisplayValue,
         )
         if (st.isLoading) { ChartPlaceholder("Loading...", "") }
         else if (st.averageHR == null) { ChartPlaceholder("No heart rate data", "Heart rate is measured automatically by your watch") }
         else {
             if (range == HealthTimeRange.Daily && st.hrSamples.any { it != null }) {
                 val tm = rememberTextMeasurer(); HRLineChart(st.hrSamples, scrub, tm)
+            }
+            if (range == HealthTimeRange.Weekly && st.restingHRSeries.any { it != null }) {
+                val tm = rememberTextMeasurer()
+                DayScrubStrip(st.restingHRLabels, rhrScrub, tm)
             }
             if (st.zoneMinutes.isNotEmpty()) HRZoneBar(st.zoneMinutes)
         }

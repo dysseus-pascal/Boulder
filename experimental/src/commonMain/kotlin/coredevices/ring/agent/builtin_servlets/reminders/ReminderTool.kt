@@ -37,6 +37,12 @@ class ReminderTool: BuiltInMcpTool(
                             "description" to "If provided by the user, the date and/or time to remind the user in human readable format, use English keywords e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
                         ).toJson()
                     ),
+                    "duration_human" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "If provided by the user, the duration from now to remind the user in human readable format, use English keywords e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
+                        ).toJson()
+                    ),
                     "message" to JsonObject(
                         mapOf(
                             "type" to "string",
@@ -62,6 +68,7 @@ class ReminderTool: BuiltInMcpTool(
     @Serializable
     private data class RemindArgs(
         val date_time_human: String? = null,
+        val duration_human: String? = null,
         val message: String
     )
 
@@ -74,10 +81,10 @@ class ReminderTool: BuiltInMcpTool(
 
     override suspend fun call(jsonInput: String): ToolCallResult {
         val remindArgs = JsonSnake.decodeFromString<RemindArgs>(jsonInput)
-        val instant = remindArgs.date_time_human?.let {
+        val instant = (remindArgs.date_time_human ?: remindArgs.duration_human)?.let { dateTimeHuman ->
             val tz = TimeZone.currentSystemDefault()
             val parser = HumanDateTimeParser(timeZone = tz)
-            val parsed = parser.parse(remindArgs.date_time_human)
+            val parsed = parser.parse(dateTimeHuman)
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
                     logger.d { "Parsed absolute date: $parsed will assume 9am" }

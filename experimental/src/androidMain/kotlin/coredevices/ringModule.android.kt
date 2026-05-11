@@ -41,6 +41,7 @@ actual val platformRingModule = module {
         KMPHaversineSatelliteManager(
             pairedSatelliteIdProvider = { prefs.ringPaired.value?.replace(":", "") },
             debugDelegate = get(),
+            hacksDelegate = get(),
             collectionIndexStorage = get(),
             context = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,

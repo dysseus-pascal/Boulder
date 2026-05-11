@@ -4,6 +4,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineDebugDelegate
+import coredevices.haversine.KMPHaversineHacksDelegate
 import coredevices.indexai.agent.ServletRepository
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.di.libIndexModule
@@ -53,6 +54,7 @@ import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.ring.service.RingHacksDelegate
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
@@ -188,6 +190,7 @@ val experimentalModule = module {
     singleOf(::IndexButtonActionHandler)
     singleOf(::IndexButtonSequenceRecorder)
     singleOf(::FirestoreRingDebugDelegate) bind KMPHaversineDebugDelegate::class
+    singleOf(::RingHacksDelegate) bind KMPHaversineHacksDelegate::class
     singleOf(::McpSandboxRepository)
     singleOf(::BuiltinServletRepository) bind ServletRepository::class
 

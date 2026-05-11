@@ -93,6 +93,7 @@ class FakePreferences : Preferences {
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
+    override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -110,6 +111,7 @@ class FakePreferences : Preferences {
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
+    override fun setLastWipedRing(id: String?) {}
 }
 
 class FakeServletRepository : ServletRepository {

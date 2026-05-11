@@ -30,6 +30,7 @@ interface Preferences: BasePreferences {
     val backupEnabled: StateFlow<Boolean>
     val useEncryption: StateFlow<Boolean>
     val encryptionKeyFingerprint: StateFlow<String?>
+    val lastWipedRing: StateFlow<String?>
 
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
@@ -44,6 +45,7 @@ interface Preferences: BasePreferences {
     fun setBackupEnabled(enabled: Boolean)
     fun setUseEncryption(enabled: Boolean)
     fun setEncryptionKeyFingerprint(fingerprint: String?)
+    fun setLastWipedRing(id: String?)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -122,6 +124,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val useEncryption = _useEncryption.asStateFlow()
     private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
     override val encryptionKeyFingerprint = _encryptionKeyFingerprint.asStateFlow()
+    private val _lastWipedRing = MutableStateFlow(settings.getStringOrNull("last_wiped_ring"))
+    override val lastWipedRing = _lastWipedRing.asStateFlow()
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -226,6 +230,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.remove("encryption_key_fingerprint")
         }
         _encryptionKeyFingerprint.value = fingerprint
+    }
+
+    override fun setLastWipedRing(id: String?) {
+        if (id != null) {
+            settings.putString("last_wiped_ring", id)
+        } else {
+            settings.remove("last_wiped_ring")
+        }
+        _lastWipedRing.value = id
     }
 }
 

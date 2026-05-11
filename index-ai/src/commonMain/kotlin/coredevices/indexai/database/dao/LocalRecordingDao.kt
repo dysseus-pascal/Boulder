@@ -26,6 +26,9 @@ interface LocalRecordingDao {
     @Query("SELECT * FROM LocalRecording WHERE id = :id")
     suspend fun getRecording(id: Long): LocalRecording?
 
+    @Query("SELECT * FROM LocalRecording WHERE firestoreId = :firestoreId LIMIT 1")
+    suspend fun getByFirestoreId(firestoreId: String): LocalRecording?
+
     @Query("SELECT * FROM LocalRecording WHERE id = :id")
     fun getRecordingFlow(id: Long): Flow<LocalRecording?>
 

@@ -204,11 +204,10 @@ private fun RecordingDetailsContents(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text("Release->RX Latency: ${entry.buttonReleaseAdvertisementLatencyMs} ms")
-                            val rxFeed =
-                                (timestamp - Instant.fromEpochMilliseconds(
-                                    entry.advertisementReceived
-                                ))
-                            Text("RX->Feed Latency: ${rxFeed.inWholeMilliseconds} ms")
+                            val rxFeed = entry.advertisementReceived?.let { ar ->
+                                timestamp - Instant.fromEpochMilliseconds(ar)
+                            }
+                            Text("RX->Feed Latency: ${rxFeed?.inWholeMilliseconds ?: "—"} ms")
                         }
                     }
                 }

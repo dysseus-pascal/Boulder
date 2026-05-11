@@ -8,8 +8,12 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.api.NenyaClient
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
@@ -32,6 +36,8 @@ import org.koin.core.component.KoinComponent
  */
 class AgentNenya(
     private val nenyaClient: NenyaClient,
+    private val itemFactory: ItemFactory,
+    private val itemRepository: ItemRepository,
     conversation: List<ConversationMessageDocument>,
     private val useSearchMode: Boolean = false
 ): KoinComponent, Agent {
@@ -214,6 +220,20 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
             )
         )
+
+        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            runCatching {
+                itemRepository.setItem(
+                    itemFactory.simpleUid(),
+                    itemFactory.answerItem(
+                        sourceRecordingId = ctx.sourceRecordingId,
+                        createdAt = ctx.createdAt,
+                        question = input,
+                        answer = text ?: "No results"
+                    )
+                )
+            }
+        }
     }
 
     override suspend fun send(

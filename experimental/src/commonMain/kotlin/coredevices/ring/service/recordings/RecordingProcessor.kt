@@ -16,11 +16,16 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
 import coredevices.ring.data.entity.room.TraceEventData
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlin.time.Clock
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
@@ -32,12 +37,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
-import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
@@ -48,6 +51,9 @@ class RecordingProcessor(
     private val recordingEntryDao: RecordingEntryDao,
     private val trace: RingTraceSession,
     private val coreConfigFlow: CoreConfigFlow,
+    private val itemRepo: ItemRepository,
+    private val recordingRepo: RecordingRepository,
+    private val itemFactory: ItemFactory,
 ) {
     sealed interface RecordingStatus {
         /**
@@ -208,6 +214,11 @@ class RecordingProcessor(
         forcedTool: (suspend () -> ToolCallResult)? = null,
         text: String
     ) {
+        val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
+        val firestoreId = rec?.firestoreId
+        val createdAt = rec?.localTimestamp ?: Clock.System.now()
+        val sessionContext = firestoreId?.let { RecordingSessionContext(it, createdAt) }
+
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(
                 recordingId = recordingId,
@@ -225,7 +236,9 @@ class RecordingProcessor(
             recordingEntryId
         )
         try {
-            agent.send(text, mcpSession)
+            withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
+                agent.send(text, mcpSession)
+            }
         } catch (e: AgentNetworkException) {
             // Reset conversation to before processing so task retry works correctly
             logger.e(e) { "Error during agent processing" }

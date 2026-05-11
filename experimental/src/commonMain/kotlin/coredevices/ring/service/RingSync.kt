@@ -526,7 +526,11 @@ class RingSync(
                                                             buttonReleased = buttonReleaseTimestamp?.toEpochMilliseconds(),
                                                             transferCompleted = transferCompleteTimestamp.toEpochMilliseconds(),
                                                             buttonReleaseAdvertisementLatencyMs = buttonReleaseTimestamp
-                                                                ?.let { transfer.transferInfo!!.advertisementReceived - it.toEpochMilliseconds() },
+                                                                ?.let { brt ->
+                                                                    transfer.transferInfo!!.advertisementReceived?.let { ar ->
+                                                                        ar - brt.toEpochMilliseconds()
+                                                                    }
+                                                                },
                                                         )
                                                         withContext(Dispatchers.IO) {
                                                             ringTransferRepository.updateTransferInfo(

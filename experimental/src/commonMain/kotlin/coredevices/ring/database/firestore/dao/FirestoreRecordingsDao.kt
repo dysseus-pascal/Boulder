@@ -9,13 +9,30 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.QuerySnapshot
 import dev.gitlive.firebase.firestore.Source
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.time.Instant
 
 class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao("recordings", dbProvider) {
     private val collection get() = authenticatedId?.let { db.collection("$it/recordings") }
         ?: throw IllegalStateException("Not authenticated — cannot access recordings")
+
+    /** Pure client-side, offline-safe Firestore document id generator.
+     *  Returns a fresh 20-char alphanumeric id matching Firestore's own
+     *  auto-id format. No network round trip; safe to call before sign-in.
+     *
+     *  Used at [coredevices.ring.database.room.repository.RecordingRepository.createRecording]
+     *  time so every LocalRecording has its firestoreId pre-allocated. This
+     *  collapses a class of bugs around items pointing at recordings that
+     *  haven't been uploaded yet. The gitlive CollectionReference doesn't
+     *  expose Firestore's no-arg `document()` overload, so we generate the
+     *  same shape here directly. */
+    fun newDocumentId(): String = buildString(20) {
+        repeat(20) { append(FIRESTORE_ID_ALPHABET.random()) }
+    }
+
+    companion object {
+        private val FIRESTORE_ID_ALPHABET: List<Char> =
+            ('A'..'Z') + ('a'..'z') + ('0'..'9')
+    }
 
     suspend fun addRecording(
         recording: RecordingDocument
@@ -50,16 +67,7 @@ class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao
     }
 
     suspend fun getCount(): Int {
-        var count = 0
-        var cursor: DocumentSnapshot? = null
-        while (true) {
-            val snapshot = getPaginated(500, cursor)
-            val docs = snapshot.documents
-            if (docs.isEmpty()) break
-            count += docs.size
-            cursor = docs.lastOrNull()
-        }
-        return count
+        return collection.count()
     }
 
     suspend fun hasAnyRecordings(): Boolean {

@@ -33,7 +33,12 @@ import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap
+import coredevices.ring.service.indexfeed.IndexFeedSyncService
+import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
@@ -134,11 +139,22 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().traceEntryDao()
     }
+    single {
+        get<RingDatabase>().cachedItemDao()
+    }
+    single {
+        get<RingDatabase>().cachedListDao()
+    }
     singleOf(::RecordingRepository)
     single {
         RingTransferRepository(get(), get<RingDatabase>())
     }
     singleOf(::RecordingProcessingTaskRepository)
+    singleOf(::ItemRepository)
+    singleOf(::ListRepository)
+    singleOf(::DefaultListsBootstrap)
+    singleOf(::IndexFeedSyncService)
+    singleOf(::ItemFactory)
     singleOf(::PreferencesImpl) binds arrayOf(Preferences::class, BasePreferences::class)
     singleOf(::RingTraceSession)
     singleOf(::TraceSessionExporter)
@@ -181,7 +197,7 @@ val experimentalModule = module {
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
-    factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
+    factory { p -> AgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
     factory { p -> AgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }

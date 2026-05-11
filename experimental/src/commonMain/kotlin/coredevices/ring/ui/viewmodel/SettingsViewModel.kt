@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
@@ -90,6 +91,10 @@ class SettingsViewModel(
     private val noteIntegrationFactory: NoteIntegrationFactory,
     private val gTasksIntegration: GTasksIntegration,
     private val indexDeviceManager: IndexDeviceManager,
+    private val itemRepository: coredevices.ring.database.room.repository.ItemRepository,
+    private val listRepository: coredevices.ring.database.room.repository.ListRepository,
+    private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val recordingProcessingQueue: coredevices.ring.service.recordings.RecordingProcessingQueue,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -251,6 +256,13 @@ class SettingsViewModel(
 
     fun downloadFeedHistory() {
         if (_syncingFeedHistory.value) return
+        // Bail before the sub-steps run — otherwise the unconditional
+        // "Sync complete" at the end of `try` overwrites the
+        // "Not signed in" status that performFeedHistoryDownload sets.
+        if (Firebase.auth.currentUser == null) {
+            _syncStatus.value = "Not signed in"
+            return
+        }
         viewModelScope.launch {
             _syncingFeedHistory.value = true
             _syncStatus.value = "Starting sync..."
@@ -258,7 +270,20 @@ class SettingsViewModel(
                 withContext(Dispatchers.IO) {
                     uploadPendingRecordings()
                     performFeedHistoryDownload()
+                    // Items + lists ride the bidirectional syncher,
+                    // which is also continuously running in the
+                    // background. This is the manual "force a full
+                    // reconciliation" entry point.
+                    indexFeedSyncService.syncNow()
                 }
+                // Single final "done" status. Each sub-step sets its own
+                // in-flight label ("Uploading 22 items...", "Repairing 15
+                // item links...") and there's no easy way to know which
+                // step ran last (the early-return path of repair, the
+                // empty-set path of upload, etc.) — so a freeze on a
+                // mid-step label is too easy. One unconditional final
+                // string after the whole `try` block kills it.
+                _syncStatus.value = "Sync complete"
             } catch (e: Exception) {
                 Logger.withTag("FeedHistorySync").e(e) { "Feed history sync failed" }
                 _syncStatus.value = "Sync failed: ${e.message}"
@@ -266,54 +291,6 @@ class SettingsViewModel(
                 _syncingFeedHistory.value = false
             }
         }
-    }
-
-    private suspend fun uploadPendingRecordings() {
-        val log = Logger.withTag("FeedHistorySync")
-        val recordings = recordingRepository.getAllRecordings().first()
-        val pending = recordings.filter { it.firestoreId == null }
-        if (pending.isEmpty()) {
-            log.i { "No pending uploads" }
-            return
-        }
-        log.i { "Uploading ${pending.size} pending recordings to Firestore" }
-        _syncStatus.value = "Uploading ${pending.size} local recordings..."
-
-        for (recording in pending) {
-            try {
-                val entries = recordingEntryDao.getEntriesForRecording(recording.id).first()
-                val messages = conversationMessageDao.getMessagesForRecording(recording.id).first()
-                var doc = recording.toDocument(
-                    entries = entries.map { entry ->
-                        coredevices.indexai.data.entity.RecordingEntry(
-                            timestamp = entry.timestamp,
-                            fileName = entry.fileName,
-                            status = entry.status,
-                            transcription = entry.transcription,
-                            transcribedUsingModel = entry.transcribedUsingModel,
-                            error = entry.error,
-                            ringTransferInfo = entry.ringTransferInfo,
-                            userMessageId = entry.userMessageId
-                        )
-                    },
-                    messages = messages.map { it.document }
-                )
-                if (preferences.useEncryption.value) {
-                    val key = documentEncryptor.getKey()
-                    if (key != null) {
-                        doc = documentEncryptor.encryptDocument(doc, key)
-                    } else {
-                        log.w { "Encryption enabled but no key — uploading unencrypted" }
-                    }
-                }
-                val remoteId = firestoreRecordingsDao.addRecording(doc).id
-                recordingRepository.updateRecordingFirestoreId(recording.id, remoteId)
-                log.i { "Uploaded recording ${recording.id} → $remoteId" }
-            } catch (e: Exception) {
-                log.w(e) { "Failed to upload recording ${recording.id}: ${e.message}" }
-            }
-        }
-        _syncStatus.value = "Upload complete"
     }
 
     fun panicRing() {
@@ -329,6 +306,59 @@ class SettingsViewModel(
         }
     }
 
+    /** Trigger upload of any locally-queued recordings that don't have a
+     *  firestoreId yet. The actual upload happens in
+     *  [coredevices.ring.service.recordings.RecordingProcessingQueue]'s
+     *  push observer — which is the SINGLE uploader and uses
+     *  `uploadingIds` to dedup. We just bump `updated` so the Room flow
+     *  re-emits and the observer wakes up.
+     *
+     *  Don't upload directly from here: the observer already filters by
+     *  `firestoreId == null`, so a parallel upload from this function
+     *  would race the observer and create two Firestore docs for one
+     *  local recording (the observer's `addRecording` runs concurrently
+     *  with this one's). Auto-pull on a fresh device then mirrored both
+     *  docs as separate Room rows — the source of the duplicate
+     *  recordings users have been seeing in the feed. */
+    private suspend fun uploadPendingRecordings() {
+        val log = Logger.withTag("FeedHistorySync")
+        val recordings = recordingRepository.getAllRecordings().first()
+        val pending = recordings.filter { it.firestoreId == null }
+        if (pending.isEmpty()) {
+            log.i { "No pending uploads" }
+            return
+        }
+        log.i { "Kicking ${pending.size} pending recordings for upload" }
+        _syncStatus.value = "Uploading ${pending.size} local recordings..."
+        val now = kotlin.time.Clock.System.now()
+        val pendingIds = pending.map { it.id }.toSet()
+        for (recording in pending) {
+            recordingRepository.setRecordingUpdated(recording.id, now)
+        }
+        // Wait for the push observer to finish — every kicked id must
+        // gain a firestoreId before we move on. Without this the rest of
+        // downloadFeedHistory and the final "Sync complete" status race
+        // with in-flight uploads. Cap at 60s to avoid hanging forever
+        // if the observer is wedged (offline, auth dropped, etc).
+        try {
+            kotlinx.coroutines.withTimeout(60_000) {
+                recordingRepository.getAllRecordings()
+                    .first { recs ->
+                        val stillPending = recs.count {
+                            it.id in pendingIds && it.firestoreId == null
+                        }
+                        if (stillPending > 0) {
+                            _syncStatus.value = "Uploading $stillPending local recordings..."
+                        }
+                        stillPending == 0
+                    }
+            }
+            log.i { "All ${pending.size} pending recordings uploaded" }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            log.w { "Timed out waiting for ${pending.size} pending uploads — moving on" }
+        }
+    }
+
     private suspend fun performFeedHistoryDownload() {
         val log = Logger.withTag("FeedHistorySync")
 
@@ -340,21 +370,19 @@ class SettingsViewModel(
         }
         log.i { "Feed history sync started for user ${user.uid} (${user.email})" }
         log.i { "Firestore path: recordings/${user.uid}/recordings" }
-        _syncStatus.value = "Checking local data..."
-
-        val existingIds = recordingRepository.getAllFirestoreIds().toMutableSet()
-        // Also index by timestamp for dedup against re-imported backups
-        val localRecordings = recordingRepository.getAllRecordings().first()
-        val existingTimestamps = localRecordings.associate {
-            it.localTimestamp.toEpochMilliseconds() to it.id
-        }
-        log.i { "Found ${existingIds.size} existing firestoreIds, ${existingTimestamps.size} local recordings" }
         _syncStatus.value = "Fetching from cloud..."
 
         var cursor: dev.gitlive.firebase.firestore.DocumentSnapshot? = null
-        var totalDownloaded = 0
-        var totalSkipped = 0
+        var totalApplied = 0
         var totalRemote = 0
+        // Per-page docs are processed concurrently — ingestRemoteRecording
+        // is independent per doc (decrypt + Room insert + child rows).
+        // Room serialises its own writes at the SQLite layer; the
+        // ingestor is also idempotent (compares remote.updated vs
+        // local.updated and no-ops when local is at-or-newer), so a
+        // concurrent re-fire from the auto-pull snapshot listener can't
+        // produce duplicates.
+        val mutex = Mutex()
 
         while (true) {
             val snapshot = firestoreRecordingsDao.getPaginated(50, cursor)
@@ -362,132 +390,78 @@ class SettingsViewModel(
             if (docs.isEmpty()) break
             totalRemote += docs.size
 
-            for (doc in docs) {
-                val firestoreId = doc.id
-                if (existingIds.contains(firestoreId)) {
-                    totalSkipped++
-                    continue
-                }
-
-                try {
-                    var recording = doc.data<RecordingDocument>()
-
-                    // Decrypt if encrypted
-                    if (recording.encrypted != null) {
-                        val key = documentEncryptor.getKey()
-                        if (key != null) {
+            coroutineScope {
+                docs.map { doc ->
+                    async {
+                        try {
+                            val data = doc.data<RecordingDocument>()
+                            val before = recordingRepository.getByFirestoreId(doc.id)
                             try {
-                                recording = documentEncryptor.decryptDocument(recording, key)
+                                recordingProcessingQueue.ingestRemoteRecording(doc.id, data)
                             } catch (e: KeyFingerprintMismatchException) {
-                                log.e { "Recording $firestoreId encrypted with key ${e.expected} but local key is ${e.actual} — restore the original key" }
+                                log.e { "Recording ${doc.id} encrypted with key ${e.expected} but local key is ${e.actual} — restore the original key" }
                                 _syncStatus.value = "Key mismatch — restore the original encryption key"
-                                continue
+                                return@async
                             } catch (e: TamperedException) {
-                                log.e(e) { "Recording $firestoreId failed integrity check" }
-                                _syncStatus.value = "Recording $firestoreId failed integrity check"
-                                continue
+                                log.e(e) { "Recording ${doc.id} failed integrity check" }
+                                _syncStatus.value = "Recording ${doc.id} failed integrity check"
+                                return@async
                             }
-                        } else {
-                            log.w { "Encrypted recording $firestoreId but no key — storing encrypted" }
+                            val after = recordingRepository.getByFirestoreId(doc.id)
+                            // Count an "apply" when the row was created
+                            // OR when its updated stamp moved forward.
+                            if (before == null || (after != null && after.updated != before.updated)) {
+                                val n = mutex.withLock { ++totalApplied }
+                                _syncStatus.value = "Applied $n recordings..."
+                            }
+                        } catch (e: Exception) {
+                            log.w(e) { "Skipping recording ${doc.id}: ${e.message}" }
                         }
                     }
-
-                    // Check if a local recording with the same timestamp already exists
-                    // (handles re-imported backups that get new Firestore IDs)
-                    val tsKey = recording.timestamp.toEpochMilliseconds()
-                    val existingLocalId = existingTimestamps[tsKey]
-                    val localId = if (existingLocalId != null) {
-                        // Update the firestoreId to point to the new document
-                        recordingRepository.updateRecordingFirestoreId(existingLocalId, firestoreId)
-                        existingIds.add(firestoreId)
-                        log.d { "Matched existing local recording $existingLocalId by timestamp, updated firestoreId to $firestoreId" }
-                        existingLocalId
-                    } else {
-                        recordingRepository.createRecording(
-                            firestoreId = firestoreId,
-                            localTimestamp = recording.timestamp,
-                            assistantTitle = recording.assistantSession?.title,
-                            updated = recording.updated
-                        )
-                    }
-
-                    // Backfill entries/messages from the remote document when the local
-                    // row has none. On a fresh createRecording both queries return empty
-                    // and we fully populate; on a timestamp-dedup match we only fill in
-                    // if the existing row is missing its children (e.g. a prior sync
-                    // created the row without entries).
-                    val existingEntries = recordingEntryDao.getEntriesForRecording(localId).first()
-                    if (existingEntries.isEmpty() && recording.entries.isNotEmpty()) {
-                        recordingEntryDao.insertRecordingEntries(
-                            recording.entries.map { entry ->
-                                RecordingEntryEntity(
-                                    recordingId = localId,
-                                    timestamp = entry.timestamp,
-                                    fileName = entry.fileName,
-                                    status = entry.status,
-                                    transcription = entry.transcription,
-                                    transcribedUsingModel = entry.transcribedUsingModel,
-                                    error = entry.error,
-                                    ringTransferInfo = entry.ringTransferInfo,
-                                    userMessageId = entry.userMessageId
-                                )
-                            }
-                        )
-                    }
-
-                    val remoteMessages = recording.assistantSession?.messages
-                    if (!remoteMessages.isNullOrEmpty()) {
-                        val existingMessages = conversationMessageDao.getMessagesForRecording(localId).first()
-                        if (existingMessages.isEmpty()) {
-                            conversationMessageDao.insertMessages(
-                                remoteMessages.map { msg ->
-                                    ConversationMessageEntity(
-                                        recordingId = localId,
-                                        document = msg
-                                    )
-                                }
-                            )
-                        }
-                    }
-
-                    // Pin `updated` to the document's value — entry/message inserts above
-                    // auto-bump it to `now()`, which would otherwise make the upload
-                    // observer immediately re-upload a freshly-downloaded recording.
-                    recordingRepository.setRecordingUpdated(
-                        localId,
-                        Instant.fromEpochMilliseconds(recording.updated)
-                    )
-
-                    if (existingLocalId != null) {
-                        totalSkipped++
-                        continue
-                    }
-
-                    totalDownloaded++
-                    _syncStatus.value = "Downloaded $totalDownloaded recordings..."
-                } catch (e: Exception) {
-                    log.w(e) { "Skipping recording $firestoreId: ${e.message}" }
-                }
+                }.awaitAll()
             }
 
-            log.i { "Progress: fetched $totalRemote remote, downloaded $totalDownloaded new, skipped $totalSkipped existing" }
+            log.i { "Progress: fetched $totalRemote remote, applied $totalApplied" }
             cursor = docs.lastOrNull()
         }
 
-        log.i { "Feed history sync complete: $totalDownloaded downloaded, $totalSkipped already existed, $totalRemote total remote" }
-        _syncStatus.value = "Done — $totalDownloaded downloaded" + if (totalSkipped > 0) ", $totalSkipped already existed" else ""
+        log.i { "Feed history sync complete: applied $totalApplied of $totalRemote remote" }
+        // Cache the cloud-side count so the Settings → Backup dialog can
+        // display it instantly without re-paginating the entire collection
+        // (the prior implementation downloaded every full document body
+        // on every dialog open, which on a 1300+ recording user took a
+        // minute over mobile).
+        preferences.setLastBackupCount(totalRemote)
+        _syncStatus.value = "Done — applied $totalApplied of $totalRemote recordings"
     }
 
     // --- Backup ---
 
-    private val _backupCount = MutableStateFlow<Int?>(null)
-    val backupCount = _backupCount.asStateFlow()
+    /** Cached count from `Preferences.lastBackupCount`. Updated at the
+     *  end of every successful sync (`performFeedHistoryDownload`). The
+     *  Backup dialog reads this directly — no Firestore round-trip on
+     *  open. The Gitlive multiplatform Firestore SDK 2.4.0 doesn't
+     *  expose the server-side `count()` aggregation, so the previous
+     *  implementation paginated through every full document body just
+     *  to count them — slow on a 1300+ recording user. */
+    val backupCount = preferences.lastBackupCount
     private val _backupLoading = MutableStateFlow(false)
     val backupLoading = _backupLoading.asStateFlow()
     private val _backupStatus = MutableStateFlow<String?>(null)
     val backupStatus = _backupStatus.asStateFlow()
     val backupEnabled = preferences.backupEnabled
 
+    /** Refresh the cached backup count using Firestore's server-side
+     *  aggregation `count()` (one cheap read, no document bodies
+     *  transferred). The Settings → Backup dialog calls this on open
+     *  via `LaunchedEffect`. The result is written to
+     *  `Preferences.lastBackupCount` so subsequent opens render
+     *  instantly from the cached value while this refresh runs in
+     *  the background.
+     *
+     *  iOS: the native aggregate API isn't bound through Gitlive, so
+     *  the actual throws — we fall through to the legacy paginated
+     *  `getCount()` (slow on big collections, but correct). */
     fun loadBackupCount() {
         viewModelScope.launch {
             _backupLoading.value = true
@@ -495,10 +469,11 @@ class SettingsViewModel(
                 val count = withContext(Dispatchers.IO) {
                     firestoreRecordingsDao.getCount()
                 }
-                _backupCount.value = count
+                preferences.setLastBackupCount(count)
             } catch (e: Exception) {
-                Logger.withTag("Backup").e(e) { "Failed to load backup count" }
-                _backupStatus.value = "Failed to load count"
+                Logger.withTag("Backup").w(e) { "Failed to refresh backup count" }
+                // Don't surface as an error in the UI — the cached value
+                // (or "—" if never synced) stays as-is.
             } finally {
                 _backupLoading.value = false
             }
@@ -551,7 +526,7 @@ class SettingsViewModel(
                     log.i { "Deleted ${audioFileIds.size} audio files from Storage" }
                 }
 
-                _backupCount.value = 0
+                preferences.setLastBackupCount(0)
                 _backupStatus.value = "Backup deleted"
                 log.i { "All backup recordings and audio files deleted" }
             } catch (e: Exception) {
@@ -587,9 +562,17 @@ class SettingsViewModel(
                     recordingStorage.deleteAllCachedMetadata()
                     // Delete cached audio files from disk
                     recordingStorage.clearCacheDirectory()
+                    // Wipe items + lists too — Firestore is unaffected
+                    // because IndexFeedSyncService's push observer reads
+                    // through the Room flow (a hard DELETE removes rows
+                    // from the emission, no `deleted=true` tombstone is
+                    // synthesized). On the next snapshot the pull
+                    // listener re-ingests from Firestore.
+                    itemRepository.deleteAllLocal()
+                    listRepository.deleteAllLocal()
                 }
                 _backupStatus.value = "Local feed deleted"
-                log.i { "All local feed data deleted (recordings, entries, cache, metadata)" }
+                log.i { "All local feed data deleted (recordings, entries, items, lists, cache, metadata)" }
             } catch (e: Exception) {
                 log.e(e) { "Failed to delete local feed" }
                 _backupStatus.value = "Delete failed: ${e.message}"
@@ -771,11 +754,22 @@ class SettingsViewModel(
                 }
                 log.i { "Encrypted $audioEncrypted/${allAudioIds.size} audio files" }
 
-                // Step 6: Re-upload all documents encrypted (BEFORE deleting old ones)
+                // Step 6: Re-upload all documents encrypted IN PLACE.
+                // We overwrite the existing Firestore doc via set() rather
+                // than addRecording() so the firestoreId stays stable.
+                // Reassigning firestoreIds would orphan every item that
+                // references this recording via its `sourceRecordingId`.
                 _migrationStatus.value = "Encrypting documents..."
-                val oldFirestoreIds = allRecordings.mapNotNull { it.firestoreId }
                 var uploaded = 0
                 for (recording in allRecordings) {
+                    val firestoreId = recording.firestoreId
+                    if (firestoreId.isNullOrBlank()) {
+                        // Legacy row that was never uploaded. Skip — the
+                        // upload observer will pick it up later and
+                        // upload it pre-encrypted.
+                        log.w { "Skipping recording ${recording.id} during encryption migration: no firestoreId" }
+                        continue
+                    }
                     try {
                         val entries = withContext(Dispatchers.IO) {
                             recordingEntryDao.getEntriesForRecording(recording.id).first()
@@ -783,6 +777,13 @@ class SettingsViewModel(
                         val messages = withContext(Dispatchers.IO) {
                             conversationMessageDao.getMessagesForRecording(recording.id).first()
                         }
+                        // Preserve any metadata already on the remote doc.
+                        val preservedMetadata = try {
+                            withContext(Dispatchers.IO) {
+                                firestoreRecordingsDao.getRecording(firestoreId).get()
+                                    .data<RecordingDocument>().metadata
+                            }
+                        } catch (e: Exception) { null }
                         var doc = recording.toDocument(
                             entries = entries.map { entry ->
                                 coredevices.indexai.data.entity.RecordingEntry(
@@ -796,29 +797,18 @@ class SettingsViewModel(
                                     userMessageId = entry.userMessageId
                                 )
                             },
-                            messages = messages.map { it.document }
+                            messages = messages.map { it.document },
+                            metadata = preservedMetadata,
                         )
                         doc = documentEncryptor.encryptDocument(doc, key)
-                        val remoteId = withContext(Dispatchers.IO) {
-                            firestoreRecordingsDao.addRecording(doc).id
-                        }
                         withContext(Dispatchers.IO) {
-                            recordingRepository.updateRecordingFirestoreId(recording.id, remoteId)
+                            firestoreRecordingsDao.setRecording(firestoreId, doc)
                         }
                         uploaded++
                         _migrationStatus.value = "Encrypted docs $uploaded/${allRecordings.size}..."
                     } catch (e: Exception) {
                         log.w(e) { "Failed to re-upload recording ${recording.id}" }
                     }
-                }
-
-                // Step 7: Delete old unencrypted Firestore documents
-                if (oldFirestoreIds.isNotEmpty()) {
-                    _migrationStatus.value = "Cleaning up old documents..."
-                    withContext(Dispatchers.IO) {
-                        firestoreRecordingsDao.deleteRecordingsByIds(oldFirestoreIds)
-                    }
-                    log.i { "Deleted ${oldFirestoreIds.size} old unencrypted Firestore documents" }
                 }
 
                 log.i { "Encryption migration complete: $uploaded docs, $audioEncrypted audio files" }
@@ -1062,12 +1052,14 @@ class SettingsViewModel(
                         RecordingImport(dirId, doc, audioFiles)
                     }
 
-                    // Build dedup sets from local DB
+                    // Dedup by firestoreId only. Timestamp-based dedup
+                    // was prone to cascading corruption when multiple
+                    // recordings share an epoch-millisecond timestamp
+                    // (notably ~520 of this user's docs that round-trip
+                    // to epoch-0 on the Kotlin client) — see the same
+                    // class of bug previously removed from
+                    // performFeedHistoryDownload.
                     val existingFirestoreIds = recordingRepository.getAllFirestoreIds()
-                    val localRecordings = recordingRepository.getAllRecordings().first()
-                    val existingTimestamps = localRecordings.associate {
-                        it.localTimestamp.toEpochMilliseconds() to it.id
-                    }
 
                     _importStatus.value = "Importing ${recordings.size} recordings..."
                     log.i { "Parsed ${recordings.size} recordings. ${existingFirestoreIds.size} already in local DB." }
@@ -1094,17 +1086,14 @@ class SettingsViewModel(
                                 semaphore.withPermit {
                                     try {
                                         // If this recording already exists locally (by firestoreId
-                                        // or timestamp), skip the cloud upload but still backfill
-                                        // entries/messages from the document when the local row
-                                        // has none — this handles re-syncing on top of a local row
-                                        // that was created without its children.
-                                        val tsMs = rec.doc.timestamp.toEpochMilliseconds()
-                                        val existingLocalId = existingTimestamps[tsMs]
-                                        val alreadyExists = existingFirestoreIds.contains(rec.firestoreId) ||
-                                            existingLocalId != null
+                                        // — the only stable identifier across devices), skip the
+                                        // cloud upload but still backfill entries/messages from the
+                                        // document when the local row has none.
+                                        val existingLocalRow = recordingRepository.getByFirestoreId(rec.firestoreId)
+                                        val alreadyExists = existingLocalRow != null
                                         val localId = if (alreadyExists) {
                                             counterMutex.withLock { skipped++ }
-                                            existingLocalId
+                                            existingLocalRow?.id
                                         } else {
                                             // 1. Upload audio files to Firebase Storage (overwrite to fix partials)
                                             for (audio in rec.audioFiles) {

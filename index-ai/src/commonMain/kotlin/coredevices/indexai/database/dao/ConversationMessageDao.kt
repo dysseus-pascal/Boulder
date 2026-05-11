@@ -49,4 +49,9 @@ interface ConversationMessageDao {
         messages.asSequence().map { it.recordingId }.distinct().forEach { touchLocalRecording(it, now) }
         return ids
     }
+
+    /** Used by the remote-recording ingest path to wipe-and-replace
+     *  children when Firestore has a newer version of the recording. */
+    @Query("DELETE FROM ConversationMessageEntity WHERE recordingId = :recordingId")
+    suspend fun deleteAllForRecording(recordingId: Long)
 }

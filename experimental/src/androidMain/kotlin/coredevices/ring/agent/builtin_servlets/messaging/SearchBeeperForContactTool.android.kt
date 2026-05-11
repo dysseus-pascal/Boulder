@@ -10,7 +10,11 @@ import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactT
 import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactToolConstants.TOOL_DESCRIPTION
 import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactToolConstants.TOOL_NAME
 import coredevices.ring.database.Preferences
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -23,6 +27,8 @@ actual class SearchBeeperForContactTool : BuiltInMcpTool(
     extraContext = EXTRA_CONTEXT
 ), KoinComponent {
     private val prefs: Preferences by inject()
+    private val itemRepo: ItemRepository by inject()
+    private val itemFactory: ItemFactory by inject()
 
     companion object {
         private val logger = Logger.withTag("SearchBeeperForContactTool")
@@ -65,9 +71,25 @@ actual class SearchBeeperForContactTool : BuiltInMcpTool(
 
         logger.d { "Contact search for '$name': ${matches.size} match(es), best=${matches.first().first.name} (score=${matches.first().second})" }
 
+        val summary = "Found ${resultMap.size} contact(s) matching '$name'"
+        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            runCatching {
+                itemRepo.setItem(
+                    itemFactory.simpleUid(),
+                    itemFactory.actionLogItem(
+                        sourceRecordingId = ctx.sourceRecordingId,
+                        createdAt = ctx.createdAt,
+                        title = "Searched contacts · $name",
+                        toolName = TOOL_NAME,
+                        success = true,
+                        body = summary,
+                    )
+                )
+            }
+        }
         return ToolCallResult(
             JsonSnake.encodeToString(resultMap),
-            SemanticResult.SupportingData("Found ${resultMap.size} contact(s) matching '$name'")
+            SemanticResult.SupportingData(summary)
         )
     }
 }

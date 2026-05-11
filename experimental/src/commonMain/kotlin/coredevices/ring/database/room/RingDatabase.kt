@@ -11,6 +11,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.ConversationMessageEntity
+import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -33,10 +34,14 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
+import coredevices.ring.data.entity.room.indexfeed.CachedItem
+import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
+import coredevices.ring.database.room.dao.CachedItemDao
+import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
@@ -70,12 +75,14 @@ import kotlin.uuid.Uuid
         RecordingProcessingTaskEntity::class,
         TraceSessionEntity::class,
         TraceEntryEntity::class,
+        CachedItem::class,
+        CachedList::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 26,
+    version = 27,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -102,6 +109,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 23, to = 24),
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26),
+        AutoMigration(from = 26, to = 27),
     ]
 )
 @TypeConverters(Converters::class)
@@ -121,6 +129,8 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
     abstract fun traceSessionDao(): TraceSessionDao
     abstract fun traceEntryDao(): TraceEntryDao
+    abstract fun cachedItemDao(): CachedItemDao
+    abstract fun cachedListDao(): CachedListDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -224,5 +234,14 @@ class Converters {
     @TypeConverter
     fun StringToStringList(string: String?) = string?.let {
         JsonSnake.decodeFromString<List<String>>(it)
+    }
+
+    @TypeConverter
+    fun ItemMetadataToString(metadata: ItemDocument.ItemMetadata?) =
+        metadata?.let { JsonSnake.encodeToString(ItemDocument.ItemMetadata.serializer(), it) }
+
+    @TypeConverter
+    fun StringToItemMetadata(string: String?) = string?.let {
+        JsonSnake.decodeFromString(ItemDocument.ItemMetadata.serializer(), it)
     }
 }

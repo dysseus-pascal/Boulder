@@ -71,6 +71,10 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
         get() = settings.getBoolean(KEY_HAD_NON_ANONYMOUS_ACCOUNT, false)
         set(value) { settings[KEY_HAD_NON_ANONYMOUS_ACCOUNT] = value }
 
+    private var hadAnonymousAccount: Boolean
+        get() = settings.getBoolean(KEY_HAD_ANONYMOUS_ACCOUNT, false)
+        set(value) { settings[KEY_HAD_ANONYMOUS_ACCOUNT] = value }
+
     // True only during initial startup, before we've seen the first non-null user.
     // Prevents the long delay from applying on explicit sign-out.
     private var isInitialStartup = true
@@ -86,18 +90,18 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     logger.v { "User changed: $firebaseUser" }
                     if (firebaseUser == null) {
                         if (isInitialStartup) {
-                            if (hadNonAnonymousAccount) {
-                                // User had a real account — don't create an anonymous one,
-                                // that would orphan all their Firestore data under the old UID.
-                                // Keep waiting for Firebase to restore auth state.
-                                logger.i { "User is null but hadNonAnonymousAccount=true, waiting for real account restoration" }
+                            if (hadNonAnonymousAccount || hadAnonymousAccount) {
+                                // Previously had an account (anon or real) — don't create a new
+                                // anonymous user, that would orphan the previous UID's Firestore
+                                // data. Wait for Firebase to restore auth state.
+                                logger.i { "User is null, prior account exists (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), waiting for restoration" }
                                 _user.emit(null)
                                 while (true) {
                                     delay(1.minutes)
-                                    logger.w { "Still waiting for real account restoration (hadNonAnonymousAccount=true)" }
+                                    logger.w { "Still waiting for auth restoration (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
                                 }
                             }
-                            logger.i { "User is null, hadNonAnonymousAccount=false, isInitialStartup=true, delay=2s before anonymous sign-in" }
+                            logger.i { "User is null, no prior account, delay=2s before anonymous sign-in" }
                             delay(2.seconds)
                             logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
                         } else {
@@ -115,7 +119,12 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                         flowOf(null)
                     } else {
                         isInitialStartup = false
-                        if (!firebaseUser.isAnonymous) {
+                        if (firebaseUser.isAnonymous) {
+                            if (!hadAnonymousAccount) {
+                                logger.i { "Anonymous user observed, setting hadAnonymousAccount=true" }
+                                hadAnonymousAccount = true
+                            }
+                        } else {
                             if (!hadNonAnonymousAccount) {
                                 logger.i { "Active login detected (hadNonAnonymousAccount false→true)" }
                                 pendingLoginEmission = true
@@ -221,6 +230,7 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
 }
 
 private const val KEY_HAD_NON_ANONYMOUS_ACCOUNT = "had_non_anonymous_account"
+private const val KEY_HAD_ANONYMOUS_ACCOUNT = "had_anonymous_account"
 
 fun generateRandomUserToken(): String {
     val charPool = "0123456789abcdef"

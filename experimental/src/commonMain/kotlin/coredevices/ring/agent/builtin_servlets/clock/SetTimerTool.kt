@@ -49,10 +49,12 @@ class SetTimerTool : BuiltInMcpTool(
             required = listOf("time_human")
         )
     ),
+    extraContext = """
+        When using the 'set_timer' tool, lean towards setting timers for durations when it's ambiguous, for example a timer for '3:20' should be set for '3 hours and 20 minutes' not 'at 3:20'.
+    """.trimIndent()
 ), KoinComponent {
     private val itemRepo: ItemRepository by inject()
     private val itemFactory: ItemFactory by inject()
-
     companion object {
         private val logger = Logger.withTag(SetTimerTool::class.simpleName!!)
         const val TOOL_NAME = "set_timer"

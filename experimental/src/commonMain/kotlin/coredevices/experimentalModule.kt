@@ -51,7 +51,6 @@ import coredevices.ring.service.IndexButtonSequenceRecorder
 import coredevices.ring.service.IndexNotificationManager
 import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.ring.service.RecordingBackgroundScope
-import coredevices.ring.service.RingBackgroundManager
 import coredevices.ring.service.RingPairing
 import coredevices.ring.service.RingSync
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -191,7 +190,6 @@ val experimentalModule = module {
     singleOf(::DocumentEncryptor)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
-    singleOf(::RingBackgroundManager)
     singleOf(::IndexNotificationManager)
     singleOf(::RingPairing)
     singleOf(::ExperimentalDevices)

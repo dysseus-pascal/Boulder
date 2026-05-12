@@ -4,12 +4,12 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
-import coredevices.ring.service.RingBackgroundManager
+import coredevices.ring.service.BackgroundRingService
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 
 actual class RingDelegate(
-    private val ringBackgroundManager: RingBackgroundManager,
+    private val backgroundRingService: BackgroundRingService,
     private val coreConfigHolder: CoreConfigHolder,
     private val recordingsDao: FirestoreRecordingsDao,
     private val settings: Settings,
@@ -23,7 +23,9 @@ actual class RingDelegate(
      */
     actual suspend fun init() {
         listenForUserPresent(recordingsDao, coreConfigHolder, settings)
-        ringBackgroundManager.startBackgroundIfEnabled()
+        if (!backgroundRingService.isRunning.value) {
+            backgroundRingService.startRingSyncJob()
+        }
         firestoreKnownRingsSync.init()
     }
 

@@ -164,6 +164,7 @@ kotlin {
             implementation(libs.play.update)
             implementation(libs.play.update.ktx)
             implementation(libs.coil.gif)
+            implementation(libs.coredevices.haversine)
         }
         androidInstrumentedTest.dependencies {
             implementation(libs.androidx.test.runner)

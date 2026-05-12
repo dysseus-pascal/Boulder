@@ -6,6 +6,7 @@ import PlatformShareLauncher
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import coredevices.analytics.createAndroidAnalytics
 import coredevices.coreapp.BuildConfig
+import coredevices.coreapp.PebbleBackgroundManager
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
@@ -66,4 +67,5 @@ val androidDefaultModule = module {
     }
     single { createAndroidAnalytics(get()) }
     singleOf(::ModelDownloadManager)
+    singleOf(::PebbleBackgroundManager)
 }

@@ -633,6 +633,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                 ),
+                basicSettingsToggleItem(
+                    title = "Foreground Service",
+                    description = "Show foreground service notification to keep app alive in background",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = coreConfig.androidForegroundServiceForWatchConnection,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                androidForegroundServiceForWatchConnection = it,
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsForegroundService() },
+                ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Quick replies",
                     description = "Preset messages for notification replies on the watch (canned messages)",

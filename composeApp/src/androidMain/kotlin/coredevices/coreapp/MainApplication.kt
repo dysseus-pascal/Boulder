@@ -57,6 +57,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
     private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
+    private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -97,6 +98,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         )
         scheduleBackgroundJob(AppContext(this), coreConfigHolder.config.value)
         commonAppDelegate.init()
+        pebbleBackgroundManager.monitorToStartBackground()
     }
 
     private fun dumpPreviousExitInfo() {

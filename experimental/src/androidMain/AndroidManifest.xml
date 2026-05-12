@@ -42,9 +42,6 @@
         <package android:name="com.beeper.android"/>
     </queries>
     <application>
-        <service android:name="coredevices.ring.service.RingService"
-            android:foregroundServiceType="connectedDevice"
-            android:exported="false"/>
         <receiver android:name=".glance.VoiceWidgetReceiver"
                   android:exported="true"
                   android:enabled="false">

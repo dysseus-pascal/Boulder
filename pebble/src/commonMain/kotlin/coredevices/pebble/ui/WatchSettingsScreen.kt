@@ -969,6 +969,32 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ),
+                SettingsItem(
+                    title = "Reminder Vibration Pattern",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Calendar,
+                    show = {
+                        libPebbleConfig.watchConfig.calendarPins &&
+                                libPebbleConfig.watchConfig.calendarReminders &&
+                                pebbleFeatures.supportsVibePatterns()
+                    },
+                    item = {
+                        SelectVibePatternOrNone(
+                            currentPattern = libPebbleConfig.watchConfig.overrideCalendarVibePattern,
+                            onChangePattern = { pattern ->
+                                libPebble.updateConfig(
+                                    libPebbleConfig.copy(
+                                        watchConfig = libPebbleConfig.watchConfig.copy(
+                                            overrideCalendarVibePattern = pattern?.name
+                                        )
+                                    )
+                                )
+                            },
+                            subtext = "Override the default on the watch",
+                            title = "Reminder Vibration Pattern",
+                        )
+                    },
+                ),
                 basicSettingsToggleItem(
                     title = "Declined Events",
                     description = "Display declined calendar events",

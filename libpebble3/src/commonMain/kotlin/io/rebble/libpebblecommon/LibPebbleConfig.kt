@@ -64,6 +64,10 @@ data class WatchConfig(
     val calendarPins: Boolean = true,
     val calendarReminders: Boolean = true,
     val calendarShowDeclinedEvents: Boolean = false,
+    /**
+     * Name of the vibe pattern used for every calendar reminder; the watch's own default when null.
+     */
+    val overrideCalendarVibePattern: String? = null,
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val verboseWatchManagerLogging: Boolean = false,

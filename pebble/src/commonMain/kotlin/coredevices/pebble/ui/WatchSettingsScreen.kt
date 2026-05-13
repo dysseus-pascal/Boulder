@@ -1311,7 +1311,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Watch settings sync",
-                    description = "Only for debugging - disables writing settings to watch when disabled",
+                    description = "Only for debugging - disables syncing settings with watch when disabled",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Debug,
                     checked = libPebbleConfig.watchConfig.enableWatchSettingsSync,

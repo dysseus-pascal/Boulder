@@ -221,7 +221,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
             )
         )
 
-        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+        currentSessionContext()?.let { ctx ->
             runCatching {
                 itemRepository.setItem(
                     itemFactory.simpleUid(),

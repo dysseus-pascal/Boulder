@@ -1309,6 +1309,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Watch settings sync",
+                    description = "Only for debugging - disables writing settings to watch when disabled",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = libPebbleConfig.watchConfig.enableWatchSettingsSync,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    enableWatchSettingsSync = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
                 basicSettingsDropdownItem(
                     id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",

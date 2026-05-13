@@ -6,6 +6,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.BlobDbDao
@@ -109,6 +110,7 @@ class BlobDB(
     private val timeProvider: TimeProvider,
     private val notificationConfigFlow: NotificationConfigFlow,
     private val settings: Settings,
+    private val libPebbleConfigFlow: LibPebbleConfigFlow,
 ) {
     protected val watchIdentifier: String = identifier.asString
 
@@ -179,6 +181,7 @@ class BlobDB(
             firmwareVersion = firmwareVersion,
             vibePatternDao = blobDatabases.getVibePatternDao(),
             notificationRuleDao = blobDatabases.getNotificationRuleDao(),
+            libPebbleConfigFlow = libPebbleConfigFlow,
         )
         val deviceHasPreviouslySyncedSettings =
             loadDevicePreviousSettingsSyncState().identifiers.contains(identifier.asString)

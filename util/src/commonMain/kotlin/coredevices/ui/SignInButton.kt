@@ -6,10 +6,11 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,17 +39,32 @@ import org.koin.compose.koinInject
 
 internal expect suspend fun signInWithCredential(credential: AuthCredential)
 
+// Thrown when the current user is anonymous and the supplied credential belongs to an
+// existing Firebase account, so linking is not possible. Completing sign-in would switch
+// to the existing account's UID and orphan the anonymous account's per-UID Firestore data
+// (locker entries, user doc fields). The caller must confirm with the user before
+// proceeding via [forceSignInWithCredential].
+internal class AccountSwitchRequiredException(val credential: AuthCredential) : Exception(
+    "Sign-in target account already exists; switching would abandon anonymous-account data"
+)
+
+internal suspend fun forceSignInWithCredential(credential: AuthCredential) {
+    Firebase.auth.signInWithCredential(credential)
+}
+
 @Composable
-fun SignInButton(
+private fun SignInButton(
     onError: (String) -> Unit = {},
     onSuccess: () -> Unit = {},
     text: String,
     credentialProvider: suspend (context: PlatformUiContext) -> AuthCredential?,
     primaryColor: Boolean,
+    skipAccountSwitchConfirmation: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val analyticsBackend: AnalyticsBackend = koinInject()
     val context = rememberUiContext()
+    var pendingSwitchCredential by remember { mutableStateOf<AuthCredential?>(null) }
     PebbleElevatedButton(
         onClick = {
             // Must use GlobalScope here: on iOS, presenting the native Apple/Google sign-in sheet
@@ -64,15 +80,19 @@ fun SignInButton(
                 }
                 try {
                     signInWithCredential(credential)
-                    Firebase.auth.currentUser?.emailOrNull?.let {
-                        analyticsBackend.setUser(email = it)
+                    completeSignIn(analyticsBackend, credential, onSuccess)
+                } catch (e: AccountSwitchRequiredException) {
+                    if (skipAccountSwitchConfirmation) {
+                        try {
+                            forceSignInWithCredential(e.credential)
+                            completeSignIn(analyticsBackend, e.credential, onSuccess)
+                        } catch (e2: Exception) {
+                            Logger.e(e2) { "Error during forced account switch: ${e2.message}" }
+                            onError("Network error during sign in")
+                        }
+                    } else {
+                        pendingSwitchCredential = e.credential
                     }
-                    Logger.i { "Signed in successfully as ${Firebase.auth.currentUser?.uid} via ${credential.providerId}" }
-                    analyticsBackend.logEvent(
-                        "signed_in_google",
-                        mapOf("provider" to credential.providerId)
-                    )
-                    onSuccess()
                 } catch (e: Exception) {
                     Logger.e(e) { "Error signing in with credential: ${e.message}" }
                     onError("Network error during sign in")
@@ -84,11 +104,69 @@ fun SignInButton(
         primaryColor = primaryColor,
         modifier = modifier,
     )
+
+    pendingSwitchCredential?.let { credential ->
+        AccountSwitchConfirmationDialog(
+            onConfirm = {
+                pendingSwitchCredential = null
+                GlobalScope.launch(Dispatchers.Main) {
+                    try {
+                        forceSignInWithCredential(credential)
+                        completeSignIn(analyticsBackend, credential, onSuccess)
+                    } catch (e: Exception) {
+                        Logger.e(e) { "Error completing forced account switch: ${e.message}" }
+                        onError("Network error during sign in")
+                    }
+                }
+            },
+            onDismiss = { pendingSwitchCredential = null },
+        )
+    }
+}
+
+private fun completeSignIn(
+    analyticsBackend: AnalyticsBackend,
+    credential: AuthCredential,
+    onSuccess: () -> Unit,
+) {
+    Firebase.auth.currentUser?.emailOrNull?.let {
+        analyticsBackend.setUser(email = it)
+    }
+    Logger.i { "Signed in successfully as ${Firebase.auth.currentUser?.uid} via ${credential.providerId}" }
+    analyticsBackend.logEvent(
+        "signed_in_google",
+        mapOf("provider" to credential.providerId)
+    )
+    onSuccess()
+}
+
+@Composable
+private fun AccountSwitchConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sign in to existing account?") },
+        text = {
+            Text(
+                "This account already exists. Signing in will switch to it, and any " +
+                    "apps or settings saved as a guest on this device won't carry over."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Sign in anyway") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
 fun SignInDialog(
     onDismiss: () -> Unit = {},
+    skipAccountSwitchConfirmation: Boolean = false,
 ) {
     Dialog(
         onDismissRequest = onDismiss
@@ -107,16 +185,25 @@ fun SignInDialog(
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.padding(8.dp)
                 )
-                SignInButtons(onDismiss, primaryColor = true)
+                SignInButtons(
+                    onDismiss = onDismiss,
+                    primaryColor = true,
+                    skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
+                )
             }
         }
     }
 }
 
+// Set [skipAccountSwitchConfirmation] = true on screens where the user cannot yet have
+// any anonymous-account data worth preserving (e.g. onboarding, before any apps are
+// installed). It bypasses the "Sign in to existing account?" dialog that would otherwise
+// appear when linking the anonymous account fails because the destination account exists.
 @Composable
 fun SignInButtons(
     onDismiss: () -> Unit,
     primaryColor: Boolean,
+    skipAccountSwitchConfirmation: Boolean = false,
 ) {
     val koin = currentKoinScope()
     var error by remember { mutableStateOf<String?>(null) }
@@ -137,6 +224,7 @@ fun SignInButtons(
                     googleAuthUtil.signInGoogle(context)
                 },
                 primaryColor = primaryColor,
+                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
                 modifier = Modifier.fillMaxWidth(),
             )
             SignInButton(
@@ -148,6 +236,7 @@ fun SignInButtons(
                     appleAuthUtil.signInApple(context)
                 },
                 primaryColor = primaryColor,
+                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
                 modifier = Modifier.fillMaxWidth(),
             )
             SignInButton(
@@ -159,6 +248,7 @@ fun SignInButtons(
                     githubAuthUtil.signInGithub(context)
                 },
                 primaryColor = primaryColor,
+                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

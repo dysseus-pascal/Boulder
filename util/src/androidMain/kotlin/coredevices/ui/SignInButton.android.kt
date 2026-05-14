@@ -6,15 +6,19 @@ import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.auth
 
+private val logger = Logger.withTag("SignInButton.ios")
+
 internal actual suspend fun signInWithCredential(credential: AuthCredential) {
-    try {
-        if (Firebase.auth.currentUser?.isAnonymous == true) {
-            if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
-                Logger.i { "Successfully linked anonymous user to account" }
-            }
+    val currentUser = Firebase.auth.currentUser
+    if (currentUser?.isAnonymous == true) {
+        try {
+            currentUser.linkWithCredential(credential)
+            logger.i { "Successfully linked anonymous user to account" }
+            return
+        } catch (_: FirebaseAuthUserCollisionException) {
+            logger.i { "User is already created, not linking anonymous user" }
+            throw AccountSwitchRequiredException(credential)
         }
-    } catch (_: FirebaseAuthUserCollisionException) {
-        Logger.i { "User is already created, not linking anonymous user" }
     }
     Firebase.auth.signInWithCredential(credential)
 }

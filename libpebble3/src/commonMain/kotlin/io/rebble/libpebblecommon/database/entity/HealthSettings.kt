@@ -31,6 +31,11 @@ import kotlin.time.Instant.Companion.DISTANT_PAST
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+/**
+ * This is the legacy database for health settings. WatchPrefEntity was introduced for new watches,
+ * which actually contains these keys - but old watches only support this DB ID for health settings,
+ * so this is the one we use.
+ */
 @GenerateRoomEntity(
     primaryKey = "id",
     databaseId = BlobDatabase.HealthParams,

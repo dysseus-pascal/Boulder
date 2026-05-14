@@ -1,7 +1,10 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
+import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue.Companion.asBytes
@@ -27,6 +30,8 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.time.Instant.Companion.DISTANT_PAST
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -47,6 +52,8 @@ import kotlinx.serialization.json.Json
 data class HealthSettingsEntry(
     val id: String,
     val value: String,
+    @ColumnInfo(defaultValue = "0")
+    val timestamp: MillisecondInstant = MillisecondInstant(Instant.fromEpochMilliseconds(0)),
 ) : BlobDbItem {
     override fun key(): UByteArray = SFixedString(
         mapper = StructMapper(),
@@ -68,6 +75,8 @@ data class HealthSettingsEntry(
     }
 
     override fun recordHashCode(): Int = hashCode()
+
+    override fun timestamp(): Instant = timestamp.instant
 }
 
 private const val KEY_ACTIVITY_PREFERENCES = "activityPreferences"
@@ -137,6 +146,7 @@ fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
 }
 
 suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettings) {
+    val now = Clock.System.now().asMillisecond()
     insertOrReplace(
         HealthSettingsEntry(
             id = KEY_ACTIVITY_PREFERENCES,
@@ -149,6 +159,7 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
                 ageYears = healthSettings.ageYears,
                 gender = healthSettings.gender,
             ).encodeToString(),
+            timestamp = now,
         )
     )
     insertOrReplace(
@@ -157,6 +168,7 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
             value = UnitsDistanceValue(
                 imperialUnits = healthSettings.imperialUnits,
             ).encodeToString(),
+            timestamp = now,
         )
     )
     insertOrReplace(
@@ -167,6 +179,7 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
                 measurementInterval = healthSettings.hrmMeasurementInterval,
                 activityTrackingEnabled = healthSettings.hrmActivityTrackingEnabled,
             ).encodeToString(),
+            timestamp = now,
         )
     )
     insertOrReplace(
@@ -180,6 +193,7 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
                 zone2Threshold = healthSettings.hrZone2Threshold,
                 zone3Threshold = healthSettings.hrZone3Threshold,
             ).encodeToString(),
+            timestamp = now,
         )
     )
 }

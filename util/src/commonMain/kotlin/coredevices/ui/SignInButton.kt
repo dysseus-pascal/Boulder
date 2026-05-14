@@ -49,7 +49,10 @@ internal class AccountSwitchRequiredException(val credential: AuthCredential) : 
 )
 
 internal suspend fun forceSignInWithCredential(credential: AuthCredential) {
+    val beforeUid = Firebase.auth.currentUser?.uid?.take(8)
+    val wasAnonymous = Firebase.auth.currentUser?.isAnonymous
     Firebase.auth.signInWithCredential(credential)
+    Logger.i { "forceSignInWithCredential: provider=${credential.providerId} beforeUid=$beforeUid wasAnonymous=$wasAnonymous finalUid=${Firebase.auth.currentUser?.uid?.take(8)}" }
 }
 
 @Composable

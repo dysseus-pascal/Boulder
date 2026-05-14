@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
@@ -196,6 +197,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
     Apps("Apps", Icons.Default.Apps),
+    Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
     Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
     Speech("Speech Recognition", Icons.Default.Mic),
@@ -210,6 +212,11 @@ enum class Section(val title: String, val icon: ImageVector) {
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
+}
+
+fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
+    Section.Battery -> PebbleNavBarRoutes.BatterySettingsRoute
+    else -> null
 }
 
 object SettingsIds {
@@ -1760,7 +1767,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
         val sectionsToShowInList = remember(filteredItems) {
             Section.entries.filter { section ->
-                filteredItems.any { it.section == section }
+                filteredItems.any { it.section == section } || section.navigatesDirectlyTo() != null
             }
         }
         val groupedItemsToDisplay = remember(filteredItems) {
@@ -1906,12 +1913,17 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 } else null,
                                 shadowElevation = ELEVATION,
                                 modifier = Modifier.clickable {
-                                    navBarNav.navigateTo(
-                                        PebbleNavBarRoutes.WatchSettingsCategoryRoute(
-                                            section = section.name,
-                                            topLevelType = viewModel.selectedTopLevelType.name,
+                                    val navigateDirectlyTo = section.navigatesDirectlyTo()
+                                    if (navigateDirectlyTo != null) {
+                                        navBarNav.navigateTo(navigateDirectlyTo)
+                                    } else {
+                                        navBarNav.navigateTo(
+                                            PebbleNavBarRoutes.WatchSettingsCategoryRoute(
+                                                section = section.name,
+                                                topLevelType = viewModel.selectedTopLevelType.name,
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             )
                         }
@@ -2590,4 +2602,3 @@ enum class WeatherSyncInterval(
         fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
     }
 }
-

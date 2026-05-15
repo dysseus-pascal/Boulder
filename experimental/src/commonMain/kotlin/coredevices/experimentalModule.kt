@@ -45,6 +45,7 @@ import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
+import coredevices.ring.service.FeedHistoryRestore
 import coredevices.ring.service.FirestoreRingDebugDelegate
 import coredevices.ring.service.IndexButtonActionHandler
 import coredevices.ring.service.IndexButtonSequenceRecorder
@@ -58,6 +59,7 @@ import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -188,6 +190,8 @@ val experimentalModule = module {
     singleOf(::RecordingOperationFactory)
     singleOf(::RecordingStorage)
     singleOf(::DocumentEncryptor)
+    singleOf(::EncryptionManager)
+    singleOf(::FeedHistoryRestore)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
     singleOf(::IndexNotificationManager)

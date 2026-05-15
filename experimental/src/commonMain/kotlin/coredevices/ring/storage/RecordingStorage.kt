@@ -283,7 +283,7 @@ class RecordingStorage(
         if (encryptionKey != null) {
             customMeta["encrypted"] = "true"
             customMeta["keyFingerprint"] =
-                coredevices.ring.encryption.AesGcmCrypto.keyFingerprint(encryptionKey)
+                coredevices.ring.encryption.AesCbcHmacCrypto.keyFingerprint(encryptionKey)
         }
 
         try {

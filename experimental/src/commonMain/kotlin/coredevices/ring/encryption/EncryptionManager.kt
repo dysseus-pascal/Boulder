@@ -84,10 +84,13 @@ class EncryptionManager(
             logger.w(e) { "Cloud keychain save failed (key still saved locally)" }
         }
 
+        val deviceName = platform.deviceModelName
+
         val encryptionInfo = EncryptionInfo(
             keyFingerprint = keyResult.fingerprint,
             createdAt = Clock.System.now().toString(),
-            keyBackupLocation = backupLocation
+            keyBackupLocation = backupLocation,
+            keyCreationDevice = deviceName
         )
 
         withContext(Dispatchers.IO) {

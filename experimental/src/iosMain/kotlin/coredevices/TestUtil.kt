@@ -77,6 +77,9 @@ object TestUtil {
                             override val name: String
                                 get() = "iOS"
 
+                            override val deviceModelName: String
+                                get() = "Test Device"
+
                             override suspend fun openUrl(url: String) {
 
                             }

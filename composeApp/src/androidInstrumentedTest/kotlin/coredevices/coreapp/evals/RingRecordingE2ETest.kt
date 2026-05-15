@@ -1,6 +1,7 @@
 package coredevices.coreapp.evals
 
 import android.content.Context
+import android.os.Build
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import coredevices.indexai.agent.ServletRepository
@@ -611,6 +612,8 @@ class RingRecordingE2ETest {
         single<Platform> {
             object : Platform {
                 override val name = "Android"
+                override val deviceModelName: String
+                    get() = "${Build.MANUFACTURER} ${Build.MODEL}"
                 override suspend fun openUrl(url: String) {}
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }

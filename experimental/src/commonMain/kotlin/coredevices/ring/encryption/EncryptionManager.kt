@@ -19,10 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 
 /** Outcome of [EncryptionManager.enableEncryption]. */
@@ -37,6 +39,25 @@ sealed interface EnableEncryptionResult {
     ) : EnableEncryptionResult
     /** Local key is present but failed an encrypt/decrypt self-test. */
     data class KeyUnusable(val reason: String) : EnableEncryptionResult
+}
+
+/** Steps of the guided "turn on encryption" flow, walking the user
+ *  through whichever is needed before encryption is turned on. */
+sealed interface EncryptionSetupState {
+    /** Dialog not shown. */
+    data object Hidden : EncryptionSetupState
+    /** No key yet — offer to generate one. */
+    data object PromptGenerate : EncryptionSetupState
+    /** Generating the key and saving it to the password manager. */
+    data object Generating : EncryptionSetupState
+    /** Key ready — show QR/copy so the user can back it up. */
+    data class ShowKey(val keyBase64: String) : EncryptionSetupState
+    /** A key exists elsewhere — trying the password manager. */
+    data object Restoring : EncryptionSetupState
+    /** Password-manager restore failed — let the user paste the key. */
+    data class PasteKey(val error: String? = null) : EncryptionSetupState
+    /** Could not obtain a key. */
+    data class Failed(val message: String) : EncryptionSetupState
 }
 
 /** State of the encryption key for the current account. */
@@ -99,7 +120,7 @@ class EncryptionManager(
                     KeyStorageStatus.KeyGeneratedBefore
                 else -> KeyStorageStatus.NoKeyStored
             }
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), KeyStorageStatus.NoKeyStored)
+        }.stateIn(scope, SharingStarted.Eagerly, KeyStorageStatus.NoKeyStored)
 
     private val _generatedKey = MutableStateFlow<String?>(null)
     val generatedKey = _generatedKey.asStateFlow()
@@ -141,7 +162,8 @@ class EncryptionManager(
         logger.i { "Key generated, fingerprint=${keyResult.fingerprint}, backup=$backupLocation" }
     }
 
-    suspend fun readKeyFromCloudKeychain(uiContext: PlatformUiContext) {
+    /** @return true if a key was found in the cloud keychain and stored locally. */
+    suspend fun readKeyFromCloudKeychain(uiContext: PlatformUiContext): Boolean {
         val key = encryptionKeyManager.readFromCloudKeychain(uiContext)
         if (key != null) {
             val email = Firebase.auth.currentUser?.email ?: "unknown"
@@ -150,7 +172,42 @@ class EncryptionManager(
             }
             keyStoreRevision.value++
             logger.i { "Key restored from cloud keychain" }
+            return true
         }
+        return false
+    }
+
+    /** Restore a key the user pasted in manually; it must round-trip and
+     *  match any fingerprint already recorded. @return true if stored locally. */
+    suspend fun restoreKeyFromString(keyBase64: String): Boolean {
+        val key = keyBase64.trim()
+        if (key.isEmpty()) return false
+        try {
+            val probe = "enc-probe".encodeToByteArray()
+            val roundTripped = AesCbcHmacCrypto.decrypt(
+                AesCbcHmacCrypto.encrypt(probe, key), key
+            )
+            if (!roundTripped.contentEquals(probe)) {
+                logger.w { "Pasted key failed round-trip self-test" }
+                return false
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Pasted key is not a usable encryption key" }
+            return false
+        }
+        val fingerprint = AesCbcHmacCrypto.keyFingerprint(key)
+        val expected = preferences.encryptionKeyFingerprint.value
+        if (expected != null && expected != fingerprint) {
+            logger.w { "Pasted key fingerprint $fingerprint != expected $expected" }
+            return false
+        }
+        val email = Firebase.auth.currentUser?.email ?: "unknown"
+        withContext(Dispatchers.IO) {
+            encryptionKeyManager.saveKeyLocally(key, email)
+        }
+        keyStoreRevision.value++
+        logger.i { "Key restored from pasted string, fingerprint=$fingerprint" }
+        return true
     }
 
     fun clearGeneratedKey() { _generatedKey.value = null }

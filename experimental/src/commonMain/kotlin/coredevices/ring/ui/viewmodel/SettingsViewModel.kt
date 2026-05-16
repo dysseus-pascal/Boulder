@@ -25,6 +25,8 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EnableEncryptionResult
 import coredevices.ring.encryption.EncryptionManager
+import coredevices.ring.encryption.EncryptionSetupState
+import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.ring.service.RingSync
@@ -486,22 +488,111 @@ class SettingsViewModel(
     }
 
     private suspend fun enableEncryptionNow() {
-        _encryptionStatus.value = when (val result = encryptionManager.enableEncryption()) {
-            EnableEncryptionResult.Enabled ->
-                "Encryption enabled — future uploads encrypted"
-            EnableEncryptionResult.NoLocalKey ->
-                "Can't enable encryption: no key on this device"
-            is EnableEncryptionResult.KeyFingerprintMismatch ->
-                "Can't enable encryption: key on this device doesn't match your account key"
-            is EnableEncryptionResult.KeyUnusable ->
-                "Can't enable encryption: key is unusable (${result.reason})"
+        _encryptionStatus.value = try {
+            when (val result = encryptionManager.enableEncryption()) {
+                EnableEncryptionResult.Enabled ->
+                    "Encryption enabled — future uploads encrypted"
+                EnableEncryptionResult.NoLocalKey ->
+                    "Can't enable encryption: no key on this device"
+                is EnableEncryptionResult.KeyFingerprintMismatch ->
+                    "Can't enable encryption: key on this device doesn't match your account key"
+                is EnableEncryptionResult.KeyUnusable ->
+                    "Can't enable encryption: key is unusable (${result.reason})"
+            }
+        } finally {
+            _enablingEncryption.value = false
         }
-        _enablingEncryption.value = false
     }
 
     fun disableEncryption() {
         encryptionManager.disableEncryption()
         _encryptionStatus.value = "Encryption disabled — future uploads will be unencrypted"
+    }
+
+    // --- Guided encryption setup (single switch, walks the user through
+    //     generating or restoring a key before turning encryption on) ---
+
+    private val _encryptionSetup = MutableStateFlow<EncryptionSetupState>(EncryptionSetupState.Hidden)
+    val encryptionSetup = _encryptionSetup.asStateFlow()
+
+    /** User flipped the encrypt switch on: enable directly if a usable
+     *  local key is present, otherwise drive the setup dialog. */
+    fun beginEncryptionSetup(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            when (encryptionManager.keyStorageStatus.value) {
+                KeyStorageStatus.KeyLocallyAvailable -> requestEnableEncryption(uiContext)
+                KeyStorageStatus.NoKeyStored ->
+                    _encryptionSetup.value = EncryptionSetupState.PromptGenerate
+                KeyStorageStatus.KeyGeneratedBefore -> {
+                    _encryptionSetup.value = EncryptionSetupState.Restoring
+                    val restored = try {
+                        encryptionManager.readKeyFromCloudKeychain(uiContext)
+                    } catch (e: Exception) {
+                        Logger.withTag("Encryption").w(e) { "Cloud keychain restore failed" }
+                        false
+                    }
+                    if (restored) finishSetupAndEnable()
+                    else _encryptionSetup.value = EncryptionSetupState.PasteKey()
+                }
+            }
+        }
+    }
+
+    /** "Generate Key" inside the setup dialog. */
+    fun generateKeyForSetup(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            _encryptionSetup.value = EncryptionSetupState.Generating
+            try {
+                encryptionManager.generateAndStoreKey(uiContext)
+                // We show the key in the wizard ourselves; clear the shared
+                // `generatedKey` so the standalone QR dialog doesn't double-show.
+                val key = encryptionManager.generatedKey.value
+                encryptionManager.clearGeneratedKey()
+                _encryptionSetup.value = if (key != null) {
+                    EncryptionSetupState.ShowKey(key)
+                } else {
+                    EncryptionSetupState.Failed("Key generation failed")
+                }
+            } catch (e: Exception) {
+                _encryptionSetup.value =
+                    EncryptionSetupState.Failed(e.message ?: "Key generation failed")
+            }
+        }
+    }
+
+    /** User pasted their backup key on the paste step. */
+    fun restoreFromPastedKey(keyBase64: String) {
+        viewModelScope.launch {
+            _encryptionSetup.value = EncryptionSetupState.Restoring
+            val restored = try {
+                encryptionManager.restoreKeyFromString(keyBase64)
+            } catch (e: Exception) {
+                Logger.withTag("Encryption").w(e) { "Pasted key restore failed" }
+                false
+            }
+            if (restored) {
+                finishSetupAndEnable()
+            } else {
+                _encryptionSetup.value =
+                    EncryptionSetupState.PasteKey("That key isn't valid for this account")
+            }
+        }
+    }
+
+    /** "Done" after the key was shown — enable encryption and close. */
+    fun completeEncryptionSetup() {
+        viewModelScope.launch { finishSetupAndEnable() }
+    }
+
+    private suspend fun finishSetupAndEnable() {
+        _enablingEncryption.value = true
+        enableEncryptionNow()
+        _encryptionSetup.value = EncryptionSetupState.Hidden
+    }
+
+    fun cancelEncryptionSetup() {
+        encryptionManager.clearGeneratedKey()
+        _encryptionSetup.value = EncryptionSetupState.Hidden
     }
 
     // --- Full backup download ---

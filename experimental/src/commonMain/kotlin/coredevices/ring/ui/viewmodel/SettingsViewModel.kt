@@ -463,6 +463,9 @@ class SettingsViewModel(
     private val _migrating = MutableStateFlow(false)
     val migrating = _migrating.asStateFlow()
 
+    private val _showKeyNotBackedUpDialog = MutableStateFlow(false)
+    val showKeyNotBackedUpDialog = _showKeyNotBackedUpDialog.asStateFlow()
+
     fun checkLocalKey() {
         viewModelScope.launch { encryptionManager.checkLocalKey() }
     }
@@ -498,24 +501,56 @@ class SettingsViewModel(
     fun clearEncryptionKeyStatus() { _encryptionKeyStatus.value = null }
     fun clearGeneratedKey() = encryptionManager.clearGeneratedKey()
 
-    fun enableEncryption() {
+    /** Enable encryption, but first verify the key is backed up to the cloud
+     *  keychain; if not, raise a confirmation dialog instead of migrating. */
+    fun requestEnableEncryption(uiContext: PlatformUiContext) {
         viewModelScope.launch {
             _migrating.value = true
+            _migrationStatus.value = "Checking key backup..."
             try {
-                encryptionManager.enableEncryption().collect { status ->
-                    _migrationStatus.value = when (status) {
-                        is EncryptionMigrationStatus.NoKey -> "No encryption key — generate one first"
-                        is EncryptionMigrationStatus.SyncingFromCloud -> "Syncing from cloud..."
-                        is EncryptionMigrationStatus.CachingAudio -> "Caching audio files..."
-                        is EncryptionMigrationStatus.EncryptingAudio -> "Encrypting audio ${status.done}/${status.total}..."
-                        is EncryptionMigrationStatus.EncryptingDocuments -> "Encrypted docs ${status.done}/${status.total}..."
-                        is EncryptionMigrationStatus.Complete -> "Encryption enabled — ${status.docs} docs, ${status.audioFiles} audio files encrypted"
-                        is EncryptionMigrationStatus.Failed -> "Migration failed: ${status.cause.message}"
-                    }
+                val backedUp = encryptionManager.isLocalKeyBackedUpToCloud(uiContext)
+                if (backedUp) {
+                    runEncryptionMigration()
+                } else {
+                    _migrationStatus.value = null
+                    _migrating.value = false
+                    _showKeyNotBackedUpDialog.value = true
                 }
-            } finally {
+            } catch (e: Exception) {
+                _migrationStatus.value = "Could not verify key backup: ${e.message}"
                 _migrating.value = false
             }
+        }
+    }
+
+    fun confirmEnableEncryption() {
+        _showKeyNotBackedUpDialog.value = false
+        viewModelScope.launch {
+            _migrating.value = true
+            runEncryptionMigration()
+        }
+    }
+
+    fun dismissKeyNotBackedUpDialog() {
+        _showKeyNotBackedUpDialog.value = false
+    }
+
+    /** Assumes [_migrating] is already true. */
+    private suspend fun runEncryptionMigration() {
+        try {
+            encryptionManager.enableEncryption().collect { status ->
+                _migrationStatus.value = when (status) {
+                    is EncryptionMigrationStatus.NoKey -> "No encryption key — generate one first"
+                    is EncryptionMigrationStatus.SyncingFromCloud -> "Syncing from cloud..."
+                    is EncryptionMigrationStatus.CachingAudio -> "Caching audio files..."
+                    is EncryptionMigrationStatus.EncryptingAudio -> "Encrypting audio ${status.done}/${status.total}..."
+                    is EncryptionMigrationStatus.EncryptingDocuments -> "Encrypted docs ${status.done}/${status.total}..."
+                    is EncryptionMigrationStatus.Complete -> "Encryption enabled — ${status.docs} docs, ${status.audioFiles} audio files encrypted"
+                    is EncryptionMigrationStatus.Failed -> "Migration failed: ${status.cause.message}"
+                }
+            }
+        } finally {
+            _migrating.value = false
         }
     }
 

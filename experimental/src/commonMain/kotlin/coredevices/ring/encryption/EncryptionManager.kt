@@ -117,6 +117,31 @@ class EncryptionManager(
 
     fun clearGeneratedKey() { _generatedKey.value = null }
 
+    /** True only if the cloud keychain holds a key matching the local key's
+     *  fingerprint. Any failure returns false ("not verified", not an error). */
+    suspend fun isLocalKeyBackedUpToCloud(uiContext: PlatformUiContext): Boolean {
+        val localKey = withContext(Dispatchers.IO) {
+            encryptionKeyManager.getLocalKey(Firebase.auth.currentUser?.email)
+        }
+        if (localKey == null) {
+            logger.w { "Cloud backup check: no local key" }
+            return false
+        }
+        val cloudKey = try {
+            encryptionKeyManager.readFromCloudKeychain(uiContext)
+        } catch (e: Exception) {
+            logger.w(e) { "Cloud backup check: could not read cloud keychain" }
+            null
+        }
+        if (cloudKey == null) return false
+        val matches = AesCbcHmacCrypto.keyFingerprint(cloudKey) ==
+            AesCbcHmacCrypto.keyFingerprint(localKey)
+        if (!matches) {
+            logger.w { "Cloud backup check: cloud key fingerprint differs from local key" }
+        }
+        return matches
+    }
+
     /**
      * Enable encryption: syncs all remote recordings locally via [FeedHistoryRestore],
      * then encrypts all local audio + Firestore docs in place.

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +55,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -763,6 +768,7 @@ fun BackupDialog(
     val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
     val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
     val generatedKey by viewModel.generatedKey.collectAsState()
+    val showKeyNotBackedUpDialog by viewModel.showKeyNotBackedUpDialog.collectAsState()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val uiContext = rememberUiContext()
     val clipboardManager = LocalClipboardManager.current
@@ -800,6 +806,34 @@ fun BackupDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showOverwriteKeyConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showKeyNotBackedUpDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissKeyNotBackedUpDialog() },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red) },
+            title = { Text("Encryption key not backed up") },
+            text = {
+                Text(
+                    buildAnnotatedString {
+                        append("You're attempting to enable backup encryption without a confirmed keychain backup of your key, ")
+                        append("please ensure you've saved your key either via QR code or copied it to your clipboard and saved it elsewhere.\n\n")
+                        withStyle(SpanStyle(color = Color.Red, fontWeight = FontWeight.Bold)) {
+                            append("If you lose this key, you will not be able to sync or restore anything from backups and will have to start fresh.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmEnableEncryption() }) {
+                    Text("I confirm, my key is saved elsewhere")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissKeyNotBackedUpDialog() }) {
                     Text("Cancel")
                 }
             }
@@ -1098,9 +1132,9 @@ fun BackupDialog(
             if (hasLocalKey) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ListItem(
-                    modifier = Modifier.clickable(enabled = !migrating) {
+                    modifier = Modifier.clickable(enabled = !migrating && (useEncryption || uiContext != null)) {
                         if (!useEncryption) {
-                            viewModel.enableEncryption()
+                            uiContext?.let { viewModel.requestEnableEncryption(it) }
                         } else {
                             viewModel.disableEncryption()
                         }

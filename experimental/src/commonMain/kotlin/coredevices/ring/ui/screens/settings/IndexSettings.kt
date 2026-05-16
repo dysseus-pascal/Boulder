@@ -1041,26 +1041,29 @@ fun BackupDialog(
             )
 
             // Import backup
-            ListItem(
-                modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
-                    scope.launch {
-                        val path = uiContext?.let { pickZipFile(it) }
-                        if (path != null) {
-                            viewModel.importBackup(path)
+            if (debugDetailsEnabled) {
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
+                        scope.launch {
+                            val path = uiContext?.let { pickZipFile(it) }
+                            if (path != null) {
+                                viewModel.importBackup(path)
+                            }
+                        }
+                    },
+                    headlineContent = { Text("Import Backup") },
+                    supportingContent = {
+                        Text(importStatus ?: "Restore recordings from a backup zip file")
+                    },
+                    trailingContent = {
+                        if (importing) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         }
                     }
-                },
-                headlineContent = { Text("Import Backup") },
-                supportingContent = {
-                    Text(importStatus ?: "Restore recordings from a backup zip file")
-                },
-                trailingContent = {
-                    if (importing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
+
 
             // Delete backup
             ListItem(
@@ -1068,7 +1071,7 @@ fun BackupDialog(
                     showDeleteConfirm = true
                 },
                 headlineContent = {
-                    Text("Delete my backup", color = MaterialTheme.colorScheme.error)
+                    Text("Delete cloud backup", color = MaterialTheme.colorScheme.error)
                 },
                 supportingContent = {
                     Text(backupStatus ?: "Permanently delete all cloud data")
@@ -1159,23 +1162,25 @@ fun BackupDialog(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // --- Danger zone ---
-            Text(
-                "Danger Zone",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            ListItem(
-                modifier = Modifier.clickable(enabled = !backupLoading) {
-                    showDeleteLocalConfirm = true
-                },
-                headlineContent = {
-                    Text("Delete local feed", color = MaterialTheme.colorScheme.error)
-                },
-                supportingContent = {
-                    Text("Remove all recordings from this device (cloud unaffected)")
-                }
-            )
+            if (debugDetailsEnabled) {
+                Text(
+                    "Danger Zone",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !backupLoading) {
+                        showDeleteLocalConfirm = true
+                    },
+                    headlineContent = {
+                        Text("Delete local feed", color = MaterialTheme.colorScheme.error)
+                    },
+                    supportingContent = {
+                        Text("Remove all recordings from this device (cloud unaffected)")
+                    }
+                )
+            }
         }
     }
 }

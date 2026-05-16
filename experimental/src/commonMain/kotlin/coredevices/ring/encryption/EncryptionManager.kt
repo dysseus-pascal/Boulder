@@ -4,55 +4,50 @@ import PlatformUiContext
 import co.touchlab.kermit.Logger
 import coredevices.firestore.EncryptionInfo
 import coredevices.firestore.UsersDao
-import coredevices.indexai.data.entity.LocalRecording
-import coredevices.indexai.data.entity.RecordingDocument
-import coredevices.indexai.data.entity.RecordingEntry
-import coredevices.indexai.database.dao.ConversationMessageDao
-import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
-import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.service.FeedHistoryRestore
-import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
+/** Outcome of [EncryptionManager.enableEncryption]. */
+sealed interface EnableEncryptionResult {
+    data object Enabled : EnableEncryptionResult
+    /** No key in the key manager for the current account. */
+    data object NoLocalKey : EnableEncryptionResult
+    /** Local key doesn't match the fingerprint recorded for this account. */
+    data class KeyFingerprintMismatch(
+        val localFingerprint: String,
+        val expectedFingerprint: String,
+    ) : EnableEncryptionResult
+    /** Local key is present but failed an encrypt/decrypt self-test. */
+    data class KeyUnusable(val reason: String) : EnableEncryptionResult
+}
+
 /**
  * Owns all encryption-related state and operations: key generation,
- * cloud-keychain backup/restore, and the in-place migration that encrypts
- * every local audio file + Firestore document when the user enables
- * encryption.
+ * cloud-keychain backup/restore, and the on/off switch that controls
+ * whether future uploads are encrypted.
  *
- * Singleton so the state flows survive Settings ViewModel recreation
- * (e.g. across configuration changes during a long migration).
+ * Enabling encryption is forward-only: it just flips the preference so
+ * subsequent uploads are encrypted. Existing cloud data is left as-is.
+ *
+ * Singleton so the state flows survive Settings ViewModel recreation.
  */
 class EncryptionManager(
     private val encryptionKeyManager: EncryptionKeyManager,
-    private val documentEncryptor: DocumentEncryptor,
-    private val recordingRepository: RecordingRepository,
-    private val recordingEntryDao: RecordingEntryDao,
-    private val conversationMessageDao: ConversationMessageDao,
-    private val firestoreRecordingsDao: FirestoreRecordingsDao,
-    private val recordingStorage: RecordingStorage,
     private val usersDao: UsersDao,
     private val preferences: Preferences,
     private val platform: Platform,
-    private val feedHistoryRestore: FeedHistoryRestore,
 ) {
     companion object {
         private val logger = Logger.withTag("EncryptionManager")
-        private val migrationLog = Logger.withTag("EncryptionMigration")
     }
     // --- Key management state ---
 
@@ -143,149 +138,53 @@ class EncryptionManager(
     }
 
     /**
-     * Enable encryption: syncs all remote recordings locally via [FeedHistoryRestore],
-     * then encrypts all local audio + Firestore docs in place.
+     * Turn on encryption for all future uploads. Existing cloud data is left
+     * unencrypted; only newly-uploaded recordings get encrypted.
      *
-     * Emits [EncryptionMigrationStatus] progress updates; always completes
-     * normally (terminal failures are emitted as [EncryptionMigrationStatus.Failed]).
+     * Refuses to flip the switch unless a usable key is actually present, so
+     * we never end up uploading recordings nothing can decrypt:
+     *  - a key for the current account must exist in the key manager;
+     *  - if a fingerprint was recorded for this account, the local key must
+     *    match it (otherwise other devices couldn't decrypt these uploads);
+     *  - the key must pass a round-trip encrypt/decrypt self-test.
      */
-    fun enableEncryption(): Flow<EncryptionMigrationStatus> = flow {
+    suspend fun enableEncryption(): EnableEncryptionResult {
+        val localKey = withContext(Dispatchers.IO) {
+            encryptionKeyManager.getLocalKey(Firebase.auth.currentUser?.email)
+        }
+        _hasLocalKey.value = localKey != null
+        if (localKey == null) {
+            logger.w { "Refusing to enable encryption: no local key in key manager" }
+            return EnableEncryptionResult.NoLocalKey
+        }
+
+        val localFingerprint = AesCbcHmacCrypto.keyFingerprint(localKey)
+        val expectedFingerprint = preferences.encryptionKeyFingerprint.value
+        if (expectedFingerprint != null && expectedFingerprint != localFingerprint) {
+            logger.w {
+                "Refusing to enable encryption: local key fingerprint " +
+                    "$localFingerprint != expected $expectedFingerprint"
+            }
+            return EnableEncryptionResult.KeyFingerprintMismatch(
+                localFingerprint = localFingerprint,
+                expectedFingerprint = expectedFingerprint,
+            )
+        }
+
         try {
-            val key = withContext(Dispatchers.IO) { encryptionKeyManager.getLocalKey() }
-            if (key == null) {
-                migrationLog.w { "No local encryption key found" }
-                emit(EncryptionMigrationStatus.NoKey)
-                return@flow
-            }
-
-            migrationLog.i { "Syncing recordings from cloud" }
-            emit(EncryptionMigrationStatus.SyncingFromCloud)
-            feedHistoryRestore.restore().collect { }
-
-            migrationLog.i { "Caching audio files locally" }
-            emit(EncryptionMigrationStatus.CachingAudio)
-            val allRecordings = withContext(Dispatchers.IO) {
-                recordingRepository.getAllRecordings().first()
-            }
-            val audioIds = collectCacheableAudioIds(allRecordings)
-            migrationLog.i { "Cached ${audioIds.size} audio files locally" }
-
-            preferences.setUseEncryption(true)
-
-            migrationLog.i { "Encrypting ${audioIds.size} audio files" }
-            val audioEncrypted = encryptAudioFiles(audioIds, key) { emit(it) }
-            migrationLog.i { "Encrypted $audioEncrypted/${audioIds.size} audio files" }
-
-            migrationLog.i { "Encrypting ${allRecordings.size} documents" }
-            val docsEncrypted = encryptDocuments(allRecordings, key) { emit(it) }
-
-            migrationLog.i { "Encryption migration complete: $docsEncrypted docs, $audioEncrypted audio files" }
-            emit(EncryptionMigrationStatus.Complete(docsEncrypted, audioEncrypted))
+            val probe = "enc-probe".encodeToByteArray()
+            val roundTripped = AesCbcHmacCrypto.decrypt(
+                AesCbcHmacCrypto.encrypt(probe, localKey), localKey
+            )
+            require(roundTripped.contentEquals(probe)) { "round-trip mismatch" }
         } catch (e: Exception) {
-            migrationLog.e(e) { "Encryption migration failed" }
-            emit(EncryptionMigrationStatus.Failed(e))
+            logger.w(e) { "Refusing to enable encryption: key failed self-test" }
+            return EnableEncryptionResult.KeyUnusable(e.message ?: "key self-test failed")
         }
-    }
 
-    private suspend fun collectCacheableAudioIds(recordings: List<LocalRecording>): List<String> {
-        val audioIds = mutableListOf<String>()
-        for (recording in recordings) {
-            val entries = withContext(Dispatchers.IO) {
-                recordingEntryDao.getEntriesForRecording(recording.id).first()
-            }
-            for (entry in entries) {
-                val fileName = entry.fileName ?: continue
-                for (variant in listOf(fileName, "$fileName-clean")) {
-                    try {
-                        val (source, _) = withContext(Dispatchers.IO) {
-                            recordingStorage.openRecordingSource(variant)
-                        }
-                        source.close()
-                        audioIds.add(variant)
-                    } catch (e: Exception) {
-                        migrationLog.w { "Could not cache audio $variant: ${e.message}" }
-                    }
-                }
-            }
-        }
-        return audioIds
-    }
-
-    private suspend fun encryptAudioFiles(
-        audioIds: List<String>,
-        key: String,
-        onProgress: suspend (EncryptionMigrationStatus.EncryptingAudio) -> Unit,
-    ): Int {
-        var encrypted = 0
-        for (audioId in audioIds) {
-            try {
-                val success = withContext(Dispatchers.IO) {
-                    recordingStorage.encryptAndReuploadAudio(audioId, key)
-                }
-                if (success) encrypted++
-                onProgress(EncryptionMigrationStatus.EncryptingAudio(encrypted, audioIds.size))
-            } catch (e: Exception) {
-                migrationLog.w(e) { "Failed to encrypt audio $audioId" }
-            }
-        }
-        return encrypted
-    }
-
-    // We overwrite via set() rather than addRecording() so the firestoreId stays stable —
-    // reassigning firestoreIds would orphan items referencing this recording via sourceRecordingId.
-    private suspend fun encryptDocuments(
-        recordings: List<LocalRecording>,
-        key: String,
-        onProgress: suspend (EncryptionMigrationStatus.EncryptingDocuments) -> Unit,
-    ): Int {
-        var uploaded = 0
-        for (recording in recordings) {
-            val firestoreId = recording.firestoreId
-            if (firestoreId.isNullOrBlank()) {
-                // Legacy row never uploaded — the upload observer will pick it up pre-encrypted.
-                migrationLog.w { "Skipping recording ${recording.id}: no firestoreId" }
-                continue
-            }
-            try {
-                val entries = withContext(Dispatchers.IO) {
-                    recordingEntryDao.getEntriesForRecording(recording.id).first()
-                }
-                val messages = withContext(Dispatchers.IO) {
-                    conversationMessageDao.getMessagesForRecording(recording.id).first()
-                }
-                val preservedMetadata = try {
-                    withContext(Dispatchers.IO) {
-                        firestoreRecordingsDao.getRecording(firestoreId).get()
-                            .data<RecordingDocument>().metadata
-                    }
-                } catch (_: Exception) { null }
-                var doc = recording.toDocument(
-                    entries = entries.map { entry ->
-                        RecordingEntry(
-                            timestamp = entry.timestamp,
-                            fileName = entry.fileName,
-                            status = entry.status,
-                            transcription = entry.transcription,
-                            transcribedUsingModel = entry.transcribedUsingModel,
-                            error = entry.error,
-                            ringTransferInfo = entry.ringTransferInfo,
-                            userMessageId = entry.userMessageId
-                        )
-                    },
-                    messages = messages.map { it.document },
-                    metadata = preservedMetadata,
-                )
-                doc = documentEncryptor.encryptDocument(doc, key)
-                withContext(Dispatchers.IO) {
-                    firestoreRecordingsDao.setRecording(firestoreId, doc)
-                }
-                uploaded++
-                onProgress(EncryptionMigrationStatus.EncryptingDocuments(uploaded, recordings.size))
-            } catch (e: Exception) {
-                migrationLog.w(e) { "Failed to re-upload recording ${recording.id}" }
-            }
-        }
-        return uploaded
+        preferences.setUseEncryption(true)
+        logger.i { "Encryption enabled — future uploads will be encrypted" }
+        return EnableEncryptionResult.Enabled
     }
 
     fun disableEncryption() {

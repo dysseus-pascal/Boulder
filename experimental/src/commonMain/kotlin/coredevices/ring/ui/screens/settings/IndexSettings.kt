@@ -1007,23 +1007,6 @@ fun BackupDialog(
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            // Sync now
-            ListItem(
-                modifier = Modifier.clickable(enabled = !syncing) {
-                    viewModel.downloadFeedHistory()
-                },
-                headlineContent = { Text("Sync now") },
-                supportingContent = {
-                    Text(syncStatus ?: "Upload local & download cloud recordings")
-                },
-                trailingContent = {
-                    if (syncing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
             // Download full backup
             ListItem(
                 modifier = Modifier.clickable(enabled = !backupDownloading && !syncing && uiContext != null) {
@@ -1129,13 +1112,13 @@ fun BackupDialog(
 
             // Enable/disable encryption
             val useEncryption by viewModel.useEncryption.collectAsState()
-            val migrationStatus by viewModel.migrationStatus.collectAsState()
-            val migrating by viewModel.migrating.collectAsState()
+            val encryptionStatus by viewModel.encryptionStatus.collectAsState()
+            val enablingEncryption by viewModel.enablingEncryption.collectAsState()
 
             if (hasLocalKey) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ListItem(
-                    modifier = Modifier.clickable(enabled = !migrating && (useEncryption || uiContext != null)) {
+                    modifier = Modifier.clickable(enabled = !enablingEncryption && (useEncryption || uiContext != null)) {
                         if (!useEncryption) {
                             uiContext?.let { viewModel.requestEnableEncryption(it) }
                         } else {
@@ -1147,13 +1130,13 @@ fun BackupDialog(
                     },
                     supportingContent = {
                         Text(
-                            migrationStatus
+                            encryptionStatus
                                 ?: if (useEncryption) "All new uploads are encrypted"
                                 else "Encrypt all recordings before uploading to cloud"
                         )
                     },
                     trailingContent = {
-                        if (migrating) {
+                        if (enablingEncryption) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         }
                     }

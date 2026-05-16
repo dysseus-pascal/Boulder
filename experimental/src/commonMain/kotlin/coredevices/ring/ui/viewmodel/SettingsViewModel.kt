@@ -412,7 +412,7 @@ class SettingsViewModel(
     val encryptionKeyStatus = _encryptionKeyStatus.asStateFlow()
     private val _encryptionKeyLoading = MutableStateFlow(false)
     val encryptionKeyLoading = _encryptionKeyLoading.asStateFlow()
-    val hasLocalKey = encryptionManager.hasLocalKey
+    val keyStorageStatus = encryptionManager.keyStorageStatus
     val generatedKey = encryptionManager.generatedKey
     val useEncryption = encryptionManager.useEncryption
     private val _encryptionStatus = MutableStateFlow<String?>(null)
@@ -422,10 +422,6 @@ class SettingsViewModel(
 
     private val _showKeyNotBackedUpDialog = MutableStateFlow(false)
     val showKeyNotBackedUpDialog = _showKeyNotBackedUpDialog.asStateFlow()
-
-    fun checkLocalKey() {
-        viewModelScope.launch { encryptionManager.checkLocalKey() }
-    }
 
     fun generateAndStoreKey(uiContext: PlatformUiContext) {
         viewModelScope.launch {

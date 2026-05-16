@@ -74,6 +74,7 @@ import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
+import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
@@ -764,7 +765,7 @@ fun BackupDialog(
     val backupLoading by viewModel.backupLoading.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val backupEnabled by viewModel.backupEnabled.collectAsState()
-    val hasLocalKey by viewModel.hasLocalKey.collectAsState()
+    val keyStorageStatus by viewModel.keyStorageStatus.collectAsState()
     val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
     val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
     val generatedKey by viewModel.generatedKey.collectAsState()
@@ -780,7 +781,6 @@ fun BackupDialog(
 
     LaunchedEffect(Unit) {
         viewModel.loadBackupCount()
-        viewModel.checkLocalKey()
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -794,7 +794,12 @@ fun BackupDialog(
             onDismissRequest = { showOverwriteKeyConfirm = false },
             title = { Text("Overwrite Encryption Key?") },
             text = {
-                Text("An encryption key already exists. Generating a new one will overwrite it. Previously encrypted backups will not be decryptable with the new key.")
+                Text(buildAnnotatedString {
+                    append("An encryption key already exists. Generating a new one will overwrite it.\n\n")
+                    withStyle(SpanStyle(color = Color.Red, fontWeight = FontWeight.Bold)) {
+                        append("Previously encrypted backups (cloud sync or local) will be permanently lost.")
+                    }
+                })
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -1070,10 +1075,13 @@ fun BackupDialog(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            // Generate encryption key
+            // Generate encryption key. A key already exists (here or on
+            // another device) unless status is NoKeyStored — regenerating it
+            // orphans prior backups, so warn and gate behind debug details.
+            val keyExists = keyStorageStatus != KeyStorageStatus.NoKeyStored
             ListItem(
-                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!hasLocalKey || debugDetailsEnabled)) {
-                    if (hasLocalKey) {
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!keyExists || debugDetailsEnabled)) {
+                    if (keyExists) {
                         showOverwriteKeyConfirm = true
                     } else {
                         uiContext?.let { viewModel.generateAndStoreKey(it) }
@@ -1082,14 +1090,21 @@ fun BackupDialog(
                 headlineContent = { Text("Generate Encryption Key") },
                 supportingContent = {
                     Text(
-                        encryptionKeyStatus
-                            ?: if (hasLocalKey) buildString {
+                        encryptionKeyStatus?.let { AnnotatedString(it) } ?: when (keyStorageStatus) {
+                            KeyStorageStatus.KeyLocallyAvailable -> buildAnnotatedString {
                                 append("Key exists")
-                                if (debugDetailsEnabled) {
+                                if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
                                     append(" — tap to regenerate")
                                 }
                             }
-                            else "Create AES-256 encryption key"
+                            KeyStorageStatus.KeyGeneratedBefore -> buildAnnotatedString {
+                                append("A key was generated before but isn't on this device — restore it instead")
+                                if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
+                                    append(", or tap to regenerate")
+                                }
+                            }
+                            KeyStorageStatus.NoKeyStored -> AnnotatedString("Create encryption key")
+                        }
                     )
                 },
                 trailingContent = {
@@ -1115,7 +1130,7 @@ fun BackupDialog(
             val encryptionStatus by viewModel.encryptionStatus.collectAsState()
             val enablingEncryption by viewModel.enablingEncryption.collectAsState()
 
-            if (hasLocalKey) {
+            if (keyStorageStatus == KeyStorageStatus.KeyLocallyAvailable) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ListItem(
                     modifier = Modifier.clickable(enabled = !enablingEncryption && (useEncryption || uiContext != null)) {

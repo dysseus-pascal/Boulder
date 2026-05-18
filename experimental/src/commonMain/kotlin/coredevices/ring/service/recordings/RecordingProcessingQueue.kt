@@ -55,6 +55,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -367,9 +368,11 @@ class RecordingProcessingQueue(
             localId,
             Instant.fromEpochMilliseconds(recording.updated),
         )
-        // Watermark this ingested version too: local now equals remote, so
-        // the push observer must not treat it as dirty and bounce it back.
-        recordingRepository.setLastPushedUpdated(localId, recording.updated)
+        // Watermark to now
+        recordingRepository.setLastPushedUpdated(
+            localId,
+            Clock.System.now().toEpochMilliseconds(),
+        )
     }
 
     override suspend fun processTask(task: RecordingProcessingTask) {

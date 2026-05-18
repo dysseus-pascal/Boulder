@@ -146,11 +146,13 @@ class WatchHomeViewModel(
     coreConfig: CoreConfigFlow,
     libPebble: LibPebble,
 ) : ViewModel() {
-    val selectedTab = mutableStateOf(if (libPebble.haveSeenFullyConnectedWatch()) {
-        WatchHomeNavTab.WatchFaces
-    } else {
-        WatchHomeNavTab.Watches
-    })
+    val selectedTab = mutableStateOf(
+        when {
+            coreConfig.value.enableIndex -> WatchHomeNavTab.Index
+            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
+            else -> WatchHomeNavTab.Watches
+        }
+    )
     private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
     private val searchStateFlow = MutableStateFlow<SearchState?>(null)
     private val titleFlow = MutableStateFlow("")

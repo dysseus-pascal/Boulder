@@ -32,11 +32,8 @@ interface Preferences: BasePreferences {
     val encryptionKeyFingerprint: StateFlow<String?>
     val lastWipedRing: StateFlow<String?>
     /** Cached count of recordings in cloud, captured at the end of every
-     *  manual sync. The Settings → Backup dialog reads this instead of
-     *  paginating the whole `recordings/{uid}/recordings` collection on
-     *  open — that approach was downloading every full document body
-     *  just to count them, which on a 1300+ recording user took a
-     *  minute+ over mobile data. `null` = never synced on this device. */
+     *  manual sync.
+     */
     val lastBackupCount: StateFlow<Int?>
 
     suspend fun setUseCactusAgent(useCactus: Boolean)

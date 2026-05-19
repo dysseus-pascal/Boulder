@@ -251,6 +251,7 @@ class SettingsViewModel(
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
 
+
     fun panicRing() {
         _panicPending.value = true
         viewModelScope.launch {
@@ -261,6 +262,59 @@ class SettingsViewModel(
             } finally {
                 _panicPending.value = false
             }
+        }
+    }
+
+    /** Trigger upload of any locally-queued recordings that don't have a
+     *  firestoreId yet. The actual upload happens in
+     *  [coredevices.ring.service.recordings.RecordingProcessingQueue]'s
+     *  push observer — which is the SINGLE uploader and uses
+     *  `uploadingIds` to dedup. We just bump `updated` so the Room flow
+     *  re-emits and the observer wakes up.
+     *
+     *  Don't upload directly from here: the observer already filters by
+     *  `firestoreId == null`, so a parallel upload from this function
+     *  would race the observer and create two Firestore docs for one
+     *  local recording (the observer's `addRecording` runs concurrently
+     *  with this one's). Auto-pull on a fresh device then mirrored both
+     *  docs as separate Room rows — the source of the duplicate
+     *  recordings users have been seeing in the feed. */
+    private suspend fun uploadPendingRecordings() {
+        val log = Logger.withTag("FeedHistorySync")
+        val recordings = recordingRepository.getAllRecordings().first()
+        val pending = recordings.filter { it.firestoreId == null }
+        if (pending.isEmpty()) {
+            log.i { "No pending uploads" }
+            return
+        }
+        log.i { "Kicking ${pending.size} pending recordings for upload" }
+        _syncStatus.value = "Uploading ${pending.size} local recordings..."
+        val now = kotlin.time.Clock.System.now()
+        val pendingIds = pending.map { it.id }.toSet()
+        for (recording in pending) {
+            recordingRepository.setRecordingUpdated(recording.id, now)
+        }
+        // Wait for the push observer to finish — every kicked id must
+        // gain a firestoreId before we move on. Without this the rest of
+        // downloadFeedHistory and the final "Sync complete" status race
+        // with in-flight uploads. Cap at 60s to avoid hanging forever
+        // if the observer is wedged (offline, auth dropped, etc).
+        try {
+            kotlinx.coroutines.withTimeout(60_000) {
+                recordingRepository.getAllRecordings()
+                    .first { recs ->
+                        val stillPending = recs.count {
+                            it.id in pendingIds && it.firestoreId == null
+                        }
+                        if (stillPending > 0) {
+                            _syncStatus.value = "Uploading $stillPending local recordings..."
+                        }
+                        stillPending == 0
+                    }
+            }
+            log.i { "All ${pending.size} pending recordings uploaded" }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            log.w { "Timed out waiting for ${pending.size} pending uploads — moving on" }
         }
     }
 

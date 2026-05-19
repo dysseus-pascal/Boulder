@@ -2,7 +2,7 @@ package coredevices.ring.model
 
 import android.content.Context
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
+import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,7 +23,8 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     companion object {
         private val logger = Logger.withTag("CactusModelProvider")
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val QUANTIZATION = "int8"
+        private const val STT_QUANTIZATION = "int8"
+        private const val LM_QUANTIZATION = "int4"
         private const val DOWNLOAD_BUFFER_SIZE = 256 * 1024
 
         // One mutex per model so an in-progress STT download doesn't head-of-line
@@ -91,7 +92,9 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     private suspend fun downloadAndExtract(modelName: String, targetDir: File, version: String) {
-        val zipName = "${modelName.lowercase()}-$QUANTIZATION.zip"
+        val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
+        val zipName = "${modelName.lowercase()}-$quantization.zip"
         val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
         logger.i { "Downloading model: $url" }
 
@@ -198,7 +201,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
         try {
-            Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
+            cactusSetTelemetryEnvironment(cacheDir.absolutePath)
             logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
         } catch (e: Throwable) {
             logger.e(e) { "Failed to initialize telemetry environment" }

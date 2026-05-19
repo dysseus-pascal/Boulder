@@ -220,8 +220,8 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", gradleBooleanProp("githubAuthEnabled", default = true).toString())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "Qwen3-0.6B")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v1.10")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v1.9")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v1.15")
     }
 }

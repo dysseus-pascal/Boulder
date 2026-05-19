@@ -1,9 +1,8 @@
 package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
-import com.cactus.CompletionOptions
-import com.cactus.Message
+import com.cactus.cactusComplete
+import com.cactus.cactusInit
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
@@ -21,10 +20,14 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.time.Clock
@@ -45,14 +48,14 @@ class AgentCactus(
     }
 
     private val agentMutex = Mutex()
-    private var model: Cactus? = null
+    private var modelHandle: Long = 0L
 
     private suspend fun initializeIfNeeded() {
-        if (model == null) {
+        if (modelHandle == 0L) {
             logger.d { "Initializing CactusAgent for the first time..." }
             val initStart = Clock.System.now()
             val modelPath = modelProvider.getLMModelPath()
-            model = Cactus.create(modelPath)
+            modelHandle = cactusInit(modelPath, null, false)
             val initDuration = Clock.System.now() - initStart
             logger.i { "CactusAgent model initialized: $modelPath in $initDuration" }
         }
@@ -68,52 +71,66 @@ class AgentCactus(
 
         agentMutex.withLock {
             initializeIfNeeded()
-            val cactus = model ?: throw IllegalStateException("CactusAgent model not initialized")
+            val handle = modelHandle
+            if (handle == 0L) throw IllegalStateException("CactusAgent model not initialized")
 
-            // Convert MCP tool definitions to Cactus List<Map<String, Any>> format
+            // Convert MCP tool definitions to JSON for cactusComplete.
+            // Use SHORT tool names (e.g. "create_note") not composite names
+            // (e.g. "builtin_note.create_note") because Needle's constrained
+            // decoding grammar is built from these names and the model was
+            // trained on short names only.
             val mcpTools = mcpSession.listTools()
-            val tools = mcpTools.map { (parentName, tool) ->
-                val definition = tool.definition
-                val required = definition.inputSchema.required ?: emptyList()
-                val properties = definition.inputSchema.properties?.mapValues { (_, param) ->
-                    val paramMap = mutableMapOf<String, Any>(
-                        "type" to (param.jsonObject["type"]?.jsonPrimitive?.content ?: "string")
-                    )
-                    param.jsonObject["description"]?.jsonPrimitive?.content?.let {
-                        paramMap["description"] = it
-                    }
-                    paramMap as Map<String, Any>
-                } ?: emptyMap()
-                mapOf<String, Any>(
-                    "type" to "function",
-                    "function" to mapOf(
-                        "name" to "$parentName.${definition.name}",
-                        "description" to (definition.description ?: ""),
-                        "parameters" to mapOf(
-                            "type" to "object",
-                            "properties" to properties,
-                            "required" to required
-                        )
-                    )
-                )
+            val toolParentMap = mutableMapOf<String, String>()
+            val toolsJson = buildJsonArray {
+                mcpTools.forEach { (parentName, tool) ->
+                    val definition = tool.definition
+                    val required = definition.inputSchema.required ?: emptyList()
+                    toolParentMap[definition.name] = parentName
+                    add(buildJsonObject {
+                        put("type", "function")
+                        put("function", buildJsonObject {
+                            put("name", definition.name)
+                            put("description", definition.description ?: "")
+                            put("parameters", buildJsonObject {
+                                put("type", "object")
+                                put("properties", buildJsonObject {
+                                    definition.inputSchema.properties?.forEach { (propName, param) ->
+                                        put(propName, buildJsonObject {
+                                            put("type", param.jsonObject["type"]?.jsonPrimitive?.content ?: "string")
+                                            param.jsonObject["description"]?.jsonPrimitive?.content?.let {
+                                                put("description", it)
+                                            }
+                                        })
+                                    }
+                                })
+                                put("required", buildJsonArray {
+                                    required.forEach { add(JsonPrimitive(it)) }
+                                })
+                            })
+                        })
+                    })
+                }
+            }.toString()
+
+            mcpTools.forEach { (parentName, tool) ->
+                logger.i { "CactusAgent tool available: $parentName.${tool.definition.name}" }
             }
 
-            tools.forEach { tool ->
-                @Suppress("UNCHECKED_CAST")
-                val fn = tool["function"] as? Map<String, Any>
-                logger.i { "CactusAgent tool available: ${fn?.get("name")}" }
-            }
+            // Needle is an encoder-decoder model, not a chat model.
+            // It encodes [query <tools> tools_json] directly — no system prompt,
+            // no /no_think prefix.
+            val messagesJson = buildJsonArray {
+                add(buildJsonObject {
+                    put("role", "user")
+                    put("content", input)
+                })
+            }.toString()
 
-            val messages = listOf(
-                Message.system("""
-                You are an assistant primarily designed to help users create and manage notes and reminders. You can
-                help with a multitude of tasks in addition to this too.
-                Create a note with the user's input unless they specify a different action.
-                Avoid asking follow-up questions unless necessary.
-                ${mcpSession.getExtraContext(includePromptsFromMcps)?.ifBlank { null } ?: ""}
-            """.trimIndent()),
-                Message.user("/no_think $input")
-            )
+            val optionsJson = buildJsonObject {
+                put("max_tokens", 256)
+                put("temperature", 0.0)
+                put("tool_rag_top_k", 0)
+            }.toString()
 
             _conversation.emit(_conversation.first() + ConversationMessageDocument(
                 role = MessageRole.user,
@@ -121,31 +138,33 @@ class AgentCactus(
             ))
 
             inferenceBoost.acquire()
-            val result = try {
-                cactus.complete(
-                    messages = messages,
-                    options = CompletionOptions(
-                        maxTokens = 200,
-                        temperature = 0.1f,
-                        forceTools = true
-                    ),
-                    tools = tools
-                )
+            val resultJson = try {
+                cactusComplete(handle, messagesJson, optionsJson, toolsJson, null)
             } finally {
                 inferenceBoost.release()
             }
 
-            // Parse function calls from result
-            val toolCalls = result.functionCalls?.mapNotNull { call ->
-                @Suppress("UNCHECKED_CAST")
-                val name = call["name"] as? String ?: return@mapNotNull null
-                val arguments = call["arguments"]
-                Triple(name, arguments, call)
+            // Parse the JSON result
+            val resultObj = Json.parseToJsonElement(resultJson).jsonObject
+            val resultText = resultObj["response"]?.jsonPrimitive?.content ?: ""
+            val functionCalls = resultObj["function_calls"]?.jsonArray
+
+            // Parse function calls — model returns SHORT names, map back to composite
+            val toolCalls = functionCalls?.mapNotNull { callElement ->
+                val call = callElement.jsonObject
+                val shortName = call["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val arguments = call["arguments"]?.jsonObject
+                val parent = toolParentMap[shortName]
+                if (parent == null) {
+                    logger.w { "Unknown tool name from model: $shortName" }
+                    return@mapNotNull null
+                }
+                Triple("$parent.$shortName", arguments, call)
             } ?: emptyList()
 
             _conversation.emit(_conversation.first() + ConversationMessageDocument(
                 role = MessageRole.assistant,
-                content = result.text.ifBlank { null },
+                content = resultText.ifBlank { null },
                 tool_calls = toolCalls.map { (name, args, _) ->
                     ToolCall(
                         id = name,
@@ -159,35 +178,39 @@ class AgentCactus(
                 language_model_used = "cactus-${modelProvider.getLMModelPath().substringAfterLast("/")}"
             ))
 
+            // If no tool was called, save the utterance as a note (fallback)
+            if (toolCalls.isEmpty() && !skipToolExecution) {
+                val noteResult = mcpSession.callTool(
+                    integrationName = "builtin_note",
+                    toolName = "create_note",
+                    jsonInput = buildJsonObject {
+                        put("text", JsonPrimitive(input))
+                    },
+                    requireExists = false
+                )
+                _conversation.emit(
+                    _conversation.first().toMutableList().apply {
+                        add(ConversationMessageDocument(
+                            role = MessageRole.tool,
+                            tool_call_id = "fallback_note",
+                            content = noteResult.resultString,
+                            semantic_result = noteResult.semanticResult
+                        ))
+                    }
+                )
+            }
+
             if (toolCalls.isNotEmpty() && !skipToolExecution) {
                 for ((name, arguments, _) in toolCalls) {
-                    val toolCompositeName = name.split(".", limit = 2)
-                    if (toolCompositeName.size != 2) {
-                        logger.w { "Invalid tool name format: $name" }
-                        _conversation.emit(
-                            _conversation.first().toMutableList().apply {
-                                add(ConversationMessageDocument(
-                                    role = MessageRole.tool,
-                                    tool_call_id = name,
-                                    content = """{"error": "Invalid tool name"}""",
-                                    semantic_result = SemanticResult.GenericFailure(
-                                        "Invalid tool call",
-                                        llmRecoverable = true
-                                    )
-                                ))
-                            }
-                        )
-                        continue
-                    }
-                    val (parent, toolName) = toolCompositeName
-                    @Suppress("UNCHECKED_CAST")
-                    val jsonInput = when (arguments) {
-                        is Map<*, *> -> buildJsonObject {
-                            (arguments as Map<String, Any>).forEach { (k, v) ->
-                                put(k, JsonPrimitive(v.toString()))
+                    val (parent, toolName) = name.split(".", limit = 2)
+                    val jsonInput = if (arguments != null) {
+                        buildJsonObject {
+                            arguments.forEach { (k, v) ->
+                                put(k, v)
                             }
                         }
-                        else -> buildJsonObject {}
+                    } else {
+                        buildJsonObject {}
                     }
                     val toolResult = mcpSession.callTool(
                         integrationName = parent,

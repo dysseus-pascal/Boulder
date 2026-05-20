@@ -1,26 +1,23 @@
 package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
-import coredevices.indexai.agent.Agent
+import coredevices.indexai.agent.AgentToolCall
+import coredevices.indexai.agent.IterativeAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.client.McpSession
+import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
-import coredevices.ring.api.NenyaClient
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.api.NenyaClient
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.Serializable
 import kotlinx.io.IOException
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -31,8 +28,9 @@ import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
 
 /**
- * Represents a conversation with an agent.
- * @param recordingId The ID of the recording feed entry to which this conversation belongs.
+ * Online agent backed by the Nenya HTTP API. Iterative: tool results are fed
+ * back to the model until it stops calling tools (capped at [MAX_TOOL_ITERATIONS]).
+ * Search mode bypasses the shared tool harness entirely.
  */
 class AgentNenya(
     private val nenyaClient: NenyaClient,
@@ -40,16 +38,11 @@ class AgentNenya(
     private val itemRepository: ItemRepository,
     conversation: List<ConversationMessageDocument>,
     private val useSearchMode: Boolean = false
-): KoinComponent, Agent {
+): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"
-    // We don't use StateFlow because we want to suspend on emit if there's backpressure
-    private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST).apply {
-        tryEmit(conversation)
-    }
-    override val conversation: SharedFlow<List<ConversationMessageDocument>> get() = _conversation
 
+    override val logger: Logger = Logger.withTag("AgentNenya")
     companion object Companion {
-        private val logger = Logger.withTag(AgentNenya::class.simpleName!!)
         private const val AGENT_CONTEXT = """
 You are an assistant primarily designed to help users create and manage notes and reminders. You can
 help with a multitude of tasks in addition to this too.
@@ -59,21 +52,10 @@ Avoid additional commentary after taking a final action unless the user asked fo
 Avoid asking follow-up questions unless necessary.
 Always lean towards creating a note, for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
 """
-        private const val MAX_TOOL_ITERATIONS = 3
     }
 
-    private suspend fun sendNormal(
-        input: String,
-        mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
-        skipToolExecution: Boolean
-    ) {
-        _conversation.emit(_conversation.first() + ConversationMessageDocument(
-            role = MessageRole.user,
-            content = input
-        ))
-        val tools = mcpSession.listTools()
-        val toolDeclarations = tools.mapNotNull {
+    private fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
+        return tools.mapNotNull {
             val definition = it.tool.definition
             val compositeName = "${it.integrationName}__${definition.name}"
             try {
@@ -117,84 +99,80 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 null
             }
         }
-        var resp = nenyaClient.run(
-            conversationHistory = conversation.first(),
-            toolSpecs = toolDeclarations,
-            additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty()
-        )
-        if (!resp.statusCode.isSuccess()) {
-            throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
-        }
-        _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
-        var toolIterations = 0
-        var lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
-        while (toolIterations++ < MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
-            // Tools need to be run
-            val responses = lastMessage.tool_calls!!.map {
-                val args: Map<String, JsonElement> = try {
-                    Json.Default.decodeFromString(it.function!!.arguments)
-                } catch (e: SerializationException) {
-                    logger.w { "Failed to deserialize tool call arguments for tool ${it.function!!.name}" }
-                    emptyMap()
-                }
-                val compositeName = it.function!!.name.split("__", limit = 2)
-                if (compositeName.size != 2) {
-                    throw Exception("Invalid tool name: ${it.function!!.name}")
-                }
-                val (integration, tool) = compositeName
-                val result = mcpSession.callTool(
-                    integration,
-                    tool,
-                    args
-                )
-                Pair(it.id, result)
-            }
-            _conversation.emit(
-                _conversation.first().toMutableList().apply {
-                    addAll(responses.map { (id, result) ->
-                        ConversationMessageDocument(
-                            role = MessageRole.tool,
-                            content = buildJsonObject {
-                                put("result", result.resultString)
-                            }.toString(),
-                            tool_call_id = id,
-                            semantic_result = result.semanticResult
-                        )
-                    })
-                }
+    }
+
+    override suspend fun runInference(
+        input: String,
+        history: List<ConversationMessageDocument>,
+        tools: List<McpSessionTool>,
+        mcpSession: McpSession,
+        includePromptsFromMcps: Map<String, Set<String>>,
+    ): ConversationMessageDocument {
+        val tools = prepareTools(tools)
+        val resp = try {
+            nenyaClient.run(
+                conversationHistory = history,
+                toolSpecs = tools,
+                additionalContext = AGENT_CONTEXT + "\n" + mcpSession.getExtraContext(includePromptsFromMcps).orEmpty()
             )
-            resp = try {
-                nenyaClient.run(
-                    conversation.first(),
-                    additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty(),
-                    toolSpecs = toolDeclarations,
-                )
-            } catch (e: IOException) {
-                throw AgentNetworkException("Network error when running agent: ${e.message}", e)
-            }
-            if (!resp.statusCode.isSuccess()) {
-                if (resp.statusCode.value in 501..504) {
-                    throw AgentNetworkException("Network error at gateway when running agent: ${resp.statusCode} (${resp.response?.message})")
-                } else {
-                    throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
-                }
-            }
-            _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
-            lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
+        } catch (e: IOException) {
+            throw AgentNetworkException("Network error when running agent: ${e.message}", e)
         }
-        if (toolIterations >= MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
-            throw Exception("Exceeded maximum tool iterations")
+        if (!resp.statusCode.isSuccess()) {
+            if (resp.statusCode.value in 501..504) {
+                throw AgentNetworkException("Network error at gateway when running agent: ${resp.statusCode} (${resp.response?.message})")
+            } else {
+                throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
+            }
+        }
+        return resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used)
+    }
+
+    override fun decodeToolCalls(
+        assistantMessage: ConversationMessageDocument
+    ): List<AgentToolCall> {
+        if (assistantMessage.role != MessageRole.assistant) return emptyList()
+        return (assistantMessage.tool_calls ?: emptyList()).map { call ->
+            val args: Map<String, JsonElement> = try {
+                Json.Default.decodeFromString(call.function!!.arguments)
+            } catch (e: SerializationException) {
+                logger.w { "Failed to deserialize tool call arguments for tool ${call.function!!.name}" }
+                emptyMap()
+            }
+            val composite = call.function!!.name.split("__", limit = 2)
+            if (composite.size != 2) {
+                throw Exception("Invalid tool name: ${call.function!!.name}")
+            }
+            AgentToolCall(
+                id = call.id,
+                integrationName = composite[0],
+                toolName = composite[1],
+                arguments = args
+            )
+        }
+    }
+
+    override fun encodeToolResultContent(result: ToolCallResult): String =
+        buildJsonObject { put("result", result.resultString) }.toString()
+
+    override suspend fun send(
+        input: String,
+        mcpSession: McpSession,
+        includePromptsFromMcps: Map<String, Set<String>>,
+        skipToolExecution: Boolean
+    ) {
+        if (useSearchMode) {
+            sendSearch(input, mcpSession)
+        } else {
+            super.send(input, mcpSession, includePromptsFromMcps, skipToolExecution)
         }
     }
 
     private suspend fun sendSearch(input: String, mcpSession: McpSession) {
-        _conversation.emit(_conversation.first() + ConversationMessageDocument(
-            role = MessageRole.user,
-            content = input
-        ))
+        emit(ConversationMessageDocument(role = MessageRole.user, content = input))
         val resp = try {
             nenyaClient.run(
-                conversationHistory = conversation.first().filter {
+                conversationHistory = currentConversation().filter {
                     it.role != MessageRole.tool || it.tool_call_id != null // filter out tool messages that are not tool call responses (e.g. fake search completion message above)
                 },
                 toolSpecs = emptyList(),
@@ -213,8 +191,8 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         }
         val text = resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used).content
             ?.replace("**", "") // remove markdown bolding
-        _conversation.emit(
-            _conversation.first() + ConversationMessageDocument(
+        emit(
+            ConversationMessageDocument(
                 role = MessageRole.tool,
                 content = "",
                 semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
@@ -234,22 +212,6 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 )
             }
         }
-    }
-
-    override suspend fun send(
-        input: String,
-        mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
-        skipToolExecution: Boolean
-    ) {
-        when {
-            useSearchMode -> sendSearch(input, mcpSession)
-            else -> sendNormal(input, mcpSession, includePromptsFromMcps, skipToolExecution)
-        }
-    }
-
-    override suspend fun addMessage(message: ConversationMessageDocument) {
-        _conversation.emit(_conversation.first() + message)
     }
 }
 

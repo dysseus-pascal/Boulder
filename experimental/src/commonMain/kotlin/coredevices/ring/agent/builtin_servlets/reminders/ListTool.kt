@@ -8,9 +8,13 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.currentSessionContext
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
+import coredevices.ring.service.indexfeed.ItemFactory
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -19,13 +23,8 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlinx.coroutines.currentCoroutineContext
-import kotlin.getValue
 import kotlin.time.Clock
 
 class ListTool: BuiltInMcpTool(
@@ -66,6 +65,7 @@ class ListTool: BuiltInMcpTool(
     val reminderFactory: ReminderFactory by inject()
     private val itemRepo: ItemRepository by inject()
     private val itemFactory: ItemFactory by inject()
+    private val listRepo: ListRepository by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_list_item"
@@ -158,9 +158,16 @@ class ListTool: BuiltInMcpTool(
             }
             currentSessionContext()?.let { ctx ->
                 runCatching {
+                    val resolvedListId = resolveListIdByHint(listItemArgs.list_name)
                     itemRepo.setItem(
                         itemFactory.simpleUid(),
-                        itemFactory.noteItem(ctx.sourceRecordingId, ctx.createdAt, reminder.message, listItemArgs.list_name)
+                        itemFactory.noteItem(
+                            ctx.sourceRecordingId,
+                            ctx.createdAt,
+                            reminder.message,
+                            listItemArgs.list_name,
+                            resolvedListId = resolvedListId,
+                        )
                     )
                 }
             }
@@ -191,5 +198,12 @@ class ListTool: BuiltInMcpTool(
                 SemanticResult.GenericFailure("Failed to create reminder: ${e.message}")
             )
         }
+    }
+
+    private suspend fun resolveListIdByHint(hint: String): String? {
+        val normalized = hint.trim().lowercase()
+        if (normalized.isEmpty()) return null
+        val lists = listRepo.getAllFlow().first()
+        return lists.firstOrNull { it.title.lowercase().contains(normalized) }?.firestoreId
     }
 }

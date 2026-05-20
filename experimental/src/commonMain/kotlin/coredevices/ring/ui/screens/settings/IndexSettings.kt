@@ -171,7 +171,6 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeSecondaryModeDialog()
             },
-            webhookEnabled = webhookIsLinked,
         )
     }
     if (showNoteShortcutDialog) {
@@ -301,7 +300,6 @@ fun IndexSettings(coreNav: CoreNav) {
                             when (secondaryMode) {
                                 SecondaryMode.Disabled -> "Disabled"
                                 SecondaryMode.Search -> "Search"
-                                SecondaryMode.IndexWebhook -> "Webhook"
                             }
                         )
                     }
@@ -577,7 +575,6 @@ fun SecondaryModeDialog(
     currentMode: SecondaryMode,
     onModeSelected: (SecondaryMode) -> Unit,
     onDismissRequest: () -> Unit,
-    webhookEnabled: Boolean,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
@@ -649,39 +646,6 @@ fun SecondaryModeDialog(
                             "Get web search results on a double click & hold.",
                             fontSize = 12.sp,
                         )
-                    }
-                }
-            }
-            item(SecondaryMode.IndexWebhook) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = webhookEnabled) {
-                            targetMode = SecondaryMode.IndexWebhook
-                        }
-                ) {
-                    RadioButton(
-                        selected = targetMode == SecondaryMode.IndexWebhook,
-                        onClick = {
-                            targetMode = SecondaryMode.IndexWebhook
-                        },
-                        enabled = webhookEnabled
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Webhook")
-                        Text(
-                            "Send recording data to your webhook on a double click & hold.",
-                            fontSize = 12.sp,
-                        )
-                        if (!webhookEnabled) {
-                            Text(
-                                "Configure webhook first.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
                     }
                 }
             }

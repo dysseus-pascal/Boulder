@@ -274,12 +274,13 @@ enum class MusicControlMode(val id: Int) {
 
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
-    Search(1),
-    IndexWebhook(2);
+    Search(1);
 
     companion object {
+        // id=2 was the legacy IndexWebhook value, now controlled by the
+        // webhook trigger preference; map it to Disabled on load.
         fun fromId(id: Int): SecondaryMode {
-            return entries.firstOrNull { it.id == id } ?: Search
+            return entries.firstOrNull { it.id == id } ?: Disabled
         }
     }
 }

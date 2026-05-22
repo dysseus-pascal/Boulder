@@ -62,9 +62,6 @@ abstract class IterativeAgent(
     /** Max tool-execution rounds before erroring. */
     protected open val maxToolRounds: Int get() = 3
 
-    /** First inference round produced no tool calls (e.g. a create-note fallback). */
-    protected open suspend fun onNoToolCalls(input: String, mcpSession: McpSession) {}
-
     /** Lifecycle prep before the loop. */
     protected open suspend fun prepare() {}
 
@@ -80,8 +77,6 @@ abstract class IterativeAgent(
     ) {
         runLoop(input, mcpSession, includePromptsFromMcps, skipToolExecution)
     }
-
-    protected open fun formatMcpToolName(integrationName: String, toolName: String): String = "${integrationName}__$toolName"
 
     private suspend fun runLoop(
         input: String,
@@ -103,10 +98,7 @@ abstract class IterativeAgent(
                 emit(assistantMessage)
                 val toolCalls = decodeToolCalls(assistantMessage)
 
-                if (toolCalls.isEmpty()) {
-                    if (round == 0 && !skipToolExecution) onNoToolCalls(input, mcpSession)
-                    return
-                }
+                if (toolCalls.isEmpty()) return
                 if (skipToolExecution) return
                 if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")
 

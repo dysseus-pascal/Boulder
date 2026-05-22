@@ -185,22 +185,4 @@ class AgentCactus(
             )
         }
     }
-
-    // If the model called no tool, save the utterance as a note (fallback).
-    override suspend fun onNoToolCalls(input: String, mcpSession: McpSession) {
-        val noteResult = mcpSession.callTool(
-            integrationName = "builtin_note",
-            toolName = "create_note",
-            jsonInput = buildJsonObject { put("text", JsonPrimitive(input)) },
-            requireExists = false
-        )
-        emit(
-            ConversationMessageDocument(
-                role = MessageRole.tool,
-                tool_call_id = "fallback_note",
-                content = noteResult.resultString,
-                semantic_result = noteResult.semanticResult
-            )
-        )
-    }
 }

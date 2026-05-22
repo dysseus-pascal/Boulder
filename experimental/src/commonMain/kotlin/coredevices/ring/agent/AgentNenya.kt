@@ -21,6 +21,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -87,7 +88,12 @@ Prioritise the first action a user requests, for example 'remind me tomorrow to 
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
                                         )
-                                    }
+                                    },
+                                    items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {
+                                        buildJsonObject {
+                                            put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
+                                        }
+                                    } else null
                                 )
                             } ?: emptyMap(),
                             required = definition.inputSchema.required ?: emptyList(),
@@ -251,7 +257,9 @@ data class FunctionDeclarationParameter(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val minimum: Int? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val maximum: Int? = null
+    val maximum: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val items: JsonObject? = null
 )
 
 @Serializable

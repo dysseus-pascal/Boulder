@@ -5,6 +5,7 @@ import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
+import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -119,6 +120,13 @@ abstract class IterativeAgent(
                 )
             }
             emitAll(results)
+            val fatalError = results.firstOrNull {
+                it.semantic_result is SemanticResult.GenericFailure && !it.semantic_result.llmRecoverable
+            }
+            if (fatalError != null) {
+                logger.w { "Aborting tool loop due to error semantic result" }
+                return
+            }
             round++
         }
     }

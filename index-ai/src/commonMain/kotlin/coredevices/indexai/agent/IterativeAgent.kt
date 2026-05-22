@@ -90,44 +90,49 @@ abstract class IterativeAgent(
         skipToolExecution: Boolean,
     ) {
         prepare()
-        emit(ConversationMessageDocument(role = MessageRole.user, content = input))
-        val tools = mcpSession.listTools()
+        mcpSession.openSession()
+        try {
+            emit(ConversationMessageDocument(role = MessageRole.user, content = input))
+            val tools = mcpSession.listTools()
 
-        var round = 0
-        while (true) {
-            val assistantMessage = runInference(
-                input, currentConversation(), tools, mcpSession, includePromptsFromMcps
-            )
-            emit(assistantMessage)
-            val toolCalls = decodeToolCalls(assistantMessage)
-
-            if (toolCalls.isEmpty()) {
-                if (round == 0 && !skipToolExecution) onNoToolCalls(input, mcpSession)
-                return
-            }
-            if (skipToolExecution) return
-            if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")
-
-            val results = toolCalls.map { call ->
-                val r = mcpSession.callTool(
-                    call.integrationName, call.toolName, call.arguments, requireExists = false
+            var round = 0
+            while (true) {
+                val assistantMessage = runInference(
+                    input, currentConversation(), tools, mcpSession, includePromptsFromMcps
                 )
-                ConversationMessageDocument(
-                    role = MessageRole.tool,
-                    content = encodeToolResultContent(r),
-                    tool_call_id = call.id,
-                    semantic_result = r.semanticResult,
-                )
+                emit(assistantMessage)
+                val toolCalls = decodeToolCalls(assistantMessage)
+
+                if (toolCalls.isEmpty()) {
+                    if (round == 0 && !skipToolExecution) onNoToolCalls(input, mcpSession)
+                    return
+                }
+                if (skipToolExecution) return
+                if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")
+
+                val results = toolCalls.map { call ->
+                    val r = mcpSession.callTool(
+                        call.integrationName, call.toolName, call.arguments, requireExists = false
+                    )
+                    ConversationMessageDocument(
+                        role = MessageRole.tool,
+                        content = encodeToolResultContent(r),
+                        tool_call_id = call.id,
+                        semantic_result = r.semanticResult,
+                    )
+                }
+                emitAll(results)
+                val fatalError = results.firstOrNull {
+                    it.semantic_result is SemanticResult.GenericFailure && !it.semantic_result.llmRecoverable
+                }
+                if (fatalError != null) {
+                    logger.w { "Aborting tool loop due to error semantic result" }
+                    return
+                }
+                round++
             }
-            emitAll(results)
-            val fatalError = results.firstOrNull {
-                it.semantic_result is SemanticResult.GenericFailure && !it.semantic_result.llmRecoverable
-            }
-            if (fatalError != null) {
-                logger.w { "Aborting tool loop due to error semantic result" }
-                return
-            }
-            round++
+        } finally {
+            mcpSession.closeSession()
         }
     }
 }

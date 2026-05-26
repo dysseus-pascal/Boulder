@@ -22,6 +22,7 @@ import coredevices.util.Platform
 import coredevices.util.isIOS
 import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -148,8 +150,6 @@ class RingSync(
 
     private val _ringEvents = MutableSharedFlow<RingEvent>(replay = 1, extraBufferCapacity = 50, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val ringEvents = _ringEvents.asSharedFlow()
-    private val _lifetimeTransferCount = MutableStateFlow(null)
-    val lifetimeTransferCount = _lifetimeTransferCount.asStateFlow()
 
     private fun logTransferEvent(
         latency: Long?,
@@ -186,6 +186,7 @@ class RingSync(
         return filename
     }
 
+    @OptIn(FlowPreview::class)
     fun startSyncJob(satelliteManager: KMPHaversineSatelliteManager) {
         logger.d { "startSyncJob()" }
         syncJob?.cancel()
@@ -196,11 +197,20 @@ class RingSync(
         }
 
         syncJob = scope.launch {
+            val lifetimeCollectionCount = MutableSharedFlow<Pair<String, Int>>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
             launch {
                 buttonActionHandler.handleButtonActions()
             }
             launch {
                 indexNotificationManager.processRingSyncTransferNotifications(ringEvents)
+            }
+            launch(Dispatchers.IO) {
+                lifetimeCollectionCount.debounce(1.seconds).collect {
+                    val (serial, count) = it
+                    logger.d { "Updating lifetime collection count for $serial to $count" }
+                    coreAnalytics.updateRingLifetimeCollectionCount(serial, count)
+                    usersDao.updateRingLifetimeCollectionCount(serial, count)
+                }
             }
             satelliteManager.lastRing.onEach {
                 _lastRing.value = it
@@ -290,8 +300,7 @@ class RingSync(
                                                                     ?: transferStatus.satellite.state.value?.serialNumber
                                                         )?.let { serial ->
                                                             transferStatus.lifetimeCollectionCount?.let { count ->
-                                                                coreAnalytics.updateRingLifetimeCollectionCount(serial, count.toInt())
-                                                                usersDao.updateRingLifetimeCollectionCount(serial, count.toInt())
+                                                                lifetimeCollectionCount.emit(serial to count.toInt())
                                                             } ?: logger.w {
                                                                 "No lifetime collection count available to update for serial $serial"
                                                             }

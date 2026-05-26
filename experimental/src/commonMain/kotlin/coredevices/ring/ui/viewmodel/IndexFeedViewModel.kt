@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -397,26 +398,27 @@ class IndexFeedViewModel(
             return raw
         }
 
-        /** Turn an ISO-8601 duration (`PT20M`, `PT1H30M`, `PT45S`) into a
-         *  human label like "20 min", "1 hr 30 min", "45 sec". Falls back to
-         *  the raw string if parsing fails. Used everywhere we surface a
-         *  timer's duration. */
-        fun formatDuration(iso: String?): String? {
-            if (iso.isNullOrBlank()) return null
-            return try {
-                val d = kotlin.time.Duration.parseIsoString(iso)
-                val totalSec = d.inWholeSeconds
-                val h = totalSec / 3600
-                val m = (totalSec % 3600) / 60
-                val s = totalSec % 60
-                buildString {
-                    if (h > 0) append("$h hr ")
-                    if (m > 0) append("$m min ")
-                    if (s > 0 && h == 0L) append("$s sec")
-                }.trim().ifBlank { iso }
+        /** Turn an ISO-8601 duration (`PT20M`, `PT1H30M`, `PT45S`) or a raw
+         *  millisecond value (legacy cached rows) into a human label like
+         *  "20 min", "1 hr 30 min", "45 sec". Falls back to the raw string
+         *  if parsing fails. Used everywhere we surface a timer's duration. */
+        fun formatDuration(raw: String?): String? {
+            if (raw.isNullOrBlank()) return null
+            // Parse ISO-8601 ("PT3M") or fall back to raw milliseconds for older cached rows
+            val d = try {
+                kotlin.time.Duration.parseIsoString(raw)
             } catch (e: Throwable) {
-                iso
+                raw.toLongOrNull()?.milliseconds ?: return raw
             }
+            val totalSec = d.inWholeSeconds
+            val h = totalSec / 3600
+            val m = (totalSec % 3600) / 60
+            val s = totalSec % 60
+            return buildString {
+                if (h > 0) append("$h hr ")
+                if (m > 0) append("$m min ")
+                if (s > 0 && h == 0L) append("$s sec")
+            }.trim().ifBlank { raw }
         }
     }
 }

@@ -1564,6 +1564,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Re-publish GATT services after BT restore",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.republishGattServicesOnRestore,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    republishGattServicesOnRestore = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsRestartingGattServerAfterBtPowerOn() }
+                ),
                 basicSettingsActionItem(
                     title = "Post test notification",
                     description = "Create a test notification, with actions",

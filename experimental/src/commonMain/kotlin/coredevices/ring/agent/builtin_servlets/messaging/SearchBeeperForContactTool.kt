@@ -32,7 +32,7 @@ internal object SearchBeeperForContactToolConstants {
     )
     val TOOL_NAME: String = "search_for_contact"
     val TOOL_DESCRIPTION: String =
-        "Searches for a contact in Beeper by name to obtain their contact ID."
+        "Searches for a contact in Beeper by name to obtain their contact ID. Can only be used for instant messages, calls are not supported."
     val EXTRA_CONTEXT: String =
         "When using search_for_contact, refuse to continue if there are multiple contacts with the same name and instead ask the user for more specific information."
 }

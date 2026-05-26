@@ -94,6 +94,11 @@ both as the content unless it's clearly two separate actions, for example 'remin
                                             enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
+                                            items = p["items"]?.jsonObject ?: if (p["type"]?.toString()?.trim('"') == "array") {
+                                                buildJsonObject {
+                                                    put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
+                                                }
+                                            } else null,
                                         )
                                     }?.takeIf { it.isNotEmpty() },
                                     items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {

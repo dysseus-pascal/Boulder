@@ -85,16 +85,17 @@ both as the content unless it's clearly two separate actions, for example 'remin
                                     enum = param.jsonObject["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                     minimum = param.jsonObject["minimum"]?.toString()?.toIntOrNull(),
                                     maximum = param.jsonObject["maximum"]?.toString()?.toIntOrNull(),
-                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.map { anyOfParam ->
+                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.mapNotNull { anyOfParam ->
                                         val p = anyOfParam.jsonObject
+                                        val type = p["type"] ?: return@mapNotNull null
                                         FunctionDeclarationParameter(
-                                            type = p["type"]!!,
+                                            type = type,
                                             description = p["description"]?.toString(),
                                             enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
                                         )
-                                    },
+                                    }?.takeIf { it.isNotEmpty() },
                                     items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {
                                         buildJsonObject {
                                             put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing

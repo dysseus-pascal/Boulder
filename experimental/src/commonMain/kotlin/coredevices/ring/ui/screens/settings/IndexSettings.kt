@@ -62,9 +62,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coreapp.ring.generated.resources.Res
-import coreapp.ring.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
@@ -1401,7 +1400,7 @@ fun IndexDeviceListItem(
             modifier = Modifier.padding(8.dp)
         ) {
             Image(
-                imageResource(Res.drawable.ring_wireframe),
+                imageResource(UtilRes.drawable.ring_wireframe),
                 contentDescription = null,
                 modifier = Modifier.size(110.dp)
             )

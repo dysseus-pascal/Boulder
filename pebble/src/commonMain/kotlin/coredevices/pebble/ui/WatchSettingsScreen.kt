@@ -820,6 +820,24 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
                 basicSettingsToggleItem(
+                    title = "Allow notifications from unknown apps",
+                    description = "This may include system apps, or app from another profile. Experimental: try enabling to see if this shows notifications from other profiles.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.allowUnknownAppNotifications,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    allowUnknownAppNotifications = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                    isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
                     title = "Show legacy watches in BLE scan",
                     description = "Allow Aplite/Basalt/Chalk watches to appear in BLE scan results. By default these only show via the Bluetooth Classic scan option.",
                     topLevelType = TopLevelType.Phone,

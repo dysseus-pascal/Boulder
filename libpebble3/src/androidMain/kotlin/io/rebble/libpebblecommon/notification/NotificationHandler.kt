@@ -131,7 +131,7 @@ class NotificationHandler(
         }
         val appEntry = notificationAppDao.getEntry(sbn.packageName)
         // Don't do any further processing if we don't know the app
-        if (appEntry == null) {
+        if (appEntry == null && !notificationConfig.value.allowUnknownAppNotifications) {
             verboseLog {
                 "Ignoring unknown (maybe system) app notification from ${
                     sbn.packageName.obfuscate(
@@ -141,13 +141,28 @@ class NotificationHandler(
             }
             return null
         }
-        notificationAppDao.insertOrReplace(
-            appEntry.copy(
-                lastNotified = timeProvider.now().asMillisecond()
+        if (appEntry != null) {
+            notificationAppDao.insertOrReplace(
+                appEntry.copy(
+                    lastNotified = timeProvider.now().asMillisecond()
+                )
             )
+        }
+        val appEntryToUse = appEntry ?: NotificationAppItem(
+            packageName = sbn.packageName,
+            iconCode = null,
+            colorName = null,
+            name = sbn.packageName,
+            muteState = MuteState.Never,
+            allowDuplicates = false,
+            channelGroups = emptyList(),
+            lastNotified = timeProvider.now().asMillisecond(),
+            vibePatternName = null,
+            stateUpdated = timeProvider.now().asMillisecond(),
+            muteExpiration = null,
         )
-        val channel = appEntry.getChannelFor(sbn)
-        val result = extractNotification(sbn, appEntry, channel)
+        val channel = appEntry?.getChannelFor(sbn)
+        val result = extractNotification(sbn, appEntryToUse, channel)
         if (notificationConfig.value.dumpNotificationContent) {
             sbn.dump(result)
         }
@@ -163,13 +178,13 @@ class NotificationHandler(
         val appProperties = NotificationProperties.lookup(sbn.packageName)
         val decision = decideNotification(
             notification = notification,
-            appEntry = appEntry,
+            appEntry = appEntryToUse,
             channel = channel,
             appProperties = appProperties,
             inflightNotifications = inflightNotifications.values,
             notificationConfig = notificationConfig.value,
             isLocalOnly = sbn.notification.isLocalOnly(),
-            isRuleFiltered = { checkRuleFiltered(appEntry, notification) },
+            isRuleFiltered = { checkRuleFiltered(appEntryToUse, notification) },
             screenIsOnAndUnlocked = ::screenIsOnAndUnlocked,
         )
         val storeNotification = when {

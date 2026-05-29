@@ -151,10 +151,16 @@ class ListTool: BuiltInMcpTool(
             message = listItemArgs.message
         )
         return try {
-            val reminderId = if (reminder is ListAssignableReminder) {
-                reminder.scheduleToList(listItemArgs.list_name)
+
+            val (reminderId, listUsed) = if (reminder is ListAssignableReminder) {
+                try {
+                    reminder.scheduleToList(listItemArgs.list_name) to reminder.listTitle
+                } catch (e: ListNotFoundException) {
+                    logger.e(e) { "List not found, scheduling reminder without list assignment" }
+                    reminder.schedule() to null
+                }
             } else {
-                reminder.schedule()
+                reminder.schedule() to null
             }
             currentSessionContext()?.let { ctx ->
                 runCatching {
@@ -176,7 +182,7 @@ class ListTool: BuiltInMcpTool(
                 if ((reminder as? ListAssignableReminder)?.listTitle != null) {
                     SemanticResult.ListItemCreation(
                         content = reminder.message,
-                        listUsed = reminder.listTitle,
+                        listUsed = listUsed,
                         remindAt = reminder.time
                     )
                 } else {

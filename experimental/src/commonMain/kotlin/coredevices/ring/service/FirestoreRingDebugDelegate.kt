@@ -92,6 +92,7 @@ class FirestoreRingDebugDelegate(
             "ring.rssi_measurement",
             mapOf(
                 "ring_serial" to (state?.programmedSerialNumber ?: state?.serialNumber ?: "<none>"),
+                "ring_mac" to (state?.serialNumber ?: "<none>"),
                 "ring_rssi" to rssi,
                 "phone_rssi" to (txRssi ?: "<none>"),
                 "rssi_diff" to (diff ?: "<none>")

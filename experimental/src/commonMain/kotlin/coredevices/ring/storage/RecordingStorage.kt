@@ -97,19 +97,16 @@ class RecordingStorage(
      * until [persistRecording] is called
      * @param id unique identifier for the recording, cannot contain characters that are invalid in file names
      */
-    suspend fun openCleanRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink {
-        val metadata = CachedRecordingMetadata("$id-clean", sampleRate, mimeType)
-        cachedMetadataDao.insert(metadata)
-        return SystemFileSystem.sink(Path(getRecordingsCacheDirectory(), "$id-clean")).buffered()
+    suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink {
+        val metadata = CachedRecordingMetadata("$id-original", sampleRate, mimeType)
+        cachedMetadataDao.insertOrReplace(metadata)
+        return SystemFileSystem.sink(Path(getRecordingsCacheDirectory(), "$id-original")).buffered()
     }
 
-    /**
-     * Open a source for reading recording data
-     */
-    suspend fun openRecordingSource(id: String): Pair<Source, RecordingSourceInfo> {
+    private suspend fun getOrDownloadCachedRecording(id: String): Pair<Path, RecordingSourceInfo> {
         val cachedPath = Path(getRecordingsCacheDirectory(), id)
         var cachedMetadata = cachedMetadataDao.get(id)
-        if (!SystemFileSystem.exists(cachedPath) || cachedMetadata == null) { // Not in cache, download
+        return if (!SystemFileSystem.exists(cachedPath) || cachedMetadata == null) { // Not in cache, download
             logger.d { "Downloading recording $id" }
             val path = "recordings/${Firebase.auth.currentUser!!.uid}/$id"
             val ref = Firebase.storage.reference(path)
@@ -163,13 +160,51 @@ class RecordingStorage(
             // Cached file is raw PCM regardless of upload format
             cachedMetadata = CachedRecordingMetadata(id, sampleRate, PCM_MIME)
             cachedMetadataDao.insertOrReplace(cachedMetadata)
+            val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
+            Pair(cachedPath, RecordingSourceInfo(id, cachedMetadata, size))
+        } else {
+            logger.d { "Recording $id found in cache" }
+            val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
+            Pair(cachedPath, RecordingSourceInfo(id, cachedMetadata, size))
         }
-        val size = SystemFileSystem.metadataOrNull(cachedPath)?.size
-            ?: error("Failed to get size of recording $id")
-        return Pair(
-            SystemFileSystem.source(cachedPath).buffered(),
-            RecordingSourceInfo(id, cachedMetadata, size)
-        )
+    }
+
+    /**
+     * Open a source for reading recording data
+     */
+    suspend fun openRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo> {
+        try {
+            val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
+            val (path, info) = getOrDownloadCachedRecording(id)
+            return Pair(SystemFileSystem.source(path).buffered(), info)
+        } catch (e: Exception) {
+            if (useOriginalAudio) {
+                logger.w(e) { "Failed to open original recording source for $idNoSuffix, falling back to processed version" }
+                val (path, info) = getOrDownloadCachedRecording(idNoSuffix)
+                return Pair(SystemFileSystem.source(path).buffered(), info)
+            } else {
+                logger.w(e) { "Failed to open recording source for $idNoSuffix, falling back to original version" }
+                val (path, info) = getOrDownloadCachedRecording("$idNoSuffix-original")
+                return Pair(SystemFileSystem.source(path).buffered(), info)
+            }
+        }
+    }
+
+    /**
+     * Open a source for reading recording data only if it already exists in cache,
+     * without attempting to download from Firebase Storage.
+     * Usually prefer [openRecordingSource].
+     */
+    suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo>? {
+        val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
+        val cachedPath = Path(getRecordingsCacheDirectory(), id)
+        val cachedMetadata = cachedMetadataDao.get(id)
+            ?: return null
+        if (!SystemFileSystem.exists(cachedPath)) {
+            return null
+        }
+        val size = SystemFileSystem.metadataOrNull(cachedPath)?.size ?: error("Failed to get size of cached recording $id")
+        return Pair(SystemFileSystem.source(cachedPath).buffered(), RecordingSourceInfo(id, cachedMetadata, size))
     }
 
     /**
@@ -197,7 +232,7 @@ class RecordingStorage(
             logger.w { "Encryption enabled but no key available — uploading unencrypted" }
         }
 
-        for (idToMove in listOf(id, "$id-clean")) {
+        for (idToMove in listOf(id, "$id-original")) {
             val source = Path(getRecordingsCacheDirectory(), idToMove)
             val cachedMetadata = cachedMetadataDao.get(idToMove)
                 ?: error("Cached metadata for recording $idToMove not found")

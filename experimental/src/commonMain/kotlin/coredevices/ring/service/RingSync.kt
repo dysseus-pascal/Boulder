@@ -586,15 +586,15 @@ class RingSync(
                                                                             },
                                                                             async(Dispatchers.IO) {
                                                                                 val t = TimeSource.Monotonic.measureTime {
-                                                                                    recordingStorage.openCleanRecordingSink(
+                                                                                    recordingStorage.openOriginalRecordingSink(
                                                                                         id,
-                                                                                        transferStatus.sampleRate.toInt(),
+                                                                                        nwSampleRate,
                                                                                         "audio/raw"
                                                                                     ).use { sink ->
-                                                                                        sink.write(transferStatus.samples.toByteArrayLe())
+                                                                                        sink.write(samplesResampled.toByteArrayLe())
                                                                                     }
                                                                                 }
-                                                                                logger.d { "Saved clean recording in ${t.inWholeMilliseconds} ms" }
+                                                                                logger.d { "Saved original recording in ${t.inWholeMilliseconds} ms" }
                                                                             }
                                                                         ).awaitAll()
                                                                         trace.markEvent(

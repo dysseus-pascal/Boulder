@@ -91,11 +91,11 @@ internal fun RingDemo(nav: CoreNav) {
                 scope.launch {
                     buffering = true
                     try {
-                        // Prefer the clean (noise-suppressed) variant, fall back to base.
+                        // Prefer the processed variant, fall back to original.
                         val (samples, info) = try {
-                            recordingStorage.openRecordingSource("$fileName-clean")
-                        } catch (e: Throwable) {
                             recordingStorage.openRecordingSource(fileName)
+                        } catch (e: Throwable) {
+                            recordingStorage.openRecordingSource(fileName, true)
                         }
                         audioPlayer.playRaw(
                             samples,

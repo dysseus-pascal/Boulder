@@ -54,7 +54,11 @@ import coredevices.ring.ui.components.feed.AudioBars
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.io.Buffer
 import org.koin.compose.koinInject
 import kotlin.time.Clock
 
@@ -70,6 +74,7 @@ internal fun RingDemo(nav: CoreNav) {
     val playerState by audioPlayer.playbackState.collectAsState()
 
     var buffering by remember { mutableStateOf(false) }
+    val buffer = remember { Buffer() }
     DisposableEffect(audioPlayer) {
         onDispose { audioPlayer.stop() }
     }
@@ -96,6 +101,12 @@ internal fun RingDemo(nav: CoreNav) {
                             recordingStorage.openRecordingSource(fileName)
                         } catch (e: Throwable) {
                             recordingStorage.openRecordingSource(fileName, true)
+                        }
+                        withContext(Dispatchers.IO) {
+                            buffer.clear()
+                            samples.use {
+                                it.transferTo(buffer)
+                            }
                         }
                         audioPlayer.playRaw(
                             samples,

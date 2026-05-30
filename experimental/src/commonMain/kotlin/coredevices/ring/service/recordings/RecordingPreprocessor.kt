@@ -29,7 +29,9 @@ class RecordingPreprocessor(
         // Read original (no processing) audio
         val (fileSource, info) = recordingStorage.openRecordingSource(fileId, useOriginalAudio = true)
 
-        val allSamples = readAllSamples(fileSource, info.size)
+        val allSamples = fileSource.use {
+            readAllSamples(fileSource, info.size)
+        }
         val frameDurationMs = 20
         // Compute whole-file gain based on average RMS of voiced frames, then apply uniformly (preserving relative dynamics for AI)
         val start = TimeSource.Monotonic.markNow()

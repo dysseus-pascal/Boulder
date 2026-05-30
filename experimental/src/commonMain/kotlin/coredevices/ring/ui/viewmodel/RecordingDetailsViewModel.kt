@@ -130,9 +130,10 @@ class RecordingDetailsViewModel(
                 withContext(Dispatchers.IO) {
                     // Only bother if we have the cached audio, try both the processed and original
                     // but just give up otherwise to not trigger download.
-                    val (_, info) = recordingStorage.openCachedRecordingSource(fileName)
+                    val (src, info) = recordingStorage.openCachedRecordingSource(fileName)
                         ?: recordingStorage.openCachedRecordingSource(fileName, true)
                         ?: return@withContext
+                    src.close() // we just needed the header info, no need to keep the stream open
                     val rate = info.cachedMetadata.sampleRate.toFloat()
                     if (rate > 0f) durationSeconds.value = info.size.toFloat() / rate
                 }

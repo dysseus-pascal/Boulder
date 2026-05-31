@@ -715,7 +715,7 @@ sealed interface DeviceListEntry {
     val key: String
 
     data class Watch(val device: PebbleDevice) : DeviceListEntry {
-        override val key get() = "watch-${device.identifier.asString}"
+        override val key get() = "watch-${device.identifier::class.simpleName}-${device.identifier.asString}"
     }
 
     data class Ring(val device: IndexDevice) : DeviceListEntry {

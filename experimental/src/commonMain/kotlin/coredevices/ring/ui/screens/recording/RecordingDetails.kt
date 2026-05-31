@@ -4,7 +4,6 @@ import BugReportButton
 import CoreNav
 import androidx.compose.foundation.combinedClickable
 import coredevices.ring.data.entity.room.indexfeed.kind
-import coredevices.ring.data.entity.room.indexfeed.recipientName
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -272,23 +271,14 @@ private fun RecordingDetailsContents(
             }
         }
 
-        // 3. Index reply + action chips. Mirrors the prototype's
-        // RecordingViewChat: ◎ avatar on the left, then a reply bubble
-        // (Q&A body or "To X: ..." for messages) and below it the
-        // remaining chips. The bubble's source item is suppressed from
-        // the chip list since the bubble already represents it.
+        // 3. Index reply + action chips. ◎ avatar on the left, then a reply
+        // bubble (Q&A answer body only) and below it the action chips. Only
+        // an answer item is promoted to the bubble and suppressed from the
+        // chip list; everything else renders as a plain action chip.
         if (linkedItems.isNotEmpty()) {
             val answerItem = linkedItems.firstOrNull { it.kind == "answer" }
-            val messageItem = if (answerItem == null)
-                linkedItems.firstOrNull { it.kind == "message" && it.body.isNotBlank() }
-                else null
-            val replyText = answerItem?.body
-                ?: messageItem?.let { msg ->
-                    val recip = msg.recipientName()
-                    if (!recip.isNullOrBlank()) "To $recip: ${msg.body}" else msg.body
-                }
-                ?: ""
-            val suppressedId = answerItem?.firestoreId ?: messageItem?.firestoreId
+            val replyText = answerItem?.body ?: ""
+            val suppressedId = answerItem?.firestoreId
             val chipsToShow = if (suppressedId != null)
                 linkedItems.filter { it.firestoreId != suppressedId }
                 else linkedItems

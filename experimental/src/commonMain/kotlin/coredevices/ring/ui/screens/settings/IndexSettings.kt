@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,6 +51,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1338,6 +1341,10 @@ fun AuthorizedIntegrations(preferences: Preferences) {
             )
         }
         if (notionAuth) {
+            var showNotionPageDialog by remember { mutableStateOf(false) }
+            if (showNotionPageDialog) {
+                NotionPageDialog(onDismiss = { showNotionPageDialog = false })
+            }
             IntegrationItem(
                 title = NotionIntegration.DEFINITION.title,
                 hasReminder = false,
@@ -1345,8 +1352,89 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 selectedReminderProvider = false,
                 selectedNoteProvider = currentNoteProvider == NoteProvider.Notion,
                 onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) }
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) },
+                onConfigure = { showNotionPageDialog = true }
             )
+        }
+    }
+}
+
+/**
+ * Lets the user pick which Notion page to-do block is placed
+ */
+@Composable
+fun NotionPageDialog(onDismiss: () -> Unit) {
+    val notion = koinInject<NotionIntegration>()
+    val scope = rememberCoroutineScope()
+    var pages by remember { mutableStateOf<List<NotionIntegration.NotionPage>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val loaded = notion.listPages()
+            selectedId = notion.selectedPageId() ?: loaded.firstOrNull()?.id
+            pages = loaded
+        } catch (e: Throwable) {
+            error = e.message ?: "Failed to load pages"
+        }
+    }
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Notion Page") },
+        buttons = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(
+                enabled = selectedId != null && !saving,
+                onClick = {
+                    val pageId = selectedId ?: return@TextButton
+                    saving = true
+                    scope.launch {
+                        notion.selectPage(pageId)
+                        onDismiss()
+                    }
+                }
+            ) { Text("OK") }
+        }
+    ) {
+        Column {
+            Text(
+                "Choose the page to place your notes' Todo list in.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(12.dp))
+            val loadedPages = pages
+            when {
+                error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
+                loadedPages == null -> Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+                loadedPages.isEmpty() -> Text(
+                    "No pages found. Give Index access to a page in Notion, then try again."
+                )
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(loadedPages) { page ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedId = page.id }
+                        ) {
+                            RadioButton(
+                                selected = selectedId == page.id,
+                                onClick = { selectedId = page.id }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(page.title)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1360,12 +1448,22 @@ fun IntegrationItem(
     selectedNoteProvider: Boolean,
     onSelectReminderProvider: () -> Unit,
     onSelectNoteProvider: () -> Unit,
+    onConfigure: (() -> Unit)? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(title)
+        if (onConfigure != null) {
+            IconButton(onClick = onConfigure, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Configure $title",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
         Spacer(Modifier.weight(1f))
         RadioButton(
             enabled = hasReminder,

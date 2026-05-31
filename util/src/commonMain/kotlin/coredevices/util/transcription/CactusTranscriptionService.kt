@@ -55,6 +55,7 @@ expect val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long
 class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val wisprFlow: WisprFlowTranscriptionService,
+    private val kirinki: KirinkiTranscriptionService,
     private val modelProvider: CactusModelPathProvider,
     private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
 ): TranscriptionService {
@@ -213,9 +214,10 @@ class CactusTranscriptionService(
 
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
-            CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable()
+            CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable() || kirinki.isAvailable()
             CactusSTTMode.LocalOnly -> modelHandle != 0L || modelExists()
-            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst -> wisprFlow.isAvailable() || modelHandle != 0L
+            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
+                wisprFlow.isAvailable() || kirinki.isAvailable() || modelHandle != 0L
         }
     }
 
@@ -240,6 +242,49 @@ class CactusTranscriptionService(
         val modelUsed: String?
     )
 
+    /**
+     * Run remote transcription via WisprFlow, falling back to the kirinki backend if it fails.
+     * The original WisprFlow error is rethrown when kirinki is unavailable.
+     */
+    private suspend fun remoteTranscribe(
+        audio: ByteArray,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        timeout: Duration,
+    ): TranscriptionSessionStatus.Transcription {
+        return try {
+            wisprFlow.transcribe(
+                audioStreamFrames = flowOf(audio),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext,
+                timeout = timeout
+            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (!kirinki.isAvailable()) {
+                logger.w(e) { "WisprFlow transcription failed and kirinki unavailable: ${e.message}" }
+                throw e
+            }
+            logger.w(e) { "WisprFlow transcription failed, falling back to kirinki: ${e.message}" }
+            kirinki.transcribe(
+                audioStreamFrames = flowOf(audio),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext,
+                timeout = timeout
+            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+        }
+    }
+
     private suspend fun localTranscribe(
         audio: ByteArray,
         sampleRate: Int,
@@ -260,15 +305,15 @@ class CactusTranscriptionService(
             logger.d { "Using transcription mode ${sttConfig.value.mode}" }
             return when (val sttMode = sttConfig.value.mode) {
                 CactusSTTMode.RemoteOnly -> {
-                    val result = wisprFlow.transcribe(
-                        audioStreamFrames = flowOf(audio),
+                    val result = remoteTranscribe(
+                        audio = audio,
                         sampleRate = sampleRate,
                         language = language,
                         conversationContext = conversationContext,
                         dictionaryContext = dictionaryContext,
                         contentContext = contentContext,
                         timeout = timeout
-                    ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+                    )
                     LocalTranscriptionResult(
                         text = result.text,
                         modeUsed = sttMode,
@@ -294,15 +339,15 @@ class CactusTranscriptionService(
                 }
                 CactusSTTMode.RemoteFirst -> {
                     try {
-                        val result = wisprFlow.transcribe(
-                            audioStreamFrames = flowOf(audio),
+                        val result = remoteTranscribe(
+                            audio = audio,
                             sampleRate = sampleRate,
                             language = language,
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
                             contentContext = contentContext,
                             timeout = timeout
-                        ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+                        )
                         LocalTranscriptionResult(
                             text = result.text,
                             modeUsed = sttMode,
@@ -348,15 +393,15 @@ class CactusTranscriptionService(
                         throw e
                     } catch (e: Exception) {
                         logger.w(e) { "Local transcription failed, falling back to remote: ${e.message}" }
-                        val result = wisprFlow.transcribe(
-                            audioStreamFrames = flowOf(audio),
+                        val result = remoteTranscribe(
+                            audio = audio,
                             sampleRate = sampleRate,
                             language = language,
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
                             contentContext = contentContext,
                             timeout = timeout
-                        ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+                        )
                         LocalTranscriptionResult(
                             text = result.text,
                             modeUsed = CactusSTTMode.RemoteOnly,

@@ -46,6 +46,7 @@ import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
@@ -544,6 +545,7 @@ class RingRecordingE2ETest {
         singleOf(::NenyaClientImpl) bind NenyaClient::class
         singleOf(::WisprFlowAuth)
         singleOf(::WisprFlowTranscriptionService)
+        singleOf(::KirinkiTranscriptionService)
 
         // Cactus local transcription
         single { CactusModelProvider() }
@@ -558,7 +560,7 @@ class RingRecordingE2ETest {
             ))
         }
         single {
-            CactusTranscriptionService(get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
         } bind TranscriptionService::class
 
         // MCP tools

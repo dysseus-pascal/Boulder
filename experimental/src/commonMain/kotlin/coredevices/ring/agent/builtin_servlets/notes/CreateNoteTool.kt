@@ -71,7 +71,7 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
 
     override suspend fun call(jsonInput: String): ToolCallResult {
         val createNoteArgs = JsonSnake.decodeFromString<CreateNoteArgs>(jsonInput)
-        Logger.d { "Creating note with text: ${createNoteArgs.text}" }
+        Logger.d { "Creating note with text length: ${createNoteArgs.text.length}" }
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
             val noteId = noteClient.createNote(createNoteArgs.text)

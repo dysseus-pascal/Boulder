@@ -43,7 +43,9 @@ class PebbleService: Service(), KoinComponent {
     }
 
     private val satelliteManager: KMPHaversineSatelliteManager by inject()
-    private lateinit var notificationManagerCompat: NotificationManagerCompat
+    private val notificationManagerCompat: NotificationManagerCompat by lazy {
+        NotificationManagerCompat.from(this)
+    }
     private val scope: RecordingBackgroundScope by inject()
     private var recordingDebugNotificationJob: Job? = null
     private var ringSyncJob: Job? = null
@@ -125,7 +127,6 @@ class PebbleService: Service(), KoinComponent {
         if (intent != null) {
             handleIntent(intent)
         }
-        notificationManagerCompat = NotificationManagerCompat.from(this)
         val notificationChannel = NotificationChannelCompat.Builder(
             NOTIFICATION_CHANNEL_ID,
             NotificationManager.IMPORTANCE_MIN)

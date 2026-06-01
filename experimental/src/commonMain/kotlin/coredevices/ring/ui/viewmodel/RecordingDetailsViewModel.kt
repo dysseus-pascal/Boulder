@@ -23,6 +23,7 @@ import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -163,8 +164,10 @@ class RecordingDetailsViewModel(
                 // home feed doesn't show orphaned chips.
                 val recId = firestoreId?.takeIf { it.isNotBlank() } ?: "local:$recordingId"
                 val linked = itemRepo.getByRecording(recId)
-                linked.forEach { itemRepo.softDelete(it.firestoreId) }
-                recordingRepo.deleteRecording(recordingId)
+                withContext(NonCancellable) {
+                    linked.forEach { itemRepo.softDelete(it.firestoreId) }
+                    recordingRepo.deleteRecording(recordingId)
+                }
                 snackbarHostState.showSnackbar(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
                 )

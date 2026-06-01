@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -171,15 +172,29 @@ internal fun IndexHeader(
                 modifier = Modifier.clickable { onCancelSearch() }.padding(6.dp),
             )
         } else {
-            Text(
-                "Index",
-                color = colors.onSurface,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.8).sp,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-            PulsingSyncHint()
+            // Wrap title + sync hint in a weighted Row so the trailing
+            // icon buttons are always given their natural width first
+            // (protects them under large font scaling / narrow devices).
+            // Within the cluster, the title renders at natural width with
+            // no wrap so "Index" never squishes, and the sync hint absorbs
+            // any leftover space, right-aligning and truncating with an
+            // ellipsis when the row gets tight.
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Index",
+                    color = colors.onSurface,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.8).sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+                PulsingSyncHint(modifier = Modifier.weight(1f))
+            }
             IconButton(onClick = onStartSearch) {
                 Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
             }
@@ -189,7 +204,7 @@ internal fun IndexHeader(
 }
 
 @Composable
-internal fun PulsingSyncHint() {
+internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
     val colors = IndexTheme.colors
     var alpha by remember { mutableFloatStateOf(0.45f) }
     LaunchedEffect(Unit) {
@@ -206,7 +221,10 @@ internal fun PulsingSyncHint() {
         color = colors.onSurfaceVariant,
         fontSize = 12.sp,
         letterSpacing = (-0.05).sp,
-        modifier = Modifier.alpha(alpha).padding(end = 4.dp),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.End,
+        modifier = modifier.alpha(alpha).padding(end = 4.dp),
     )
 }
 

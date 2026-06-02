@@ -285,6 +285,20 @@ class RecordingProcessor(
                 )
             )
         }
+        // Create feed items from this turn's tool messages, stamping each with the tool_call_id
+        // that produced it. Done centrally (rather than in each tool) because only the tool message
+        // carries the tool_call_id.
+        if (firestoreId != null) {
+            agent.conversation.first().drop(convEndIdx)
+                .filter { it.role == MessageRole.tool }
+                .forEach { msg ->
+                    val item = msg.semantic_result?.let {
+                        itemFactory.createFromSemanticResult(it, firestoreId, createdAt, msg.tool_call_id)
+                    } ?: return@forEach
+                    runCatching { itemRepo.setItem(itemFactory.simpleUid(), item) }
+                        .onFailure { logger.e(it) { "Failed to persist item for tool_call ${msg.tool_call_id}" } }
+                }
+        }
         updateConversation(recordingId, agent.conversation.first())
         linkUserMessageToEntry(recordingId, recordingEntryId)
         trace.markEvent("agent_processing_end",

@@ -139,6 +139,7 @@ import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
 import coredevices.pebble.services.LanguagePackRepository
@@ -1245,6 +1246,22 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         showScreenshotDialog = true
                     }
                 )
+
+                if (watch.watchInfo.platform.isCoreDevice()) {
+                    DropdownMenuItem(
+                        text = { Text("Battery Life") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.BatteryFull,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            navBarNav.navigateTo(PebbleNavBarRoutes.BatterySettingsRoute)
+                        }
+                    )
+                }
                 HorizontalDivider()
             }
 

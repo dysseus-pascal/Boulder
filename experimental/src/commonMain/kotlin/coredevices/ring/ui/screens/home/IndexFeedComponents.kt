@@ -35,11 +35,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coredevices.ring.ui.components.feed.TodoCheckCircle
@@ -507,39 +509,44 @@ internal fun LazyListScope.todosCarousel(
     onOpen: (CachedItem) -> Unit,
 ) {
     val pages = todos.chunked(IndexFeedViewModel.TODO_PAGE_SIZE)
+    if (pages.isEmpty()) return
     item("todos-pages") {
+        // HorizontalPager (compose-foundation) gives us the standard
+        // snap-during-fling behaviour out of the box: when the user
+        // releases mid-swipe the page settles immediately at the nearest
+        // boundary using the same fling physics as the system.
+        // The previous implementation waited for `isScrollInProgress`
+        // to flip to false (i.e. fling fully stopped) and then ran a
+        // separate animateScrollToItem — a two-stage motion that felt
+        // slow and jerky on release.
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // 36dp of next-page peek visible at the right edge so the
+            // user knows there's more. Identical visual to the old
+            // implementation, just driven by a real pager.
             val pageWidth = maxWidth - 36.dp
-            val listState = rememberLazyListState()
-            SnapToNearestPage(listState = listState, pageCount = pages.size)
-            LazyRow(
-                state = listState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(end = 36.dp, top = 2.dp, bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items = pages, key = { page -> page.first().firestoreId }) { page ->
-                    Column(modifier = Modifier.width(pageWidth)) {
-                        page.forEach { task ->
-                            TaskRow(
-                                task = task,
-                                onToggle = { onToggle(task) },
-                                onClick = { onOpen(task) },
-                            )
-                        }
-                        // No empty-row padding here. The previous version
-                        // padded short pages to PAGE_SIZE rows so every
-                        // page rendered at the same height — but the
-                        // 42dp spacer height was taller than the actual
-                        // TaskRow, so a partial page (e.g. 3 of 6 todos)
-                        // ended up TALLER than a full page, and the
-                        // LazyRow's wrapContent height locked to the
-                        // taller value. Result: 50–80dp of dead space
-                        // visible BELOW page 1 (the full one). Letting
-                        // the LazyRow size to the full page is the right
-                        // behaviour — partial pages just have empty
-                        // space below their content when scrolled to.
+            val pagerState = rememberPagerState(pageCount = { pages.size })
+            HorizontalPager(
+                state = pagerState,
+                pageSize = PageSize.Fixed(pageWidth),
+                pageSpacing = 8.dp,
+                contentPadding = PaddingValues(end = 36.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 10.dp),
+            ) { pageIndex ->
+                val page = pages[pageIndex]
+                Column {
+                    page.forEach { task ->
+                        TaskRow(
+                            task = task,
+                            onToggle = { onToggle(task) },
+                            onClick = { onOpen(task) },
+                        )
                     }
+                    // Intentionally NO empty-row spacers. Pager pages can
+                    // have natural heights; the pager wraps to the
+                    // tallest page. A partial last page just shows empty
+                    // space below its content when scrolled to.
                 }
             }
         }
@@ -606,41 +613,44 @@ internal fun LazyListScope.notesGrid(
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // 22dp leading edge to align with the rest of the home feed,
-            // ~32dp peek of the next page on the trailing edge.
+            // ~32dp peek of the next page on the trailing edge. Driven
+            // by HorizontalPager so swipe physics match the system snap
+            // behaviour (snaps mid-fling rather than after-fling).
             val pageWidth = maxWidth - 22.dp - 32.dp - 10.dp
-            val listState = rememberLazyListState()
-            SnapToNearestPage(listState = listState, pageCount = pages.size)
-            LazyRow(
-                state = listState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(start = 22.dp, end = 32.dp, top = 2.dp, bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(items = pages, key = { page -> page.first().list.firestoreId }) { page ->
-                    Column(modifier = Modifier.width(pageWidth)) {
-                        repeat(2) { rowIndex ->
-                            val row = page.drop(rowIndex * 2).take(2)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 5.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                row.forEach { entry ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        ListCard(
-                                            entry = entry,
-                                            onClick = { onOpen(entry.list) },
-                                        )
-                                    }
+            val pagerState = rememberPagerState(pageCount = { pages.size })
+            HorizontalPager(
+                state = pagerState,
+                pageSize = PageSize.Fixed(pageWidth),
+                pageSpacing = 10.dp,
+                contentPadding = PaddingValues(start = 22.dp, end = 32.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 10.dp),
+            ) { pageIndex ->
+                val page = pages[pageIndex]
+                Column {
+                    repeat(2) { rowIndex ->
+                        val row = page.drop(rowIndex * 2).take(2)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            row.forEach { entry ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    ListCard(
+                                        entry = entry,
+                                        onClick = { onOpen(entry.list) },
+                                    )
                                 }
-                                if (row.size == 1) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                                if (row.isEmpty()) {
-                                    Spacer(modifier = Modifier.weight(1f).height(NOTES_EMPTY_ROW_HEIGHT))
-                                    Spacer(modifier = Modifier.weight(1f).height(NOTES_EMPTY_ROW_HEIGHT))
-                                }
+                            }
+                            if (row.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                            if (row.isEmpty()) {
+                                Spacer(modifier = Modifier.weight(1f).height(NOTES_EMPTY_ROW_HEIGHT))
+                                Spacer(modifier = Modifier.weight(1f).height(NOTES_EMPTY_ROW_HEIGHT))
                             }
                         }
                     }
@@ -651,22 +661,6 @@ internal fun LazyListScope.notesGrid(
 }
 
 private val NOTES_EMPTY_ROW_HEIGHT = 124.dp
-
-@Composable
-private fun SnapToNearestPage(listState: LazyListState, pageCount: Int) {
-    LaunchedEffect(listState, pageCount) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collect { scrolling ->
-                if (scrolling || pageCount <= 1) return@collect
-                val nearest = listState.layoutInfo.visibleItemsInfo
-                    .minByOrNull { abs(it.offset) }
-                    ?.index
-                    ?: listState.firstVisibleItemIndex
-                listState.animateScrollToItem(nearest.coerceIn(0, pageCount - 1))
-            }
-    }
-}
 
 @Composable
 internal fun ListCard(
@@ -737,12 +731,26 @@ fun NoteListCard(
                 // title — Compose baseline-aligns Text composables in a Row by
                 // default, so "○ Dried mangoes" reads cleanly without manual
                 // top padding (which an Icon would need to fudge).
+                //
+                // The glyph reflects the **item's own kind** first, so a
+                // mixed list (a Notes-to-self list that has both notes and
+                // a couple of checklist items in it) renders correctly:
+                // checklist items always get "○", notes always get "−",
+                // regardless of the parent list's listKind. We fall back
+                // to the parent listKind only when the item kind isn't
+                // one of those two (shouldn't happen in practice — the
+                // Notes filter upstream is `note || checklist`).
                 Row(
                     verticalAlignment = Alignment.Top,
                     modifier = Modifier.padding(top = 2.dp),
                 ) {
+                    val glyph = when (item.kind) {
+                        "checklist" -> "○"
+                        "note" -> "−"
+                        else -> if (isChecklist) "○" else "−"
+                    }
                     Text(
-                        if (isChecklist) "○" else "−",
+                        glyph,
                         color = colors.onSurfaceVariant,
                         fontSize = 12.sp,
                         lineHeight = 15.sp,

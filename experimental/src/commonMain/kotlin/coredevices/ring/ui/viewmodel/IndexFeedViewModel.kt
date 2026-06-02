@@ -288,7 +288,13 @@ class IndexFeedViewModel(
             val itemsByList = items
                 .asSequence()
                 .filter { !it.deleted }
-                .filter { it.kind == "note" }
+                // Notes lists hold both `note` and `checklist` items —
+                // a checklist is just a note with a tickable checkbox,
+                // and the user can convert between the two via the
+                // type dropdown on the item-detail edit hero. Keeping
+                // `note` only here used to silently hide an item from
+                // its parent list the moment it was converted.
+                .filter { it.kind == "note" || it.kind == "checklist" }
                 .sortedByDescending { it.createdAt.toEpochMilliseconds() }
                 .toList()
                 .groupBy { it.parentListIds().firstOrNull() ?: LIST_NOTES_SELF_ID }

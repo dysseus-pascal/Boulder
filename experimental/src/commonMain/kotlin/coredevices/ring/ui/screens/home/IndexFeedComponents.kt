@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
@@ -316,6 +317,7 @@ internal fun FeedSectionHeader(
 internal fun PeekStrip(
     peeks: List<IndexFeedViewModel.UiState.RecordingPeek>,
     onOpenRecording: (LocalRecording) -> Unit,
+    onRetryRecording: (LocalRecording, RecordingEntryEntity) -> Unit,
 ) {
     val visiblePeeks = peeks.take(5)
     val firstId = visiblePeeks.firstOrNull()?.recording?.id
@@ -348,6 +350,7 @@ internal fun PeekStrip(
             PeekCard(
                 peek = peek,
                 onClick = { onOpenRecording(peek.recording) },
+                onRetry = { peek.retryEntry?.let { onRetryRecording(peek.recording, it) } },
                 modifier = Modifier.animateItem(
                     fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     placementSpec = spring(
@@ -365,6 +368,7 @@ internal fun PeekStrip(
 internal fun PeekCard(
     peek: IndexFeedViewModel.UiState.RecordingPeek,
     onClick: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = IndexTheme.colors
@@ -408,28 +412,60 @@ internal fun PeekCard(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.weight(1f)) // pushes chip text to the bottom of the fixed-height card
-        Row(
-            modifier = Modifier.height(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(modifier = Modifier.size(14.dp), contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = if (peek.orphan) colors.onSurfaceVariant else colors.primary,
-                    modifier = Modifier.size(13.dp),
+        if (peek.retryEntry != null) {
+            // Transcription failed — surface the error and a retry affordance
+            // in place of the action chip.
+            Row(
+                modifier = Modifier.height(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Transcription error",
+                    color = colors.error,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Retry",
+                    color = colors.primary,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable { onRetry() }
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
                 )
             }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                peek.primaryChip,
-                color = if (peek.orphan) colors.onSurfaceVariant else colors.primary,
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        } else {
+            Row(
+                modifier = Modifier.height(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = if (peek.orphan) colors.onSurfaceVariant else colors.primary,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    peek.primaryChip,
+                    color = if (peek.orphan) colors.onSurfaceVariant else colors.primary,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

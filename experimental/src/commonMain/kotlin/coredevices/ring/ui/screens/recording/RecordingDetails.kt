@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -77,6 +78,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
@@ -251,6 +253,12 @@ private fun RecordingDetailsContents(
 ) {
     val transcription = entries.firstOrNull()?.transcription.orEmpty()
     val firstEntry = entries.firstOrNull()
+    // Latest attempt decides the error state (a recording can accrue retries).
+    // Matches IndexFeedViewModel / FullFeedViewModel.
+    val transcriptionFailed = entries
+        .sortedWith(compareBy<RecordingEntryEntity> { it.timestamp }.thenBy { it.id })
+        .lastOrNull()
+        ?.status == RecordingEntryStatus.transcription_error
 
     // Tool calls that produced a saved object render as a navigable item chip
     // instead of a raw call; everything else falls back to the tool call.
@@ -313,6 +321,15 @@ private fun RecordingDetailsContents(
             item("bubble") {
                 Spacer(Modifier.height(16.dp))
                 TranscriptionBubble(transcription)
+            }
+        }
+
+        // 2b. Transcription failed — surface the error inline with a retry,
+        // so the user can recover without digging into the more menu.
+        if (transcriptionFailed) {
+            item("transcription-error") {
+                Spacer(Modifier.height(8.dp))
+                TranscriptionErrorRow(onRetry = onRetry)
             }
         }
 
@@ -636,6 +653,67 @@ private fun ReplyBubble(text: String) {
             fontSize = 14.5.sp,
             lineHeight = 21.sp,
         )
+    }
+}
+
+/** Assistant-side row shown when transcription failed: an error bubble with
+ *  an inline Retry button that re-enqueues the recording. Mirrors the
+ *  assistant turn's avatar so it reads as part of the conversation. */
+@Composable
+private fun TranscriptionErrorRow(onRetry: () -> Unit) {
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(colors.redSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            RingGlyphCanvas(sizeDp = 14, color = colors.primary)
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+                .background(colors.errorContainer)
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Transcription error",
+                color = colors.onErrorContainer,
+                fontSize = 14.5.sp,
+                lineHeight = 21.sp,
+            )
+            Spacer(Modifier.width(10.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(colors.primary)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = "Retry transcription",
+                    tint = colors.onPrimary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Retry",
+                    color = colors.onPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }
 

@@ -14,8 +14,8 @@ import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.IndexNotificationManager
-import coredevices.ring.service.PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID
-import coredevices.ring.service.PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME
+import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
+import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingSync
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -70,9 +70,9 @@ class PebbleService: Service(), KoinComponent {
         recordingDebugNotificationJob?.cancel()
         recordingDebugNotificationJob = scope.launch {
             val notificationChannel = NotificationChannelCompat.Builder(
-                PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID,
+                INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID,
                 NotificationManager.IMPORTANCE_DEFAULT)
-                .setName(PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME)
+                .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
                 .build()
             notificationManagerCompat.createNotificationChannel(notificationChannel)
 

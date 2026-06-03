@@ -268,6 +268,8 @@ class CactusTranscriptionService(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
+
             if (!kirinki.isAvailable()) {
                 logger.w(e) { "WisprFlow transcription failed and kirinki unavailable: ${e.message}" }
                 throw e

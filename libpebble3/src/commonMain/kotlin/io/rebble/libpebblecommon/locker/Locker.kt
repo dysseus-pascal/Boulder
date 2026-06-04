@@ -77,6 +77,8 @@ class Locker(
     private val settings: Settings,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
+    private val timelinePinDao = database.timelinePinDao()
+    private val timelineReminderDao = database.timelineReminderDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
@@ -178,6 +180,7 @@ class Locker(
             }
         }
         lockerEntryDao.markForDeletion(id)
+        timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -238,6 +241,7 @@ class Locker(
         }
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
+        timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
         performCacheCleanup()
     }
 

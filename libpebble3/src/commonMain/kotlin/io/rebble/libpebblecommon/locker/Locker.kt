@@ -205,6 +205,9 @@ class Locker(
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
+            // Preferred source for this UUID failed this sync; don't downgrade existing entry
+            // to a fallback source's (potentially older) entry. Leave the DB row alone.
+            if (newEntity.id in locker.failedToFetchUuids) return@mapNotNull null
             val existing = existingApps.remove(newEntity.id)
             if (existing == null) {
                 newEntity

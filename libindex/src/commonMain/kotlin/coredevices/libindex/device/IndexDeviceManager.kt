@@ -182,7 +182,13 @@ class IndexDeviceManager(
 
     fun addScanResult(result: IndexScanResult) {
         _rings.update { prev ->
-            val existingIdx = prev.indexOfFirst { it.identifier.asString.equals(result.identifier.asString, ignoreCase = true) }
+            // Match by identifier, or by name: a ring entering failsafe advertises a
+            // slightly different address/id but the same name, so overwrite the existing
+            // discovered entry rather than showing a duplicate.
+            val existingIdx = prev.indexOfFirst {
+                it.identifier.asString.equals(result.identifier.asString, ignoreCase = true) ||
+                    (it is DiscoveredIndexDevice && it.name == result.name)
+            }
             val existing = existingIdx.takeIf { it != -1 }?.let { prev[it] }
             if (existing is DiscoveredIndexDevice) {
                 prev
@@ -221,6 +227,7 @@ data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
+    val isFailsafe: Boolean
 )
 
 internal sealed interface PairedRingDecision {

@@ -105,23 +105,6 @@ class PebbleService: Service(), KoinComponent {
         }
     }
 
-    private fun observeRingPaired() {
-        if (ringObserverJob?.isActive == true) return
-        ringObserverJob = commonPrefs.ringPaired
-            .map { it != null }
-            .distinctUntilChanged()
-            .onEach { ringPaired ->
-                logger.d { "ringPaired changed: $ringPaired" }
-                if (ringPaired) {
-                    startRingSyncJob()
-                    startRecordingDebugNotificationJob()
-                } else {
-                    stopRingJobs()
-                }
-            }
-            .launchIn(GlobalScope)
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         logger.v { "onStartCommand()" }
         if (intent != null) {
@@ -150,7 +133,8 @@ class PebbleService: Service(), KoinComponent {
                 0
             }
         )
-        observeRingPaired()
+        startRingSyncJob()
+        startRecordingDebugNotificationJob()
         pebbleBackgroundManager.onServiceStarted()
         return START_STICKY
     }

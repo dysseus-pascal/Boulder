@@ -6,6 +6,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
 import co.touchlab.kermit.Logger
+import coredevices.libindex.LibIndex
+import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.ring.database.Preferences
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.ActiveDevice
@@ -24,6 +26,7 @@ class PebbleBackgroundManager(
     private val commonPrefs: Preferences,
     private val coreConfigFlow: CoreConfigFlow,
     private val libPebble: LibPebble,
+    private val libIndex: LibIndex
 ) {
     companion object {
         private val logger = Logger.withTag("PebbleBackgroundManager")
@@ -59,13 +62,19 @@ class PebbleBackgroundManager(
     }
 
     fun monitorToStartBackground() {
+        var holdIndexEnabled = false
         combine(
             commonPrefs.ringPaired,
+            libIndex.rings,
             coreConfigFlow.flow,
             libPebble.bluetoothEnabled,
             libPebble.watches,
-        ) { ringPaired, config, btState, watches ->
-            val ringActive = ringPaired != null
+        ) { ringPaired, rings, config, btState, watches ->
+            val ringRecover = rings.any { it is DiscoveredIndexDevice && it.isFailsafe }
+            if (ringRecover) {
+                holdIndexEnabled = true
+            }
+            val ringActive = ringPaired != null || ringRecover || holdIndexEnabled
             val watchKeepAlive = config.androidForegroundServiceForWatchConnection &&
                 btState.enabled() &&
                 watches.any { it is ActiveDevice }

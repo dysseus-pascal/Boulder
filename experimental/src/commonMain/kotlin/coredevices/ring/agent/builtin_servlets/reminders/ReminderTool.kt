@@ -102,7 +102,7 @@ class ReminderTool: BuiltInMcpTool(
                     val currentTime = Clock.System.now().toLocalDateTime(tz)
                     if (parsed.time < currentTime.time) {
                         val is12HourFormat = !isLocale24HourFormat()
-                        if (is12HourFormat && parsed.time.hour in 1..11) {
+                        if (is12HourFormat && parsed.time.hour in 1..11 && !parsed.amPmExplicit) {
                             // If the parsed time is in the past for today, and the locale is 12-hour format, there's a chance it was an AM/PM issue.
                             // For example, if it's currently 3pm and the user said "at 3", it might have been parsed as 3am which has already passed.
                             logger.d { "Parsed time is in the past and locale is 12-hour format, assuming it's an AM/PM parsing issue and adding 12 hours" }

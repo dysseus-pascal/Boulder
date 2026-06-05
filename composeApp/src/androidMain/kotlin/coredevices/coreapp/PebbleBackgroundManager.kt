@@ -74,7 +74,7 @@ class PebbleBackgroundManager(
             if (ringRecover) {
                 holdIndexEnabled = true
             }
-            val ringActive = ringPaired != null || ringRecover || holdIndexEnabled
+            val ringActive = (ringPaired != null || ringRecover || holdIndexEnabled) && btState.enabled()
             val watchKeepAlive = config.androidForegroundServiceForWatchConnection &&
                 btState.enabled() &&
                 watches.any { it is ActiveDevice }

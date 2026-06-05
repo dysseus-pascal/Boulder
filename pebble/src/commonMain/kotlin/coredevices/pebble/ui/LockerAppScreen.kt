@@ -204,7 +204,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val sharedViewModel: SharedLockerViewModel = koinInject()
         sharedViewModel.Init()
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
-        val showContactDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
@@ -266,13 +265,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
             }
             topBarParams.title(entry?.type?.name ?: "")
-        }
-        if (showContactDialog.value && entry?.storeId != null) {
-            ContactDeveloperDialog(
-                appId = entry.storeId,
-                appTitle = entry.title,
-                onDismiss = { showContactDialog.value = false },
-            )
         }
         PullToRefreshBox(
             isRefreshing = viewModel.loadingFromStore,
@@ -735,16 +727,24 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             onClick = { urlLauncher.open(developerLink) }
                         )
                     }
+                    val contactStoreId = entry.storeId
                     if (
                         commonAppStore?.contactable == true &&
                         commonAppStore.storeSource.isPebbleFeed() &&
-                        entry.storeId != null
+                        contactStoreId != null
                     ) {
                         PropertyRow(
                             name = "CONTACT DEVELOPER",
                             nameModifier = propertyNameModifier,
                             value = "Send Message",
-                            onClick = { showContactDialog.value = true },
+                            onClick = {
+                                navBarNav.navigateTo(
+                                    PebbleRoutes.ContactDeveloperRoute(
+                                        appId = contactStoreId,
+                                        appTitle = entry.title,
+                                    )
+                                )
+                            },
                             onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                         )
                     }

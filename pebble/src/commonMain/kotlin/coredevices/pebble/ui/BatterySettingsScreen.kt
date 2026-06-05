@@ -28,13 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
-import com.multiplatform.webview.web.LoadingState
-import com.multiplatform.webview.web.WebView
-import com.multiplatform.webview.web.rememberWebViewNavigator
-import com.multiplatform.webview.web.rememberWebViewState
 import com.russhwolf.settings.Settings
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.PebbleWebview
+import coredevices.ui.PebbleWebviewNavigator
+import coredevices.ui.PebbleWebviewUrlInterceptor
 import coredevices.ui.SignInDialog
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
@@ -43,8 +42,6 @@ import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.koin.compose.koinInject
-import theme.CoreAppColorScheme
-import theme.currentColorScheme
 
 private const val MOBILE_BATTERY_PATH = "/m/battery"
 
@@ -62,15 +59,12 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     var url by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
-    // Mirror the in-app theme (Settings → General → App Theme) to the web page.
-    val theme = if (currentColorScheme() == CoreAppColorScheme.Grey) "dark" else "light"
-
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.title("Battery")
     }
 
-    LaunchedEffect(accountEmail, theme) {
+    LaunchedEffect(accountEmail) {
         val email = accountEmail ?: run {
             url = null
             return@LaunchedEffect
@@ -95,7 +89,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             return@LaunchedEffect
         }
         loadError = null
-        url = buildBatteryUrl(baseUrl, email = email, idToken = idToken, theme = theme)
+        url = buildBatteryUrl(baseUrl, email = email, idToken = idToken)
     }
 
     if (showSignInDialog) {
@@ -152,11 +146,15 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         return
     }
 
-    val state = rememberWebViewState(currentUrl)
-    val navigator = rememberWebViewNavigator()
-    LaunchedEffect(Unit) {
+    val interceptor = remember {
+        object : PebbleWebviewUrlInterceptor {
+            override var navigator: PebbleWebviewNavigator? = null
+            override fun onIntercept(url: String, navigator: PebbleWebviewNavigator) = true
+        }
+    }
+    LaunchedEffect(interceptor) {
         topBarParams.actions {
-            IconButton(onClick = { navigator.reload() }) {
+            IconButton(onClick = { interceptor.navigator?.reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
             }
         }
@@ -166,14 +164,11 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        WebView(
-            state = state,
+        PebbleWebview(
+            url = currentUrl,
+            interceptor = interceptor,
             modifier = Modifier.fillMaxSize(),
-            navigator = navigator,
         )
-        if (state.loadingState is LoadingState.Loading) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-        }
     }
 }
 
@@ -181,7 +176,6 @@ private fun buildBatteryUrl(
     baseUrl: String,
     email: String,
     idToken: String,
-    theme: String,
 ): String {
     // bugUrl is configured as `<host>/api`; the mobile battery page is at the host root.
     val root = baseUrl.trimEnd('/').removeSuffix("/api")
@@ -190,7 +184,6 @@ private fun buildBatteryUrl(
         append(MOBILE_BATTERY_PATH)
         append("?email=").append(email.encodeURLParameter())
         append("&googleIdToken=").append(idToken.encodeURLParameter())
-        append("&theme=").append(theme.encodeURLParameter())
     }
 }
 

@@ -667,6 +667,7 @@ fun WatchesPreview() {
                                 override val identifier = IndexIdentifier("1234")
                                 override val name = "Index 01"
                                 override val rssi = -50
+                                override val isFailsafe: Boolean = false
                                 override val pairingState: IndexPairingState =
                                     IndexPairingState.NotPaired
 
@@ -739,7 +740,11 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
         },
         supportingContent = {
             val stateText = when (ring) {
-                is DiscoveredIndexDevice -> "Available to pair"
+                is DiscoveredIndexDevice -> if (ring.isFailsafe) {
+                    "Failsafe mode"
+                } else {
+                    "Available to pair"
+                }
                 is InterviewedIndexDevice if (ring.updating) -> "Updating..."
                 else -> "Ready"
             }
@@ -778,6 +783,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                     }
                     if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
                         Button(
+                            enabled = !ring.isFailsafe,
                             onClick = {
                                 scope.launch {
                                     val result = try {

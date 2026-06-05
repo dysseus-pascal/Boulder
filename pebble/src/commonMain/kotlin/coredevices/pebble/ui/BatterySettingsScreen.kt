@@ -43,6 +43,8 @@ import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.koin.compose.koinInject
+import theme.CoreAppColorScheme
+import theme.currentColorScheme
 
 private const val MOBILE_BATTERY_PATH = "/m/battery"
 
@@ -60,12 +62,15 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     var url by remember { mutableStateOf<String?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
+    // Mirror the in-app theme (Settings → General → App Theme) to the web page.
+    val theme = if (currentColorScheme() == CoreAppColorScheme.Grey) "dark" else "light"
+
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.title("Battery")
     }
 
-    LaunchedEffect(accountEmail) {
+    LaunchedEffect(accountEmail, theme) {
         val email = accountEmail ?: run {
             url = null
             return@LaunchedEffect
@@ -90,7 +95,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             return@LaunchedEffect
         }
         loadError = null
-        url = buildBatteryUrl(baseUrl, email = email, idToken = idToken)
+        url = buildBatteryUrl(baseUrl, email = email, idToken = idToken, theme = theme)
     }
 
     if (showSignInDialog) {
@@ -176,6 +181,7 @@ private fun buildBatteryUrl(
     baseUrl: String,
     email: String,
     idToken: String,
+    theme: String,
 ): String {
     // bugUrl is configured as `<host>/api`; the mobile battery page is at the host root.
     val root = baseUrl.trimEnd('/').removeSuffix("/api")
@@ -184,6 +190,7 @@ private fun buildBatteryUrl(
         append(MOBILE_BATTERY_PATH)
         append("?email=").append(email.encodeURLParameter())
         append("&googleIdToken=").append(idToken.encodeURLParameter())
+        append("&theme=").append(theme.encodeURLParameter())
     }
 }
 

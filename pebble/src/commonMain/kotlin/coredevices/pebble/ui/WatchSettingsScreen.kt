@@ -1408,12 +1408,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         }
                     },
                     extraSupportingContent = {
-                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.progress?.let { progress ->
-                            logger.v { "xx model download progress = $progress" }
-                            CoreLinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-                            )
+                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.let { state ->
+                            Column {
+                                Text(
+                                    text = "Downloading in the background...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                state.progress?.let { progress ->
+                                    CoreLinearProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                                    )
+                                } ?: CoreLinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                                )
+                            }
                         }
                     },
                 ),

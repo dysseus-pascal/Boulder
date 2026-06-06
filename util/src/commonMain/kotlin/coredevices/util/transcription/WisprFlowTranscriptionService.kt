@@ -37,7 +37,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class WisprFlowTranscriptionService(
@@ -65,7 +64,7 @@ class WisprFlowTranscriptionService(
     override val onInitialized: Channel<Boolean> = Channel()
 
     private suspend fun resolveAccessToken(): String? {
-        return withTimeout(10.seconds) {
+        return withTimeout(5.seconds) {
             wisprFlowAuth.getAccessToken()
         }
     }
@@ -129,7 +128,6 @@ class WisprFlowTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
-        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow
@@ -190,6 +188,7 @@ class WisprFlowTranscriptionService(
                                         finalTextDeferred.complete(text)
                                         return@launch
                                     } else {
+                                        logger.v { "Received partial: ${text.length} chars" }
                                         partials.send(text)
                                     }
                                 }

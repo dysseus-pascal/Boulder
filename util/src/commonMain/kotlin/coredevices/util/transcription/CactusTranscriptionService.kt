@@ -17,6 +17,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
@@ -63,6 +65,7 @@ class CactusTranscriptionService(
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
+        private val wisprSkipInterval = 3.minutes
     }
 
     private val transcriptionMutex = Mutex()
@@ -119,6 +122,9 @@ class CactusTranscriptionService(
     private var _lastSuccessfulMode: CactusSTTMode? = null
     val lastSuccessfulMode get() = _lastSuccessfulMode
     override val onInitialized = Channel<Boolean>(Channel.RENDEZVOUS)
+
+    private val lastErrorMutex = Mutex()
+    private var lastWisprError = Instant.DISTANT_PAST
 
     private fun getCacheFilePath(): Path {
         SystemFileSystem.createDirectories(cacheDir, mustCreate = false)
@@ -249,8 +255,9 @@ class CactusTranscriptionService(
     )
 
     /**
-     * Run remote transcription via WisprFlow, falling back to the kirinki backend if it fails.
-     * The original WisprFlow error is rethrown when kirinki is unavailable.
+     * Run remote transcription via WisprFlow.
+     *
+     * When [willFallbackLocal] is false kirinki is used as a backup and timeouts are more lenient.
      */
     private suspend fun remoteTranscribe(
         audio: ByteArray,
@@ -259,37 +266,65 @@ class CactusTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        timeout: Duration,
+        willFallbackLocal: Boolean
     ): TranscriptionSessionStatus.Transcription {
-        return try {
-            wisprFlow.transcribe(
-                audioStreamFrames = flowOf(audio),
-                sampleRate = sampleRate,
-                language = language,
-                conversationContext = conversationContext,
-                dictionaryContext = dictionaryContext,
-                contentContext = contentContext,
-                timeout = timeout
-            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
+        // We reduce the timeout if we have the potential to fall back locally since some consumers
+        // (e.g. pebble firmware) have hard timeouts.
+        val initialTimeout = if (willFallbackLocal) 7.seconds else 10.seconds
 
-            if (!kirinki.isAvailable()) {
-                logger.w(e) { "WisprFlow transcription failed and kirinki unavailable: ${e.message}" }
+        suspend fun transcribeKirinki() = kirinki.transcribe(
+            audioStreamFrames = flowOf(audio),
+            sampleRate = sampleRate,
+            language = language,
+            conversationContext = conversationContext,
+            dictionaryContext = dictionaryContext,
+            contentContext = contentContext
+        ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+
+        // Kirinki is only used as a backup when there's no local model to fall back on. When a local
+        // fallback is available we let the caller handle it by propagating the WisprFlow failure.
+        val canUseKirinki = !willFallbackLocal && kirinki.isAvailable()
+
+        val skipWispr = lastErrorMutex.withLock {
+            (Clock.System.now() - lastWisprError) < wisprSkipInterval && (willFallbackLocal || canUseKirinki)
+        }
+        if (skipWispr) {
+            if (canUseKirinki) {
+                logger.w { "Skipping WisprFlow transcription due to recent error, using kirinki directly" }
+                return transcribeKirinki()
+            }
+            logger.w { "Skipping WisprFlow transcription due to recent error, falling back to local" }
+            throw TranscriptionException.TranscriptionServiceUnavailable("wisprflow")
+        }
+
+        return try {
+            val res = withTimeout(initialTimeout) {
+                wisprFlow.transcribe(
+                    audioStreamFrames = flowOf(audio),
+                    sampleRate = sampleRate,
+                    language = language,
+                    conversationContext = conversationContext,
+                    dictionaryContext = dictionaryContext,
+                    contentContext = contentContext
+                ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+            }
+            lastErrorMutex.withLock {
+                lastWisprError = Instant.DISTANT_PAST
+            }
+            res
+        } catch (e: Exception) {
+            if (e !is TimeoutCancellationException && e is CancellationException) throw e
+            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
+            lastErrorMutex.withLock {
+                lastWisprError = Clock.System.now()
+            }
+
+            if (!canUseKirinki) {
+                logger.w(e) { "WisprFlow transcription failed, propagating to caller: ${e.message}" }
                 throw e
             }
             logger.w(e) { "WisprFlow transcription failed, falling back to kirinki: ${e.message}" }
-            kirinki.transcribe(
-                audioStreamFrames = flowOf(audio),
-                sampleRate = sampleRate,
-                language = language,
-                conversationContext = conversationContext,
-                dictionaryContext = dictionaryContext,
-                contentContext = contentContext,
-                timeout = timeout
-            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+            transcribeKirinki()
         }
     }
 
@@ -318,7 +353,6 @@ class CactusTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        timeout: Duration,
     ): LocalTranscriptionResult {
         val path = getCacheFilePath()
         withContext(Dispatchers.IO) {
@@ -338,7 +372,7 @@ class CactusTranscriptionService(
                         conversationContext = conversationContext,
                         dictionaryContext = dictionaryContext,
                         contentContext = contentContext,
-                        timeout = timeout
+                        willFallbackLocal = false
                     )
                     LocalTranscriptionResult(
                         text = result.text,
@@ -363,7 +397,7 @@ class CactusTranscriptionService(
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
                             contentContext = contentContext,
-                            timeout = timeout
+                            willFallbackLocal = true
                         )
                         LocalTranscriptionResult(
                             text = result.text,
@@ -399,7 +433,7 @@ class CactusTranscriptionService(
                             conversationContext = conversationContext,
                             dictionaryContext = dictionaryContext,
                             contentContext = contentContext,
-                            timeout = timeout
+                            willFallbackLocal = false
                         )
                         LocalTranscriptionResult(
                             text = result.text,
@@ -483,7 +517,6 @@ class CactusTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
-        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "CactusTranscriptionService.transcribe() called" }
         if (initJob == null || modelHandle == 0L || lastInitedModel != sttConfig.value.modelName) {
@@ -508,7 +541,7 @@ class CactusTranscriptionService(
         }
 
         try {
-            withTimeout(20.seconds) { initJob?.join() }
+            withTimeout(10.seconds) { initJob?.join() }
             val start = Clock.System.now()
             val (text, modeUsed, modelUsed) = transcriptionMutex.withLock {
                 localTranscribe(
@@ -518,7 +551,6 @@ class CactusTranscriptionService(
                     conversationContext = conversationContext,
                     dictionaryContext = dictionaryContext,
                     contentContext = contentContext,
-                    timeout = timeout
                 )
             }
             if (text != null) _lastSuccessfulMode = modeUsed
@@ -536,7 +568,11 @@ class CactusTranscriptionService(
                     throw TranscriptionException.NoSpeechDetected("stutters_or_noise", modelUsed = modelUsed)
             }
 
-            logger.d { "Transcription text: '$text' (${text?.length} chars)" }
+            if (!coreConfigFlow.value.obfuscateSensitiveLogs) {
+                logger.d { "Transcription text: '$text' (${text?.length} chars), used $modelUsed" }
+            } else {
+                logger.d { "Transcription text ${text?.length} chars, used $modelUsed" }
+            }
             emit(TranscriptionSessionStatus.Transcription(
                 text?.ifBlank { null }
                     ?: throw TranscriptionException.NoSpeechDetected("Failed to understand audio", modelUsed = modelUsed),

@@ -39,11 +39,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class RecordingProcessor(
@@ -82,7 +84,7 @@ class RecordingProcessor(
 
     companion object {
         private const val AUDIO_STREAM_BUFFER_SIZE = 1024
-        private val TRANSCRIPTION_TIMEOUT = 2.minutes
+        private val TRANSCRIPTION_TIMEOUT = 45.seconds
         private val logger = Logger.withTag("RecordingProcessor")
     }
 
@@ -107,13 +109,14 @@ class RecordingProcessor(
         sampleRate: Int,
         language: STTLanguage,
         encoding: AudioEncoding
-    ) = transcriptionService.transcribe(
-        audioStreamFlow,
-        sampleRate,
-        language = language,
-        encoding = encoding,
-        timeout = transcriptionTimeout
-    ).flowOn(Dispatchers.IO)
+    ) = withTimeout(transcriptionTimeout) {
+        transcriptionService.transcribe(
+            audioStreamFlow,
+            sampleRate,
+            language = language,
+            encoding = encoding,
+        ).flowOn(Dispatchers.IO)
+    }
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {
         withContext(Dispatchers.IO) {

@@ -23,6 +23,41 @@ class RecordingPreprocessor(
         // Frames with RMS below this are considered silence and excluded from measurement
         private const val NOISE_FLOOR_RMS = 100.0
         private val logger = Logger.withTag("RecordingPreprocessor")
+
+        internal fun computeGain(samples: ShortArray, frameSize: Int): Float {
+            // Compute RMS over voiced frames only (frames above the noise floor)
+            var voicedSumOfSquares = 0.0
+            var voicedSampleCount = 0L
+
+            var offset = 0
+            while (offset < samples.size) {
+                val end = minOf(frameSize, samples.size - offset)
+
+                // Compute frame RMS
+                var frameSum = 0.0
+                for (i in 0 until end) {
+                    val s = samples[offset + i].toDouble()
+                    frameSum += s * s
+                }
+                val frameRms = sqrt(frameSum / end)
+
+                // Only include voiced frames in the overall measurement
+                if (frameRms > NOISE_FLOOR_RMS) {
+                    voicedSumOfSquares += frameSum
+                    voicedSampleCount += end
+                }
+                offset += end
+            }
+
+            if (voicedSampleCount == 0L) return 1f // silence, don't amplify
+
+            val voicedRms = sqrt(voicedSumOfSquares / voicedSampleCount)
+            if (voicedRms < 1.0) return 1f
+
+            val gain = (TARGET_RMS / voicedRms).toFloat().coerceAtMost(MAX_GAIN)
+            // Don't attenuate — only boost
+            return gain.coerceAtLeast(1f)
+        }
     }
 
     suspend fun preprocess(fileId: String) = withContext(Dispatchers.IO) {
@@ -57,40 +92,5 @@ class RecordingPreprocessor(
     private fun readAllSamples(source: Source, size: Long): ShortArray {
         val count = (size / 2).toInt()
         return ShortArray(count) { source.readShortLe() }
-    }
-
-    private fun computeGain(samples: ShortArray, frameSize: Int): Float {
-        // Compute RMS over voiced frames only (frames above the noise floor)
-        var voicedSumOfSquares = 0.0
-        var voicedSampleCount = 0L
-
-        var offset = 0
-        while (offset < samples.size) {
-            val end = minOf(frameSize, samples.size - offset)
-
-            // Compute frame RMS
-            var frameSum = 0.0
-            for (i in 0 until end) {
-                val s = samples[offset + i].toDouble()
-                frameSum += s * s
-            }
-            val frameRms = sqrt(frameSum / end)
-
-            // Only include voiced frames in the overall measurement
-            if (frameRms > NOISE_FLOOR_RMS) {
-                voicedSumOfSquares += frameSum
-                voicedSampleCount += end
-            }
-            offset += end
-        }
-
-        if (voicedSampleCount == 0L) return 1f // silence, don't amplify
-
-        val voicedRms = sqrt(voicedSumOfSquares / voicedSampleCount)
-        if (voicedRms < 1.0) return 1f
-
-        val gain = (TARGET_RMS / voicedRms).toFloat().coerceAtMost(MAX_GAIN)
-        // Don't attenuate — only boost
-        return gain.coerceAtLeast(1f)
     }
 }

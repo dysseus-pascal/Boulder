@@ -39,6 +39,7 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
@@ -593,7 +594,7 @@ class RingRecordingE2ETest {
         singleOf(::DocumentEncryptor)
 
         // Processing pipeline
-        singleOf(::RecordingStorage)
+        singleOf(::RealRecordingStorage) bind RecordingStorage::class
         singleOf(::RecordingPreprocessor)
         singleOf(::RecordingProcessor)
         singleOf(::RingTraceSession)

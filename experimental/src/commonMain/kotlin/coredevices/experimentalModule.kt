@@ -60,6 +60,7 @@ import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
+import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
@@ -187,7 +188,7 @@ val experimentalModule = module {
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
-    singleOf(::RecordingStorage)
+    singleOf(::RealRecordingStorage) bind RecordingStorage::class
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)

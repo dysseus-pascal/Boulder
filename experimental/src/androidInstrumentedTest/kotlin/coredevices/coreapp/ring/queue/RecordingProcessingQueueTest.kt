@@ -42,6 +42,7 @@ import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionKeyManager
+import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.models.CactusSTTMode
@@ -71,6 +72,7 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
+import kotlin.collections.emptyList
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -95,6 +97,7 @@ class FakePreferences : Preferences {
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
+    override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -113,6 +116,9 @@ class FakePreferences : Preferences {
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
+    override fun setLastBackupCount(count: Int?) {
+        TODO("Not yet implemented")
+    }
 }
 
 class FakeServletRepository : ServletRepository {
@@ -201,7 +207,7 @@ class RecordingProcessingQueueTest {
         singleOf(::McpSandboxRepository)
         single { EncryptionKeyManager(context.applicationContext) }
         singleOf(::DocumentEncryptor)
-        singleOf(::RecordingStorage)
+        singleOf(::RealRecordingStorage) bind RecordingStorage::class
         singleOf(::RingTraceSession)
 
         // Fakes
@@ -224,7 +230,7 @@ class RecordingProcessingQueueTest {
         single { BuiltinServletRepository() }
 
         // Agent (uses FakeNenyaClient via Koin)
-        factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
+        factory { p -> AgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
         singleOf(::AgentFactory)
         singleOf(::McpSessionFactory)
 

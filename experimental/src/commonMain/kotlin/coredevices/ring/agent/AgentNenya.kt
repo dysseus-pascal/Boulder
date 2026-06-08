@@ -10,9 +10,9 @@ import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.api.NenyaClient
+import coredevices.ring.api.NenyaModel
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.ktor.http.isSuccess
 import kotlinx.io.IOException
 import kotlinx.serialization.EncodeDefault
@@ -27,7 +27,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
-import kotlin.time.Clock
 
 /**
  * Online agent backed by the Nenya HTTP API. Iterative: tool results are fed
@@ -198,7 +197,7 @@ both as the content unless it's clearly two separate actions, for example 'remin
                 },
                 toolSpecs = emptyList(),
                 additionalContext = "Provide a concise answer to the query after searching the internet, to be shown on a small display. The answer should have no additional commentary or markdown formatting.",
-                searchMode = true
+                model = NenyaModel.Search
             )
         } catch (e: IOException) {
             throw AgentNetworkException("Network error when running agent: ${e.message}", e)

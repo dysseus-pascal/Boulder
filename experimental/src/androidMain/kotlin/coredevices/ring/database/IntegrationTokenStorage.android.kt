@@ -19,8 +19,9 @@ actual class IntegrationTokenStorageImpl(
     context: Context
 ) : IntegrationTokenStorage {
 
-    private val prefs: SharedPreferences =
+    private val prefs: SharedPreferences by lazy {
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     private val keyLock = Any()

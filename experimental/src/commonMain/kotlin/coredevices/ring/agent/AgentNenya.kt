@@ -63,10 +63,22 @@ both as the content unless it's clearly two separate actions, for example 'remin
 """
     }
 
+    /**
+     * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
+     * + 64 max chars. Covers Gemini + Claude
+     */
+    private fun sanitizeToolName(name: String): String {
+        return name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_").take(64)
+    }
+
     private fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
         return tools.mapNotNull {
             val definition = it.tool.definition
-            val compositeName = "${it.integrationName}__${definition.name}"
+            val compositeNameRaw = "${it.integrationName}__${definition.name}"
+            val compositeName = sanitizeToolName(compositeNameRaw)
+            if (compositeName != compositeNameRaw) {
+                logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }
+            }
             try {
                 ToolDeclaration(
                     function = FunctionDeclaration(

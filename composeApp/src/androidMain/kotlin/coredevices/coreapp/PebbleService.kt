@@ -123,16 +123,20 @@ class PebbleService: Service(), KoinComponent {
             .setOngoing(true)
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
-        ServiceCompat.startForeground(
-            this,
-            1,
-            notification,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            } else {
-                0
-            }
-        )
+        try {
+            ServiceCompat.startForeground(
+                this,
+                1,
+                notification,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                } else {
+                    0
+                }
+            )
+        } catch (e: SecurityException) {
+            logger.w(e) { "Error starting FG service" }
+        }
         startRingSyncJob()
         startRecordingDebugNotificationJob()
         pebbleBackgroundManager.onServiceStarted()

@@ -5,7 +5,7 @@ import com.cactus.cactusComplete
 import com.cactus.cactusInit
 import com.cactus.isCactusSupported
 import coredevices.indexai.agent.AgentToolCall
-import coredevices.indexai.agent.IterativeAgent
+import coredevices.indexai.agent.ToolCallingAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
 import coredevices.indexai.data.entity.MessageRole
@@ -35,7 +35,7 @@ class AgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
-) : KoinComponent, IterativeAgent(conversation, true) {
+) : KoinComponent, ToolCallingAgent(conversation) {
     override val label = "Cactus"
 
     override val logger = Logger.withTag("AgentCactus")

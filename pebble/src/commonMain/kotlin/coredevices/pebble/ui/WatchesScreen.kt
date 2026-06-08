@@ -2037,6 +2037,18 @@ fun WatchDetails(
                     "in watch settings (Settings > Bluetooth), then accept the new pairing request.",
         )
     }
+    if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.MalformedConnectivityStatus) {
+        ConnectionFailureGuidanceButton(
+            appContext = appContext,
+            pebbleFeatures = pebbleFeatures,
+            buttonText = "Error Connecting - Restart Your Watch",
+            dialogTitle = "Restart your watch",
+            dialogText = "Your watch needs to be restarted before it can connect. " +
+                    "Press and hold the back button (top-left) for about 15 seconds " +
+                    "until the watch restarts, then try connecting again.",
+            showBluetoothSettingsLink = false,
+        )
+    }
     Row {
         Box(modifier = Modifier.weight(1f)) {
             if (watch is ActiveDevice) {
@@ -2076,9 +2088,10 @@ private fun ConnectionFailureGuidanceButton(
     buttonText: String,
     dialogTitle: String,
     dialogText: String,
+    showBluetoothSettingsLink: Boolean = true,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val canDeepLink = pebbleFeatures.supportsLinkingToOsBtSettings()
+    val canDeepLink = showBluetoothSettingsLink && pebbleFeatures.supportsLinkingToOsBtSettings()
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },

@@ -32,6 +32,7 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
             .setContentText(data.message)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setGroup("reminders")
             .build()
     private fun ensureChannelCreated(notificationManager: NotificationManager) {
         notificationManager.createNotificationChannel(

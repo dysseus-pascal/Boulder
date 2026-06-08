@@ -13,6 +13,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.AgentNenya
+import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -230,7 +231,8 @@ class RecordingProcessingQueueTest {
         single { BuiltinServletRepository() }
 
         // Agent (uses FakeNenyaClient via Koin)
-        factory { p -> AgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
+        factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList()) }
+        factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
         singleOf(::McpSessionFactory)
 

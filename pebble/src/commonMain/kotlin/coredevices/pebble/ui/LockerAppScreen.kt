@@ -806,7 +806,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 
                     storeSource?.let { storeSource ->
                         val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
-                            { urlLauncher.open("https://apps.repebble.com/${entry.storeId}") }
+                            {
+                                urlLauncher.open("https://apps.repebble.com/${entry.storeId}")
+                                Unit
+                            }
                         } else {
                             null
                         }

@@ -653,7 +653,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             nameModifier = propertyNameModifier,
                             value = entry.androidCompanion.name,
                             onClick = {
-                                urlLauncher.openUri(entry.androidCompanion.url)
+                                urlLauncher.open(entry.androidCompanion.url)
                             },
                         )
                     }
@@ -823,12 +823,20 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
     }
 }
 
-fun UriHandler.open(url : String) {
+fun UriHandler.open(url : String): Boolean {
     val urlParsed = parseUrl(url)
     if (urlParsed != null && urlParsed.protocolOrNull in listOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
-        openUri(url)
+        try {
+            openUri(url)
+            return true
+        } catch (e: Exception) {
+            // No browser / VIEW handler installed (Android Go, stripped ROMs, DPC policy).
+            logger.w(e) { "Failed to open URL: $url" }
+            return false
+        }
     } else {
         logger.w { "Not opening invalid URL: $url" }
+        return false
     }
 }
 

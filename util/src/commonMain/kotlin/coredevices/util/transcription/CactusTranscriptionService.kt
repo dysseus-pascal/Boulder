@@ -5,6 +5,7 @@ import com.cactus.cactusDestroy
 import com.cactus.cactusInit
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
+import com.cactus.isCactusSupported
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
@@ -175,6 +176,7 @@ class CactusTranscriptionService(
     private suspend fun initIfNeeded() {
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
+        if (!isCactusSupported()) return
         val sttModelName = coredevices.util.CommonBuildKonfig.CACTUS_STT_MODEL
         if (!modelProvider.isModelDownloaded(sttModelName)) {
             logger.w { "STT model '$sttModelName' not downloaded, skipping init" }
@@ -215,9 +217,9 @@ class CactusTranscriptionService(
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
             CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable() || kirinki.isAvailable()
-            CactusSTTMode.LocalOnly -> modelHandle != 0L || modelExists()
+            CactusSTTMode.LocalOnly -> isCactusSupported() && (modelHandle != 0L || modelExists())
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
-                wisprFlow.isAvailable() || kirinki.isAvailable() || modelHandle != 0L
+                wisprFlow.isAvailable() || kirinki.isAvailable() || (isCactusSupported() && modelHandle != 0L)
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
@@ -291,6 +293,24 @@ class CactusTranscriptionService(
         }
     }
 
+    private suspend fun runLocalTranscribe(path: Path, timeout: Duration): String {
+        val handle = modelHandle
+        if (handle == 0L) {
+            if (!isCactusSupported()) {
+                throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = sttConfig.value.modelName)
+            }
+            throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+        }
+        inferenceBoost.acquire()
+        return try {
+            withTimeout(timeout) {
+                cancellableTranscribe(handle, path.toString())
+            }
+        } finally {
+            inferenceBoost.release()
+        }
+    }
+
     private suspend fun localTranscribe(
         audio: ByteArray,
         sampleRate: Int,
@@ -327,16 +347,7 @@ class CactusTranscriptionService(
                     )
                 }
                 CactusSTTMode.LocalOnly -> {
-                    val handle = modelHandle
-                    if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
-                    inferenceBoost.acquire()
-                    val text: String = try {
-                        withTimeout(timeout) {
-                            cancellableTranscribe(handle, path.toString())
-                        }
-                    } finally {
-                        inferenceBoost.release()
-                    }
+                    val text = runLocalTranscribe(path, timeout)
                     LocalTranscriptionResult(
                         text = text,
                         modeUsed = sttMode,
@@ -361,16 +372,7 @@ class CactusTranscriptionService(
                         )
                     } catch (e: Exception) {
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
-                        val handle = modelHandle
-                        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
-                        inferenceBoost.acquire()
-                        val text: String = try {
-                            withTimeout(timeout) {
-                                cancellableTranscribe(handle, path.toString())
-                            }
-                        } finally {
-                            inferenceBoost.release()
-                        }
+                        val text = runLocalTranscribe(path, timeout)
                         LocalTranscriptionResult(
                             text = text,
                             modeUsed = CactusSTTMode.LocalOnly,
@@ -380,16 +382,7 @@ class CactusTranscriptionService(
                 }
                 CactusSTTMode.LocalFirst -> {
                     try {
-                        val handle = modelHandle
-                        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
-                        inferenceBoost.acquire()
-                        val text: String = try {
-                            withTimeout(timeout) {
-                                cancellableTranscribe(handle, path.toString())
-                            }
-                        } finally {
-                            inferenceBoost.release()
-                        }
+                        val text = runLocalTranscribe(path, timeout)
                         LocalTranscriptionResult(
                             text = text,
                             modeUsed = sttMode,

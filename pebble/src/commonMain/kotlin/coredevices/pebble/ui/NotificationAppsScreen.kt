@@ -286,32 +286,32 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                     )
                                 }
                             }
-                            if (pebbleFeatures.supportsNotificationFiltering()) {
-                                ElevatedFilterChip(
-                                    onClick = {
-                                        viewModel.showSystemApps.value =
-                                            !viewModel.showSystemApps.value
-                                    },
-                                    label = { Text("Show system apps") },
-                                    selected = viewModel.showSystemApps.value,
-                                    leadingIcon = if (viewModel.showSystemApps.value) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Filled.Done,
-                                                contentDescription = "Done icon",
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                    elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
-                                    colors = FilterChipDefaults.elevatedFilterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.background,
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 4.dp),
-                                )
-                            }
+                        }
+                        if (pebbleFeatures.supportsNotificationFiltering()) {
+                            ElevatedFilterChip(
+                                onClick = {
+                                    viewModel.showSystemApps.value =
+                                        !viewModel.showSystemApps.value
+                                },
+                                label = { Text("Show system apps") },
+                                selected = viewModel.showSystemApps.value,
+                                leadingIcon = if (viewModel.showSystemApps.value) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = "Done icon",
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                                elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                                colors = FilterChipDefaults.elevatedFilterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
                         }
                     }
                 }

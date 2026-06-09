@@ -17,7 +17,6 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -328,7 +327,15 @@ class CactusTranscriptionService(
         }
     }
 
-    private suspend fun runLocalTranscribe(path: Path, timeout: Duration): String {
+    private suspend fun <T> withMaybeTimeout(timeout: Duration?, block: suspend () -> T): T {
+        return if (timeout != null) {
+            withTimeout(timeout) { block() }
+        } else {
+            block()
+        }
+    }
+
+    private suspend fun runLocalTranscribe(path: Path, timeout: Duration? = null): String {
         val handle = modelHandle
         if (handle == 0L) {
             if (!isCactusSupported()) {
@@ -338,7 +345,7 @@ class CactusTranscriptionService(
         }
         inferenceBoost.acquire()
         return try {
-            withTimeout(timeout) {
+            withMaybeTimeout(timeout) {
                 cancellableTranscribe(handle, path.toString())
             }
         } finally {
@@ -381,7 +388,7 @@ class CactusTranscriptionService(
                     )
                 }
                 CactusSTTMode.LocalOnly -> {
-                    val text = runLocalTranscribe(path, timeout)
+                    val text = runLocalTranscribe(path)
                     LocalTranscriptionResult(
                         text = text,
                         modeUsed = sttMode,
@@ -406,7 +413,7 @@ class CactusTranscriptionService(
                         )
                     } catch (e: Exception) {
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
-                        val text = runLocalTranscribe(path, timeout)
+                        val text = runLocalTranscribe(path)
                         LocalTranscriptionResult(
                             text = text,
                             modeUsed = CactusSTTMode.LocalOnly,
@@ -416,7 +423,7 @@ class CactusTranscriptionService(
                 }
                 CactusSTTMode.LocalFirst -> {
                     try {
-                        val text = runLocalTranscribe(path, timeout)
+                        val text = runLocalTranscribe(path, 10.seconds)
                         LocalTranscriptionResult(
                             text = text,
                             modeUsed = sttMode,

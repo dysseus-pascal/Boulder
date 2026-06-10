@@ -9,9 +9,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.UIKitView
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.readValue
 import platform.CoreGraphics.CGRectZero
+import platform.Foundation.NSError
 import platform.Foundation.NSURL
+import platform.Foundation.NSURLErrorCancelled
 import platform.Foundation.NSURLRequest
 import platform.UIKit.UIUserInterfaceStyle
 import platform.WebKit.WKNavigationAction
@@ -33,8 +36,10 @@ actual fun PebbleWebview(
     interceptor: PebbleWebviewUrlInterceptor,
     modifier: Modifier,
     onPageFinishedJavaScript: String?,
+    onPageError: ((message: String) -> Unit)?,
 ) {
     val currentInterceptor by rememberUpdatedState(interceptor)
+    val currentOnPageError by rememberUpdatedState(onPageError)
 
     val navigationDelegate = remember {
         object : NSObject(), WKNavigationDelegateProtocol {
@@ -85,6 +90,42 @@ actual fun PebbleWebview(
                 onPageFinishedJavaScript?.let { js ->
                     webView.evaluateJavaScript(js) { _, _ -> }
                 }
+            }
+
+            // Failure after the response started arriving (e.g. content decoding error).
+            // Both fail callbacks map to the same Kotlin signature, so disambiguate by selector.
+            @ObjCSignatureOverride
+            override fun webView(
+                webView: WKWebView,
+                didFailNavigation: platform.WebKit.WKNavigation?,
+                withError: NSError
+            ) {
+                reportError(withError)
+            }
+
+            // Failure before any response (the common case: connection lost, DNS, server
+            // unreachable, TLS failure). This is what fires on the network blips that
+            // previously left a silent white screen.
+            @ObjCSignatureOverride
+            override fun webView(
+                webView: WKWebView,
+                didFailProvisionalNavigation: platform.WebKit.WKNavigation?,
+                withError: NSError
+            ) {
+                reportError(withError)
+            }
+
+            override fun webViewWebContentProcessDidTerminate(webView: WKWebView) {
+                logger.w { "WebView content process terminated" }
+                currentOnPageError?.invoke("The page stopped responding")
+            }
+
+            private fun reportError(error: NSError) {
+                // Ignore cancellations — e.g. our own interceptor rejecting a navigation,
+                // or a load superseded by a newer one. These aren't real failures.
+                if (error.code == NSURLErrorCancelled) return
+                logger.w { "WebView navigation failed: ${error.localizedDescription} (code=${error.code})" }
+                currentOnPageError?.invoke(error.localizedDescription)
             }
         }
     }

@@ -146,6 +146,19 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         return
     }
 
+    var pageError by remember { mutableStateOf<String?>(null) }
+    // Clear any prior failure when the target URL changes (e.g. sign-in or token refresh).
+    LaunchedEffect(currentUrl) { pageError = null }
+
+    if (pageError != null) {
+        Logger.withTag("BatterySettingsScreen").w { "Battery page failed to load: $pageError" }
+        BatteryLoadErrorContent(onRetry = { pageError = null })
+        LaunchedEffect(Unit) {
+            topBarParams.actions { }
+        }
+        return
+    }
+
     val interceptor = remember {
         object : PebbleWebviewUrlInterceptor {
             override var navigator: PebbleWebviewNavigator? = null
@@ -168,6 +181,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             url = currentUrl,
             interceptor = interceptor,
             modifier = Modifier.fillMaxSize(),
+            onPageError = { pageError = it },
         )
     }
 }
@@ -206,6 +220,30 @@ private fun SignedOutBatteryContent(onSignIn: () -> Unit) {
         PebbleElevatedButton(
             onClick = onSignIn,
             text = "Sign in",
+            primaryColor = true,
+        )
+    }
+}
+
+@Composable
+private fun BatteryLoadErrorContent(onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "Couldn't load your Battery usage. Check your connection and try again.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+        Box(Modifier.height(12.dp))
+        PebbleElevatedButton(
+            onClick = onRetry,
+            text = "Retry",
             primaryColor = true,
         )
     }

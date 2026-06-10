@@ -9,6 +9,7 @@ expect fun PebbleWebview(
     interceptor: PebbleWebviewUrlInterceptor,
     modifier: Modifier,
     onPageFinishedJavaScript: String? = null,
+    onPageError: ((message: String) -> Unit)? = null,
 )
 
 interface PebbleWebviewUrlInterceptor {

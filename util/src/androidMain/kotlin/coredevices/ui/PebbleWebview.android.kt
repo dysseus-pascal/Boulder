@@ -19,6 +19,7 @@ actual fun PebbleWebview(
     interceptor: PebbleWebviewUrlInterceptor,
     modifier: Modifier,
     onPageFinishedJavaScript: String?,
+    onPageError: ((message: String) -> Unit)?,
 ) {
     val state = rememberWebViewState(url)
 
@@ -74,6 +75,14 @@ actual fun PebbleWebview(
     LaunchedEffect(state.loadingState, onPageFinishedJavaScript) {
         if (state.loadingState is LoadingState.Finished && onPageFinishedJavaScript != null) {
             navigator.evaluateJavaScript(onPageFinishedJavaScript)
+        }
+    }
+
+    // Surface main-frame load failures (cleared automatically when a new request starts).
+    val mainFrameError = state.errorsForCurrentRequest.firstOrNull { it.isFromMainFrame }
+    LaunchedEffect(mainFrameError) {
+        if (mainFrameError != null) {
+            onPageError?.invoke(mainFrameError.description)
         }
     }
     

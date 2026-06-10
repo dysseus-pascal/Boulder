@@ -32,6 +32,9 @@ import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
+import coredevices.ring.ui.components.QrPhotoPickResult
+import coredevices.ring.ui.components.pickQrCodeFromPhotos
+import coredevices.ring.ui.components.saveQrCodeToPhotos
 import coredevices.ring.storage.BackupZipWriter
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
@@ -499,14 +502,33 @@ class SettingsViewModel(
         viewModelScope.launch {
             _encryptionKeyLoading.value = true
             try {
-                encryptionManager.generateAndStoreKey(uiContext)
-                _encryptionKeyStatus.value = "Encryption key generated and saved"
+                val key = encryptionManager.generateAndStoreKey(uiContext)
+                // Save the QR (and let iOS show its photos prompt) before
+                // revealing the key dialog, which would cover the prompt.
+                val qrSaved = trySaveKeyQrToPhotos(uiContext, key)
+                encryptionManager.revealGeneratedKey(key)
+                _encryptionKeyStatus.value = if (qrSaved) {
+                    "Encryption key generated — QR code saved to your photos"
+                } else {
+                    "Encryption key generated and saved"
+                }
             } catch (e: Exception) {
                 _encryptionKeyStatus.value = "Failed: ${e.message}"
             } finally {
                 _encryptionKeyLoading.value = false
             }
         }
+    }
+
+    /** Back the key up as a QR code in the photo library; never fails the key flow. */
+    private suspend fun trySaveKeyQrToPhotos(
+        uiContext: PlatformUiContext,
+        keyBase64: String,
+    ): Boolean = try {
+        saveQrCodeToPhotos(uiContext, keyBase64, "Index encryption key.png")
+    } catch (e: Exception) {
+        Logger.withTag("Encryption").w(e) { "Could not save key QR code to photos" }
+        false
     }
 
     fun readKeyFromCloudKeychain(uiContext: PlatformUiContext) {
@@ -613,16 +635,15 @@ class SettingsViewModel(
         viewModelScope.launch {
             _encryptionSetup.value = EncryptionSetupState.Generating
             try {
-                encryptionManager.generateAndStoreKey(uiContext)
-                // We show the key in the wizard ourselves; clear the shared
-                // `generatedKey` so the standalone QR dialog doesn't double-show.
-                val key = encryptionManager.generatedKey.value
-                encryptionManager.clearGeneratedKey()
-                _encryptionSetup.value = if (key != null) {
-                    EncryptionSetupState.ShowKey(key)
-                } else {
-                    EncryptionSetupState.Failed("Key generation failed")
-                }
+                val key = encryptionManager.generateAndStoreKey(uiContext)
+                // Hide the wizard while the QR is saved — on iOS the photos
+                // permission prompt would otherwise show underneath it.
+                _encryptionSetup.value = EncryptionSetupState.Hidden
+                val qrSaved = trySaveKeyQrToPhotos(uiContext, key)
+                _encryptionSetup.value = EncryptionSetupState.ShowKey(
+                    keyBase64 = key,
+                    qrSavedToPhotos = qrSaved,
+                )
             } catch (e: Exception) {
                 _encryptionSetup.value =
                     EncryptionSetupState.Failed(e.message ?: "Key generation failed")
@@ -645,6 +666,59 @@ class SettingsViewModel(
             } else {
                 _encryptionSetup.value =
                     EncryptionSetupState.PasteKey("That key isn't valid for this account")
+            }
+        }
+    }
+
+    /** "Import from QR" on the paste step — pick the key QR photo and restore it. */
+    fun restoreFromQrPhoto(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            try {
+                when (val result = pickQrCodeFromPhotos(uiContext)) {
+                    is QrPhotoPickResult.Found -> {
+                        _encryptionSetup.value = EncryptionSetupState.Restoring
+                        if (encryptionManager.restoreKeyFromString(result.data)) {
+                            finishSetupAndEnable()
+                        } else {
+                            _encryptionSetup.value = EncryptionSetupState.PasteKey(
+                                "That QR code isn't a valid key for this account"
+                            )
+                        }
+                    }
+                    QrPhotoPickResult.NoQrFound ->
+                        _encryptionSetup.value =
+                            EncryptionSetupState.PasteKey("No QR code found in that photo")
+                    QrPhotoPickResult.Cancelled -> {}
+                }
+            } catch (e: Exception) {
+                Logger.withTag("Encryption").w(e) { "QR key import failed" }
+                _encryptionSetup.value =
+                    EncryptionSetupState.PasteKey(e.message ?: "QR import failed")
+            }
+        }
+    }
+
+    /** Settings-list QR import, reporting through [encryptionKeyStatus]. */
+    fun importKeyFromQrPhoto(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            _encryptionKeyLoading.value = true
+            try {
+                when (val result = pickQrCodeFromPhotos(uiContext)) {
+                    is QrPhotoPickResult.Found ->
+                        _encryptionKeyStatus.value =
+                            if (encryptionManager.restoreKeyFromString(result.data)) {
+                                "Key imported from QR code"
+                            } else {
+                                "That QR code isn't a valid key for this account"
+                            }
+                    QrPhotoPickResult.NoQrFound ->
+                        _encryptionKeyStatus.value = "No QR code found in that photo"
+                    QrPhotoPickResult.Cancelled -> {}
+                }
+            } catch (e: Exception) {
+                _encryptionKeyStatus.value = "QR import failed: ${e.message}"
+            } finally {
+                _encryptionKeyLoading.value = false
             }
         }
     }

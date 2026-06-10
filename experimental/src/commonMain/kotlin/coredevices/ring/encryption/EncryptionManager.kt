@@ -51,7 +51,11 @@ sealed interface EncryptionSetupState {
     /** Generating the key and saving it to the password manager. */
     data object Generating : EncryptionSetupState
     /** Key ready — show QR/copy so the user can back it up. */
-    data class ShowKey(val keyBase64: String) : EncryptionSetupState
+    data class ShowKey(
+        val keyBase64: String,
+        /** True if a QR code of the key was saved to the photo library. */
+        val qrSavedToPhotos: Boolean = false,
+    ) : EncryptionSetupState
     /** A key exists elsewhere — trying the password manager. */
     data object Restoring : EncryptionSetupState
     /** Password-manager restore failed — let the user paste the key. */
@@ -127,7 +131,13 @@ class EncryptionManager(
 
     val useEncryption = preferences.useEncryption
 
-    suspend fun generateAndStoreKey(uiContext: PlatformUiContext) {
+    /**
+     * Generate, store and back up a key. The new key is returned but NOT
+     * shown in the key-backup dialog — call [revealGeneratedKey] once any
+     * follow-up system prompts (e.g. photo library) are out of the way,
+     * since on iOS those would render underneath the dialog.
+     */
+    suspend fun generateAndStoreKey(uiContext: PlatformUiContext): String {
         val keyResult = encryptionKeyManager.generateKey()
 
         val email = Firebase.auth.currentUser?.email ?: "unknown"
@@ -158,9 +168,12 @@ class EncryptionManager(
         }
 
         keyStoreRevision.value++
-        _generatedKey.value = keyResult.keyBase64
         logger.i { "Key generated, fingerprint=${keyResult.fingerprint}, backup=$backupLocation" }
+        return keyResult.keyBase64
     }
+
+    /** Show [key] in the key-backup dialog (driven by [generatedKey]). */
+    fun revealGeneratedKey(key: String) { _generatedKey.value = key }
 
     /** @return true if a key was found in the cloud keychain and stored locally. */
     suspend fun readKeyFromCloudKeychain(uiContext: PlatformUiContext): Boolean {

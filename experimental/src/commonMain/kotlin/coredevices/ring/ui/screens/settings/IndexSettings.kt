@@ -1083,6 +1083,17 @@ fun BackupDialog(
                 }
             )
 
+            // Import key from a QR code photo (the backup saved at generation time)
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
+                    uiContext?.let { viewModel.importKeyFromQrPhoto(it) }
+                },
+                headlineContent = { Text("Import Key from QR Code") },
+                supportingContent = {
+                    Text("Pick your key's QR code from your photos")
+                }
+            )
+
             // Enable/disable encryption
             val useEncryption by viewModel.useEncryption.collectAsState()
             val encryptionStatus by viewModel.encryptionStatus.collectAsState()
@@ -1259,8 +1270,16 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "Saved to your password manager. Save this key somewhere safe too — " +
-                            "you'll need it to restore your backups and it can't be recovered.",
+                        buildString {
+                            append("Saved to your password manager. ")
+                            if (s.qrSavedToPhotos) {
+                                append("A QR code of your key was also saved to your photos. ")
+                            }
+                            append(
+                                "Save this key somewhere safe too — you'll need it to " +
+                                    "restore your backups and it can't be recovered."
+                            )
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1281,7 +1300,8 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                 ) {
                     Text(
                         "Your key was generated on another device and isn't in this " +
-                            "password manager. Paste your backup key to continue."
+                            "password manager. Paste your backup key, or import the " +
+                            "QR code saved in your photos."
                     )
                     OutlinedTextField(
                         value = pasted,
@@ -1290,6 +1310,10 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                         label = { Text("Encryption key") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    TextButton(
+                        enabled = uiContext != null,
+                        onClick = { uiContext?.let { viewModel.restoreFromQrPhoto(it) } }
+                    ) { Text("Import QR code from photos") }
                     s.error?.let {
                         Text(
                             it,

@@ -28,7 +28,7 @@ class RecordingOperationFactory(
     companion object {
         private val secondaryOperationSequence = listOf(ButtonPress.Short, ButtonPress.Long)
     }
-    fun createForButtonSequence(
+    suspend fun createForButtonSequence(
         recordingId: Long,
         fileId: String,
         transferId: Long?,
@@ -103,7 +103,7 @@ class RecordingOperationFactory(
         )
     }
 
-    private fun createSecondaryOperation(
+    private suspend fun createSecondaryOperation(
         recordingId: Long,
         transferId: Long?,
         fileId: String,
@@ -132,6 +132,24 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     trace = trace,
                     forcedTool = null
+                )
+            }
+            SecondaryMode.McpSandbox -> {
+                val group = prefs.secondaryModeMcpGroupId.value
+                    ?.let { mcpSandboxRepository.getGroupById(it) }
+                // Fall back to normal behaviour if the configured group was deleted
+                val mode = group?.let { ChatMode.McpSandbox(it) } ?: ChatMode.Normal
+                DefaultRecordingOperation(
+                    mcpSandboxRepository = mcpSandboxRepository,
+                    mcpSessionFactory = mcpSessionFactory,
+                    chatAgent = agentFactory.createForChatMode(mode),
+                    recordingId = recordingId,
+                    transferId = transferId,
+                    fileId = fileId,
+                    trace = trace,
+                    // Sandbox mode shouldn't force a note when the agent takes no action
+                    forcedTool = if (group == null) forcedTool else null,
+                    sandboxGroupId = group?.id
                 )
             }
         }

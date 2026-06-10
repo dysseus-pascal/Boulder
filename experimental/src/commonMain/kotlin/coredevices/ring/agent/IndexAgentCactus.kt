@@ -31,7 +31,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.time.Clock
 
-class AgentCactus(
+class IndexAgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()

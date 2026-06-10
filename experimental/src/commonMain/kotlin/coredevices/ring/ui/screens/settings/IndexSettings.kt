@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
+import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -163,10 +164,14 @@ fun IndexSettings(coreNav: CoreNav) {
     }
     if (showSecondaryModeDialog) {
         val mode = viewModel.secondaryMode.collectAsState()
+        val sandboxGroups by viewModel.sandboxGroups.collectAsState()
+        val sandboxGroupId by viewModel.secondaryModeMcpGroupId.collectAsState()
         SecondaryModeDialog(
             currentMode = mode.value,
-            onModeSelected = {
-                viewModel.setSecondaryMode(it)
+            sandboxGroups = sandboxGroups,
+            currentSandboxGroupId = sandboxGroupId,
+            onModeSelected = { newMode, groupId ->
+                viewModel.setSecondaryMode(newMode, groupId)
                 viewModel.closeSecondaryModeDialog()
             },
             onDismissRequest = {
@@ -301,6 +306,7 @@ fun IndexSettings(coreNav: CoreNav) {
                             when (secondaryMode) {
                                 SecondaryMode.Disabled -> "Disabled"
                                 SecondaryMode.Search -> "Search"
+                                SecondaryMode.McpSandbox -> "MCP Sandbox"
                             }
                         )
                     }
@@ -574,10 +580,15 @@ fun MusicControlDialog(
 @Composable
 fun SecondaryModeDialog(
     currentMode: SecondaryMode,
-    onModeSelected: (SecondaryMode) -> Unit,
+    sandboxGroups: List<McpSandboxGroupEntity>,
+    currentSandboxGroupId: Long?,
+    onModeSelected: (SecondaryMode, Long?) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
+    var targetGroupId by remember {
+        mutableStateOf(currentSandboxGroupId ?: sandboxGroups.firstOrNull()?.id)
+    }
     M3Dialog(
         onDismissRequest = onDismissRequest,
         icon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -590,8 +601,9 @@ fun SecondaryModeDialog(
             }
             TextButton(
                 onClick = {
-                    onModeSelected(targetMode)
-                }
+                    onModeSelected(targetMode, targetGroupId)
+                },
+                enabled = targetMode != SecondaryMode.McpSandbox || targetGroupId != null
             ) {
                 Text("OK")
             }
@@ -647,6 +659,55 @@ fun SecondaryModeDialog(
                             "Get web search results on a double click & hold.",
                             fontSize = 12.sp,
                         )
+                    }
+                }
+            }
+            item(SecondaryMode.McpSandbox) {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                targetMode = SecondaryMode.McpSandbox
+                            }
+                    ) {
+                        RadioButton(
+                            selected = targetMode == SecondaryMode.McpSandbox,
+                            onClick = {
+                                targetMode = SecondaryMode.McpSandbox
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("MCP Sandbox")
+                            Text(
+                                "Run a chosen MCP sandbox group's model and tools on a double click & hold.",
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                    if (targetMode == SecondaryMode.McpSandbox) {
+                        sandboxGroups.forEach { group ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 32.dp)
+                                    .clickable {
+                                        targetGroupId = group.id
+                                    }
+                            ) {
+                                RadioButton(
+                                    selected = targetGroupId == group.id,
+                                    onClick = {
+                                        targetGroupId = group.id
+                                    }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(group.title)
+                            }
+                        }
                     }
                 }
             }

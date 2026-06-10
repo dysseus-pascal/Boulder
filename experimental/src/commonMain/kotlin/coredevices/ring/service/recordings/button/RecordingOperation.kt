@@ -47,7 +47,9 @@ open class DefaultRecordingOperation(
     private val transferId: Long?,
     private val fileId: String,
     private val trace: RingTraceSession,
-    private val forcedTool: (suspend (messageText: String) -> ToolCallResult)?
+    private val forcedTool: (suspend (messageText: String) -> ToolCallResult)?,
+    /** Sandbox group whose MCP servers are exposed to the agent; null = default group. */
+    private val sandboxGroupId: Long? = null,
 ) : RecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -134,7 +136,7 @@ open class DefaultRecordingOperation(
         }
         coroutineScope {
             val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                mcpSandboxRepository.getDefaultGroupId(),
+                sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
                 this
             )
             val transcription = try {

@@ -24,6 +24,8 @@ interface Preferences: BasePreferences {
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
+    /** Sandbox group used when [secondaryMode] is [SecondaryMode.McpSandbox]. */
+    val secondaryModeMcpGroupId: StateFlow<Long?>
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
     val noteShortcut: StateFlow<NoteShortcutType>
@@ -43,6 +45,7 @@ interface Preferences: BasePreferences {
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)
+    fun setSecondaryModeMcpGroupId(groupId: Long?)
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
     fun setNoteShortcut(shortcut: NoteShortcutType)
@@ -110,6 +113,10 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
     override val secondaryMode = _secondaryMode.asStateFlow()
+    private val _secondaryModeMcpGroupId = MutableStateFlow(
+        settings.getLongOrNull("ring_secondary_mode_mcp_group")
+    )
+    override val secondaryModeMcpGroupId = _secondaryModeMcpGroupId.asStateFlow()
     private val _reminderProvider = MutableStateFlow(
         settings.getInt("reminder_provider", ReminderProvider.BuiltIn.id)
             .let { ReminderProvider.fromId(it)!! }
@@ -206,6 +213,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _secondaryMode.value = mode
     }
 
+    override fun setSecondaryModeMcpGroupId(groupId: Long?) {
+        if (groupId != null) {
+            settings.putLong("ring_secondary_mode_mcp_group", groupId)
+        } else {
+            settings.remove("ring_secondary_mode_mcp_group")
+        }
+        _secondaryModeMcpGroupId.value = groupId
+    }
+
     override fun setReminderProvider(provider: ReminderProvider) {
         settings.putInt("reminder_provider", provider.id)
         _reminderProvider.value = provider
@@ -274,7 +290,8 @@ enum class MusicControlMode(val id: Int) {
 
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
-    Search(1);
+    Search(1),
+    McpSandbox(3);
 
     companion object {
         // id=2 was the legacy IndexWebhook value, now controlled by the

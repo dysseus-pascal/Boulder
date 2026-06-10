@@ -21,6 +21,7 @@ import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
+import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EnableEncryptionResult
@@ -94,6 +95,7 @@ class SettingsViewModel(
     private val listRepository: coredevices.ring.database.room.repository.ListRepository,
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val platform: coredevices.util.Platform,
+    private val mcpSandboxRepository: McpSandboxRepository,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -115,6 +117,12 @@ class SettingsViewModel(
     private val _showSecondaryModeDialog = MutableStateFlow(false)
     val showSecondaryModeDialog = _showSecondaryModeDialog.asStateFlow()
     val secondaryMode = preferences.secondaryMode
+    val secondaryModeMcpGroupId = preferences.secondaryModeMcpGroupId
+    val sandboxGroups = mcpSandboxRepository.getAllGroupsFlow().stateIn(
+        viewModelScope,
+        started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
@@ -216,8 +224,11 @@ class SettingsViewModel(
         _showSecondaryModeDialog.value = false
     }
 
-    fun setSecondaryMode(mode: SecondaryMode) {
+    fun setSecondaryMode(mode: SecondaryMode, mcpSandboxGroupId: Long? = null) {
         preferences.setSecondaryMode(mode)
+        if (mode == SecondaryMode.McpSandbox) {
+            preferences.setSecondaryModeMcpGroupId(mcpSandboxGroupId)
+        }
     }
 
     fun toggleDebugDetailsEnabled() {

@@ -9,6 +9,7 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.api.NenyaClient
+import coredevices.ring.api.NenyaModel
 import io.ktor.http.isSuccess
 import kotlinx.io.IOException
 import kotlinx.serialization.EncodeDefault
@@ -29,32 +30,15 @@ import org.koin.core.component.KoinComponent
  * back to the model until it stops calling tools (capped at [MAX_TOOL_ITERATIONS]).
  * Search mode bypasses the shared tool harness entirely.
  */
-class AgentNenya(
+open class AgentNenya(
     private val nenyaClient: NenyaClient,
+    private val context: String,
+    private val model: NenyaModel,
     conversation: List<ConversationMessageDocument>,
 ): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"
 
     override val logger: Logger = Logger.withTag("AgentNenya")
-    companion object Companion {
-        private const val AGENT_CONTEXT = """
-You are primarily tasked with helping users create and manage notes, lists, and reminders. You can
-help with a multitude of tasks in addition to this too.
-## Interpretation guidelines:
- - Create a note with the user's input unless they specify a different action, do not assume an action that wasn't explicitly requested, just make a note.
- - Avoid asking follow-up questions unless necessary.
- - When user requests are ambiguous, always lean towards creating a note; for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
- - Prioritise the first action a user requests, for example 'remind me tomorrow to message John' should create a reminder and not attempt a message.
- - When users provide multiple items, for example 'remind me to buy milk and bread tomorrow', or 'add Apple and China to my book list', take a single action with
-both as the content unless it's clearly two separate actions, for example 'remind me to buy milk tomorrow and bread the day after' should create two reminders.
- - When fulfilling a user request, do not also passively take a note if you have already taken another requested action.
-
-## Response and action guidelines:
- - Eagerly run tools to assist the user by gathering required information and taking actions.
- - Avoid additional commentary after taking a final action unless the user asked for it, e.g. when asking a question. The user can see actions without you notifying them.
- - Always take an action, even if you just fall back to creating a note with what the user said.
-"""
-    }
 
     /**
      * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
@@ -133,12 +117,14 @@ both as the content unless it's clearly two separate actions, for example 'remin
         mcpSession: McpSession,
         includePromptsFromMcps: Map<String, Set<String>>,
     ): ConversationMessageDocument {
+        logger.v { "Running inference with model $model, tool count = ${tools.size}, context length = ${context.length}, conversation history length = ${history.size}" }
         val tools = prepareTools(tools)
         val resp = try {
             nenyaClient.run(
                 conversationHistory = history,
                 toolSpecs = tools,
-                additionalContext = AGENT_CONTEXT + "\n" + mcpSession.getExtraContext(includePromptsFromMcps).orEmpty()
+                additionalContext = context + "\n" + mcpSession.getExtraContext(includePromptsFromMcps).orEmpty(),
+                model = model
             )
         } catch (e: IOException) {
             throw AgentNetworkException("Network error when running agent: ${e.message}", e)

@@ -9,13 +9,14 @@ import coredevices.indexai.agent.ServletRepository
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.di.libIndexModule
 import coredevices.ring.BuildKonfig
-import coredevices.ring.agent.AgentCactus
+import coredevices.ring.agent.IndexAgentCactus
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.ring.agent.AgentFactory
-import coredevices.ring.agent.AgentNenya
+import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.McpSandboxAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
@@ -51,6 +52,8 @@ import coredevices.ring.service.IndexButtonActionHandler
 import coredevices.ring.service.IndexButtonSequenceRecorder
 import coredevices.ring.service.IndexNotificationManager
 import coredevices.libindex.database.PrefsCollectionIndexStorage
+import coredevices.ring.agent.AgentNenya
+import coredevices.ring.api.NenyaModel
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingPairing
 import coredevices.ring.service.RingSync
@@ -199,11 +202,13 @@ val experimentalModule = module {
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
-    factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList()) }
+    factory { p -> AgentNenya(get(), p.getOrNull() ?: "", p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
+    factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
+    factory { p -> McpSandboxAgentNenya(get(), p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
     factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
-    factory { p -> AgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
+    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
     singleOf(::AgentFactory)
     singleOf(::RecordingProcessor)
     singleOf(::IndexButtonActionHandler)

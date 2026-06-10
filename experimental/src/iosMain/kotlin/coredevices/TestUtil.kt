@@ -135,6 +135,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
+    override val secondaryModeMcpGroupId: StateFlow<Long?>
+        get() = TODO("Not yet implemented")
     override val reminderProvider: StateFlow<ReminderProvider>
         get() = TODO("Not yet implemented")
     override val noteProvider: StateFlow<NoteProvider>
@@ -189,6 +191,10 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override fun setSecondaryMode(mode: SecondaryMode) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setSecondaryModeMcpGroupId(groupId: Long?) {
         TODO("Not yet implemented")
     }
 

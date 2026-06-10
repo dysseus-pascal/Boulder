@@ -20,7 +20,6 @@ import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.CoroutineScope
@@ -215,13 +214,12 @@ class RecordingProcessor(
         recordingEntryId: Long?,
         mcpSession: McpSession,
         agent: Agent,
-        forcedTool: (suspend () -> ToolCallResult)? = null,
+        forcedTool: (suspend (assistantMessage: String?) -> ToolCallResult)? = null,
         text: String
     ) {
         val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
         val firestoreId = rec?.firestoreId
         val createdAt = rec?.localTimestamp ?: Clock.System.now()
-        val sessionContext = firestoreId?.let { RecordingSessionContext(it, createdAt) }
 
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(
@@ -240,9 +238,7 @@ class RecordingProcessor(
             recordingEntryId
         )
         try {
-            withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
-                agent.send(text, mcpSession)
-            }
+            agent.send(text, mcpSession)
         } catch (e: AgentNetworkException) {
             // Reset conversation to before processing so task retry works correctly
             logger.e(e) { "Error during agent processing" }
@@ -272,10 +268,11 @@ class RecordingProcessor(
             it.semantic_result is SemanticResult.GenericFailure && (it.semantic_result as SemanticResult.GenericFailure).forceFallbackTool
         } ?: false
         if (forcedTool != null && (noToolRan || toolRequestedFallback)) {
+            val lastAssistantMessage = conv.drop(convEndIdx)
+                .lastOrNull { it.role == MessageRole.assistant }
+                ?.content
             // Agent did not take any action, force tool
-            val toolResult = withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
-                forcedTool()
-            }
+            val toolResult = forcedTool(lastAssistantMessage)
             logger.w { "Forcing tool call result into conversation" }
             agent.addMessage(
                 ConversationMessageDocument(

@@ -1,17 +1,20 @@
 package coredevices.ring.service.recordings.button
 
 import coredevices.indexai.agent.Agent
+import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
+import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
 import coredevices.ring.service.ButtonPress
+import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 
@@ -23,7 +26,9 @@ class RecordingOperationFactory(
     private val indexWebhookApi: IndexWebhookApi,
     private val indexWebhookPreferences: IndexWebhookPreferences,
     private val recordingStorage: RecordingStorage,
-    private val trace: RingTraceSession
+    private val trace: RingTraceSession,
+    private val itemFactory: ItemFactory,
+    private val itemRepository: ItemRepository,
 ) {
     companion object {
         private val secondaryOperationSequence = listOf(ButtonPress.Short, ButtonPress.Long)
@@ -52,7 +57,7 @@ class RecordingOperationFactory(
                 transferId = transferId,
                 fileId = fileId,
                 trace = trace,
-                forcedTool = forcedNoteTool
+                forcedTool = { text, _ -> forcedNoteTool(text) }
             )
         }
         return maybeWrapWithWebhook(
@@ -119,7 +124,7 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     fileId = fileId,
                     trace = trace,
-                    forcedTool = forcedTool
+                    forcedTool = { text, _ -> forcedTool(text) }
                 )
             }
             SecondaryMode.Search -> {
@@ -147,11 +152,33 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     fileId = fileId,
                     trace = trace,
-                    // Sandbox mode shouldn't force a note when the agent takes no action
-                    forcedTool = if (group == null) forcedTool else null,
+                    // Sandbox mode doesn't force a note; if the agent only replied
+                    // with a message, capture it as an answer instead
+                    forcedTool = if (group == null) {
+                        { text, _ -> forcedTool(text) }
+                    } else {
+                        ::forcedAnswerTool
+                    },
                     sandboxGroupId = group?.id
                 )
             }
         }
+    }
+
+    /** Persists the agent's plain reply as an answer item (question = transcription)
+     *  and surfaces it as a tool result, mirroring [coredevices.ring.agent.SearchAgentNenya]. */
+    private suspend fun forcedAnswerTool(question: String, answer: String?): ToolCallResult {
+        if (answer.isNullOrBlank()) {
+            return ToolCallResult(
+                resultString = "Agent took no action and gave no response",
+                semanticResult = SemanticResult.GenericFailure(
+                    userErrorMessage = "No response from agent"
+                )
+            )
+        }
+        return ToolCallResult(
+            resultString = answer,
+            semanticResult = SemanticResult.SupportingData(answer, assistiveOnly = false)
+        )
     }
 }

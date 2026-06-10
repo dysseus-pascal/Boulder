@@ -65,7 +65,7 @@ open class TextOnlyRecordingOperation(
                 mcpSession = mcpSession,
                 recordingEntryId = entryId,
                 agent = chatAgent,
-                forcedTool = forcedTool,
+                forcedTool = forcedTool?.let { { _ -> it() } },
                 text = text
             )
         }

@@ -74,21 +74,6 @@ class SearchAgentNenya(
                 semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
             )
         )
-
-        currentSessionContext()?.let { ctx ->
-            runCatching {
-                itemRepository.setItem(
-                    itemFactory.simpleUid(),
-                    itemFactory.answerItem(
-                        sourceRecordingId = ctx.sourceRecordingId,
-                        createdAt = ctx.createdAt,
-                        question = input,
-                        answer = text ?: "No results",
-                        toolCallId = null
-                    )
-                )
-            }
-        }
     }
 
     // Search does not use the iterative tool-calling contract.

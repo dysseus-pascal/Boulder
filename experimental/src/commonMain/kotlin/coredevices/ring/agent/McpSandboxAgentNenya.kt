@@ -21,7 +21,6 @@ class McpSandboxAgentNenya(
         private const val AGENT_CONTEXT = """
 You are a helpful assistant fulfilling user requests with the tools available to you.
 ## Response and action guidelines:
- - Eagerly run tools to assist the user by gathering required information and taking actions.
  - Keep responses concise; they may be shown on a small display.
  - Avoid additional commentary after taking a final action unless the user asked for it. The user can see actions without you notifying them.
 """

@@ -165,8 +165,8 @@ class RecordingOperationFactory(
         }
     }
 
-    /** Persists the agent's plain reply as an answer item (question = transcription)
-     *  and surfaces it as a tool result, mirroring [coredevices.ring.agent.SearchAgentNenya]. */
+    /** Surfaces the agent's plain reply as a tool result (question = transcription).
+     *  No item is created — the reply only shows in the conversation/notification. */
     private suspend fun forcedAnswerTool(question: String, answer: String?): ToolCallResult {
         if (answer.isNullOrBlank()) {
             return ToolCallResult(
@@ -177,8 +177,8 @@ class RecordingOperationFactory(
             )
         }
         return ToolCallResult(
-            resultString = answer,
-            semanticResult = SemanticResult.SupportingData(answer, assistiveOnly = false)
+            resultString = "",
+            semanticResult = SemanticResult.Response(answer, question = question)
         )
     }
 }

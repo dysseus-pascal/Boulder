@@ -104,8 +104,23 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
+    fun nonAssistiveSupportingDataMapsToAnswerItem() {
+        val item = map(
+            SemanticResult.SupportingData("75F and sunny", assistiveOnly = false, question = "weather in NY?")
+        )!!
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Answer)
+        assertEquals("weather in NY?", meta.question)
+        assertEquals("weather in NY?", item.title)
+        assertEquals("75F and sunny", item.body)
+        assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
+        assertEquals(toolCallId, item.sourceToolCallId)
+    }
+
+    @Test
     fun nonItemResultsMapToNull() {
-        assertNull(map(SemanticResult.SupportingData("info")))
+        assertNull(map(SemanticResult.SupportingData("info", assistiveOnly = true)))
+        assertNull(map(SemanticResult.Response("hello there")))
         assertNull(map(SemanticResult.GenericSuccess))
         assertNull(map(SemanticResult.GenericFailure("nope")))
     }

@@ -43,8 +43,11 @@ class ItemFactory {
             messageItem(sourceRecordingId, createdAt, result.recipientName, result.text, result.contactId, ItemMetadata.Message.Status.Sent, toolCallId)
         is SemanticResult.ActionLogged ->
             actionLogItem(sourceRecordingId, createdAt, result.title, result.toolName, result.success, toolCallId, result.body)
+        is SemanticResult.SupportingData if !result.assistiveOnly ->
+            answerItem(sourceRecordingId, createdAt, result.question ?: "", result.summary ?: "", toolCallId)
         is SemanticResult.SupportingData,
-        SemanticResult.GenericSuccess,
+        is SemanticResult.Response,
+        is SemanticResult.GenericSuccess,
         is SemanticResult.GenericFailure -> null
     }
 

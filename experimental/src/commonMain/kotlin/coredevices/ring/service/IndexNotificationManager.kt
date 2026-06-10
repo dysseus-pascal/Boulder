@@ -352,6 +352,9 @@ class IndexNotificationManager(
                                                         appendLine(notification.userText)
                                                     }
                                                 }
+                                                is SemanticResult.Response -> {
+                                                    appendLine(lastAction.text)
+                                                }
                                                 else -> {
                                                     appendLine(notification.userText)
                                                 }

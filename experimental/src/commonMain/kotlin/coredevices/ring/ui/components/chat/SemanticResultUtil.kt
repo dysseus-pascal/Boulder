@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.Note
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Send
@@ -65,6 +66,7 @@ fun SemanticResultIcon(
         is SemanticResult.TaskCreation -> Icons.Outlined.Checklist
         is SemanticResult.ListItemCreation -> Icons.AutoMirrored.Outlined.Note
         is SemanticResult.SupportingData -> Icons.Outlined.IntegrationInstructions
+        is SemanticResult.Response -> Icons.AutoMirrored.Outlined.Chat
         is SemanticResult.ActionLogged -> Icons.Default.Code
     }
     Icon(
@@ -92,7 +94,8 @@ fun SemanticResult.hasExpandedDetails(): Boolean {
         is SemanticResult.AlarmCreation,
         is SemanticResult.TimerCreation,
         is SemanticResult.TaskCreation,
-        is SemanticResult.ListItemCreation -> true
+        is SemanticResult.ListItemCreation,
+        is SemanticResult.Response -> true
         is SemanticResult.SupportingData if this.summary != null -> true
         is SemanticResult.GenericFailure if this.userErrorMessage != null -> true
         else -> false
@@ -198,6 +201,9 @@ fun SemanticResultDetails(
                 Text(text = it, modifier = modifier)
             }
         }
+        is SemanticResult.Response -> {
+            Text(text = result.text, modifier = modifier)
+        }
         is SemanticResult.GenericFailure -> {
             result.userErrorMessage?.let {
                 Text(text = it, modifier = modifier)
@@ -233,6 +239,7 @@ suspend fun SemanticResult.actionText(): String {
             getString(Res.string.noted)
         }
         is SemanticResult.SupportingData -> "Gathered info"
+        is SemanticResult.Response -> "Replied"
         is SemanticResult.ActionLogged -> this.title
     }
 }

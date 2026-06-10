@@ -71,7 +71,7 @@ class SearchAgentNenya(
             ConversationMessageDocument(
                 role = MessageRole.tool,
                 content = "",
-                semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
+                semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false, question = input)
             )
         )
     }

@@ -50,11 +50,25 @@ sealed class SemanticResult {
      * Tool call provided supporting data for the LLM to use (e.g. JS eval, search)
      * @param summary A brief summary of the supporting data
      * @param assistiveOnly Whether the data is only to be used for assistive purposes
+     * @param question User or LLM query
      * (e.g. informing future actions) and not for direct response generation
      */
     @Serializable
     @SerialName("SupportingData")
-    data class SupportingData(val summary: String?, val assistiveOnly: Boolean = false): SemanticResult()
+    data class SupportingData(
+        val summary: String?,
+        val assistiveOnly: Boolean = false,
+        val question: String? = null,
+    ): SemanticResult()
+    /**
+     * The agent replied with a message as its main action. Creates no item;
+     * surfaced directly (e.g. in the completion notification)
+     * @param text The reply body
+     * @param question The user query the reply answers
+     */
+    @Serializable
+    @SerialName("Response")
+    data class Response(val text: String, val question: String? = null): SemanticResult()
     /**
      * Tool call resulted in a message being sent to a contact
      * @param recipientName The display name of the message recipient

@@ -21,11 +21,15 @@ import platform.AuthenticationServices.ASAuthorizationAppleIDProvider
 import platform.AuthenticationServices.ASAuthorizationAppleIDRequest
 import platform.AuthenticationServices.ASAuthorizationController
 import platform.AuthenticationServices.ASAuthorizationControllerDelegateProtocol
+import platform.AuthenticationServices.ASAuthorizationControllerPresentationContextProvidingProtocol
 import platform.AuthenticationServices.ASAuthorizationScopeEmail
 import platform.AuthenticationServices.ASAuthorizationScopeFullName
+import platform.AuthenticationServices.ASPresentationAnchor
 import platform.CoreCrypto.CC_SHA256
 import platform.CoreCrypto.CC_SHA256_DIGEST_LENGTH
 import platform.Foundation.NSError
+import platform.UIKit.UIApplication
+import platform.UIKit.UIWindow
 import platform.darwin.NSObject
 
 actual class RealAppleAuthUtil : AppleAuthUtil {
@@ -35,7 +39,10 @@ actual class RealAppleAuthUtil : AppleAuthUtil {
 
     private fun performAuthRequest(request: ASAuthorizationAppleIDRequest, nonce: String) =
         callbackFlow {
-            val delegate = object : NSObject(), ASAuthorizationControllerDelegateProtocol {
+            val delegate = object :
+                NSObject(),
+                ASAuthorizationControllerDelegateProtocol,
+                ASAuthorizationControllerPresentationContextProvidingProtocol {
                 override fun authorizationController(
                     controller: ASAuthorizationController,
                     didCompleteWithAuthorization: ASAuthorization
@@ -50,11 +57,22 @@ actual class RealAppleAuthUtil : AppleAuthUtil {
                 ) {
                     close(Exception(didCompleteWithError.localizedDescription))
                 }
+
+                override fun presentationAnchorForAuthorizationController(
+                    controller: ASAuthorizationController
+                ): ASPresentationAnchor =
+                    UIApplication.sharedApplication.keyWindow
+                        ?: UIApplication.sharedApplication.windows.firstOrNull() as? UIWindow
+                        ?: UIWindow()
             }
             val authorizationController = ASAuthorizationController(listOf(request))
             authorizationController.delegate = delegate
+            authorizationController.presentationContextProvider = delegate
             authorizationController.performRequests()
-            awaitClose { authorizationController.delegate = null }
+            awaitClose {
+                authorizationController.delegate = null
+                authorizationController.presentationContextProvider = null
+            }
         }
 
     actual override suspend fun signInApple(context: PlatformUiContext): AuthCredential? {

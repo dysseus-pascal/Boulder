@@ -89,6 +89,7 @@ class OnboardingViewModel(private val config: CoreConfigHolder) : ViewModel() {
     val stage = mutableStateOf(OnboardingStage.Welcome)
     val deviceChoice = mutableStateOf<DeviceChoice?>(null)
     val requestedPermissions = mutableStateOf(emptySet<Permission>())
+    val coreConfig = config.config
     fun setIndexEnabled(enabled: Boolean) {
         config.update(config.config.value.copy(enableIndex = enabled))
     }
@@ -265,6 +266,7 @@ fun OnboardingScreen(
                 }
 
                 OnboardingStage.SignIn -> {
+                    val coreConfig by viewModel.coreConfig.collectAsState()
                     Column(
                         modifier = Modifier.fillMaxSize().padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -284,12 +286,13 @@ fun OnboardingScreen(
                             // to the existing account if Firebase reports a collision.
                             skipAccountSwitchConfirmation = true,
                         )
-                        PebbleElevatedButton(
-                            text = "Skip",
-                            onClick = { viewModel.stage.value = OnboardingStage.Done },
-                            primaryColor = true,
-    
-                        )
+                        if (!coreConfig.enableIndex) {
+                            PebbleElevatedButton(
+                                text = "Skip",
+                                onClick = { viewModel.stage.value = OnboardingStage.Done },
+                                primaryColor = true,
+                            )
+                        }
                     }
                 }
 

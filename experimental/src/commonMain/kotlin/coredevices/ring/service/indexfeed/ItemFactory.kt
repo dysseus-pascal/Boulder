@@ -54,7 +54,7 @@ class ItemFactory {
     // --- Per-call item factories used by tool implementations ---
 
     fun reminderItem(
-        sourceRecordingId: String,
+        sourceRecordingId: String?,
         createdAt: Instant,
         title: String,
         dueAt: Instant?,
@@ -79,7 +79,7 @@ class ItemFactory {
     }
 
     fun noteItem(
-        sourceRecordingId: String,
+        sourceRecordingId: String?,
         createdAt: Instant,
         title: String,
         listHint: String?,
@@ -207,7 +207,7 @@ class ItemFactory {
         body: String = "",
         dueAt: Instant? = null,
         parents: List<String>,
-        recordingId: String,
+        recordingId: String?,
         toolCallId: String?,
         metadata: ItemMetadata,
     ): ItemDocument {

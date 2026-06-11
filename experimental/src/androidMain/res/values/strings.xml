@@ -1,3 +1,7 @@
 <resources>
     <string name="voice_widget_description">Voice Note</string>
+    <string name="share_target_index_note">Index note</string>
+    <string name="share_target_index_reminder">Index reminder</string>
+    <string name="share_to_index_note_done">Note added to Index</string>
+    <string name="share_to_index_reminder_done">Reminder added to Index</string>
 </resources>

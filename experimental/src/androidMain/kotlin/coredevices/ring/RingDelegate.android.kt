@@ -11,6 +11,11 @@ import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.glance.VoiceWidgetReceiver
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
 actual class RingDelegate(
     private val context: Context,
@@ -41,7 +46,36 @@ actual class RingDelegate(
     actual suspend fun init() {
         listenForUserPresent(recordingsDao, coreConfigHolder, settings)
         firestoreKnownRingsSync.init()
+        monitorIndexShareTargets()
         //enableWidget(context)
+    }
+
+    /** Keeps the Index share-sheet targets (disabled by default in the manifest) in sync
+     *  with CoreConfig.enableIndex so they only show when Index is enabled. */
+    private fun monitorIndexShareTargets() {
+        val shareTargets = listOf(
+            ShareToIndexNoteActivity::class.java,
+            ShareToIndexReminderActivity::class.java,
+        )
+        coreConfigHolder.config
+            .map { it.enableIndex }
+            .distinctUntilChanged()
+            .onEach { enabled ->
+                logger.d { "Setting Index share targets enabled=$enabled" }
+                val state = if (enabled) {
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                } else {
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                }
+                shareTargets.forEach {
+                    context.packageManager.setComponentEnabledSetting(
+                        ComponentName(context, it),
+                        state,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+            }
+            .launchIn(GlobalScope)
     }
 }
 

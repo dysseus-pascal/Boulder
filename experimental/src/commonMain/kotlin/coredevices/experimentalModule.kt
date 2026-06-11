@@ -20,6 +20,7 @@ import coredevices.ring.agent.McpSandboxAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
+import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -223,6 +224,7 @@ val experimentalModule = module {
     singleOf(::ReminderFactory)
     singleOf(::ContextualActionPredictor)
     singleOf(::ShortcutActionHandler)
+    singleOf(::ShareActionHandler)
 }
 
 expect val platformRingModule: Module

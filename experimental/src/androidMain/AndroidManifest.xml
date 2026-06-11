@@ -71,6 +71,38 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:exported="false"/>
+        <!--
+            Share-sheet targets for Index. Disabled by default; toggled at runtime to follow
+            CoreConfig.enableIndex (RingDelegate.monitorIndexShareTargets).
+        -->
+        <activity
+            android:name="coredevices.ring.ShareToIndexNoteActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/share_target_index_note"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="coredevices.ring.ShareToIndexReminderActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/share_target_index_reminder"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

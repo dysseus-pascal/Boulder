@@ -91,6 +91,7 @@ import kotlinx.datetime.LocalTime
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -633,7 +634,7 @@ class RingRecordingE2ETest {
         // Webhook (disabled)
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {}
+                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
                 override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
             }
         } bind IndexWebhookApi::class

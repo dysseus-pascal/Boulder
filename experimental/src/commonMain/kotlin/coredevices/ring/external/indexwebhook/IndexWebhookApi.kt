@@ -16,8 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface IndexWebhookApi {
@@ -29,8 +29,15 @@ interface IndexWebhookApi {
      * @param sampleRate Sample rate of the audio in Hz
      * @param recordingId Unique identifier for the recording (used in filename)
      * @param transcription Transcription text. Null when RecordingOnly mode.
+     * @param recordedAt When the recording was actually made
      */
-    fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?)
+    fun uploadIfEnabled(
+        samples: ShortArray?,
+        sampleRate: Int,
+        recordingId: String,
+        transcription: String?,
+        recordedAt: Instant,
+    )
     val isEnabled: StateFlow<Boolean>
 }
 
@@ -64,7 +71,13 @@ class IndexWebhookApiImpl(
         }
     }
 
-    override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {
+    override fun uploadIfEnabled(
+        samples: ShortArray?,
+        sampleRate: Int,
+        recordingId: String,
+        transcription: String?,
+        recordedAt: Instant,
+    ) {
         val url = webhookPreferences.webhookUrl.value
         if (url.isNullOrBlank()) return
 
@@ -93,7 +106,8 @@ class IndexWebhookApiImpl(
                     headers = headers,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
-                    transcription = transcriptionToSend
+                    transcription = transcriptionToSend,
+                    recordedAt = recordedAt
                 )
 
                 result.fold(
@@ -111,10 +125,10 @@ class IndexWebhookApiImpl(
         headers: Map<String, String>,
         audioData: ByteArray?,
         filename: String,
-        transcription: String?
+        transcription: String?,
+        recordedAt: Instant
     ): Result<Unit> {
         return try {
-            val recordedAt = Clock.System.now().toEpochMilliseconds()
             val boundary = Uuid.random().toString()
 
             val bodyBytes = buildMultipartBody(
@@ -122,7 +136,7 @@ class IndexWebhookApiImpl(
                 audioData = audioData,
                 filename = filename,
                 mimeType = "audio/mp4",
-                recordedAt = recordedAt,
+                recordedAt = recordedAt.toEpochMilliseconds(),
                 client = "ring",
                 transcription = transcription
             )

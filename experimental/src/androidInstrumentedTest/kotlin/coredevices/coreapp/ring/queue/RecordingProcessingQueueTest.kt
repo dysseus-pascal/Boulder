@@ -76,6 +76,7 @@ import java.io.File
 import kotlin.collections.emptyList
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 // region Fakes
 
@@ -240,7 +241,7 @@ class RecordingProcessingQueueTest {
 
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {}
+                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
                 override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
             }
         } bind IndexWebhookApi::class

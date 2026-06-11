@@ -22,6 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
 
@@ -71,7 +72,7 @@ open class AgentNenya(
                                             throw Exception("Parameter $key has no type")
                                         }
                                     },
-                                    description = param.jsonObject["description"]?.toString() ?: "",
+                                    description = param.jsonObject["description"]?.jsonPrimitive?.content ?: "",
                                     enum = param.jsonObject["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                     minimum = param.jsonObject["minimum"]?.toString()?.toIntOrNull(),
                                     maximum = param.jsonObject["maximum"]?.toString()?.toIntOrNull(),
@@ -80,7 +81,7 @@ open class AgentNenya(
                                         val type = p["type"] ?: return@mapNotNull null
                                         FunctionDeclarationParameter(
                                             type = type,
-                                            description = p["description"]?.toString(),
+                                            description = p["description"]?.jsonPrimitive?.content,
                                             enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
@@ -194,7 +195,7 @@ data class FunctionDeclarationParameter(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val type: JsonElement? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val description: String?,
+    val description: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val enum: List<String>? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)

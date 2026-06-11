@@ -120,6 +120,7 @@ class CactusTranscriptionService(
     val isModelReady get() = modelHandle != 0L
     val configuredMode get() = sttConfig.value.mode
     val configuredModel get() = sttConfig.value.modelName
+    val configuredLanguage get() = sttConfig.value.spokenLanguage
     private var _lastSuccessfulMode: CactusSTTMode? = null
     val lastSuccessfulMode get() = _lastSuccessfulMode
     override val onInitialized = Channel<Boolean>(Channel.RENDEZVOUS)

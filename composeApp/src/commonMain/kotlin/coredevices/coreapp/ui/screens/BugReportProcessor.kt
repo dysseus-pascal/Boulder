@@ -144,6 +144,7 @@ class BugReportProcessor(
             val isModelReady = transcriptionService.isModelReady
             val configuredModel = transcriptionService.configuredModel
             val configuredMode = transcriptionService.configuredMode
+            val configuredLanguage = transcriptionService.configuredLanguage ?: "Auto/Not specified"
             val lastSuccessfulMode = when (transcriptionService.lastSuccessfulMode) {
                 CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> "Local"
                 CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
@@ -153,6 +154,7 @@ class BugReportProcessor(
             "\nSTT Summary\n" +
                     "Configured mode: $configuredMode\n" +
                     "Configured model: $configuredModel\n" +
+                    "Configured language: $configuredLanguage\n" +
                     "Is model ready: $isModelReady\n" +
                     "Last model used: $lastModel\n" +
                     "Last successful mode: $lastSuccessfulMode\n"

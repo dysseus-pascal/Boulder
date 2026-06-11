@@ -38,4 +38,8 @@ internal fun listenForUserPresent(recordingsDao: FirestoreRecordingsDao, configH
 expect class RingDelegate {
     suspend fun init()
     fun requiredRuntimePermissions(): Set<Permission>
+    /** Should be called whenever an iOS background sync is triggered. */
+    fun onBackgroundSync()
+    /** Restarts the haversine pre-emptive transfer loop. iOS only; no-op on Android. */
+    fun restartPreemptiveTransfer()
 }

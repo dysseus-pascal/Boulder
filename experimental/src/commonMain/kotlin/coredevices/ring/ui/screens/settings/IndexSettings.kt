@@ -461,6 +461,19 @@ fun IndexSettings(coreNav: CoreNav) {
                 }
                 item {
                     ListItem(
+                        modifier = Modifier.clickable(enabled = !platform.isAndroid) {
+                            viewModel.restartPreemptiveTransfer()
+                        },
+                        headlineContent = { Text("Restart Pre-emptive Transfer") },
+                        supportingContent = {
+                            if (platform.isAndroid) {
+                                Text("Available on iOS only")
+                            }
+                        }
+                    )
+                }
+                item {
+                    ListItem(
                         modifier = Modifier.clickable {
                             coreNav.navigateTo(RingRoutes.RingSyncInspector)
                         },

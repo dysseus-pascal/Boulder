@@ -154,6 +154,8 @@ class CommonAppDelegate(
             logger.d { "Skipping background sync - already in progress" }
             return
         }
+        // Use the background runtime window even if the sync intervals below haven't elapsed
+        experimentalDevices.onBackgroundSync()
         val now = Clock.System.now()
         val config = coreConfigHolder.config.value
         val lastFullSync =

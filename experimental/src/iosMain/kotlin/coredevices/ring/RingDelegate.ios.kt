@@ -32,4 +32,14 @@ actual class RingDelegate(
     actual fun requiredRuntimePermissions(): Set<Permission> {
         return setOf(Permission.Reminders)
     }
+
+    actual fun onBackgroundSync() {
+        // The pre-emptive transfer loop's coroutines were frozen while the app was suspended;
+        // restart it so its launch phase makes an immediate transfer attempt.
+        restartPreemptiveTransfer()
+    }
+
+    actual fun restartPreemptiveTransfer() {
+        backgroundRingService.restartPreemptiveTransfer()
+    }
 }

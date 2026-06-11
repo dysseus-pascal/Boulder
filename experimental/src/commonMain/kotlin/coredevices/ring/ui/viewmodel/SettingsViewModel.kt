@@ -30,6 +30,7 @@ import coredevices.ring.encryption.EncryptionSetupState
 import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
+import coredevices.ring.RingDelegate
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.ui.components.QrPhotoPickResult
@@ -99,6 +100,7 @@ class SettingsViewModel(
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val platform: coredevices.util.Platform,
     private val mcpSandboxRepository: McpSandboxRepository,
+    private val ringDelegate: RingDelegate,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -282,6 +284,10 @@ class SettingsViewModel(
                 _panicPending.value = false
             }
         }
+    }
+
+    fun restartPreemptiveTransfer() {
+        ringDelegate.restartPreemptiveTransfer()
     }
 
     /** Trigger upload of any locally-queued recordings that don't have a

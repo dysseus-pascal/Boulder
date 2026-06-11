@@ -49,6 +49,10 @@ class BackgroundRingService(
         startRecordingDebugNotificationJob()
     }
 
+    fun restartPreemptiveTransfer() {
+        satelliteManager.restartPreemptiveTransfer()
+    }
+
     fun stopRingSyncJob() {
         logger.i { "Stopping ring sync job" }
         scope.launch {

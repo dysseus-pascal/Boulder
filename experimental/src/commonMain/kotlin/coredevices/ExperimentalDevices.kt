@@ -115,6 +115,10 @@ class ExperimentalDevices(
         }
     }
 
+    fun onBackgroundSync() {
+        ringDelegate.onBackgroundSync()
+    }
+
     fun handleDeepLink(uri: Uri): Boolean {
         return shortcutActionHandler.handleDeepLink(uri)
     }

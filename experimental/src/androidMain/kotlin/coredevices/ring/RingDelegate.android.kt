@@ -50,6 +50,14 @@ actual class RingDelegate(
         //enableWidget(context)
     }
 
+    actual fun onBackgroundSync() {
+        // No-op: ring scanning runs continuously in a foreground service on Android.
+    }
+
+    actual fun restartPreemptiveTransfer() {
+        // No-op: the pre-emptive transfer loop is iOS-only behaviour.
+    }
+
     /** Keeps the Index share-sheet targets (disabled by default in the manifest) in sync
      *  with CoreConfig.enableIndex so they only show when Index is enabled. */
     private fun monitorIndexShareTargets() {

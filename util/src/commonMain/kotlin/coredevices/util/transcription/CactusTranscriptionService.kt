@@ -6,6 +6,7 @@ import com.cactus.cactusInit
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
+import coredevices.analytics.CoreAnalytics
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
@@ -59,6 +60,7 @@ class CactusTranscriptionService(
     private val wisprFlow: WisprFlowTranscriptionService,
     private val kirinki: KirinkiTranscriptionService,
     private val modelProvider: CactusModelPathProvider,
+    private val analytics: CoreAnalytics,
     private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
 ): TranscriptionService {
     companion object {
@@ -271,14 +273,23 @@ class CactusTranscriptionService(
         // (e.g. pebble firmware) have hard timeouts.
         val initialTimeout = if (willFallbackLocal) 7.seconds else 10.seconds
 
-        suspend fun transcribeKirinki() = kirinki.transcribe(
-            audioStreamFrames = flowOf(audio),
-            sampleRate = sampleRate,
-            language = language,
-            conversationContext = conversationContext,
-            dictionaryContext = dictionaryContext,
-            contentContext = contentContext
-        ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+        suspend fun transcribeKirinki() = try {
+            kirinki.transcribe(
+                audioStreamFrames = flowOf(audio),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext
+            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first().also {
+                analytics.logTranscriptionSuccess("kirinki")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            analytics.logTranscriptionFailure("kirinki", transcriptionFailureReason(e))
+            throw e
+        }
 
         // Kirinki is only used as a backup when there's no local model to fall back on. When a local
         // fallback is available we let the caller handle it by propagating the WisprFlow failure.
@@ -310,9 +321,11 @@ class CactusTranscriptionService(
             lastErrorMutex.withLock {
                 lastWisprError = Instant.DISTANT_PAST
             }
+            analytics.logTranscriptionSuccess("wisprflow")
             res
         } catch (e: Exception) {
             if (e !is TimeoutCancellationException && e is CancellationException) throw e
+            analytics.logTranscriptionFailure("wisprflow", transcriptionFailureReason(e))
             if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
             lastErrorMutex.withLock {
                 lastWisprError = Clock.System.now()
@@ -336,20 +349,32 @@ class CactusTranscriptionService(
     }
 
     private suspend fun runLocalTranscribe(path: Path, timeout: Duration? = null): String {
-        val handle = modelHandle
-        if (handle == 0L) {
-            if (!isCactusSupported()) {
-                throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = sttConfig.value.modelName)
+        try {
+            val handle = modelHandle
+            if (handle == 0L) {
+                if (!isCactusSupported()) {
+                    throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = sttConfig.value.modelName)
+                }
+                throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
             }
-            throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
-        }
-        inferenceBoost.acquire()
-        return try {
-            withMaybeTimeout(timeout) {
-                cancellableTranscribe(handle, path.toString())
+            inferenceBoost.acquire()
+            val text = try {
+                withMaybeTimeout(timeout) {
+                    cancellableTranscribe(handle, path.toString())
+                }
+            } finally {
+                inferenceBoost.release()
             }
-        } finally {
-            inferenceBoost.release()
+            analytics.logTranscriptionSuccess("cactus")
+            return text
+        } catch (e: TimeoutCancellationException) {
+            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+            throw e
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+            throw e
         }
     }
 
@@ -501,11 +526,21 @@ class CactusTranscriptionService(
                     inferenceBoost.release()
                 }
                 _lastSuccessfulMode = CactusSTTMode.LocalOnly
-                text.takeIf { it.isNotBlank() }
+                val result = text.takeIf { it.isNotBlank() }
                     ?: throw TranscriptionException.NoSpeechDetected(
                         "empty_result",
                         modelUsed = sttConfig.value.modelName,
                     )
+                analytics.logTranscriptionSuccess("cactus")
+                result
+            } catch (e: TimeoutCancellationException) {
+                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+                throw e
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+                throw e
             } finally {
                 try {
                     SystemFileSystem.delete(path)

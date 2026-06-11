@@ -100,6 +100,7 @@ val utilModule = module {
                 override fun getModelSizeBytes(modelName: String): Long = 0L
                 override fun initTelemetry() {}
             },
+            get(),
             getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
         )
     } bind TranscriptionService::class

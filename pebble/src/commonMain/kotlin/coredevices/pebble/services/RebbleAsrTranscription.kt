@@ -1,9 +1,12 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
+import coredevices.analytics.CoreAnalytics
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.PebbleAccount
 import coredevices.util.CoreConfigFlow
+import coredevices.util.transcription.logTranscriptionFailure
+import coredevices.util.transcription.logTranscriptionSuccess
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
@@ -14,6 +17,7 @@ class RebbleAsrTranscription(
     private val bootConfigProvider: BootConfigProvider,
     private val pebbleAccount: PebbleAccount,
     private val coreConfigFlow: CoreConfigFlow,
+    private val analytics: CoreAnalytics,
 ) : TranscriptionProvider {
     companion object {
         private val logger = Logger.withTag("RebbleAsrTranscription")
@@ -32,6 +36,20 @@ class RebbleAsrTranscription(
         encoderInfo: VoiceEncoderInfo,
         audioFrames: Flow<UByteArray>,
         isNotificationReply: Boolean
+    ): TranscriptionResult {
+        val result = transcribeInner(encoderInfo, audioFrames)
+        if (result is TranscriptionResult.Success && result.words.isNotEmpty()) {
+            analytics.logTranscriptionSuccess("rebble")
+        } else {
+            analytics.logTranscriptionFailure("rebble", result.failureReason())
+        }
+        return result
+    }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
+    private suspend fun transcribeInner(
+        encoderInfo: VoiceEncoderInfo,
+        audioFrames: Flow<UByteArray>,
     ): TranscriptionResult {
         require(encoderInfo is VoiceEncoderInfo.Speex) {
             "Rebble ASR only supports Speex encoding, got ${encoderInfo::class.simpleName}"
@@ -62,3 +80,11 @@ class RebbleAsrTranscription(
 
 private fun extractHost(endpoint: String): String =
     endpoint.removePrefix("https://").removePrefix("http://").substringBefore('/')
+
+private fun TranscriptionResult.failureReason(): String = when (this) {
+    is TranscriptionResult.Success -> "empty_result"
+    is TranscriptionResult.ConnectionError -> "connection_error"
+    is TranscriptionResult.Error -> message
+    TranscriptionResult.Failed -> "failed"
+    TranscriptionResult.Disabled -> "disabled"
+}

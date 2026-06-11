@@ -561,8 +561,18 @@ class RingRecordingE2ETest {
                 ))
             ))
         }
+        single<coredevices.analytics.CoreAnalytics> {
+            object : coredevices.analytics.CoreAnalytics {
+                override fun logEvent(name: String, parameters: Map<String, Any>?) {}
+                override suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: kotlin.time.Instant) {}
+                override suspend fun processHeartbeat() {}
+                override fun updateLastConnectedSerial(serial: String?) {}
+                override fun updateRingTransferDurationMetric(duration: kotlin.time.Duration) {}
+                override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+            }
+        }
         single {
-            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
         } bind TranscriptionService::class
 
         // MCP tools

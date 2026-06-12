@@ -109,7 +109,7 @@ internal fun RingDemo(nav: CoreNav) {
                             }
                         }
                         audioPlayer.playRaw(
-                            samples,
+                            buffer,
                             info.cachedMetadata.sampleRate.toLong(),
                             AudioEncoding.PCM_16BIT,
                             info.size,

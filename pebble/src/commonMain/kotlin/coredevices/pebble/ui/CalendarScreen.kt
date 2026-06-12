@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -23,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,7 @@ import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import theme.coreOrange
 
 @Composable
 fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
@@ -143,12 +148,15 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     libPebble.updateCalendarEnabled(entry.id, isChecked)
                                 }
                             )
-                            val notSyncedText = if (entry.syncEvents) {
-                                ""
-                            } else {
-                                " (not synced by Android!)"
+                            Text(entry.name)
+                        }
+                        if (entry.enabled && !entry.syncEvents || !entry.visible) {
+                            Row {
+                                Text(
+                                    text = "Not synced by Android - toggle checkbox to ask Android to sync",
+                                    color = coreOrange,
+                                )
                             }
-                            Text("${entry.name}$notSyncedText")
                         }
                     }
                 }

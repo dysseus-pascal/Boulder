@@ -16,4 +16,6 @@ data class CalendarEntity(
         val enabled: Boolean,
         @ColumnInfo(defaultValue = "1")
         val syncEvents: Boolean = true,
+        @ColumnInfo(defaultValue = "1")
+        val visible: Boolean = true,
 )

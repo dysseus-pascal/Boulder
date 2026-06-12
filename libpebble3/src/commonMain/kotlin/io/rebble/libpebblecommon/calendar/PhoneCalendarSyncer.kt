@@ -113,6 +113,7 @@ class PhoneCalendarSyncer(
                     ownerId = matchingCalendar.ownerId,
                     color = matchingCalendar.color,
                     syncEvents = matchingCalendar.syncEvents,
+                    visible = matchingCalendar.visible,
                 )
                 calendarDao.update(updateCal)
             } else {
@@ -225,7 +226,9 @@ class PhoneCalendarSyncer(
         libPebbleCoroutineScope.launch {
             calendarDao.setEnabled(calendarId, enabled)
             val calendar = calendarDao.getAll().find { it.id == calendarId }
-            if (calendar != null && !calendar.syncEvents) {
+            // A calendar only actually downloads events to the provider when it's both syncing and
+            // visible; repair either flag if missing (enableSyncForCalendar sets both).
+            if (calendar != null && (!calendar.syncEvents || !calendar.visible)) {
                 systemCalendar.enableSyncForCalendar(calendar)
             }
             requestSync()

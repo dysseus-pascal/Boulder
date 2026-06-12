@@ -31,6 +31,7 @@ private val calendarProjection = arrayOf(
     CalendarContract.Calendars.OWNER_ACCOUNT,
     CalendarContract.Calendars.CALENDAR_COLOR,
     CalendarContract.Calendars.SYNC_EVENTS,
+    CalendarContract.Calendars.VISIBLE,
 )
 
 private val instanceUri: Uri = CalendarContract.Instances.CONTENT_URI
@@ -374,6 +375,9 @@ class AndroidSystemCalendar(
                             val syncEvents =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.SYNC_EVENTS)
                                     ?.let { cursor.getInt(it) }
+                            val visible =
+                                cursor.getNullableColumnIndex(CalendarContract.Calendars.VISIBLE)
+                                    ?.let { cursor.getInt(it) }
 
                             CalendarEntity(
                                 platformId = id.toString(),
@@ -383,6 +387,7 @@ class AndroidSystemCalendar(
                                 color = color,
                                 enabled = true,
                                 syncEvents = syncEvents == 1,
+                                visible = visible == 1,
                             )
                         } else {
                             null
@@ -425,10 +430,12 @@ class AndroidSystemCalendar(
     }
 
     override suspend fun enableSyncForCalendar(calendar: CalendarEntity) {
-        // Create the update URI for this specific calendar
-        val updateUri = ContentUris.withAppendedId(calendarUri, calendar.id.toLong())
+        // Create the update URI for this specific calendar. platformId is the provider's calendar
+        // _id; calendar.id is our local Room PK and must not be used to address the provider.
+        val updateUri = ContentUris.withAppendedId(calendarUri, calendar.platformId.toLong())
         val values = ContentValues().apply {
             put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+            put(CalendarContract.Calendars.VISIBLE, 1)
         }
 
         try {

@@ -51,6 +51,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,6 +64,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -114,6 +119,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
     val playbackState by viewModel.playbackState.collectAsState()
     val showDebugDetails by viewModel.showDebugDetails.collectAsState()
     val showTraceTimeline by viewModel.showTraceTimeline.collectAsState()
+    val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
     val linkedItems by viewModel.linkedItems.collectAsState()
     val allLists by viewModel.allLists.collectAsState()
     val durationSec by viewModel.durationSeconds.collectAsState()
@@ -194,7 +200,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                             }
                             DropdownMenuItem(
                                 text = { Text("Delete recording", color = indexColors.error) },
-                                onClick = { viewModel.dismissMoreMenu(); viewModel.deleteRecording { coreNav.goBack() } },
+                                onClick = { viewModel.dismissMoreMenu(); viewModel.requestDelete() },
                             )
                         }
                     }
@@ -232,8 +238,103 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                 }
             }
         }
+        if (showDeleteDialog) {
+            DeleteRecordingDialog(
+                linkedItemCount = linkedItems.size,
+                onDismiss = viewModel::dismissDeleteDialog,
+                onDeleteRecordingOnly = {
+                    viewModel.deleteRecording(alsoDeleteItems = false) { coreNav.goBack() }
+                },
+                onDeleteRecordingAndItems = {
+                    viewModel.deleteRecording(alsoDeleteItems = true) { coreNav.goBack() }
+                },
+            )
+        }
     }
     Firebase.crashlytics.setCustomKey("recording_details_recording_id", 0)
+}
+
+@Composable
+private fun DeleteRecordingDialog(
+    linkedItemCount: Int,
+    onDismiss: () -> Unit,
+    onDeleteRecordingOnly: () -> Unit,
+    onDeleteRecordingAndItems: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    if (linkedItemCount == 0) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Delete recording?") },
+            text = { Text("This will permanently delete the recording.") },
+            confirmButton = {
+                TextButton(onClick = onDeleteRecordingOnly) {
+                    Text("Delete", color = colors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            },
+        )
+    } else {
+        val itemWord = if (linkedItemCount == 1) "item" else "items"
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Delete recording?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "This recording created $linkedItemCount $itemWord in your feed.",
+                    )
+                    // Use full-width selectable rows for the two delete
+                    // choices so they read cleanly and don't fight the
+                    // AlertDialog button slots (which only fit Cancel +
+                    // one primary).
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        DeleteChoiceRow(
+                            label = "Delete recording only",
+                            sublabel = "Keep the $itemWord in your feed",
+                            color = colors.error,
+                            onClick = onDeleteRecordingOnly,
+                        )
+                        DeleteChoiceRow(
+                            label = "Delete recording and $itemWord",
+                            sublabel = "Remove everything",
+                            color = colors.error,
+                            onClick = onDeleteRecordingAndItems,
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun DeleteChoiceRow(
+    label: String,
+    sublabel: String,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(label, color = color, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(sublabel, color = colors.onSurfaceVariant, fontSize = 12.sp)
+    }
 }
 
 @Composable

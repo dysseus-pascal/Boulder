@@ -112,6 +112,7 @@ class RecordingDetailsViewModel(
     val moreMenuExpanded = MutableStateFlow(false)
     val playbackState = MutableStateFlow<MessagePlaybackState>(MessagePlaybackState.Stopped)
     val showTraceTimeline = MutableStateFlow(false)
+    val showDeleteDialog = MutableStateFlow(false)
 
     fun toggleTraceTimeline() {
         showTraceTimeline.value = !showTraceTimeline.value
@@ -152,10 +153,22 @@ class RecordingDetailsViewModel(
         moreMenuExpanded.value = false
     }
 
-    /** Hard-delete this recording (entries cascade via FK) plus any items
-     *  that were extracted from it. Calls [onAfter] after the snackbar so
-     *  the screen can pop. */
-    fun deleteRecording(onAfter: () -> Unit) {
+    fun requestDelete() {
+        showDeleteDialog.value = true
+    }
+
+    fun dismissDeleteDialog() {
+        showDeleteDialog.value = false
+    }
+
+    /** Hard-delete this recording (entries cascade via FK). If
+     *  [alsoDeleteItems] is true, also soft-delete any items extracted
+     *  from this recording; otherwise the items are preserved.
+     *  Calls [onAfter] after the snackbar so the screen can pop. */
+    fun deleteRecording(alsoDeleteItems: Boolean, onAfter: () -> Unit) {
+        // Dismiss synchronously so a second tap on a delete row can't
+        // race in another coroutine before the first one starts.
+        showDeleteDialog.value = false
         viewModelScope.launch {
             try {
                 val state = itemState.value as? ItemState.Loaded
@@ -163,7 +176,7 @@ class RecordingDetailsViewModel(
                 // Soft-delete any items linked back to this recording so the
                 // home feed doesn't show orphaned chips.
                 val recId = firestoreId?.takeIf { it.isNotBlank() } ?: "local:$recordingId"
-                val linked = itemRepo.getByRecording(recId)
+                val linked = if (alsoDeleteItems) itemRepo.getByRecording(recId) else emptyList()
                 withContext(NonCancellable) {
                     linked.forEach { itemRepo.softDelete(it.firestoreId) }
                     recordingRepo.deleteRecording(recordingId)

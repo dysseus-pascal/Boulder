@@ -3,6 +3,7 @@ package coredevices.ring.agent.builtin_servlets.notes
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -61,7 +62,7 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         val noteId: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val createNoteArgs = JsonSnake.decodeFromString<CreateNoteArgs>(jsonInput)
         Logger.d { "Creating note with text length: ${createNoteArgs.text.length}" }
         return try {

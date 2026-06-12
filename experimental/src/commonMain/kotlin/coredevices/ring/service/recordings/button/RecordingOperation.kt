@@ -6,6 +6,7 @@ import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
@@ -48,7 +49,7 @@ open class DefaultRecordingOperation(
     private val transferId: Long?,
     private val fileId: String,
     private val trace: RingTraceSession,
-    private val forcedTool: (suspend (messageText: String, assistantMessage: String?) -> ToolCallResult)?,
+    private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
     /** Sandbox group whose MCP servers are exposed to the agent; null = default group. */
     private val sandboxGroupId: Long? = null,
 ) : RecordingOperation, KoinComponent {
@@ -253,7 +254,7 @@ open class DefaultRecordingOperation(
                     recordingEntryId = entryId,
                     mcpSession = mcpSession,
                     agent = chatAgent,
-                    forcedTool = forcedTool?.let { { assistantMessage -> it(transcription.text, assistantMessage) } },
+                    forcedTool = forcedTool?.let { { assistantMessage, sessionContext -> it(transcription.text, assistantMessage, sessionContext) } },
                     text = transcription.text
                 )
                 logger.d { "Processing complete." }

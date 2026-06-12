@@ -5,6 +5,7 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -109,7 +110,7 @@ class SetTimerTool : BuiltInMcpTool(
         val errorMessage: String? = null,
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val setTimerArgs = JsonSnake.decodeFromString<SetTimerArgs>(jsonInput)
         val tz = TimeZone.currentSystemDefault()
         val now = Clock.System.now()

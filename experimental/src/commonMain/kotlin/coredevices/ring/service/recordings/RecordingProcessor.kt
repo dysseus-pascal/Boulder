@@ -11,6 +11,7 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.TranscriptionSessionStatus
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
@@ -214,12 +215,13 @@ class RecordingProcessor(
         recordingEntryId: Long?,
         mcpSession: McpSession,
         agent: Agent,
-        forcedTool: (suspend (assistantMessage: String?) -> ToolCallResult)? = null,
+        forcedTool: (suspend (assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)? = null,
         text: String
     ) {
         val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
         val firestoreId = rec?.firestoreId
         val createdAt = rec?.localTimestamp ?: Clock.System.now()
+        val sessionContext = SessionContext(timeBase = createdAt)
 
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(
@@ -238,7 +240,7 @@ class RecordingProcessor(
             recordingEntryId
         )
         try {
-            agent.send(text, mcpSession)
+            agent.send(text, mcpSession, sessionContext)
         } catch (e: AgentNetworkException) {
             // Reset conversation to before processing so task retry works correctly
             logger.e(e) { "Error during agent processing" }
@@ -272,7 +274,7 @@ class RecordingProcessor(
                 .lastOrNull { it.role == MessageRole.assistant }
                 ?.content
             // Agent did not take any action, force tool
-            val toolResult = forcedTool(lastAssistantMessage)
+            val toolResult = forcedTool(lastAssistantMessage, sessionContext)
             logger.w { "Forcing tool call result into conversation" }
             agent.addMessage(
                 ConversationMessageDocument(

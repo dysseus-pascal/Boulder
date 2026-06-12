@@ -5,6 +5,7 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.ui.isLocale24HourFormat
@@ -79,7 +80,7 @@ class ReminderTool: BuiltInMcpTool(
         val reminderId: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val remindArgs = JsonSnake.decodeFromString<RemindArgs>(jsonInput)
         val instant = (remindArgs.date_time_human ?: remindArgs.duration_human)?.let { dateTimeHuman ->
             val tz = TimeZone.currentSystemDefault()

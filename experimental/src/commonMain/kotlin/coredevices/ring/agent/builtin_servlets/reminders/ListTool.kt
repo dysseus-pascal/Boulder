@@ -5,6 +5,7 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.database.room.repository.ListRepository
@@ -82,7 +83,7 @@ class ListTool: BuiltInMcpTool(
         val id: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val listItemArgs = JsonSnake.decodeFromString<ListItemArgs>(jsonInput)
         val instant = listItemArgs.reminder_date_time_human?.let {
             val tz = TimeZone.currentSystemDefault()

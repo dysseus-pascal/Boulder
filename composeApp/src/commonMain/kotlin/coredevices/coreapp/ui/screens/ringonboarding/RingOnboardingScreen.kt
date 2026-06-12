@@ -51,7 +51,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.russhwolf.settings.Settings
 import coredevices.pebble.ui.SnackbarDisplay
+import coredevices.pebble.ui.setHasSeenRingOnboarding
 import coredevices.ring.database.Preferences
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.util.Platform
@@ -66,6 +68,7 @@ fun RingOnboardingScreen(
 ) {
     val preferences: Preferences = koinInject()
     val platform: Platform = koinInject()
+    val settings: Settings = koinInject()
     val viewModel = koinViewModel<SettingsViewModel>()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -76,7 +79,12 @@ fun RingOnboardingScreen(
     // so a "back" from Setup returns them to the final guide page.
     var faqInitialPage by remember { mutableStateOf(0) }
     val isAndroid = remember { platform.isAndroid }
-    val exit: () -> Unit = { coreNav.goBack() }
+    // Persisting here (finish or close) rather than when onboarding is first
+    // shown means a crash mid-onboarding re-shows it on next launch.
+    val exit: () -> Unit = {
+        settings.setHasSeenRingOnboarding(true)
+        coreNav.goBack()
+    }
 
     val palette = if (isSystemInDarkTheme()) DarkPalette else LightPalette
 

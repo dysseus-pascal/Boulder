@@ -445,7 +445,6 @@ fun WatchHomeScreen(
         if (rings.any { it is InterviewedIndexDevice && !hasSeenRingOnboarding }) {
             hasSeenRingOnboarding = true
             coreConfigHolder.update(coreConfig.copy(enableIndex = true))
-            settings.setHasSeenRingOnboarding(true)
             coreNav.navigateTo(CommonRoutes.RingOnboardingRoute)
         }
 
@@ -736,7 +735,7 @@ private const val HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY = "hasSeenRingOnboarding
 private fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
 private fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
 private fun Settings.hasSeenRingOnboarding() = getBoolean(HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY, false)
-private fun Settings.setHasSeenRingOnboarding(seen: Boolean) = set(HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY, seen)
+fun Settings.setHasSeenRingOnboarding(seen: Boolean) = set(HAS_SEEN_RING_ONBOARDING_SETTINGS_KEY, seen)
 
 /**
  * NavController crashes if we navigate before it is ready

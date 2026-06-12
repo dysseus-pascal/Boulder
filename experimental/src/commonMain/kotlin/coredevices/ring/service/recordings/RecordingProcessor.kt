@@ -18,6 +18,7 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
 import coredevices.ring.data.entity.room.TraceEventData
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -46,6 +47,7 @@ import kotlinx.io.readByteArray
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class RecordingProcessor(
@@ -56,6 +58,7 @@ class RecordingProcessor(
     private val coreConfigFlow: CoreConfigFlow,
     private val itemRepo: ItemRepository,
     private val recordingRepo: RecordingRepository,
+    private val transferRepository: RingTransferRepository,
     private val itemFactory: ItemFactory,
     private val localReminderDao: LocalReminderDao,
 ) {
@@ -221,7 +224,17 @@ class RecordingProcessor(
         val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
         val firestoreId = rec?.firestoreId
         val createdAt = rec?.localTimestamp ?: Clock.System.now()
-        val sessionContext = SessionContext(timeBase = createdAt)
+        // Ring recordings only have a true recording time when the ring reported the button
+        // press; other sources (chat, phone mic) stamp the recording at capture time.
+        val ringTransfer = withContext(Dispatchers.IO) {
+            transferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
+        }
+        val timeBase = if (ringTransfer != null) {
+            ringTransfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) }
+        } else {
+            createdAt
+        }
+        val sessionContext = SessionContext(timeBase = timeBase)
 
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(

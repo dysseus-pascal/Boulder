@@ -126,6 +126,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.LibIndex
+import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.libindex.device.IndexDevice
 import coredevices.libindex.device.KnownIndexDevice
@@ -240,6 +241,12 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val scope = rememberCoroutineScope()
     val permissionRequester: PermissionRequester = koinInject()
     val requiredScanPermission = remember { scanPermission() }
+
+    val companionDevice = koinInject<CompanionDevice>()
+    val deepLinkHandler = koinInject<PebbleDeepLinkHandler>()
+    val screenUiContext = rememberUiContext()
+    val requestIndexCompanion by deepLinkHandler.requestIndexCompanion.collectAsState()
+
     val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
     var addFabExpanded by remember { mutableStateOf(false) }
     val indexAlreadyPaired by libIndex.rings.map { rings -> rings.any { it !is DiscoveredIndexDevice } }
@@ -253,6 +260,20 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             delay(15_000)
             showRingWakeHint = true
         }
+    }
+
+    suspend fun requestCDMForInactiveIndex(uiContext: PlatformUiContext, identifier: IndexIdentifier) {
+        topBarParams.showSnackbar("Press the button on your Index 01 so this device can find it...")
+        companionDevice.registerDevice(identifier, uiContext)
+    }
+
+    LaunchedEffect(requestIndexCompanion) {
+        if (!requestIndexCompanion) return@LaunchedEffect
+        val pairedRing = libIndex.rings.value.firstOrNull { it is KnownIndexDevice }
+        if (screenUiContext != null && pairedRing != null) {
+            requestCDMForInactiveIndex(screenUiContext, (pairedRing as KnownIndexDevice).identifier)
+        }
+        deepLinkHandler.consumeRequestIndexCompanion()
     }
 
     suspend fun ensureScanPermission(uiContext: PlatformUiContext): Boolean {
@@ -568,6 +589,9 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             is DeviceListEntry.Ring -> RingItem(
                                 ring = entry.device,
                                 scope = scope,
+                                onRequestCompanion = { identifier ->
+                                    screenUiContext?.let { requestCDMForInactiveIndex(it, identifier) }
+                                },
                             )
                         }
                         if (index < entries.lastIndex) {
@@ -726,12 +750,19 @@ sealed interface DeviceListEntry {
 }
 
 @Composable
-fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
+fun RingItem(
+    ring: IndexDevice,
+    scope: CoroutineScope,
+    onRequestCompanion: suspend (IndexIdentifier) -> Unit = {},
+) {
     val coreAnalytics = koinInject<CoreAnalytics>()
     val platform = koinInject<Platform>()
     val companionDevice = koinInject<CompanionDevice>()
     val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
+    var companionApproved by remember(ring.identifier) {
+        mutableStateOf(companionDevice.hasApprovedDevice(ring.identifier))
+    }
     ListItem(
         headlineContent = {
             Text(
@@ -824,6 +855,27 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                             .fillMaxWidth()
                             .padding(vertical = 6.dp)
                     )
+                }
+                if (ring is KnownIndexDevice && !companionApproved) {
+                    Text(
+                        text = "Limited background access",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                onRequestCompanion(ring.identifier)
+                                // Re-check once the system association dialog resolves so the
+                                // warning clears if the user approved it.
+                                companionApproved = companionDevice.hasApprovedDevice(ring.identifier)
+                            }
+                        },
+                        modifier = Modifier.padding(top = 5.dp),
+                    ) {
+                        Text("Enable background access")
+                    }
                 }
             }
         },

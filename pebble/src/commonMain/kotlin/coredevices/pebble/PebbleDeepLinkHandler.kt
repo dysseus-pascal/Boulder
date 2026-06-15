@@ -4,6 +4,8 @@ import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import coredevices.analytics.CoreAnalytics
 import coredevices.database.AppstoreSourceDao
+import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.libindex.device.REQUEST_URI_HOST
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.ui.NavBarRoute
@@ -32,6 +34,14 @@ interface PebbleDeepLinkHandler {
     val initialLockerSync: StateFlow<Boolean>
     val snackBarMessages: SharedFlow<String>
     val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?>
+
+    /**
+     * Set when the user taps the "Index 01 background access limited" notification. The Watches
+     * screen observes this and re-runs the CompanionDeviceManager association for the paired ring
+     * (which needs a foreground Activity), then calls [consumeRequestIndexCompanion].
+     */
+    val requestIndexCompanion: StateFlow<Boolean>
+    fun consumeRequestIndexCompanion()
     fun handle(uri: Uri?): Boolean
 }
 
@@ -50,6 +60,12 @@ class RealPebbleDeepLinkHandler(
     override val snackBarMessages: SharedFlow<String> = _snackBarMessages.asSharedFlow()
     private val _navigateToPebbleDeepLink = MutableStateFlow<PebbleDeepLink?>(null)
     override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
+    private val _requestIndexCompanion = MutableStateFlow(false)
+    override val requestIndexCompanion: StateFlow<Boolean> = _requestIndexCompanion.asStateFlow()
+
+    override fun consumeRequestIndexCompanion() {
+        _requestIndexCompanion.value = false
+    }
 
     data class PebbleDeepLink(
         val route: NavBarRoute,
@@ -64,6 +80,7 @@ class RealPebbleDeepLinkHandler(
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
                     STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
                     NAVBAR_URL -> handleNavbar(uri.path)
+                    REGISTER_INDEX_COMPANION_HOST -> handleRegisterIndexCompanion()
                     SHOW_WATCHES_HOST -> handleShowWatches(uri.path)
 //                    UPDATE_WATCH_NOW_HOST -> handleShowWatches(uri.path)
                     else -> false
@@ -216,6 +233,13 @@ class RealPebbleDeepLinkHandler(
         return true
     }
 
+    // Show the Watches tab and ask it to (re-)register the paired ring as a companion device.
+    private fun handleRegisterIndexCompanion(): Boolean {
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(PebbleNavBarRoutes.WatchesRoute)
+        _requestIndexCompanion.value = true
+        return true
+    }
+
     private fun handleNavbar(path: String?): Boolean {
         if (path == null) {
             return false
@@ -248,7 +272,9 @@ class RealPebbleDeepLinkHandler(
         private const val NAVBAR_URL: String = "navbar"
         private val SHOW_WATCHES_HOST = "show-watches"
 //        private val UPDATE_WATCH_NOW_HOST = "update-watch-now"
+        private val REGISTER_INDEX_COMPANION_HOST = IndexPlatformBluetoothAssociations.REQUEST_URI_HOST
         val NOTIFICATION_INTENT_URI_SHOW_WATCHES = Uri.parse("pebble://${SHOW_WATCHES_HOST}")
+        val NOTIFICATION_INTENT_URI_REGISTER_INDEX_COMPANION = Uri.parse("pebble://${REGISTER_INDEX_COMPANION_HOST}")
 //        val NOTIFICATION_INTENT_URI_UPDATE_NOW = Uri.parse("pebble://${UPDATE_WATCH_NOW_HOST}")
         private const val GITHUB_OAUTH_CALLBACK_HOST: String = "cloud.repebble.com"
         private const val GITHUB_OAUTH_CALLBACK_PATH: String = "githubAuth"

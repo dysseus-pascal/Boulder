@@ -17,6 +17,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -109,7 +110,8 @@ actual class IndexPlatformBluetoothAssociations(
                     PendingIntent.getActivity(
                         context,
                         0,
-                        context.packageManager.getLaunchIntentForPackage(context.packageName),
+                        context.packageManager.getLaunchIntentForPackage(context.packageName)
+                            ?.setData("pebble://${REQUEST_URI_HOST}".toUri()),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                 )

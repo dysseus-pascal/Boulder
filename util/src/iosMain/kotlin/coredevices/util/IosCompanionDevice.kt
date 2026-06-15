@@ -21,6 +21,10 @@ class IosCompanionDevice : CompanionDevice {
         return true
     }
 
+    override fun hasApprovedDevice(identifier: IndexIdentifier): Boolean {
+        return true
+    }
+
     override fun cdmPreviouslyCrashed(): Boolean {
         return false
     }

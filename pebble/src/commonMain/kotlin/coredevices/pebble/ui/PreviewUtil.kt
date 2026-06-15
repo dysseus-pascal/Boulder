@@ -339,6 +339,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override val initialLockerSync: StateFlow<Boolean> = MutableStateFlow(false)
         override val snackBarMessages: SharedFlow<String> = MutableSharedFlow()
         override val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?> = MutableStateFlow(null)
+        override val requestIndexCompanion: StateFlow<Boolean> = MutableStateFlow(false)
+        override fun consumeRequestIndexCompanion() {}
         override fun handle(uri: Uri?): Boolean = true
     }
     single { initialLockerSync } bind PebbleDeepLinkHandler::class
@@ -384,6 +386,10 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         }
 
         override fun hasApprovedDevice(identifier: PebbleIdentifier): Boolean {
+            return true
+        }
+
+        override fun hasApprovedDevice(identifier: IndexIdentifier): Boolean {
             return true
         }
 

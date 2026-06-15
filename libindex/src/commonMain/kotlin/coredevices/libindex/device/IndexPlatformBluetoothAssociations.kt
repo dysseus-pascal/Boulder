@@ -21,6 +21,9 @@ expect class IndexPlatformBluetoothAssociations {
     fun warnIfNoCompanionAssociations(): Unit
 }
 
+val IndexPlatformBluetoothAssociations.Companion.REQUEST_URI_HOST: String
+    get() = "register-index-companion"
+
 data class IndexAssociation(
     val deviceName: String,
     val identifier: IndexIdentifier

@@ -180,6 +180,11 @@ class AndroidCompanionDevice(
         return service.hasApprovedMac(identifier.macAddress)
     }
 
+    override fun hasApprovedDevice(identifier: IndexIdentifier): Boolean {
+        val service = context.getSystemService(CompanionDeviceManager::class.java)
+        return service.hasApprovedMac(identifier.asPlatformAddress)
+    }
+
     override fun cdmPreviouslyCrashed(): Boolean {
         return settings.getBoolean(PENDING_CDM_POSSIBLE_CRASH, false)
     }

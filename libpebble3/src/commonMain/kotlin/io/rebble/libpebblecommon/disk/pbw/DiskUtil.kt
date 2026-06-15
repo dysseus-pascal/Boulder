@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.disk.pbw
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.metadata.pbw.manifest.PbwManifest
-import kotlinx.io.IOException
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
@@ -12,6 +11,7 @@ import kotlinx.io.okio.asKotlinxIoRawSource
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import okio.FileSystem
+import okio.IOException
 import okio.Path.Companion.toPath
 import okio.SYSTEM
 import okio.openZip

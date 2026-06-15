@@ -13,6 +13,9 @@ actual class IndexPlatformBluetoothAssociations {
         throw NotImplementedError()
     }
 
+    // No CompanionDeviceManager on iOS; never warn.
+    actual fun warnIfNoCompanionAssociations(): Unit = Unit
+
     actual companion object {
         actual val isEnabled: Boolean = false
     }

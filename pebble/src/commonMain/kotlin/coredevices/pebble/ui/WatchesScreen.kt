@@ -729,6 +729,8 @@ sealed interface DeviceListEntry {
 fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
     val coreAnalytics = koinInject<CoreAnalytics>()
     val platform = koinInject<Platform>()
+    val companionDevice = koinInject<CompanionDevice>()
+    val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
     ListItem(
         headlineContent = {
@@ -786,6 +788,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                             enabled = !ring.isFailsafe,
                             onClick = {
                                 scope.launch {
+                                    uiContext?.let { companionDevice.registerDevice(ring.identifier, it) }
                                     val result = try {
                                         ring.pair()
                                     } catch (e: Exception) {

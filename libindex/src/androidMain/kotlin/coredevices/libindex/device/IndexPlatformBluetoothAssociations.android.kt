@@ -2,8 +2,11 @@ package coredevices.libindex.device
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.companion.CompanionDeviceManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -11,6 +14,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -69,6 +75,50 @@ actual class IndexPlatformBluetoothAssociations(
     fun updateAssociations() {
         _associations.value = getAssociations() ?: return
         _associationsReady.complete(Unit)
+    }
+
+    private val NOTIFICATION_CHANNEL_ID = "index_warnings"
+
+    @SuppressLint("MissingPermission")
+    actual fun warnIfNoCompanionAssociations() {
+        val cdm = context.getSystemService(CompanionDeviceManager::class.java) ?: return
+        @Suppress("DEPRECATION")
+        val associations = try {
+            cdm.associations
+        } catch (e: SecurityException) {
+            logger.w("hasAnyCompanionAssociations: SecurityException reading CDM associations", e)
+            return
+        }
+        if (associations.isEmpty()) {
+            logger.w { "Paired ring but no CompanionDeviceManager associations; warning user" }
+            val channel = NotificationChannelCompat.Builder(NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_HIGH)
+                .setName("Index Warnings")
+                .setDescription("Notifications about Index issues")
+                .build()
+            val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("Index 01 background access limited")
+                .setContentText("Your Index 01 isn't registered as a companion device, so some background " +
+                        "features may not work correctly. Re-pair it from the app to fix this.")
+                .setStyle(NotificationCompat.BigTextStyle().bigText("Your Index 01 isn't registered as a companion device, so some background " +
+                        "features may not work correctly. Re-pair it from the app to fix this."))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setGroup("index_warnings")
+                .setAutoCancel(true)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context,
+                        0,
+                        context.packageManager.getLaunchIntentForPackage(context.packageName),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+                .build()
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.createNotificationChannel(channel)
+            notificationManager.notify("index_warning_cdm".hashCode(), notification)
+        }
     }
 
     actual fun init(bluetoothPermissionChanged: Flow<Boolean>) {

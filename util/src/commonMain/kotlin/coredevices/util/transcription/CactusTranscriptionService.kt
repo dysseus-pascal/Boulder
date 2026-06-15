@@ -288,7 +288,7 @@ class CactusTranscriptionService(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            analytics.logTranscriptionFailure("kirinki", transcriptionFailureReason(e))
+            analytics.logTranscriptionFailure("kirinki", transcriptionFailureReason(e), e.message)
             throw e
         }
 
@@ -326,7 +326,7 @@ class CactusTranscriptionService(
             res
         } catch (e: Exception) {
             if (e !is TimeoutCancellationException && e is CancellationException) throw e
-            analytics.logTranscriptionFailure("wisprflow", transcriptionFailureReason(e))
+            analytics.logTranscriptionFailure("wisprflow", transcriptionFailureReason(e), e.message)
             if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
             lastErrorMutex.withLock {
                 lastWisprError = Clock.System.now()
@@ -369,12 +369,12 @@ class CactusTranscriptionService(
             analytics.logTranscriptionSuccess("cactus")
             return text
         } catch (e: TimeoutCancellationException) {
-            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
             throw e
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
             throw e
         }
     }
@@ -535,12 +535,12 @@ class CactusTranscriptionService(
                 analytics.logTranscriptionSuccess("cactus")
                 result
             } catch (e: TimeoutCancellationException) {
-                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
                 throw e
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e))
+                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
                 throw e
             } finally {
                 try {

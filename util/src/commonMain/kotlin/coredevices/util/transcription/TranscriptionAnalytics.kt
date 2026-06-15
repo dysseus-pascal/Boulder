@@ -10,8 +10,8 @@ fun CoreAnalytics.logTranscriptionSuccess(service: String) {
     logEvent(TRANSCRIPTION_SUCCESS_EVENT, mapOf("service" to service))
 }
 
-fun CoreAnalytics.logTranscriptionFailure(service: String, reason: String) {
-    logEvent(TRANSCRIPTION_FAILURE_EVENT, mapOf("service" to service, "reason" to reason))
+fun CoreAnalytics.logTranscriptionFailure(service: String, reason: String, desc: String? = null) {
+    logEvent(TRANSCRIPTION_FAILURE_EVENT, mapOf("service" to service, "reason" to reason, "desc" to (desc?.take(128) ?: "<none>")))
 }
 
 fun transcriptionFailureReason(e: Throwable): String = when (e) {

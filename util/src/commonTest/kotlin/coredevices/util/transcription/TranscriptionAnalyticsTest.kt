@@ -38,7 +38,7 @@ class TranscriptionAnalyticsTest {
         assertEquals(
             listOf<Pair<String, Map<String, Any>?>>(
                 TRANSCRIPTION_FAILURE_EVENT to
-                        mapOf("service" to "cactus", "reason" to "timeout")
+                        mapOf("service" to "cactus", "reason" to "timeout", "desc" to "<none>")
             ),
             analytics.events,
         )

@@ -195,7 +195,7 @@ class ItemFactory {
         createdAt = createdAt,
         title = question.trim().replace(Regex("""\s+"""), " "),
         body = answer,
-        parents = listOf(LIST_NOTES_SELF_ID),
+        parents = emptyList(),
         recordingId = sourceRecordingId,
         toolCallId = toolCallId,
         metadata = ItemMetadata.Answer(question = question.trim()),

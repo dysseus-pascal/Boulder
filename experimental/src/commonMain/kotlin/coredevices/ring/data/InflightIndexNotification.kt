@@ -22,7 +22,11 @@ sealed interface InflightIndexNotification {
         override val id: Int,
         override val pressedTimestamp: IndexTimestamp,
         val userText: String
-    ): InflightIndexNotification
+    ): InflightIndexNotification {
+        override fun toString(): String {
+            return "AgentRunning(id=$id, pressedTimestamp=$pressedTimestamp, userText=<${userText.length} chars>)"
+        }
+    }
 
     data class AgentComplete(
         override val id: Int,
@@ -32,7 +36,11 @@ sealed interface InflightIndexNotification {
         val pressToRXLatency: Duration?,
         val actionsTaken: List<SemanticResult>,
         val shortcutAction: NoteShortcutType
-    ): InflightIndexNotification
+    ): InflightIndexNotification {
+        override fun toString(): String {
+            return "AgentComplete(id=$id, pressedTimestamp=$pressedTimestamp, recordingId=$recordingId, userText=<${userText.length} chars>, pressToRXLatency=$pressToRXLatency, actionsTaken=<${actionsTaken.size}>, shortcutAction=$shortcutAction)"
+        }
+    }
 
     data class Error(
         override val id: Int,

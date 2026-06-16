@@ -230,10 +230,8 @@ class RecordingDetailsViewModel(
         viewModelScope.launch {
             val item = itemState.value as? ItemState.Loaded ?: return@launch
             item.entries.firstOrNull()?.fileName?.let {
-                for (id in listOf(it, "$it-original")) {
-                    val path = recordingStorage.exportRecording(id)
-                    writeToDownloads(uiContext, path)
-                }
+                val path = recordingStorage.exportRecording(it)
+                writeToDownloads(uiContext, path)
             } ?: run {
                 logger.e { "Can't export, no recording file to export" }
                 snackbarHostState.showSnackbar(

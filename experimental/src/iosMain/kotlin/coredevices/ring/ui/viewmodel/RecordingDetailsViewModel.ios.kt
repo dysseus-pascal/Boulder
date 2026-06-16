@@ -2,7 +2,6 @@ package coredevices.ring.ui.viewmodel
 
 import PlatformUiContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
@@ -31,5 +30,4 @@ actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mi
             uiContext.viewController.presentViewController(picker, animated = true, completion = null)
         }
     }
-    delay(250)
 }

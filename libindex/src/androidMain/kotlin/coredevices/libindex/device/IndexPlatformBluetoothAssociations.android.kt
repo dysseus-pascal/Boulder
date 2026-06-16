@@ -100,9 +100,9 @@ actual class IndexPlatformBluetoothAssociations(
                 .setSmallIcon(android.R.drawable.stat_sys_warning)
                 .setContentTitle("Index 01 background access limited")
                 .setContentText("Your Index 01 isn't registered as a companion device, so some background " +
-                        "features may not work correctly. Re-pair it from the app to fix this.")
+                        "features may not work correctly. Tap here to fix this.")
                 .setStyle(NotificationCompat.BigTextStyle().bigText("Your Index 01 isn't registered as a companion device, so some background " +
-                        "features may not work correctly. Re-pair it from the app to fix this."))
+                        "features may not work correctly. Tap here to fix this."))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setGroup("index_warnings")
                 .setAutoCancel(true)

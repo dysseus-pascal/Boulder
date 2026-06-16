@@ -9,6 +9,7 @@ import co.touchlab.kermit.Logger
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.ring.database.Preferences
+import coredevices.util.AndroidCompanionDevice
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.ActiveDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -26,7 +27,8 @@ class PebbleBackgroundManager(
     private val commonPrefs: Preferences,
     private val coreConfigFlow: CoreConfigFlow,
     private val libPebble: LibPebble,
-    private val libIndex: LibIndex
+    private val libIndex: LibIndex,
+    private val androidCompanionDevice: AndroidCompanionDevice
 ) {
     companion object {
         private val logger = Logger.withTag("PebbleBackgroundManager")
@@ -38,6 +40,13 @@ class PebbleBackgroundManager(
         } catch (e: Exception) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
                 logger.w(e) { "Cannot start PebbleService from background (no CDM exemption?)" }
+                if (coreConfigFlow.value.enableIndex) {
+                    if (!androidCompanionDevice.cdmPreviouslyCrashed()) {
+                        libIndex.warnIfNoCompanionAssociations()
+                    } else {
+                        logger.w { "CDM previously crashed; skipping warnIfNoCompanionAssociations" }
+                    }
+                }
             } else {
                 throw e
             }

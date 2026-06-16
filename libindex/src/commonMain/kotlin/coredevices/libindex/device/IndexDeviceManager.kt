@@ -37,6 +37,10 @@ class IndexDeviceManager(
     private val _rings = MutableStateFlow(emptyList<IndexDevice>())
     override val rings: IndexDevices = _rings
 
+    override fun warnIfNoCompanionAssociations() {
+        associations?.warnIfNoCompanionAssociations()
+    }
+
     companion object {
         private val logger = Logger.withTag("IndexDeviceRepository")
     }

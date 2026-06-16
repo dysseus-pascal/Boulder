@@ -706,6 +706,92 @@ class HumanDateTimeParserTest {
         assertEquals(LocalDate(2025, 2, 14), result.date)
     }
 
+    // ===== WEEKEND TESTS =====
+
+    @Test
+    fun testWeekendResolvesToUpcomingSaturday() {
+        // Reference is Wednesday Jan 15, 2025, so the upcoming Saturday is Jan 18
+        val result = parser.parse("weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 18), result.date)
+    }
+
+    @Test
+    fun testThisWeekendResolvesToUpcomingSaturday() {
+        val result = parser.parse("this weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 18), result.date)
+    }
+
+    @Test
+    fun testTheWeekendResolvesToUpcomingSaturday() {
+        val result = parser.parse("the weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 18), result.date)
+    }
+
+    @Test
+    fun testNextWeekendResolvesToFollowingSaturday() {
+        // Upcoming Saturday is Jan 18, so "next weekend" is the Saturday after, Jan 25
+        val result = parser.parse("next weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 25), result.date)
+    }
+
+    @Test
+    fun testWeekendOnSaturdayBefore9amResolvesToSameDay() {
+        // Today is Saturday and the default 9am reminder slot hasn't passed yet, so it stays today.
+        val saturdayReference = LocalDateTime(2025, 1, 18, 7, 30)
+        val saturdayParser = HumanDateTimeParser(object : Clock {
+            override fun now(): kotlin.time.Instant = saturdayReference.toInstant(TimeZone.UTC)
+        }, TimeZone.UTC)
+        val result = saturdayParser.parse("this weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 18), result.date)
+    }
+
+    @Test
+    fun testWeekendOnSaturdayAfter9amResolvesToNextSaturday() {
+        // Today is Saturday and the default 9am slot has passed; resolving to today would yield a
+        // past 9am the scheduler rejects, so it rolls to the next Saturday (Jan 25).
+        val saturdayReference = LocalDateTime(2025, 1, 18, 10, 30)
+        val saturdayParser = HumanDateTimeParser(object : Clock {
+            override fun now(): kotlin.time.Instant = saturdayReference.toInstant(TimeZone.UTC)
+        }, TimeZone.UTC)
+        val result = saturdayParser.parse("this weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 25), result.date)
+    }
+
+    @Test
+    fun testParseFromMessageExtractsThisWeekend() {
+        val result = parser.parseFromMessage("remind me to go back to kings fish house this weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result?.dateTime)
+        assertEquals(LocalDate(2025, 1, 18), (result?.dateTime as InterpretedDateTime.AbsoluteDate).date)
+        assertEquals("this weekend", result.matchedText.lowercase())
+    }
+
+    @Test
+    fun testParseFromMessageIgnoresLastWeekend() {
+        // "last weekend" is in the past — must not be extracted as an upcoming reminder time
+        val result = parser.parseFromMessage("I had a great time last weekend with friends")
+        assertNull(result)
+    }
+
+    @Test
+    fun testParseFromMessageIgnoresEveryWeekend() {
+        // "every weekend" is recurring, not a single date — must not be extracted
+        val result = parser.parseFromMessage("I go hiking every weekend")
+        assertNull(result)
+    }
+
+    @Test
+    fun testParseFromMessageIgnoresThisPastWeekend() {
+        // "this past weekend" is in the past — must not be extracted
+        val result = parser.parseFromMessage("we went camping this past weekend")
+        assertNull(result)
+    }
+
     // ===== ABSOLUTE DATETIME TESTS =====
 
     @Test

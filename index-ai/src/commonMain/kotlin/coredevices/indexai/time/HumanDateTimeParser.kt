@@ -257,6 +257,11 @@ class HumanDateTimeParser(
     }
 
     private fun parseAbsoluteDate(input: String): InterpretedDateTime.AbsoluteDate? {
+        weekendPattern.find(input)?.let { match ->
+            val nextWeek = match.groupValues[1].lowercase() == "next"
+            return InterpretedDateTime.AbsoluteDate(parseWeekend(nextWeek))
+        }
+
         dayWordOnlyPattern.find(input)?.let { match ->
             val date = parseDayWord(match.groupValues[1]) ?: return null
             return InterpretedDateTime.AbsoluteDate(date)
@@ -356,6 +361,25 @@ class HumanDateTimeParser(
         return currentDateTime.date + DatePeriod(days = adjustedDays)
     }
 
+    /**
+     * Resolves a "weekend" expression to the start of the weekend (Saturday). The caller (reminder
+     * tools) defaults a bare date to 9am, so "this weekend" becomes 9am Saturday. If today is
+     * already Saturday but the default 9am slot has passed, we roll to the next Saturday — otherwise
+     * the bare-date 9am would be in the past and the scheduler would reject it. "next weekend" always
+     * jumps to the following Saturday.
+     */
+    private fun parseWeekend(nextWeek: Boolean): LocalDate {
+        val current = currentDateTime
+        var daysUntilSaturday = (DayOfWeek.SATURDAY.ordinal - current.dayOfWeek.ordinal + 7) % 7
+        // Only "this weekend" on Saturday can resolve to today and hit a past 9am slot; "next
+        // weekend" is always >= 7 days out, so the roll-forward guard doesn't apply there.
+        if (!nextWeek && daysUntilSaturday == 0 && current.time >= DEFAULT_BARE_DATE_TIME) {
+            daysUntilSaturday = 7
+        }
+        val offset = daysUntilSaturday + if (nextWeek) 7 else 0
+        return current.date + DatePeriod(days = offset)
+    }
+
     private fun parseMonthDay(monthName: String, day: Int, explicitYear: Int? = null): LocalDate? {
         val month = parseMonthName(monthName) ?: return null
         if (day !in 1..31) return null
@@ -414,6 +438,10 @@ class HumanDateTimeParser(
     }
 
     companion object {
+        // Time the reminder tools assign to a bare date (no explicit time). Kept in sync with the
+        // 9am default in ReminderTool/ListTool so weekend resolution doesn't land on a past slot.
+        private val DEFAULT_BARE_DATE_TIME = LocalTime(9, 0)
+
         // Shared regex fragments
         private const val TIME_EXPR = """\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?)"""
         private const val TIME_24_EXPR = """\d{1,2}:\d{2}"""
@@ -455,6 +483,7 @@ class HumanDateTimeParser(
         private val amPmPattern = Regex("""[ap]\.?\s*m\.?""")
 
         // Absolute date patterns
+        private val weekendPattern = Regex("""^(?:(this|the|next|coming|this\s+coming)\s+)?weekend$""")
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
         private val dayOfWeekPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
         private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$""")
@@ -487,6 +516,10 @@ class HumanDateTimeParser(
             Regex("""\b\d{1,2}/\d{1,2}\b"""),
             Regex("""\b(?:$DAY_WORD_EXPR)\b"""),
             Regex("""\b$DAY_OF_WEEK_EXPR\b"""),
+            // Upcoming weekend. Unsupported past/recurring qualifiers ("last", "every", "this past")
+            // are captured too so the candidate fails parse() and is skipped, rather than silently
+            // matching the bare "weekend" token. (Lookbehind is avoided for Kotlin/Native support.)
+            Regex("""\b(?:(?:last|every|past|this\s+past|this\s+coming|this|the|next|coming)\s+)?weekend\b"""),
             // Bare time (e.g. "3pm")
             Regex("""\b$TIME_EXPR"""),
         )

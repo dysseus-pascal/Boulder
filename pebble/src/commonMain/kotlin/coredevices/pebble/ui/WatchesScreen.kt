@@ -721,6 +721,10 @@ fun WatchesPreview() {
                         )
                     )
 
+                    override fun warnIfNoCompanionAssociations() {
+
+                    }
+
                     override fun init(bluetoothPermissionChanged: Flow<Boolean>) {
                         TODO("Not yet implemented")
                     }

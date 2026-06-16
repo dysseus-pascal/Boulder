@@ -25,7 +25,14 @@ sealed class SemanticResult {
      */
     @Serializable
     @SerialName("TaskCreation")
-    data class TaskCreation(val title: String, val deadline: Instant?): SemanticResult()
+    data class TaskCreation(
+        val title: String,
+        val deadline: Instant?,
+        /** Platform-local reminder id when this task is a scheduled reminder, used to
+         *  link the produced feed item back to the local reminder. Null for old
+         *  records / non-reminder tasks. */
+        val localReminderId: Int? = null,
+    ): SemanticResult()
     /**
      * Tool call resulted in a list item creation action (e.g. generic note, list)
      */

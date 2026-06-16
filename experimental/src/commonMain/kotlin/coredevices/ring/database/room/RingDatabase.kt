@@ -84,7 +84,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 29,
+    version = 30,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -114,6 +114,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 26, to = 27),
         AutoMigration(from = 27, to = 28, Migrate27To28::class),
         AutoMigration(from = 28, to = 29, Migrate27To28::class),
+        AutoMigration(from = 29, to = 30),
     ]
 )
 @TypeConverters(Converters::class)

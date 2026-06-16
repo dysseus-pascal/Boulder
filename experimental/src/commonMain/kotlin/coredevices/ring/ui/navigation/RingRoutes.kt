@@ -60,6 +60,16 @@ object RingRoutes {
     data object McpSandboxGroups : RingRoute
     @Serializable
     data object AddIntegration : RingRoute
+
+    /** Deep link that opens the [ObjectDetails] screen for an index item by
+     *  its Firestore id. Used by the platform reminder notification so
+     *  tapping it opens the reminder's feed item. Parsed by
+     *  `CoreDeepLinkHandler`. */
+    const val OBJECT_DEEP_LINK_HOST = "deep-link"
+    const val OBJECT_DEEP_LINK_PATH = "object"
+    const val OBJECT_DEEP_LINK_ID_PARAM = "id"
+    fun objectDeepLink(objectId: String) =
+        "pebblecore://$OBJECT_DEEP_LINK_HOST/$OBJECT_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$objectId"
 }
 
 fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {

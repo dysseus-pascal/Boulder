@@ -28,6 +28,7 @@ import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.watchModule
+import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
@@ -40,6 +41,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -247,6 +249,23 @@ object IOSDelegate : KoinComponent {
     ) {
         logger.d { "userNotificationCenterDidReceive" }
         val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
+
+        // Reminder notifications carry only the reminder id; the feed item to deep link to
+        // isn't linked when the notification is scheduled, so resolve it now (at tap time).
+        val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
+        if (reminderId != null) {
+            val resolver: ReminderDeepLinkResolver = get()
+            bgTaskScope.launch {
+                val link = resolver.resolveDeepLink(reminderId)
+                logger.d { "Handling reminder deep link from notification: $link" }
+                withContext(Dispatchers.Main) {
+                    NSURL.URLWithString(link)?.let { handleOpenUrl(it) }
+                    completionHandler()
+                }
+            }
+            return
+        }
+
         val action = response.actionIdentifier
         val deepLink = userInfo["notification-deepLink"] as? String
         val actionDeepLink = userInfo["$action-deepLink"] as? String

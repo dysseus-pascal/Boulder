@@ -17,6 +17,7 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
 import coredevices.ring.data.entity.room.TraceEventData
+import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -56,6 +57,7 @@ class RecordingProcessor(
     private val itemRepo: ItemRepository,
     private val recordingRepo: RecordingRepository,
     private val itemFactory: ItemFactory,
+    private val localReminderDao: LocalReminderDao,
 ) {
     sealed interface RecordingStatus {
         /**
@@ -295,8 +297,15 @@ class RecordingProcessor(
                     val item = msg.semantic_result?.let {
                         itemFactory.createFromSemanticResult(it, firestoreId, createdAt, msg.tool_call_id)
                     } ?: return@forEach
-                    runCatching { itemRepo.setItem(itemFactory.simpleUid(), item) }
+                    val itemId = itemFactory.simpleUid()
+                    runCatching { itemRepo.setItem(itemId, item) }
                         .onFailure { logger.e(it) { "Failed to persist item for tool_call ${msg.tool_call_id}" } }
+                    // Link the local reminder back to this recording so its
+                    // notification can find the feed item to deep link to.
+                    (msg.semantic_result as? SemanticResult.TaskCreation)?.localReminderId?.let { localReminderId ->
+                        runCatching { localReminderDao.setRecordingId(localReminderId, firestoreId) }
+                            .onFailure { logger.w(it) { "Failed to link reminder $localReminderId to recording $firestoreId" } }
+                    }
                 }
         }
         updateConversation(recordingId, agent.conversation.first())

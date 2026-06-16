@@ -42,7 +42,14 @@ data class ItemDocument(
     sealed interface ItemMetadata {
         @Serializable
         @SerialName("reminder")
-        data class Reminder(val repeat: String, val notification: String) : ItemMetadata
+        data class Reminder(
+            val repeat: String,
+            val notification: String,
+            /** Platform-local reminder id this item was created from, letting the
+             *  local reminder notification deep link back to this item. Defaults to
+             *  null for items decoded from older records. */
+            val localReminderId: Int? = null,
+        ) : ItemMetadata
 
         @Serializable
         @SerialName("scheduled")

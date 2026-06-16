@@ -3,6 +3,7 @@
 package coredevices.ring.service.indexfeed
 
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
+import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
@@ -28,14 +29,33 @@ class ItemFactoryCreateFromSemanticResultTest {
     @Test
     fun taskCreationMapsToReminderWithToolCallId() {
         val due = createdAt + 5.minutes
-        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = due))!!
+        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = due, localReminderId = 42))!!
 
         assertEquals("Call mom", item.title)
         assertEquals(due, item.dueAt)
         assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
         assertEquals(recordingId, item.sourceRecordingId)
         assertEquals(toolCallId, item.sourceToolCallId)
-        assertTrue(item.metadata is ItemMetadata.Reminder)
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertEquals(42, meta.localReminderId)
+    }
+
+    @Test
+    fun taskCreationWithoutLocalReminderIdLeavesItNull() {
+        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = null))!!
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertNull(meta.localReminderId)
+    }
+
+    @Test
+    fun reminderMetadataFromOlderJsonDecodesWithNullLocalReminderId() {
+        // Records written before localReminderId existed must still decode.
+        val legacy = """{"type":"reminder","repeat":"one_time","notification":"push"}"""
+        val meta = JsonSnake.decodeFromString(ItemMetadata.serializer(), legacy)
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertNull(meta.localReminderId)
     }
 
     @Test

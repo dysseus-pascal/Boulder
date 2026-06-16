@@ -75,7 +75,7 @@ class ShareActionHandler(
 
     private suspend fun createReminder(text: String) {
         val reminder = reminderFactory.create(time = parseReminderTime(text), message = text)
-        reminder.schedule()
+        val localReminderId = reminder.schedule().toIntOrNull()
         itemRepository.setItem(
             itemFactory.simpleUid(),
             itemFactory.reminderItem(
@@ -84,6 +84,7 @@ class ShareActionHandler(
                 title = reminder.message,
                 dueAt = reminder.time,
                 toolCallId = null,
+                localReminderId = localReminderId,
             ),
         )
     }

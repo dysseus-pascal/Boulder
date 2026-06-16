@@ -2,10 +2,13 @@ package coredevices.ring.reminders
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import androidx.core.app.PendingIntentCompat
+import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.LocalReminderDao
@@ -25,15 +28,33 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
 
     private val scope = CoroutineScope(Dispatchers.Default)
     private val localReminderDao: LocalReminderDao by inject()
+    private val deepLinkResolver: ReminderDeepLinkResolver by inject()
 
-    private fun makeNotification(context: Context, data: LocalReminderData) =
+    private fun makeNotification(context: Context, data: LocalReminderData, deepLink: String) =
         NotificationCompat.Builder(context, "reminders")
             .setContentTitle("Reminder")
             .setContentText(data.message)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setGroup("reminders")
+            .setAutoCancel(true)
+            .setContentIntent(makeContentIntent(context, data.id, deepLink))
             .build()
+
+    private fun makeContentIntent(context: Context, reminderId: Int, deepLink: String): PendingIntent? {
+        val intent = Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
+            data = deepLink.toUri()
+            action = Intent.ACTION_VIEW
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntentCompat.getActivity(
+            context,
+            AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
+    }
     private fun ensureChannelCreated(notificationManager: NotificationManager) {
         notificationManager.createNotificationChannel(
             NotificationChannel(
@@ -60,7 +81,7 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
                 return@launch
             }
 
-            val notification = makeNotification(context, reminder)
+            val notification = makeNotification(context, reminder, deepLinkResolver.resolveDeepLink(reminder.id))
             withContext(Dispatchers.Main) {
                 notificationManager.notify(AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId, notification)
             }

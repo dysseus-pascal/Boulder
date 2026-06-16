@@ -3,6 +3,7 @@ package coredevices.ring.agent.builtin_servlets.reminders
 import co.touchlab.kermit.Logger
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.reminders.ReminderDeepLinkResolver
 import kotlinx.datetime.toNSDate
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -69,6 +70,7 @@ class IOSBuiltInReminder(
                 setTitle("Reminder")
                 setBody(message)
                 setSound(UNNotificationSound.defaultSound)
+                setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to id.toString()))
             }
             val components = NSCalendar.currentCalendar.components(
                 NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay

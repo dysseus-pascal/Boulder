@@ -39,6 +39,7 @@ import coredevices.ring.database.room.repository.RecordingProcessingTaskReposito
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -161,6 +162,7 @@ val experimentalModule = module {
     singleOf(::DefaultListsBootstrap)
     singleOf(::IndexFeedSyncService)
     singleOf(::ItemFactory)
+    singleOf(::ReminderDeepLinkResolver)
     singleOf(::PreferencesImpl) binds arrayOf(Preferences::class, BasePreferences::class)
     singleOf(::RingTraceSession)
     singleOf(::TraceSessionExporter)

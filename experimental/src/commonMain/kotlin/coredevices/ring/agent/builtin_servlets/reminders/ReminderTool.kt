@@ -180,7 +180,8 @@ class ReminderTool: BuiltInMcpTool(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(
                     title = reminder.message,
-                    deadline = reminder.time
+                    deadline = reminder.time,
+                    localReminderId = reminderId.toIntOrNull(),
                 )
             )
         } catch (e: Exception) {

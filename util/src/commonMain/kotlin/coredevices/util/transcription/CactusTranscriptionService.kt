@@ -2,6 +2,7 @@ package coredevices.util.transcription
 
 import co.touchlab.kermit.Logger
 import com.cactus.cactusDestroy
+import com.cactus.cactusGetLastError
 import com.cactus.cactusInit
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
@@ -101,7 +102,11 @@ class CactusTranscriptionService(
             }
         }
         return try {
-            parseTranscriptionText(cactusTranscribe(handle, audioPath, null, null, null, null))
+            parseTranscriptionText(cactusTranscribe(handle, audioPath, null, null, null, null)).also { text ->
+                if (text.isBlank()) {
+                    logger.w { "cactusTranscribe returned blank result, native lastError='${cactusGetLastError()}'" }
+                }
+            }
         } finally {
             completionHandle?.dispose()
         }

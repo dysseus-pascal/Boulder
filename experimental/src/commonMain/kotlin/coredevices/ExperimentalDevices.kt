@@ -210,7 +210,13 @@ class ExperimentalDevices(
         )
     }
 
-    fun debugSummary(): String? {
-        return ringSync.lastRingSummary()
+    fun debugSummary(): String {
+        return buildString {
+            ringSync.lastRingSummary()?.let {
+                append(it)
+                append("\n")
+            }
+            append("Cactus agent enabled: ${preferences.useCactusAgent.value}")
+        }
     }
 }

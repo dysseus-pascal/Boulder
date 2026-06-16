@@ -508,6 +508,14 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         text = "Scanning for devices...",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
+                    if (scanningStatus == ScanningStatus.ScanningRing) {
+                        Text(
+                            text = "Press the button on your Index 01 to wake it.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 16.dp)
+                        )
+                    }
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )

@@ -113,7 +113,7 @@ class ItemFactoryCreateFromSemanticResultTest {
         assertEquals("weather in NY?", meta.question)
         assertEquals("weather in NY?", item.title)
         assertEquals("75F and sunny", item.body)
-        assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
+        assertEquals(emptyList(), item.parentListIds)
         assertEquals(toolCallId, item.sourceToolCallId)
     }
 

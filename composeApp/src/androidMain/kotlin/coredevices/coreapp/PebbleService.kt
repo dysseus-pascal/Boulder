@@ -22,7 +22,6 @@ import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.util.R
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -147,8 +146,9 @@ class PebbleService: Service(), KoinComponent {
         pebbleBackgroundManager.onServiceStopped()
         ringObserverJob?.cancel()
         ringObserverJob = null
+        // Scope is not canceled as it's currently application-global
+        // TODO: Give background scope a proper lifecycle / scoped inject
         stopRingJobs()
-        scope.cancel("Service destroyed")
         notificationManagerCompat.cancel(1)
         super.onDestroy()
     }

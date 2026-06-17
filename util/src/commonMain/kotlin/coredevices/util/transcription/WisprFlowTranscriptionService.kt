@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -284,6 +285,8 @@ class WisprFlowTranscriptionService(
             val finalText = finalTextDeferred.await()
             emit(TranscriptionSessionStatus.Transcription(finalText, "wisprflow"))
         } catch (e: TranscriptionException) {
+            throw e
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             logger.e(e) { "WisprFlow transcription failed: ${e.message}" }

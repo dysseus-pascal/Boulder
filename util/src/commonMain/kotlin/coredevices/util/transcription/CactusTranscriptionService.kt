@@ -68,7 +68,7 @@ class CactusTranscriptionService(
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
         private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
-        private val wisprSkipInterval = 3.minutes
+        private val wisprSkipInterval = 1.minutes
     }
 
     private val transcriptionMutex = Mutex()
@@ -311,7 +311,8 @@ class CactusTranscriptionService(
         val canUseKirinki = !willFallbackLocal && kirinki.isAvailable()
 
         val skipWispr = lastErrorMutex.withLock {
-            (Clock.System.now() - lastWisprError) < wisprSkipInterval && (willFallbackLocal || canUseKirinki)
+            // Don't skip wispr if local fallback, because cactus might still be running, we can't trust its cancellation right now due to bug
+            ((Clock.System.now() - lastWisprError) < wisprSkipInterval && canUseKirinki) && !willFallbackLocal
         }
         if (skipWispr) {
             if (canUseKirinki) {

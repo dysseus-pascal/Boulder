@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +58,12 @@ import coredevices.pebble.ui.setHasSeenRingOnboarding
 import coredevices.ring.database.Preferences
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.util.Platform
+import coredevices.util.emailOrNull
 import coredevices.util.isAndroid
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -78,6 +84,12 @@ fun RingOnboardingScreen(
     // Seed for the FAQ pager — bumped to lastIndex when user lands on Setup
     // so a "back" from Setup returns them to the final guide page.
     var faqInitialPage by remember { mutableStateOf(0) }
+    // A real (non-anonymous) account has an email; anonymous guests don't. The
+    // sign-in step is required and only shown when the user isn't signed in yet.
+    val userEmail by Firebase.auth.authStateChanged
+        .map { it?.emailOrNull }
+        .distinctUntilChanged()
+        .collectAsState(Firebase.auth.currentUser?.emailOrNull)
     val isAndroid = remember { platform.isAndroid }
     // Persisting here (finish or close) rather than when onboarding is first
     // shown means a crash mid-onboarding re-shows it on next launch.
@@ -106,9 +118,16 @@ fun RingOnboardingScreen(
                         1 -> FaqTourStep(
                             initialPage = faqInitialPage,
                             onLeaveBackwards = { step = 0 },
-                            onContinue = { step = 2 },
+                            // Skip the sign-in step when the user is already signed in.
+                            onContinue = { step = if (userEmail != null) 3 else 2 },
                             onExit = exit,
                             coreNav = coreNav,
+                        )
+                        2 -> SignInStep(
+                            userEmail = userEmail,
+                            onBack = { step = 1 },
+                            onContinue = { step = 3 },
+                            onExit = exit,
                         )
                         else -> SetupStep(
                             coreNav = coreNav,

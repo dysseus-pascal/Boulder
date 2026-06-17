@@ -29,21 +29,30 @@ class AndroidSystemCallLog(private val context: AppContext): SystemCallLog {
 
     override suspend fun getMissedCalls(start: Instant): List<MissedCall> {
         val missedCalls = mutableListOf<MissedCall>()
-        context.context.contentResolver.query(
-            CallLog.Calls.CONTENT_URI,
-            buildList {
-                add(CallLog.Calls.NUMBER)
-                add(CallLog.Calls.CACHED_NAME)
-                add(CallLog.Calls.DATE)
-                add(CallLog.Calls.DURATION)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    add(CallLog.Calls.BLOCK_REASON)
-                }
-            }.toTypedArray(),
-            "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls.DATE} > ?",
-            arrayOf(CallLog.Calls.MISSED_TYPE.toString(), start.toEpochMilliseconds().toString()),
-            "${CallLog.Calls.DATE} DESC"
-        )?.use { cursor ->
+        val query = try {
+            context.context.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                buildList {
+                    add(CallLog.Calls.NUMBER)
+                    add(CallLog.Calls.CACHED_NAME)
+                    add(CallLog.Calls.DATE)
+                    add(CallLog.Calls.DURATION)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        add(CallLog.Calls.BLOCK_REASON)
+                    }
+                }.toTypedArray(),
+                "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls.DATE} > ?",
+                arrayOf(CallLog.Calls.MISSED_TYPE.toString(), start.toEpochMilliseconds().toString()),
+                "${CallLog.Calls.DATE} DESC"
+            )
+        } catch (e: SecurityException) {
+            // checkSelfPermission() can report granted while the CallLog query is still denied
+            // (permission revoked mid-lifecycle, AppOps revocation). This runs in the flow body, so
+            // an uncaught exception would crash the app - mirror registerForMissedCallChanges.
+            logger.e(e) { "Failed to query missed calls" }
+            return emptyList()
+        }
+        query?.use { cursor ->
             val numberIdx = cursor.getColumnIndex(CallLog.Calls.NUMBER)
             if (numberIdx == -1) {
                 logger.e { "Call log cursor does not contain number column." }

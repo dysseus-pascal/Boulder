@@ -3,6 +3,7 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
+import coredevices.haversine.BluetoothFailureReason
 import coredevices.haversine.DataDecodeException
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.haversine.KMPHaversineSatelliteManager
@@ -114,6 +115,10 @@ sealed interface RingEvent {
             override val isFailsafe: Boolean
         ) : FirmwareUpdate
     }
+
+    data class BluetoothPeerPairingIssue(
+        override val ringId: String,
+    ) : RingEvent
 }
 
 class RingSync(
@@ -764,6 +769,19 @@ class RingSync(
                                         is SatelliteStatus.ProgrammingUserId -> {
                                             logger.i {
                                                 "Satellite ${satelliteStatus.satellite.id} programming user ID"
+                                            }
+                                        }
+
+                                        is SatelliteStatus.BluetoothFailure -> {
+                                            logger.e {
+                                                "Satellite ${satelliteStatus.satellite.id} Bluetooth failure: ${satelliteStatus.reason}"
+                                            }
+                                            if (satelliteStatus.reason == BluetoothFailureReason.PeerRemovedPairingInformation) {
+                                                _ringEvents.emit(
+                                                    RingEvent.BluetoothPeerPairingIssue(
+                                                        ringId = satelliteStatus.satellite.id,
+                                                    )
+                                                )
                                             }
                                         }
                                     }

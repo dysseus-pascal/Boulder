@@ -609,15 +609,15 @@ class RingSync(
                                                                     }
                                                                 },
                                                         )
-                                                        withContext(Dispatchers.IO) {
-                                                            ringTransferRepository.updateTransferInfo(
-                                                                transfer.id,
-                                                                transferInfo
-                                                            )
-                                                        }
-                                                        logger.d { "Saving transfer..." }
-                                                        id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
                                                         if (audioDuration >= 1.5) {
+                                                            withContext(Dispatchers.IO) {
+                                                                ringTransferRepository.updateTransferInfo(
+                                                                    transfer.id,
+                                                                    transferInfo
+                                                                )
+                                                            }
+                                                            logger.d { "Saving transfer..." }
+                                                            id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
                                                             launch {
                                                                 saveSemaphore.withPermit {
                                                                     try {

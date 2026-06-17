@@ -473,13 +473,15 @@ class IndexNotificationManager(
     }
 
 
+    @OptIn(FlowPreview::class)
     suspend fun startNotificationProcessingJob(scope: CoroutineScope) {
         val lastTimestamp = MutableStateFlow(ringTransferRepo.getMostRecentTransfer()?.createdAt ?: Instant.DISTANT_PAST)
 
         lastTimestamp.flatMapLatest {
             ringTransferRepo.getTransfersAfterFlow(it)
-        }.collect { transfers ->
-            transfers.forEach { startNotificationJobFor(it, scope) }
+        }.debounce(100).collect { transfers ->
+            transfers.filter { it.status != RingTransferStatus.Discarded }
+                .forEach { startNotificationJobFor(it, scope) }
             lastTimestamp.value = transfers
                 .maxByOrNull { it.createdAt }
                 ?.createdAt

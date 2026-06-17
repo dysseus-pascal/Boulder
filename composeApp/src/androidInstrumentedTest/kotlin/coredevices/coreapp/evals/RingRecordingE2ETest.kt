@@ -30,7 +30,6 @@ import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
@@ -59,6 +58,9 @@ import coredevices.api.WisprFlowAuth
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.model.CactusModelProvider
 import com.russhwolf.settings.SharedPreferencesSettings
+import coredevices.firestore.PebbleUser
+import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CompletableJob
@@ -95,6 +97,8 @@ import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 // ---- Transcription Normalization ----
 
@@ -586,9 +590,16 @@ class RingRecordingE2ETest {
         single<coredevices.firestore.UsersDao> {
             object : coredevices.firestore.UsersDao {
                 override val user = kotlinx.coroutines.flow.flowOf<coredevices.firestore.PebbleUser?>(null)
+                override val loginEvents: Flow<PebbleUser> = emptyFlow()
+
                 override suspend fun updateTodoBlockId(todoBlockId: String) {}
                 override suspend fun initUserDevToken(rebbleUserToken: String?) {}
                 override suspend fun updateLastConnectedWatch(serial: String) {}
+                override suspend fun updateRingLifetimeCollectionCount(
+                    serial: String,
+                    count: Int
+                ) {}
+
                 override fun init() {}
             }
         }
@@ -659,7 +670,7 @@ private class E2EPreferences : Preferences {
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
-    override val approvedBeeperContacts: StateFlow<List<String>> = MutableStateFlow(emptyList())
+    override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val secondaryModeMcpGroupId: StateFlow<Long?> = MutableStateFlow(null)
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
@@ -669,6 +680,7 @@ private class E2EPreferences : Preferences {
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
+    override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -678,7 +690,7 @@ private class E2EPreferences : Preferences {
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {}
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setSecondaryModeMcpGroupId(groupId: Long?) {}
     override fun setReminderProvider(provider: ReminderProvider) {}
@@ -688,4 +700,5 @@ private class E2EPreferences : Preferences {
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
+    override fun setLastBackupCount(count: Int?) {}
 }

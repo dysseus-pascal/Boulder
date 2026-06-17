@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
@@ -78,10 +79,25 @@ class CactusTranscriptionService(
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
 
     /**
-     * Run cactusTranscribe() with cancellation support.
-     * Since the native transcribe call is blocking and can't be interrupted by coroutine
-     * cancellation, we monitor the calling coroutine's Job and call cactusStop() if it
-     * gets cancelled while the native call is in progress.
+     * Calls cactusStop() if the calling coroutine is cancelled while [block] runs.
+     */
+    private suspend fun <T> withCactusStopOnCancel(handle: Long, block: () -> T): T {
+        val callerJob = kotlin.coroutines.coroutineContext[Job]
+        val completionHandle = callerJob?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                logger.d { "Calling cactusStop() due to cancellation: ${cause.message}" }
+                cactusStop(handle)
+            }
+        }
+        return try {
+            block()
+        } finally {
+            completionHandle?.dispose()
+        }
+    }
+
+    /**
+     * Run cactusTranscribe() with cancellation support (see [withCactusStopOnCancel]).
      */
     private suspend fun cancellableTranscribe(handle: Long, audioPath: String): String {
         val freeMemory = try {
@@ -94,21 +110,12 @@ class CactusTranscriptionService(
             logger.e { "Low free memory ($freeMemory MB), skipping local transcription" }
             throw TranscriptionException.NotEnoughMemory(modelUsed = sttConfig.value.modelName)
         }
-        val callerJob = kotlin.coroutines.coroutineContext[Job]
-        val completionHandle = callerJob?.invokeOnCompletion { cause ->
-            if (cause != null) {
-                logger.d { "Calling cactusStop() due to cancellation: ${cause.message}" }
-                cactusStop(handle)
-            }
-        }
-        return try {
+        return withCactusStopOnCancel(handle) {
             parseTranscriptionText(cactusTranscribe(handle, audioPath, null, null, null, null)).also { text ->
                 if (text.isBlank()) {
                     logger.w { "cactusTranscribe returned blank result, native lastError='${cactusGetLastError()}'" }
                 }
             }
-        } finally {
-            completionHandle?.dispose()
         }
     }
 
@@ -180,7 +187,9 @@ class CactusTranscriptionService(
             if (handle == 0L) return
             withHighPriorityThread {
                 withTimeout(2.seconds) {
-                    cactusTranscribe(handle, null, null, null, null, silentPcm)
+                    withCactusStopOnCancel(handle) {
+                        cactusTranscribe(handle, null, null, null, null, silentPcm)
+                    }
                 }
             }
         }

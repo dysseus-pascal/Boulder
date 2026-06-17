@@ -231,6 +231,9 @@ kotlin {
             implementation(libs.health.kmp)
         }
     }
+    sourceSets.androidInstrumentedTest.dependencies {
+        implementation(kotlin("test"))
+    }
 }
 
 compose.resources {

@@ -34,6 +34,9 @@ class PebbleBackgroundManager(
         private val logger = Logger.withTag("PebbleBackgroundManager")
     }
 
+    @Volatile
+    private var shouldBeRunning = false
+
     private fun startBackground() {
         try {
             ContextCompat.startForegroundService(context, Intent(context, PebbleService::class.java))
@@ -92,6 +95,7 @@ class PebbleBackgroundManager(
             .distinctUntilChanged()
             .onEach { shouldRun ->
                 logger.d { "shouldRun=$shouldRun isRunning=${isRunning.value}" }
+                shouldBeRunning = shouldRun
                 if (shouldRun && !isRunning.value) {
                     startBackground()
                 } else if (!shouldRun && isRunning.value) {
@@ -99,6 +103,17 @@ class PebbleBackgroundManager(
                 }
             }
             .launchIn(GlobalScope)
+    }
+
+    /**
+     * Retry starting the background service when the app is foregrounded. The initial start may
+     * have failed while backgrounded.
+     */
+    fun retryStartIfNeeded() {
+        if (shouldBeRunning && !isRunning.value) {
+            logger.i { "App foregrounded; retrying background service start (was not running)" }
+            startBackground()
+        }
     }
 
     fun onServiceStarted() {

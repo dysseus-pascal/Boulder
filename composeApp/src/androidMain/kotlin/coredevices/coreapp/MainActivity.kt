@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private val coreDeepLinkHandler: CoreDeepLinkHandler by inject()
     private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
+    private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
 
     companion object {
         private val logger = Logger.withTag(MainActivity::class.simpleName!!)
@@ -81,6 +82,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         pebbleAppDelegate.onAppResumed()
+        // Retry the background service start in case it failed while backgrounded (e.g. no CDM exemption).
+        pebbleBackgroundManager.retryStartIfNeeded()
     }
 
     override fun onDestroy() {

@@ -35,14 +35,12 @@ class NotionIntegration(
         private val logger = Logger.withTag("NotionIntegration")
     }
 
-    suspend fun hasPage(): Boolean {
-        return try {
-            findPage()
-            true
-        } catch (e: NotionPageNotFound) {
-            false
-        }
-    }
+    /**
+     * Whether the OAuth grant gives access to at least one page the user can pick for notes.
+     * Used to validate a fresh sign-in; deliberately does not require a page to be selected yet
+     * (the picker is shown afterwards), so it must not be confused with [findPage].
+     */
+    suspend fun hasPage(): Boolean = listPages().isNotEmpty()
 
     /** All non-archived pages the integration has been granted access to. */
     suspend fun listPages(): List<NotionPage> {
@@ -71,6 +69,7 @@ class NotionIntegration(
             throw NotionPageNotFound("No accessible Notion page")
         }
         val selectedId = selectedPageId()
+            ?: throw NotionPageNotFound("No Notion page selected for notes")
         return pages.firstOrNull { it.id == selectedId }?.id
             ?: throw NotionPageNotFound("Selected page not found or archived")
     }

@@ -21,6 +21,8 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.integrations.IosOAuthLauncher
+import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
@@ -48,6 +50,7 @@ val iosDefaultModule = module {
     } bind HttpClientEngine::class
     singleOf(::AppContext)
     singleOf(::IOSPlatform) bind Platform::class
+    singleOf(::IosOAuthLauncher) bind OAuthLauncher::class
     singleOf(::PlatformContext)
     singleOf(::IosPermissionRequester) bind PermissionRequester::class
     singleOf(::IosCompanionDevice) bind CompanionDevice::class

@@ -2,9 +2,6 @@ package coredevices.util.integrations
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
-import coredevices.util.OAuthRedirectHandler
-import coredevices.util.Platform
-import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -16,8 +13,7 @@ abstract class OAuthIntegration(
     private val tokenStorage: IntegrationTokenStorage,
     private val tokenStorageKey: String
 ): Integration, KoinComponent {
-    private val platform: Platform by inject()
-    private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
+    private val oAuthLauncher: OAuthLauncher by inject()
 
     /**
      * The path segment used to identify OAuth redirects for this integration.
@@ -63,9 +59,14 @@ abstract class OAuthIntegration(
         val verifier = generateCodeVerifier()
         val challenge = verifier.toChallenge()
         val url = api.getAuthorizationUrl(challenge)
-        platform.openUrl(url)
-        val uri = oAuthRedirectHandler.oauthRedirects.first {
-            it.host == "oauth" && it.lastPathSegment == oauthPathSegment
+        val uri = try {
+            oAuthLauncher.authenticate(
+                authUrl = url,
+                callbackScheme = "pebble",
+                expectedPathSegment = oauthPathSegment,
+            )
+        } catch (e: OAuthCancelledException) {
+            return false
         }
         val error = uri.getQueryParameter("error")
         if (error != null) {

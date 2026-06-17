@@ -25,6 +25,8 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.integrations.AndroidOAuthLauncher
+import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -49,6 +51,7 @@ val androidDefaultModule = module {
     } bind HttpClientEngine::class
     singleOf(::PlatformShareLauncher)
     singleOf(::AndroidPlatform) bind Platform::class
+    singleOf(::AndroidOAuthLauncher) bind OAuthLauncher::class
     single { CoreAppVersion(BuildConfig.VERSION_NAME) }
     factory { AppUpdateManagerFactory.create(get()) }
     singleOf(::PlatformContext)

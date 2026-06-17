@@ -232,6 +232,10 @@ fun NotionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Notion") },
         buttons = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+            Spacer(Modifier.width(8.dp))
             TextButton(
                 enabled = state !is SignInState.SigningIn,
                 onClick = ::onSignIn

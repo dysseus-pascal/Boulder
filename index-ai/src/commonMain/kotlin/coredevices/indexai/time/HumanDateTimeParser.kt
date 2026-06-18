@@ -212,7 +212,7 @@ class HumanDateTimeParser(
 
         monthDayTimePattern.find(input)?.let { match ->
             val monthName = match.groupValues[1]
-            val day = match.groupValues[2].toIntOrNull() ?: return null
+            val day = parseDayOfMonth(match.groupValues[2]) ?: return null
             val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
             val timeStr = match.groupValues[4]
             val date = parseMonthDay(monthName, day, year) ?: return null
@@ -223,7 +223,7 @@ class HumanDateTimeParser(
         timeMonthDayPattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
             val monthName = match.groupValues[2]
-            val day = match.groupValues[3].toIntOrNull() ?: return null
+            val day = parseDayOfMonth(match.groupValues[3]) ?: return null
             val year = match.groupValues[4].takeIf { it.isNotEmpty() }?.toIntOrNull()
             val date = parseMonthDay(monthName, day, year) ?: return null
             val time = parseTimeString(timeStr) ?: return null
@@ -274,7 +274,7 @@ class HumanDateTimeParser(
 
         monthDayPattern.find(input)?.let { match ->
             val monthName = match.groupValues[1]
-            val day = match.groupValues[2].toIntOrNull() ?: return null
+            val day = parseDayOfMonth(match.groupValues[2]) ?: return null
             val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
             val date = parseMonthDay(monthName, day, year) ?: return null
             return InterpretedDateTime.AbsoluteDate(date)
@@ -380,6 +380,27 @@ class HumanDateTimeParser(
         return current.date + DatePeriod(days = offset)
     }
 
+    /**
+     * Day-of-month token that may be numeric ("5", "21st") or written out ("twenty",
+     * "twenty one"). Range validation (1..31) stays in parseMonthDay.
+     */
+    private fun parseDayOfMonth(raw: String): Int? {
+        val token = raw.trim().lowercase()
+        Regex("""^(\d{1,2})(?:st|nd|rd|th)?$""").find(token)?.let {
+            return it.groupValues[1].toIntOrNull()
+        }
+        val parts = token.split(' ', '-').filter { it.isNotBlank() }
+        return when (parts.size) {
+            1 -> wordToNumber(parts[0])?.toInt()
+            2 -> {
+                val tens = wordToNumber(parts[0]) ?: return null
+                val ones = wordToNumber(parts[1]) ?: return null
+                if ((tens == 20L || tens == 30L) && ones in 1L..9L) (tens + ones).toInt() else null
+            }
+            else -> null
+        }
+    }
+
     private fun parseMonthDay(monthName: String, day: Int, explicitYear: Int? = null): LocalDate? {
         val month = parseMonthName(monthName) ?: return null
         if (day !in 1..31) return null
@@ -450,6 +471,13 @@ class HumanDateTimeParser(
         private const val MONTH_EXPR = """(?:january|february|march|april|may|june|july|august|september|october|november|december)"""
         private const val TIME_OF_DAY_EXPR = """(?:morning|afternoon|evening|night)"""
         private const val NUMBER_WORDS_EXPR = """two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty"""
+
+        // Spelled-out day-of-month numbers (cardinals 1–31). Compound forms first so
+        // "twenty one" matches before the bare "twenty".
+        private const val DAY_NUM_WORD_EXPR =
+            """(?:twenty|thirty)[\s-](?:one|two|three|four|five|six|seven|eight|nine)""" +
+            """|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen""" +
+            """|twenty|thirty|one|two|three|four|five|six|seven|eight|nine"""
         private const val QUANTIFIER_EXPR = """(?:\d+|a|an|one|$NUMBER_WORDS_EXPR|a\s+couple(?:\s+of)?|a\s+few|couple(?:\s+of)?|few|several)"""
         private const val QUANTIFIER_CAPTURE = """(\d+|a|an|one|$NUMBER_WORDS_EXPR|a\s+couple(?:\s+of)?|a\s+few|couple(?:\s+of)?|few|several)"""
         private const val UNIT_EXPR = """(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)"""
@@ -473,8 +501,8 @@ class HumanDateTimeParser(
         private val timeDayWordPattern = Regex("""(?:at\s+)?(.+?)\s+(today|tomorrow)""")
         private val dayOfWeekTimePattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(.+)""")
         private val timeDayOfWeekPattern = Regex("""(?:at\s+)?(.+?)\s+(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
-        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\s+at\s+(.+)""")
-        private val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?""")
+        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?\s+at\s+(.+)""")
+        private val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?""")
         private val numericDateTimePattern = Regex("""(\d{1,2})/(\d{1,2})\s+at\s+(.+)""")
 
         // Absolute time patterns
@@ -486,7 +514,7 @@ class HumanDateTimeParser(
         private val weekendPattern = Regex("""^(?:(this|the|next|coming|this\s+coming)\s+)?weekend$""")
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
         private val dayOfWeekPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
-        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$""")
+        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?$""")
         private val numericDatePattern = Regex("""^(\d{1,2})/(\d{1,2})$""")
 
         // Patterns for parseFromMessage, ordered by specificity (most specific first)

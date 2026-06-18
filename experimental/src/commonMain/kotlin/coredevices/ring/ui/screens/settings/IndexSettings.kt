@@ -55,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -1553,23 +1554,44 @@ fun IntegrationItem(
             }
         }
         Spacer(Modifier.weight(1f))
-        RadioButton(
-            enabled = hasReminder,
+        OutputTypeOption(
+            label = "Reminders",
+            visible = hasReminder,
             selected = selectedReminderProvider,
-            onClick = {
-                onSelectReminderProvider()
-            }
+            onSelect = onSelectReminderProvider
         )
-        Text("Reminders")
         Spacer(Modifier.width(16.dp))
-        RadioButton(
-            enabled = hasNotes,
+        OutputTypeOption(
+            label = "Notes",
+            visible = hasNotes,
             selected = selectedNoteProvider,
-            onClick = {
-                onSelectNoteProvider()
-            }
+            onSelect = onSelectNoteProvider
         )
-        Text("Notes")
+    }
+}
+
+/**
+ * A single "Reminders" / "Notes" radio option for a provider row. Output types a provider can't
+ * handle aren't shown at all (rather than greyed out), but the slot keeps its footprint so the
+ * columns stay aligned across provider rows.
+ */
+@Composable
+private fun OutputTypeOption(
+    label: String,
+    visible: Boolean,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = if (visible) Modifier else Modifier.alpha(0f)
+    ) {
+        RadioButton(
+            enabled = visible,
+            selected = selected,
+            onClick = onSelect
+        )
+        Text(label)
     }
 }
 

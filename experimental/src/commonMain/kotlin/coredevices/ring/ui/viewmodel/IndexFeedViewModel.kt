@@ -311,16 +311,22 @@ class IndexFeedViewModel(
                     compareBy<CachedItem> { task ->
                         val dueMs = task.dueAt?.toEpochMilliseconds()
                         when {
-                            dueMs != null && dueMs <= urgentCutoffMs -> 0
-                            dueMs == null -> 1
-                            else -> 2
+                            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
+                            dueMs != null && dueMs <= nowMs -> 1
+                            dueMs == null -> 2
+                            else -> 3
                         }
                     }
                         .thenBy { task ->
                             val dueMs = task.dueAt?.toEpochMilliseconds()
-                            if (dueMs != null && dueMs <= urgentCutoffMs) dueMs else Long.MAX_VALUE
+                            when {
+                                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
+                                dueMs != null && dueMs <= nowMs -> -dueMs
+                                dueMs == null -> Long.MAX_VALUE
+                                else -> dueMs
+                            }
                         }
-                        .thenByDescending { it.createdAt.toEpochMilliseconds() }
+                        .thenBy { it.createdAt.toEpochMilliseconds() }
                         .thenBy { it.title.lowercase() },
                 )
                 .toList()

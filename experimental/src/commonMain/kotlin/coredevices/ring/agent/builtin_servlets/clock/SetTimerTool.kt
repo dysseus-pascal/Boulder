@@ -147,7 +147,7 @@ class SetTimerTool : BuiltInMcpTool(
             logger.e(e) { "Failed to set timer via tool" }
             ToolCallResult(
                 JsonSnake.encodeToString(SetTimerResult(success = false, errorMessage = e.message)),
-                SemanticResult.GenericFailure("Failed to set timer: ${e.message}")
+                SemanticResult.GenericFailure("Failed: ${e.message}")
             )
         }
     }

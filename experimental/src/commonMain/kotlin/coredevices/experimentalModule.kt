@@ -39,6 +39,8 @@ import coredevices.ring.database.room.repository.RecordingProcessingTaskReposito
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.agent.builtin_servlets.reminders.cancelBuiltInReminder
+import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
@@ -157,7 +159,10 @@ val experimentalModule = module {
         RingTransferRepository(get(), get<RingDatabase>())
     }
     singleOf(::RecordingProcessingTaskRepository)
-    singleOf(::ItemRepository)
+    single {
+        val localReminderDao = get<LocalReminderDao>()
+        ItemRepository(get()) { cancelBuiltInReminder(it, localReminderDao) }
+    }
     singleOf(::ListRepository)
     singleOf(::DefaultListsBootstrap)
     singleOf(::IndexFeedSyncService)

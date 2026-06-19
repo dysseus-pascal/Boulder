@@ -20,6 +20,7 @@ import kotlin.time.ExperimentalTime
  */
 class ItemRepository(
     private val cacheDao: CachedItemDao,
+    private val cancelReminder: suspend (localReminderId: Int) -> Unit,
 ) {
     fun getAllFlow(): Flow<List<CachedItem>> = cacheDao.getAllFlow()
 
@@ -42,7 +43,15 @@ class ItemRepository(
     suspend fun getById(id: String): CachedItem? = cacheDao.getById(id)
 
     suspend fun setItem(id: String, item: ItemDocument) {
+        val existing = cacheDao.getById(id)
         cacheDao.upsert(CachedItem.fromDocument(id, item))
+        // When a reminder item is completed, cancel its scheduled reminder so the notification
+        // doesn't still fire (MOB-7831). Only on the false->true transition; sync uses upsertLocal.
+        if (existing != null && !existing.done && item.done) {
+            (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
+                runCatching { cancelReminder(it) }
+            }
+        }
     }
 
     /** Soft-delete; matches the prototype's `deleted: true` flag. */

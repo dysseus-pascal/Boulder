@@ -2,6 +2,7 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -83,6 +84,10 @@ class AndroidBuiltInReminder(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         pendingIntent?.let(alarmManager::cancel)
+
+        // Also dismiss the notification if it already fired (mirrors iOS removeDeliveredNotifications).
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId)
 
         db.localReminderDao().deleteReminder(reminderId)
         _reminderId = null

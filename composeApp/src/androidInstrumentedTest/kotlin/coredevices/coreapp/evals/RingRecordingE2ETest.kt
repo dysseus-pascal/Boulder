@@ -47,6 +47,7 @@ import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.TranscriptionService
@@ -577,7 +578,10 @@ class RingRecordingE2ETest {
             }
         }
         single {
-            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
+        }
+        single {
+            HybridTranscriptionService(get(), get(), get(), get(), get())
         } bind TranscriptionService::class
 
         // MCP tools

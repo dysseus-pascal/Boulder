@@ -22,7 +22,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
 import coredevices.util.models.CactusSTTMode
-import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -139,7 +139,7 @@ class BugReportProcessor(
     private fun getSTTSummary(): String {
         return try {
             // Lazy grab in case of init issues
-            val transcriptionService = KoinPlatform.getKoin().get<CactusTranscriptionService>()
+            val transcriptionService = KoinPlatform.getKoin().get<HybridTranscriptionService>()
             val lastModel = transcriptionService.lastModelUsed
             val isModelReady = transcriptionService.isModelReady
             val configuredModel = transcriptionService.configuredModel

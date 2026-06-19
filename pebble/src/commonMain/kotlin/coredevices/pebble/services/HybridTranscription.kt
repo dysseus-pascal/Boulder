@@ -3,7 +3,7 @@ package coredevices.pebble.services
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
 import coredevices.util.CoreConfigFlow
-import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.STTLanguage
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
@@ -30,8 +30,8 @@ import kotlinx.io.readByteArray
 import kotlin.time.Duration.Companion.seconds
 
 internal expect fun tempTranscriptionDirectory(): Path
-class CactusTranscription(
-    private val service: CactusTranscriptionService,
+class HybridTranscription(
+    private val service: HybridTranscriptionService,
     private val libPebbleLazy: Lazy<LibPebble>,
     private val coreConfigFlow: CoreConfigFlow,
 ): TranscriptionProvider {

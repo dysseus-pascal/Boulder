@@ -802,7 +802,7 @@ class RingSync(
         }
     }
 
-    fun sendBugReportPrompt() {
+    suspend fun sendBugReportPrompt() {
         indexNotificationManager.sendBugReportPrompt(
             "Index ran into a problem",
             """

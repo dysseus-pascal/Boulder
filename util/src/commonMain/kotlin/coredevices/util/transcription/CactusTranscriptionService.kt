@@ -319,7 +319,10 @@ class CactusTranscriptionService(
     ): String {
         ensureInit(initTimeout)
         val path = getCacheFilePath()
-        return transcriptionMutex.withLock {
+        if (!transcriptionMutex.tryLock()) {
+            throw TranscriptionException.TranscriptionInProgress(modelUsed = sttConfig.value.modelName)
+        }
+        return try {
             withContext(Dispatchers.IO) {
                 SystemFileSystem.sink(path).buffered().use { sink ->
                     sink.writeWavHeader(sampleRate, audioSize = audio.size)
@@ -333,6 +336,8 @@ class CactusTranscriptionService(
                     logger.w(e) { "Failed to delete temp file $path" }
                 }
             }
+        } finally {
+            transcriptionMutex.unlock()
         }
     }
 

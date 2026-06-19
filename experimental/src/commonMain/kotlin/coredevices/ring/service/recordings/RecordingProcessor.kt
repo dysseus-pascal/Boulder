@@ -39,7 +39,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
@@ -85,7 +84,7 @@ class RecordingProcessor(
 
     companion object {
         private const val AUDIO_STREAM_BUFFER_SIZE = 1024
-        private val TRANSCRIPTION_TIMEOUT = 45.seconds
+        internal val TRANSCRIPTION_TIMEOUT = 45.seconds
         private val logger = Logger.withTag("RecordingProcessor")
     }
 
@@ -104,20 +103,20 @@ class RecordingProcessor(
         }
     }
 
+    // transcriptionService.transcribe(...) returns a cold flow; the timeout that bounds the
+    // (blocking) transcription is applied by the caller around collection (see RecordingOperation),
+    // because a timeout wrapped around building the cold flow expires instantly and bounds nothing.
     private suspend fun transcriptionStep(
-        transcriptionTimeout: Duration,
         audioStreamFlow: Flow<ByteArray>,
         sampleRate: Int,
         language: STTLanguage,
         encoding: AudioEncoding
-    ) = withTimeout(transcriptionTimeout) {
-        transcriptionService.transcribe(
-            audioStreamFlow,
-            sampleRate,
-            language = language,
-            encoding = encoding,
-        ).flowOn(Dispatchers.IO)
-    }
+    ) = transcriptionService.transcribe(
+        audioStreamFlow,
+        sampleRate,
+        language = language,
+        encoding = encoding,
+    ).flowOn(Dispatchers.IO)
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {
         withContext(Dispatchers.IO) {
@@ -203,7 +202,6 @@ class RecordingProcessor(
         }.flowOn(Dispatchers.IO)
 
         return transcriptionStep(
-            transcriptionTimeout = TRANSCRIPTION_TIMEOUT,
             audioStreamFlow = audioStreamFlow,
             sampleRate = sampleRate,
             encoding = encoding,

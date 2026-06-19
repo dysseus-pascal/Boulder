@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
@@ -145,11 +146,19 @@ open class DefaultRecordingOperation(
                     recordingEntryId = entryId,
                     transferId = transferId ?: -1
                 ))
-                val txt = recordingProcessor.transcribe(
-                    audioSource = source,
-                    sampleRate = meta.cachedMetadata.sampleRate,
-                ).flowOn(Dispatchers.IO)
-                    .first { it is TranscriptionSessionStatus.Transcription } as TranscriptionSessionStatus.Transcription
+                // Bound the actual collection (the blocking transcription), converting a timeout
+                // into a clean non-cancellation exception so it classifies as a normal failure and
+                // never propagates a CancellationException into the queue scheduler. The native
+                // call can't be interrupted, but timing out frees this processing slot promptly.
+                val txt = withTimeoutOrNull(RecordingProcessor.TRANSCRIPTION_TIMEOUT) {
+                    recordingProcessor.transcribe(
+                        audioSource = source,
+                        sampleRate = meta.cachedMetadata.sampleRate,
+                    ).flowOn(Dispatchers.IO)
+                        .first { it is TranscriptionSessionStatus.Transcription } as TranscriptionSessionStatus.Transcription
+                } ?: throw TranscriptionException.TranscriptionServiceError(
+                    "Transcription timed out after ${RecordingProcessor.TRANSCRIPTION_TIMEOUT}"
+                )
                 trace.markEvent("transcription_end", TraceEventData.TranscriptionEnd(
                     recordingId = recordingId,
                     recordingEntryId = entryId,
@@ -177,6 +186,18 @@ open class DefaultRecordingOperation(
                     modelUsed = e.modelUsed
                 )
                 throw RecoverableTaskException("Network error during transcription", e)
+            } catch (e: TranscriptionException.TranscriptionInProgress) {
+                // The single native model handle is busy with another (possibly cancelled-but-
+                // still-running) transcription. Don't fail the recording or write
+                // transcription_error — defer and let the queue retry once the model is free.
+                trace.markEvent("transcription_fail", TraceEventData.TranscriptionFail(
+                    recordingId = recordingId,
+                    recordingEntryId = entryId,
+                    transferId = transferId ?: -1,
+                    modelUsed = e.modelUsed,
+                    reason = "Transcription model busy, deferring: ${e.message}"
+                ))
+                throw RecoverableTaskException("Transcription model busy", e)
             } catch (e: Exception) {
                 if (e is TranscriptionException.NotEnoughMemory) {
                     sendNotEnoughMemoryNotification()

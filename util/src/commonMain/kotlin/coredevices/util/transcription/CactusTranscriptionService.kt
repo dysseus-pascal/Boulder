@@ -89,7 +89,7 @@ class CactusTranscriptionService(
 ): TranscriptionService {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
-        private val wisprSkipInterval = 1.minutes
+        private val wisprSkipInterval = 1.seconds
     }
 
     private val transcriptionMutex = Mutex()

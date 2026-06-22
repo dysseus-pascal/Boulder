@@ -76,6 +76,7 @@ import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
@@ -1393,6 +1394,8 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val gTasks = koinInject<GTasksIntegration>()
     val notion = koinInject<NotionIntegration>()
     val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
+    val obsidian = koinInject<ObsidianIntegration>()
+    val obsidianAuth by flow { emit(obsidian.isAuthorized()) }.collectAsState(false)
     val gTasksAuth by flow { emit(gTasks.isAuthorized()) }.collectAsState(false)
     val notionAuth by flow { emit(notion.isAuthorized()) }.collectAsState(false)
     val taskerAuth by flow {
@@ -1449,6 +1452,22 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 onSelectReminderProvider = {},
                 onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) },
                 onConfigure = { showNotionPageDialog = true }
+            )
+        }
+        if (obsidianAuth) {
+            var showObsidianConfig by remember { mutableStateOf(false) }
+            if (showObsidianConfig) {
+                ObsidianDialog(onDismiss = { showObsidianConfig = false })
+            }
+            IntegrationItem(
+                title = ObsidianIntegration.DEFINITION.title,
+                hasReminder = false,
+                hasNotes = true,
+                selectedReminderProvider = false,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Obsidian,
+                onSelectReminderProvider = {},
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Obsidian) },
+                onConfigure = { showObsidianConfig = true },
             )
         }
         if (platform.isAndroid && taskerAuth) {

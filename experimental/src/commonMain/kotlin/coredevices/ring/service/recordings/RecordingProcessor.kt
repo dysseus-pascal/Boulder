@@ -230,7 +230,7 @@ class RecordingProcessor(
             transferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
         }
         val timeBase = if (ringTransfer != null) {
-            ringTransfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) }
+            ringTransfer.transferInfo?.buttonReleased?.let { Instant.fromEpochMilliseconds(it) }
         } else {
             createdAt
         }

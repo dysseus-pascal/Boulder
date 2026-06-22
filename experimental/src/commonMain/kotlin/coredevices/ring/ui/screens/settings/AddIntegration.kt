@@ -3,6 +3,7 @@ package coredevices.ring.ui.screens.settings
 import BugReportButton
 import CoreNav
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,14 +30,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
+import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
+import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.data.IntegrationDefinition
 import coredevices.ui.M3Dialog
+import coredevices.util.Platform
+import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -46,6 +53,7 @@ import org.koin.core.parameter.parametersOf
 @Composable
 fun AddIntegration(coreNav: CoreNav) {
     var dialog by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
+    val platform = koinInject<Platform>()
     dialog?.invoke()
     Scaffold(
         topBar = {
@@ -93,6 +101,18 @@ fun AddIntegration(coreNav: CoreNav) {
                         NotionDialog(
                             onDismiss = { dialog = null }
                         )
+                    }
+                }
+            }
+            if (platform.isAndroid) {
+                item {
+                    val def = remember { TASKER_DEFINITION }
+                    Item(def) {
+                        dialog = {
+                            TaskerDialog(
+                                onDismiss = { dialog = null }
+                            )
+                        }
                     }
                 }
             }
@@ -266,6 +286,87 @@ fun NotionDialog(
                     )
                 }
                 is SignInState.Success -> {}
+            }
+        }
+    }
+}
+
+@Composable
+fun TaskerDialog(
+    onDismiss: () -> Unit
+) {
+    val uiContext = rememberUiContext()!!
+    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
+    var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
+    val scope = rememberCoroutineScope()
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tasker") },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text(if (state is SignInState.Success) "Done" else "Cancel")
+            }
+            if (state !is SignInState.Success) {
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    enabled = state !is SignInState.SigningIn,
+                    onClick = {
+                        state = SignInState.SigningIn
+                        scope.launch {
+                            state = try {
+                                val client = noteIntegrationFactory.createNoteClient(NoteProvider.Tasker)
+                                if (client.signIn(uiContext)) {
+                                    SignInState.Success
+                                } else {
+                                    SignInState.Error("Tasker is not installed. Install Tasker, then try again.")
+                                }
+                            } catch (e: Throwable) {
+                                Logger.w("AddIntegration", e) { "Error connecting Tasker: ${e.message}" }
+                                SignInState.Error(e.message ?: "Unknown error")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Connect")
+                }
+            }
+        }
+    ) {
+        when (val s = state) {
+            is SignInState.Idle -> {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Sends your notes and reminders to Tasker as a shared intent " +
+                            "(text/plain), so you can route them to any app or action."
+                    )
+                    Text("To receive them, in Tasker:", fontWeight = FontWeight.Bold)
+                    Text("1.  Add a profile, pick Event → Received Share.")
+                    Text("2.  Attach a task — your text arrives in the %rs_text variable.")
+                    Text(
+                        "3.  Optional: limit it to this app with %rs_package_name = " +
+                            "coredevices.coreapp."
+                    )
+                }
+            }
+            is SignInState.SigningIn -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is SignInState.Success -> {
+                Text("Tasker connected. Choose it for notes or reminders in Index settings.")
+            }
+            is SignInState.Error -> {
+                Text(
+                    "Error: ${s.message}",
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

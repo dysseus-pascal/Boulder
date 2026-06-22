@@ -41,6 +41,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.emailOrNull
+import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -184,6 +185,12 @@ class SettingsViewModel(
             }
             if (gTasksIntegration.isAuthorized()) {
                 add(ReminderProvider.GoogleTasks)
+            }
+            // Tasker shares one opt-in across notes & reminders; reuse the note client's auth check.
+            if (platform.isAndroid &&
+                noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized()
+            ) {
+                add(ReminderProvider.Tasker)
             }
         }
     }

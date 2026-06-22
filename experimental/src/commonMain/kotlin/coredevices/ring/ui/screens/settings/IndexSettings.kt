@@ -70,7 +70,9 @@ import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
@@ -1390,8 +1392,12 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
 fun AuthorizedIntegrations(preferences: Preferences) {
     val gTasks = koinInject<GTasksIntegration>()
     val notion = koinInject<NotionIntegration>()
+    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
     val gTasksAuth by flow { emit(gTasks.isAuthorized()) }.collectAsState(false)
     val notionAuth by flow { emit(notion.isAuthorized()) }.collectAsState(false)
+    val taskerAuth by flow {
+        emit(noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized())
+    }.collectAsState(false)
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
@@ -1443,6 +1449,17 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 onSelectReminderProvider = {},
                 onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) },
                 onConfigure = { showNotionPageDialog = true }
+            )
+        }
+        if (platform.isAndroid && taskerAuth) {
+            IntegrationItem(
+                title = TASKER_DEFINITION.title,
+                hasReminder = true,
+                hasNotes = true,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Tasker,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Tasker,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Tasker) },
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Tasker) }
             )
         }
     }

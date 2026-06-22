@@ -20,6 +20,7 @@ class NoteIntegrationFactory(
         return when (integration) {
             NoteProvider.Builtin -> LocalNoteClient()
             NoteProvider.Notion -> get<NotionIntegration>()
+            NoteProvider.Tasker -> createTaskerNoteClient()
         }
     }
 }

@@ -61,6 +61,7 @@ data class BugReportGenerationParams(
     val screenContext: String,
     val attachments: List<DocumentAttachment>,
     val sendRecording: Boolean,
+    val sendRecentRecordings: Boolean,
     val expOutputPath: String?,
     val imageAttachments: List<DocumentAttachment>,
     val fetchPebbleLogs: Boolean,
@@ -486,6 +487,15 @@ class BugReportProcessor(
                 experimentalDevices.exportOutput(params.expOutputPath)?.let {
                     attachments.add(it)
                 }
+            }
+        }
+
+        // Add the last few recordings + their data for Index bug reports
+        if (params.sendRecentRecordings) {
+            try {
+                attachments.addAll(experimentalDevices.exportRecentRecordings())
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to gather recent recordings" }
             }
         }
 

@@ -51,6 +51,7 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
     companion object {
         const val TOOL_NAME = "create_note"
         const val TOOL_DESCRIPTION = "Create a new note with the given user text"
+        private val logger = Logger.withTag("CreateNoteTool")
     }
 
     @Serializable
@@ -64,16 +65,23 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val createNoteArgs = JsonSnake.decodeFromString<CreateNoteArgs>(jsonInput)
-        Logger.d { "Creating note with text length: ${createNoteArgs.text.length}" }
+        val text = runCatching { context.userMessageText.await() }
+            .onFailure {
+                logger.e { "Failed to get user message text" }
+            }.getOrNull() ?: run {
+                logger.w { "User message text is null, using agent-provided text" }
+                createNoteArgs.text.trim()
+            }
+        logger.d { "Creating note with text length: ${text.length}" }
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
-            val noteId = noteClient.createNote(createNoteArgs.text)
+            val noteId = noteClient.createNote(text)
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
-                SemanticResult.ListItemCreation(createNoteArgs.text)
+                SemanticResult.ListItemCreation(text)
             )
         } catch (e: Exception) {
-            Logger.e(e) { "Failed to create note" }
+            logger.e(e) { "Failed to create note" }
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult()),
                 SemanticResult.GenericFailure("Failed to create note: ${e.message}")

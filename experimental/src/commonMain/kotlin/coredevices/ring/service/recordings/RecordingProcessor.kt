@@ -25,6 +25,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -234,7 +235,10 @@ class RecordingProcessor(
         } else {
             createdAt
         }
-        val sessionContext = SessionContext(timeBase = timeBase)
+        val sessionContext = SessionContext(
+            timeBase = timeBase,
+            CompletableDeferred(text)
+        )
 
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(

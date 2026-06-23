@@ -5,6 +5,7 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
@@ -161,7 +162,7 @@ class CreateCalendarEventTool : BuiltInMcpTool(
         SemanticResult.GenericFailure(message, llmRecoverable = true)
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val args = JsonSnake.decodeFromString<CreateEventArgs>(jsonInput)
 
         // Defense in depth: the servlet hides this tool when calendar access is missing, but a stale

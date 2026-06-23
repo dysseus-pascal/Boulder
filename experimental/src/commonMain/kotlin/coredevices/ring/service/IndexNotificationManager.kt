@@ -345,6 +345,16 @@ class IndexNotificationManager(
                                                     val time = lastAction.fireTime
                                                     appendLine("Alarm set for ${time.format(UITimeUtil.timeFormat())}")
                                                 }
+                                                is SemanticResult.CalendarEventCreation -> {
+                                                    val dateTime = lastAction.startTime.toLocalDateTime(
+                                                        TimeZone.currentSystemDefault()
+                                                    )
+                                                    val humanDate = UITimeUtil.humanDate(dateTime.date)
+                                                    val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
+                                                    appendLine("Event added for ${humanDate}, ${humanTime}")
+                                                    appendLine()
+                                                    appendLine(lastAction.title)
+                                                }
                                                 is SemanticResult.TimerCreation -> {
                                                     val requested = lastAction.requestedDuration
                                                     val time = lastAction.fireTime.toLocalDateTime(TimeZone.currentSystemDefault())

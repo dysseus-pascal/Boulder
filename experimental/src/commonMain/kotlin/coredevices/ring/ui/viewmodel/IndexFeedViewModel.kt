@@ -437,6 +437,7 @@ class IndexFeedViewModel(
                     "Added to $parentName"
                 }
                 "answer" -> "Answered"
+                "calendar_event" -> item.title.ifBlank { "Event" }
                 "message" -> {
                     val raw = strField("recipientName") ?: strField("contact")
                     val name = raw?.let { messageRecipientLabel(it) }

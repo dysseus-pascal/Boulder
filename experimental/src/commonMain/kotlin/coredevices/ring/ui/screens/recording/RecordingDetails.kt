@@ -914,6 +914,7 @@ private fun chipGlyph(kind: String): String = when (kind) {
     "answer" -> "✨"
     "message" -> "✉"
     "action_log" -> "✉"
+    "calendar_event" -> "📅"
     else -> "•"
 }
 

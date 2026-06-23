@@ -192,6 +192,7 @@ class FullFeedViewModel(
             "answer" -> "✨"
             "message" -> "✉"
             "action_log" -> "✉"
+            "calendar_event" -> "📅"
             else -> "•"
         }
 

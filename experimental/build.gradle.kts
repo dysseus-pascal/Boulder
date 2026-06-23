@@ -185,6 +185,7 @@ kotlin {
                 implementation(libs.coredevices.haversine)
                 implementation(project(":cactus"))
                 implementation(project(":libindex"))
+                implementation(project(":libpebble3"))
                 implementation(libs.settings)
                 implementation(libs.kable)
                 implementation(libs.uri)

@@ -99,7 +99,10 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
 import coredevices.ui.dismissKeyboardOnTapOutside
 import coredevices.ui.SignInDialog
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
 import coredevices.util.Platform
+import coredevices.util.granted
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
@@ -1423,6 +1426,13 @@ fun AuthorizedIntegrations(preferences: Preferences) {
 
     val platform = koinInject<Platform>()
 
+    // Calendar (Built-in only): the dot reflects whether calendar permission is granted; tapping
+    // it requests the permission. Permission is the "connection" for the built-in calendar account.
+    val permissionRequester = koinInject<PermissionRequester>()
+    val uiContext = rememberUiContext()
+    val scope = rememberCoroutineScope()
+    val calendarGranted by permissionRequester.granted(Permission.Calendar).collectAsState(false)
+
     Column(modifier = Modifier.fillMaxWidth()) {
         IntegrationItem(
             title = "Built-in",
@@ -1431,7 +1441,15 @@ fun AuthorizedIntegrations(preferences: Preferences) {
             selectedReminderProvider = currentReminderProvider == ReminderProvider.BuiltIn,
             selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
             onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
-            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) },
+            hasCalendar = true,
+            calendarGranted = calendarGranted,
+            onToggleCalendar = {
+                if (!calendarGranted) {
+                    val ctx = uiContext ?: return@IntegrationItem
+                    scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
+                }
+            },
         )
         if (platform.isIOS) {
             IntegrationItem(
@@ -1591,6 +1609,9 @@ fun IntegrationItem(
     onSelectReminderProvider: () -> Unit,
     onSelectNoteProvider: () -> Unit,
     onConfigure: (() -> Unit)? = null,
+    hasCalendar: Boolean = false,
+    calendarGranted: Boolean = false,
+    onToggleCalendar: () -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1619,6 +1640,14 @@ fun IntegrationItem(
             visible = hasNotes,
             selected = selectedNoteProvider,
             onSelect = onSelectNoteProvider
+        )
+        Spacer(Modifier.width(16.dp))
+        // Calendar (Built-in only): the dot reflects calendar permission; tapping requests it.
+        OutputTypeOption(
+            label = "Calendar",
+            visible = hasCalendar,
+            selected = calendarGranted,
+            onSelect = onToggleCalendar
         )
     }
 }

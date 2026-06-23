@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,10 +60,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +97,7 @@ import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
+import coredevices.ui.dismissKeyboardOnTapOutside
 import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
@@ -862,9 +867,11 @@ fun BackupDialog(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
             title = { Text("Delete Backup") },
             text = {
                 Column {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "This will permanently delete all your cloud backup data. This cannot be undone.",
                         color = MaterialTheme.colorScheme.error
@@ -876,7 +883,9 @@ fun BackupDialog(
                         value = deleteInput,
                         onValueChange = { deleteInput = it },
                         singleLine = true,
-                        placeholder = { Text("delete") }
+                        placeholder = { Text("delete") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                     )
                 }
             },
@@ -902,9 +911,11 @@ fun BackupDialog(
     if (showDeleteLocalConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteLocalConfirm = false; deleteLocalInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
             title = { Text("Delete Local Feed") },
             text = {
                 Column {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "This will delete all recordings from the local feed on this device. Cloud backup is not affected. You can restore from cloud with Sync or from a backup zip with Import.",
                         color = MaterialTheme.colorScheme.error
@@ -916,7 +927,9 @@ fun BackupDialog(
                         value = deleteLocalInput,
                         onValueChange = { deleteLocalInput = it },
                         singleLine = true,
-                        placeholder = { Text("delete") }
+                        placeholder = { Text("delete") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                     )
                 }
             },
@@ -1265,6 +1278,7 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
 
     AlertDialog(
         onDismissRequest = { viewModel.cancelEncryptionSetup() },
+        modifier = Modifier.dismissKeyboardOnTapOutside(),
         title = { Text("Set up backup encryption") },
         text = {
             when (val s = current) {
@@ -1316,6 +1330,7 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                 is EncryptionSetupState.PasteKey -> Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "Your key was generated on another device and isn't in this " +
                             "password manager. Paste your backup key, or import the " +
@@ -1326,6 +1341,8 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                         onValueChange = { pasted = it },
                         singleLine = true,
                         label = { Text("Encryption key") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.fillMaxWidth()
                     )
                     TextButton(

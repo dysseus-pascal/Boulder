@@ -45,56 +45,56 @@ fun M3Dialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-                    .then(modifier),
-                shape = MaterialTheme.shapes.extraLarge,
-            ) {
-                Column {
-                    Column(
+                    .then(modifier)
+                .dismissKeyboardOnTapOutside(),
+            shape = MaterialTheme.shapes.extraLarge,
+        ) {
+            Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = if (icon != null) {
+                        Alignment.CenterHorizontally
+                    } else {
+                        Alignment.Start
+                    },
+                ) {
+                    if (icon != null) {
+                        icon()
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    if (title != null) {
+                        CompositionLocalProvider(
+                            LocalTextStyle provides MaterialTheme.typography.titleLarge,
+                        ) {
+                            title()
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    CompositionLocalProvider(
+                        LocalTextStyle provides MaterialTheme.typography.bodyMedium,
+                    ) {
+                        contents()
+                    }
+                }
+                if (buttons != null) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = if (icon != null) {
-                            Alignment.CenterHorizontally
-                        } else {
-                            Alignment.Start
-                        },
+                            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
                     ) {
-                        if (icon != null) {
-                            icon()
-                            Spacer(Modifier.height(16.dp))
-                        }
-                        if (title != null) {
-                            CompositionLocalProvider(
-                                LocalTextStyle provides MaterialTheme.typography.titleLarge,
-                            ) {
-                                title()
-                            }
-                            Spacer(Modifier.height(16.dp))
-                        }
-                        CompositionLocalProvider(
-                            LocalTextStyle provides MaterialTheme.typography.bodyMedium,
-                        ) {
-                            contents()
-                        }
+                        buttons()
                     }
-                    if (buttons != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
-                        ) {
-                            buttons()
-                        }
-                    } else if (verticalButtons != null) {
-                        Column(
-                            modifier = Modifier
-                                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
-                                .align(Alignment.End),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            verticalButtons()
-                        }
+                } else if (verticalButtons != null) {
+                    Column(
+                        modifier = Modifier
+                            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
+                            .align(Alignment.End),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        verticalButtons()}
                     }
                 }
             }

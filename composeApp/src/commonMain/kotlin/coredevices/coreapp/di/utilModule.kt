@@ -33,7 +33,7 @@ import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.TranscriptionService
-import coredevices.util.transcription.WisprFlowTranscriptionService
+import coredevices.util.transcription.WisprFlowRESTTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -106,7 +106,7 @@ val utilModule = module {
     single {
         HybridTranscriptionService(get(), get(), get(), get(), get())
     } bind TranscriptionService::class
-    singleOf(::WisprFlowTranscriptionService)
+    singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get()) }
     singleOf(::HealthSyncTracker)

@@ -30,7 +30,7 @@ import kotlin.time.Instant
 class HybridTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val cactus: CactusTranscriptionService,
-    private val wisprFlow: WisprFlowTranscriptionService,
+    private val wisprFlow: WisprFlowRESTTranscriptionService,
     private val kirinki: KirinkiTranscriptionService,
     private val analytics: CoreAnalytics,
 ) : TranscriptionService {

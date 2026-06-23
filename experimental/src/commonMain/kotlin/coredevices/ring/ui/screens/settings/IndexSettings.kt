@@ -1664,8 +1664,8 @@ private fun OutputTypeOption(
     selected: Boolean,
     onSelect: () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = if (visible) Modifier else Modifier.alpha(0f)
     ) {
         RadioButton(

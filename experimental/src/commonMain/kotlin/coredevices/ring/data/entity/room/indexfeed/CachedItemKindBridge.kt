@@ -43,6 +43,9 @@ val ItemMetadata.kind: String get() = when (this) {
 val CachedItem.kind: String get() = metadata.kind
 val ItemDocument.kind: String get() = metadata.kind
 
+val CachedItem.displayTitle: String get() = if (locked) "🔒 Encrypted" else title
+val CachedList.displayTitle: String get() = if (locked) "🔒 Encrypted" else title
+
 /**
  * Re-serialise the metadata to a flat JSON object the UI can read by key.
  * The kotlinx.serialization sealed-class encoding adds a `"type"` discriminator

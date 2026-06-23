@@ -68,8 +68,8 @@ class ItemRepository(
         cacheDao.upsertAll(items.map { (id, doc) -> CachedItem.fromDocument(id, doc) })
     }
 
-    suspend fun upsertLocal(id: String, doc: ItemDocument) {
-        cacheDao.upsert(CachedItem.fromDocument(id, doc))
+    suspend fun upsertLocal(id: String, doc: ItemDocument, locked: Boolean = false) {
+        cacheDao.upsert(CachedItem.fromDocument(id, doc, locked))
     }
 
     suspend fun upsertAllLocal(items: List<Pair<String, ItemDocument>>) {

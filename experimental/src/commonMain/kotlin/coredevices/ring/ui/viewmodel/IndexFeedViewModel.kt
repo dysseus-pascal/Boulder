@@ -149,6 +149,7 @@ class IndexFeedViewModel(
         val s = state.value
         val item = (s.todosPreview + s.notesLists.flatMap { it.items } + s.answersPreview)
             .firstOrNull { it.firestoreId == itemId } ?: return
+        if (item.locked) return // can't toggle a row we can't read
         val wasDone = item.done
         if (!wasDone) {
             // Mark animating BEFORE the DB write so the upcoming flow
@@ -341,6 +342,9 @@ class IndexFeedViewModel(
             val itemsByList = items
                 .asSequence()
                 .filter { !it.deleted }
+                // Encrypted-without-key rows have no readable title — keep them
+                // out of the notes grid entirely rather than showing placeholders.
+                .filter { !it.locked }
                 // Notes lists hold both `note` and `checklist` items —
                 // a checklist is just a note with a tickable checkbox,
                 // and the user can convert between the two via the
@@ -414,6 +418,7 @@ class IndexFeedViewModel(
         /** Pretty-print the primary action chip for a recording's first
          *  extracted item. Mirrors the prototype's `objectChip`. */
         internal fun chipLabel(item: CachedItem, lists: List<CachedList>): String {
+            if (item.locked) return "🔒 Encrypted"
             val fields = item.fields()
             fun strField(key: String): String? = (fields[key] as? JsonPrimitive)?.contentOrNull
             return when (item.kind) {

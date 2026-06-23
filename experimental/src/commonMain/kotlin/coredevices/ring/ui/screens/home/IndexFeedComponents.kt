@@ -94,6 +94,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
+import coredevices.ring.data.entity.room.indexfeed.displayTitle
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
@@ -488,15 +489,21 @@ internal fun TaskRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                // Locked rows can't be opened/edited (no key to decrypt) — a
+                // write would clobber the cloud ciphertext with cleartext.
+                .let { if (task.locked) it else it.clickable { onClick() } }
                 .padding(horizontal = 22.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            TodoCheckCircle(
-                done = task.done,
-                onToggle = onToggle,
-                modifier = Modifier.padding(top = 1.dp),
-            )
+            if (task.locked) {
+                Text("🔒", fontSize = 15.sp, modifier = Modifier.padding(top = 1.dp))
+            } else {
+                TodoCheckCircle(
+                    done = task.done,
+                    onToggle = onToggle,
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
             Spacer(Modifier.width(12.dp))
             // Strike-through + faded look while the row lingers post-toggle
             // (the row is dropped from the list ~600 ms later by the
@@ -513,7 +520,7 @@ internal fun TaskRow(
                     .graphicsLayer { alpha = rowAlpha },
             ) {
                 Text(
-                    task.title,
+                    task.displayTitle,
                     color = colors.onSurface,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
@@ -740,16 +747,20 @@ fun NoteListCard(
             .clip(RoundedCornerShape(14.dp))
             .background(colors.surfaceContainerLow)
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            // A locked list can't be opened — its title and items are encrypted.
+            .let { if (list.locked) it else it.clickable { onClick() } }
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon.isNotEmpty()) {
+            if (list.locked) {
+                Text(text = "🔒", fontSize = 16.sp)
+                Spacer(Modifier.width(6.dp))
+            } else if (icon.isNotEmpty()) {
                 Text(text = icon, fontSize = 16.sp)
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                list.title.ifBlank { "List" },
+                list.displayTitle.ifBlank { "List" },
                 color = colors.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,

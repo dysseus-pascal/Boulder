@@ -701,11 +701,14 @@ private fun AssistantTurn(
                         when {
                             // Prefer the saved object's chip (navigable, richly
                             // labelled) when the tool call produced one.
+                            // Locked (encrypted, no key): chipLabel already
+                            // yields "🔒 Encrypted"; drop the glyph so the lock
+                            // isn't doubled, and make it non-navigable.
                             item != null -> ActionChip(
-                                glyph = chipGlyph(item.kind),
+                                glyph = if (item.locked) "" else chipGlyph(item.kind),
                                 label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                     .chipLabel(item, allLists).take(64),
-                                onClick = { onOpenObject(item.firestoreId) },
+                                onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
                             )
                             // Otherwise collapse the call + its result into one
                             // chip showing the result.
@@ -859,10 +862,10 @@ private fun TrailingItemChips(
                 ) {
                     chipItems.forEach { item ->
                         ActionChip(
-                            glyph = chipGlyph(item.kind),
+                            glyph = if (item.locked) "" else chipGlyph(item.kind),
                             label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                 .chipLabel(item, allLists).take(64),
-                            onClick = { onOpenObject(item.firestoreId) },
+                            onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
                         )
                     }
                 }

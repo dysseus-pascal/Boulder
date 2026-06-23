@@ -37,6 +37,7 @@ data class ItemDocument(
     val sourceToolCallId: String? = null,
     val metadata: ItemMetadata = ItemMetadata.Note,
     val deleted: Boolean = false,
+    val encrypted: EncryptedEnvelope? = null,
 ) {
     @Serializable
     sealed interface ItemMetadata {

@@ -96,7 +96,7 @@ class ObjectDetailViewModel(
                         listSort,
                         showDone,
                     ) { lists, children, q, sort, done ->
-                        val allChildren = children.filter { !it.deleted }
+                        val allChildren = children.filter { !it.deleted && !it.locked }
                         UiState.ListView(
                             list = list,
                             allLists = lists.filter { !it.deleted },

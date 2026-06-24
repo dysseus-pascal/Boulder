@@ -6,6 +6,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -39,7 +40,10 @@ class SessionContextDispatchTest {
             integrations = listOf(BuiltInMcpIntegration("builtin", listOf(tool))),
             scope = CoroutineScope(Dispatchers.Default)
         )
-        val context = SessionContext(timeBase = Instant.fromEpochMilliseconds(1234567890L))
+        val context = SessionContext(
+            timeBase = Instant.fromEpochMilliseconds(1234567890L),
+            userMessageText = CompletableDeferred("Hello, world!"),
+        )
         session.callTool("builtin", "capture", emptyMap(), context)
         assertEquals(context, tool.receivedContext)
     }

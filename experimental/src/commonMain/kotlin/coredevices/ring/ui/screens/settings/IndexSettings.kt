@@ -403,9 +403,9 @@ fun IndexSettings(coreNav: CoreNav) {
             item {
                 ListItem(
                     modifier = Modifier.clickable(onClick = viewModel::toggleCactusAgent),
-                    headlineContent = { Text("Use Cactus Agent") },
+                    headlineContent = { Text("Use Local LLM") },
                     supportingContent = {
-                        Text("Experimental agent with enhanced capabilities")
+                        Text("Experimental! Less accurate than cloud")
                     },
                     trailingContent = {
                         Switch(

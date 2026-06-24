@@ -31,6 +31,7 @@ import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.ring.RingDelegate
+import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.ui.components.QrPhotoPickResult
@@ -102,6 +103,7 @@ class SettingsViewModel(
     private val platform: coredevices.util.Platform,
     private val mcpSandboxRepository: McpSandboxRepository,
     private val ringDelegate: RingDelegate,
+    private val cactusModelProvider: CactusModelProvider,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -209,7 +211,9 @@ class SettingsViewModel(
     fun toggleCactusAgent() {
         viewModelScope.launch {
             if (!_useCactusAgent.value) {
-                _showModelDownloadDialog.value = ModelType.Agent(CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+                // Trigger LM model extraction, should be already integrated into assets so no DL
+                cactusModelProvider.getLMModelPath()
+                preferences.setUseCactusAgent(true)
             } else {
                 preferences.setUseCactusAgent(false)
             }

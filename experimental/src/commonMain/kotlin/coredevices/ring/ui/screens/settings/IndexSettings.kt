@@ -120,7 +120,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val useCactusAgent by viewModel.useCactusAgent.collectAsState()
-    val showModelDialog by viewModel.showModelDownloadDialog.collectAsState()
     val showMusicControlDialog by viewModel.showMusicControlDialog.collectAsState()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
@@ -147,14 +146,6 @@ fun IndexSettings(coreNav: CoreNav) {
 
     if (showSignInDialog) {
         SignInDialog(onDismiss = { showSignInDialog = false })
-    }
-    if (showModelDialog != null) {
-        ModelDownloadDialog(
-            onDismissRequest = { success ->
-                viewModel.onModelDownloadDialogDismissed(success)
-            },
-            models = setOf(showModelDialog!!)
-        )
     }
     if (showContactsDialog && platform.isAndroid) {
         SettingsBeeperContactsDialog(

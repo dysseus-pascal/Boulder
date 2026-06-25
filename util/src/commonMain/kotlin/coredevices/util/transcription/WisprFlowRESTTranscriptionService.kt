@@ -162,7 +162,9 @@ class WisprFlowRESTTranscriptionService(
                 modelUsed = MODEL,
             )
         }
-        return response.body<WisprTranscribeResponse>().text
+        val body = response.body<WisprTranscribeResponse>()
+        logger.d { "WisprFlow request id: ${body.id}" }
+        return body.text
     }
 
     private suspend fun sendRequest(request: WisprTranscribeRequest, accessToken: String): HttpResponse {

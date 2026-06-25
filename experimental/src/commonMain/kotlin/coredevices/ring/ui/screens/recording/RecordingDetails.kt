@@ -688,6 +688,11 @@ private fun AssistantTurn(
             if (replyText.isNotBlank()) ReplyBubble(replyText)
             answerItems.forEach { ReplyBubble(it.body) }
             if (chipCalls.isNotEmpty()) {
+                chipCalls.map { toolResultsByCallId[it.id] }.filterIsInstance<SemanticResult.GenericFailure>().forEach { result ->
+                    result.userErrorMessage?.let {
+                        ReplyBubble(it)
+                    }
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),

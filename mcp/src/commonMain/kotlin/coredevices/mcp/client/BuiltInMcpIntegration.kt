@@ -9,7 +9,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.serialization.json.JsonElement
 
-open class BuiltInMcpIntegration(override val name: String, private val tools: List<McpTool>) : McpIntegration {
+open class BuiltInMcpIntegration(override val name: String, protected val tools: List<McpTool>) : McpIntegration {
     private val toolMap: Map<String, McpTool> = tools.associateBy { it.definition.name }
     override suspend fun resetCache() {
         // no-op

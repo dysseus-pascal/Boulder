@@ -115,12 +115,14 @@ class RecordingProcessor(
         audioStreamFlow: Flow<ByteArray>,
         sampleRate: Int,
         language: STTLanguage,
-        encoding: AudioEncoding
+        encoding: AudioEncoding,
+        dictionaryContext: List<String>? = null,
     ) = transcriptionService.transcribe(
         audioStreamFlow,
         sampleRate,
         language = language,
         encoding = encoding,
+        dictionaryContext = dictionaryContext
     ).flowOn(Dispatchers.IO)
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {
@@ -189,7 +191,8 @@ class RecordingProcessor(
     suspend fun transcribe(
         audioSource: Source,
         sampleRate: Int,
-        encoding: AudioEncoding = AudioEncoding.PCM_16BIT
+        encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
+        dictionaryContext: List<String>? = null
     ): Flow<TranscriptionSessionStatus> {
         val audioStreamFlow = flow {
             audioSource.use {
@@ -210,6 +213,7 @@ class RecordingProcessor(
             audioStreamFlow = audioStreamFlow,
             sampleRate = sampleRate,
             encoding = encoding,
+            dictionaryContext = dictionaryContext,
             language = STTLanguage.fromCodeOrAutomatic(coreConfigFlow.value.sttConfig.spokenLanguage),
         )
     }

@@ -12,6 +12,7 @@ import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.database.Preferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
@@ -62,6 +63,7 @@ open class DefaultRecordingOperation(
     private val recordingProcessor: RecordingProcessor by inject()
     private val ringTransferRepository: RingTransferRepository by inject()
     private val recordingBackgroundScope: RecordingBackgroundScope by inject()
+    private val prefs: Preferences by inject()
     private var lastNotEnoughMemoryNotif: Instant? = null
 
     fun sendNotEnoughMemoryNotification() {
@@ -72,6 +74,14 @@ open class DefaultRecordingOperation(
                 body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
             }
             lastNotEnoughMemoryNotif = now
+        }
+    }
+
+    private suspend fun buildDictionaryContext(): List<String> = buildList {
+        val approvedContacts = prefs.approvedBeeperContacts.value
+        approvedContacts.forEach {
+            add(it.name)
+            it.nickname?.let { nick -> add(nick) }
         }
     }
 
@@ -147,6 +157,7 @@ open class DefaultRecordingOperation(
                     recordingEntryId = entryId,
                     transferId = transferId ?: -1
                 ))
+                val dictionaryContext = buildDictionaryContext()
                 // Bound the actual collection (the blocking transcription), converting a timeout
                 // into a clean non-cancellation exception so it classifies as a normal failure and
                 // never propagates a CancellationException into the queue scheduler. The native
@@ -155,6 +166,7 @@ open class DefaultRecordingOperation(
                     recordingProcessor.transcribe(
                         audioSource = source,
                         sampleRate = meta.cachedMetadata.sampleRate,
+                        dictionaryContext = dictionaryContext,
                     ).flowOn(Dispatchers.IO)
                         .first { it is TranscriptionSessionStatus.Transcription } as TranscriptionSessionStatus.Transcription
                 } ?: throw TranscriptionException.TranscriptionServiceError(

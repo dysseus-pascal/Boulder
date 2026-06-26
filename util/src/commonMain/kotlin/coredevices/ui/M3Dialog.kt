@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.LocalTextStyle
@@ -34,6 +36,10 @@ fun M3Dialog(
     buttons: (@Composable RowScope.() -> Unit)? = null,
     verticalButtons: (@Composable ColumnScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    // When the content can be taller than the space left above the soft keyboard
+    // (e.g. a form with many fields), set this so the content area scrolls and the
+    // button row stays pinned and reachable instead of being pushed off-screen.
+    scrollableContent: Boolean = false,
     contents: @Composable () -> Unit,
 ) {
     Dialog(
@@ -53,6 +59,17 @@ fun M3Dialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(
+                            if (scrollableContent) {
+                                // Cap the content to the available height and scroll it,
+                                // so the pinned button row below stays on screen.
+                                Modifier
+                                    .weight(1f, fill = false)
+                                    .verticalScroll(rememberScrollState())
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(24.dp),
                     horizontalAlignment = if (icon != null) {
                         Alignment.CenterHorizontally

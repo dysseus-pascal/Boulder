@@ -261,6 +261,7 @@ private fun HttpServerEditDialog(
     var showAuthSection by remember { mutableStateOf(initialServer?.authHeader?.isNotBlank() == true) }
     var cachedTitle by remember { mutableStateOf(initialServer?.cachedTitle ?: "") }
     var isFetchingTitle by remember { mutableStateOf(false) }
+    var serverContactable by remember { mutableStateOf<Boolean?>(null) }
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
@@ -271,6 +272,7 @@ private fun HttpServerEditDialog(
         if (url.isBlank()) {
             cachedTitle = ""
             availablePrompts = emptyList()
+            serverContactable = null
             return@LaunchedEffect
         }
         delay(500) // Debounce
@@ -288,20 +290,25 @@ private fun HttpServerEditDialog(
             cachedTitle = integration.title ?: ""
             availablePrompts = integration.listPrompts()
             integration.close()
+            serverContactable = true
         } catch (e: Exception) {
             Logger.withTag("HttpServerEditDialog").w("Failed to fetch MCP server title", e)
             cachedTitle = ""
             availablePrompts = emptyList()
+            serverContactable = false
         } finally {
             isFetchingTitle = false
         }
     }
 
     val isEditing = initialServer != null
-    val canSave = name.isNotBlank() && url.isNotBlank() && cachedTitle.isNotBlank()
+    // Name and URL are required, and the server must be contactable so we don't save a
+    // broken entry.
+    val canSave = name.isNotBlank() && url.isNotBlank() && serverContactable == true
 
     M3Dialog(
         onDismissRequest = onDismiss,
+        scrollableContent = true,
         title = {
             Text(if (isEditing) "Edit HTTP MCP Server" else "Add HTTP MCP Server")
         },
@@ -355,12 +362,20 @@ private fun HttpServerEditDialog(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("URL") },
-                supportingText = if (isFetchingTitle) {
-                    { Text("Fetching server info...") }
-                } else if (cachedTitle.isNotBlank()) {
-                    { Text("Server: $cachedTitle") }
-                } else {
-                    { Text("") }
+                isError = serverContactable == false,
+                supportingText = when {
+                    isFetchingTitle -> {
+                        { Text("Fetching server info...") }
+                    }
+                    serverContactable == false -> {
+                        { Text("Server not contactable") }
+                    }
+                    cachedTitle.isNotBlank() -> {
+                        { Text("Server: $cachedTitle") }
+                    }
+                    else -> {
+                        { Text("") }
+                    }
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -519,7 +534,8 @@ fun McpServerEntryItem(
             Text(
                 when (entry) {
                     is McpServerEntry.BuiltinMcpEntry -> entry.builtinMcpName
-                    is McpServerEntry.HttpServerEntry -> entry.server.cachedTitle
+                    is McpServerEntry.HttpServerEntry ->
+                        entry.server.cachedTitle.ifBlank { entry.server.name }
                 }
             )
         },

@@ -1204,6 +1204,37 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAtBareHourParsesAsAmbiguousTime() {
+        // "at 5" is unambiguously a time. The hour is taken as-is (am); the caller resolves it to
+        // the next upcoming 5 o'clock using amPmExplicit.
+        val result = parser.parse("at 5")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(5, 0), result.time)
+        assertEquals(false, result.amPmExplicit)
+    }
+
+    @Test
+    fun testAtBareHour24Hour() {
+        // A bare hour above 12 is treated as 24-hour, no am/pm ambiguity.
+        val result = parser.parse("at 17")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(17, 0), result.time)
+    }
+
+    @Test
+    fun testAtBareHourOutOfRangeReturnsNull() {
+        val result = parser.parse("at 25")
+        assertNull(result)
+    }
+
+    @Test
+    fun testAtBareHourWithUnitIsNotATime() {
+        // "at 5 minutes" must not be misread as the time 5:00.
+        val result = parser.parse("at 5 minutes")
+        assertNull(result)
+    }
+
+    @Test
     fun testHourOutOfRange13pm() {
         // 13pm is ambiguous but parser treats the pm as redundant, resulting in 13:00
         val result = parser.parse("at 13pm")

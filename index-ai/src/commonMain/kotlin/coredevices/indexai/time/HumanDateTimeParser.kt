@@ -245,7 +245,9 @@ class HumanDateTimeParser(
     private fun parseAbsoluteTime(input: String): InterpretedDateTime.AbsoluteTime? {
         atTimePattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
-            val time = parseTimeString(timeStr) ?: return null
+            // An explicit "at" makes a bare hour like "at 5" unambiguously a time, so allow it
+            // here. amPmExplicit stays false so the caller resolves it to the next 5 (am/pm).
+            val time = parseTimeString(timeStr, allowBareHour = true) ?: return null
             return InterpretedDateTime.AbsoluteTime(time, amPmExplicit = amPmPattern.containsMatchIn(timeStr))
         }
 
@@ -303,7 +305,7 @@ class HumanDateTimeParser(
         }
     }
 
-    private fun parseTimeString(timeStr: String): LocalTime? {
+    private fun parseTimeString(timeStr: String, allowBareHour: Boolean = false): LocalTime? {
         val cleaned = timeStr.trim().lowercase()
             .replace(".", "")
             .replace(" ", "")
@@ -312,17 +314,24 @@ class HumanDateTimeParser(
             val hour = match.groupValues[1].toIntOrNull() ?: return null
             val minute = match.groupValues[2].takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 0
             val amPm = match.groupValues[3].takeIf { it.isNotEmpty() }
+            val hasMinutes = match.groupValues[2].isNotEmpty()
 
             if (amPm != null) {
                 val adjustedHour = adjustHour(hour, isPm = amPm == "pm")
                 if (adjustedHour !in 0..23 || minute !in 0..59) return null
                 return LocalTime(adjustedHour, minute)
-            } else {
-                // 24-hour format — requires colon (minute must be present)
-                if (match.groupValues[2].isEmpty()) return null
+            }
+
+            if (hasMinutes) {
+                // 24-hour format, e.g. "15:00"
                 if (hour !in 0..23 || minute !in 0..59) return null
                 return LocalTime(hour, minute)
             }
+
+            // Bare hour, no minutes and no am/pm (e.g. "5"). Ambiguous in isolation, so only
+            // honoured when the caller signals an explicit time context (like "at 5").
+            if (!allowBareHour || hour !in 0..23) return null
+            return LocalTime(hour, 0)
         }
 
         return null

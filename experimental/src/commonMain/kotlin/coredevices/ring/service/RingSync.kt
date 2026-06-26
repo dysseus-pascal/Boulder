@@ -609,7 +609,7 @@ class RingSync(
                                                                     }
                                                                 },
                                                         )
-                                                        if (audioDuration >= 1.5) {
+                                                        if (audioDuration >= 1.0) {
                                                             withContext(Dispatchers.IO) {
                                                                 ringTransferRepository.updateTransferInfo(
                                                                     transfer.id,

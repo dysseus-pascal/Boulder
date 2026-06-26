@@ -849,9 +849,10 @@ internal fun AnswerCard(answer: CachedItem, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (answer.body.isNotBlank()) {
+        val sanitizedBody = answer.body.replace(Regex("<[^>]*>"), "").trim()
+        if (sanitizedBody.isNotBlank()) {
             Text(
-                answer.body,
+                sanitizedBody,
                 color = colors.onSurfaceVariant,
                 fontSize = 12.5.sp,
                 lineHeight = 17.5.sp,

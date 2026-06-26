@@ -740,6 +740,7 @@ private fun AssistantTurn(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ReplyBubble(text: String) {
+    val sanitized = text.replace(Regex("<[^>]*>"), "").trim()
     val colors = IndexTheme.colors
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -750,14 +751,14 @@ private fun ReplyBubble(text: String) {
             .combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(sanitized))
                     haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 },
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(
-            text,
+            sanitized,
             color = colors.onSurface,
             fontSize = 14.5.sp,
             lineHeight = 21.sp,

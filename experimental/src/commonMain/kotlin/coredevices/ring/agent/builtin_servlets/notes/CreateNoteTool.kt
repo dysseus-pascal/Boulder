@@ -50,7 +50,7 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
 
     companion object {
         const val TOOL_NAME = "create_note"
-        const val TOOL_DESCRIPTION = "Create a new note with the given user text"
+        const val TOOL_DESCRIPTION = "Save a note, idea, or thought for later. Use when the user wants to remember, jot down, or note something."
         private val logger = Logger.withTag("CreateNoteTool")
     }
 

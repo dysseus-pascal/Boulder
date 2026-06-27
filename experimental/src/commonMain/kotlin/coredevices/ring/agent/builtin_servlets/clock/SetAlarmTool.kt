@@ -49,7 +49,7 @@ class SetAlarmTool : BuiltInMcpTool(
     companion object {
         private val logger = Logger.withTag(SetAlarmTool::class.simpleName!!)
         const val TOOL_NAME = "set_alarm"
-        const val TOOL_DESCRIPTION = "Set an alarm for a specified time"
+        const val TOOL_DESCRIPTION = "Set an alarm for a specific clock time like 8am or 16:30."
     }
 
     @Serializable

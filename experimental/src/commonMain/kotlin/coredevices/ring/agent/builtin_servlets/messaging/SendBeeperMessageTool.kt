@@ -31,7 +31,7 @@ internal object SendBeeperMessageToolConstants {
                 "text" to JsonObject(
                     mapOf(
                         "type" to "string",
-                        "description" to "The instant message contents to be sent to the contact."
+                        "description" to "The instant message contents to be sent."
                     ).toJson()
                 )
             )
@@ -39,5 +39,5 @@ internal object SendBeeperMessageToolConstants {
         required = listOf("contact_name", "text")
     )
     val TOOL_NAME: String = "send_instant_message"
-    val TOOL_DESCRIPTION: String = "Sends an instant message to a specified contact."
+    val TOOL_DESCRIPTION: String = "Sends an instant message to a specified contact. Use when the user asks you to e.g. 'text', 'message', or 'send a message to' someone."
 }

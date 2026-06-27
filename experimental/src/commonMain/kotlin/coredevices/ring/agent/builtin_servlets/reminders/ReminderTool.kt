@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 class ReminderTool: BuiltInMcpTool(
     definition = Tool(
@@ -45,6 +46,12 @@ class ReminderTool: BuiltInMcpTool(
                             "description" to "If provided by the user, the duration from now to remind the user in human readable format, use English keywords e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
                         ).toJson()
                     ),
+                    "notification_hours_before" to JsonObject(
+                        mapOf(
+                            "type" to "number",
+                            "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
+                        ).toJson()
+                    ),
                     "message" to JsonObject(
                         mapOf(
                             "type" to "string",
@@ -63,7 +70,7 @@ class ReminderTool: BuiltInMcpTool(
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
-        const val TOOL_DESCRIPTION = "Create a reminder for the user at a specific time"
+        const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder or wants to be reminded at a specific time or date."
         private val logger = Logger.withTag("ReminderTool")
     }
 
@@ -71,6 +78,7 @@ class ReminderTool: BuiltInMcpTool(
     private data class RemindArgs(
         val date_time_human: String? = null,
         val duration_human: String? = null,
+        val notification_hours_before: Double? = null,
         val message: String
     )
 
@@ -192,9 +200,15 @@ class ReminderTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
+        // Lead time only makes sense alongside a reminder time; ignore otherwise.
+        val notifyBefore = instant?.let {
+            remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
+        }
+
         val reminder = reminderFactory.create(
             time = instant,
-            message = remindArgs.message
+            message = remindArgs.message,
+            notifyBefore = notifyBefore,
         )
         return try {
             val reminderId = reminder.schedule()
@@ -204,6 +218,7 @@ class ReminderTool: BuiltInMcpTool(
                     title = reminder.message,
                     deadline = reminder.time,
                     localReminderId = reminderId.toIntOrNull(),
+                    notifyBeforeMillis = reminder.notifyBefore?.inWholeMilliseconds,
                 )
             )
         } catch (e: Exception) {

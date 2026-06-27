@@ -1,5 +1,6 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 /**
@@ -8,12 +9,13 @@ import kotlin.time.Instant
  * than throwing at creation — `ReminderFactory.create()` is called outside callers' try/catch, and
  * an `Error` like `NotImplementedError` wouldn't be caught by their `catch (Exception)` anyway.
  */
-actual fun createTaskerReminder(time: Instant?, message: String): ListAssignableReminder =
-    DisabledTaskerReminder(time, message)
+actual fun createTaskerReminder(time: Instant?, message: String, notifyBefore: Duration?): ListAssignableReminder =
+    DisabledTaskerReminder(time, message, notifyBefore)
 
 private class DisabledTaskerReminder(
     override val time: Instant?,
     override val message: String,
+    override val notifyBefore: Duration? = null,
 ) : ListAssignableReminder {
     override val listTitle: String? = null
     override suspend fun schedule(): String = error("Tasker is Android-only")

@@ -32,7 +32,7 @@ class ItemFactory {
         toolCallId: String?,
     ): ItemDocument? = when (result) {
         is SemanticResult.TaskCreation ->
-            reminderItem(sourceRecordingId, createdAt, result.title, result.deadline, toolCallId, result.localReminderId)
+            reminderItem(sourceRecordingId, createdAt, result.title, result.deadline, toolCallId, result.localReminderId, result.notifyBeforeMillis)
         is SemanticResult.ListItemCreation ->
             noteItem(sourceRecordingId, createdAt, result.content, result.listUsed, toolCallId, result.resolvedListId)
         is SemanticResult.AlarmCreation ->
@@ -62,6 +62,7 @@ class ItemFactory {
         dueAt: Instant?,
         toolCallId: String?,
         localReminderId: Int? = null,
+        notifyBeforeMillis: Long? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
@@ -69,7 +70,12 @@ class ItemFactory {
         parents = listOf(LIST_TODOS_ID),
         recordingId = sourceRecordingId,
         toolCallId = toolCallId,
-        metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push", localReminderId = localReminderId),
+        metadata = ItemMetadata.Reminder(
+            repeat = "one_time",
+            notification = "push",
+            localReminderId = localReminderId,
+            notifyBeforeMillis = notifyBeforeMillis,
+        ),
     )
 
     private fun pickNoteList(listUsedHint: String?): String {

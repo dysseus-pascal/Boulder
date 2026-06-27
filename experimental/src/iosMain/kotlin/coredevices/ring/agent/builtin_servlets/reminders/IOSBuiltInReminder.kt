@@ -25,6 +25,8 @@ import platform.UserNotifications.UNUserNotificationCenter
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
@@ -34,7 +36,8 @@ import kotlin.time.Instant
  */
 class IOSBuiltInReminder(
     override val time: Instant?,
-    override val message: String
+    override val message: String,
+    override val notifyBefore: Duration? = null,
 ) : ListAssignableReminder, KoinComponent {
     private val db: RingDatabase by inject()
     private val notificationCenter = UNUserNotificationCenter.currentNotificationCenter()
@@ -43,7 +46,7 @@ class IOSBuiltInReminder(
     val reminderId: Int? get() = _reminderId
     override val listTitle: String? = null
 
-    private constructor(time: Instant?, message: String, reminderId: Int) : this(time, message) {
+    private constructor(time: Instant?, message: String, notifyBefore: Duration?, reminderId: Int) : this(time, message, notifyBefore) {
         _reminderId = reminderId
     }
 
@@ -62,37 +65,59 @@ class IOSBuiltInReminder(
         require(time == null || time > Clock.System.now()) { "Time must be in the future" }
         check(requestAuthorization()) { "Notification permission not granted" }
 
-        val id = db.localReminderDao().insertReminder(LocalReminderData(0, time, message)).toInt()
+        val id = db.localReminderDao().insertReminder(
+            LocalReminderData(0, time, message, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+        ).toInt()
         _reminderId = id
 
         time?.let { scheduledTime ->
-            val content = UNMutableNotificationContent().apply {
-                setTitle("Reminder")
-                setBody(message)
-                setSound(UNNotificationSound.defaultSound)
-                setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to id.toString()))
+            scheduleNotification(id, scheduledTime, notificationId(id), title = "Reminder")
+            // The early heads-up notification is only scheduled when its trigger time is still ahead.
+            notifyBefore?.let { lead ->
+                val preTime = scheduledTime - lead
+                if (preTime > Clock.System.now()) {
+                    scheduleNotification(id, preTime, preNotificationId(id), title = "Upcoming reminder")
+                }
             }
-            val components = NSCalendar.currentCalendar.components(
-                NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay
-                        or NSCalendarUnitHour or NSCalendarUnitMinute or NSCalendarUnitSecond,
-                fromDate = scheduledTime.toNSDate()
-            )
-            val trigger = UNCalendarNotificationTrigger.triggerWithDateMatchingComponents(components, repeats = false)
-            val request = UNNotificationRequest.requestWithIdentifier(notificationId(id), content, trigger)
-            val error = suspendCoroutine { continuation ->
-                notificationCenter.addNotificationRequest(request) { error -> continuation.resume(error) }
-            }
-            check(error == null) { "Failed to schedule reminder notification: ${error?.localizedDescription}" }
         }
         return id.toString()
     }
 
+    private suspend fun scheduleNotification(reminderId: Int, triggerTime: Instant, identifier: String, title: String) {
+        val content = UNMutableNotificationContent().apply {
+            setTitle(title)
+            setBody(message)
+            setSound(UNNotificationSound.defaultSound)
+            setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to reminderId.toString()))
+        }
+        val components = NSCalendar.currentCalendar.components(
+            NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay
+                    or NSCalendarUnitHour or NSCalendarUnitMinute or NSCalendarUnitSecond,
+            fromDate = triggerTime.toNSDate()
+        )
+        val trigger = UNCalendarNotificationTrigger.triggerWithDateMatchingComponents(components, repeats = false)
+        val request = UNNotificationRequest.requestWithIdentifier(identifier, content, trigger)
+        val error = suspendCoroutine { continuation ->
+            notificationCenter.addNotificationRequest(request) { error -> continuation.resume(error) }
+        }
+        check(error == null) { "Failed to schedule reminder notification: ${error?.localizedDescription}" }
+    }
+
     override suspend fun cancel() {
         val reminderId = _reminderId ?: return
-        notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(notificationId(reminderId)))
-        notificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(notificationId(reminderId)))
+        val identifiers = listOf(notificationId(reminderId), preNotificationId(reminderId))
+        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
+        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
         db.localReminderDao().deleteReminder(reminderId)
         _reminderId = null
+    }
+
+    override suspend fun cancelExtraNotification() {
+        val reminderId = _reminderId ?: return
+        val identifiers = listOf(preNotificationId(reminderId))
+        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
+        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        db.localReminderDao().clearNotifyBefore(reminderId)
     }
 
     override suspend fun scheduleToList(listName: String): String {
@@ -103,9 +128,10 @@ class IOSBuiltInReminder(
         private val logger = Logger.withTag("IOSBuiltInReminder")
 
         private fun notificationId(reminderId: Int) = "ring-reminder-$reminderId"
+        private fun preNotificationId(reminderId: Int) = "ring-reminder-pre-$reminderId"
 
         fun fromData(data: LocalReminderData): IOSBuiltInReminder {
-            return IOSBuiltInReminder(data.time, data.message, data.id)
+            return IOSBuiltInReminder(data.time, data.message, data.notifyBeforeMillis?.milliseconds, data.id)
         }
     }
 }

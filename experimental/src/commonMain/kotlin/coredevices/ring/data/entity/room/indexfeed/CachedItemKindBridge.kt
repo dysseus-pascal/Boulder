@@ -56,6 +56,7 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
         is ItemMetadata.Reminder -> buildJsonObject {
             put("repeat", repeat)
             put("notification", notification)
+            notifyBeforeMillis?.let { put("notifyBeforeMillis", it) }
         }
         is ItemMetadata.Scheduled -> buildJsonObject {
             put("fireKind", when (fireKind) {

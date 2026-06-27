@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
@@ -47,6 +48,30 @@ class ItemFactoryCreateFromSemanticResultTest {
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.Reminder)
         assertNull(meta.localReminderId)
+    }
+
+    @Test
+    fun taskCreationCarriesNotifyBeforeIntoReminderMetadata() {
+        val due = createdAt + 5.minutes
+        val item = map(
+            SemanticResult.TaskCreation(
+                title = "Leave for airport",
+                deadline = due,
+                localReminderId = 7,
+                notifyBeforeMillis = 2.hours.inWholeMilliseconds,
+            )
+        )!!
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertEquals(2.hours.inWholeMilliseconds, meta.notifyBeforeMillis)
+    }
+
+    @Test
+    fun taskCreationWithoutNotifyBeforeLeavesItNull() {
+        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = createdAt + 5.minutes))!!
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertNull(meta.notifyBeforeMillis)
     }
 
     @Test

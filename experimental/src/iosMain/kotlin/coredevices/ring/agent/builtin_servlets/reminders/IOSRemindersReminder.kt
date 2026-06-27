@@ -24,11 +24,14 @@ import platform.Foundation.NSError
 import platform.UIKit.UIDevice
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 class IOSRemindersReminder(
     override val time: Instant?,
-    override val message: String
+    override val message: String,
+    override val notifyBefore: Duration? = null,
 ) : ListAssignableReminder, KoinComponent {
     private val db: RingDatabase by inject()
 
@@ -38,7 +41,7 @@ class IOSRemindersReminder(
     override val listTitle: String?
         get() = _listTitle
 
-    private constructor(time: Instant?, message: String, reminderId: Int) : this(time, message) {
+    private constructor(time: Instant?, message: String, notifyBefore: Duration?, reminderId: Int) : this(time, message, notifyBefore) {
         _reminderId = reminderId
     }
 
@@ -72,6 +75,10 @@ class IOSRemindersReminder(
                 fromDate = date
             )
             ekReminder.addAlarm(EKAlarm.alarmWithAbsoluteDate(date))
+            // Extra early heads-up alarm, expressed as a negative offset from the due date.
+            notifyBefore?.let { lead ->
+                ekReminder.addAlarm(EKAlarm.alarmWithRelativeOffset(-lead.inWholeSeconds.toDouble()))
+            }
         }
 
         check(eventStore.saveReminder(ekReminder, commit = true, error = null)) {
@@ -112,7 +119,7 @@ class IOSRemindersReminder(
         private val logger = Logger.withTag("IOSRemindersReminder")
 
         fun fromData(data: LocalReminderData): IOSRemindersReminder {
-            return IOSRemindersReminder(data.time, data.message, data.id)
+            return IOSRemindersReminder(data.time, data.message, data.notifyBeforeMillis?.milliseconds, data.id)
         }
     }
 }

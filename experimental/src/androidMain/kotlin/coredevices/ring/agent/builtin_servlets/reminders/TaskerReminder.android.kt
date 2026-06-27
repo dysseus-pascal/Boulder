@@ -1,20 +1,23 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
 import coredevices.ring.tasker.TaskerEndpoint
+import kotlin.time.Duration
 import kotlin.time.Instant
 
-actual fun createTaskerReminder(time: Instant?, message: String): ListAssignableReminder =
-    AndroidTaskerReminder(time, message)
+actual fun createTaskerReminder(time: Instant?, message: String, notifyBefore: Duration?): ListAssignableReminder =
+    AndroidTaskerReminder(time, message, notifyBefore)
 
 /**
  * Routes a reminder to Tasker via [TaskerEndpoint]. The reminder text is sent as the payload with a
- * `messageType=reminder` extra, plus the optional `deadline` and (when assigned) `list` so the
- * Tasker side can branch on them. Tasker has no native list concept, so [scheduleToList] simply
- * forwards the list name as an extra.
+ * `messageType=reminder` extra, plus the optional `deadline`, `notify_before_seconds` and (when
+ * assigned) `list` so the Tasker side can branch on them. Tasker has no native list concept, so
+ * [scheduleToList] simply forwards the list name as an extra; honouring the lead time is up to the
+ * user's Tasker profile.
  */
 class AndroidTaskerReminder(
     override val time: Instant?,
     override val message: String,
+    override val notifyBefore: Duration? = null,
 ) : ListAssignableReminder {
     private var _listTitle: String? = null
     override val listTitle: String?
@@ -22,8 +25,13 @@ class AndroidTaskerReminder(
 
     // The due date goes to Tasker as a UTC timestamp: kotlin.time.Instant.toString() renders the
     // absolute due-time in ISO-8601 UTC (e.g. 2026-06-18T16:00:00Z), regardless of local timezone.
-    private fun deadlineExtras(): Map<String, String> =
-        time?.let { mapOf("deadline" to it.toString()) } ?: emptyMap()
+    // The lead time (when set alongside a due date) is passed as whole seconds.
+    private fun deadlineExtras(): Map<String, String> = buildMap {
+        time?.let {
+            put("deadline", it.toString())
+            notifyBefore?.let { lead -> put("notify_before_seconds", lead.inWholeSeconds.toString()) }
+        }
+    }
 
     override suspend fun schedule(): String =
         TaskerEndpoint.send(message, messageType = "reminder", extras = deadlineExtras())

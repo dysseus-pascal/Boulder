@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.ring.agent.builtin_servlets.reminders.removeExtraReminderNotification
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.data.entity.room.indexfeed.metadataForKind
+import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -46,6 +48,7 @@ class ObjectDetailViewModel(
     private val itemRepo: ItemRepository,
     private val listRepo: ListRepository,
     private val recordingRepo: RecordingRepository,
+    private val localReminderDao: LocalReminderDao,
     private val snackbarHostState: SnackbarHostState,
 ) : ViewModel() {
 
@@ -178,6 +181,23 @@ class ObjectDetailViewModel(
                 updatedAt = Clock.System.now(),
             )
             itemRepo.setItem(it.firestoreId, updated)
+        }
+    }
+
+    /** Cancels the reminder's extra early notification and clears it from the item metadata.
+     *  Only meaningful for built-in reminders (which carry a localReminderId). */
+    fun removeExtraNotification() {
+        val s = state.value as? UiState.ItemView ?: return
+        val item = s.item
+        val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
+        if (meta.notifyBeforeMillis == null) return
+        viewModelScope.launch {
+            meta.localReminderId?.let { removeExtraReminderNotification(it, localReminderDao) }
+            val updated = item.toDocument().copy(
+                metadata = meta.copy(notifyBeforeMillis = null),
+                updatedAt = Clock.System.now(),
+            )
+            itemRepo.setItem(item.firestoreId, updated)
         }
     }
 

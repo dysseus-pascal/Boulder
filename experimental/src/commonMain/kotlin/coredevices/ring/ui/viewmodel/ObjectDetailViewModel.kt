@@ -435,18 +435,22 @@ internal fun kindLabel(kind: String): String = when (kind) {
     else -> kind.replaceFirstChar { it.uppercase() }
 }
 
-private fun normalizeParentLists(
+internal fun normalizeParentLists(
     kind: String,
     requestedParents: List<String>?,
     currentParents: List<String>,
 ): List<String> {
     if (kind == "reminder" || kind == "scheduled") return listOf(LIST_TODOS_ID)
 
-    val source = requestedParents ?: currentParents
-    val nonTodoParents = source
+    // No explicit membership change → preserve current lists as-is. Stripping
+    // Todos / defaulting to Notes here would silently relocate items that
+    // legitimately live in Todos (e.g. calendar_event) on a text-only edit.
+    val requested = requestedParents ?: return currentParents
+
+    return requested
         .filter { it != LIST_TODOS_ID }
         .distinct()
-    return nonTodoParents.ifEmpty { listOf(LIST_NOTES_SELF_ID) }
+        .ifEmpty { listOf(LIST_NOTES_SELF_ID) }
 }
 
 private fun todoComparator(): Comparator<CachedItem> {

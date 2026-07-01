@@ -9,6 +9,7 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -68,6 +69,21 @@ class ListTool: BuiltInMcpTool(
         const val TOOL_NAME = "create_list_item"
         const val TOOL_DESCRIPTION = "Add an item to a shopping list, grocery list, or to-do list. Use when the user names a list or wants to buy groceries, food, or household supplies."
         private val logger = Logger.withTag(ReminderTool::class.simpleName!!)
+
+        /**
+         * Resolves a list-name hint from the model to a list's firestoreId.
+         * Prefers a title match (covers user-renamed and custom lists), then
+         * falls back to the stable seed marker so built-in lists keep resolving
+         * by their original keyword after a rename. The model is still prompted
+         * to use 'todo', which no longer matches the renamed "Reminders" title
+         * but does match its unchanged seed ("todos").
+         */
+        fun matchListIdByHint(lists: List<CachedList>, hint: String): String? {
+            val normalized = hint.trim().lowercase()
+            if (normalized.isEmpty()) return null
+            return lists.firstOrNull { it.title.lowercase().contains(normalized) }?.firestoreId
+                ?: lists.firstOrNull { it.seed?.lowercase()?.contains(normalized) == true }?.firestoreId
+        }
     }
 
     @Serializable
@@ -204,10 +220,6 @@ class ListTool: BuiltInMcpTool(
         }
     }
 
-    private suspend fun resolveListIdByHint(hint: String): String? {
-        val normalized = hint.trim().lowercase()
-        if (normalized.isEmpty()) return null
-        val lists = listRepo.getAllFlow().first()
-        return lists.firstOrNull { it.title.lowercase().contains(normalized) }?.firestoreId
-    }
+    private suspend fun resolveListIdByHint(hint: String): String? =
+        matchListIdByHint(listRepo.getAllFlow().first(), hint)
 }

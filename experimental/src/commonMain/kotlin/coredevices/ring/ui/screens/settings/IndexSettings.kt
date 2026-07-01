@@ -1552,7 +1552,7 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
     ) {
         Column {
             Text(
-                "Choose the page to place your notes' Todo list in.",
+                "Choose the page to place your notes' Reminders list in.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(12.dp))

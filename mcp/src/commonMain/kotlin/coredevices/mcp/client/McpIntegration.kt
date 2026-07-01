@@ -13,11 +13,11 @@ interface McpIntegration {
     suspend fun close()
     suspend fun listTools(): List<McpTool>
     suspend fun callTool(toolName: String, json: Map<String, JsonElement>, context: SessionContext): ToolCallResult
-    suspend fun getExtraContext(): String?
+    suspend fun getExtraContext(sessionContext: SessionContext?): String?
 }
 
 interface PromptProvider: McpIntegration {
     suspend fun listPrompts(): List<McpPrompt>
     suspend fun getPromptContent(promptName: String): String
-    suspend fun getExtraContext(includePromptsFrom: Set<String>? = null): String?
+    suspend fun getExtraContext(sessionContext: SessionContext?, includePromptsFrom: Set<String>? = null): String?
 }

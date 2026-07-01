@@ -37,7 +37,7 @@ open class BuiltInMcpIntegration(override val name: String, protected val tools:
         return tool.call(jsonInput = McpJson.encodeToString(json), context = context)
     }
 
-    override suspend fun getExtraContext(): String? {
+    override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         val disabled = getDisabledTools().toSet()
         return tools.filterNot { it.definition.name in disabled }.joinToString("\n") { it.extraContext ?: "" }.takeIf { it.isNotEmpty() }
     }

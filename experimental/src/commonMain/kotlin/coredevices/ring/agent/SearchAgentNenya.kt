@@ -84,7 +84,8 @@ class SearchAgentNenya(
         history: List<ConversationMessageDocument>,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>
     ): ConversationMessageDocument =
         throw UnsupportedOperationException("SearchAgentNenya does not use the inference loop")
 

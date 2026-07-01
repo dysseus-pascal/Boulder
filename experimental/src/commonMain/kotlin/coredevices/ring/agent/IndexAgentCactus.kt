@@ -10,6 +10,7 @@ import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
@@ -115,7 +116,8 @@ class IndexAgentCactus(
         history: List<ConversationMessageDocument>,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>
     ): ConversationMessageDocument {
         logger.i { "CactusAgent received input: ${if (get<CoreConfigFlow>().value.obfuscateSensitiveLogs) "[${input.length} chars redacted]" else input}" }
 

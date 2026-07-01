@@ -57,14 +57,14 @@ class McpSession(
             .flatten()
     }
 
-    suspend fun getExtraContext(includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
+    suspend fun getExtraContext(context: SessionContext?, includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
         return integrations
             .map {
                 scope.async {
                     val includePrompts = includePromptsFrom[it.name]
                     when (it) {
-                        is PromptProvider -> it.getExtraContext(includePrompts)
-                        else -> it.getExtraContext()
+                        is PromptProvider -> it.getExtraContext(context, includePrompts)
+                        else -> it.getExtraContext(context)
                     }
                 }
             }

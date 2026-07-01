@@ -210,11 +210,11 @@ class HttpMcpIntegration(
         }
     }
 
-    override suspend fun getExtraContext(): String? {
+    override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         return client.serverInstructions
     }
 
-    override suspend fun getExtraContext(includePromptsFrom: Set<String>?): String? {
+    override suspend fun getExtraContext(sessionContext: SessionContext?, includePromptsFrom: Set<String>?): String? {
         val promptContext = includePromptsFrom?.mapNotNull { promptName ->
             try {
                 getPromptContent(promptName)

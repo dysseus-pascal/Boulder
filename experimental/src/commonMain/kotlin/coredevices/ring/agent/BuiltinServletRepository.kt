@@ -32,7 +32,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
                         title = "JavaScript Evaluation"
                     ),*/
                     McpServerDefinition(
-                        name = ReminderServlet.name,
+                        name = ReminderServlet.NAME,
                         title = "Reminders"
                     ),
                     McpServerDefinition(
@@ -65,7 +65,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             )
             ClockServlet.name -> ClockServlet
             JsServlet.name -> JsServlet
-            ReminderServlet.name -> ReminderServlet
+            ReminderServlet.NAME -> ReminderServlet(get())
             CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> {
                 require(platform.isAndroid) { "Messaging servlet is only available on Android" }

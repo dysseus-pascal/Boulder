@@ -28,7 +28,7 @@ abstract class IterativeAgent(
     ) = withToolSession(input, mcpSession) { tools ->
         var round = 0
         while (true) {
-            val assistantMessage = inferAndEmit(input, tools, mcpSession, includePromptsFromMcps)
+            val assistantMessage = inferAndEmit(input, tools, mcpSession, sessionContext, includePromptsFromMcps)
             val toolCalls = decodeToolCalls(assistantMessage)
             if (toolCalls.isEmpty() || skipToolExecution) return@withToolSession
             if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")

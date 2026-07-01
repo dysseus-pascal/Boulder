@@ -16,6 +16,7 @@ import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,6 +51,7 @@ class ObjectDetailViewModel(
     private val recordingRepo: RecordingRepository,
     private val localReminderDao: LocalReminderDao,
     private val snackbarHostState: SnackbarHostState,
+    private val appScope: LibIndexCoroutineScope,
 ) : ViewModel() {
 
     /** Local search/sort/done-toggle state for list views. */
@@ -312,7 +314,10 @@ class ObjectDetailViewModel(
     fun renameList(newTitle: String, newIcon: String? = null) {
         val s = state.value as? UiState.ListView ?: return
         val title = newTitle.trim().ifBlank { return }
-        viewModelScope.launch {
+        // appScope, not viewModelScope: this is flushed from onDispose when the
+        // screen leaves, which is the same moment viewModelScope is cancelled —
+        // launching the write there would lose it. See [patchItem].
+        appScope.launch {
             val updated = s.list.toDocument().copy(
                 title = title,
                 icon = newIcon?.trim() ?: s.list.icon,
@@ -337,7 +342,13 @@ class ObjectDetailViewModel(
     ) {
         val s = state.value as? UiState.ItemView ?: return
         val it = s.item
-        viewModelScope.launch {
+        // appScope, not viewModelScope: patchItem is the always-edit auto-save,
+        // flushed from the screen's onDispose when the user navigates back. That
+        // dispose coincides with this per-screen ViewModel being cleared and
+        // viewModelScope cancelled, so a write launched there would be cancelled
+        // before it commits and the edit would be silently lost. appScope is the
+        // app-lifetime LibIndex scope, so the write always completes.
+        appScope.launch {
             val nextKind = kind ?: it.kind
             val nextDueAt = when (dueAt) {
                 DueAtChange.NoChange -> it.dueAt
@@ -362,7 +373,9 @@ class ObjectDetailViewModel(
     }
 
     fun patchChildItem(childId: String, title: String?, body: String? = null, kind: String? = null) {
-        viewModelScope.launch {
+        // appScope: flushed from the inline note row's onDispose on navigate-away
+        // (same scope-cancellation race as [patchItem]).
+        appScope.launch {
             val existing = itemRepo.getById(childId) ?: return@launch
             val trimmed = title?.trim()
             if (trimmed != null && trimmed.isBlank()) return@launch

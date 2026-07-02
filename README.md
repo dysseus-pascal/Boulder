@@ -1,39 +1,8 @@
-# libpebble3
+# Pebble Mobile app
 
-libpebble3 is a kotlin multiplatform library for interacting with Pebble devices. It is designed to do everything that a Pebble/Core watch companion app needs to do, except for the UI and specific web services.
+Welcome to the official source code for the Pebble mobile app. Download the app from the [iOS Appstore](https://apps.apple.com/us/app/pebble-core/id6743771967) or [Google Play](https://play.google.com/store/apps/details?id=coredevices.coreapp&hl=en_US). The app is entirely open source. 
 
-See https://github.com/coredevices/libpebble3/wiki/Roadmap
-
-# Using libpebble3
-
-See https://github.com/coredevices/libpebble3/wiki/Roadmap
-
-## Enabling PebbleKit Android 2
-
-To fully enable PebbleKit Android 2 support, you have to add this provider to your `AndroidManifest.xml`:
-
-```xml
-<provider
-    android:authorities="[YOUR_PACKAGE].pebblekit"
-    android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider"
-    android:exported="true" />
-```
-
-Where the `[YOUR_PACKAGE]` is the package name of your application.
-
-## Enabling PebbleKit Android Classic
-
-To fully enable PebbleKit Android Classic, you have to add this provider to your `AndroidManifest.xml`:
-
-```xml
-<provider
-    android:authorities="com.getpebble.android.provider.basalt"
-    android:name="io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProvider"
-    tools:ignore="ExportedContentProvider"
-    android:exported="true" />
-```
-
-Note that by doing so, your app will not be able to be installed alongside other apps that also do this.
+This app supports ALL Pebble watches, and Pebble Index 01 rings.
 
 # Mobile App
 
@@ -145,7 +114,11 @@ In order to honour the Pebble trademark, you may not use "Pebble" in the name of
 
 # Contributing
 
-We aren't actively encouraging contributions yet, while we are aggressively building out feature parity with the original Pebble apps. CI testing is not comprehensive, so changes need to be manually tested with real hardware using CoreApp, and our roadmap/bug tracker is not currently on github. We will update when this changes.
+Pebble employs several (extremely busy) full time mobile developers to work on this app. If you'd like to contribute, we welcome PRs but caution you that it may take us some time before we can review your PR. Please be patient with us :)
+
+# Reporting bugs
+
+Please use the built-in bug report feature in the Pebble app by going to Settings > Get Help > New Bug Report instead of Github issues, as the internal bug reports contain more information for us to debug most issues. 
 
 # Development Guidelines
 
@@ -163,7 +136,7 @@ Connection:
 
 See https://ericmigi.notion.site/Core-Devices-Software-Licensing-1c0fbb55ea8480f88d27ccf20fcb84a8
 
-Copyright 2025 Core Devices LLC
+Copyright 2026 Core Devices LLC
 
 This software is dual-licensed by Core Devices LLC. It can be used either:
   

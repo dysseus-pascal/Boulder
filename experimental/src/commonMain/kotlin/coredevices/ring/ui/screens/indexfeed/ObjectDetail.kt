@@ -241,9 +241,11 @@ internal fun ListSearchTopBar(
     }
 }
 
-/** Outlined sort pill that cycles through three states:
+/** Outlined sort pill that cycles through sort states:
  *  - `Newest`: ↓ icon, "Newest" label (createdAt desc)
  *  - `Oldest`: ↑ icon, "Oldest" label (createdAt asc)
+ *  - `AtoZ`: ↓ icon, "A–Z" label (title ascending)
+ *  - `ZtoA`: ↑ icon, "Z–A" label (title descending)
  *  - `DueDate`: clock icon, "Due date" label (most-overdue / soonest-due first) */
 @Composable
 internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit) {
@@ -251,6 +253,8 @@ internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit)
     val (icon, label) = when (sort) {
         ObjectDetailViewModel.ListSort.Newest -> Icons.Default.ArrowDownward to "Newest"
         ObjectDetailViewModel.ListSort.Oldest -> Icons.Default.ArrowUpward to "Oldest"
+        ObjectDetailViewModel.ListSort.AtoZ -> Icons.Default.ArrowDownward to "A–Z"
+        ObjectDetailViewModel.ListSort.ZtoA -> Icons.Default.ArrowUpward to "Z–A"
         ObjectDetailViewModel.ListSort.DueDate -> Icons.Outlined.AccessTime to "Due date"
     }
     Row(

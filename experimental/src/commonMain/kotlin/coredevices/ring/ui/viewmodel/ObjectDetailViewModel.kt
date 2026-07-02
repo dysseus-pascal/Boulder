@@ -68,7 +68,7 @@ class ObjectDetailViewModel(
     )
     val showDone = MutableStateFlow(false)
 
-    enum class ListSort { Newest, Oldest, DueDate }
+    enum class ListSort { Newest, Oldest, AtoZ, ZtoA, DueDate }
 
     /** Child item ids that were just toggled to done and should linger
      *  with strikethrough + faded opacity in the *active* bucket of the
@@ -115,6 +115,8 @@ class ObjectDetailViewModel(
                                     when (sort) {
                                         ListSort.Newest -> filtered.sortedByDescending { it.createdAt }
                                         ListSort.Oldest -> filtered.sortedBy { it.createdAt }
+                                        ListSort.AtoZ -> filtered.sortedBy { it.title.lowercase() }
+                                        ListSort.ZtoA -> filtered.sortedByDescending { it.title.lowercase() }
                                         // Due-date sort mirrors the home
                                         // Todos preview: overdue / due
                                         // within 24h, then undated, then
@@ -241,11 +243,13 @@ class ObjectDetailViewModel(
 
     fun setListQuery(q: String) { listSearch.value = q }
     fun setListSort(sort: ListSort) { listSort.value = sort }
-    /** Cycle Newest → Oldest → DueDate → Newest. */
+    /** Cycle Newest → Oldest → A–Z → Z–A → DueDate → Newest. */
     fun toggleSort() {
         listSort.value = when (listSort.value) {
             ListSort.Newest -> ListSort.Oldest
-            ListSort.Oldest -> ListSort.DueDate
+            ListSort.Oldest -> ListSort.AtoZ
+            ListSort.AtoZ -> ListSort.ZtoA
+            ListSort.ZtoA -> ListSort.DueDate
             ListSort.DueDate -> ListSort.Newest
         }
     }

@@ -884,12 +884,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Connectivity,
-                    checked = libPebbleConfig.bleConfig.reversedPPoG,
+                    checked = libPebbleConfig.bleConfig.legacyReversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 bleConfig = libPebbleConfig.bleConfig.copy(
-                                    reversedPPoG = it
+                                    legacyReversedPPoG = it
                                 )
                             )
                         )

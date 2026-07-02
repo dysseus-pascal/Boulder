@@ -819,6 +819,8 @@ fun BackupDialog(
     var showDeleteLocalConfirm by remember { mutableStateOf(false) }
     var deleteLocalInput by remember { mutableStateOf("") }
     var showOverwriteKeyConfirm by remember { mutableStateOf(false) }
+    var showEnterKeyDialog by remember { mutableStateOf(false) }
+    var enterKeyInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.loadBackupCount()
@@ -852,6 +854,46 @@ fun BackupDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showOverwriteKeyConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showEnterKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showEnterKeyDialog = false; enterKeyInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
+            title = { Text("Enter Encryption Key") },
+            text = {
+                Column {
+                    val focusManager = LocalFocusManager.current
+                    Text("Type or paste the encryption key from another device.")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = enterKeyInput,
+                        onValueChange = { enterKeyInput = it },
+                        singleLine = true,
+                        label = { Text("Encryption key") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = enterKeyInput.isNotBlank() && !encryptionKeyLoading,
+                    onClick = {
+                        viewModel.importKeyFromText(enterKeyInput)
+                        showEnterKeyDialog = false
+                        enterKeyInput = ""
+                    }
+                ) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnterKeyDialog = false; enterKeyInput = "" }) {
                     Text("Cancel")
                 }
             }
@@ -1116,6 +1158,18 @@ fun BackupDialog(
                 headlineContent = { Text("Import Key from QR Code") },
                 supportingContent = {
                     Text("Pick your key's QR code from your photos")
+                }
+            )
+
+            // Enter the key manually as text (e.g. copied from another device)
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading) {
+                    enterKeyInput = ""
+                    showEnterKeyDialog = true
+                },
+                headlineContent = { Text("Enter Key Manually") },
+                supportingContent = {
+                    Text("Type or paste your encryption key as text")
                 }
             )
 

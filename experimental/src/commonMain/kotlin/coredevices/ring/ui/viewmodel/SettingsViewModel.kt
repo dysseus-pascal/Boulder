@@ -746,6 +746,27 @@ class SettingsViewModel(
         }
     }
 
+    /** Settings-list manual key entry, reporting through [encryptionKeyStatus]. */
+    fun importKeyFromText(keyBase64: String) {
+        val key = keyBase64.trim()
+        if (key.isEmpty()) return
+        viewModelScope.launch {
+            _encryptionKeyLoading.value = true
+            try {
+                _encryptionKeyStatus.value =
+                    if (encryptionManager.restoreKeyFromString(key)) {
+                        "Key imported from text"
+                    } else {
+                        "That key isn't valid for this account"
+                    }
+            } catch (e: Exception) {
+                _encryptionKeyStatus.value = "Key import failed: ${e.message}"
+            } finally {
+                _encryptionKeyLoading.value = false
+            }
+        }
+    }
+
     /** "Done" after the key was shown — enable encryption and close. */
     fun completeEncryptionSetup() {
         viewModelScope.launch { finishSetupAndEnable() }

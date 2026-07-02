@@ -91,4 +91,5 @@ private class FakeCachedItemDao(private val items: List<CachedItem>) : CachedIte
     override suspend fun deleteById(id: String) = error("unused")
     override suspend fun deleteAll() = error("unused")
     override suspend fun getAllIds(): List<String> = error("unused")
+    override suspend fun countLocked(): Int = error("unused")
 }

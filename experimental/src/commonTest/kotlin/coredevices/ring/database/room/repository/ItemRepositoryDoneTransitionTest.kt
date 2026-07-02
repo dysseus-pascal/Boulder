@@ -34,6 +34,7 @@ class ItemRepositoryDoneTransitionTest {
         override suspend fun deleteById(id: String) { items.remove(id) }
         override suspend fun deleteAll() { items.clear() }
         override suspend fun getAllIds(): List<String> = items.keys.toList()
+        override suspend fun countLocked(): Int = items.values.count { it.locked }
     }
 
     private fun fixture(): Pair<ItemRepository, MutableList<Int>> {
@@ -101,5 +102,16 @@ class ItemRepositoryDoneTransitionTest {
         repo.upsertLocal("a", reminderItem(done = false))
         repo.upsertLocal("a", reminderItem(done = true))
         assertEquals(emptyList(), cancelled)
+    }
+
+    @Test
+    fun countLockedReflectsLockedRowsAndUnlocking() = runBlocking {
+        val (repo, _) = fixture()
+        repo.upsertLocal("a", ItemDocument(title = "x", metadata = ItemMetadata.Note), locked = true)
+        repo.upsertLocal("b", ItemDocument(title = "y", metadata = ItemMetadata.Note), locked = false)
+        assertEquals(1, repo.countLocked())
+        // Re-resolving the locked row with a key (locked = false) clears it.
+        repo.upsertLocal("a", ItemDocument(title = "x", metadata = ItemMetadata.Note), locked = false)
+        assertEquals(0, repo.countLocked())
     }
 }

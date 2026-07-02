@@ -65,4 +65,7 @@ interface CachedItemDao {
 
     @Query("SELECT firestoreId FROM CachedItem")
     suspend fun getAllIds(): List<String>
+
+    @Query("SELECT COUNT(*) FROM CachedItem WHERE locked = 1")
+    suspend fun countLocked(): Int
 }

@@ -62,4 +62,7 @@ class ListRepository(
     suspend fun deleteAllLocal() {
         cacheDao.deleteAll()
     }
+
+    /** Number of rows synced from an encrypted doc we couldn't decrypt. */
+    suspend fun countLocked(): Int = cacheDao.countLocked()
 }

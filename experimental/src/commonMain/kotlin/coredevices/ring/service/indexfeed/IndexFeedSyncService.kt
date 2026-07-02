@@ -13,6 +13,8 @@ import coredevices.ring.database.firestore.dao.FirestoreListsDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.ring.encryption.EncryptionManager
+import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.service.RecordingBackgroundScope
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -21,13 +23,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,6 +81,7 @@ class IndexFeedSyncService(
     private val firestoreListsDao: FirestoreListsDao,
     private val preferences: Preferences,
     private val documentEncryptor: DocumentEncryptor,
+    private val encryptionManager: EncryptionManager,
     private val scope: RecordingBackgroundScope,
 ) {
     private val log = Logger.withTag("IndexFeedSync")
@@ -152,6 +159,41 @@ class IndexFeedSyncService(
             .flowOn(Dispatchers.IO)
             .catch { log.e(it) { "lists pull listener error" } }
             .launchIn(scope)
+
+        // A key is available (restored on this launch, or just entered) →
+        // re-pull so any locked rows decrypt. The continuous pull listeners
+        // above only fire on a remote change, so nothing would otherwise
+        // re-resolve already-synced locked rows. Fires at startup (key
+        // already present), on a mid-session key add, and on a key
+        // *replacement* — swapping a wrong key for the right one leaves the
+        // status at KeyLocallyAvailable, so we also key off the key-store
+        // revision. The locked-row count gate below keeps the common
+        // no-locked case cheap.
+        combine(
+            encryptionManager.keyStorageStatus
+                .map { it == KeyStorageStatus.KeyLocallyAvailable },
+            encryptionManager.keyStoreRevision,
+        ) { available, revision -> available to revision }
+            .filter { (available, _) -> available }
+            .distinctUntilChanged()
+            .onEach { redecryptLockedRows() }
+            .flowOn(Dispatchers.IO)
+            .catch { log.e(it) { "key-available re-decrypt observer error" } }
+            .launchIn(scope)
+    }
+
+    /** Re-pull every item/list doc and let the pull guard re-resolve any
+     *  locally-locked row — now that a key is present, those decrypt in
+     *  place. The ciphertext isn't kept locally (locked rows store blanked
+     *  fields), so this re-fetches from Firestore rather than decrypting
+     *  the Room copy. No-op (no Firestore read) when nothing is locked. */
+    private suspend fun redecryptLockedRows() {
+        if (!preferences.backupEnabled.value) return
+        if (Firebase.auth.currentUser == null) return
+        if (itemRepo.countLocked() == 0 && listRepo.countLocked() == 0) return
+        log.i { "Key available — re-pulling to unlock encrypted items/lists" }
+        try { pullItems(firestoreItemsDao.getAll()) } catch (e: Exception) { log.w(e) { "re-decrypt pull items failed" } }
+        try { pullLists(firestoreListsDao.getAll()) } catch (e: Exception) { log.w(e) { "re-decrypt pull lists failed" } }
     }
 
     /**
@@ -251,7 +293,9 @@ class IndexFeedSyncService(
                 log.w(e) { "skip item ${doc.id}: deser failed" }; continue
             }
             val local = itemRepo.getById(doc.id)
-            if (local == null || remote.updatedAt > local.updatedAt) {
+            // Re-resolve a locked row once a key is present so it decrypts,
+            // even though its updatedAt hasn't advanced since we locked it.
+            if (local == null || remote.updatedAt > local.updatedAt || (local.locked && key != null)) {
                 val (resolved, locked) = resolveItem(doc.id, remote, key)
                 itemRepo.upsertLocal(doc.id, resolved, locked)
                 mutex.withLock { itemLastApplied[doc.id] = remote.updatedAt }
@@ -281,7 +325,7 @@ class IndexFeedSyncService(
                 log.w(e) { "skip list ${doc.id}: deser failed" }; continue
             }
             val local = listRepo.getById(doc.id)
-            if (local == null || remote.updatedAt > local.updatedAt) {
+            if (local == null || remote.updatedAt > local.updatedAt || (local.locked && key != null)) {
                 val (resolved, locked) = resolveList(doc.id, remote, key)
                 listRepo.upsertLocal(doc.id, resolved, locked)
                 mutex.withLock { listLastApplied[doc.id] = remote.updatedAt }

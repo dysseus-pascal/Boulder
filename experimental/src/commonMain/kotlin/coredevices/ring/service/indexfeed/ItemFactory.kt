@@ -94,14 +94,20 @@ class ItemFactory {
         listHint: String?,
         toolCallId: String?,
         resolvedListId: String? = null,
-    ): ItemDocument = createItem(
-        createdAt = createdAt,
-        title = title,
-        parents = listOf(resolvedListId ?: pickNoteList(listHint)),
-        recordingId = sourceRecordingId,
-        toolCallId = toolCallId,
-        metadata = ItemMetadata.Note,
-    )
+    ): ItemDocument {
+        val parentId = resolvedListId ?: pickNoteList(listHint)
+        // Items dictated into the Shopping list become checklist items so they
+        // can be ticked off, matching the list's checklist type (MOB-8946).
+        val metadata = if (parentId == LIST_SHOPPING_ID) ItemMetadata.Checklist else ItemMetadata.Note
+        return createItem(
+            createdAt = createdAt,
+            title = title,
+            parents = listOf(parentId),
+            recordingId = sourceRecordingId,
+            toolCallId = toolCallId,
+            metadata = metadata,
+        )
+    }
 
     fun alarmItem(
         sourceRecordingId: String,

@@ -18,6 +18,7 @@ import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -413,6 +414,9 @@ class ObjectDetailViewModel(
     ) {
         val s = state.value as? UiState.ListView ?: return
         val cleanTitle = title.trim().ifBlank { return }
+        // New items added to the Shopping list are checklist items so they get a
+        // tickable circle and can be checked off (MOB-8946).
+        val effectiveKind = if (s.list.firestoreId == LIST_SHOPPING_ID) "checklist" else kind
         viewModelScope.launch {
             val now = Clock.System.now()
             val id = "local-item-${Uuid.random()}"
@@ -422,17 +426,17 @@ class ObjectDetailViewModel(
                     ItemDocument(
                         createdAt = now,
                         updatedAt = now,
-                        metadata = metadataForKind(kind),
+                        metadata = metadataForKind(effectiveKind),
                         title = cleanTitle,
                         parentListIds = normalizeParentLists(
-                            kind = kind,
+                            kind = effectiveKind,
                             requestedParents = listOf(s.list.firestoreId),
                             currentParents = emptyList(),
                         ),
                     ),
                 )
+                onCreated(id)
             }
-            onCreated(id)
         }
     }
 

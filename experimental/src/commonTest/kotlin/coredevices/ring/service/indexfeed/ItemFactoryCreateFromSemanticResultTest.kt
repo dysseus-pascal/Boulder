@@ -6,6 +6,7 @@ import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
@@ -99,6 +100,26 @@ class ItemFactoryCreateFromSemanticResultTest {
     fun listItemCreationWithoutListFallsBackToNotesList() {
         val item = map(SemanticResult.ListItemCreation(content = "Idea"))!!
         assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
+    }
+
+    @Test
+    fun listItemCreationRoutedToShoppingBecomesChecklist() {
+        val item = map(
+            SemanticResult.ListItemCreation(content = "Milk", listUsed = "Shopping", resolvedListId = LIST_SHOPPING_ID)
+        )!!
+
+        assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
+    fun listItemCreationRoutedToShoppingByHintBecomesChecklist() {
+        // No resolvedListId: pickNoteList sends "shopping"/"grocery" hints to the
+        // shopping list, and those items should be checklist items too.
+        val item = map(SemanticResult.ListItemCreation(content = "Eggs", listUsed = "grocery"))!!
+
+        assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
     }
 
     @Test

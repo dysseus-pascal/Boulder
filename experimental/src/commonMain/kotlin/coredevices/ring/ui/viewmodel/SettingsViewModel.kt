@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
@@ -104,6 +105,7 @@ class SettingsViewModel(
     private val mcpSandboxRepository: McpSandboxRepository,
     private val ringDelegate: RingDelegate,
     private val cactusModelProvider: CactusModelProvider,
+    private val appScope: LibIndexCoroutineScope,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -200,16 +202,17 @@ class SettingsViewModel(
     fun onModelDownloadDialogDismissed(success: Boolean) {
         val wasDownloading = _showModelDownloadDialog.value ?: return
         _showModelDownloadDialog.value = null
-        viewModelScope.launch {
+        // appScope: pref write must land even if the user leaves Settings.
+        appScope.launch {
             when (wasDownloading) {
                 is ModelType.Agent -> preferences.setUseCactusAgent(success)
                 is ModelType.STT -> preferences.setUseCactusTranscription(success)
             }
         }
     }
-    
+
     fun toggleCactusAgent() {
-        viewModelScope.launch {
+        appScope.launch {
             if (!_useCactusAgent.value) {
                 // Trigger LM model extraction, should be already integrated into assets so no DL
                 cactusModelProvider.getLMModelPath()
@@ -382,7 +385,7 @@ class SettingsViewModel(
      *  the actual throws — we fall through to the legacy paginated
      *  `getCount()` (slow on big collections, but correct). */
     fun loadBackupCount() {
-        viewModelScope.launch {
+        appScope.launch {
             _backupLoading.value = true
             try {
                 val count = withContext(Dispatchers.IO) {
@@ -400,7 +403,9 @@ class SettingsViewModel(
     }
 
     fun deleteBackup() {
-        viewModelScope.launch {
+        // appScope: a multi-step destructive operation — leaving Settings
+        // mid-way must not abandon it half-done.
+        appScope.launch {
             _backupLoading.value = true
             _backupStatus.value = "Deleting backup..."
             val log = Logger.withTag("Backup")
@@ -466,7 +471,8 @@ class SettingsViewModel(
     }
 
     fun deleteLocalFeed() {
-        viewModelScope.launch {
+        // appScope: same as deleteBackup — must run to completion.
+        appScope.launch {
             _backupLoading.value = true
             _backupStatus.value = "Deleting local feed..."
             val log = Logger.withTag("Backup")

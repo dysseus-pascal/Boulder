@@ -19,6 +19,8 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -177,7 +179,8 @@ class ObjectDetailViewModel(
     fun toggleDone() {
         val s = state.value as? UiState.ItemView ?: return
         val it = s.item
-        viewModelScope.launch {
+        // appScope: back-navigation right after the tap must not cancel the write.
+        appScope.launch {
             val updated = it.toDocument().copy(
                 done = !it.done,
                 updatedAt = Clock.System.now(),
@@ -193,7 +196,7 @@ class ObjectDetailViewModel(
         val item = s.item
         val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
         if (meta.notifyBeforeMillis == null) return
-        viewModelScope.launch {
+        appScope.launch {
             meta.localReminderId?.let { removeExtraReminderNotification(it, localReminderDao) }
             val updated = item.toDocument().copy(
                 metadata = meta.copy(notifyBeforeMillis = null),
@@ -216,7 +219,7 @@ class ObjectDetailViewModel(
             animatingDoneJobs.remove(id)?.cancel()
             animatingDoneIds.value = animatingDoneIds.value - id
         }
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val updated = child.toDocument().copy(
                 done = !child.done,
                 updatedAt = Clock.System.now(),
@@ -252,12 +255,16 @@ class ObjectDetailViewModel(
         viewModelScope.launch {
             when (val s = state.value) {
                 is UiState.ItemView -> {
-                    itemRepo.softDelete(s.item.firestoreId)
-                    onAfter()
+                    appScope.launch(Dispatchers.IO) {
+                        itemRepo.softDelete(s.item.firestoreId)
+                        onAfter()
+                    }
                 }
                 is UiState.ListView -> {
-                    listRepo.softDelete(s.list.firestoreId)
-                    onAfter()
+                    appScope.launch(Dispatchers.IO) {
+                        listRepo.softDelete(s.list.firestoreId)
+                        onAfter()
+                    }
                 }
                 else -> return@launch
             }
@@ -266,7 +273,7 @@ class ObjectDetailViewModel(
 
     fun deleteListAndChildren(onAfter: () -> Unit) {
         val s = state.value as? UiState.ListView ?: return
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val now = Clock.System.now()
             val children = itemRepo.getByList(s.list.firestoreId)
             children.forEach { child ->
@@ -291,7 +298,7 @@ class ObjectDetailViewModel(
     fun deleteListMovingChildren(targetListId: String, onAfter: () -> Unit) {
         val s = state.value as? UiState.ListView ?: return
         if (targetListId == s.list.firestoreId) return
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val now = Clock.System.now()
             val children = itemRepo.getByList(s.list.firestoreId)
             children.forEach { child ->
@@ -405,26 +412,28 @@ class ObjectDetailViewModel(
         viewModelScope.launch {
             val now = Clock.System.now()
             val id = "local-item-${Uuid.random()}"
-            itemRepo.setItem(
-                id,
-                ItemDocument(
-                    createdAt = now,
-                    updatedAt = now,
-                    metadata = metadataForKind(kind),
-                    title = cleanTitle,
-                    parentListIds = normalizeParentLists(
-                        kind = kind,
-                        requestedParents = listOf(s.list.firestoreId),
-                        currentParents = emptyList(),
+            appScope.launch(Dispatchers.IO) {
+                itemRepo.setItem(
+                    id,
+                    ItemDocument(
+                        createdAt = now,
+                        updatedAt = now,
+                        metadata = metadataForKind(kind),
+                        title = cleanTitle,
+                        parentListIds = normalizeParentLists(
+                            kind = kind,
+                            requestedParents = listOf(s.list.firestoreId),
+                            currentParents = emptyList(),
+                        ),
                     ),
-                ),
-            )
+                )
+            }
             onCreated(id)
         }
     }
 
     fun deleteChildItem(childId: String) {
-        viewModelScope.launch {
+        appScope.launch {
             itemRepo.softDelete(childId)
         }
     }

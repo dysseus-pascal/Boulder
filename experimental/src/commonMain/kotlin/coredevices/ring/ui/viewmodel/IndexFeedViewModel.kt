@@ -8,6 +8,7 @@ import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.fields
@@ -16,23 +17,22 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
-import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_TODOS
+import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.ui.viewmodel.IndexFeedViewModel.Companion.STRIKE_THROUGH_MS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
@@ -51,6 +51,7 @@ class IndexFeedViewModel(
     listRepo: ListRepository,
     private val recordingQueue: RecordingProcessingQueue,
     private val ringTransferDao: RingTransferDao,
+    private val appScope: LibIndexCoroutineScope,
 ) : ViewModel() {
 
     /** What the user typed into the search bar. Empty = not searching. */
@@ -156,14 +157,14 @@ class IndexFeedViewModel(
             // re-emit doesn't cause a flicker (row leaving + re-entering
             // the active bucket).
             animatingDoneJobs.remove(itemId)?.cancel()
-            animatingDoneIds.value = animatingDoneIds.value + itemId
+            animatingDoneIds.value += itemId
         } else {
             // Toggling back to undone — cancel any in-flight strike
             // removal so the row doesn't disappear unexpectedly.
             animatingDoneJobs.remove(itemId)?.cancel()
-            animatingDoneIds.value = animatingDoneIds.value - itemId
+            animatingDoneIds.value -= itemId
         }
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val updated = item.toDocument().copy(
                 done = !item.done,
                 updatedAt = Clock.System.now(),
@@ -172,7 +173,7 @@ class IndexFeedViewModel(
             if (!wasDone) {
                 animatingDoneJobs[itemId] = viewModelScope.launch {
                     delay(STRIKE_THROUGH_MS)
-                    animatingDoneIds.value = animatingDoneIds.value - itemId
+                    animatingDoneIds.value -= itemId
                     animatingDoneJobs.remove(itemId)
                 }
             }

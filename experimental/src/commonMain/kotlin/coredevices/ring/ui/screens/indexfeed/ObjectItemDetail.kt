@@ -3,7 +3,6 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import coredevices.ring.ui.relativeTime
-import CoreRoute
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -199,9 +198,14 @@ internal fun ItemView(
                             text = { Text("Delete ${kindLabel(it.kind).lowercase()}", color = colors.error) },
                             onClick = {
                                 menuOpen = false
-                                val destination = deleteDestinationForItem(draftKind, draftParentListIds)
                                 deleting = true
-                                vm.deleteThis { coreNav.replaceWith(destination) }
+                                // Pop back to the existing parent list already on the
+                                // stack. Using replaceWith here pushed a *new* parent
+                                // instance on every delete, stacking up duplicates so
+                                // back would cycle through the same page N times
+                                // (MOB-8492). The parent list filters out deleted = 0,
+                                // so the removed item disappears automatically.
+                                vm.deleteThis { coreNav.goBack() }
                             },
                         )
                     }
@@ -295,15 +299,6 @@ internal fun ItemView(
 private fun defaultParentListsForKind(kind: String): List<String> =
     if (kind == "reminder" || kind == "scheduled") listOf(LIST_TODOS_ID)
     else listOf(LIST_NOTES_SELF_ID)
-
-private fun deleteDestinationForItem(kind: String, parentListIds: List<String>): CoreRoute =
-    when {
-        kind == "reminder" || kind == "scheduled" -> RingRoutes.ObjectDetails(LIST_TODOS_ID)
-        kind == "answer" -> RingRoutes.AllAnswers
-        else -> RingRoutes.ObjectDetails(
-            parentListIds.firstOrNull { it != LIST_TODOS_ID } ?: LIST_NOTES_SELF_ID,
-        )
-    }
 
 @Composable
 private fun ItemHeroCard(

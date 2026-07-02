@@ -1588,6 +1588,8 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
 
     M3Dialog(
         onDismissRequest = onDismiss,
+        // The page list can be long; scroll it so the buttons stay reachable.
+        scrollableContent = true,
         title = { Text("Notion Page") },
         buttons = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -1622,8 +1624,10 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
                 loadedPages.isEmpty() -> Text(
                     "No pages found. Give Index access to a page in Notion, then try again."
                 )
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(loadedPages) { page ->
+                // Plain Column (not LazyColumn): the dialog content scrolls via
+                // scrollableContent, and nested lazy lists inside verticalScroll crash.
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    loadedPages.forEach { page ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier

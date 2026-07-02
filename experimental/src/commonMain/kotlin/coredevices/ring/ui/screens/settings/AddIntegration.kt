@@ -348,6 +348,7 @@ fun ObsidianDialog(
                 if (integration.signIn(uiContext)) {
                     vaultName = integration.vaultDisplayName() ?: "Obsidian vault"
                     notes = integration.listNotes()
+                    selectedNote = null
                 } else {
                     error = "No folder selected."
                 }

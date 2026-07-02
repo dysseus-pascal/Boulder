@@ -116,8 +116,14 @@ class IosObsidianVault : ObsidianVault {
     override suspend fun readFile(handle: String, name: String): String? = withContext(Dispatchers.Default) {
         withVault(handle) { dir ->
             val fileUrl = dir.URLByAppendingPathComponent(name) ?: return@withVault null
-            val data = NSData.dataWithContentsOfURL(fileUrl) ?: return@withVault null
-            NSString.create(data, NSUTF8StringEncoding) as String?
+            val data = NSData.dataWithContentsOfURL(fileUrl)
+            if (data == null) {
+                logger.d { "readFile: file not found: $name" }
+                return@withVault null
+            }
+            val content = NSString.create(data, NSUTF8StringEncoding) as String?
+            logger.d { "readFile: $name -> ${content?.length ?: 0} chars" }
+            content
         }
     }
 
@@ -134,13 +140,22 @@ class IosObsidianVault : ObsidianVault {
             }
             val nsContent = NSString.create(string = content)
             val data = nsContent.dataUsingEncoding(NSUTF8StringEncoding) ?: return@withVault false
-            data.writeToURL(fileUrl, atomically = true)
+            val ok = data.writeToURL(fileUrl, atomically = true)
+            if (ok) {
+                logger.d { "writeFile: $name -> ${content.length} chars written" }
+            } else {
+                logger.w { "writeFile: failed to write $name (${content.length} chars)" }
+            }
+            ok
         } ?: false
     }
 
     private fun <T> withVault(handle: String, block: (NSURL) -> T): T? {
         val url = resolve(handle) ?: return null
         val started = url.startAccessingSecurityScopedResource()
+        if (!started) {
+            logger.w { "startAccessingSecurityScopedResource returned false for vault; file operations may silently fail" }
+        }
         try {
             return block(url)
         } finally {

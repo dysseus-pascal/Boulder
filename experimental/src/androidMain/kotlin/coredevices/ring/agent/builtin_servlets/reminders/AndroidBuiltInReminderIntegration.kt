@@ -1,5 +1,6 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
+import PlatformUiContext
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
@@ -9,37 +10,28 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.reminders.ReminderReceiver
 import coredevices.util.AndroidPlatform
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-class AndroidBuiltInReminder(
-    override val time: Instant?,
-    override val message: String,
-    // No default value: a defaulted param here makes Kotlin emit a synthetic defaults constructor
-    // whose JVM signature clashes with the private (.., workId) secondary constructor below.
-    override val notifyBefore: Duration?,
-): ListAssignableReminder, KoinComponent {
+class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val context: Context by inject()
     private val db: RingDatabase by inject()
 
-    private var _reminderId: Int? = null
-    val reminderId: Int? get() = _reminderId
-    override val listTitle: String? = null
-
-    private constructor(time: Instant?, message: String, notifyBefore: Duration?, workId: Int): this(time, message, notifyBefore) {
-        _reminderId = workId
-    }
-
-    override suspend fun schedule(): String {
-        require(time == null || time > Clock.System.now()) { "Time must be in the future" }
+    override suspend fun createReminder(
+        title: String,
+        deadline: Instant?,
+        listId: String?,
+        notifyBefore: Duration?,
+    ): String {
+        require(deadline == null || deadline > Clock.System.now()) { "Time must be in the future" }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             check(context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -51,12 +43,11 @@ class AndroidBuiltInReminder(
             check(alarmManager.canScheduleExactAlarms()) { "No permissions to schedule reminders, check under 'Special app access > Alarms and reminders' in Settings app." }
         }
 
-        val reminder = LocalReminderData(0, time, message, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+        val id = db.localReminderDao().insertReminder(
+            LocalReminderData(0, deadline, title, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+        ).toInt()
 
-        val id = db.localReminderDao().insertReminder(reminder).toInt()
-        _reminderId = id
-
-        time?.let {
+        deadline?.let { time ->
             scheduleAlarm(alarmManager, context, id, time, isPreNotification = false)
             // The early heads-up alarm is only scheduled when its trigger time hasn't already passed.
             notifyBefore?.let { lead ->
@@ -72,8 +63,11 @@ class AndroidBuiltInReminder(
         return id.toString()
     }
 
-    override suspend fun cancel() {
-        val reminderId = _reminderId ?: return
+    // Built-in reminders have no list concept; callers fall back to a plain reminder.
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> = emptyList()
+
+    override suspend fun cancelReminder(reminderId: Int) {
+        db.localReminderDao().getReminder(reminderId) ?: return
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelAlarm(alarmManager, context, reminderId, isPreNotification = false)
@@ -85,11 +79,10 @@ class AndroidBuiltInReminder(
         notificationManager.cancel(ReminderReceiver.preNotificationId(reminderId))
 
         db.localReminderDao().deleteReminder(reminderId)
-        _reminderId = null
     }
 
-    override suspend fun cancelExtraNotification() {
-        val reminderId = _reminderId ?: return
+    override suspend fun cancelExtraNotification(reminderId: Int) {
+        db.localReminderDao().getReminder(reminderId) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelAlarm(alarmManager, context, reminderId, isPreNotification = true)
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -97,20 +90,12 @@ class AndroidBuiltInReminder(
         db.localReminderDao().clearNotifyBefore(reminderId)
     }
 
-    override suspend fun scheduleToList(listName: String): String {
-        return schedule()
-    }
+    // Built-in reminders need no account; permissions are checked when scheduling.
+    override suspend fun signIn(uiContext: PlatformUiContext): Boolean = true
+    override suspend fun unlink() {}
+    override suspend fun isAuthorized(): Boolean = true
 
     companion object {
-        fun fromData(data: LocalReminderData): AndroidBuiltInReminder {
-            return AndroidBuiltInReminder(
-                data.time,
-                data.message,
-                data.notifyBeforeMillis?.milliseconds,
-                data.id,
-            )
-        }
-
         /**
          * Builds the [PendingIntent] for a reminder's alarm. The early heads-up alarm and the due
          * alarm share a request code but carry different actions, so they resolve to distinct

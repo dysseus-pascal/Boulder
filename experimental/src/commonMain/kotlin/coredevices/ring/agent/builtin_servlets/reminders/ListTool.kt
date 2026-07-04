@@ -62,7 +62,7 @@ class ListTool: BuiltInMcpTool(
         )
     )
 ), KoinComponent {
-    val reminderFactory: ReminderFactory by inject()
+    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
     private val listRepo: ListRepository by inject()
 
     companion object Companion {
@@ -178,31 +178,21 @@ class ListTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
-        val reminder = reminderFactory.create(
-            time = instant,
-            message = listItemArgs.message
-        )
         return try {
-
-            val (reminderId, listUsed) = if (reminder is ListAssignableReminder) {
-                try {
-                    reminder.scheduleToList(listItemArgs.list_name) to reminder.listTitle
-                } catch (e: ListNotFoundException) {
-                    logger.e(e) { "List not found, scheduling reminder without list assignment" }
-                    reminder.schedule() to null
-                }
-            } else {
-                reminder.schedule() to null
-            }
+            val integration = reminderIntegrationFactory.createReminderIntegration()
+            // First matching list wins; when the integration doesn't know the list (or has no
+            // list concept at all) the reminder is created without a list assignment.
+            val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
+            val reminderId = integration.createReminder(listItemArgs.message, instant, listId = list?.id)
             // Always a note (routed to the resolved list); the item itself is created centrally
             // in RecordingProcessor from this semantic result so it can carry the tool_call_id.
             val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(
                 JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),
                 SemanticResult.ListItemCreation(
-                    content = reminder.message,
-                    listUsed = listUsed,
-                    remindAt = reminder.time,
+                    content = listItemArgs.message,
+                    listUsed = list?.title,
+                    remindAt = instant,
                     resolvedListId = resolvedListId,
                 )
             )

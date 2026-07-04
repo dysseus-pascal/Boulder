@@ -66,7 +66,7 @@ class ReminderTool: BuiltInMcpTool(
         )
     )
 ), KoinComponent {
-    val reminderFactory: ReminderFactory by inject()
+    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
@@ -205,20 +205,16 @@ class ReminderTool: BuiltInMcpTool(
             remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
         }
 
-        val reminder = reminderFactory.create(
-            time = instant,
-            message = remindArgs.message,
-            notifyBefore = notifyBefore,
-        )
         return try {
-            val reminderId = reminder.schedule()
+            val reminderId = reminderIntegrationFactory.createReminderIntegration()
+                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore)
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(
-                    title = reminder.message,
-                    deadline = reminder.time,
+                    title = remindArgs.message,
+                    deadline = instant,
                     localReminderId = reminderId.toIntOrNull(),
-                    notifyBeforeMillis = reminder.notifyBefore?.inWholeMilliseconds,
+                    notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
                 )
             )
         } catch (e: Exception) {

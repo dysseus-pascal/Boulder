@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import co.touchlab.kermit.Logger
-import coredevices.ring.agent.builtin_servlets.reminders.AndroidBuiltInReminder
+import coredevices.ring.agent.builtin_servlets.reminders.AndroidBuiltInReminderIntegration
 import coredevices.ring.database.room.dao.LocalReminderDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,11 +47,11 @@ class ReminderBootReceiver : BroadcastReceiver(), KoinComponent {
                 for (reminder in reminders) {
                     val time = reminder.time ?: continue
                     if (time > now) {
-                        AndroidBuiltInReminder.scheduleAlarm(alarmManager, context, reminder.id, time, isPreNotification = false)
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, time, isPreNotification = false)
                     }
                     val preTime = reminder.notifyBeforeMillis?.let { time - it.milliseconds }
                     if (preTime != null && preTime > now) {
-                        AndroidBuiltInReminder.scheduleAlarm(alarmManager, context, reminder.id, preTime, isPreNotification = true)
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, preTime, isPreNotification = true)
                     }
                 }
                 logger.d { "Re-scheduled ${reminders.size} reminder(s) after boot" }

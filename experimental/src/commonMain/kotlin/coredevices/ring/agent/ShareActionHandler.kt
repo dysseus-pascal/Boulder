@@ -4,7 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +20,7 @@ import kotlin.time.Instant
  */
 class ShareActionHandler(
     private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val reminderFactory: ReminderFactory,
+    private val reminderIntegrationFactory: ReminderIntegrationFactory,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
 ) {
@@ -74,15 +74,17 @@ class ShareActionHandler(
     }
 
     private suspend fun createReminder(text: String) {
-        val reminder = reminderFactory.create(time = parseReminderTime(text), message = text)
-        val localReminderId = reminder.schedule().toIntOrNull()
+        val time = parseReminderTime(text)
+        val localReminderId = reminderIntegrationFactory.createReminderIntegration()
+            .createReminder(text, time)
+            .toIntOrNull()
         itemRepository.setItem(
             itemFactory.simpleUid(),
             itemFactory.reminderItem(
                 sourceRecordingId = null,
                 createdAt = Clock.System.now(),
-                title = reminder.message,
-                dueAt = reminder.time,
+                title = text,
+                dueAt = time,
                 toolCallId = null,
                 localReminderId = localReminderId,
             ),

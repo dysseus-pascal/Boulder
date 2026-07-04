@@ -22,7 +22,9 @@ import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
+import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.UIEmailIntegration
 import coredevices.ring.api.ApiConfig
@@ -39,8 +41,6 @@ import coredevices.ring.database.room.repository.RecordingProcessingTaskReposito
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.agent.builtin_servlets.reminders.cancelBuiltInReminder
-import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
@@ -161,8 +161,8 @@ val experimentalModule = module {
     }
     singleOf(::RecordingProcessingTaskRepository)
     single {
-        val localReminderDao = get<LocalReminderDao>()
-        ItemRepository(get()) { cancelBuiltInReminder(it, localReminderDao) }
+        val builtInReminders = get<BuiltInReminderIntegration>()
+        ItemRepository(get()) { builtInReminders.cancelReminder(it) }
     }
     singleOf(::ListRepository)
     singleOf(::DefaultListsBootstrap)
@@ -230,7 +230,8 @@ val experimentalModule = module {
 
     factoryOf(::GTasksIntegration)
     factoryOf(::UIEmailIntegration)
-    singleOf(::ReminderFactory)
+    single { createBuiltInReminderIntegration() }
+    singleOf(::ReminderIntegrationFactory)
     singleOf(::ContextualActionPredictor)
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)

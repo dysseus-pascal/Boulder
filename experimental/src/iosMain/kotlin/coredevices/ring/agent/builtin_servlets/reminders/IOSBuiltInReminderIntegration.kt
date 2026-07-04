@@ -1,6 +1,8 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
+import PlatformUiContext
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.reminders.ReminderDeepLinkResolver
@@ -26,29 +28,16 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
- * iOS counterpart to [AndroidBuiltInReminder]: schedules a local notification via
- * [UNUserNotificationCenter] and records the reminder in [LocalReminderData] so it shows up
+ * iOS counterpart to [AndroidBuiltInReminderIntegration]: schedules local notifications via
+ * [UNUserNotificationCenter] and records each reminder in [LocalReminderData] so it shows up
  * in the in-app reminders list and can be cancelled.
  */
-class IOSBuiltInReminder(
-    override val time: Instant?,
-    override val message: String,
-    override val notifyBefore: Duration? = null,
-) : ListAssignableReminder, KoinComponent {
+class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val db: RingDatabase by inject()
-    private val notificationCenter = UNUserNotificationCenter.currentNotificationCenter()
-
-    private var _reminderId: Int? = null
-    val reminderId: Int? get() = _reminderId
-    override val listTitle: String? = null
-
-    private constructor(time: Instant?, message: String, notifyBefore: Duration?, reminderId: Int) : this(time, message, notifyBefore) {
-        _reminderId = reminderId
-    }
+    private val notificationCenter get() = UNUserNotificationCenter.currentNotificationCenter()
 
     private suspend fun requestAuthorization(): Boolean = suspendCoroutine { continuation ->
         notificationCenter.requestAuthorizationWithOptions(
@@ -61,31 +50,44 @@ class IOSBuiltInReminder(
         }
     }
 
-    override suspend fun schedule(): String {
-        require(time == null || time > Clock.System.now()) { "Time must be in the future" }
+    override suspend fun createReminder(
+        title: String,
+        deadline: Instant?,
+        listId: String?,
+        notifyBefore: Duration?,
+    ): String {
+        require(deadline == null || deadline > Clock.System.now()) { "Time must be in the future" }
         check(requestAuthorization()) { "Notification permission not granted" }
 
         val id = db.localReminderDao().insertReminder(
-            LocalReminderData(0, time, message, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+            LocalReminderData(0, deadline, title, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
         ).toInt()
-        _reminderId = id
 
-        time?.let { scheduledTime ->
-            scheduleNotification(id, scheduledTime, notificationId(id), title = "Reminder")
+        deadline?.let { scheduledTime ->
+            scheduleNotification(id, title, scheduledTime, notificationId(id), notificationTitle = "Reminder")
             // The early heads-up notification is only scheduled when its trigger time is still ahead.
             notifyBefore?.let { lead ->
                 val preTime = scheduledTime - lead
                 if (preTime > Clock.System.now()) {
-                    scheduleNotification(id, preTime, preNotificationId(id), title = "Upcoming reminder")
+                    scheduleNotification(id, title, preTime, preNotificationId(id), notificationTitle = "Upcoming reminder")
                 }
             }
         }
         return id.toString()
     }
 
-    private suspend fun scheduleNotification(reminderId: Int, triggerTime: Instant, identifier: String, title: String) {
+    // Built-in reminders have no list concept; callers fall back to a plain reminder.
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> = emptyList()
+
+    private suspend fun scheduleNotification(
+        reminderId: Int,
+        message: String,
+        triggerTime: Instant,
+        identifier: String,
+        notificationTitle: String,
+    ) {
         val content = UNMutableNotificationContent().apply {
-            setTitle(title)
+            setTitle(notificationTitle)
             setBody(message)
             setSound(UNNotificationSound.defaultSound)
             setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to reminderId.toString()))
@@ -103,35 +105,31 @@ class IOSBuiltInReminder(
         check(error == null) { "Failed to schedule reminder notification: ${error?.localizedDescription}" }
     }
 
-    override suspend fun cancel() {
-        val reminderId = _reminderId ?: return
+    override suspend fun cancelReminder(reminderId: Int) {
+        db.localReminderDao().getReminder(reminderId) ?: return
         val identifiers = listOf(notificationId(reminderId), preNotificationId(reminderId))
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
         db.localReminderDao().deleteReminder(reminderId)
-        _reminderId = null
     }
 
-    override suspend fun cancelExtraNotification() {
-        val reminderId = _reminderId ?: return
+    override suspend fun cancelExtraNotification(reminderId: Int) {
+        db.localReminderDao().getReminder(reminderId) ?: return
         val identifiers = listOf(preNotificationId(reminderId))
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
         db.localReminderDao().clearNotifyBefore(reminderId)
     }
 
-    override suspend fun scheduleToList(listName: String): String {
-        return schedule()
-    }
+    // Built-in reminders need no account; notification permission is requested when scheduling.
+    override suspend fun signIn(uiContext: PlatformUiContext): Boolean = true
+    override suspend fun unlink() {}
+    override suspend fun isAuthorized(): Boolean = true
 
     companion object {
-        private val logger = Logger.withTag("IOSBuiltInReminder")
+        private val logger = Logger.withTag("IOSBuiltInReminderIntegration")
 
         private fun notificationId(reminderId: Int) = "ring-reminder-$reminderId"
         private fun preNotificationId(reminderId: Int) = "ring-reminder-pre-$reminderId"
-
-        fun fromData(data: LocalReminderData): IOSBuiltInReminder {
-            return IOSBuiltInReminder(data.time, data.message, data.notifyBeforeMillis?.milliseconds, data.id)
-        }
     }
 }

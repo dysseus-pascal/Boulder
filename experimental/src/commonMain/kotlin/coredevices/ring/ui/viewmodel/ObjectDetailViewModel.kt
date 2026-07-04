@@ -7,12 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
-import coredevices.ring.agent.builtin_servlets.reminders.removeExtraReminderNotification
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.data.entity.room.indexfeed.metadataForKind
-import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -52,7 +51,7 @@ class ObjectDetailViewModel(
     private val itemRepo: ItemRepository,
     private val listRepo: ListRepository,
     private val recordingRepo: RecordingRepository,
-    private val localReminderDao: LocalReminderDao,
+    private val builtInReminders: BuiltInReminderIntegration,
     private val snackbarHostState: SnackbarHostState,
     private val appScope: LibIndexCoroutineScope,
 ) : ViewModel() {
@@ -200,7 +199,7 @@ class ObjectDetailViewModel(
         val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
         if (meta.notifyBeforeMillis == null) return
         appScope.launch {
-            meta.localReminderId?.let { removeExtraReminderNotification(it, localReminderDao) }
+            meta.localReminderId?.let { runCatching { builtInReminders.cancelExtraNotification(it) } }
             val updated = item.toDocument().copy(
                 metadata = meta.copy(notifyBeforeMillis = null),
                 updatedAt = Clock.System.now(),

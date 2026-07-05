@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.notes
 
 import PlatformUiContext
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.tasker.TaskerEndpoint
 import coredevices.util.integrations.IntegrationTokenStorage
@@ -16,7 +17,7 @@ actual fun createTaskerNoteClient(): NoteIntegration = TaskerNoteClient()
 class TaskerNoteClient : NoteIntegration, KoinComponent {
     private val tokenStorage: IntegrationTokenStorage by inject()
 
-    override suspend fun createNote(content: String): String =
+    override suspend fun createNote(content: String, source: ItemSource?): String =
         TaskerEndpoint.send(content, messageType = "note")
 
     override suspend fun signIn(uiContext: PlatformUiContext): Boolean {

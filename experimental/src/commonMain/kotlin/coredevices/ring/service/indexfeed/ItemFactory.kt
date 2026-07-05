@@ -31,10 +31,6 @@ class ItemFactory {
         createdAt: Instant,
         toolCallId: String?,
     ): ItemDocument? = when (result) {
-        is SemanticResult.TaskCreation ->
-            reminderItem(sourceRecordingId, createdAt, result.title, result.deadline, toolCallId, result.localReminderId, result.notifyBeforeMillis)
-        is SemanticResult.ListItemCreation ->
-            noteItem(sourceRecordingId, createdAt, result.content, result.listUsed, toolCallId, result.resolvedListId)
         is SemanticResult.AlarmCreation ->
             alarmItem(sourceRecordingId, createdAt, result.fireTime, toolCallId)
         is SemanticResult.CalendarEventCreation ->
@@ -47,6 +43,9 @@ class ItemFactory {
             actionLogItem(sourceRecordingId, createdAt, result.title, result.toolName, result.success, toolCallId, result.body)
         is SemanticResult.SupportingData if !result.assistiveOnly ->
             answerItem(sourceRecordingId, createdAt, result.question ?: "", result.summary ?: "", toolCallId)
+        // Notes and reminders/list items are created by the owning integration
+        is SemanticResult.TaskCreation,
+        is SemanticResult.ListItemCreation,
         is SemanticResult.SupportingData,
         is SemanticResult.Response,
         is SemanticResult.GenericSuccess,

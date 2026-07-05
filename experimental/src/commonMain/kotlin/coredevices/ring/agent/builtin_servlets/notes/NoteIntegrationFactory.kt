@@ -19,7 +19,7 @@ class NoteIntegrationFactory(
     suspend fun createNoteClient(integration: NoteProvider = prefs.noteProvider.value): NoteIntegration {
         logger.i { "Creating note integration for provider: $integration" }
         return when (integration) {
-            NoteProvider.Builtin -> LocalNoteClient()
+            NoteProvider.Builtin -> LocalNoteClient(get(), get())
             NoteProvider.Notion -> get<NotionIntegration>()
             NoteProvider.Obsidian -> get<ObsidianIntegration>()
             NoteProvider.Tasker -> createTaskerNoteClient()

@@ -6,6 +6,7 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.itemSource
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -75,7 +76,7 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         logger.d { "Creating note with text length: ${text.length}" }
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
-            val noteId = noteClient.createNote(text)
+            val noteId = noteClient.createNote(text, context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
                 SemanticResult.ListItemCreation(text)

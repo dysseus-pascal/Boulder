@@ -2,6 +2,7 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
@@ -37,6 +38,7 @@ import kotlin.time.Instant
  */
 class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val db: RingDatabase by inject()
+    private val feedItems: BuiltInReminderFeedItems by inject()
     private val notificationCenter get() = UNUserNotificationCenter.currentNotificationCenter()
 
     private suspend fun requestAuthorization(): Boolean = suspendCoroutine { continuation ->
@@ -55,12 +57,18 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String {
         require(deadline == null || deadline > Clock.System.now()) { "Time must be in the future" }
         check(requestAuthorization()) { "Notification permission not granted" }
 
         val id = db.localReminderDao().insertReminder(
-            LocalReminderData(0, deadline, title, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+            LocalReminderData(
+                0,
+                deadline,
+                title,
+                recordingId = source?.recordingFirestoreId,
+                notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
         ).toInt()
 
         deadline?.let { scheduledTime ->
@@ -73,11 +81,20 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
                 }
             }
         }
+        try {
+            feedItems.createFeedItem(id, title, deadline, listId, notifyBefore, source)
+        } catch (e: Exception) {
+            // If the feed item creation fails, cancel the scheduled notifications and delete the reminder.
+            notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(notificationId(id), preNotificationId(id)))
+            notificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(notificationId(id), preNotificationId(id)))
+            db.localReminderDao().deleteReminder(id)
+            throw e
+        }
         return id.toString()
     }
 
-    // Built-in reminders have no list concept; callers fall back to a plain reminder.
-    override suspend fun searchForList(listName: String): List<ReminderListEntry> = emptyList()
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> =
+        feedItems.searchForList(listName)
 
     private suspend fun scheduleNotification(
         reminderId: Int,

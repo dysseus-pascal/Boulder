@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
 import PlatformUiContext
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
 import kotlin.time.Duration
@@ -23,6 +24,7 @@ private class DisabledRemindersAppIntegration : ReminderIntegration {
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String = error("iPhone Reminders is iOS-only")
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> =

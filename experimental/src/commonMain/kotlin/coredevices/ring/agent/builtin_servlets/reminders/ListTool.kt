@@ -9,6 +9,7 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -180,12 +181,13 @@ class ListTool: BuiltInMcpTool(
 
         return try {
             val integration = reminderIntegrationFactory.createReminderIntegration()
-            // First matching list wins; when the integration doesn't know the list (or has no
-            // list concept at all) the reminder is created without a list assignment.
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
-            val reminderId = integration.createReminder(listItemArgs.message, instant, listId = list?.id)
-            // Always a note (routed to the resolved list); the item itself is created centrally
-            // in RecordingProcessor from this semantic result so it can carry the tool_call_id.
+            val reminderId = integration.createReminder(
+                listItemArgs.message,
+                instant,
+                listId = list?.id,
+                source = context.itemSource(),
+            )
             val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(
                 JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),

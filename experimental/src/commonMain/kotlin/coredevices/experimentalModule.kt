@@ -22,6 +22,7 @@ import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
@@ -231,6 +232,7 @@ val experimentalModule = module {
     factoryOf(::GTasksIntegration)
     factoryOf(::UIEmailIntegration)
     single { createBuiltInReminderIntegration() }
+    singleOf(::BuiltInReminderFeedItems)
     singleOf(::ReminderIntegrationFactory)
     singleOf(::ContextualActionPredictor)
     singleOf(::ShortcutActionHandler)

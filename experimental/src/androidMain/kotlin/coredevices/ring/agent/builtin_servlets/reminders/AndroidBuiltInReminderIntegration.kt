@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
@@ -24,12 +25,14 @@ import org.koin.core.component.inject
 class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val context: Context by inject()
     private val db: RingDatabase by inject()
+    private val feedItems: BuiltInReminderFeedItems by inject()
 
     override suspend fun createReminder(
         title: String,
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String {
         require(deadline == null || deadline > Clock.System.now()) { "Time must be in the future" }
 
@@ -44,7 +47,12 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
         }
 
         val id = db.localReminderDao().insertReminder(
-            LocalReminderData(0, deadline, title, notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
+            LocalReminderData(
+                0,
+                deadline,
+                title,
+                recordingId = source?.recordingFirestoreId,
+                notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
         ).toInt()
 
         deadline?.let { time ->
@@ -60,11 +68,20 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
                 Logger.d { "Next alarm: ${it.triggerTime}" }
             } ?: Logger.d { "No next alarm" }
         }
+        try {
+            feedItems.createFeedItem(id, title, deadline, listId, notifyBefore, source)
+        } catch (e: Exception) {
+            // If the feed item creation fails, cancel the scheduled alarms and delete the reminder.
+            cancelAlarm(alarmManager, context, id, isPreNotification = false)
+            cancelAlarm(alarmManager, context, id, isPreNotification = true)
+            db.localReminderDao().deleteReminder(id)
+            throw e
+        }
         return id.toString()
     }
 
-    // Built-in reminders have no list concept; callers fall back to a plain reminder.
-    override suspend fun searchForList(listName: String): List<ReminderListEntry> = emptyList()
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> =
+        feedItems.searchForList(listName)
 
     override suspend fun cancelReminder(reminderId: Int) {
         db.localReminderDao().getReminder(reminderId) ?: return

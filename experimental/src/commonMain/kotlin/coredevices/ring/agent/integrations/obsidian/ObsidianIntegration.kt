@@ -3,6 +3,7 @@ package coredevices.ring.agent.integrations.obsidian
 import PlatformUiContext
 import co.touchlab.kermit.Logger
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.data.IntegrationDefinition
 import kotlinx.coroutines.sync.Mutex
@@ -74,7 +75,7 @@ class ObsidianIntegration(
         return vault.listMarkdownFiles(handle)
     }
 
-    override suspend fun createNote(content: String): String? = noteMutex.withLock {
+    override suspend fun createNote(content: String, source: ItemSource?): String? = noteMutex.withLock {
         val handle = prefs.vaultHandle.value
         if (handle == null || !vault.hasAccess(handle)) {
             logger.w { "No accessible Obsidian vault; cannot create note" }

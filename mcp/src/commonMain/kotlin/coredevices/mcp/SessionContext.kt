@@ -13,10 +13,13 @@ import kotlin.time.Instant
  * @property userMessageText a deferred that will resolve to the text of the user message that
  * triggered this tool call, or null if the message text is not available, e.g. deterministic
  * transcription failed.
+ * @property recordingFirestoreId id of the recording this session processes, so tools that
+ * create local objects can link them back to it. Null outside a recording (e.g. share sheet).
  */
 data class SessionContext(
     val timeBase: Instant?,
-    val userMessageText: Deferred<String?>
+    val userMessageText: Deferred<String?>,
+    val recordingFirestoreId: String? = null,
 )
 
 /** A clock frozen at this instant, for resolving relative/ambiguous times against the recording time. */

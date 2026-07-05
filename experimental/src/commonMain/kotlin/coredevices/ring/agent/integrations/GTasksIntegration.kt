@@ -27,6 +27,7 @@ class GTasksIntegration(
         // The Google Tasks API exposes only a due date — there is no per-task notification lead
         // time — so [notifyBefore] cannot be honoured.
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String {
         val token = tokenForScopes() ?: throw IntegrationAuthException("Google Tasks not authorized")
         return googleTasksApi.createTask(token, title, deadline, listId).id

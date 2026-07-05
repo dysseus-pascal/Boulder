@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
 import PlatformUiContext
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.tasker.TaskerEndpoint
@@ -27,6 +28,7 @@ class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String {
         // The due date goes to Tasker as a UTC timestamp: kotlin.time.Instant.toString() renders
         // the absolute due-time in ISO-8601 UTC (e.g. 2026-06-18T16:00:00Z), regardless of local

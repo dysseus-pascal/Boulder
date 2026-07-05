@@ -241,7 +241,8 @@ class RecordingProcessor(
         }
         val sessionContext = SessionContext(
             timeBase = timeBase,
-            CompletableDeferred(text)
+            userMessageText = CompletableDeferred(text),
+            recordingFirestoreId = firestoreId,
         )
 
         trace.markEvent("agent_processing_start",
@@ -321,12 +322,6 @@ class RecordingProcessor(
                     val itemId = itemFactory.simpleUid()
                     runCatching { itemRepo.setItem(itemId, item) }
                         .onFailure { logger.e(it) { "Failed to persist item for tool_call ${msg.tool_call_id}" } }
-                    // Link the local reminder back to this recording so its
-                    // notification can find the feed item to deep link to.
-                    (msg.semantic_result as? SemanticResult.TaskCreation)?.localReminderId?.let { localReminderId ->
-                        runCatching { localReminderDao.setRecordingId(localReminderId, firestoreId) }
-                            .onFailure { logger.w(it) { "Failed to link reminder $localReminderId to recording $firestoreId" } }
-                    }
                 }
         }
         updateConversation(recordingId, agent.conversation.first())

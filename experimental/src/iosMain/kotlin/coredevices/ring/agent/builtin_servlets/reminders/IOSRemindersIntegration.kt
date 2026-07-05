@@ -2,6 +2,7 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
 import kotlinx.datetime.toNSDate
@@ -51,6 +52,7 @@ class IOSRemindersIntegration : ReminderIntegration {
         deadline: Instant?,
         listId: String?,
         notifyBefore: Duration?,
+        source: ItemSource?,
     ): String {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }

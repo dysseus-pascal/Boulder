@@ -9,6 +9,7 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.ui.isLocale24HourFormat
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -207,7 +208,7 @@ class ReminderTool: BuiltInMcpTool(
 
         return try {
             val reminderId = reminderIntegrationFactory.createReminderIntegration()
-                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore)
+                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(

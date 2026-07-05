@@ -5,8 +5,6 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,8 +19,6 @@ import kotlin.time.Instant
 class ShareActionHandler(
     private val noteIntegrationFactory: NoteIntegrationFactory,
     private val reminderIntegrationFactory: ReminderIntegrationFactory,
-    private val itemFactory: ItemFactory,
-    private val itemRepository: ItemRepository,
 ) {
     enum class Action { Note, Reminder }
 
@@ -59,35 +55,14 @@ class ShareActionHandler(
         }
     }
 
+    // The integration creates the feed item itself when builtin; external providers own the
+    // note/reminder remotely, so no local item is created.
     private suspend fun createNote(text: String) {
         noteIntegrationFactory.createNoteClient().createNote(text)
-        itemRepository.setItem(
-            itemFactory.simpleUid(),
-            itemFactory.noteItem(
-                sourceRecordingId = null,
-                createdAt = Clock.System.now(),
-                title = text,
-                listHint = null,
-                toolCallId = null,
-            ),
-        )
     }
 
     private suspend fun createReminder(text: String) {
-        val time = parseReminderTime(text)
-        val localReminderId = reminderIntegrationFactory.createReminderIntegration()
-            .createReminder(text, time)
-            .toIntOrNull()
-        itemRepository.setItem(
-            itemFactory.simpleUid(),
-            itemFactory.reminderItem(
-                sourceRecordingId = null,
-                createdAt = Clock.System.now(),
-                title = text,
-                dueAt = time,
-                toolCallId = null,
-                localReminderId = localReminderId,
-            ),
-        )
+        reminderIntegrationFactory.createReminderIntegration()
+            .createReminder(text, parseReminderTime(text))
     }
 }

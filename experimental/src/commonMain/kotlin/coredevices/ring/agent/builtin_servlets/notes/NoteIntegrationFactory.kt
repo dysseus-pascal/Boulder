@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.notes
 
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
@@ -20,9 +21,13 @@ class NoteIntegrationFactory(
         logger.i { "Creating note integration for provider: $integration" }
         return when (integration) {
             NoteProvider.Builtin -> LocalNoteClient(get(), get())
-            NoteProvider.Notion -> get<NotionIntegration>()
-            NoteProvider.Obsidian -> get<ObsidianIntegration>()
-            NoteProvider.Tasker -> createTaskerNoteClient()
+            NoteProvider.Notion -> delegated(get<NotionIntegration>(), integration)
+            NoteProvider.Obsidian -> delegated(get<ObsidianIntegration>(), integration)
+            NoteProvider.Tasker -> delegated(createTaskerNoteClient(), integration)
         }
     }
+
+    // External integrations own the note remotely; the wrapper records a "Sent to X" feed item.
+    private fun delegated(delegate: NoteIntegration, provider: NoteProvider): NoteIntegration =
+        DelegatingNoteIntegration(delegate, provider.title, get())
 }

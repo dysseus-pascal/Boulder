@@ -128,5 +128,14 @@ data class ItemDocument(
         @Serializable
         @SerialName("checklist")
         object Checklist : ItemMetadata
+
+        /**
+         * Marker for a note/reminder handed to an external integration rather than stored
+         * locally — the real object lives in that service. [integration] is the provider's
+         * display name (e.g. "Notion", "Google Tasks") so the feed can say "Sent to X".
+         */
+        @Serializable
+        @SerialName("delegated")
+        data class DelegatedToIntegration(val integration: String) : ItemMetadata
     }
 }

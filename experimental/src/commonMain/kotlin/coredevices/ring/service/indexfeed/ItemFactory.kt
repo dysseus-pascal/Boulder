@@ -222,6 +222,22 @@ class ItemFactory {
         metadata = ItemMetadata.ActionLog(toolName = toolName, success = success),
     )
 
+    /** Marker item for a note/reminder handed to an external integration ("Sent to X"). */
+    fun delegatedItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        integrationName: String,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.DelegatedToIntegration(integration = integrationName),
+    )
+
     fun answerItem(
         sourceRecordingId: String,
         createdAt: Instant,

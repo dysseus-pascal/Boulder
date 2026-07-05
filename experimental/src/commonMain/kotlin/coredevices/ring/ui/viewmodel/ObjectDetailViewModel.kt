@@ -480,6 +480,7 @@ internal fun kindLabel(kind: String): String = when (kind) {
     "message" -> "Message"
     "action_log" -> "Action"
     "calendar_event" -> "Event"
+    "delegated" -> "Sent"
     "list" -> "List"
     else -> kind.replaceFirstChar { it.uppercase() }
 }

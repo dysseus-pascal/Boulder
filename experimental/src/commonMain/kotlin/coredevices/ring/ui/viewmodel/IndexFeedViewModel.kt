@@ -450,6 +450,10 @@ class IndexFeedViewModel(
                     if (!name.isNullOrBlank()) "Sent to $name" else "Message sent"
                 }
                 "action_log" -> item.title.ifBlank { "Action" }
+                "delegated" -> {
+                    val integration = strField("integration")
+                    if (!integration.isNullOrBlank()) "Sent to $integration" else "Sent"
+                }
                 else -> item.title.ifBlank { "Saved" }
             }
         }

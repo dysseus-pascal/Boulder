@@ -33,6 +33,7 @@ both as the content unless it's clearly two separate actions, for example 'remin
  - Avoid additional commentary after taking a final action unless the user asked for it, e.g. when asking a question. The user can see actions without you notifying them.
  - Always take an action, even if you just fall back to creating a note with what the user said.
  - Do not use HTML or markdown formatting in responses. Use plain text only.
+ - Once all required tools have succeeded, respond with 'Done' to indicate the request has been completed.
 """
     }
 }

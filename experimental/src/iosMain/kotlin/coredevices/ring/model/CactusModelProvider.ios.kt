@@ -15,6 +15,7 @@ import okio.SYSTEM
 import okio.buffer
 import okio.openZip
 import platform.Foundation.NSApplicationSupportDirectory
+import platform.Foundation.NSBundle
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
@@ -149,16 +150,25 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
         val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
         val zipName = "${modelName.lowercase()}-$quantization.zip"
-        val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
-        logger.i { "Downloading model: $url" }
 
         val tempZipPath = "${NSTemporaryDirectory()}cactus_download_$modelName.zip"
         val fileManager = NSFileManager.defaultManager
 
-        try {
+        // Prefer a model zip bundled with the app (mirrors Android's assets/models) over
+        // downloading. On iOS the zip sits at the bundle root with no subdirectory.
+        val bundledZipPath = NSBundle.mainBundle.pathForResource(zipName.removeSuffix(".zip"), ofType = "zip")
+        val sourceZipPath = if (bundledZipPath != null) {
+            logger.i { "Found bundled model zip: $zipName, extracting..." }
+            bundledZipPath
+        } else {
+            val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
+            logger.i { "Downloading model: $url" }
             downloadToFile(url, tempZipPath)
             logger.i { "Download complete: $tempZipPath" }
+            tempZipPath
+        }
 
+        try {
             // Clear old model if present
             if (fileManager.fileExistsAtPath(targetDir)) {
                 fileManager.removeItemAtPath(targetDir, null)
@@ -168,7 +178,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                 attributes = null, error = null
             )
 
-            extractZip(tempZipPath, targetDir)
+            extractZip(sourceZipPath, targetDir)
             logger.i { "Extraction complete to $targetDir" }
         } catch (e: Exception) {
             logger.e(e) { "Model download/extract failed for $modelName" }

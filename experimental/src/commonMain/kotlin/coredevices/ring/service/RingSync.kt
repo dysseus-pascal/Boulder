@@ -61,6 +61,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TimeSource
 import kotlin.time.measureTime
 import kotlin.uuid.Uuid
@@ -149,6 +150,9 @@ class RingSync(
     private val saveSemaphore = Semaphore(permits = 8)
     private val _lastRing: MutableStateFlow<KMPHaversineSatellite?> = MutableStateFlow(null)
     val lastRing = _lastRing.asStateFlow()
+
+    private val _lastSyncedAt: MutableStateFlow<Instant?> = MutableStateFlow(null)
+    val lastSyncedAt = _lastSyncedAt.asStateFlow()
 
     private fun resample(samples: ShortArray, sampleRate: Int): ShortArray {
         val resampler = Resampler(sampleRate, TARGET_SAMPLE_RATE)
@@ -522,6 +526,7 @@ class RingSync(
                                                     }
 
                                                     is TransferStatus.TransferComplete -> {
+                                                        _lastSyncedAt.value = Clock.System.now()
                                                         val range = transferRange
                                                         trace.markEvent("transfer_completed",
                                                             TraceEventData.TransferCompleted(

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -68,7 +69,9 @@ class AllListsViewModel(
                     listKind = "note",
                 ),
             )
-            onCreated(newId)
+            // Hop to Main: onCreated navigates, and NavController
+            // requires the main thread.
+            withContext(Dispatchers.Main) { onCreated(newId) }
         }
     }
 

@@ -43,6 +43,9 @@ class BuiltInReminderFeedItemsTest {
         override suspend fun deleteById(id: String) { items.remove(id) }
         override suspend fun deleteAll() { items.clear() }
         override suspend fun getAllIds(): List<String> = items.keys.toList()
+        override suspend fun countLocked(): Int {
+            return 0
+        }
     }
 
     private class FakeCachedListDao(val lists: List<CachedList>) : CachedListDao {
@@ -56,6 +59,9 @@ class BuiltInReminderFeedItemsTest {
         override suspend fun count(): Int = lists.size
         override suspend fun deleteById(id: String) = error("unused")
         override suspend fun deleteAll() = error("unused")
+        override suspend fun countLocked(): Int {
+            return 0
+        }
     }
 
     private val defaultLists = listOf(
@@ -81,15 +87,15 @@ class BuiltInReminderFeedItemsTest {
         val (feedItems, itemDao) = fixture()
         feedItems.createFeedItem(
             localReminderId = 5,
-            title = "Milk",
+            title = "Umbrella",
             deadline = null,
-            listId = LIST_SHOPPING_ID,
+            listId = "list_custom",
             notifyBefore = null,
             source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now),
         )
         val item = itemDao.items.values.single().toDocument()
-        assertEquals("Milk", item.title)
-        assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
+        assertEquals("Umbrella", item.title)
+        assertEquals(listOf("list_custom"), item.parentListIds)
         assertEquals("rec-1", item.sourceRecordingId)
         assertEquals(now, item.createdAt)
         assertNull(item.sourceToolCallId)

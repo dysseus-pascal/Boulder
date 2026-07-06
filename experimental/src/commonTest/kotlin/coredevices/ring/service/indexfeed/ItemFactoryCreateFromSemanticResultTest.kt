@@ -107,20 +107,20 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun listItemCreationRoutedToShoppingBecomesChecklist() {
-        val item = map(
-            SemanticResult.ListItemCreation(content = "Milk", listUsed = "Shopping", resolvedListId = LIST_SHOPPING_ID)
-        )!!
+    fun noteItemRoutedToShoppingBecomesChecklist() {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Milk", listHint = "Shopping", toolCallId = null, resolvedListId = LIST_SHOPPING_ID,
+        )
 
         assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
         assertTrue(item.metadata is ItemMetadata.Checklist)
     }
 
     @Test
-    fun listItemCreationRoutedToShoppingByHintBecomesChecklist() {
+    fun noteItemRoutedToShoppingByHintBecomesChecklist() {
         // No resolvedListId: pickNoteList sends "shopping"/"grocery" hints to the
         // shopping list, and those items should be checklist items too.
-        val item = map(SemanticResult.ListItemCreation(content = "Eggs", listUsed = "grocery"))!!
+        val item = factory.noteItem(recordingId, createdAt, "Eggs", listHint = "grocery", toolCallId = null)
 
         assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
         assertTrue(item.metadata is ItemMetadata.Checklist)

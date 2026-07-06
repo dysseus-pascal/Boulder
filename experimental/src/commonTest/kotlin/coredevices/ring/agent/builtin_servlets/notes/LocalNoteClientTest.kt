@@ -36,6 +36,9 @@ class LocalNoteClientTest {
         override suspend fun deleteById(id: String) { items.remove(id) }
         override suspend fun deleteAll() { items.clear() }
         override suspend fun getAllIds(): List<String> = items.keys.toList()
+        override suspend fun countLocked(): Int {
+            return 0
+        }
     }
 
     private fun fixture(): Pair<LocalNoteClient, FakeCachedItemDao> {

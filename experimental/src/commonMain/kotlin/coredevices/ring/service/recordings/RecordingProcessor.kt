@@ -122,7 +122,8 @@ class RecordingProcessor(
         sampleRate,
         language = language,
         encoding = encoding,
-        dictionaryContext = dictionaryContext
+        dictionaryContext = dictionaryContext,
+        initialTimeout = TRANSCRIPTION_TIMEOUT,
     ).flowOn(Dispatchers.IO)
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {

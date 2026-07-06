@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class WisprFlowTranscriptionService(
@@ -135,6 +136,7 @@ class WisprFlowTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow

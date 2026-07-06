@@ -38,6 +38,7 @@ import kotlinx.io.readByteArray
 import kotlinx.io.write
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -82,6 +83,7 @@ class WisprFlowRESTTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow

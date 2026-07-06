@@ -1,6 +1,7 @@
 package coredevices.util.transcription
 
 import coredevices.util.AudioEncoding
+import kotlin.time.Duration
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 
@@ -21,6 +22,7 @@ interface TranscriptionService {
     /**
      * Transcribe audio stream frames to text.
      * @param audioStreamFrames Audio stream frames to transcribe (in PCM format). If null, transcription will use default mic (and requires permission).
+     * @param initialTimeout Optional override for the initial transcription attempt timeout; when null the service's own default is used.
      * @return Flow of transcription session status.
      */
     suspend fun transcribe(
@@ -31,6 +33,7 @@ interface TranscriptionService {
         dictionaryContext: List<String>? = null,
         contentContext: String? = null,
         encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
+        initialTimeout: Duration? = null,
     ): Flow<TranscriptionSessionStatus>
 
     val onInitialized: Channel<Boolean>

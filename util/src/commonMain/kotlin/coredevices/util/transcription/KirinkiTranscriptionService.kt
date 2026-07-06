@@ -20,6 +20,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -65,6 +66,7 @@ class KirinkiTranscriptionService : ApiClient(CommonBuildKonfig.USER_AGENT_VERSI
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         val url = CommonBuildKonfig.KIRINKI_URL
             ?: throw TranscriptionException.TranscriptionServiceUnavailable(MODEL_USED)

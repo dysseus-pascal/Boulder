@@ -19,6 +19,7 @@ import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -95,12 +96,9 @@ class HybridTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        willFallbackLocal: Boolean
+        willFallbackLocal: Boolean,
+        initialTimeout: Duration = if (willFallbackLocal) 7.seconds else 10.seconds // We reduce the timeout if we have the potential to fall back locally since some consumers (e.g. pebble firmware) have hard timeouts.
     ): TranscriptionSessionStatus.Transcription {
-        // We reduce the timeout if we have the potential to fall back locally since some consumers
-        // (e.g. pebble firmware) have hard timeouts.
-        val initialTimeout = if (willFallbackLocal) 7.seconds else 10.seconds
-
         suspend fun transcribeKirinki() = try {
             kirinki.transcribe(
                 audioStreamFrames = flowOf(audio),
@@ -176,6 +174,7 @@ class HybridTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
+        initialTimeout: Duration? = null
     ): RoutedResult {
         suspend fun remote(willFallbackLocal: Boolean): TranscriptionSessionStatus.Transcription =
             remoteTranscribe(
@@ -186,6 +185,7 @@ class HybridTranscriptionService(
                 dictionaryContext = dictionaryContext,
                 contentContext = contentContext,
                 willFallbackLocal = willFallbackLocal,
+                initialTimeout = initialTimeout ?: if (willFallbackLocal) 7.seconds else 10.seconds
             )
 
         logger.d { "Using transcription mode ${sttConfig.mode}" }
@@ -249,6 +249,7 @@ class HybridTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "HybridTranscriptionService.transcribe() called" }
         // Kick off local model init concurrently with audio collection so it's warm if we need it.
@@ -278,6 +279,7 @@ class HybridTranscriptionService(
                 conversationContext = conversationContext,
                 dictionaryContext = dictionaryContext,
                 contentContext = contentContext,
+                initialTimeout = initialTimeout,
             )
             val duration = Clock.System.now() - start
             logger.d { "Transcription completed in $duration" }

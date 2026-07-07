@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
@@ -398,6 +399,25 @@ class RingSync(
                                                                     }
                                                                 }
 
+                                                                // Advancing to a new start index means any lower index still in
+                                                                // Started never had its audio delivered (the ring moved on). Fail
+                                                                // them so they reach a terminal state (MOB-8727).
+                                                                val orphaned = withContext(Dispatchers.IO) {
+                                                                    ringTransferRepository.failOrphanedStartedTransfersBelow(idx)
+                                                                }
+                                                                orphaned.forEach { orphan ->
+                                                                    trace.markEvent("past_transfer_failed",
+                                                                        TraceEventData.PastTransferFailed(
+                                                                            satellite = satelliteSerial,
+                                                                            transferId = orphan.id
+                                                                        )
+                                                                    )
+                                                                    logger.i {
+                                                                        "Advanced to index $idx, marking orphaned transfer ${orphan.id} " +
+                                                                                "(start idx ${orphan.transferInfo?.collectionStartIndex}) as failed"
+                                                                    }
+                                                                }
+
                                                                 lastIdx = idx
                                                                 val id = withContext(Dispatchers.IO) {
                                                                     ringTransferRepository.createRingTransfer(
@@ -620,6 +640,10 @@ class RingSync(
                                                                     transfer.id,
                                                                     transferInfo
                                                                 )
+                                                                ringTransferRepository.updateTransferStatus(
+                                                                    transfer.id,
+                                                                    RingTransferStatus.Saving
+                                                                )
                                                             }
                                                             logger.d { "Saving transfer..." }
                                                             id = "ring_${transferStatus.satellite.id}-${transferStatus.collectionIndex}-${Uuid.random()}"
@@ -686,6 +710,14 @@ class RingSync(
                                                                         throw e
                                                                     } catch (e: Exception) {
                                                                         logger.e(e) { "Error saving/queueing transfer ${transfer.id}: ${e.message}" }
+                                                                        // Saving is excluded from the orphan sweep, so give a failed
+                                                                        // save an explicit terminal state instead of stranding it.
+                                                                        withContext(NonCancellable + Dispatchers.IO) {
+                                                                            ringTransferRepository.updateTransferStatus(
+                                                                                transfer.id,
+                                                                                RingTransferStatus.Failed
+                                                                            )
+                                                                        }
                                                                         sendBugReportPrompt()
                                                                     }
                                                                 }

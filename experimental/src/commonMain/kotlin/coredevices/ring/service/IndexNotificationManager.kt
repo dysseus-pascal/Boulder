@@ -118,7 +118,7 @@ class IndexNotificationManager(
         )
 
         when (transfer.status) {
-            RingTransferStatus.Started -> {
+            RingTransferStatus.Started, RingTransferStatus.Saving -> {
                 return InflightIndexNotification.Transferring(notifId, timestamp)
             }
             RingTransferStatus.Discarded -> {

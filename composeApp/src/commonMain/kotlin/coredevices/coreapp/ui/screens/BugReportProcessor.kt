@@ -32,6 +32,7 @@ import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
@@ -53,6 +54,7 @@ import kotlinx.serialization.json.JsonObject
 import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 data class BugReportGenerationParams(
     val userMessage: String,
@@ -437,7 +439,7 @@ class BugReportProcessor(
         }
         GlobalScope.launch(Dispatchers.IO) {
             val userIdToken = try {
-                Firebase.auth.currentUser?.getIdToken(false)
+                Firebase.auth.currentUser?.getIdToken(true)
             } catch (e: Exception) {
                 logger.e(e) { "No user token: ${e.message}" }
                 null
@@ -596,7 +598,9 @@ class BugReportProcessor(
             }
 
             // Step 2: Get presigned URLs for all files
-            val presignedResult = bugApi.getPresignedUrls(fileMetadata, googleIdToken)
+            val presignedResult = withStrikes {
+                bugApi.getPresignedUrls(fileMetadata, googleIdToken)
+            }
             if (presignedResult.isFailure) {
                 logger.e { "Failed to get presigned URLs: ${presignedResult.exceptionOrNull()}" }
                 return@withContext Result.failure(Exception("Unable to prepare file uploads. Please check your connection and try again."))
@@ -617,12 +621,14 @@ class BugReportProcessor(
                 logger.d { "Uploading ${attachment.fileName} to R2 (${attachment.size} bytes)" }
 
                 // Upload to presigned URL using pre-read data
-                val uploadResult = bugApi.uploadToPresignedUrl(
-                    presignedUrl = uploadInfo.uploadUrl,
-                    data = attachment.source,
-                    contentType = attachment.mimeType ?: "application/octet-stream",
-                    size = attachment.size,
-                )
+                val uploadResult = withStrikes {
+                    bugApi.uploadToPresignedUrl(
+                        presignedUrl = uploadInfo.uploadUrl,
+                        data = attachment.source,
+                        contentType = attachment.mimeType ?: "application/octet-stream",
+                        size = attachment.size,
+                    )
+                }
 
                 if (uploadResult.isSuccess) {
                     // Extract file key from URL (exact pattern from test script)
@@ -636,11 +642,13 @@ class BugReportProcessor(
 
                     // Call upload complete immediately for this file
                     try {
-                        val completeResult = bugApi.completeUpload(
-                            fileKey = fileKey,
-                            bugReportId = bugReportId,
-                            googleIdToken = googleIdToken
-                        )
+                        val completeResult = withStrikes {
+                            bugApi.completeUpload(
+                                fileKey = fileKey,
+                                bugReportId = bugReportId,
+                                googleIdToken = googleIdToken
+                            )
+                        }
                         if (completeResult.isFailure) {
                             logger.e { "Failed to complete upload for ${attachment.fileName}: ${completeResult.exceptionOrNull()}" }
                             // Don't fail the whole process, just log the error
@@ -709,6 +717,20 @@ class BugReportProcessor(
                 appendLine("watch_$index $watch")
             }
         }
+    }
+
+    private suspend fun <T> withStrikes(strikes: Int = 3, block: suspend () -> Result<T>): Result<T> {
+        var result: Result<T>? = null
+        repeat(strikes) {
+            result = block()
+            if (result.isSuccess) {
+                return result
+            } else {
+                logger.w(result.exceptionOrNull()) { "Attempt ${it + 1} failed: ${result.exceptionOrNull()?.message}" }
+                delay(1.seconds)
+            }
+        }
+        return result ?: Result.failure(Exception("Unknown error after $strikes attempts"))
     }
 }
 

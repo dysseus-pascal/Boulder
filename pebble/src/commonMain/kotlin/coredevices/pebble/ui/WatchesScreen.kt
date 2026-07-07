@@ -642,6 +642,13 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         "You'll see the light flash red green blue repeatedly when successful.",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
                     )
+                    val uriHandler = LocalUriHandler.current
+                    TextButton(
+                        onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Text("Need more help? View detailed instructions")
+                    }
                 }
             },
             confirmButton = {
@@ -944,6 +951,13 @@ fun RingItem(
                     )
                     Text("Short (3 times) LONG (1 second, 3 times) short (3 times)", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
                     Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                    val uriHandler = LocalUriHandler.current
+                    TextButton(
+                        onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Text("Need more help? View detailed instructions")
+                    }
                 }
             },
             confirmButton = {

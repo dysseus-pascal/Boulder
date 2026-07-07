@@ -260,8 +260,17 @@ private fun HttpServerEditDialog(
     var authHeader by remember { mutableStateOf(initialServer?.authHeader ?: "") }
     var showAuthSection by remember { mutableStateOf(initialServer?.authHeader?.isNotBlank() == true) }
     var cachedTitle by remember { mutableStateOf(initialServer?.cachedTitle ?: "") }
+    // The endpoint (url, protocol, auth) that `cachedTitle` was fetched for. A title only
+    // describes that exact endpoint, so if these fields change we must not keep it.
+    var titleEndpoint by remember {
+        mutableStateOf(
+            initialServer?.let { Triple(it.url, it.streamable, it.authHeader ?: "") }
+        )
+    }
     var isFetchingTitle by remember { mutableStateOf(false) }
     var serverContactable by remember { mutableStateOf<Boolean?>(null) }
+    // The reason the server couldn't be reached, surfaced to the user (null when reachable/unknown).
+    var fetchError by remember { mutableStateOf<String?>(null) }
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
@@ -273,6 +282,7 @@ private fun HttpServerEditDialog(
             cachedTitle = ""
             availablePrompts = emptyList()
             serverContactable = null
+            fetchError = null
             return@LaunchedEffect
         }
         delay(500) // Debounce
@@ -288,23 +298,32 @@ private fun HttpServerEditDialog(
             )
             integration.connect()
             cachedTitle = integration.title ?: ""
+            titleEndpoint = Triple(url, streamable, authHeader)
             availablePrompts = integration.listPrompts()
             integration.close()
             serverContactable = true
+            fetchError = null
         } catch (e: Exception) {
             Logger.withTag("HttpServerEditDialog").w("Failed to fetch MCP server title", e)
-            cachedTitle = ""
+            // Keep the cached title only if the endpoint is unchanged (server just momentarily
+            // unreachable); if the user edited url/protocol/auth, the old title is stale for the
+            // new endpoint and must not be shown or saved.
+            if (Triple(url, streamable, authHeader) != titleEndpoint) {
+                cachedTitle = ""
+            }
             availablePrompts = emptyList()
             serverContactable = false
+            fetchError = e.message ?: e::class.simpleName ?: "Unknown error"
         } finally {
             isFetchingTitle = false
         }
     }
 
     val isEditing = initialServer != null
-    // Name and URL are required, and the server must be contactable so we don't save a
-    // broken entry.
-    val canSave = name.isNotBlank() && url.isNotBlank() && serverContactable == true
+    // Only Name and URL are required. Contactability is advisory (surfaced as an error below)
+    // but must not gate saving: a server may be momentarily down, need auth entered here, or
+    // simply not respond to the title probe while still being a valid entry to create.
+    val canSave = name.isNotBlank() && url.isNotBlank()
 
     M3Dialog(
         onDismissRequest = onDismiss,
@@ -368,7 +387,7 @@ private fun HttpServerEditDialog(
                         { Text("Fetching server info...") }
                     }
                     serverContactable == false -> {
-                        { Text("Server not contactable") }
+                        { Text("Couldn't reach server: ${fetchError ?: "unknown error"}") }
                     }
                     cachedTitle.isNotBlank() -> {
                         { Text("Server: $cachedTitle") }

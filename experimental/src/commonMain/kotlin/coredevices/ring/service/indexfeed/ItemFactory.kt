@@ -116,10 +116,12 @@ class ItemFactory {
         repeatDays: Set<Int> = emptySet(),
     ): ItemDocument {
         val timeStr = fireTime.toString().substringBefore('.').take(5)
+        // The system clock app owns the alarm; surface it only on the recording,
+        // not in the Reminders list.
         return createItem(
             createdAt = createdAt,
             title = "Alarm · $timeStr",
-            parents = listOf(LIST_TODOS_ID),
+            parents = emptyList(),
             recordingId = sourceRecordingId,
             toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(
@@ -163,11 +165,13 @@ class ItemFactory {
     ): ItemDocument {
         val durationPretty = duration?.toString()
         val title = "Timer" + (durationPretty?.let { " · $it" } ?: "")
+        // The system clock app owns the timer; surface it only on the recording,
+        // not in the Reminders list.
         return createItem(
             createdAt = createdAt,
             title = title,
             dueAt = dueAt,
-            parents = listOf(LIST_TODOS_ID),
+            parents = emptyList(),
             recordingId = sourceRecordingId,
             toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(

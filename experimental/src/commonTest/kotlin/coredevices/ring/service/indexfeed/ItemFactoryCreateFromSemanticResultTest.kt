@@ -134,6 +134,8 @@ class ItemFactoryCreateFromSemanticResultTest {
         assertEquals(ItemMetadata.Scheduled.FireKind.Alarm, meta.fireKind)
         assertEquals(LocalTime(7, 0), meta.fireTime)
         assertEquals(toolCallId, item.sourceToolCallId)
+        // Owned by the system clock app — must not appear in the Reminders list.
+        assertEquals(emptyList(), item.parentListIds)
     }
 
     @Test
@@ -145,6 +147,8 @@ class ItemFactoryCreateFromSemanticResultTest {
         assertEquals(ItemMetadata.Scheduled.FireKind.Timer, meta.fireKind)
         assertEquals(fireAt, item.dueAt)
         assertEquals(toolCallId, item.sourceToolCallId)
+        // Owned by the system clock app — must not appear in the Reminders list.
+        assertEquals(emptyList(), item.parentListIds)
     }
 
     @Test

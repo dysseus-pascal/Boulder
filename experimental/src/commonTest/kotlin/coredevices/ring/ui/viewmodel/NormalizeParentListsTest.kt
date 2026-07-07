@@ -59,6 +59,20 @@ class NormalizeParentListsTest {
     }
 
     @Test
+    fun scheduledEditKeepsItemOutOfReminders() {
+        // Timer/alarm items are owned by the system clock app; an edit must not
+        // re-parent them into the Reminders list.
+        assertEquals(
+            emptyList(),
+            normalizeParentLists(
+                kind = "scheduled",
+                requestedParents = null,
+                currentParents = emptyList(),
+            ),
+        )
+    }
+
+    @Test
     fun explicitDeselectAllFallsBackToNotes() {
         assertEquals(
             listOf(LIST_NOTES_SELF_ID),

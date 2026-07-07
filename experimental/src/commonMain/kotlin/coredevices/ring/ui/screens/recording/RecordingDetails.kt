@@ -84,8 +84,10 @@ import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.ui.components.chat.actionText
+import coredevices.ring.ui.openSystemClockApp
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
@@ -713,7 +715,12 @@ private fun AssistantTurn(
                                 glyph = if (item.locked) "" else chipGlyph(item.kind),
                                 label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                     .chipLabel(item, allLists).take(64),
-                                onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
+                                onClick = if (item.locked) null else ({
+                                    // First try opening item deeplink, otherwise open in-app details
+                                    if(!openLinkedItem(item)) {
+                                        onOpenObject(item.firestoreId)
+                                    }
+                                }),
                             )
                             // Otherwise collapse the call + its result into one
                             // chip showing the result.
@@ -871,13 +878,28 @@ private fun TrailingItemChips(
                             glyph = if (item.locked) "" else chipGlyph(item.kind),
                             label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                 .chipLabel(item, allLists).take(64),
-                            onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
+                            onClick = if (item.locked) null else ({
+                                // First try opening item deeplink, otherwise open in-app details
+                                if(!openLinkedItem(item)) {
+                                    onOpenObject(item.firestoreId)
+                                }
+                            }),
                         )
                     }
                 }
             }
         }
     }
+}
+
+/** Timer/alarm chips represent something owned by the system clock app, so
+ *  tapping them deep links there; everything else (and platforms that can't
+ *  open the clock app) opens the in-app object detail. */
+private fun openLinkedItem(
+    item: coredevices.ring.data.entity.room.indexfeed.CachedItem
+): Boolean {
+    val scheduled = item.metadata as? ItemMetadata.Scheduled
+    return scheduled != null && openSystemClockApp(scheduled.fireKind)
 }
 
 /** Pill-shaped action chip. [onClick] null = non-interactive (raw tool call). */

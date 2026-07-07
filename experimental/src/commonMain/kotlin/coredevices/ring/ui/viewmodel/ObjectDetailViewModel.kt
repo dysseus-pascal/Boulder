@@ -490,7 +490,10 @@ internal fun normalizeParentLists(
     requestedParents: List<String>?,
     currentParents: List<String>,
 ): List<String> {
-    if (kind == "reminder" || kind == "scheduled") return listOf(LIST_TODOS_ID)
+    if (kind == "reminder") return listOf(LIST_TODOS_ID)
+    // Scheduled (timer/alarm) items are owned by the system clock app and stay
+    // out of the Reminders list; an edit must not re-parent them into it.
+    if (kind == "scheduled") return currentParents
 
     // No explicit membership change → preserve current lists as-is. Stripping
     // Todos / defaulting to Notes here would silently relocate items that

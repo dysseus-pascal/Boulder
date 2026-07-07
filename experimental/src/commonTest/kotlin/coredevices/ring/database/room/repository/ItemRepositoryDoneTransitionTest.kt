@@ -14,8 +14,8 @@ import kotlin.test.assertEquals
 import kotlin.time.ExperimentalTime
 
 /**
- * Verifies that completing a reminder item cancels its backing reminder exactly once, and only on
- * a genuine false->true `done` transition (MOB-7831).
+ * Verifies that completing (MOB-7831) or deleting (MOB-8390) a reminder item cancels its backing
+ * reminder exactly once, and only on a genuine false->true `done`/`deleted` transition.
  */
 class ItemRepositoryDoneTransitionTest {
 
@@ -89,10 +89,41 @@ class ItemRepositoryDoneTransitionTest {
     }
 
     @Test
-    fun softDeleteDoesNotCancel() = runBlocking {
+    fun softDeleteCancelsReminder() = runBlocking {
+        // Deleting a reminder item (from the feed, a list, or a recording's
+        // "delete recording and items") must cancel the scheduled alarm so the
+        // notification doesn't fire for a deleted reminder (MOB-8390).
         val (repo, cancelled) = fixture()
         repo.setItem("a", reminderItem(done = false))
-        repo.softDelete("a")   // flips deleted, leaves done unchanged
+        repo.softDelete("a")
+        assertEquals(listOf(7), cancelled)
+    }
+
+    @Test
+    fun softDeleteOfDoneReminderCancelsAgainHarmlessly() = runBlocking {
+        // done=true already cancelled once; the delete transition cancels again,
+        // which is a no-op at the alarm layer (row already gone).
+        val (repo, cancelled) = fixture()
+        repo.setItem("a", reminderItem(done = false))
+        repo.setItem("a", reminderItem(done = true))
+        repo.softDelete("a")
+        assertEquals(listOf(7, 7), cancelled)
+    }
+
+    @Test
+    fun reSavingAlreadyDeletedItemDoesNotCancel() = runBlocking {
+        val (repo, cancelled) = fixture()
+        repo.setItem("a", reminderItem(done = false))
+        repo.softDelete("a")
+        repo.softDelete("a")   // no deleted transition the second time
+        assertEquals(listOf(7), cancelled)
+    }
+
+    @Test
+    fun softDeleteOfNonReminderItemDoesNothing() = runBlocking {
+        val (repo, cancelled) = fixture()
+        repo.setItem("a", ItemDocument(title = "note", done = false, metadata = ItemMetadata.Note))
+        repo.softDelete("a")
         assertEquals(emptyList(), cancelled)
     }
 

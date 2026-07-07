@@ -45,9 +45,12 @@ class ItemRepository(
     suspend fun setItem(id: String, item: ItemDocument) {
         val existing = cacheDao.getById(id)
         cacheDao.upsert(CachedItem.fromDocument(id, item))
-        // When a reminder item is completed, cancel its scheduled reminder so the notification
-        // doesn't still fire (MOB-7831). Only on the false->true transition; sync uses upsertLocal.
-        if (existing != null && !existing.done && item.done) {
+        // When a reminder item is completed (MOB-7831) or deleted (MOB-8390), cancel its
+        // scheduled reminder so the notification doesn't still fire. Only on the false->true
+        // transition; sync uses upsertLocal.
+        val completed = existing != null && !existing.done && item.done
+        val deleted = existing != null && !existing.deleted && item.deleted
+        if (completed || deleted) {
             (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
                 runCatching { cancelReminder(it) }
             }

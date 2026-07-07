@@ -298,9 +298,11 @@ class IndexFeedSyncService(
             if (local == null || remote.updatedAt > local.updatedAt || (local.locked && key != null)) {
                 val (resolved, locked) = resolveItem(doc.id, remote, key)
                 itemRepo.upsertLocal(doc.id, resolved, locked)
-                mutex.withLock { itemLastApplied[doc.id] = remote.updatedAt }
                 applied++
             }
+            // Always mark as applied to prevent the push observer from
+            // re-encrypting items that are already in sync (RING-113).
+            mutex.withLock { itemLastApplied[doc.id] = remote.updatedAt }
         }
         var removed = 0
         for (change in snap.documentChanges) {
@@ -328,9 +330,11 @@ class IndexFeedSyncService(
             if (local == null || remote.updatedAt > local.updatedAt || (local.locked && key != null)) {
                 val (resolved, locked) = resolveList(doc.id, remote, key)
                 listRepo.upsertLocal(doc.id, resolved, locked)
-                mutex.withLock { listLastApplied[doc.id] = remote.updatedAt }
                 applied++
             }
+            // Always mark as applied to prevent the push observer from
+            // re-encrypting lists that are already in sync (RING-113).
+            mutex.withLock { listLastApplied[doc.id] = remote.updatedAt }
         }
         var removed = 0
         for (change in snap.documentChanges) {

@@ -426,7 +426,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
                 if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
                     firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
-                    libPebble.checkForFirmwareUpdates()
+                    libPebble.checkForFirmwareUpdates(false)
                 }
             }
 
@@ -1295,7 +1295,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                             Icon(Icons.Outlined.Autorenew, contentDescription = null)
                         },
                         onClick = {
-                            watch.checkforFirmwareUpdate()
+                            watch.checkforFirmwareUpdate(true)
                         }
                     )
                 }

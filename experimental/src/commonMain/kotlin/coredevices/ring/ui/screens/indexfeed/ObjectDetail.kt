@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,6 +45,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -107,6 +110,10 @@ fun ObjectDetail(coreNav: CoreNav, objectId: String, startEditing: Boolean = fal
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = colors.surface,
+            // Include the IME so the content shrinks above the keyboard —
+            // otherwise editing the last row in a long list leaves the
+            // focused field hidden behind the keyboard (MOB-9093).
+            contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
         ) { insets ->
             Box(modifier = Modifier.padding(insets).fillMaxSize().background(colors.surface)) {
                 when (val s = state) {

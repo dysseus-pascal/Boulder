@@ -115,13 +115,12 @@ class AndroidPhoneReceiver(
                             }
                             return@collect
                         }
-                        // Get the latest decline action for hangup
-                        val declineAction = callDetector.declineAction
                         currentCall.value = Call.ActiveCall(
                             contactName = existingCall.contactName,
                             contactNumber = existingCall.contactNumber,
                             cookie = existingCall.cookie,
                             onCallEnd = {
+                                val declineAction = callDetector.declineAction
                                 if (declineAction != null) {
                                     logger.v { "Ending call via notification action" }
                                     try {
@@ -170,16 +169,14 @@ class AndroidPhoneReceiver(
             ?: context.contentResolver.resolveNameFromContacts(number)
         val contactNumber = callDetector.contactNumber ?: number ?: "Unknown number"
 
-        val answerAction = callDetector.answerAction
-        val declineAction = callDetector.declineAction
-
-        logger.d { "Handling ringing call: ${contactName.obfuscate(privateLogger)} / ${contactNumber.obfuscate(privateLogger)} (answer=${answerAction != null}, decline=${declineAction != null})" }
+        logger.d { "Handling ringing call: ${contactName.obfuscate(privateLogger)} / ${contactNumber.obfuscate(privateLogger)} (answer=${callDetector.answerAction != null}, decline=${callDetector.declineAction != null})" }
 
         currentCall.value = Call.RingingCall(
             contactName = contactName,
             contactNumber = contactNumber,
             cookie = cookie,
             onCallAnswer = {
+                val answerAction = callDetector.answerAction
                 if (answerAction != null) {
                     logger.v { "Answering call via notification action" }
                     try {
@@ -192,6 +189,7 @@ class AndroidPhoneReceiver(
                 }
             },
             onCallEnd = {
+                val declineAction = callDetector.declineAction
                 if (declineAction != null) {
                     logger.v { "Declining call via notification action" }
                     try {

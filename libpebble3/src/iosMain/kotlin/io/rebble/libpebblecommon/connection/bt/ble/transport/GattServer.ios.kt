@@ -198,6 +198,16 @@ actual class GattServer(
         logger.d("/addService: $serviceUuid")
     }
 
+    actual suspend fun removeServices() {
+        addServicesMutex.withLock {
+            logger.d("removeServices")
+            registeredServices.values.forEach { service ->
+                peripheralManager.removeService(service)
+            }
+            registeredServices.clear()
+        }
+    }
+
     actual suspend fun closeServer() {
     }
 

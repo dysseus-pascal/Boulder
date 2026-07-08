@@ -157,14 +157,36 @@ class PebbleBle(
             }
         }
 
+        var useReversed = false
         if (reversedConfig != null) {
             // Subscribe to the watch's notify characteristic and wire up the
             // reversed-PPoG transport. Done after pairing so the link is
             // encrypted before we subscribe.
-            ppogPacketSenderProxy.configureReversed(device, reversedConfig)
+            useReversed = try {
+                ppogPacketSenderProxy.configureReversed(device, reversedConfig)
+                true
+            } catch (e: Exception) {
+                // iOS in particular can return a `40000000` reversed-PPoG
+                // service in its cached GATT results even after the watch
+                // stopped advertising it (booted into a firmware without
+                // reversed PPoG, ran the recovery slot, etc.). The subscribe
+                // then fails with CBATTError "invalid handle". CoreBluetooth
+                // gives us no way to force a re-discovery — fall back to
+                // forward-PPoG for this connection and let the phone's own
+                // GATT server carry the session.
+                logger.w(
+                    "reversed PPoG setup failed (likely stale iOS GATT cache); falling back to forward",
+                    e
+                )
+                if (!gattServerManager.registerDevice(identifier, pPoGStream.inboundPPoGBytesChannel)) {
+                    return PebbleConnectionResult.Failed(ConnectionFailureReason.RegisterGattServer)
+                }
+                ppogPacketSenderProxy.configureForward()
+                false
+            }
         }
 
-        ppog.run(reversed = reversedConfig != null)
+        ppog.run(reversed = useReversed)
         return PebbleConnectionResult.Success
     }
 

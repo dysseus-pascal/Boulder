@@ -98,19 +98,20 @@ class GattServerManager(
     fun unregisterDevice(identifier: PebbleBleIdentifier) {
         gattServer?.unregisterDevice(identifier)
         registeredDevices.remove(identifier)
-        if (registeredDevices.isEmpty()) {
-            libPebbleCoroutineScope.launch {
-                serverMutex.withLock {
-                    // Re-check under the lock — another registerDevice may have
-                    // slotted in between the map removal above and this coroutine.
-                    if (registeredDevices.isEmpty() && servicesAdded) {
-                        logger.d("removing forward-PPoG services (no registered devices)")
-                        gattServer?.removeServices()
-                        servicesAdded = false
-                    }
-                }
-            }
-        }
+        // Don't remove services - the churn seems to be breaking connectivity
+//        if (registeredDevices.isEmpty()) {
+//            libPebbleCoroutineScope.launch {
+//                serverMutex.withLock {
+//                    // Re-check under the lock — another registerDevice may have
+//                    // slotted in between the map removal above and this coroutine.
+//                    if (registeredDevices.isEmpty() && servicesAdded) {
+//                        logger.d("removing forward-PPoG services (no registered devices)")
+//                        gattServer?.removeServices()
+//                        servicesAdded = false
+//                    }
+//                }
+//            }
+//        }
     }
 
     suspend fun sendData(

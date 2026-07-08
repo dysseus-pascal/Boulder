@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -261,13 +262,15 @@ class ObjectDetailViewModel(
                 is UiState.ItemView -> {
                     appScope.launch(Dispatchers.IO) {
                         itemRepo.softDelete(s.item.firestoreId)
-                        onAfter()
+                        // Hop to Main: onAfter navigates, and NavController
+                        // requires the main thread (MOB-9323).
+                        withContext(Dispatchers.Main) { onAfter() }
                     }
                 }
                 is UiState.ListView -> {
                     appScope.launch(Dispatchers.IO) {
                         listRepo.softDelete(s.list.firestoreId)
-                        onAfter()
+                        withContext(Dispatchers.Main) { onAfter() }
                     }
                 }
                 else -> return@launch
@@ -295,7 +298,7 @@ class ObjectDetailViewModel(
                 }
             }
             listRepo.softDelete(s.list.firestoreId)
-            onAfter()
+            withContext(Dispatchers.Main) { onAfter() }
         }
     }
 
@@ -318,7 +321,7 @@ class ObjectDetailViewModel(
                 )
             }
             listRepo.softDelete(s.list.firestoreId)
-            onAfter()
+            withContext(Dispatchers.Main) { onAfter() }
         }
     }
 

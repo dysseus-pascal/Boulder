@@ -3,6 +3,7 @@ package coredevices.ring.model
 import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.modelsDirectory
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
@@ -14,7 +15,6 @@ import okio.Path.Companion.toPath
 import okio.SYSTEM
 import okio.buffer
 import okio.openZip
-import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSData
@@ -22,7 +22,6 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
-import platform.Foundation.NSURLIsExcludedFromBackupKey
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.writeToFile
@@ -41,33 +40,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             NSCachesDirectory, NSUserDomainMask, true
         ).first() as String
 
-    private val modelsDir: String by lazy {
-        val appSupport = NSSearchPathForDirectoriesInDomains(
-            NSApplicationSupportDirectory, NSUserDomainMask, true
-        ).first() as String
-        val dir = "$appSupport/models"
-        val fileManager = NSFileManager.defaultManager
-
-        if (!SystemFileSystem.exists(Path(dir))) {
-            // Application Support isn't guaranteed to exist; create it before moving into it.
-            fileManager.createDirectoryAtPath(
-                appSupport, withIntermediateDirectories = true, attributes = null, error = null
-            )
-            // One-time migration: models used to live in Caches. Move an existing download
-            // over rather than re-fetching the (large) weights.
-            val legacyDir = "$cachesDir/models"
-            if (fileManager.fileExistsAtPath(legacyDir)) {
-                fileManager.moveItemAtPath(legacyDir, toPath = dir, error = null)
-            }
-            if (!SystemFileSystem.exists(Path(dir))) {
-                SystemFileSystem.createDirectories(Path(dir))
-            }
-        }
-        NSURL.fileURLWithPath(dir).setResourceValue(
-            true, forKey = NSURLIsExcludedFromBackupKey, error = null
-        )
-        dir
-    }
+    private val modelsDir: String by lazy { modelsDirectory() }
 
     actual override suspend fun getSTTModelPath(): String {
         val modelName = CommonBuildKonfig.CACTUS_STT_MODEL

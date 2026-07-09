@@ -118,8 +118,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
         manager.updateDownloadStatus(ModelDownloadStatus.Downloading(slug, null))
 
         val fileManager = NSFileManager.defaultManager
-        val modelsPath = platform.Foundation.NSSearchPathForDirectoriesInDomains(platform.Foundation.NSCachesDirectory, platform.Foundation.NSUserDomainMask, true).first().toString() + "/models"
-        val outputDir = modelsPath.toPath() / slug.toPath()
+        val outputDir = modelsDirectory().toPath() / slug.toPath()
 
         fileManager.removeItemAtPath(outputDir.toString(), null)
         fileManager.createDirectoryAtPath(outputDir.toString(), withIntermediateDirectories = true, attributes = null, error = null)
@@ -177,9 +176,8 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
             logger.e {"Download failed for model $slug: ${didCompleteWithError.localizedDescription}"}
 
             // Clean up any partially extracted data
-            val modelsPath = platform.Foundation.NSSearchPathForDirectoriesInDomains(platform.Foundation.NSCachesDirectory, platform.Foundation.NSUserDomainMask, true).first().toString() + "/models"
             val fileManager = NSFileManager.defaultManager
-            val outputDir = modelsPath.toPath() / slug.toPath()
+            val outputDir = modelsDirectory().toPath() / slug.toPath()
             if (fileManager.fileExistsAtPath(outputDir.toString())) {
                 fileManager.removeItemAtPath(outputDir.toString(), null)
             }

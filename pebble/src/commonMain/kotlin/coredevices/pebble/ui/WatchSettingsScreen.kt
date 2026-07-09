@@ -1822,12 +1822,15 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             }
         }
+        val libPebble = rememberLibPebble()
+        val libPebbleConfig by libPebble.config.collectAsState()
+        val settingsSyncEnabled = libPebbleConfig.watchConfig.enableWatchSettingsSync
 
-        val availableTopLevelTypes = remember(state.anyWatchSupportsSettingsSync, state.coreConfig) {
+        val availableTopLevelTypes = remember(state.anyWatchSupportsSettingsSync, state.coreConfig, settingsSyncEnabled) {
             TopLevelType.entries.filter {
                 when (it) {
                     TopLevelType.Phone -> true
-                    TopLevelType.Watch -> state.anyWatchSupportsSettingsSync
+                    TopLevelType.Watch -> state.anyWatchSupportsSettingsSync && settingsSyncEnabled
                     TopLevelType.All -> state.coreConfig.showAllSettingsTab
                     TopLevelType.Notifications -> false
                 }

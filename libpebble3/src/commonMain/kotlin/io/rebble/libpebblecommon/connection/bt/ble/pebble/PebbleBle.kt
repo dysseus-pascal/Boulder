@@ -189,7 +189,7 @@ class PebbleBle(
         }
 
         ppog.run(reversed = useReversed)
-        return PebbleConnectionResult.Success(reversedConfig?.version)
+        return PebbleConnectionResult.Success(if (useReversed) reversedConfig?.version else null)
     }
 
     override suspend fun disconnect() {

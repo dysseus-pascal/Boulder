@@ -120,13 +120,14 @@ class WatchManagerTest {
             }
             _state.value = ConnectingPebbleState.Connecting(identifier)
             delay(1.milliseconds)
-            _state.value = ConnectingPebbleState.Negotiating(identifier)
+            _state.value = ConnectingPebbleState.Negotiating(identifier, null)
             delay(1.milliseconds)
             if (connectSuccess) {
                 _state.value = ConnectingPebbleState.Connected.ConnectedNotInPrf(
                     identifier = identifier,
                     watchInfo = TODO(),
                     services = TODO(),
+                    reversePpogVersion = null,
                 )
             } else {
                 _state.value = ConnectingPebbleState.Failed(identifier, ConnectionFailureReason.FailedToConnect)

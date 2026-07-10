@@ -333,6 +333,7 @@ class WatchManager(
             connectionFailureInfo = connectionFailureInfo,
             usingBtClassic = usingBtClassic,
             languagePackInstallState = languagePackInstallState,
+            reversePpogVersion = state.reversePpogVersion(),
         )
 
     fun init() {

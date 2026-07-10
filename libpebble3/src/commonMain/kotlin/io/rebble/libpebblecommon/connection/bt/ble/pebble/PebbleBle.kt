@@ -77,6 +77,7 @@ class PebbleBle(
                 serviceUuid = PPOGATT_WATCH_SERVER_V2_SERVICE,
                 notifyCharacteristic = PPOGATT_WATCH_SERVER_V2_DATA,
                 writeCharacteristic = PPOGATT_WATCH_SERVER_V2_DATA_WR,
+                version = ReversePpogVersion.V2,
             )
 
             libPebbleConfigFlow.value.bleConfig.legacyReversedPPoG && watchServices.any { it.uuid == PPOGATT_DEVICE_SERVICE_UUID_CLIENT } -> PpogClientConfig(
@@ -85,6 +86,7 @@ class PebbleBle(
                 // V1 legacy firmware accepts data writes on the notify char
                 // itself, and that's what the original shipped phone app did.
                 writeCharacteristic = PPOGATT_DEVICE_CHARACTERISTIC_READ,
+                version = ReversePpogVersion.V1,
             )
 
             else -> null
@@ -111,7 +113,7 @@ class PebbleBle(
             }
         }
         val mtuResult = mtuParam.update(device, TARGET_MTU)
-        if (mtuResult != PebbleConnectionResult.Success) {
+        if (mtuResult !is PebbleConnectionResult.Success) {
             return mtuResult
         }
         logger.d("done mtu update")
@@ -187,7 +189,7 @@ class PebbleBle(
         }
 
         ppog.run(reversed = useReversed)
-        return PebbleConnectionResult.Success
+        return PebbleConnectionResult.Success(reversedConfig?.version)
     }
 
     override suspend fun disconnect() {

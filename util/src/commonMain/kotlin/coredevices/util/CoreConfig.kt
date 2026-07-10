@@ -93,6 +93,7 @@ data class CoreConfig(
     val obfuscateSensitiveLogs: Boolean = true,
     val hidePermissionWarningBadges: Boolean = false,
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,
+    val showWatchConnectionDebugInfo: Boolean = false,
 )
 
 @Serializable

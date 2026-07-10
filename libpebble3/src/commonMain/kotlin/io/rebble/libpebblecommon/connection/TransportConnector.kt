@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
@@ -68,7 +69,7 @@ enum class ConnectionFailureReason {
 }
 
 sealed class PebbleConnectionResult {
-    data object Success : PebbleConnectionResult()
+    data class Success(val reversePpogVersion: ReversePpogVersion?) : PebbleConnectionResult()
 
     data class Failed(val reason: ConnectionFailureReason) : PebbleConnectionResult()
 }
@@ -87,7 +88,7 @@ sealed class ConnectingPebbleState {
     data class Inactive(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     data class Connecting(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     data class Failed(override val identifier: PebbleIdentifier, val reason: ConnectionFailureReason) : ConnectingPebbleState()
-    data class Negotiating(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Negotiating(override val identifier: PebbleIdentifier, val reversePpogVersion: ReversePpogVersion?) : ConnectingPebbleState()
     sealed class Connected : ConnectingPebbleState() {
         abstract val watchInfo: WatchInfo
 
@@ -95,14 +96,23 @@ sealed class ConnectingPebbleState {
             override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.PrfServices,
+            val reversePpogVersion: ReversePpogVersion?,
         ) : Connected()
 
         data class ConnectedNotInPrf(
             override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.Services,
+            val reversePpogVersion: ReversePpogVersion?,
         ) : Connected()
     }
+}
+
+fun ConnectingPebbleState?.reversePpogVersion(): ReversePpogVersion? = when (this) {
+    is ConnectingPebbleState.Connected.ConnectedInPrf -> reversePpogVersion
+    is ConnectingPebbleState.Connected.ConnectedNotInPrf -> reversePpogVersion
+    is ConnectingPebbleState.Negotiating -> reversePpogVersion
+    else -> null
 }
 
 fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
@@ -169,7 +179,7 @@ class RealPebbleConnector(
             is PebbleConnectionResult.Success -> {
                 logger.d("$result")
                 val negotiationJob = scope.async {
-                    doAfterConnection(previouslyConnected)
+                    doAfterConnection(previouslyConnected, result.reversePpogVersion)
                 }
                 val disconnectedJob = scope.launch {
                     transportConnector.disconnected.await()
@@ -187,8 +197,8 @@ class RealPebbleConnector(
         }
     }
 
-    private suspend fun doAfterConnection(previouslyConnected: Boolean) {
-        _state.value = Negotiating(identifier)
+    private suspend fun doAfterConnection(previouslyConnected: Boolean, reversePpogVersion: ReversePpogVersion?) {
+        _state.value = Negotiating(identifier, reversePpogVersion)
         scope.launch {
             pebbleProtocolRunner.run()
         }
@@ -239,8 +249,9 @@ class RealPebbleConnector(
                     firmware = firmwareUpdater,
                     logs = logDumpService,
                     coreDump = getBytesService,
-                    devConnection = devConnectionManager
+                    devConnection = devConnectionManager,
                 ),
+                reversePpogVersion = reversePpogVersion,
             )
             return
         }
@@ -282,7 +293,8 @@ class RealPebbleConnector(
                 screenshot = screenshotService,
                 language = languagePackInstaller,
                 health = healthService,
-            )
+            ),
+            reversePpogVersion = reversePpogVersion,
         )
     }
 }

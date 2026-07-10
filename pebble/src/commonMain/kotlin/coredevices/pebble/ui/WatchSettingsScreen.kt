@@ -1787,6 +1787,17 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfigHolder.update(coreConfig.copy(interceptPKJSWeather = it))
                     },
                 ),
+                basicSettingsToggleItem(
+                    title = "Show watch connection debug info",
+                    description = "Extra debug info on devices tab",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = coreConfig.showWatchConnectionDebugInfo,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(showWatchConnectionDebugInfo = it))
+                    },
+                    isDebugSetting = true,
+                ),
             ) + watchPrefs
         }
 

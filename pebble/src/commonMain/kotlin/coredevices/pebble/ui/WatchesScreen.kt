@@ -126,17 +126,17 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.LibIndex
-import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.libindex.device.IndexDevice
-import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.libindex.device.IndexPairingResult
 import coredevices.libindex.device.IndexPairingState
-import coredevices.libindex.device.PairingRequestResult
 import coredevices.libindex.device.InterviewedIndexDevice
+import coredevices.libindex.device.KnownIndexDevice
+import coredevices.libindex.device.PairingRequestResult
 import coredevices.libindex.ui.components.Press
 import coredevices.libindex.ui.components.PressPatternDot
+import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
@@ -150,6 +150,7 @@ import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CompanionDevice
+import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -172,6 +173,7 @@ import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.color
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateErrorStarting
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
@@ -185,12 +187,12 @@ import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
@@ -1127,6 +1129,7 @@ fun FirmwareUpdateErrorStarting.message(): String = when (this) {
 fun PebbleDevice.stateText(
     firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
     languagePackInstallState: LanguagePackInstallState,
+    coreConfig: CoreConfig,
 ): String {
     val installingState = when (firmwareUpdateState) {
         is FirmwareUpdater.FirmwareUpdateStatus.InProgress -> {
@@ -1143,11 +1146,17 @@ fun PebbleDevice.stateText(
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion}"
     }
+    val reversePpogState = when {
+        !coreConfig.showWatchConnectionDebugInfo -> ""
+        reversePpogVersion() != null -> " (reverse PPOG: ${reversePpogVersion()})"
+        else -> ""
+    }
     val stateText = when (this) {
-        is ConnectedPebbleDevice -> "Connected$installingState"
-        is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$installingState"
+        is ConnectedPebbleDevice -> "Connected$reversePpogState$installingState"
+        is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$reversePpogState$installingState"
         is ConnectingPebbleDevice -> {
-            when {
+            val connectingState =
+                when {
                 rebootingAfterFirmwareUpdate -> if (negotiating) {
                     "Rebooting after update - Negotiating"
                 } else {
@@ -1157,14 +1166,22 @@ fun PebbleDevice.stateText(
                 negotiating -> "Negotiating"
                 else -> "Connecting"
             }
+            "$connectingState$reversePpogState"
         }
 
         is KnownPebbleDevice, is DiscoveredPebbleDevice -> "Disconnected"
         is DisconnectingPebbleDevice -> "Disconnecting"
-        else -> "Unknown ($this)"
     }
     return stateText
 }
+
+private fun PebbleDevice.reversePpogVersion(): ReversePpogVersion? =
+    when (this) {
+        is ConnectedPebbleDevice -> reversePpogVersion
+        is ConnectedPebbleDeviceInRecovery -> reversePpogVersion
+        is ConnectingPebbleDevice -> reversePpogVersion
+        else -> null
+    }
 
 private fun PebbleDevice.isActive(): Boolean = when (this) {
     is ConnectedPebbleDevice, is ConnectingPebbleDevice, is ConnectedPebbleDeviceInRecovery -> true
@@ -1959,6 +1976,8 @@ fun WatchDetails(
 ) {
     val appContext: AppContext = koinInject()
     val pebbleFeatures = koinInject<PebbleFeatures>()
+    val coreConfigFlow = koinInject<CoreConfigFlow>()
+    val coreConfig by coreConfigFlow.flow.collectAsState()
     val firmwareUpdateState = remember(watch) {
         if (watch is ConnectedPebble.Firmware) {
             watch.firmwareUpdateState
@@ -1971,7 +1990,7 @@ fun WatchDetails(
     val languagePackInstallState = (watch as? ConnectedPebble.LanguageState)?.languagePackInstallState ?: LanguagePackInstallState.Idle()
     Row {
         Text(
-            text = watch.stateText(firmwareUpdateState, languagePackInstallState),
+            text = watch.stateText(firmwareUpdateState, languagePackInstallState, coreConfig),
             fontWeight = when {
                 watch.isActive() -> FontWeight.Bold
                 else -> FontWeight.Normal

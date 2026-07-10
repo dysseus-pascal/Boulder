@@ -11,7 +11,7 @@ class PebbleBtClassic(
     override suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult {
         val result = connector.connect()
         return when (result) {
-            ClassicConnectionResult.Success -> PebbleConnectionResult.Success
+            ClassicConnectionResult.Success -> PebbleConnectionResult.Success(null)
             ClassicConnectionResult.Failure -> PebbleConnectionResult.Failed(ConnectionFailureReason.ClassicConnectionFailed)
         }
     }

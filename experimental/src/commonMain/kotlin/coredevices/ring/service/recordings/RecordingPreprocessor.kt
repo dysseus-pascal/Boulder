@@ -72,7 +72,7 @@ class RecordingPreprocessor(
         // (removes low-frequency noise/pressure noise from handling)
         val took = measureTime {
             withContext(Dispatchers.Default) {
-                val highPassFilter = HighPassFilter(info.cachedMetadata.sampleRate, 30.0)
+                val highPassFilter = ButterworthHighPassFilter(info.cachedMetadata.sampleRate, 30.0, order = 4)
                 highPassFilter.process(allSamples)
             }
         }

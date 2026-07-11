@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.companion.CompanionDeviceManager
@@ -40,7 +41,9 @@ actual class IndexPlatformBluetoothAssociations(
     actual val associations: StateFlow<List<IndexAssociation>> = _associations.asStateFlow()
     private val _bondStateChanges = MutableSharedFlow<IndexBondStateUpdate>(extraBufferCapacity = 5, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     actual val bondStateChanges: Flow<IndexBondStateUpdate> = _bondStateChanges.asSharedFlow()
-    private val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+    private val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).apply {
+        addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+    }
     private val _associationsReady = CompletableDeferred<Unit>()
     actual val associationsReady: Deferred<Unit> = _associationsReady
 
@@ -58,6 +61,11 @@ actual class IndexPlatformBluetoothAssociations(
             return null
         }
         val bluetoothAdapter = manager.adapter
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            // BT is off or still coming up (e.g. right after a phone reboot). (MOB-9358)
+            Logger.d("updateAssociations: BT adapter not ready (enabled=${bluetoothAdapter?.isEnabled}); skipping")
+            return null
+        }
         val bondedDevices = try {
             bluetoothAdapter.bondedDevices ?: emptySet()
         } catch (e: SecurityException) {
@@ -135,6 +143,15 @@ actual class IndexPlatformBluetoothAssociations(
 
     override fun onReceive(context: Context?, intent: Intent?) {
         val action = intent?.action
+        if (action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            if (state == BluetoothAdapter.STATE_ON) {
+                // BT finished turning on (e.g. after a reboot); the bond list is now readable.
+                logger.d { "BT turned on, refreshing associations" }
+                updateAssociations()
+            }
+            return
+        }
         if (action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
             val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)

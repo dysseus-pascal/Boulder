@@ -231,8 +231,7 @@ val experimentalModule = module {
     singleOf(::RingHacksDelegate) bind KMPHaversineHacksDelegate::class
     singleOf(::McpSandboxRepository)
     singleOf(::BuiltinServletRepository) bind ServletRepository::class
-
-    factoryOf(::GTasksIntegration)
+    factory { GTasksIntegration(get()) }
     factoryOf(::UIEmailIntegration)
     single { createBuiltInReminderIntegration() }
     singleOf(::BuiltInReminderFeedItems)

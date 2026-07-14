@@ -9,6 +9,7 @@ import org.jetbrains.skiko.OS
 import org.jetbrains.skiko.OSVersion
 import org.jetbrains.skiko.available
 import platform.Foundation.NSUUID
+import platform.UIKit.UIScrollViewContentInsetAdjustmentBehavior
 import platform.WebKit.WKWebsiteDataStore
 import kotlin.uuid.Uuid
 
@@ -23,6 +24,14 @@ internal actual fun webViewFactory(params: WebViewFactoryParam, uuid: Uuid): Nat
             configuration.websiteDataStore =
                 WKWebsiteDataStore.nonPersistentDataStore()
         }
+
+        // Stop the webview from auto-adjusting its scroll inset when a text field is
+        // focused. Compose renders through Metal and applies its own keyboard/IME
+        // insets to the interop view; WKWebView's default inset adjustment fights
+        // that, producing the violent up/down scrolling users see when tapping inputs
+        // on PKJS settings pages (MOB-5387 / MOB-9386). Content scrolling still works.
+        scrollView.contentInsetAdjustmentBehavior =
+            UIScrollViewContentInsetAdjustmentBehavior.UIScrollViewContentInsetAdjustmentNever
     }
 
 internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {

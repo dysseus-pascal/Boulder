@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -583,6 +584,9 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    // Reserve space so the last device rows can scroll clear of the floating
+                    // add-device FAB (Scaffold does not reserve content padding for the FAB).
+                    contentPadding = PaddingValues(bottom = 88.dp),
                     state = listState,
                 ) {
                     itemsIndexed(

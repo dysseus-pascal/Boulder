@@ -153,9 +153,9 @@ class SharedLockerViewModel : ViewModel() {
                 // don't want to override manual selection)
                 watchType.value = lastConnectedWatch.watchType.watchType
             }
+            haveSetWatchType.value = true
         }
         showWatchTypeDropdown.value = lastConnectedWatch !is ConnectedPebbleDevice
-        haveSetWatchType.value = true
     }
 }
 

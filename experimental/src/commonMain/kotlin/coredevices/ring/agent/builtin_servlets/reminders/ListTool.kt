@@ -61,7 +61,10 @@ class ListTool: BuiltInMcpTool(
                 "message"
             )
         )
-    )
+    ),
+    extraContext = """
+        Never guess 'reminder_date_time_human' — only pass a time the user actually said, otherwise omit it.
+    """.trimIndent()
 ), KoinComponent {
     val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
     private val listRepo: ListRepository by inject()

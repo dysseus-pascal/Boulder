@@ -65,7 +65,10 @@ class ReminderTool: BuiltInMcpTool(
                 "message"
             )
         )
-    )
+    ),
+    extraContext = """
+        Only pass times to 'create_reminder' that the user actually said. If the user started to specify a reminder time but it was cut off, do not guess one and do not create the reminder; tell the user the time was missing. Omit the time fields entirely for reminders without a time.
+    """.trimIndent()
 ), KoinComponent {
     val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
 

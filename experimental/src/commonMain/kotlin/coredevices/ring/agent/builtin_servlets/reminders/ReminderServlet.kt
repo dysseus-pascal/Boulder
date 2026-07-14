@@ -31,6 +31,7 @@ class ReminderServlet(
             ?.split(" ")
             ?.map { it.lowercase() } ?: emptyList()
         return buildString {
+            super.getExtraContext(sessionContext)?.let { appendLine(it) }
             appendLine("Top available lists for ${ListTool.TOOL_NAME}:")
             lists.sortedWith { a, b ->
                 val aMatch = words.any { it in a.title.lowercase() }

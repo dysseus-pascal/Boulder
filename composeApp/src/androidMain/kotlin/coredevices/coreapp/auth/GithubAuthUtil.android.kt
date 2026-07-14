@@ -26,6 +26,7 @@ actual class RealGithubAuthUtil : GitHubAuthUtil {
             logger.i("GitHub sign-in cancelled")
             return null
         } catch (e: Exception) {
+            logger.e(e) { "GitHub sign-in failed" }
             throw IllegalStateException("GitHub sign-in failed", e)
         }
         return result.credential?.let { AuthCredential(it) }

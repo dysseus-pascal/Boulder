@@ -22,6 +22,8 @@ import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotificationAction
+import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
@@ -108,6 +110,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             setBody(message)
             setSound(UNNotificationSound.defaultSound)
             setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to reminderId.toString()))
+            setCategoryIdentifier(REMINDER_CATEGORY_ID)
         }
         val components = NSCalendar.currentCalendar.components(
             NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay
@@ -146,7 +149,42 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
     companion object {
         private val logger = Logger.withTag("IOSBuiltInReminderIntegration")
 
+        /** Notification category id whose actions include the "Done" button (MOB-8439). */
+        const val REMINDER_CATEGORY_ID = "ring-reminder-actions"
+
+        /** Action id for the "Done" button; matched in the notification-response handler. */
+        const val REMINDER_ACTION_DONE = "ring-reminder-done"
+
         private fun notificationId(reminderId: Int) = "ring-reminder-$reminderId"
         private fun preNotificationId(reminderId: Int) = "ring-reminder-pre-$reminderId"
+
+        /** Registers the reminder notification category carrying the "Done" action (MOB-8439), once.
+         *  Merges with any already-registered categories so we don't clobber other notification
+         *  categories (e.g. the Index agent-complete actions). */
+        suspend fun ensureCategoryRegistered() {
+            val notificationCenter = UNUserNotificationCenter.currentNotificationCenter()
+            val existing: Set<*> = suspendCoroutine { continuation ->
+                notificationCenter.getNotificationCategoriesWithCompletionHandler { categories ->
+                    @Suppress("UNCHECKED_CAST")
+                    continuation.resume(categories as Set<*>? ?: emptySet<Any>())
+                }
+            }
+            val alreadyRegistered = existing.any {
+                (it as? UNNotificationCategory)?.identifier == REMINDER_CATEGORY_ID
+            }
+            if (alreadyRegistered) return
+            val doneAction = UNNotificationAction.actionWithIdentifier(
+                identifier = REMINDER_ACTION_DONE,
+                title = "Done",
+                options = 0u, // background action: marks done without bringing the app to the foreground
+            )
+            val category = UNNotificationCategory.categoryWithIdentifier(
+                identifier = REMINDER_CATEGORY_ID,
+                actions = listOf(doneAction),
+                intentIdentifiers = emptyList<String>(),
+                options = 0u,
+            )
+            notificationCenter.setNotificationCategories(existing + setOf(category))
+        }
     }
 }

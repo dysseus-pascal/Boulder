@@ -53,7 +53,7 @@
                 android:resource="@xml/voice_widget_info" />
         </receiver>
         <receiver android:name="coredevices.ring.reminders.ReminderReceiver"
-                    android:exported="true">
+                    android:exported="false">
         </receiver>
         <receiver android:name="coredevices.ring.reminders.ReminderBootReceiver"
                     android:exported="true">

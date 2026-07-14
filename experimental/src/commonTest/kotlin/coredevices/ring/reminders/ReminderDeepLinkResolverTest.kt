@@ -79,6 +79,7 @@ private class FakeLocalReminderDao(private val reminder: LocalReminderData?) : L
 private class FakeCachedItemDao(private val items: List<CachedItem>) : CachedItemDao {
     override suspend fun getByRecording(recordingId: String): List<CachedItem> =
         items.filter { it.sourceRecordingId == recordingId }
+    override suspend fun getAllActive(): List<CachedItem> = items.filter { !it.deleted }
     override suspend fun upsert(item: CachedItem) = error("unused")
     override suspend fun upsertAll(items: List<CachedItem>) = error("unused")
     override suspend fun getById(id: String): CachedItem? = error("unused")

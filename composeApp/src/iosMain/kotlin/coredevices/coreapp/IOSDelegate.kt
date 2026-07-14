@@ -28,6 +28,8 @@ import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.watchModule
+import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
+import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
@@ -65,12 +67,7 @@ import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.isLowPowerModeEnabled
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundFetchResult
-import platform.UIKit.UIUserNotificationSettings
-import platform.UIKit.UIUserNotificationTypeAlert
-import platform.UIKit.UIUserNotificationTypeBadge
-import platform.UIKit.UIUserNotificationTypeSound
 import platform.UIKit.registerForRemoteNotifications
-import platform.UIKit.registerUserNotificationSettings
 import platform.UserNotifications.UNNotificationResponse
 import kotlin.time.Clock
 
@@ -220,12 +217,6 @@ object IOSDelegate : KoinComponent {
             doneInitialOnboarding.doneInitialOnboarding.await()
 
             logger.d { "registering for push notifications.." }
-            application.registerUserNotificationSettings(
-                UIUserNotificationSettings.settingsForTypes(
-                    UIUserNotificationTypeAlert or UIUserNotificationTypeBadge or UIUserNotificationTypeSound,
-                    null
-                )
-            )
             application.registerForRemoteNotifications()
         }
         commonAppDelegate.init()
@@ -254,6 +245,17 @@ object IOSDelegate : KoinComponent {
         // isn't linked when the notification is scheduled, so resolve it now (at tap time).
         val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
         if (reminderId != null) {
+            // "Done" button (MOB-8439): mark the backing item complete in the background without
+            // opening the app. Completing it cancels the reminder and dismisses the notification.
+            if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
+                val completer: ReminderCompleter = get()
+                bgTaskScope.launch {
+                    runCatching { completer.markDone(reminderId) }
+                        .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                    withContext(Dispatchers.Main) { completionHandler() }
+                }
+                return
+            }
             val resolver: ReminderDeepLinkResolver = get()
             bgTaskScope.launch {
                 val link = resolver.resolveDeepLink(reminderId)

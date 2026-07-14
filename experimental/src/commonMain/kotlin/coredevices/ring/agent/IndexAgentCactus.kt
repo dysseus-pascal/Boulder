@@ -14,9 +14,12 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
+import coredevices.ring.database.Preferences
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.util.CoreConfigFlow
+import coredevices.util.usage.CactusUsageTracker
+import coredevices.util.usage.DeviceType
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,7 +39,9 @@ import kotlin.time.Clock
 class IndexAgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
-    private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
+    private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider(),
+    private val usageTracker: CactusUsageTracker,
+    private val preferences: Preferences,
 ) : KoinComponent, ToolCallingAgent(conversation) {
     override val label = "Cactus"
 
@@ -138,14 +143,36 @@ class IndexAgentCactus(
         }.toString()
 
         val preparedTools = prepareTools(tools)
-        val resultJson = agentMutex.withLock {
-            inferenceBoost.acquire()
-            try {
-                cactusComplete(handle, messagesJson, optionsJson, preparedTools.toolsJson, null)
-            } finally {
-                inferenceBoost.release()
+        val modelLabel = modelProvider.getLMModelPath().substringAfterLast("/")
+        val ringId = preferences.ringPaired.value
+        val start = Clock.System.now()
+        val resultJson = try {
+            agentMutex.withLock {
+                inferenceBoost.acquire()
+                try {
+                    cactusComplete(handle, messagesJson, optionsJson, preparedTools.toolsJson, null)
+                } finally {
+                    inferenceBoost.release()
+                }
             }
+        } catch (e: Throwable) {
+            usageTracker.recordComplete(
+                deviceType = DeviceType.Ring,
+                deviceId = ringId,
+                modelName = modelLabel,
+                success = false,
+                durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+                failureReason = e::class.simpleName,
+            )
+            throw e
         }
+        usageTracker.recordComplete(
+            deviceType = DeviceType.Ring,
+            deviceId = ringId,
+            modelName = modelLabel,
+            success = true,
+            durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+        )
 
         val resultObj = Json.parseToJsonElement(resultJson).jsonObject
         val resultText = resultObj["response"]?.jsonPrimitive?.content ?: ""

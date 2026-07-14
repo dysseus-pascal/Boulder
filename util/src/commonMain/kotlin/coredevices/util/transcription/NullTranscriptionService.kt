@@ -2,6 +2,7 @@ package coredevices.util.transcription
 
 import co.touchlab.kermit.Logger
 import coredevices.util.AudioEncoding
+import coredevices.util.usage.DeviceType
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +21,8 @@ class NullTranscriptionService: TranscriptionService {
     //TODO: Throw exception instead of placeholder implementation
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
+        deviceType: DeviceType,
+        deviceId: String?,
         sampleRate: Int,
         language: STTLanguage,
         conversationContext: STTConversationContext?,

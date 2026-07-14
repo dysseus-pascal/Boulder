@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
+import coredevices.util.usage.DeviceType
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.TranscriptionSessionStatus
 import coredevices.mcp.SessionContext
@@ -20,6 +21,7 @@ import coredevices.ring.agent.AgentNetworkException
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.dao.LocalReminderDao
+import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -62,6 +64,7 @@ class RecordingProcessor(
     private val transferRepository: RingTransferRepository,
     private val itemFactory: ItemFactory,
     private val localReminderDao: LocalReminderDao,
+    private val preferences: Preferences,
 ) {
     sealed interface RecordingStatus {
         /**
@@ -119,7 +122,9 @@ class RecordingProcessor(
         dictionaryContext: List<String>? = null,
     ) = transcriptionService.transcribe(
         audioStreamFlow,
-        sampleRate,
+        deviceType = DeviceType.Ring,
+        deviceId = preferences.ringPaired.value,
+        sampleRate = sampleRate,
         language = language,
         encoding = encoding,
         dictionaryContext = dictionaryContext,

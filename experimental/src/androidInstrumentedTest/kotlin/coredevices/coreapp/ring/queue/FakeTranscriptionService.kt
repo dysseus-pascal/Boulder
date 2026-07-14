@@ -1,6 +1,7 @@
 package coredevices.coreapp.ring.queue
 
 import coredevices.util.AudioEncoding
+import coredevices.util.usage.DeviceType
 import coredevices.util.transcription.STTConversationContext
 import coredevices.util.transcription.STTLanguage
 import coredevices.util.transcription.TranscriptionException
@@ -32,6 +33,8 @@ class FakeTranscriptionService : TranscriptionService {
 
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
+        deviceType: DeviceType,
+        deviceId: String?,
         sampleRate: Int,
         language: STTLanguage,
         conversationContext: STTConversationContext?,

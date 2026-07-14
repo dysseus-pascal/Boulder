@@ -11,6 +11,8 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.usage.CactusUsageTracker
+import coredevices.util.usage.DeviceType
 import coredevices.util.writeWavHeader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,7 +75,8 @@ class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val modelProvider: CactusModelPathProvider,
     private val analytics: CoreAnalytics,
-    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
+    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost(),
+    private val usageTracker: CactusUsageTracker,
 ) {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
@@ -186,12 +189,29 @@ class CactusTranscriptionService(
         warmupMutex.withLock {
             val handle = modelHandle
             if (handle == 0L) return
-            withHighPriorityThread {
-                withTimeout(2.seconds) {
-                    withCactusStopOnCancel(handle) {
-                        cactusTranscribe(handle, null, null, null, null, silentPcm)
+            val modelLabel = sttConfig.value.modelName
+            val start = Clock.System.now()
+            try {
+                withHighPriorityThread {
+                    withTimeout(2.seconds) {
+                        withCactusStopOnCancel(handle) {
+                            cactusTranscribe(handle, null, null, null, null, silentPcm)
+                        }
                     }
                 }
+                usageTracker.recordTranscribeWarmup(
+                    modelName = modelLabel,
+                    success = true,
+                    durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+                )
+            } catch (e: Throwable) {
+                usageTracker.recordTranscribeWarmup(
+                    modelName = modelLabel,
+                    success = false,
+                    durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+                    failureReason = e::class.simpleName,
+                )
+                throw e
             }
         }
     }
@@ -272,7 +292,22 @@ class CactusTranscriptionService(
         }
     }
 
-    private suspend fun runLocalTranscribe(path: Path, timeout: Duration? = null): String {
+    private suspend fun runLocalTranscribe(
+        path: Path,
+        timeout: Duration? = null,
+        deviceType: DeviceType,
+        deviceId: String?,
+    ): String {
+        val modelLabel = sttConfig.value.modelName
+        val start = Clock.System.now()
+        fun recordFailure(e: Throwable) = usageTracker.recordTranscribe(
+            deviceType = deviceType,
+            deviceId = deviceId,
+            modelName = modelLabel,
+            success = false,
+            durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+            failureReason = e::class.simpleName,
+        )
         try {
             val handle = modelHandle
             if (handle == 0L) {
@@ -290,14 +325,23 @@ class CactusTranscriptionService(
                 inferenceBoost.release()
             }
             analytics.logTranscriptionSuccess("cactus")
+            usageTracker.recordTranscribe(
+                deviceType = deviceType,
+                deviceId = deviceId,
+                modelName = modelLabel,
+                success = true,
+                durationMs = (Clock.System.now() - start).inWholeMilliseconds,
+            )
             return text
         } catch (e: TimeoutCancellationException) {
             analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
+            recordFailure(e)
             throw e
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
+            recordFailure(e)
             throw e
         }
     }
@@ -314,6 +358,8 @@ class CactusTranscriptionService(
     suspend fun transcribeLocal(
         audio: ByteArray,
         sampleRate: Int,
+        deviceType: DeviceType,
+        deviceId: String?,
         timeout: Duration? = null,
         initTimeout: Duration = 10.seconds,
     ): String {
@@ -330,7 +376,7 @@ class CactusTranscriptionService(
                 }
             }
             try {
-                runLocalTranscribe(path, timeout)
+                runLocalTranscribe(path, timeout, deviceType, deviceId)
             } finally {
                 try { SystemFileSystem.delete(path) } catch (e: Exception) {
                     logger.w(e) { "Failed to delete temp file $path" }
@@ -356,6 +402,8 @@ class CactusTranscriptionService(
         val text = transcribeLocal(
             audio = audio,
             sampleRate = sampleRate,
+            deviceType = DeviceType.Watch,
+            deviceId = null,
             timeout = timeout.takeIf { it.isFinite() },
             initTimeout = 20.seconds,
         )

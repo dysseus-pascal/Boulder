@@ -22,11 +22,19 @@ import coredevices.database.getCoreRoomDatabase
 import coredevices.firestore.UsersDao
 import coredevices.firestore.UsersDaoImpl
 import coredevices.util.AppResumed
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
+import coredevices.util.usage.CactusUsageEventQueue
+import coredevices.util.usage.CactusUsageTracker
+import coredevices.util.usage.CactusUsageUploader
+import coredevices.util.usage.InstallIdProvider
+import coredevices.util.usage.RealCactusUsageTracker
+import coredevices.util.usage.SettingsInstallIdProvider
+import coredevices.util.usage.SupabaseCactusUsageUploader
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
@@ -80,6 +88,24 @@ val utilModule = module {
     single { get<CoreDatabase>().heartsDao() }
     single { get<CoreDatabase>().memfaultChunkDao() }
     single { get<CoreDatabase>().analyticsHeartbeatDao() }
+    single { get<CoreDatabase>().cactusUsageEventDao() }
+    singleOf(::SettingsInstallIdProvider) bind InstallIdProvider::class
+    single<CactusUsageUploader> {
+        SupabaseCactusUsageUploader(
+            httpClient = get(),
+            supabaseUrl = CommonBuildKonfig.CACTUS_SUPABASE_USAGE_URL,
+            supabaseKey = CommonBuildKonfig.CACTUS_SUPABASE_USAGE_KEY,
+        )
+    }
+    singleOf(::CactusUsageEventQueue)
+    single<CactusUsageTracker> {
+        RealCactusUsageTracker(
+            queue = get(),
+            installIdProvider = get(),
+            platform = get(),
+            appVersion = CommonBuildKonfig.USER_AGENT_VERSION,
+        )
+    }
     single { UserConfigDao { get() } }
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
@@ -100,7 +126,8 @@ val utilModule = module {
                 override fun initTelemetry() {}
             },
             get(),
-            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
+            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost(),
+            get<CactusUsageTracker>(),
         )
     }
     single {

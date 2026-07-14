@@ -22,6 +22,7 @@ import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.usage.CactusUsageEventQueue
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusModelPathProvider
@@ -59,6 +60,7 @@ class CommonAppDelegate(
     private val firestoreKnownWatchesSync: FirestoreKnownWatchesSync,
     private val libPebble: LibPebble,
     private val platformHealthSync: PlatformHealthSync,
+    private val cactusUsageEventQueue: CactusUsageEventQueue,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -144,6 +146,7 @@ class CommonAppDelegate(
         firestoreKnownWatchesSync.init()
         oneTimeSetLockerOrderMode()
         platformHealthSync.startAutoSync(GlobalScope)
+        cactusUsageEventQueue.startProcessing(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }

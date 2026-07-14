@@ -32,6 +32,7 @@ class DelegatedIntegrationItemsTest {
         override fun getAllForSyncFlow(): Flow<List<CachedItem>> = flowOf(items.values.toList())
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
+        override suspend fun getAllActive(): List<CachedItem> = items.values.filter { !it.deleted }
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) { items.remove(id) }

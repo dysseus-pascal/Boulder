@@ -60,6 +60,9 @@ class ReminderCompleterTest {
         override suspend fun setRecordingId(id: Int, recordingId: String) {
             reminders[id]?.let { reminders[id] = it.copy(recordingId = recordingId) }
         }
+        override suspend fun clearNotifyBefore(id: Int) {
+            reminders[id]?.let { reminders[id] = it.copy(notifyBeforeMillis = null) }
+        }
         override suspend fun deleteReminder(id: Int) { reminders.remove(id) }
     }
 

@@ -60,6 +60,9 @@ interface RecordingEntryDao {
     suspend fun updateRecordingEntryStatus(recordingId: Long, status: RecordingEntryStatus, error: String? = null)
     @Query("UPDATE RecordingEntryEntity SET transcription = :transcription, transcribedUsingModel = :modelUsed WHERE id = :recordingId")
     suspend fun updateRecordingEntryTranscription(recordingId: Long, transcription: String?, modelUsed: String? = null)
+    /** Entries created by older auth-failure paths have no fileName; only fills when null. */
+    @Query("UPDATE RecordingEntryEntity SET fileName = :fileName WHERE id = :recordingId AND fileName IS NULL")
+    suspend fun backfillRecordingEntryFileName(recordingId: Long, fileName: String)
 
     @Query("SELECT * FROM RecordingEntryEntity WHERE id = :id")
     suspend fun getById(id: Long): RecordingEntryEntity?

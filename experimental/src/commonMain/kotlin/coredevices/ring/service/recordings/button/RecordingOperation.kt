@@ -89,6 +89,9 @@ open class DefaultRecordingOperation(
         val entryId = withContext(Dispatchers.IO) {
             if (handle?.stage is RecordingProcessingStage.RecordingEntryCreated) {
                 val id = (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
+                // Reused entries from the auth-failure path may predate fileName
+                // being captured there — backfill so playback/export work.
+                recordingEntryDao.backfillRecordingEntryFileName(id, fileId)
                 trace.markEvent(
                     "recording_entry_reused",
                     TraceEventData.RecordingEntryInfo(id, recordingId, transferId ?: -1)

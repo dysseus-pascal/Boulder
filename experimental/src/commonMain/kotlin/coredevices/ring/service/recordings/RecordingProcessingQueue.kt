@@ -427,10 +427,38 @@ class RecordingProcessingQueue(
         } catch (e: AgentAuthenticationException) {
             logger.e(e) { "Creation of recording operation failed" }
             withContext(Dispatchers.IO) {
-                recordingRepository.createFailedRecordingEntry(
-                    recordingId = recordingId,
-                    errorMessage = "Login required for cloud processing"
-                )
+                val recordingEntryDao: RecordingEntryDao = get()
+                val stagedEntry =
+                    (handle.stage as? RecordingProcessingStage.RecordingEntryCreated)
+                        ?.recordingEntryId?.let { recordingEntryDao.getById(it) }
+                if (stagedEntry != null) {
+                    // Retrying an existing entry — update it in place rather than
+                    // inserting a duplicate failed entry on the same recording.
+                    recordingEntryDao.backfillRecordingEntryFileName(stagedEntry.id, fileId)
+                    recordingEntryDao.updateRecordingEntryStatus(
+                        stagedEntry.id,
+                        status = RecordingEntryStatus.agent_error,
+                        error = "Login required for cloud processing"
+                    )
+                    // Keep parity with createFailedRecordingEntry: surface the error
+                    // as the transcription text — but never clobber a real transcript.
+                    if (stagedEntry.transcription.isNullOrBlank()) {
+                        recordingEntryDao.updateRecordingEntryTranscription(
+                            stagedEntry.id,
+                            transcription = "Error: Login required for cloud processing",
+                            modelUsed = stagedEntry.transcribedUsingModel
+                        )
+                    }
+                    // The insert path bumps the parent recording; do the same so
+                    // sync dirty-detection sees the in-place change.
+                    recordingEntryDao.touchLocalRecording(recordingId, Clock.System.now())
+                } else {
+                    recordingRepository.createFailedRecordingEntry(
+                        recordingId = recordingId,
+                        errorMessage = "Login required for cloud processing",
+                        fileName = fileId
+                    )
+                }
             }
             return
         }

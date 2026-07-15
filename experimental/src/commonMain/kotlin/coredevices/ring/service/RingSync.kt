@@ -445,7 +445,10 @@ class RingSync(
                                                                 collectionIndex = transferStatus.collectionIndex,
                                                             )
                                                         )
-                                                        logger.e(transferStatus.exception) { "Transfer dropped: ${transferStatus.collectionIndex}" }
+                                                        val loggedException = transferStatus.exception?.takeIf {
+                                                            it.message?.contains("Connection failure", ignoreCase = true) != true
+                                                        }
+                                                        logger.e(loggedException) { "Transfer dropped: ${transferStatus.collectionIndex} ${transferStatus.exception?.message ?: ""}" }
                                                         if (rangeStart != null) {
                                                             logTransferFailedEvent(
                                                                 serialNumber = satelliteSerial,

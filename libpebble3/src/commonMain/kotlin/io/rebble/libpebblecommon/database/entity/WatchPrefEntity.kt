@@ -211,6 +211,7 @@ enum class BoolWatchPref(
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
+    QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     ;

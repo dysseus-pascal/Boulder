@@ -135,6 +135,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MenuScrollWrapAround -> Section.Display
     EnumWatchPref.MenuScrollVibe -> Section.Display
     BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
+    BoolWatchPref.QuietTimeAutoDismiss -> Section.QuietTime
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
 }

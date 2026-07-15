@@ -34,10 +34,21 @@ class LanguagePackRepository(
 
     suspend fun languagePacksForWatch(watch: ConnectedPebbleDevice): List<LanguagePack> = withContext(Dispatchers.IO) {
         val locale = Locale.current.toLanguageTag()
-        val hardwarePlatform = watch.watchInfo.platform
-        languagePacks
-            .filter { it.hardware == null || it.hardware == hardwarePlatform.languagePackPlatform().revision }
+        val platform = watch.watchInfo.platform
+        val revision = platform.revision
+        val fallbackRevision = platform.languagePackPlatform().revision
 
+        // Prefer packs built for this exact hardware; fall back to the silk-compatible
+        // pack for any locale the exact hardware doesn't provide.
+        val exactLocales = languagePacks.filter { it.hardware == revision }.map { it.isoLocal }.toSet()
+        languagePacks
+            .filter {
+                when (it.hardware) {
+                    revision -> true
+                    null, fallbackRevision -> it.isoLocal !in exactLocales
+                    else -> false
+                }
+            }
             .sortedByDescending { it.isoLocal.take(2) == locale.take(2) }
             .sortedByDescending { it.isoLocal == locale }
     }

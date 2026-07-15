@@ -224,7 +224,7 @@ val experimentalModule = module {
     factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
-    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider(), get(), get()) }
+    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
     singleOf(::AgentFactory)
     singleOf(::RecordingProcessor)
     singleOf(::IndexButtonActionHandler)

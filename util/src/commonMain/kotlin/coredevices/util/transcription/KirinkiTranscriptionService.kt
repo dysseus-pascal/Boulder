@@ -6,7 +6,6 @@ import coredevices.api.ApiClient
 import coredevices.api.ApiAuthException
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
-import coredevices.util.usage.DeviceType
 import io.ktor.client.call.body
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -61,8 +60,6 @@ class KirinkiTranscriptionService : ApiClient(CommonBuildKonfig.USER_AGENT_VERSI
 
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
-        deviceType: DeviceType,
-        deviceId: String?,
         sampleRate: Int,
         language: STTLanguage,
         conversationContext: STTConversationContext?,

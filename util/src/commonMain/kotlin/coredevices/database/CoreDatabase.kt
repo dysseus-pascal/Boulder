@@ -23,9 +23,8 @@ internal const val CORE_DATABASE_FILENAME = "coreapp.db"
         HeartEntity::class,
         MemfaultChunkEntity::class,
         AnalyticsHeartbeatEntity::class,
-        CactusUsageEventEntity::class,
     ],
-    version = 10,
+    version = 9,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -35,7 +34,6 @@ internal const val CORE_DATABASE_FILENAME = "coreapp.db"
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
-        AutoMigration(from = 9, to = 10),
     ],
     exportSchema = true,
 )
@@ -49,7 +47,6 @@ abstract class CoreDatabase : RoomDatabase() {
     abstract fun heartsDao(): HeartsDao
     abstract fun memfaultChunkDao(): MemfaultChunkDao
     abstract fun analyticsHeartbeatDao(): AnalyticsHeartbeatDao
-    abstract fun cactusUsageEventDao(): CactusUsageEventDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

@@ -11,7 +11,6 @@ import coredevices.api.WisprTranscribeRequest
 import coredevices.api.WisprTranscribeResponse
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
-import coredevices.util.usage.DeviceType
 import coredevices.util.writeWavHeader
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -78,8 +77,6 @@ class WisprFlowRESTTranscriptionService(
     @OptIn(ExperimentalEncodingApi::class)
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
-        deviceType: DeviceType,
-        deviceId: String?,
         sampleRate: Int,
         language: STTLanguage,
         conversationContext: STTConversationContext?,

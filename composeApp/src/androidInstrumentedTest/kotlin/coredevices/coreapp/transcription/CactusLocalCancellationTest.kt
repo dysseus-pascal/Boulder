@@ -104,7 +104,6 @@ class CactusLocalCancellationTest {
                         modelProvider = provider,
                         analytics = NoopAnalytics,
                         inferenceBoost = NoOpInferenceBoost(),
-                        usageTracker = coredevices.util.usage.NoOpCactusUsageTracker,
                     )
                     val load = TimeSource.Monotonic.markNow()
                     runBlocking {
@@ -139,12 +138,7 @@ class CactusLocalCancellationTest {
      */
     private suspend fun runTranscriptionIgnoringResult(audio: ByteArray) {
         try {
-            service.transcribeLocal(
-                audio = audio,
-                sampleRate = SAMPLE_RATE,
-                deviceType = coredevices.util.usage.DeviceType.Ring,
-                deviceId = null,
-            )
+            service.transcribeLocal(audio = audio, sampleRate = SAMPLE_RATE)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

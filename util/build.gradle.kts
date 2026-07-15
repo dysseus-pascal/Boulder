@@ -155,9 +155,6 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
-                implementation(libs.coroutines.test)
-                implementation(libs.settings.test)
-                implementation(libs.ktor.client.mock)
             }
         }
 
@@ -223,8 +220,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.BOOLEAN, "APPLE_AUTH_ENABLED", gradleBooleanProp("appleAuthEnabled", default = true).toString())
         buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", gradleBooleanProp("githubAuthEnabled", default = true).toString())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_SUPABASE_USAGE_URL", gradleStringPropOrNull("cactusSupabaseUsageUrl"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_SUPABASE_USAGE_KEY", gradleStringPropOrNull("cactusSupabaseUsageKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v1.10")

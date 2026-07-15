@@ -1,7 +1,6 @@
 package coredevices.util.transcription
 
 import coredevices.util.AudioEncoding
-import coredevices.util.usage.DeviceType
 import kotlin.time.Duration
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -28,8 +27,6 @@ interface TranscriptionService {
      */
     suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
-        deviceType: DeviceType,
-        deviceId: String?,
         sampleRate: Int = 16000,
         language: STTLanguage = STTLanguage.Automatic,
         conversationContext: STTConversationContext? = null,

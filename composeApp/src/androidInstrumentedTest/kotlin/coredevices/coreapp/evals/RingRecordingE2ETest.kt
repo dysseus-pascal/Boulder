@@ -578,7 +578,7 @@ class RingRecordingE2ETest {
             }
         }
         single {
-            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost(), coredevices.util.usage.NoOpCactusUsageTracker)
+            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
         }
         single {
             HybridTranscriptionService(get(), get(), get(), get(), get())

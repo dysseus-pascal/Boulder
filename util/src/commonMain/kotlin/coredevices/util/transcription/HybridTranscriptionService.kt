@@ -5,7 +5,6 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.util.AudioEncoding
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
-import coredevices.util.usage.DeviceType
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -97,16 +96,12 @@ class HybridTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        deviceType: DeviceType,
-        deviceId: String?,
         willFallbackLocal: Boolean,
         initialTimeout: Duration = if (willFallbackLocal) 7.seconds else 10.seconds // We reduce the timeout if we have the potential to fall back locally since some consumers (e.g. pebble firmware) have hard timeouts.
     ): TranscriptionSessionStatus.Transcription {
         suspend fun transcribeKirinki() = try {
             kirinki.transcribe(
                 audioStreamFrames = flowOf(audio),
-                deviceType = deviceType,
-                deviceId = deviceId,
                 sampleRate = sampleRate,
                 language = language,
                 conversationContext = conversationContext,
@@ -143,8 +138,6 @@ class HybridTranscriptionService(
             val res = withTimeout(initialTimeout) {
                 wisprFlow.transcribe(
                     audioStreamFrames = flowOf(audio),
-                    deviceType = deviceType,
-                    deviceId = deviceId,
                     sampleRate = sampleRate,
                     language = language,
                     conversationContext = conversationContext,
@@ -181,8 +174,6 @@ class HybridTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        deviceType: DeviceType,
-        deviceId: String?,
         initialTimeout: Duration? = null
     ): RoutedResult {
         suspend fun remote(willFallbackLocal: Boolean): TranscriptionSessionStatus.Transcription =
@@ -193,8 +184,6 @@ class HybridTranscriptionService(
                 conversationContext = conversationContext,
                 dictionaryContext = dictionaryContext,
                 contentContext = contentContext,
-                deviceType = deviceType,
-                deviceId = deviceId,
                 willFallbackLocal = willFallbackLocal,
                 initialTimeout = initialTimeout ?: if (willFallbackLocal) 7.seconds else 10.seconds
             )
@@ -206,7 +195,7 @@ class HybridTranscriptionService(
                 RoutedResult(result.text, sttMode, result.modelUsed)
             }
             CactusSTTMode.LocalOnly -> {
-                val text = cactus.transcribeLocal(audio, sampleRate, deviceType, deviceId)
+                val text = cactus.transcribeLocal(audio, sampleRate)
                 RoutedResult(text, sttMode, configuredModel)
             }
             CactusSTTMode.RemoteFirst -> {
@@ -215,19 +204,19 @@ class HybridTranscriptionService(
                     RoutedResult(result.text, sttMode, result.modelUsed)
                 } catch (e: TimeoutCancellationException) {
                     logger.w(e) { "Remote transcription timeout, falling back to local: ${e.message}" }
-                    val text = cactus.transcribeLocal(audio, sampleRate, deviceType, deviceId)
+                    val text = cactus.transcribeLocal(audio, sampleRate)
                     RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
-                    val text = cactus.transcribeLocal(audio, sampleRate, deviceType, deviceId)
+                    val text = cactus.transcribeLocal(audio, sampleRate)
                     RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
                 }
             }
             CactusSTTMode.LocalFirst -> {
                 try {
-                    val text = cactus.transcribeLocal(audio, sampleRate, deviceType, deviceId, timeout = 8.seconds)
+                    val text = cactus.transcribeLocal(audio, sampleRate, timeout = 8.seconds)
                     // Treat an empty/no-speech local result as a failure so we fall back to
                     // remote, as remote is more accurate.
                     validateContainsSpeech(text, configuredModel)
@@ -254,8 +243,6 @@ class HybridTranscriptionService(
 
     override suspend fun transcribe(
         audioStreamFrames: Flow<ByteArray>?,
-        deviceType: DeviceType,
-        deviceId: String?,
         sampleRate: Int,
         language: STTLanguage,
         conversationContext: STTConversationContext?,
@@ -292,8 +279,6 @@ class HybridTranscriptionService(
                 conversationContext = conversationContext,
                 dictionaryContext = dictionaryContext,
                 contentContext = contentContext,
-                deviceType = deviceType,
-                deviceId = deviceId,
                 initialTimeout = initialTimeout,
             )
             val duration = Clock.System.now() - start

@@ -4,12 +4,10 @@ import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
 import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.HybridTranscriptionService
-import coredevices.util.usage.DeviceType
 import coredevices.util.transcription.STTLanguage
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
 import io.ktor.utils.io.CancellationException
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.voice.PEBBLE_FW_TRANSCRIPTION_TIMEOUT
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
@@ -75,11 +73,6 @@ class HybridTranscription(
                     it.split(" ", limit = 2)
                 }
             } else null
-            val activeWatchId = libPebbleLazy.value.watches.value
-                .filterIsInstance<ConnectedPebbleDevice>()
-                .firstOrNull()
-                ?.identifier
-                ?.asString
             val result = withTimeout(PEBBLE_FW_TRANSCRIPTION_TIMEOUT - 1.seconds) {
                 service.transcribe(
                     audioStreamFrames = flow {
@@ -98,8 +91,6 @@ class HybridTranscription(
                     dictionaryContext = recentContacts,
                     sampleRate = encoderInfo.sampleRate.toInt(),
                     encoding = coredevices.util.AudioEncoding.PCM_16BIT,
-                    deviceType = DeviceType.Watch,
-                    deviceId = activeWatchId,
                 ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
             }
             TranscriptionResult.Success(

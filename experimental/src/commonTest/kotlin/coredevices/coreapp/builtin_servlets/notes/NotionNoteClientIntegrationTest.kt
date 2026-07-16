@@ -105,6 +105,7 @@ class NotionNoteClientIntegrationTest {
                 nenyaUrl = "",
                 notionOAuthBackendUrl = "",
                 notionApiUrl = "https://api.notion.com/v1",
+                tickTickOAuthBackendUrl = "",
                 bugUrl = "",
                 version = "",
                 tokenUrl = "",

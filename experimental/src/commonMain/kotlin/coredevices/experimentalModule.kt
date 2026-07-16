@@ -29,12 +29,14 @@ import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFact
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
+import coredevices.ring.agent.integrations.TickTickIntegration
 import coredevices.ring.agent.integrations.UIEmailIntegration
 import coredevices.ring.api.ApiConfig
 import coredevices.ring.api.GoogleTasksApi
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaClientImpl
 import coredevices.ring.api.NotionApi
+import coredevices.ring.api.TickTickApi
 import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.PreferencesImpl
@@ -183,6 +185,7 @@ val experimentalModule = module {
             nenyaUrl = BuildKonfig.NENYA_URL,
             notionOAuthBackendUrl = BuildKonfig.NOTION_OAUTH_BACKEND_URL,
             notionApiUrl = "https://api.notion.com/v1",
+            tickTickOAuthBackendUrl = BuildKonfig.TICKTICK_OAUTH_BACKEND_URL,
             bugUrl = CommonBuildKonfig.BUG_URL,
             version = CommonBuildKonfig.USER_AGENT_VERSION,
             tokenUrl = CommonBuildKonfig.TOKEN_URL,
@@ -192,6 +195,7 @@ val experimentalModule = module {
     singleOf(::NenyaClientImpl) bind NenyaClient::class
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
+    singleOf(::TickTickApi)
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
     singleOf(::ObsidianPreferences)
@@ -234,6 +238,7 @@ val experimentalModule = module {
     singleOf(::McpSandboxRepository)
     singleOf(::BuiltinServletRepository) bind ServletRepository::class
     factory { GTasksIntegration(get()) }
+    factory { TickTickIntegration(get(), get()) }
     factoryOf(::UIEmailIntegration)
     single { createBuiltInReminderIntegration() }
     singleOf(::BuiltInReminderFeedItems)

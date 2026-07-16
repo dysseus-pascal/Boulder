@@ -26,6 +26,12 @@ interface ReminderIntegration : Integration {
     ): String
 
     suspend fun searchForList(listName: String): List<ReminderListEntry>
+
+    /**
+     * Link to view a reminder created by [createReminder] in the external service, if the
+     * provider has one. [listId] is the same value that was passed to [createReminder].
+     */
+    fun reminderUrl(id: String, listId: String? = null): String? = null
 }
 
 data class ReminderListEntry(

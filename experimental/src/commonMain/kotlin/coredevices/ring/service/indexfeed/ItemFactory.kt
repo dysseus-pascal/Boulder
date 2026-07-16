@@ -233,13 +233,14 @@ class ItemFactory {
         title: String,
         integrationName: String,
         toolCallId: String?,
+        url: String? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
         parents = emptyList(),
         recordingId = sourceRecordingId,
         toolCallId = toolCallId,
-        metadata = ItemMetadata.DelegatedToIntegration(integration = integrationName),
+        metadata = ItemMetadata.DelegatedToIntegration(integration = integrationName, url = url),
     )
 
     fun answerItem(

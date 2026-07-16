@@ -71,6 +71,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -93,6 +94,7 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.viewmodel.MessagePlaybackState
 import coredevices.ring.ui.viewmodel.RecordingDetailsViewModel
+import coredevices.util.Platform
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -100,6 +102,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -711,17 +715,23 @@ private fun AssistantTurn(
                             // Locked (encrypted, no key): chipLabel already
                             // yields "🔒 Encrypted"; drop the glyph so the lock
                             // isn't doubled, and make it non-navigable.
-                            item != null -> ActionChip(
-                                glyph = if (item.locked) "" else chipGlyph(item.kind),
-                                label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
-                                    .chipLabel(item, allLists).take(64),
-                                onClick = if (item.locked) null else ({
-                                    // First try opening item deeplink, otherwise open in-app details
-                                    if(!openLinkedItem(item)) {
-                                        onOpenObject(item.firestoreId)
-                                    }
-                                }),
-                            )
+                            item != null -> {
+                                val platform = koinInject<Platform>()
+                                val scope = rememberCoroutineScope()
+                                ActionChip(
+                                    glyph = if (item.locked) "" else chipGlyph(item.kind),
+                                    label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
+                                        .chipLabel(item, allLists).take(64),
+                                    onClick = if (item.locked) null else ({
+                                        // First try opening item deeplink, otherwise open in-app details
+                                        val url = delegatedUrl(item)
+                                        when {
+                                            url != null -> scope.launch { platform.openUrl(url) }
+                                            !openLinkedItem(item) -> onOpenObject(item.firestoreId)
+                                        }
+                                    }),
+                                )
+                            }
                             // Otherwise collapse the call + its result into one
                             // chip showing the result.
                             resultActionText != null -> ActionChip(
@@ -873,6 +883,8 @@ private fun TrailingItemChips(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    val platform = koinInject<Platform>()
+                    val scope = rememberCoroutineScope()
                     chipItems.forEach { item ->
                         ActionChip(
                             glyph = if (item.locked) "" else chipGlyph(item.kind),
@@ -880,8 +892,10 @@ private fun TrailingItemChips(
                                 .chipLabel(item, allLists).take(64),
                             onClick = if (item.locked) null else ({
                                 // First try opening item deeplink, otherwise open in-app details
-                                if(!openLinkedItem(item)) {
-                                    onOpenObject(item.firestoreId)
+                                val url = delegatedUrl(item)
+                                when {
+                                    url != null -> scope.launch { platform.openUrl(url) }
+                                    !openLinkedItem(item) -> onOpenObject(item.firestoreId)
                                 }
                             }),
                         )
@@ -901,6 +915,11 @@ private fun openLinkedItem(
     val scheduled = item.metadata as? ItemMetadata.Scheduled
     return scheduled != null && openSystemClockApp(scheduled.fireKind)
 }
+
+/** Link to the external service holding a "Sent to X" item, e.g. the TickTick task. */
+private fun delegatedUrl(
+    item: coredevices.ring.data.entity.room.indexfeed.CachedItem
+): String? = (item.metadata as? ItemMetadata.DelegatedToIntegration)?.url
 
 /** Pill-shaped action chip. [onClick] null = non-interactive (raw tool call). */
 @Composable

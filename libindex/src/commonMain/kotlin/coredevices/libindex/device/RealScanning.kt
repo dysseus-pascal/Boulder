@@ -73,6 +73,7 @@ class RealScanning(
                         return@collect
                     }
                     val isFailsafe = fingerprintMatchesFailsafe(fingerprint)
+                    logger.d { "Found index device: ${it.identifier.asString}, name=${it.name}, rssi=${it.rssi}, isFailsafe=$isFailsafe, fingerprint=$fingerprint" }
                     indexDeviceManager.addScanResult(
                         IndexScanResult(
                             identifier = IndexIdentifier.fromPlatformAddress(it.identifier.asString),

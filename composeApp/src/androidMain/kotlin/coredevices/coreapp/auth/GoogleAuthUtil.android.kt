@@ -15,6 +15,7 @@ import co.touchlab.kermit.Logger
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -100,12 +101,19 @@ actual class RealGoogleAuthUtil(private val appContext: Context, private val set
         }
     }
 
-    private suspend fun authorize(context: Context, request: AuthorizationRequest): AuthorizationResult {
-        return suspendCoroutine { cont ->
-            Identity.getAuthorizationClient(context)
-                .authorize(request)
-                .addOnSuccessListener { cont.resume(it) }
-                .addOnFailureListener { cont.resumeWithException(it) }
+    // Null if authorization fails, e.g. some ROMs ship without the GMS Authorization module
+    // (SERVICE_INVALID, MOB-9761) — treat Google integrations as unauthorized there.
+    private suspend fun authorize(context: Context, request: AuthorizationRequest): AuthorizationResult? {
+        return try {
+            suspendCoroutine { cont ->
+                Identity.getAuthorizationClient(context)
+                    .authorize(request)
+                    .addOnSuccessListener { cont.resume(it) }
+                    .addOnFailureListener { cont.resumeWithException(it) }
+            }
+        } catch (e: ApiException) {
+            logger.w(e) { "Google authorization unavailable" }
+            null
         }
     }
 
@@ -113,7 +121,7 @@ actual class RealGoogleAuthUtil(private val appContext: Context, private val set
         val request = AuthorizationRequest.builder()
             .setRequestedScopes(scopes.map { Scope(it) })
             .build()
-        val result = authorize(context.activity, request)
+        val result = authorize(context.activity, request) ?: return null
 
         if (!result.hasResolution()) {
             return result.accessToken
@@ -144,7 +152,7 @@ actual class RealGoogleAuthUtil(private val appContext: Context, private val set
         val request = AuthorizationRequest.Builder()
             .setRequestedScopes(scopes.map { Scope(it) })
             .build()
-        val result = authorize(context = appContext, request = request)
+        val result = authorize(context = appContext, request = request) ?: return null
         return if (result.hasResolution()) null else result.accessToken
     }
 }

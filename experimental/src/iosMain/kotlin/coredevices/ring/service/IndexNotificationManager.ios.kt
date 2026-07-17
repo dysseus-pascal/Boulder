@@ -53,6 +53,16 @@ actual class PlatformIndexNotificationManager {
             content.setBody(notification.contentText)
         }
         content.setSound(UNNotificationSound.defaultSound)
+        // Set userInfo even when there are no actions, so tapping the
+        // notification itself still deep links to the relevant view.
+        val userInfo = mutableMapOf<Any?, Any?>()
+        notification.actions.forEachIndexed { index, action ->
+            userInfo["action-$index-deepLink"] = action.deepLink
+        }
+        notification.deepLink?.let { userInfo["notification-deepLink"] = it }
+        if (userInfo.isNotEmpty()) {
+            content.setUserInfo(userInfo)
+        }
         if (notification.actions.isNotEmpty()) {
             val categoryId = "idxnotif-actions-${notification.id}"
             val unActions = notification.actions.mapIndexed { index, action ->
@@ -62,12 +72,6 @@ actual class PlatformIndexNotificationManager {
                     options = UNNotificationActionOptionForeground
                 )
             }
-            val userInfo = mutableMapOf<Any?, Any?>()
-            notification.actions.forEachIndexed { index, action ->
-                userInfo["action-$index-deepLink"] = action.deepLink
-            }
-            notification.deepLink?.let { userInfo["notification-deepLink"] = it }
-            content.setUserInfo(userInfo)
             val category = UNNotificationCategory.categoryWithIdentifier(
                 identifier = categoryId,
                 actions = unActions,

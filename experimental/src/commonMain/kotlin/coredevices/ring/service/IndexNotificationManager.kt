@@ -17,6 +17,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.components.chat.actionText
+import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
 import io.ktor.utils.io.CancellationException
@@ -395,7 +396,7 @@ class IndexNotificationManager(
                                     contentText = contentText,
                                     inProgress = null,
                                     localOnly = false,
-                                    deepLink = DEEP_LINK_URI,
+                                    deepLink = RingRoutes.recordingDeepLink(notification.recordingId),
                                     actions = listOf(
                                         notification.shortcutAction.let { action ->
                                             when (action) {

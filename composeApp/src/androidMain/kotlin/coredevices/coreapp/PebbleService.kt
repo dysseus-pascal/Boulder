@@ -1,6 +1,7 @@
 package coredevices.coreapp
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -116,11 +117,19 @@ class PebbleService: Service(), KoinComponent {
         .build()
         notificationManagerCompat.createNotificationChannel(notificationChannel)
 
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Pebble")
             .setContentText("Keeping Pebble connection alive")
             .setOngoing(true)
             .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(contentIntent)
             .build()
         try {
             ServiceCompat.startForeground(

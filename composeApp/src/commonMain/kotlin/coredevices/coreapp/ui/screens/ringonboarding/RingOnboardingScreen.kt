@@ -86,7 +86,7 @@ fun RingOnboardingScreen(
     var faqInitialPage by remember { mutableStateOf(0) }
     // A real (non-anonymous) account has an email; anonymous guests don't. The
     // sign-in step is required and only shown when the user isn't signed in yet.
-    val userEmail by Firebase.auth.authStateChanged
+    val userEmail by Firebase.auth.idTokenChanged
         .map { it?.emailOrNull }
         .distinctUntilChanged()
         .collectAsState(Firebase.auth.currentUser?.emailOrNull)

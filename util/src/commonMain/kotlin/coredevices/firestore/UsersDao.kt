@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -97,9 +97,8 @@ class UsersDaoImpl(
         GlobalScope.launch {
             Firebase.auth.idTokenChanged
                 .onStart { emit(Firebase.auth.currentUser) }
-                .distinctUntilChanged { old, new ->
-                    old?.uid == new?.uid && old?.isAnonymous == new?.isAnonymous
-                }
+                // Emissions can wrap the same mutated native user; snapshot the key per emission.
+                .distinctUntilChangedBy { it?.uid to it?.isAnonymous }
                 .flatMapLatest { firebaseUser ->
                     val userInfo = firebaseUser?.let { "uid=${it.uid.take(8)} isAnonymous=${it.isAnonymous}" } ?: "null"
                     logger.v { "User changed: $userInfo" }

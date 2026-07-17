@@ -21,6 +21,8 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.auth.NoOpSilentSignIn
+import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.IosOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
@@ -38,6 +40,7 @@ import kotlin.time.DurationUnit
 
 val iosDefaultModule = module {
     singleOf(::RealGoogleAuthUtil) bind GoogleAuthUtil::class
+    single<SilentSignIn> { NoOpSilentSignIn }
     singleOf(::RealAppleAuthUtil) bind AppleAuthUtil::class
     singleOf(::RealGithubAuthUtil) bind GitHubAuthUtil::class
     singleOf(::PlatformShareLauncher)

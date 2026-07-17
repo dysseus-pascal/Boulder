@@ -25,6 +25,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.AndroidOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
@@ -34,12 +35,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
 val androidDefaultModule = module {
-    singleOf(::RealGoogleAuthUtil) bind GoogleAuthUtil::class
+    singleOf(::RealGoogleAuthUtil) binds arrayOf(GoogleAuthUtil::class, SilentSignIn::class)
     singleOf(::RealAppleAuthUtil) bind AppleAuthUtil::class
     singleOf(::RealGithubAuthUtil) bind GitHubAuthUtil::class
     factory { params ->

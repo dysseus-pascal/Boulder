@@ -110,8 +110,8 @@ class WatchManagerTest {
             _disconnected.complete(ConnectionFailureReason.FailedToConnect)
         }
 
-        override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
-            lastPreviouslyConnected = previouslyConnected
+        override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
+            lastPreviouslyConnected = knownWatchProperties?.lastConnected != null
             activeConnections++
             totalConnections++
             if (activeConnections > 1) {

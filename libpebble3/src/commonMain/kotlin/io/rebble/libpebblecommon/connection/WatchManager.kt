@@ -56,7 +56,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
-internal data class KnownWatchProperties(
+data class KnownWatchProperties(
     val name: String,
     val nickname: String?,
     val runningFwVersion: String,
@@ -617,7 +617,7 @@ class WatchManager(
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
                     pebbleConnector.connect(
-                        previouslyConnected = device.knownWatchProps?.lastConnected != null,
+                        knownWatchProperties = device.knownWatchProps,
                         lastError = device.connectionFailureInfo?.reason,
                     )
                     disconnectDuringConnectionJob.cancel()

@@ -71,7 +71,11 @@ class WatchManagerTest {
     }
     private val pebbleDeviceFactory = PebbleDeviceFactory()
     private val createPlatformIdentifier = object : CreatePlatformIdentifier {
-        override fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier {
+        override fun identifier(
+            identifier: PebbleIdentifier,
+            name: String,
+            lastAttemptFailed: Boolean,
+        ): PlatformIdentifier {
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }

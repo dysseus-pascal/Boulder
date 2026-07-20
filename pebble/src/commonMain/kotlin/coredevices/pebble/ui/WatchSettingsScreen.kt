@@ -1629,6 +1629,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsRestartingGattServerAfterBtPowerOn() }
                 ),
+                basicSettingsToggleItem(
+                    title = "Passive reconnection mode",
+                    description = "After a failed connection, wait for the watch to become available instead of retrying repeatedly",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.autoConnectAfterFailure,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    autoConnectAfterFailure = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsBleAutoConnect() },
+                ),
                 basicSettingsActionItem(
                     title = "Post test notification",
                     description = "Create a test notification, with actions",

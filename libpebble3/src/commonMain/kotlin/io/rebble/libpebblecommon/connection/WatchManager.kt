@@ -567,7 +567,11 @@ class WatchManager(
                     }
                 }
             }
-            val platformIdentifier = createPlatformIdentifier.identifier(identifier, watch.name)
+            val platformIdentifier = createPlatformIdentifier.identifier(
+                identifier = identifier,
+                name = watch.name,
+                lastAttemptFailed = device.connectionFailureInfo != null,
+            )
             if (platformIdentifier == null) {
                 // Probably because it couldn't create the device (ios throws on an unknown peristed
                 // uuid, so we'll need to scan for it using the name/serial?)...
@@ -589,7 +593,7 @@ class WatchManager(
             val coroutineContext =
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString-$thisConnectionNum")
             val connectionScope = ConnectionCoroutineScope(coroutineContext)
-            logger.v("transport.createConnector")
+            logger.v("transport.createConnector: $platformIdentifier")
             val color = watch.color()
             val connectionKoinScope = connectionScopeFactory.createScope(
                 ConnectionScopeProperties(

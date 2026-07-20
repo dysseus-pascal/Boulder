@@ -29,6 +29,7 @@ import platform.UniformTypeIdentifiers.UTType
 import platform.UniformTypeIdentifiers.UTTypeJPEG
 import platform.UniformTypeIdentifiers.UTTypeMovie
 import platform.UniformTypeIdentifiers.UTTypePNG
+import platform.UniformTypeIdentifiers.conformsToType
 import platform.UniformTypeIdentifiers.loadDataRepresentationForContentType
 import platform.UniformTypeIdentifiers.registeredContentTypes
 import platform.darwin.NSObject

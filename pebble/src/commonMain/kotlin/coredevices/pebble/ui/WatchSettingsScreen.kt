@@ -1855,6 +1855,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { loggedIn != null },
                 ),
+                basicSettingsToggleItem(
+                    title = "Auto-Resume Firmware Updates",
+                    description = "Automatically continue an interrupted firmware update when the watch reconnects",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = libPebbleConfig.watchConfig.autoResumeFirmwareUpdate,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    autoResumeFirmwareUpdate = it
+                                )
+                            )
+                        )
+                    },
+                ),
                 navBarNav?.let {basicSettingsActionItem(
                     title = "Show Watch Onboarding",
                     topLevelType = TopLevelType.Phone,

@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
@@ -17,6 +18,7 @@ import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.PutBytesService
 import io.rebble.libpebblecommon.services.SystemService
+import io.rebble.libpebblecommon.util.crc32
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import kotlinx.coroutines.CancellationException
@@ -28,8 +30,10 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Instant
 
 sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
@@ -46,7 +50,12 @@ enum class FirmwareUpdateErrorStarting {
 
 interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     val firmwareUpdateState: StateFlow<FirmwareUpdateStatus>
-    fun init(watchPlatform: WatchHardwarePlatform, runningSlot: Int?)
+    fun init(
+        watchPlatform: WatchHardwarePlatform,
+        runningSlot: Int?,
+        supportsResume: Boolean,
+        runningFwVersion: FirmwareVersion,
+    )
 
     sealed class FirmwareUpdateStatus {
         sealed class NotInProgress : FirmwareUpdateStatus() {
@@ -75,15 +84,58 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
 private data class FwupProperties(
     val watchPlatform: WatchHardwarePlatform,
     val updateToSlot: Int?,
+    val supportsResume: Boolean,
 )
 
+/**
+ * Remembers a firmware update which was interrupted by disconnection, so it can be auto-resumed on
+ * the next connection. In-memory only: an app restart loses it, but a manual retry still resumes
+ * (the watch owns the transfer state).
+ */
+class InterruptedFirmwareUpdates {
+    data class Interrupted(
+        val identifier: PebbleIdentifier,
+        val update: FirmwareUpdateCheckResult.FoundUpdate,
+        val path: Path,
+    )
+
+    private val interrupted = AtomicReference<Interrupted?>(null)
+
+    fun record(
+        identifier: PebbleIdentifier,
+        update: FirmwareUpdateCheckResult.FoundUpdate,
+        path: Path,
+    ) {
+        interrupted.store(Interrupted(identifier, update, path))
+    }
+
+    fun clear(identifier: PebbleIdentifier) {
+        val current = interrupted.load()
+        if (current?.identifier == identifier) {
+            interrupted.compareAndSet(current, null)
+        }
+    }
+
+    fun get(identifier: PebbleIdentifier): Interrupted? =
+        interrupted.load()?.takeIf { it.identifier == identifier }
+}
+
+private data class ResumeOffsets(
+    val firmware: UInt,
+    val resources: UInt,
+) {
+    val total: UInt get() = firmware + resources
+}
+
 class RealFirmwareUpdater(
-    identifier: PebbleIdentifier,
+    private val identifier: PebbleIdentifier,
     private val systemService: SystemService,
     private val putBytesSession: PutBytesSession,
     private val firmwareDownloader: FirmwareDownloader,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val firmwareUpdateManager: FirmwareUpdateManager,
+    private val interruptedUpdates: InterruptedFirmwareUpdates,
+    private val watchConfig: WatchConfigFlow,
 ) : FirmwareUpdater {
     private val logger = Logger.withTag("FWUpdate-$identifier")
     private var props: FwupProperties? = null
@@ -92,13 +144,47 @@ class RealFirmwareUpdater(
     override val firmwareUpdateState: StateFlow<FirmwareUpdateStatus> =
         _firmwareUpdateState.asStateFlow()
 
-    override fun init(watchPlatform: WatchHardwarePlatform, runningSlot: Int?) {
+    override fun init(
+        watchPlatform: WatchHardwarePlatform,
+        runningSlot: Int?,
+        supportsResume: Boolean,
+        runningFwVersion: FirmwareVersion,
+    ) {
         val updateToSlot = when (runningSlot) {
             0 -> 1
             1 -> 0
             else -> null
         }
-        props = FwupProperties(watchPlatform, updateToSlot)
+        props = FwupProperties(watchPlatform, updateToSlot, supportsResume)
+        maybeAutoResume(runningFwVersion)
+    }
+
+    /**
+     * Resume an update which a disconnection interrupted - but only if both sides agree: the watch
+     * isn't already running it, and the watch reports partial transfer state (which must also
+     * CRC-match the pbz before anything is sent - see [beginFirmwareUpdate]).
+     */
+    private fun maybeAutoResume(runningFwVersion: FirmwareVersion) {
+        val fwupProps = props ?: return
+        val interrupted = interruptedUpdates.get(identifier) ?: return
+        if (!watchConfig.value.autoResumeFirmwareUpdate || !fwupProps.supportsResume) return
+        if (runningFwVersion >= interrupted.update.version) {
+            logger.d { "Not auto-resuming: watch already running ${runningFwVersion.stringVersion}" }
+            interruptedUpdates.clear(identifier)
+            return
+        }
+        connectionCoroutineScope.launch {
+            val status = systemService.requestFirmwareUpdateStatus()
+            val watchResumable = status != null &&
+                    (status.firmwareBytesWritten.get() > 0u || status.resourcesBytesWritten.get() > 0u)
+            if (!watchResumable) {
+                logger.d { "Not auto-resuming: watch has no resumable update state" }
+                interruptedUpdates.clear(identifier)
+                return@launch
+            }
+            logger.i { "Auto-resuming interrupted firmware update to ${interrupted.update.version.stringVersion}" }
+            startUpdate(interrupted.update, requireResume = true)
+        }
     }
 
     private fun performSafetyChecks(manifest: PbzManifestWrapper, fwupProps: FwupProperties) {
@@ -132,67 +218,53 @@ class RealFirmwareUpdater(
 
     private suspend fun sendFirmwareParts(
         manifest: PbzManifestWrapper,
-        offset: UInt,
+        resume: ResumeOffsets,
         update: FirmwareUpdateCheckResult.FoundUpdate,
     ) {
-        var totalSent = 0u
+        var totalSent = resume.total
         val firmware = manifest.manifest.firmware
         val resources = manifest.manifest.resources
-        check(
-            offset < (firmware.size + (resources?.size ?: 0)).toUInt()
-        ) {
-            "Resume offset greater than total transfer size"
-        }
         var firmwareCookie: UInt? = null
         val progessFlow = MutableStateFlow(0.0f)
-        if (offset < firmware.size.toUInt()) {
-            try {
-                sendFirmware(manifest, offset).collect {
-                    when (it) {
-                        is PutBytesSession.SessionState.Open -> {
-                            logger.d { "PutBytes session opened for firmware" }
-                            _firmwareUpdateState.value =
-                                FirmwareUpdateStatus.InProgress(update, progessFlow)
-                        }
+        try {
+            sendFirmware(manifest, resume.firmware).collect {
+                when (it) {
+                    is PutBytesSession.SessionState.Open -> {
+                        logger.d { "PutBytes session opened for firmware" }
+                        _firmwareUpdateState.value =
+                            FirmwareUpdateStatus.InProgress(update, progessFlow)
+                    }
 
-                        is PutBytesSession.SessionState.Sending -> {
-                            totalSent = it.totalSent
-                            val progress =
-                                (it.totalSent.toFloat() / firmware.size) / 2.0f
-                            logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
-                            progessFlow.emit(progress)
-                        }
+                    is PutBytesSession.SessionState.Sending -> {
+                        totalSent = resume.firmware + it.totalSent
+                        val progress =
+                            (totalSent.toFloat() / firmware.size) / 2.0f
+                        logger.i { "Firmware update progress: $progress (putbytes cookie: ${it.cookie})" }
+                        progessFlow.emit(progress)
+                    }
 
-                        is PutBytesSession.SessionState.Finished -> {
-                            firmwareCookie = it.cookie
-                        }
+                    is PutBytesSession.SessionState.Finished -> {
+                        firmwareCookie = it.cookie
                     }
                 }
-            } catch (e: Exception) {
-                if (e is CancellationException) {
-                    logger.d { "Firmware transfer cancelled" }
-                    throw e
-                } else {
-                    throw FirmwareUpdateException.TransferFailed(
-                        "Failed to transfer firmware",
-                        e,
-                        totalSent
-                    )
-                }
             }
-            logger.d { "Completed firmware transfer" }
-        } else {
-            logger.d { "Firmware already sent, skipping firmware PutBytes" }
+        } catch (e: Exception) {
+            if (e is CancellationException) {
+                logger.d { "Firmware transfer cancelled" }
+                throw e
+            } else {
+                throw FirmwareUpdateException.TransferFailed(
+                    "Failed to transfer firmware",
+                    e,
+                    totalSent
+                )
+            }
         }
+        logger.d { "Completed firmware transfer" }
         var resourcesCookie: UInt? = null
         resources?.let { res ->
-            val resourcesOffset = if (offset < firmware.size.toUInt()) {
-                0u
-            } else {
-                offset - firmware.size.toUInt()
-            }
             try {
-                sendResources(manifest, resourcesOffset).collect {
+                sendResources(manifest, resume.resources).collect {
                     when (it) {
                         is PutBytesSession.SessionState.Open -> {
                             logger.d { "PutBytes session opened for resources" }
@@ -200,9 +272,10 @@ class RealFirmwareUpdater(
                         }
 
                         is PutBytesSession.SessionState.Sending -> {
-                            totalSent = firmware.size.toUInt() + it.totalSent
+                            val resourcesSent = resume.resources + it.totalSent
+                            totalSent = firmware.size.toUInt() + resourcesSent
                             val progress =
-                                0.5f + ((it.totalSent.toFloat() / res.size.toFloat()) / 2.0f)
+                                0.5f + ((resourcesSent.toFloat() / res.size.toFloat()) / 2.0f)
                             logger.i { "Resources update progress: $progress (putbytes cookie: ${it.cookie})" }
                             progessFlow.emit(progress)
                         }
@@ -274,11 +347,15 @@ class RealFirmwareUpdater(
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
-            beginFirmwareUpdate(pbz, 0u, update, fwupProps)
+            beginFirmwareUpdate(pbz, update, fwupProps)
         }
     }
 
     override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {
+        startUpdate(update, requireResume = false)
+    }
+
+    private fun startUpdate(update: FirmwareUpdateCheckResult.FoundUpdate, requireResume: Boolean) {
         connectionCoroutineScope.launch {
             logger.d { "updateFirmware: $update" }
             val fwupProps = props
@@ -288,23 +365,54 @@ class RealFirmwareUpdater(
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
-            val path = firmwareDownloader.downloadFirmware(update.url, "pbz")
-            if (path == null) {
-                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                    FirmwareUpdateErrorStarting.ErrorDownloading)
-                return@launch
+            val pbz = reusableDownloadedPbz(update) ?: run {
+                val path = firmwareDownloader.downloadFirmware(update.url, "pbz")
+                if (path == null) {
+                    _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                        FirmwareUpdateErrorStarting.ErrorDownloading)
+                    return@launch
+                }
+                val pbz = try {
+                    PbzFirmware(path).apply { manifests }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.w(e) { "Failed to parse firmware: ${e.message}" }
+                    _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                        FirmwareUpdateErrorStarting.ErrorParsingPbz)
+                    return@launch
+                }
+                // Remember the attempt (only once the file is downloaded and parseable, so a
+                // failed download doesn't trigger a retry on the next connection). Cleared when
+                // the update completes; anything interrupting it can auto-resume on reconnect.
+                interruptedUpdates.record(identifier, update, path)
+                pbz
             }
-            val pbz = try {
-                PbzFirmware(path)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                logger.w(e) { "Failed to parse firmware: ${e.message}" }
-                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
-                return@launch
+            beginFirmwareUpdate(pbz, update, fwupProps, requireResume)
+        }
+    }
+
+    /**
+     * The pbz from an interrupted attempt at the same update, if it's still on disk and really
+     * contains the expected version - so a resume doesn't re-download it.
+     */
+    private fun reusableDownloadedPbz(update: FirmwareUpdateCheckResult.FoundUpdate): PbzFirmware? {
+        val recorded = interruptedUpdates.get(identifier)?.takeIf { it.update == update } ?: return null
+        return try {
+            val pbz = PbzFirmware(recorded.path)
+            val versions = pbz.manifests.map { it.manifest.asFirmwareVersion() }
+            // Not equals(): the update-check version has a placeholder timestamp
+            if (versions.isEmpty() || versions.any { it == null || !it.sameVersionNumberAs(update.version) }) {
+                logger.w { "Previously-downloaded pbz isn't ${update.version.stringVersion} (contains ${versions.map { it?.stringVersion }}); re-downloading" }
+                return null
             }
-            beginFirmwareUpdate(pbz, 0u, update, fwupProps)
+            logger.d { "Reusing already-downloaded pbz: ${recorded.path}" }
+            pbz
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(e) { "Previously-downloaded pbz unusable; re-downloading" }
+            null
         }
     }
 
@@ -316,9 +424,9 @@ class RealFirmwareUpdater(
 
     private suspend fun beginFirmwareUpdate(
         pbzFw: PbzFirmware,
-        offset: UInt,
         update: FirmwareUpdateCheckResult.FoundUpdate,
         fwupProps: FwupProperties,
+        requireResume: Boolean = false,
     ) {
         logger.d { "beginFirmwareUpdate" }
         try {
@@ -327,12 +435,27 @@ class RealFirmwareUpdater(
             logger.d { "Loading firmware for slot ${fwupProps.updateToSlot}" }
             require(totalBytes > 0) { "Firmware size is 0" }
             performSafetyChecks(manifest, fwupProps)
-            val result = systemService.sendFirmwareUpdateStart(offset, totalBytes.toUInt())
+            val resume = if (fwupProps.supportsResume) {
+                determineResumeOffsets(manifest)
+            } else {
+                ResumeOffsets(0u, 0u)
+            }
+            if (requireResume && resume.total == 0u) {
+                logger.i { "Not auto-resuming: watch state doesn't match this update" }
+                interruptedUpdates.clear(identifier)
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle()
+                return
+            }
+            val result = systemService.sendFirmwareUpdateStart(
+                bytesAlreadyTransferred = resume.total,
+                bytesToSend = totalBytes.toUInt() - resume.total,
+            )
             if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
                 error("Failed to start firmware update: $result")
             }
-            sendFirmwareParts(manifest, offset, update)
+            sendFirmwareParts(manifest, resume, update)
             logger.d { "Firmware update completed, waiting for reboot" }
+            interruptedUpdates.clear(identifier)
             _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
             systemService.sendFirmwareUpdateComplete()
             return
@@ -358,6 +481,35 @@ class RealFirmwareUpdater(
         }
     }
 
+    private suspend fun determineResumeOffsets(manifest: PbzManifestWrapper): ResumeOffsets {
+        val status = systemService.requestFirmwareUpdateStatus()
+        if (status == null) {
+            logger.d { "No firmware update status from watch; starting from scratch" }
+            return ResumeOffsets(0u, 0u)
+        }
+        val firmwareOffset = validatedResumeOffset(
+            bytesWritten = status.firmwareBytesWritten.get(),
+            reportedCrc = status.firmwareCrc.get(),
+            objectSize = manifest.manifest.firmware.size.toUInt(),
+        ) { manifest.getFirmware().buffered() }
+        // Only resume resources if firmware is also resuming (a genuinely interrupted transfer) -
+        // the resources region can hold a stale-but-valid pack from a previous completed update,
+        // and "resuming" off that is confusing.
+        val resourcesOffset = if (firmwareOffset == 0u) {
+            0u
+        } else {
+            manifest.manifest.resources?.let { res ->
+                validatedResumeOffset(
+                    bytesWritten = status.resourcesBytesWritten.get(),
+                    reportedCrc = status.resourcesCrc.get(),
+                    objectSize = res.size.toUInt(),
+                ) { manifest.getResources()!!.buffered() }
+            } ?: 0u
+        }
+        logger.i { "Resume offsets: firmware=$firmwareOffset resources=$resourcesOffset (watch reported $status)" }
+        return ResumeOffsets(firmwareOffset, resourcesOffset)
+    }
+
     private fun sendFirmware(
         manifest: PbzManifestWrapper,
         skip: UInt = 0u,
@@ -378,6 +530,8 @@ class RealFirmwareUpdater(
             filename = "",
             source = source,
             sendInstall = false,
+            resumeOffset = skip,
+            objectCrc = if (skip > 0u) firmware.crc.toUInt() else null,
         ).onCompletion { source.close() } // Can't do use block because of the flow
     }
 
@@ -399,9 +553,35 @@ class RealFirmwareUpdater(
             filename = "",
             source = source,
             sendInstall = false,
+            resumeOffset = skip,
+            objectCrc = if (skip > 0u) resources.crc.toUInt() else null,
         ).onCompletion { source.close() }
     }
 }
+
+/**
+ * The offset to resume an object transfer from: the watch-reported offset if our local copy of the
+ * object matches the watch-reported CRC up to that offset, otherwise zero (restart from scratch).
+ */
+internal fun validatedResumeOffset(
+    bytesWritten: UInt,
+    reportedCrc: UInt,
+    objectSize: UInt,
+    source: () -> Source,
+): UInt {
+    if (bytesWritten == 0u || bytesWritten >= objectSize) return 0u
+    val localCrc = source().let { src ->
+        try {
+            src.crc32(bytesWritten.toLong())
+        } finally {
+            src.close()
+        }
+    }
+    return if (localCrc == reportedCrc) bytesWritten else 0u
+}
+
+private fun FirmwareVersion.sameVersionNumberAs(other: FirmwareVersion): Boolean =
+    major == other.major && minor == other.minor && patch == other.patch
 
 fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
     val versionTag = firmware.versionTag

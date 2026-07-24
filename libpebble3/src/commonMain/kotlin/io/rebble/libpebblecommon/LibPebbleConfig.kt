@@ -71,6 +71,7 @@ data class WatchConfig(
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val verboseWatchManagerLogging: Boolean = false,
+    val autoResumeFirmwareUpdate: Boolean = true,
     val pkjsInspectable: Boolean = false,
     val emulateRemoteTimeline: Boolean = true,
     /**

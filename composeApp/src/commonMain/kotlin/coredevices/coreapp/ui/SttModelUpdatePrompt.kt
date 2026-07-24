@@ -20,8 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import com.mmk.kmpnotifier.notification.NotifierManager
 import com.russhwolf.settings.Settings
 import coredevices.coreapp.STT_MODE_BEFORE_UPDATE_KEY
+import coredevices.coreapp.STT_UPDATE_NOTIFICATION_ID
 import coredevices.ui.M3Dialog
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigHolder
@@ -89,6 +91,9 @@ fun SttModelUpdatePrompt() {
 
     fun startDownload() {
         failed = false
+        runCatching {
+            NotifierManager.getLocalNotifier().remove(STT_UPDATE_NOTIFICATION_ID)
+        }
         scope.launch {
             val info = modelManager.getAvailableSTTModels().firstOrNull { it.slug == sttModel }
             if (info != null && modelManager.downloadSTTModel(info, allowMetered = true)) {

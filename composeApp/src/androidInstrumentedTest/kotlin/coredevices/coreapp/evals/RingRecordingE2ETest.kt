@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
@@ -673,7 +674,7 @@ class RingRecordingE2ETest {
 }
 
 private class E2EPreferences : Preferences {
-    override val useCactusAgent: StateFlow<Boolean> = MutableStateFlow(false)
+    override val llmMode: StateFlow<LlmMode> = MutableStateFlow(LlmMode.RemoteOnly)
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
@@ -697,7 +698,7 @@ private class E2EPreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
 
-    override suspend fun setUseCactusAgent(useCactus: Boolean) {}
+    override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}

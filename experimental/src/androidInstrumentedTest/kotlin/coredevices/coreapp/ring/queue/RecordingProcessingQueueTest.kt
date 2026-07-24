@@ -46,6 +46,7 @@ import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.ring.agent.LlmMode
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.TranscriptionService
@@ -81,7 +82,7 @@ import kotlin.time.Instant
 // region Fakes
 
 class FakePreferences : Preferences {
-    override val useCactusAgent: StateFlow<Boolean> = MutableStateFlow(false)
+    override val llmMode: StateFlow<LlmMode> = MutableStateFlow(LlmMode.RemoteOnly)
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
@@ -105,7 +106,7 @@ class FakePreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
 
-    override suspend fun setUseCactusAgent(useCactus: Boolean) {}
+    override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}

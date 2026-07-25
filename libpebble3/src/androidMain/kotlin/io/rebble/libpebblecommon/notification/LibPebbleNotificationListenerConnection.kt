@@ -109,7 +109,14 @@ class AndroidPebbleNotificationListenerConnection(
     }
 
     override fun init(libPebble: LibPebble) {
-        notificationHandler.init()
+        notificationHandler.init(activeNotifications = {
+            try {
+                listenerService?.activeNotifications?.toList()
+            } catch (e: Exception) {
+                logger.w(e) { "getActiveNotifications failed" }
+                null
+            }
+        })
         notificationSendQueue.onEach {
             libPebble.sendNotification(
                 it.toTimelineNotification(notificationConfig.value.cannedResponses)

@@ -111,6 +111,13 @@ sealed interface RingEvent {
             override val isFailsafe: Boolean
         ) : FirmwareUpdate
 
+        /** The update never got underway (typically we couldn't connect); it will be retried. */
+        data class NotStarted(
+            override val ringId: String,
+            override val newVersion: String,
+            override val isFailsafe: Boolean
+        ) : FirmwareUpdate
+
         data class Success(
             override val ringId: String,
             override val newVersion: String,
@@ -797,6 +804,20 @@ class RingSync(
                                                     deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = false)
                                                     _ringEvents.emit(
                                                         RingEvent.FirmwareUpdate.Failed(
+                                                            ringId = satelliteStatus.satellite.id,
+                                                            newVersion = satelliteStatus.newVersion,
+                                                            isFailsafe = isFailsafe,
+                                                        )
+                                                    )
+                                                }
+
+                                                is SatelliteStatus.FirmwareUpdating.NotStarted -> {
+                                                    logger.i {
+                                                        "Satellite ${satelliteStatus.satellite.id} firmware update to version ${satelliteStatus.newVersion} did not start, will retry"
+                                                    }
+                                                    deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = false)
+                                                    _ringEvents.emit(
+                                                        RingEvent.FirmwareUpdate.NotStarted(
                                                             ringId = satelliteStatus.satellite.id,
                                                             newVersion = satelliteStatus.newVersion,
                                                             isFailsafe = isFailsafe,

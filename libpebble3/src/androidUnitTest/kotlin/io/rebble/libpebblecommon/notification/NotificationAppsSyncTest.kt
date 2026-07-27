@@ -2,9 +2,12 @@ package io.rebble.libpebblecommon.notification
 
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.database.entity.ChannelGroup
+import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.carriedOverMuteState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -95,6 +98,55 @@ class NotificationAppsSyncTest {
 
         assertEquals(listOf(pmSyncedRemoved), toDelete)
         assertFalse(toDelete.contains(crossProfile))
+    }
+
+    @Test
+    fun channelMute_preservedWhenIdChangesButNameMatches() {
+        val existing = appItem("com.snapchat.android", autoAdded = false).copy(
+            channelGroups = listOf(
+                ChannelGroup(
+                    id = "default", name = null, channels = listOf(
+                        ChannelItem(id = "silent_v1", name = "Silent notifications", muteState = MuteState.Always),
+                    )
+                )
+            )
+        )
+        val newGroup = ChannelGroup(id = "default", name = null, channels = emptyList())
+        val newChannel = ChannelItem(id = "silent_v2", name = "Silent notifications", muteState = MuteState.Never)
+        assertEquals(MuteState.Always, existing.carriedOverMuteState(newGroup, newChannel))
+    }
+
+    @Test
+    fun channelMute_idMatchWinsOverNameMatch() {
+        val existing = appItem("com.example", autoAdded = false).copy(
+            channelGroups = listOf(
+                ChannelGroup(
+                    id = "g", name = "Group", channels = listOf(
+                        ChannelItem(id = "a", name = "Chat", muteState = MuteState.Never),
+                        ChannelItem(id = "b", name = "Chat", muteState = MuteState.Always),
+                    )
+                )
+            )
+        )
+        val group = ChannelGroup(id = "g", name = "Group", channels = emptyList())
+        val channel = ChannelItem(id = "b", name = "Chat", muteState = MuteState.Never)
+        assertEquals(MuteState.Always, existing.carriedOverMuteState(group, channel))
+    }
+
+    @Test
+    fun channelMute_unknownChannelDefaultsToNever() {
+        val existing = appItem("com.example", autoAdded = false).copy(
+            channelGroups = listOf(
+                ChannelGroup(
+                    id = "g", name = "Group", channels = listOf(
+                        ChannelItem(id = "a", name = "Chat", muteState = MuteState.Always),
+                    )
+                )
+            )
+        )
+        val group = ChannelGroup(id = "g", name = "Group", channels = emptyList())
+        val channel = ChannelItem(id = "new", name = "Other", muteState = MuteState.Never)
+        assertEquals(MuteState.Never, existing.carriedOverMuteState(group, channel))
     }
 
     private fun appItem(pkg: String, autoAdded: Boolean): NotificationAppItem =

@@ -277,6 +277,12 @@ android {
             isShrinkResources = true
             if (localReleaseBuild) {
                 signingConfig = signingConfigs.getByName("debug")
+                // Crashlytics regenerates a mapping-id resource every build
+                // (upToDateWhen=false), forcing aapt + a full R8 rerun even on
+                // null builds. Skip it for local release builds.
+                configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                    mappingFileUploadEnabled = false
+                }
             } else {
                 signingConfig = signingConfigs.getByName("release")
             }

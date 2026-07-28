@@ -110,6 +110,8 @@ kotlin {
                 val xcodeDir = providers.exec {
                     commandLine("xcode-select", "-p")
                 }.standardOutput.asText.get().trim()
+                val osName =
+                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
                 linkerOpts(
                     "-weak_framework", "CoreML",
                     "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"

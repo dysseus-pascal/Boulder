@@ -29,7 +29,6 @@ androidXTestVersion = "1.7.0"
 androidXRulesVersion = "1.7.0"
 googleServices = "4.4.4"
 firebase-crashlytics-plugin = "3.0.6"
-androidVersion = "2.4.0"
 androidx-activityCompose = "1.12.4"
 androidx-credentials = "1.5.0"
 gms-auth = "21.5.0"
@@ -80,7 +79,6 @@ kotlinx-atomicfu = { id = "org.jetbrains.kotlinx.atomicfu", version.ref = "atomi
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics-plugin" }
-androidVersion = { id = "de.nanogiants.android-versioning", version.ref = "androidVersion" }
 buildKonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
 androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 androidLint = { id = "com.android.lint", version.ref = "agp" }

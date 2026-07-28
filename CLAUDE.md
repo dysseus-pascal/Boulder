@@ -30,7 +30,7 @@ iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, no
 
 - Source layout per module follows standard KMP: `src/commonMain/kotlin`, `src/androidMain/kotlin`, `src/iosMain/kotlin`, plus `commonTest` / `androidUnitTest` / `androidInstrumentedTest`.
 - Compose resources are generated under the package `coreapp.composeapp.generated.resources`.
-- `versionCode` is derived from git commit count (`versioning.getVersionCode()`); `versionName` requires a git tag (e.g. `git tag 1.0.0`) or falls back to `"unknown"`.
+- `versionCode` is derived from git commit count; `versionName` requires a git tag (e.g. `git tag 1.0.0`) or falls back to `"unknown"`. Both are set lazily in `androidComponents.onVariants` so the git commands don't run during configuration.
 - DI is Koin (`koin-core`, `koin-compose`, `koin-compose-viewmodel`); navigation uses `androidx.navigation.compose`; logging uses Kermit; HTTP is Ktor (OkHttp on Android, Darwin on iOS).
 - Some dependencies are internally developed and published. You can still ask for the source code of these dependencies to be included in the session if you need more context but don't try looking for it in the filesystem.
 
@@ -131,7 +131,7 @@ When asked to make a release build and install it on a local device, follow the 
 
 1. Add or confirm `LOCAL_RELEASE_BUILD=true` in the root `local.properties`. This makes the release variant use the debug signing config, so it can install over an existing local/debug app without uninstalling.
 2. Build from the repo root with `./gradlew :composeApp:assembleRelease --stacktrace --no-daemon`. Do not skip release lint unless the user explicitly asks.
-3. Install over the existing app with `adb -s <device-id> install -r composeApp/build/outputs/apk/release/composeApp-<version>-release.apk`. Do not uninstall first unless explicitly requested.
+3. Install over the existing app with `adb -s <device-id> install -r composeApp/build/outputs/apk/release/composeApp-release.apk`. Do not uninstall first unless explicitly requested.
 4. Launch and verify with logcat:
     - `adb -s <device-id> logcat -c`
     - `adb -s <device-id> shell monkey -p coredevices.coreapp -c android.intent.category.LAUNCHER 1`

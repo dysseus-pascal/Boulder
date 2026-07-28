@@ -12,7 +12,6 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.googleServices)
     alias(libs.plugins.firebaseCrashlytics)
-    alias(libs.plugins.androidVersion)
     alias(libs.plugins.nativeCocoaPods)
     alias(libs.plugins.kotlinx.atomicfu)
 }
@@ -25,13 +24,28 @@ val properties = Properties().apply {
     }
 }
 val localReleaseBuild = properties["LOCAL_RELEASE_BUILD"]?.toString()?.toBooleanStrictOrNull() ?: false
-versioning.keepOriginalBundleFile = true
 
-val headSha by lazy {
-    project.providers.exec {
-        commandLine("git", "describe", "--always", "--dirty")
-    }.standardOutput.asText.get().trim()
+// Hoisted out of the lambda below, which must not capture the project.
+val providerFactory = providers
+
+// Number of commits in the git history, so it always increases on main.
+val gitVersionCode = providers.exec {
+    isIgnoreExitValue = true
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.map {
+    it.trim().toIntOrNull() ?: throw GradleException("Error reading current commit count")
 }
+
+// Newest tag anywhere in the repo, including on branches HEAD doesn't descend from.
+val gitVersionName = providers.exec {
+    isIgnoreExitValue = true
+    commandLine("git", "rev-list", "--tags", "--max-count=1")
+}.standardOutput.asText.flatMap { rev ->
+    providerFactory.exec {
+        isIgnoreExitValue = true
+        commandLine("git", "describe", "--tags", rev.trim().ifEmpty { "HEAD" })
+    }.standardOutput.asText
+}.map { it.trim().ifEmpty { "unknown" } }
 
 dependencies {
     debugImplementation(compose.uiTooling)
@@ -57,11 +71,12 @@ kotlin {
 
     // Make xcode invoke gradle from the right place
     tasks.register("fixXcodeProject") {
+        val xcodeProjectFile = project.file("../iosApp/Pods/Pods.xcodeproj/project.pbxproj")
+        val rootProjectPath = rootProject.projectDir.absolutePath
         doLast {
-            val xcodeProjectFile = project.file("../iosApp/Pods/Pods.xcodeproj/project.pbxproj")
             if (xcodeProjectFile.exists()) {
                 var content = xcodeProjectFile.readText()
-                content = content.replace("gradlew\\\" -p \\\"\$REPO_ROOT\\\"", "gradlew\\\" -p \\\"${rootProject.projectDir}\\\"")
+                content = content.replace("gradlew\\\" -p \\\"\$REPO_ROOT\\\"", "gradlew\\\" -p \\\"$rootProjectPath\\\"")
                 xcodeProjectFile.writeText(content)
             } else {
                 logger.warn("Xcode project file not found, skipping fix: ${xcodeProjectFile.path}")
@@ -259,9 +274,6 @@ android {
         applicationId = "coredevices.coreapp"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        // This uses the number of commits in the git history, so it will always increase on main
-        versionCode = versioning.getVersionCode()
-        versionName = try { versioning.getVersionName() } catch (e: Exception) { "unknown" }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             //noinspection ChromeOsAbiSupport
@@ -299,5 +311,16 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// Resolved at execution time — a configuration-time .get() makes every commit invalidate the
+// configuration cache.
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach {
+            it.versionCode.set(gitVersionCode)
+            it.versionName.set(gitVersionName)
+        }
     }
 }

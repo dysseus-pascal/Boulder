@@ -994,6 +994,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             title = "Reminder Vibration Pattern",
                         )
                     },
+                    isDebugSetting = false,
                 ),
                 basicSettingsToggleItem(
                     title = "Declined Events",

@@ -681,6 +681,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsForegroundService() },
                 ),
+                basicSettingsToggleItem(
+                    title = "Watch fully charged",
+                    description = "Notify on this phone when a watch finishes charging",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = coreConfig.notifyWatchFullyCharged,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                notifyWatchFullyCharged = it
+                            )
+                        )
+                    },
+                ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Quick replies",
                     description = "Preset messages for notification replies on the watch (canned messages)",

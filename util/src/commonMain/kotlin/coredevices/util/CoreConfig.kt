@@ -94,6 +94,7 @@ data class CoreConfig(
     val hidePermissionWarningBadges: Boolean = false,
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,
     val showWatchConnectionDebugInfo: Boolean = false,
+    val notifyWatchFullyCharged: Boolean = true,
 )
 
 @Serializable

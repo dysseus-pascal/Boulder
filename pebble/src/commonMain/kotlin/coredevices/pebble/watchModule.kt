@@ -15,10 +15,13 @@ import coredevices.pebble.account.RealBootConfigProvider
 import coredevices.pebble.account.RealFirestoreKnownWatchesSync
 import coredevices.pebble.account.RealFirestoreLocker
 import coredevices.pebble.account.RealPebbleAccount
+import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.Cohorts
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.RealBatteryChargedNotifier
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
+import coredevices.pebble.firmware.postWatchFullyChargedNotification
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
@@ -68,6 +71,7 @@ import io.rebble.libpebblecommon.BleConfig
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -124,6 +128,10 @@ val watchModule = module {
     } } bind PebbleAccountProvider::class
     singleOf(::PebbleAppDelegate)
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
+    single<BatteryChargedNotifier> {
+        val appContext: AppContext = get()
+        RealBatteryChargedNotifier(get()) { postWatchFullyChargedNotification(appContext, it) }
+    }
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
     single { FirestoreLockerDao { get() } }

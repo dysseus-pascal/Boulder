@@ -81,9 +81,11 @@ kotlin {
                 val xcodeDir = providers.exec {
                     commandLine("xcode-select", "-p")
                 }.standardOutput.asText.get().trim()
+                val osName =
+                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
                 linkerOpts.addAll(listOf(
                     "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator",
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName",
                     "-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"
                 ))
             }
@@ -103,7 +105,9 @@ kotlin {
                 val xcodeDir = providers.exec {
                     commandLine("xcode-select", "-p")
                 }.standardOutput.asText.get().trim()
-                linkerOpts.addAll(listOf("-weak_framework", "CoreML", "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator"))
+                val osName =
+                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
+                linkerOpts.addAll(listOf("-weak_framework", "CoreML", "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"))
             }
         }
         pod("GoogleSignIn", "8.0.0")

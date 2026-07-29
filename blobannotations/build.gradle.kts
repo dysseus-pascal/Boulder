@@ -11,7 +11,7 @@ kotlin {
     android {
         namespace = "coredevices.blobannotations"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
-        minSdk = 26
+        minSdk = libs.versions.android.minSdk.get().toInt()
 
         compilerOptions {
             jvmTarget.set(JvmTarget.valueOf("JVM_${libs.versions.jvm.toolchain.get()}"))

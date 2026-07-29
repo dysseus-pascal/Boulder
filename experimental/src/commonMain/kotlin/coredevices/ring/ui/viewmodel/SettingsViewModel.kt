@@ -409,7 +409,7 @@ class SettingsViewModel(
                 val count = withContext(Dispatchers.IO) {
                     firestoreRecordingsDao.getCount()
                 }
-                preferences.setLastBackupCount(count)
+                preferences.setLastBackupCount(count.toInt())
             } catch (e: Exception) {
                 Logger.withTag("Backup").w(e) { "Failed to refresh backup count" }
                 // Don't surface as an error in the UI — the cached value

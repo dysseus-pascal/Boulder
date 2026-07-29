@@ -1,16 +1,14 @@
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     `maven-publish`
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
     alias(libs.plugins.kotlinx.atomicfu)
-    alias(libs.plugins.composeMultiplatform)
-    alias(libs.plugins.composeCompiler)
 }
 
 publishing {
@@ -30,35 +28,12 @@ room {
     schemaDirectory("schema")
 }
 
-android {
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-    namespace = "io.rebble.libpebblecommon"
-    defaultConfig {
-        minSdk = 26
-        lint.targetSdk = compileSdk
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.valueOf("VERSION_${libs.versions.jvm.toolchain.get()}")
-        targetCompatibility = JavaVersion.valueOf("VERSION_${libs.versions.jvm.toolchain.get()}")
-    }
-
-    kotlin {
-        jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
-    }
-
-    buildTypes {
-        release {
-            consumerProguardFiles("consumer-rules.pro")
-        }
-    }
-}
-
 // Non-mac machines cannot build iOS targets, so disable them
 val enableIosTarget = System.getProperty("os.name").contains("mac", ignoreCase = true)
 
 kotlin {
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
+
     targets.configureEach {
         compilations.configureEach {
             compileTaskProvider.configure {
@@ -69,10 +44,25 @@ kotlin {
         }
     }
 
-    androidTarget {
-        publishLibraryVariants("release", "debug")
-        instrumentedTestVariant {
-            sourceSetTree.set(KotlinSourceSetTree.test)
+    android {
+        namespace = "io.rebble.libpebblecommon"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = 26
+
+        compilerOptions {
+            jvmTarget.set(JvmTarget.valueOf("JVM_${libs.versions.jvm.toolchain.get()}"))
+        }
+
+        withHostTestBuilder {}
+
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
+
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
         }
     }
 
@@ -127,7 +117,7 @@ kotlin {
             implementation(libs.ktor.server.websockets)
             api(libs.kotlinx.datetime)
             implementation(libs.koin.core)
-            implementation(compose.ui)
+            implementation(libs.compose.ui)
             implementation(project(":blobannotations"))
             implementation(libs.settings)
             implementation(libs.settings.serialization)
@@ -160,13 +150,13 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
         }
 
-        androidInstrumentedTest.dependencies {
+        getByName("androidDeviceTest").dependencies {
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.rules)
             implementation(libs.androidx.monitor)
         }
 
-        getByName("androidUnitTest").dependencies {
+        getByName("androidHostTest").dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlin.test.junit)
             implementation(libs.coroutines.test)
@@ -183,10 +173,7 @@ tasks.withType<KotlinCompilationTask<*>>().all {
 }
 
 afterEvaluate {
-    tasks.named("kspDebugKotlinAndroid") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
-    tasks.named("kspReleaseKotlinAndroid") {
+    tasks.named("kspAndroidMain") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
 

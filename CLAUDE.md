@@ -15,13 +15,14 @@ Kotlin Multiplatform / Compose Multiplatform app targeting Android and iOS.
 
 ## Repository layout
 
-- `:composeApp` — main Android/iOS app entry point (Compose UI, Firebase, Cocoapods, Koin DI). Android `applicationId` is `coredevices.coreapp`.
+- `:composeApp` — shared Compose UI / Firebase / Cocoapods / Koin DI, and the iOS entry point. KMP library.
+- `:androidApp` — Android application shell: manifest, launcher resources, signing, R8, google-services. `applicationId` is `coredevices.coreapp`; the Activity and Service classes it declares live in `:composeApp`.
 - `:libpebble3` — KMP library for talking to Pebble/Core watches (BLE, protocol, services, endpoint managers). Mirrored from a standalone repo.
 - `:pebble` — Pebble-related shared code used by the app.
 - `:experimental` — newer/experimental device features (e.g. ring); see `coredevices.ring`.
 - `:util` — shared utilities (logging, IO, etc.).
 - `:mcp`, `:index-ai`, `:libindex` — AI/MCP-related modules.
-- `:cactus`, `:resampler`, `:krisp-stubs` — audio/ML support modules.
+- `:cactus`, `:resampler`, `:krisp-stubs` — audio/ML support modules. `:cactus-native` is a plain Android library holding cactus' CMake build and prebuilt `.so` (the KMP Android library plugin has no NDK support).
 - `:blobannotations`, `:blobdbgen` — KSP annotations + code generator for Pebble blobdb.
 
 iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, not `.xcodeproj`).
@@ -111,7 +112,7 @@ When adding a new format/encoding, prefer keeping the local storage format uncha
 - Gradle wrapper at the root: `./gradlew`.
 - JDK 17 required. JVM target is 17 across modules.
 - Version catalog: `gradle/libs.versions.toml`.
-- Android: `./gradlew :composeApp:assembleDebug` / `assembleRelease`. Needs `composeApp/src/google-services.json` (a dummy is committed alongside).
+- Android: `./gradlew :androidApp:assembleDebug` / `assembleRelease`. Needs `androidApp/src/google-services.json` (a dummy is committed alongside).
 - iOS: `./gradlew podInstall`, then build from Xcode against `iosApp/iosApp.xcworkspace`.
 - The iOS framework is named `ComposeApp` and is wired up via the Kotlin Cocoapods plugin in `composeApp/build.gradle.kts`.
 
@@ -130,8 +131,8 @@ When adding a new format/encoding, prefer keeping the local storage format uncha
 When asked to make a release build and install it on a local device, follow the GitHub Actions release build shape instead of inventing a shortcut:
 
 1. Add or confirm `LOCAL_RELEASE_BUILD=true` in the root `local.properties`. This makes the release variant use the debug signing config, so it can install over an existing local/debug app without uninstalling.
-2. Build from the repo root with `./gradlew :composeApp:assembleRelease --stacktrace --no-daemon`. Do not skip release lint unless the user explicitly asks.
-3. Install over the existing app with `adb -s <device-id> install -r composeApp/build/outputs/apk/release/composeApp-release.apk`. Do not uninstall first unless explicitly requested.
+2. Build from the repo root with `./gradlew :androidApp:assembleRelease --stacktrace --no-daemon`. Do not skip release lint unless the user explicitly asks.
+3. Install over the existing app with `adb -s <device-id> install -r androidApp/build/outputs/apk/release/androidApp-release.apk`. Do not uninstall first unless explicitly requested.
 4. Launch and verify with logcat:
     - `adb -s <device-id> logcat -c`
     - `adb -s <device-id> shell monkey -p coredevices.coreapp -c android.intent.category.LAUNCHER 1`

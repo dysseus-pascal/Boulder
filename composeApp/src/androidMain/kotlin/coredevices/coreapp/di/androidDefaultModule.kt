@@ -3,10 +3,11 @@ package coredevices.coreapp.di
 import CoreAppVersion
 import PlatformContext
 import PlatformShareLauncher
+import android.content.Context
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import coredevices.analytics.createAndroidAnalytics
-import coredevices.coreapp.BuildConfig
 import coredevices.coreapp.PebbleBackgroundManager
+import coredevices.coreapp.appVersionName
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
@@ -54,7 +55,7 @@ val androidDefaultModule = module {
     singleOf(::PlatformShareLauncher)
     singleOf(::AndroidPlatform) bind Platform::class
     singleOf(::AndroidOAuthLauncher) bind OAuthLauncher::class
-    single { CoreAppVersion(BuildConfig.VERSION_NAME) }
+    single { CoreAppVersion(get<Context>().appVersionName) }
     factory { AppUpdateManagerFactory.create(get()) }
     singleOf(::PlatformContext)
     singleOf(::AndroidPermissionRequester) bind PermissionRequester::class

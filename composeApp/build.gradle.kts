@@ -1,56 +1,15 @@
-
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.googleServices)
-    alias(libs.plugins.firebaseCrashlytics)
     alias(libs.plugins.nativeCocoaPods)
     alias(libs.plugins.kotlinx.atomicfu)
 }
-
-val properties = Properties().apply {
-    try {
-        load(rootDir.resolve("local.properties").reader())
-    } catch (e: Exception) {
-        println("local.properties file not found")
-    }
-}
-val localReleaseBuild = properties["LOCAL_RELEASE_BUILD"]?.toString()?.toBooleanStrictOrNull() ?: false
-
-// Hoisted out of the lambda below, which must not capture the project.
-val providerFactory = providers
-
-// Number of commits in the git history, so it always increases on main.
-val gitVersionCode = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "rev-list", "--count", "HEAD")
-}.standardOutput.asText.map {
-    it.trim().toIntOrNull() ?: throw GradleException("Error reading current commit count")
-}
-
-// Newest tag anywhere in the repo, including on branches HEAD doesn't descend from.
-val gitVersionName = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "rev-list", "--tags", "--max-count=1")
-}.standardOutput.asText.flatMap { rev ->
-    providerFactory.exec {
-        isIgnoreExitValue = true
-        commandLine("git", "describe", "--tags", rev.trim().ifEmpty { "HEAD" })
-    }.standardOutput.asText
-}.map { it.trim().ifEmpty { "unknown" } }
-
-dependencies {
-    debugImplementation(compose.uiTooling)
-}
-
 
 kotlin {
     val xcodeExists = providers.exec {
@@ -74,11 +33,20 @@ kotlin {
             }
         }
     }
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    android {
+        namespace = "coredevices.coreapp.shared"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
+
+        androidResources {
+            enable = true
+        }
+
+        withHostTestBuilder {}
     }
 
     // Make xcode invoke gradle from the right place
@@ -203,6 +171,7 @@ kotlin {
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
+            implementation(compose.uiTooling)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)
             implementation(libs.gms.auth)
@@ -215,17 +184,7 @@ kotlin {
             implementation(libs.coil.gif)
             implementation(libs.coredevices.haversine)
         }
-        androidInstrumentedTest.dependencies {
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
-            implementation(project.dependencies.platform(libs.firebase.bom))
-            implementation(libs.ktor.client.okhttp)
-            implementation(project(":experimental"))
-            implementation(project(":util"))
-            implementation(project(":index-ai"))
-            implementation(project(":mcp"))
-        }
-        androidUnitTest.dependencies {
+        getByName("androidHostTest").dependencies {
             implementation(libs.ktor.client.okhttp)
         }
         iosMain.dependencies {
@@ -280,86 +239,8 @@ kotlin {
             implementation(libs.health.kmp)
         }
     }
-    sourceSets.androidInstrumentedTest.dependencies {
-        implementation(kotlin("test"))
-    }
 }
 
 compose.resources {
     packageOfResClass = "coreapp.composeapp.generated.resources"
-}
-
-android {
-    namespace = "coredevices.coreapp"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    buildFeatures {
-        buildConfig = true
-        compose = true
-    }
-
-    if (!localReleaseBuild) {
-        signingConfigs {
-            create("release") {
-                storeFile = file("../keystore.jks")
-                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEYSTORE_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
-            }
-        }
-    }
-
-    defaultConfig {
-        applicationId = "coredevices.coreapp"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk {
-            //noinspection ChromeOsAbiSupport
-            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
-        }
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            if (localReleaseBuild) {
-                signingConfig = signingConfigs.getByName("debug")
-                // Crashlytics regenerates a mapping-id resource every build
-                // (upToDateWhen=false), forcing aapt + a full R8 rerun even on
-                // null builds. Skip it for local release builds.
-                configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
-                    mappingFileUploadEnabled = false
-                }
-            } else {
-                signingConfig = signingConfigs.getByName("release")
-            }
-            isDebuggable = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-        getByName("debug") {
-            isMinifyEnabled = false
-            isDebuggable = true
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-}
-
-// Resolved at execution time — a configuration-time .get() makes every commit invalidate the
-// configuration cache.
-androidComponents {
-    onVariants { variant ->
-        variant.outputs.forEach {
-            it.versionCode.set(gitVersionCode)
-            it.versionName.set(gitVersionName)
-        }
-    }
 }

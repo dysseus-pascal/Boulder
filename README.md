@@ -41,8 +41,8 @@ The cross-platform Pebble mobile app is located in `composeApp`.
 Several features (e.g. bug reporting, google login, memfault, online transcription, github developer connection) will not work without tokens configured in `gradle.properties` (but all core features do work).
 
 ### Android
-* Compile on Android with `./gradlew :composeApp:assembleRelease`.
-* You will need a `google-services.json` in `composeApp/src` to compile on Android (an examples with dummy values is provided in `google-services-dummy.json`).
+* Compile on Android with `./gradlew :androidApp:assembleRelease`.
+* You will need a `google-services.json` in `androidApp/src` to compile on Android (an examples with dummy values is provided in `google-services-dummy.json`).
 * You will need a keystore with some keys if you intend to do a release build on Android (unless you use `LOCAL_RELEASE_BUILD=true` in `gradle.properties`).
 
 ### iOS

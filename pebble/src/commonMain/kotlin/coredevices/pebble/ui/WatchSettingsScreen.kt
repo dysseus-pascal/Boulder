@@ -1726,6 +1726,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { pebbleFeatures.supportsRestartingGattServerAfterBtPowerOn() }
                 ),
                 basicSettingsToggleItem(
+                    title = "Reversed PPoG",
+                    description = "Let the watch host the data connection when it supports it. Turn off to use the older phone-hosted mode. Reconnect for this to take effect",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.useReversedPpog,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    useReversedPpog = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
                     title = "Passive reconnection mode",
                     description = "After a failed connection, wait for the watch to become available instead of retrying repeatedly",
                     topLevelType = TopLevelType.Phone,

@@ -109,6 +109,11 @@ fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watc
 data class BleConfig(
     @SerialName("reversedPpog")
     val legacyReversedPPoG: Boolean = false,
+    /**
+     * When false, ignore any reversed PPoG service the watch advertises and host forward PPoG
+     * ourselves instead. Evaluated per connection, so it takes effect on the next reconnect.
+     */
+    val useReversedPpog: Boolean = true,
     val verbosePpogLogging: Boolean = false,
     /**
      * iOS only. When true, re-publish the GATT services automatically after the BT stack

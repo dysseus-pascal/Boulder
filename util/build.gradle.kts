@@ -30,7 +30,6 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
     }
 
     compileOptions {
@@ -160,6 +159,8 @@ kotlin {
 
         androidMain {
             dependencies {
+                // gitlive's compile variant declares com.google.firebase:* without versions.
+                implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.ktor.client.okhttp)
                 implementation(compose.uiTooling)

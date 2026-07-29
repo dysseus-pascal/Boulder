@@ -29,7 +29,6 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -234,6 +233,8 @@ kotlin {
 
         androidMain {
             dependencies {
+                // gitlive's compile variant declares com.google.firebase:* without versions.
+                implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.androidx.glance)
                 implementation(libs.androidx.glance.material3)
                 implementation(compose.uiTooling)

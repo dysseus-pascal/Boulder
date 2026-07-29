@@ -22,7 +22,6 @@ android {
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
         minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
     }
 
     compileOptions {
@@ -140,6 +139,8 @@ kotlin {
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
                 implementation(libs.androidx.activity.compose)
+                // gitlive's compile variant declares com.google.firebase:* without versions.
+                implementation(project.dependencies.platform(libs.firebase.bom))
             }
         }
 

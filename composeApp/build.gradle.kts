@@ -200,6 +200,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)

@@ -79,7 +79,6 @@ kotlin {
     jvm()
 
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { target ->
@@ -195,9 +194,6 @@ afterEvaluate {
         tasks.named("kspKotlinIosArm64") {
             dependsOn("kspCommonMainKotlinMetadata")
         }
-        tasks.named("kspKotlinIosX64") {
-            dependsOn("kspCommonMainKotlinMetadata")
-        }
         tasks.named("kspKotlinIosSimulatorArm64") {
             dependsOn("kspCommonMainKotlinMetadata")
         }
@@ -211,7 +207,6 @@ dependencies {
     add("kspAndroid", libs.room.compiler)
 
     if (enableIosTarget) {
-        add("kspIosX64", libs.room.compiler)
         add("kspIosArm64", libs.room.compiler)
         add("kspIosSimulatorArm64", libs.room.compiler)
     }

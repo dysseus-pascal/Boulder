@@ -36,9 +36,6 @@ kotlin {
         }
     }
 
-    iosX64 {
-    }
-
     iosArm64 {
     }
 

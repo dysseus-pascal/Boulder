@@ -96,12 +96,27 @@ kotlin {
         podfile = project.file("../iosApp/Podfile")
 
         pod("GoogleSignIn", "8.0.0")
-        pod("FirebaseCore")
+        pod("FirebaseCore", "11.10.0")
         pod("FirebaseAuth") {
             linkOnly = true
             extraOpts += listOf("-compiler-option", "-fmodules")
         }
         pod("FirebaseFirestore") {
+            linkOnly = true
+            source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
+                // 11.10.0 — pinned here by commit because the synthetic Podfile's lock lives
+                // under build/ and is never committed
+                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+            }
+        }
+        // The binary FirebaseFirestoreInternal is static, so its C deps must be linked here
+        pod("nanopb") {
+            version = "3.30910.0"
+            linkOnly = true
+        }
+        pod("leveldb-library") {
+            version = "1.22.6"
+            moduleName = "leveldb"
             linkOnly = true
         }
         pod("FirebaseStorage") {
@@ -147,6 +162,24 @@ kotlin {
             freeCompilerArgs += listOf(
                 "-Xdisable-phases=DevirtualizationAnalysis,DCEPhase"
             )
+            // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
+            // every binary that pulls in Firestore, not just the pod framework.
+            val grpcSlice = if (target.konanTarget.name.contains("simulator")) {
+                "ios-arm64_x86_64-simulator"
+            } else {
+                "ios-arm64"
+            }
+            listOf(
+                "FirebaseFirestoreGRPCCoreBinary/grpc.xcframework" to "grpc",
+                "FirebaseFirestoreGRPCCPPBinary/grpcpp.xcframework" to "grpcpp",
+                "FirebaseFirestoreGRPCBoringSSLBinary/openssl_grpc.xcframework" to "openssl_grpc",
+                "FirebaseFirestoreAbseilBinary/absl.xcframework" to "absl",
+            ).forEach { (path, fw) ->
+                val sliceDir = layout.buildDirectory
+                    .dir("cocoapods/synthetic/ios/Pods/$path/$grpcSlice")
+                    .get().asFile
+                linkerOpts.addAll(listOf("-F" + sliceDir.absolutePath, "-framework", fw))
+            }
         }
     }
     

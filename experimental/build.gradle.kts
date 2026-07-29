@@ -90,6 +90,26 @@ kotlin {
                 ))
             }
         }
+        // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
+        // every binary that pulls in Firestore, not just the pod framework.
+        it.binaries.all {
+            val grpcSlice = if (target.konanTarget.name.contains("simulator")) {
+                "ios-arm64_x86_64-simulator"
+            } else {
+                "ios-arm64"
+            }
+            listOf(
+                "FirebaseFirestoreGRPCCoreBinary/grpc.xcframework" to "grpc",
+                "FirebaseFirestoreGRPCCPPBinary/grpcpp.xcframework" to "grpcpp",
+                "FirebaseFirestoreGRPCBoringSSLBinary/openssl_grpc.xcframework" to "openssl_grpc",
+                "FirebaseFirestoreAbseilBinary/absl.xcframework" to "absl",
+            ).forEach { (path, fw) ->
+                val sliceDir = layout.buildDirectory
+                    .dir("cocoapods/synthetic/ios/Pods/$path/$grpcSlice")
+                    .get().asFile
+                linkerOpts.addAll(listOf("-F" + sliceDir.absolutePath, "-framework", fw))
+            }
+        }
     }
 
     cocoapods {
@@ -118,7 +138,20 @@ kotlin {
             extraOpts += listOf("-compiler-option", "-fmodules")
         }
         pod("FirebaseFirestore") {
-            version = "11.10.0"
+            linkOnly = true
+            source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
+                // 11.10.0 — keep in step with :composeApp, or the two modules resolve
+                // different Firestore builds
+                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+            }
+        }
+        pod("nanopb") {
+            version = "3.30910.0"
+            linkOnly = true
+        }
+        pod("leveldb-library") {
+            version = "1.22.6"
+            moduleName = "leveldb"
             linkOnly = true
         }
         pod("FirebaseStorage") {

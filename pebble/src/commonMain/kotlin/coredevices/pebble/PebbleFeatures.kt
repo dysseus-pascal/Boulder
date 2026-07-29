@@ -18,4 +18,5 @@ class PebbleFeatures(
     fun supportsForegroundService(): Boolean = platform == Platform.Android
     fun supportsRestartingGattServerAfterBtPowerOn(): Boolean = platform == Platform.IOS
     fun supportsBleAutoConnect(): Boolean = platform == Platform.Android
+    fun supportsCentralStateRestoration(): Boolean = platform == Platform.IOS
 }

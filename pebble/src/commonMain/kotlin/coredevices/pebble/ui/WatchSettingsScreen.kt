@@ -1743,6 +1743,24 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
+                    title = "Bluetooth state restoration",
+                    description = "Let iOS relaunch the app to restore the watch connection. Takes effect on next app launch",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.centralStateRestoration,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    centralStateRestoration = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsCentralStateRestoration() },
+                    isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
                     title = "Passive reconnection mode",
                     description = "After a failed connection, wait for the watch to become available instead of retrying repeatedly",
                     topLevelType = TopLevelType.Phone,

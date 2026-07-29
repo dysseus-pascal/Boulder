@@ -13,3 +13,7 @@ internal actual fun createKableAdvertisementsFlow(): Flow<Advertisement> = TODO(
 actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier {
     TODO("Not yet implemented")
 }
+
+actual fun configureKableCentral(stateRestoration: Boolean) {
+    // No-op: CoreBluetooth state restoration is iOS-only.
+}

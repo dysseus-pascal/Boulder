@@ -10,6 +10,13 @@ import kotlinx.coroutines.flow.mapNotNull
 
 expect fun kableBleScanner(): BleScanner
 
+/**
+ * Must run before anything touches Kable's shared central manager (any scan,
+ * [com.juul.kable.Peripheral] creation, or Bluetooth-state collection) — Kable
+ * throws if its central has already been initialised.
+ */
+expect fun configureKableCentral(stateRestoration: Boolean)
+
 internal expect fun createKableAdvertisementsFlow(): Flow<Advertisement>
 
 class KableBleScanner : BleScanner {

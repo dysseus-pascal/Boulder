@@ -22,3 +22,7 @@ internal actual fun createKableAdvertisementsFlow(): Flow<Advertisement> = Scann
 
 actual fun Identifier.asPebbleBleIdentifier(): PebbleBleIdentifier =
     PebbleBleIdentifier(macAddress = toString())
+
+actual fun configureKableCentral(stateRestoration: Boolean) {
+    // No-op: CoreBluetooth state restoration is iOS-only.
+}

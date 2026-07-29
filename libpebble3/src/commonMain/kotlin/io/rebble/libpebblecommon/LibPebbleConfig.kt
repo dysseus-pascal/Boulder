@@ -125,6 +125,16 @@ data class BleConfig(
      * attempts, so that the OS waits for the watch to appear instead of us retrying in a loop.
      */
     val autoConnectAfterFailure: Boolean = true,
+    /**
+     * iOS only. Opt the watch connection into CoreBluetooth state preservation/restoration so the
+     * OS can relaunch us for central-side events. Applied once during
+     * [io.rebble.libpebblecommon.connection.LibPebble3.create], because Kable's central manager can
+     * only be configured before first use — changing it takes effect on the next app launch.
+     *
+     * Also suppresses the system "Bluetooth is off" alert: Kable sets
+     * CBCentralManagerOptionShowPowerAlertKey=false whenever it passes options at all.
+     */
+    val centralStateRestoration: Boolean = false,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

@@ -64,6 +64,7 @@ reorderable = "3.1.0"
 zxing = "3.5.4"
 compass = "3.2.0"
 health-kmp = "1.4.0"
+documentfile = "1.1.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -136,7 +137,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
 identity-google = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleId" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
-androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version = "1.0.1" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 play-update = { group = "com.google.android.play", name = "app-update", version.ref = "play-update" }
 play-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "play-update" }
 crashkios = { module = "co.touchlab.crashkios:crashlytics", version.ref = "crashkios" }

@@ -48,6 +48,13 @@ kotlin {
         isIgnoreExitValue = true
         commandLine("which", "xcode-select")
     }.result.get().exitValue == 0
+    val xcodeDir = if (xcodeExists) {
+        providers.exec {
+            commandLine("xcode-select", "-p")
+        }.standardOutput.asText.get().trim()
+    } else {
+        ""
+    }
     androidTarget {
         publishLibraryVariants("release", "debug")
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -73,26 +80,21 @@ kotlin {
         iosSimulatorArm64()
     ).forEach {
         it.binaries.getTest(NativeBuildType.DEBUG).apply {
-            val xcodeExists = providers.exec {
-                isIgnoreExitValue = true
-                commandLine("which", "xcode-select")
-            }.result.get().exitValue == 0
             if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
-                val osName =
-                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
-                linkerOpts.addAll(listOf(
-                    "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName",
-                    "-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"
-                ))
+                linkerOpts.addAll(listOf("-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"))
             }
         }
-        // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
-        // every binary that pulls in Firestore, not just the pod framework.
         it.binaries.all {
+            val osName =
+                if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
+            if (xcodeExists) {
+                linkerOpts.addAll(listOf(
+                    "-weak_framework", "CoreML",
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
+                ))
+            }
+            // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
+            // every binary that pulls in Firestore, not just the pod framework.
             val grpcSlice = if (target.konanTarget.name.contains("simulator")) {
                 "ios-arm64_x86_64-simulator"
             } else {
@@ -121,14 +123,6 @@ kotlin {
         framework {
             baseName = "RingModule"
             isStatic = false
-            if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
-                val osName =
-                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
-                linkerOpts.addAll(listOf("-weak_framework", "CoreML", "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"))
-            }
         }
         pod("GoogleSignIn", "8.0.0")
         pod("FirebaseCore", "11.10.0")

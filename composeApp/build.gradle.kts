@@ -53,6 +53,18 @@ dependencies {
 
 
 kotlin {
+    val xcodeExists = providers.exec {
+        isIgnoreExitValue = true
+        commandLine("which", "xcode-select")
+    }.result.get().exitValue == 0
+    val xcodeDir = if (xcodeExists) {
+        providers.exec {
+            commandLine("xcode-select", "-p")
+        }.standardOutput.asText.get().trim()
+    } else {
+        ""
+    }
+
     targets.configureEach {
         compilations.configureEach {
             compileTaskProvider.configure {
@@ -131,22 +143,6 @@ kotlin {
 
         framework {
             baseName = "ComposeApp"
-            linkerOpts("-framework", "Accelerate")
-            val xcodeExists = providers.exec {
-                isIgnoreExitValue = true
-                commandLine("which", "xcode-select")
-            }.result.get().exitValue == 0
-            if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
-                val osName =
-                    if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
-                linkerOpts(
-                    "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
-                )
-            }
         }
     }
 
@@ -162,6 +158,15 @@ kotlin {
             freeCompilerArgs += listOf(
                 "-Xdisable-phases=DevirtualizationAnalysis,DCEPhase"
             )
+            linkerOpts.addAll(listOf("-framework", "Accelerate"))
+            val osName =
+                if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
+            if (xcodeExists) {
+                linkerOpts.addAll(listOf(
+                    "-weak_framework", "CoreML",
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
+                ))
+            }
             // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
             // every binary that pulls in Firestore, not just the pod framework.
             val grpcSlice = if (target.konanTarget.name.contains("simulator")) {

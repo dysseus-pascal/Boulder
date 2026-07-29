@@ -51,7 +51,7 @@ webview = "2.0.3"
 coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.38.0"
-coredevices-speex = "1946c84"
+coredevices-speex = "c61d18a"
 mcp = "0.8.3"
 glance = "1.1.1"
 #noinspection GradleDependency

@@ -53,6 +53,10 @@ kotlin {
             jvmTarget.set(JvmTarget.valueOf("JVM_${libs.versions.jvm.toolchain.get()}"))
         }
 
+        androidResources {
+            enable = true
+        }
+
         withHostTestBuilder {}
 
         withDeviceTestBuilder {

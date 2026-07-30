@@ -35,6 +35,7 @@ import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
+import coredevices.coreapp.util.registerBluetoothPairingDebugLogger
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.watchModule
@@ -85,6 +86,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
                 logger.i { "Power state changed: isPowerSaveMode=${powerManager.isPowerSaveMode}" }
             }
         }, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        registerBluetoothPairingDebugLogger(this)
         setupExceptionHandler()
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()

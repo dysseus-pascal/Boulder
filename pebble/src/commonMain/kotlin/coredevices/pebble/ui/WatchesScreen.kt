@@ -249,8 +249,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
     val bluetoothEnabled by libPebble.bluetoothEnabled.collectAsState()
     var addFabExpanded by remember { mutableStateOf(false) }
-    val indexAlreadyPaired by libIndex.rings.map { rings -> rings.any { it !is DiscoveredIndexDevice } }
-        .collectAsState(initial = false)
     var showIndexAlreadyPairedDialog by remember { mutableStateOf(false) }
     var fabInfoDialog by remember { mutableStateOf<FabInfo?>(null) }
     var showRingWakeHint by remember { mutableStateOf(false) }
@@ -301,13 +299,6 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         scope.launch {
             if (!ensureScanPermission(uiContext)) return@launch
             libPebble.startClassicScan()
-        }
-    }
-
-    fun scanIndex(uiContext: PlatformUiContext) {
-        scope.launch {
-            if (!ensureScanPermission(uiContext)) return@launch
-            libIndex.startScan()
         }
     }
 
@@ -365,10 +356,18 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
-                            if (indexAlreadyPaired) {
-                                showIndexAlreadyPairedDialog = true
-                            } else if (uiContext != null) {
-                                scanIndex(uiContext)
+                            uiContext?.let { ctx ->
+                                scope.launch {
+                                    // Ask for the scan permission before trusting the paired
+                                    // state: reconciling it against the platform bond list
+                                    // needs that permission.
+                                    if (!ensureScanPermission(ctx)) return@launch
+                                    if (libIndex.rings.value.any { it !is DiscoveredIndexDevice }) {
+                                        showIndexAlreadyPairedDialog = true
+                                    } else {
+                                        libIndex.startScan()
+                                    }
+                                }
                             }
                         },
                         icon = { Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Scan") },

@@ -1777,6 +1777,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsBleAutoConnect() },
                 ),
+                basicSettingsToggleItem(
+                    title = "Filter BLE watch scans by UUID",
+                    description = "Disable this only if BLE scans are not finding your Core watch or Pebble 2",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.filterScanResultsByUuid,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    filterScanResultsByUuid = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
                 basicSettingsActionItem(
                     title = "Post test notification",
                     description = "Create a test notification, with actions",

@@ -5,12 +5,14 @@ import com.juul.kable.Advertisement
 import com.juul.kable.CentralManager
 import com.juul.kable.Identifier
 import com.juul.kable.Scanner
+import io.rebble.libpebblecommon.BleConfig
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.transport.BleScanner
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
-actual fun kableBleScanner(): BleScanner = KableBleScanner()
+actual fun kableBleScanner(bleConfigFlow: BleConfigFlow): BleScanner = KableBleScanner(bleConfigFlow)
 
 actual fun configureKableCentral(stateRestoration: Boolean) {
     // Opts the watch connection into CoreBluetooth state preservation/restoration
@@ -26,9 +28,11 @@ actual fun configureKableCentral(stateRestoration: Boolean) {
     }
 }
 
-internal actual fun createKableAdvertisementsFlow(): Flow<Advertisement> = Scanner {
+internal actual fun createKableAdvertisementsFlow(bleConfig: BleConfig): Flow<Advertisement> = Scanner {
     filters {
-        match { }
+        match {
+            applyServiceFilter(bleConfig)
+        }
     }
 }.advertisements
 

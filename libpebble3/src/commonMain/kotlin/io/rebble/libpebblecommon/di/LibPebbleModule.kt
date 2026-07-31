@@ -362,7 +362,7 @@ fun initKoin(
                 single { get<Database>().appPrefsDao() }
                 singleOf(::LegacyBtClassicMigrator)
                 singleOf(::WatchManager) bind WatchConnector::class
-                single { bleScanner() }
+                single { bleScanner(get()) }
                 singleOf(::RealScanning) bind Scanning::class
                 single { libPebbleScope }
                 singleOf(::Locker)

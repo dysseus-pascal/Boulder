@@ -135,6 +135,7 @@ data class BleConfig(
      * CBCentralManagerOptionShowPowerAlertKey=false whenever it passes options at all.
      */
     val centralStateRestoration: Boolean = false,
+    val filterScanResultsByUuid: Boolean = true,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

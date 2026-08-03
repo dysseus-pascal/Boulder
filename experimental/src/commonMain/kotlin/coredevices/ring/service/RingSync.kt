@@ -30,7 +30,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -873,8 +872,8 @@ class RingSync(
         )
     }
 
-    suspend fun stop() {
-        syncJob?.cancelAndJoin()
+    fun stop() {
+        syncJob?.cancel()
     }
 
     fun lastRingSummary(): String? = lastRing.value?.let {

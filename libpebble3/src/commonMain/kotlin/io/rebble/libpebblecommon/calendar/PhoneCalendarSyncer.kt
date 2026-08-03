@@ -108,6 +108,9 @@ class PhoneCalendarSyncer(
         val existingCalendars = calendarDao.getAll()
         val calendars = systemCalendar.getCalendars()
         logger.d("Got ${calendars.size} calendars from device, syncing... (${existingCalendars.size} existing)")
+        val removedCalendars = existingCalendars.filter { existing ->
+            calendars.none { it.platformId == existing.platformId }
+        }
         existingCalendars.forEach { existingCalendar ->
             val matchingCalendar = calendars.find { it.platformId == existingCalendar.platformId }
             if (matchingCalendar != null) {
@@ -127,7 +130,7 @@ class PhoneCalendarSyncer(
         }
         calendars.forEach { newCalendar ->
             if (existingCalendars.none { it.platformId == newCalendar.platformId }) {
-                calendarDao.insertOrReplace(newCalendar)
+                calendarDao.insertOrReplace(newCalendar.inheritEnabledFrom(removedCalendars))
             }
         }
 
@@ -259,3 +262,13 @@ class PhoneCalendarSyncer(
 }
 
 data class EventAndPin(val event: CalendarEvent, val pin: TimelinePin)
+
+/**
+ * `platformId` is not stable - iOS may hand back a new `calendarIdentifier` for the same calendar
+ * (re-subscribe, account resync), which drops the old row and re-adds it enabled. Carry the user's
+ * choice over to the replacement.
+ */
+internal fun CalendarEntity.inheritEnabledFrom(removed: List<CalendarEntity>): CalendarEntity {
+    val previous = removed.find { it.ownerId == ownerId && it.name == name } ?: return this
+    return copy(enabled = previous.enabled)
+}

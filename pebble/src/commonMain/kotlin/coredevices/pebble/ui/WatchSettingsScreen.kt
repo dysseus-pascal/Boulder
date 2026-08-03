@@ -1351,7 +1351,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Weather,
                     items = WeatherUnit.entries,
-                    selectedItem = coreConfig.weatherUnits,
+                    selectedItem = coreConfig.resolvedWeatherUnits,
                     onItemSelected = {
                         coreConfigHolder.update(
                             coreConfig.copy(

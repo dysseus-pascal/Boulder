@@ -68,7 +68,7 @@ class WeatherFetcher(
     suspend fun fetchWeather(scope: CoroutineScope) {
         val weatherEnabled = coreConfigFlow.value.fetchWeather
         val pinsEnabled = coreConfigFlow.value.weatherPinsV2
-        val units = coreConfigFlow.value.weatherUnits
+        val units = coreConfigFlow.value.resolvedWeatherUnits
         if (!pinsEnabled || !weatherEnabled) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)

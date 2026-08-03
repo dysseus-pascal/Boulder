@@ -83,7 +83,7 @@ data class CoreConfig(
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val indexPermissionsConfirmed: Boolean = false,
-    val weatherUnits: WeatherUnit = deviceDefaultWeatherUnit(),
+    val weatherUnits: WeatherUnit? = null,
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
     val interceptPKJSWeather: Boolean = true,
@@ -95,7 +95,11 @@ data class CoreConfig(
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,
     val showWatchConnectionDebugInfo: Boolean = false,
     val notifyWatchFullyCharged: Boolean = true,
-)
+) {
+    /** Null until the user picks explicitly; the settings [Json] omits defaults, so a
+     * locale-derived default here would never be persisted. */
+    val resolvedWeatherUnits: WeatherUnit get() = weatherUnits ?: deviceDefaultWeatherUnit()
+}
 
 @Serializable
 data class STTConfig(

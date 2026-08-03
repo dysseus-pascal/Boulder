@@ -1730,12 +1730,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "Let the watch host the data connection when it supports it. Turn off to use the older phone-hosted mode. Reconnect for this to take effect",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Connectivity,
-                    checked = libPebbleConfig.bleConfig.useReversedPpog,
+                    checked = libPebbleConfig.bleConfig.useReversedPpogV2,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 bleConfig = libPebbleConfig.bleConfig.copy(
-                                    useReversedPpog = it
+                                    useReversedPpogV2 = it
                                 )
                             )
                         )

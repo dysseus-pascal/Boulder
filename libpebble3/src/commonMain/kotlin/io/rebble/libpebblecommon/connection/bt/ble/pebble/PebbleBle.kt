@@ -77,7 +77,7 @@ class PebbleBle(
         val watchServices = device.services?.takeIf { discovered }.orEmpty()
         val bleConfig = libPebbleConfigFlow.value.bleConfig
         val reversedConfig: PpogClientConfig? = when {
-            !bleConfig.useReversedPpog -> null
+            !bleConfig.useReversedPpogV2 -> null
 
             watchServices.any { it.uuid == PPOGATT_WATCH_SERVER_V2_SERVICE } -> PpogClientConfig(
                 serviceUuid = PPOGATT_WATCH_SERVER_V2_SERVICE,

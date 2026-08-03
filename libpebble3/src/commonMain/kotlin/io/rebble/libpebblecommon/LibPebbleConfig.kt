@@ -113,7 +113,7 @@ data class BleConfig(
      * When false, ignore any reversed PPoG service the watch advertises and host forward PPoG
      * ourselves instead. Evaluated per connection, so it takes effect on the next reconnect.
      */
-    val useReversedPpog: Boolean = true,
+    val useReversedPpogV2: Boolean = false,
     val verbosePpogLogging: Boolean = false,
     /**
      * iOS only. When true, re-publish the GATT services automatically after the BT stack

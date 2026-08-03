@@ -34,6 +34,11 @@ class FirmwareUpdaterResumeTest {
     }
 
     @Test
+    fun fullyWrittenObjectRestarts() {
+        assertEquals(0u, validatedResumeOffset(99u, crcOfPrefix(99), 100u) { source() })
+    }
+
+    @Test
     fun localObjectShorterThanOffsetRestarts() {
         assertEquals(
             0u,

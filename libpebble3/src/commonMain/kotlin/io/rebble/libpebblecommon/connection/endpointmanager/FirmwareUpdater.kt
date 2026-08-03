@@ -569,7 +569,10 @@ internal fun validatedResumeOffset(
     objectSize: UInt,
     source: () -> Source,
 ): UInt {
-    if (bytesWritten == 0u || bytesWritten >= objectSize) return 0u
+    // The watch derives this by scanning its flash bank for the last written byte, and deliberately
+    // reports one less than it holds, so it can never say an object is complete: objectSize - 1 is
+    // a fully-written bank (e.g. left behind by a previous completed update), not a partial one.
+    if (bytesWritten == 0u || (bytesWritten + 1u) >= objectSize) return 0u
     val localCrc = source().let { src ->
         try {
             src.crc32(bytesWritten.toLong())

@@ -45,6 +45,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.Platform
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -302,7 +304,13 @@ object IOSDelegate : KoinComponent {
         completionHandler()
     }
 
+    @OptIn(ExperimentalNativeApi::class)
     private fun setupCrashlytics() {
+        // Debug builds never upload their dSYMs, so their crashes can't be symbolicated.
+        if (Platform.isDebugBinary) {
+            Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
+            return
+        }
         enableCrashlytics()
         setCrashlyticsUnhandledExceptionHook()
     }

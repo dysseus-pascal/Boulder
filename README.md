@@ -4,6 +4,8 @@ Welcome to the official source code for the Pebble mobile app. Download the app 
 
 This app supports ALL Pebble watches, and Pebble Index 01 rings.
 
+**Note: this is a public copy of our internal repo, where we do active development; it is synced regularly, but this process is manual so it may lag behind.
+
 # Architecture
 
 **New to Pebble?** A Pebble watch runs its own firmware and its own apps/watchfaces, but has no internet connection of its own. This app is the watch's companion and gateway to the world: it holds a persistent Bluetooth connection (BLE, or Bluetooth Classic on older watches) to relay notifications, sync data (time, weather, calendar, contacts, health), install watchapps, and proxy network requests on the watch's behalf. Much of the app's job is to be a reliable background service that stays connected and answers the watch quickly.

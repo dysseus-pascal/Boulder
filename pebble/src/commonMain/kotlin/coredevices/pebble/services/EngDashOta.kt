@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.io.IOException
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -68,6 +69,7 @@ class EngDashOta(
                         version = fwVersion,
                         notes = result.notes.orEmpty(),
                         url = result.artifacts.first().url,
+                        canDowngrade = result.isDowngrade,
                     )
                 }
             } catch (e: NoTransformationFoundException) {
@@ -98,6 +100,8 @@ class EngDashOta(
 data class EngDashLatestResult(
     val version: String,
     val notes: String? = null,
+    @SerialName("is_downgrade")
+    val isDowngrade: Boolean = false,
     val artifacts: List<EngDashArtifact>,
 )
 

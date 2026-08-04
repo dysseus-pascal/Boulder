@@ -86,6 +86,7 @@ private data class FwupProperties(
     val watchPlatform: WatchHardwarePlatform,
     val updateToSlot: Int?,
     val supportsResume: Boolean,
+    val runningFwVersion: FirmwareVersion,
 )
 
 /**
@@ -156,7 +157,7 @@ class RealFirmwareUpdater(
             1 -> 0
             else -> null
         }
-        props = FwupProperties(watchPlatform, updateToSlot, supportsResume)
+        props = FwupProperties(watchPlatform, updateToSlot, supportsResume, runningFwVersion)
         maybeAutoResume(runningFwVersion)
     }
 
@@ -354,9 +355,14 @@ class RealFirmwareUpdater(
                 version = updateToVersion,
                 url = "",
                 notes = "Sideloaded",
+                canDowngrade = true,
             )
             logger.d { "sideloadFirmware path: $path" }
             if (!tryStartUpdateMutex(update)) {
+                return@launch
+            }
+            if (needsPrfToDowngrade(update, fwupProps.runningFwVersion)) {
+                rebootIntoPrfForDowngrade(update)
                 return@launch
             }
             beginFirmwareUpdate(pbz, update, fwupProps)
@@ -375,6 +381,10 @@ class RealFirmwareUpdater(
                 throw FirmwareUpdateException.SafetyCheckFailed("FirmwareUpdater not initialized")
             }
             if (!tryStartUpdateMutex(update)) {
+                return@launch
+            }
+            if (needsPrfToDowngrade(update, fwupProps.runningFwVersion)) {
+                rebootIntoPrfForDowngrade(update)
                 return@launch
             }
             val pbz = reusableDownloadedPbz(update) ?: run {
@@ -426,6 +436,14 @@ class RealFirmwareUpdater(
             logger.w(e) { "Previously-downloaded pbz unusable; re-downloading" }
             null
         }
+    }
+
+    /** Nothing is transferred: the update is installed from the normal PRF flow after reconnect. */
+    private fun rebootIntoPrfForDowngrade(update: FirmwareUpdateCheckResult.FoundUpdate) {
+        logger.i { "Downgrade to ${update.version.stringVersion}: rebooting watch into PRF" }
+        interruptedUpdates.clear(identifier)
+        _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
+        systemService.resetIntoPrf()
     }
 
     override fun checkforFirmwareUpdate(force: Boolean) {
@@ -597,6 +615,17 @@ internal fun validatedResumeOffset(
 
 private fun FirmwareVersion.sameVersionNumberAs(other: FirmwareVersion): Boolean =
     major == other.major && minor == other.minor && patch == other.patch
+
+/** Ignores the timestamp, which is a placeholder on versions that came from an update check. */
+private fun FirmwareVersion.lowerVersionNumberThan(other: FirmwareVersion): Boolean =
+    compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch }) < 0
+
+/** Dual-slot firmware refuses to install a version lower than the one running; PRF doesn't. */
+internal fun needsPrfToDowngrade(
+    update: FirmwareUpdateCheckResult.FoundUpdate,
+    running: FirmwareVersion,
+): Boolean = update.canDowngrade && running.isDualSlot && !running.isRecovery &&
+        update.version.lowerVersionNumberThan(running)
 
 fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
     val versionTag = firmware.versionTag

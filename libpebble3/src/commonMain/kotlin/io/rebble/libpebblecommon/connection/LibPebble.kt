@@ -256,6 +256,11 @@ sealed class FirmwareUpdateCheckResult {
         val version: FirmwareVersion,
         val url: String,
         val notes: String,
+        /**
+         * Whether installing this over a higher version is intended: the update server flagged it
+         * as a downgrade, or the user picked the file themselves.
+         */
+        val canDowngrade: Boolean = false,
     ) : FirmwareUpdateCheckResult()
 
     data object FoundNoUpdate : FirmwareUpdateCheckResult()

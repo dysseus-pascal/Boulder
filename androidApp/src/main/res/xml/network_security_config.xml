@@ -7,7 +7,9 @@
   the user installs and trusts the cert on their device.
 -->
 <network-security-config>
-    <base-config>
+    <!-- This overrides android:usesCleartextTraffic in the manifest, which is ignored whenever a
+         network security config is present. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

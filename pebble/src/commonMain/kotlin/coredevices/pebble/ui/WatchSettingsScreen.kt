@@ -1434,6 +1434,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Use Core OTA service",
+                    description = "Check Core Devices service for Core watch firmware updates instead of Memfault (falls back to Memfault on failure)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = coreConfig.useEngDashOta,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                useEngDashOta = it,
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
                 basicSettingsDropdownItem(
                     id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",

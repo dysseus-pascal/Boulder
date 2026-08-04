@@ -25,6 +25,7 @@ import coredevices.pebble.firmware.postWatchFullyChargedNotification
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
+import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.HybridTranscription
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
@@ -188,6 +189,7 @@ val watchModule = module {
     } bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
     singleOf(::Memfault)
+    singleOf(::EngDashOta)
     singleOf(::MemfaultChunkQueue)
     singleOf(::AnalyticsIngest)
     singleOf(::AnalyticsHeartbeatQueue)

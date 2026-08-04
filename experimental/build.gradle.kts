@@ -20,6 +20,10 @@ compose.resources {
     packageOfResClass = "coreapp.ring.generated.resources"
 }
 
+// Set by the IDE during sync only. The simulator target doubles the pod/cinterop work sync waits
+// on; command-line and Xcode builds still configure it.
+val ideSync = providers.systemProperty("idea.sync.active").orNull.toBoolean()
+
 kotlin {
     val xcodeExists = providers.exec {
         isIgnoreExitValue = true
@@ -64,10 +68,10 @@ kotlin {
 // A step-by-step guide on how to include this library in an XCode
 // project can be found here:
 // https://developer.android.com/kotlin/multiplatform/migrate
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach {
+    buildList {
+        add(iosArm64())
+        if (!ideSync) add(iosSimulatorArm64())
+    }.forEach {
         it.binaries.getTest(NativeBuildType.DEBUG).apply {
             if (xcodeExists) {
                 linkerOpts.addAll(listOf("-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"))
@@ -280,7 +284,7 @@ dependencies {
     add("kspCommonMainMetadata", libs.room.compiler)
     add("kspAndroid", libs.room.compiler)
     add("kspIosArm64", libs.room.compiler)
-    if (System.getenv("CI_RELEASE") != "true") {
+    if (!ideSync) {
         //add("kspIosX64", libs.room.compiler)
         add("kspIosSimulatorArm64", libs.room.compiler)
     }

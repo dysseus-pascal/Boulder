@@ -115,11 +115,10 @@ kotlin {
     }
 
     buildList {
-        if (System.getenv("CI_RELEASE") != "true") {
-            add(iosSimulatorArm64())
-        } else {
-            logger.warn("Skipping configuration of iOS simulator targets for CI release build")
-        }
+        // idea.sync.active is set by the IDE during sync only. The simulator target doubles the
+        // pod/cinterop work sync waits on; command-line and Xcode builds still configure it.
+        val ideSync = providers.systemProperty("idea.sync.active").orNull.toBoolean()
+        if (!ideSync) add(iosSimulatorArm64())
         add(iosArm64())
     }.forEach {
         it.binaries.all {

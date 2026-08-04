@@ -113,7 +113,10 @@ kotlin {
             baseName = "RingModule"
             isStatic = false
         }
-        pod("GoogleSignIn", "8.0.0")
+        pod("GoogleSignIn") {
+            version = "8.0.0"
+            linkOnly = true
+        }
         pod("FirebaseCore", "11.10.0")
         pod("FirebaseAuth") {
             version = "11.10.0"

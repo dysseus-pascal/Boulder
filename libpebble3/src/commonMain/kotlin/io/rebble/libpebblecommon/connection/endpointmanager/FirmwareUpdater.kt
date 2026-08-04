@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -213,6 +214,17 @@ class RealFirmwareUpdater(
 
             fwupProps.updateToSlot != null && fwupProps.updateToSlot != firmware.slot && !isRecoveryFirmware ->
                 throw FirmwareUpdateException.SafetyCheckFailed("Firmware slot (${firmware.slot}) does not match watch slot: (${fwupProps.updateToSlot})")
+        }
+        checkCrc("Firmware", manifest.getFirmware(), firmware.size, firmware.crc)
+        resources?.let { checkCrc("Resources", manifest.getResources()!!, it.size, it.crc) }
+    }
+
+    private fun checkCrc(name: String, source: RawSource, size: Long, expectedCrc: Long) {
+        val actual = source.buffered().use { it.crc32(size) }
+        if (actual != expectedCrc.toUInt()) {
+            throw FirmwareUpdateException.SafetyCheckFailed(
+                "$name CRC does not match manifest: expected $expectedCrc, got $actual"
+            )
         }
     }
 
@@ -531,7 +543,7 @@ class RealFirmwareUpdater(
             source = source,
             sendInstall = false,
             resumeOffset = skip,
-            objectCrc = if (skip > 0u) firmware.crc.toUInt() else null,
+            objectCrc = firmware.crc.toUInt(),
         ).onCompletion { source.close() } // Can't do use block because of the flow
     }
 
@@ -554,7 +566,7 @@ class RealFirmwareUpdater(
             source = source,
             sendInstall = false,
             resumeOffset = skip,
-            objectCrc = if (skip > 0u) resources.crc.toUInt() else null,
+            objectCrc = resources.crc.toUInt(),
         ).onCompletion { source.close() }
     }
 }

@@ -30,11 +30,15 @@ class FirmwareUpdateCheck(
     private data class CacheKey(
         val platform: WatchHardwarePlatform,
         val serial: String,
-        val fwVersion: String,
-        val isRecovery: Boolean,
     )
 
+    /**
+     * One entry per watch: the running version is an input to the check, so an entry only answers
+     * for the version it was fetched for, and a version change evicts it rather than shadowing it.
+     */
     private data class CacheEntry(
+        val fwVersion: String,
+        val isRecovery: Boolean,
         val result: FirmwareUpdateCheckResult,
         val expiresAt: Instant,
     )
@@ -43,19 +47,19 @@ class FirmwareUpdateCheck(
     private val cache = mutableMapOf<CacheKey, CacheEntry>()
 
     suspend fun checkForUpdates(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult {
-        val key = CacheKey(
-            platform = watch.platform,
-            serial = watch.serial,
-            fwVersion = watch.runningFwVersion.stringVersion,
-            isRecovery = watch.runningFwVersion.isRecovery,
-        )
+        val key = CacheKey(platform = watch.platform, serial = watch.serial)
+        val fwVersion = watch.runningFwVersion.stringVersion
+        val isRecovery = watch.runningFwVersion.isRecovery
         val now = clock.now()
         if (!force) {
             mutex.withLock {
-                cache[key]?.takeIf { it.expiresAt > now }?.let {
-                    logger.v { "Serving FWUP from cache" }
-                    return it.result
-                }
+                cache[key]
+                    ?.takeIf { it.fwVersion == fwVersion && it.isRecovery == isRecovery }
+                    ?.takeIf { it.expiresAt > now }
+                    ?.let {
+                        logger.v { "Serving FWUP from cache" }
+                        return it.result
+                    }
             }
         }
         val result = doCheck(watch)
@@ -63,7 +67,7 @@ class FirmwareUpdateCheck(
         // must retry on the next connect, not be locked in for the TTL.
         if (result !is FirmwareUpdateCheckResult.UpdateCheckFailed) {
             mutex.withLock {
-                cache[key] = CacheEntry(result, now + CACHE_TTL)
+                cache[key] = CacheEntry(fwVersion, isRecovery, result, now + CACHE_TTL)
             }
         }
         return result

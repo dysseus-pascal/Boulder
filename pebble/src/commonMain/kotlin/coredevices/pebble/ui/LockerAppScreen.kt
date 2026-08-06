@@ -710,7 +710,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             value = "$version$sideloadedText$updatedDateText"
                         )
                     }
-                    entry.sourceLink?.let { sourceLink ->
+                    (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
                         PropertyRow(
                             name = "SOURCE CODE",
                             nameModifier = propertyNameModifier,

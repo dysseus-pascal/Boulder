@@ -981,6 +981,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         companions = app.companions,
         category = app.category,
         userToken = timelineToken,
+        source = app.source,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {

@@ -1,6 +1,7 @@
 package coredevices.pebble.firmware
 
 import co.touchlab.kermit.Logger
+import coredevices.analytics.CoreAnalytics
 import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.Memfault
 import coredevices.util.CommonBuildKonfig
@@ -21,6 +22,7 @@ class FirmwareUpdateCheck(
     private val engDashOta: EngDashOta,
     private val cohorts: Cohorts,
     private val coreConfig: CoreConfigFlow,
+    private val coreAnalytics: CoreAnalytics,
     private val clock: Clock = Clock.System,
 ) {
     private val logger = Logger.withTag("FirmwareUpdateCheck")
@@ -84,6 +86,7 @@ class FirmwareUpdateCheck(
                 return result
             }
             logger.w { "eng-dash OTA check failed (${result.error}); falling back" }
+            coreAnalytics.logEvent("core_ota_failed")
         }
         return if (CommonBuildKonfig.MEMFAULT_TOKEN != null) {
             memfault.getLatestFirmware(watch)

@@ -174,6 +174,7 @@ fun ConfirmDialog(
     text: String,
     confirmText: String,
     onConfirm: () -> Unit,
+    confirmButtonModifier: Modifier = Modifier,
 ) {
     if (!show.value) return
     AlertDialog(
@@ -183,10 +184,13 @@ fun ConfirmDialog(
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {
-            TextButton(onClick = {
-                show.value = false
-                onConfirm()
-            }) { Text(confirmText) }
+            TextButton(
+                onClick = {
+                    show.value = false
+                    onConfirm()
+                },
+                modifier = confirmButtonModifier,
+            ) { Text(confirmText) }
         },
         dismissButton = {
             TextButton(onClick = {

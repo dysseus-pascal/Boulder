@@ -6,7 +6,12 @@ import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import co.touchlab.kermit.Logger
@@ -39,6 +44,7 @@ class MainActivity : ComponentActivity() {
         private val logger = Logger.withTag(MainActivity::class.simpleName!!)
     }
 
+    @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(themeProvider.theme.value)
         super.onCreate(savedInstanceState)
@@ -48,7 +54,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            App()
+            // Surface Compose testTags as resource-ids for UiAutomator/Maestro
+            Box(Modifier.semantics { testTagsAsResourceId = true }) {
+                App()
+            }
         }
 
         lifecycleScope.launch {

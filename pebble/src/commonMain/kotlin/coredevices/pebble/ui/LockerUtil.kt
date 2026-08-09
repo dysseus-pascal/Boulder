@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -811,7 +812,12 @@ fun AppsFilterRow(
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                            modifier = Modifier.padding(0.dp)
+                            modifier = Modifier.padding(0.dp).testTag(
+                                when (appType) {
+                                    AppType.Watchface -> "locker_type_faces"
+                                    AppType.Watchapp -> "locker_type_apps"
+                                }
+                            )
                         )
                     }
                 }

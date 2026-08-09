@@ -78,7 +78,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -516,8 +515,7 @@ fun WatchHomeScreen(
                                     expanded = false,
                                     onExpandedChange = { },
                                     placeholder = { Text("Search") },
-                                    modifier = Modifier.focusRequester(focusRequester)
-                                        .testTag("locker_search_field"),
+                                    modifier = Modifier.focusRequester(focusRequester),
                                     trailingIcon = {
                                         IconButton(onClick = {
                                             params.searchState?.show = false
@@ -577,7 +575,6 @@ fun WatchHomeScreen(
                                         onClick = { params.searchState?.show = true },
                                         icon = Icons.Filled.Search,
                                         description = "Search",
-                                        modifier = Modifier.testTag("locker_search_button"),
                                     )
                                 }
                             }
@@ -846,7 +843,6 @@ fun TopBarIconButtonWithToolTip(
     icon: ImageVector,
     description: String,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier,
 ) {
     val tooltipState = remember { TooltipState(isPersistent = false) }
     TooltipBox(
@@ -858,7 +854,7 @@ fun TopBarIconButtonWithToolTip(
         },
         state = tooltipState
     ) {
-        IconButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        IconButton(onClick = onClick, enabled = enabled) {
             Icon(
                 imageVector = icon,
                 contentDescription = description

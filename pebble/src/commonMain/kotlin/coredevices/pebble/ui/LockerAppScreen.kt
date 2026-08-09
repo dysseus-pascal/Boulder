@@ -68,7 +68,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -253,7 +252,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         },
                         confirmText = "Remove",
-                        confirmButtonModifier = Modifier.testTag("app_remove_confirm"),
                     )
                 }
                 val showRemove = entry?.commonAppType is CommonAppType.Locker
@@ -263,7 +261,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         icon = Icons.Filled.Delete,
                         description = "Remove",
                         enabled = !showRemoveConfirmDialog.value,
-                        modifier = Modifier.testTag("app_remove"),
                     )
                 }
             }
@@ -517,8 +514,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 icon = Icons.Default.Add,
                                 contentDescription = "Add To Watch",
                                 primaryColor = true,
-                                modifier = Modifier.padding(end = 8.dp)
-                                    .testTag("app_add_to_watch"),
+                                modifier = Modifier.padding(end = 8.dp),
                             )
 //                        if (viewModel.storeEntries != null && (viewModel.storeEntries?.size ?: 1) > 1) {
 //                            ExposedDropdownMenuBox(
@@ -674,7 +670,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     PropertyRow(
                         name = "DEVELOPER",
                         nameModifier = propertyNameModifier,
-                        modifier = Modifier.testTag("app_developer_row"),
                         value = entry.developerName,
                         onClick = if (entry.developerId != null && storeSource != null) {
                             {
@@ -856,9 +851,8 @@ private fun PropertyRow(
     onClickIcon: ImageVector = Icons.AutoMirrored.Default.Launch,
     multiRow: Boolean = false,
     nameModifier: Modifier = Modifier,
-    modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier.padding(5.dp).let{
+    Row(modifier = Modifier.padding(5.dp).let{
         if (onClick != null) {
             it.then(Modifier.clickable(onClick = onClick))
         } else {

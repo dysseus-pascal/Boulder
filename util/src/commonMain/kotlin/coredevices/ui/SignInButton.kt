@@ -18,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -253,7 +252,7 @@ fun SignInButtons(
                     },
                     primaryColor = primaryColor,
                     skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
-                    modifier = Modifier.fillMaxWidth().testTag("onboarding_sign_in_google"),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             } else {
                 SignInUnavailable("Google")

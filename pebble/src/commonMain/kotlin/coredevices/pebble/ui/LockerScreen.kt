@@ -55,7 +55,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
@@ -717,7 +716,7 @@ fun SearchResultsList(
             LazyVerticalGrid(
                 columns = GridCells.FixedSize(120.dp),
                 state = lazyGridState,
-                modifier = Modifier.fillMaxSize().testTag("locker_search_results"),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
@@ -772,7 +771,7 @@ fun SearchResultsList(
             }
         }
     } else {
-        LazyColumn(modifier.testTag("locker_search_results"), lazyListState) {
+        LazyColumn(modifier, lazyListState) {
             if (lockerEntries.isNotEmpty()) {
                 item {
                     Text(

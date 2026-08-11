@@ -220,9 +220,10 @@ internal fun SetupStep(
             title = { Text("On-device speech recognition") },
             text = {
                 Text(
-                    "Uses Apple's built-in speech recognition. Audio stays on your phone " +
-                        "and no download is needed. Recordings in unsupported languages fall " +
-                        "back to cloud transcription." +
+                    "Uses Apple's built-in speech recognition — no download needed. " +
+                        "Audio is processed on your phone, falling back to cloud " +
+                        "transcription if the language isn't supported or on-device " +
+                        "transcription fails." +
                         if (languages.isEmpty()) {
                             ""
                         } else {
@@ -613,12 +614,12 @@ internal fun SpeechModeChoice(
     onPlatformInfo: (() -> Unit)? = null,
 ) {
     val options = listOfNotNull(
-        Triple(CactusSTTMode.PlatformOnly, "On-device", "Recommended — private, stays on this iPhone")
+        Triple(CactusSTTMode.PlatformOnly, "On-device, with cloud fallback", "Native iOS speech to text")
             .takeIf { showPlatformOption },
         Triple(CactusSTTMode.RemoteOnly, "Cloud only", "Best performance, requires connection"),
-        Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 670MB download"),
-        Triple(CactusSTTMode.LocalFirst, "Local, cloud fallback", "670MB download"),
-        Triple(CactusSTTMode.LocalOnly, "Local only", "Complete privacy, 670MB download"),
+        Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 400MB download"),
+        Triple(CactusSTTMode.LocalFirst, "Local, cloud fallback", "400MB download"),
+        Triple(CactusSTTMode.LocalOnly, "Local only", "Complete privacy, 400MB download"),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (m, title, sub) ->

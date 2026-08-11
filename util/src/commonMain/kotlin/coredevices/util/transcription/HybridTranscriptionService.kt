@@ -240,10 +240,11 @@ class HybridTranscriptionService(
                 } catch (e: Exception) {
                     val expected = e is TranscriptionException.NoSpeechDetected ||
                         e is TranscriptionException.TranscriptionInProgress
-                    if (!expected) {
-                        analytics.logTranscriptionFailure("platform", transcriptionFailureReason(e), e.message)
-                    }
-                    throw e
+                    if (expected) throw e
+                    analytics.logTranscriptionFailure("platform", transcriptionFailureReason(e), e.message)
+                    logger.w(e) { "Platform transcription failed, falling back to remote: ${e.message}" }
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
                 }
                 RoutedResult(text, sttMode, PLATFORM_STT_MODEL_NAME)
             }

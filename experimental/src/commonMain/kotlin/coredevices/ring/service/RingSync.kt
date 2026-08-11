@@ -168,11 +168,6 @@ class RingSync(
         return resampler.process(samples)
     }
 
-    private fun handleButtonPressSequence(sequence: String?) {
-        sequence?.let { buttonSequenceRecorder.recordSequence(sequence) } ?:
-            buttonSequenceRecorder.recordNoSequence()
-    }
-
     private val _ringEvents = MutableSharedFlow<RingEvent>(replay = 1, extraBufferCapacity = 50, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val ringEvents = _ringEvents.asSharedFlow()
 
@@ -298,6 +293,7 @@ class RingSync(
                                         is SatelliteStatus.Transferring -> {
                                             logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi} lastRxRSSI = ${satelliteStatus.satellite.state.value?.rxRSSI}" }
                                             val transferStatus = satelliteStatus.transferStatus
+                                            buttonSequenceRecorder.onTransferStatus(transferStatus)
                                             if (transferStatus is TransferStatus.TransferComplete) {
                                                 withContext(Dispatchers.Default) {
                                                     removeDCBias(transferStatus.samples)
@@ -368,12 +364,6 @@ class RingSync(
                                                         } ?: logger.w {
                                                             "No serial number available in satellite state to update lifetime collection count"
                                                         }
-                                                        if (transferStatus.collectionStartIndex == null || transferStatus.final) { // skip handling button presses for long transfers until they're final
-                                                            handleButtonPressSequence(transferStatus.buttonSequence)
-                                                        } else {
-                                                            handleButtonPressSequence(null)
-                                                        }
-
                                                         if (transferStatus.isAudio) {
                                                             val idx =
                                                                 transferStatus.collectionStartIndex

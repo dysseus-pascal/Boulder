@@ -17,6 +17,8 @@ import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.libindex.device.IndexDeviceManager
+import coredevices.libindex.device.IndexImage
+import coredevices.libindex.device.isFailsafe
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession

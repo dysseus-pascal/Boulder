@@ -153,8 +153,6 @@ class SettingsViewModel(
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
     val ringPaired = preferences.ringPaired
-    private val _panicPending = MutableStateFlow(false)
-    val panicPending = _panicPending.asStateFlow()
     val currentRingFirmware = currentRing
         .mapNotNull { (it as? InterviewedIndexDevice)?.firmwareVersion }
         .stateIn(
@@ -303,20 +301,6 @@ class SettingsViewModel(
     val syncingFeedHistory = _syncingFeedHistory.asStateFlow()
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
-
-
-    fun panicRing() {
-        _panicPending.value = true
-        viewModelScope.launch {
-            try {
-                ringSync.lastRing.value?.panic()
-            } catch (e: Exception) {
-                Logger.withTag("Settings").e(e) { "Failed to panic ring: ${e.message}" }
-            } finally {
-                _panicPending.value = false
-            }
-        }
-    }
 
     fun restartPreemptiveTransfer() {
         ringDelegate.restartPreemptiveTransfer()

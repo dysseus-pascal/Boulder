@@ -157,7 +157,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
-    val panicPending by viewModel.panicPending.collectAsStateWithLifecycle()
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val preferences = koinInject<Preferences>()
@@ -563,15 +562,6 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             if (debugDetailsEnabled) {
-                // Panic Ring button commented out for prod — crashes the app (MOB-7937).
-                // item {
-                //     ListItem(
-                //         modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
-                //             viewModel.panicRing()
-                //         },
-                //         headlineContent = { Text("Panic Ring", color = Color.Red) }
-                //     )
-                // }
                 item {
                     ListItem(
                         modifier = Modifier.clickable(enabled = !platform.isAndroid) {

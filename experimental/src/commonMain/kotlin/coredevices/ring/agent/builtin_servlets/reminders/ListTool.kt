@@ -53,7 +53,7 @@ class ListTool: BuiltInMcpTool(
                     "reminder_date_time_human" to JsonObject(
                         mapOf(
                             "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format e.g. 'tomorrow at 13:00'"
+                            "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'"
                         ).toJson()
                     ),
                 )
@@ -175,7 +175,10 @@ class ListTool: BuiltInMcpTool(
                         JsonSnake.encodeToString(
                             ListAddResult(
                                 success = false,
-                                errorMessage = "Failed to parse date time: '${listItemArgs.reminder_date_time_human}'"
+                                errorMessage = "Failed to parse date time: '${listItemArgs.reminder_date_time_human}'. " +
+                                        "Retry with the same date/time rephrased in simple English " +
+                                        "like 'on August 20 at 9am' or 'tomorrow at 13:00'. " +
+                                        "If it cannot be expressed that way, create the item without a reminder time."
                             )
                         ),
                         SemanticResult.GenericFailure(

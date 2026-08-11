@@ -74,7 +74,7 @@ class ReminderTool: BuiltInMcpTool(
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
-        const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder or wants to be reminded at a specific time or date."
+        const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder, asks to remember to do something ('remind me to...', 'remember to...'), or wants to be reminded at a specific time or date."
         private val logger = Logger.withTag("ReminderTool")
     }
 

@@ -290,10 +290,13 @@ val EVAL_CASES = listOf(
         groundTruth = "Remember to tell Danny about the idea to call a liquor brand La Curious.",
         expectedTranscriptionLocal = "Remember to tell Danny about the idea to call a liquor brand Lucurious?",
         expectedTranscriptionRemote = "Remember to tell Danny about the idea to call a liquor brand \"La Curious.\"",
-        expectedToolName = "builtin_note.create_note",
+        expectedToolName = "builtin_reminder.create_reminder",
         expectedToolArgs = mapOf(),
         verifyEffect = { result ->
-            assertTrue("Expected ListItemCreation, got: $result", result is SemanticResult.ListItemCreation)
+            assertTrue("Expected TaskCreation, got: $result", result is SemanticResult.TaskCreation)
+            val task = result as SemanticResult.TaskCreation
+            assertTrue("Expected Danny task, got: ${task.title}", task.title.contains("Danny"))
+            assertEquals("No deadline expected", null, task.deadline)
         }
     ),
 )

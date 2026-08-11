@@ -76,7 +76,10 @@ class IndexDeviceManager(
                                 name = existing.name,
                                 isPaired = true,
                                 satellite = satellite,
-                                satelliteState = satellite.state.value!!,
+                                satelliteState = satellite.state.value ?: run {
+                                    logger.w { "State is stale for ring update, ignoring" }
+                                    return@update prev
+                                },
                                 isUpdating = isUpdating
                                     ?: (existing is InterviewedIndexDevice && (existing as InterviewedIndexDevice).updating)
                             )

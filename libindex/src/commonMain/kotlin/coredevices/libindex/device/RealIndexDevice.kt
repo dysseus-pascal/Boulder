@@ -86,7 +86,7 @@ class IndexDeviceFactory(
             known != null -> known
 
             scanResult != null -> when (scanResult.currentImage) {
-                IndexImage.ProductionTest, IndexImage.Primary -> RealRepairableIndexDevice(
+                IndexImage.ProductionTest -> RealRepairableIndexDevice(
                     base,
                     indexSystem,
                 )

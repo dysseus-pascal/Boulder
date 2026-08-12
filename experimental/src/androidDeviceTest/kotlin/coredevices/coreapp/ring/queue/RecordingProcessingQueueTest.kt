@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.McpServerDefinition
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
@@ -472,6 +473,7 @@ class RecordingProcessingQueueTest {
         assertEquals(1, entries.size)
         assertEquals(RecordingEntryStatus.transcription_error, entries[0].status)
         assertNotNull(entries[0].error)
+        assertEquals(RecordingEntryErrorType.no_speech, entries[0].errorType)
     }
 
     @Test

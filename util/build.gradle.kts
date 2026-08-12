@@ -127,6 +127,7 @@ kotlin {
                 implementation(project(":cactus"))
                 implementation(project(":libpebble3"))
                 implementation(project(":libindex"))
+                api(project(":index-ai"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)

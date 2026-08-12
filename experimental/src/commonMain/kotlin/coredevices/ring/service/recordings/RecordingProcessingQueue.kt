@@ -5,6 +5,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
@@ -151,6 +152,7 @@ class RecordingProcessingQueue(
                                     transcription = it.transcription,
                                     transcribedUsingModel = it.transcribedUsingModel,
                                     error = it.error,
+                                    errorType = it.errorType,
                                     ringTransferInfo = it.ringTransferInfo,
                                     userMessageId = it.userMessageId
                                 )
@@ -351,6 +353,7 @@ class RecordingProcessingQueue(
                         transcription = entry.transcription,
                         transcribedUsingModel = entry.transcribedUsingModel,
                         error = entry.error,
+                        errorType = entry.errorType,
                         ringTransferInfo = entry.ringTransferInfo,
                         userMessageId = entry.userMessageId,
                     )
@@ -438,7 +441,8 @@ class RecordingProcessingQueue(
                     recordingEntryDao.updateRecordingEntryStatus(
                         stagedEntry.id,
                         status = RecordingEntryStatus.agent_error,
-                        error = "Login required for cloud processing"
+                        error = "Login required for cloud processing",
+                        errorType = RecordingEntryErrorType.login_required
                     )
                     // Keep parity with createFailedRecordingEntry: surface the error
                     // as the transcription text — but never clobber a real transcript.
@@ -456,6 +460,7 @@ class RecordingProcessingQueue(
                     recordingRepository.createFailedRecordingEntry(
                         recordingId = recordingId,
                         errorMessage = "Login required for cloud processing",
+                        errorType = RecordingEntryErrorType.login_required,
                         fileName = fileId
                     )
                 }

@@ -154,6 +154,10 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun addQemuWatch(address: String, connect: Boolean) {
+        // No-op
+    }
+
     // RequestSync interface
     override fun requestLockerSync(): Deferred<Unit> {
         return CompletableDeferred(Unit)

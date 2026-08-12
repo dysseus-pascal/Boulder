@@ -66,6 +66,8 @@ enum class ConnectionFailureReason {
     TimeoutInitializingPpog,
     ClassicConnectionFailed,
     ClassicDisconnected,
+    SocketConnectionFailed,
+    SocketDisconnected,
 }
 
 sealed class PebbleConnectionResult {
@@ -209,7 +211,11 @@ class RealPebbleConnector(
         // Allow the service to buffer up writeback sync messages
         blobDBService.init()
 
-        val watchInfo = negotiator.negotiate(systemService, appRunStateService)
+        val watchInfo = negotiator.negotiate(
+            systemService,
+            appRunStateService,
+            awaitAppVersionRequest = identifier.sendsAppVersionRequest(),
+        )
         if (watchInfo == null) {
             logger.w("negotiation failed: disconnecting")
             transportConnector.disconnect()
@@ -227,7 +233,8 @@ class RealPebbleConnector(
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
-        val ignoreMissingPrfOnThisDevice = watchConfig.value.ignoreMissingPrf
+        val ignoreMissingPrfOnThisDevice =
+            watchConfig.value.ignoreMissingPrf || !identifier.canHaveRecoveryFirmware()
         val recoveryMode = when {
             watchInfo.runningFwVersion.isRecovery -> true.also {
                 logger.i("PRF running; going into recovery mode")

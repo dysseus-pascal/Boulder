@@ -290,6 +290,9 @@ interface Scanning {
     fun stopBleScan()
     fun startClassicScan()
     fun stopClassicScan()
+
+    /** Adds a watch reached over a TCP socket at [address] ("host:port"), bypassing any scan. */
+    fun addQemuWatch(address: String, connect: Boolean = false)
 }
 
 interface RequestSync {

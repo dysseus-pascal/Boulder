@@ -69,6 +69,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
 import io.rebble.libpebblecommon.connection.bt.classic.pebble.PebbleBtClassic
+import io.rebble.libpebblecommon.connection.qemu.QemuTransport
 import io.rebble.libpebblecommon.connection.devconnection.CloudpebbleProxyProtocolVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
@@ -468,6 +469,7 @@ fun initKoin(
                     scopedOf(::KableGattConnector)
                     scopedOf(::PebbleBle)
                     scopedOf(::PebbleBtClassic)
+                    scopedOf(::QemuTransport)
                     scopedOf(::RealConnectionAnalyticsLogger) bind ConnectionAnalyticsLogger::class
                     scoped<GattConnector> {
                         when (val id = get<PebbleIdentifier>()) {
@@ -480,6 +482,7 @@ fun initKoin(
                         when (val id = get<PebbleIdentifier>()) {
                             is PebbleBleIdentifier -> get<PebbleBle>()
                             is PebbleBtClassicIdentifier -> get<PebbleBtClassic>()
+                            is PebbleSocketIdentifier -> get<QemuTransport>()
                             else -> error("Transport not implemented for: $id")
                         }
                     }

@@ -87,7 +87,7 @@ private val FaqEntries: List<FaqEntry> = listOf(
         ann(
             "Jot down notes, add a reminder or todo, set timers and alarms, or whatever else " +
                     "you need to remember! Double-click-and-hold to ask quick questions and get " +
-                    "the answer in a notification."
+                    "the answer* in a notification.\n\n*Included free for now; pricing may change."
         ),
     ),
     FaqEntry(

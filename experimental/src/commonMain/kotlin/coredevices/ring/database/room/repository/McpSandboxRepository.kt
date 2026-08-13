@@ -146,7 +146,12 @@ class McpSandboxRepository(
     suspend fun seedDatabase() {
         val groups = groupDao.getAllFlow().first()
         val defaultGroupId = if (groups.isEmpty()) {
-            groupDao.insertGroup(McpSandboxGroupEntity(title = "Default MCP Sandbox"))
+            groupDao.insertGroup(
+                McpSandboxGroupEntity(
+                    title = "Default MCP Sandbox",
+                    modelType = SandboxModelType.IndexAgent,
+                )
+            )
         } else {
             groups.first().id
         }

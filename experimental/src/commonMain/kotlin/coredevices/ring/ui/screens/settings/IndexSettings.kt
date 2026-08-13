@@ -520,7 +520,7 @@ fun IndexSettings(coreNav: CoreNav) {
                 ListItem(
                     modifier = Modifier.clickable(onClick = viewModel::showLlmModeDialog),
                     headlineContent = { Text("Assistant Model") },
-                    supportingContent = { Text(llmMode.displayName()) }
+                    supportingContent = { Text(llmModeRowSubtitle(llmMode)) }
                 )
             }
             item {
@@ -592,10 +592,23 @@ fun IndexSettings(coreNav: CoreNav) {
 }
 
 fun LlmMode.displayName(): String = when (this) {
-    LlmMode.RemoteOnly -> "Cloud Only"
-    LlmMode.RemoteFirst -> "Cloud (with Local Fallback)"
-    LlmMode.LocalOnly -> "Local Only"
+    LlmMode.RemoteOnly -> "Cloud LLM"
+    LlmMode.RemoteFirst -> "Cloud LLM (with Local fallback)"
+    LlmMode.LocalOnly -> "Local LLM"
 }
+
+internal fun LlmMode.modeDetail(): String = when (this) {
+    LlmMode.RemoteOnly -> "Best performance, requires connection"
+    LlmMode.RemoteFirst -> "Uses the Local LLM when the cloud can't be reached"
+    LlmMode.LocalOnly -> "Runs on this phone. Experimental, less accurate than the Cloud LLM"
+}
+
+/** Offered most-cloud first; the enum's own order is persistence ids, not a reading order. */
+internal val llmModeOptions = listOf(LlmMode.RemoteOnly, LlmMode.RemoteFirst, LlmMode.LocalOnly)
+
+internal fun llmModeRowSubtitle(mode: LlmMode): String =
+    if (mode.usesLocalCactus()) "${mode.displayName()} · ${mode.modeDetail()}"
+    else mode.displayName()
 
 @Composable
 fun LlmModeDialog(
@@ -606,6 +619,7 @@ fun LlmModeDialog(
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
+        scrollableContent = true,
         onDismissRequest = onDismissRequest,
         icon = { Icon(Icons.Default.Bolt, contentDescription = null) },
         title = { Text("Assistant Model") },
@@ -619,8 +633,10 @@ fun LlmModeDialog(
         }
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            LlmMode.entries.forEach { mode ->
+            llmModeOptions.forEach { mode ->
                 val enabled = localSupported || !mode.usesLocalCactus()
+                val contentColor =
+                    if (enabled) Color.Unspecified else MaterialTheme.colorScheme.outline
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -633,21 +649,23 @@ fun LlmModeDialog(
                         onClick = { targetMode = mode }
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        mode.displayName(),
-                        color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.outline
-                    )
+                    Column {
+                        Text(mode.displayName(), color = contentColor)
+                        Text(
+                            mode.modeDetail(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor
+                        )
+                    }
                 }
             }
-            Text(
-                if (localSupported) {
-                    "The local model runs on-device and is experimental — less accurate than cloud."
-                } else {
-                    "The offline agent does not support MCP sandboxes. Set the default MCP " +
-                        "sandbox group's model to \"Index Agent\" to use it."
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
+            if (!localSupported) {
+                Text(
+                    "The Local LLM does not support MCP sandboxes. Set the default MCP " +
+                        "sandbox group's model to \"Index Agent\" to use it.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }

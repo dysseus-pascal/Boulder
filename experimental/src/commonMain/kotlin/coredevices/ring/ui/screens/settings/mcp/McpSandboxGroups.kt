@@ -98,7 +98,7 @@ class McpSandboxGroupsViewModel(
             if (!preferences.llmMode.value.usesLocalCactus()) return@launch
             preferences.setLlmMode(LlmMode.RemoteOnly)
             snackbarHostState.showSnackbar(
-                "Assistant model set to Cloud Only. The offline model doesn't support MCP sandboxes"
+                "Assistant model set to Cloud LLM. The Local LLM doesn't support MCP sandboxes"
             )
         }
     }

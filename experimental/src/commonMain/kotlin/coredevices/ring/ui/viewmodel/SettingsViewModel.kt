@@ -119,8 +119,8 @@ class SettingsViewModel(
     private val _showLlmModeDialog = MutableStateFlow(false)
     val showLlmModeDialog = _showLlmModeDialog.asStateFlow()
 
-    /** The on-device agent can't drive a sandbox group's model, so the local LLM modes are
-     *  only offered while the default group runs the Index Agent. */
+    /** The Local LLM can't drive a sandbox group's model, so the Local LLM modes are only
+     *  offered while the default group runs the Index Agent. */
     val localLlmSupported = mcpSandboxRepository.getDefaultGroupFlow()
         .map { it?.modelType == SandboxModelType.IndexAgent }
         .stateIn(

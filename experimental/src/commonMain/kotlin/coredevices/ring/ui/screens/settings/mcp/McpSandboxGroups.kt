@@ -48,6 +48,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
+import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
@@ -66,6 +67,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -148,6 +150,11 @@ fun McpSandboxGroups(coreNav: CoreNav) {
     val snackbarHostState = remember { SnackbarHostState() }
     val vm = koinViewModel<McpSandboxGroupsViewModel> { parametersOf(snackbarHostState) }
     val defaultGroupId by vm.defaultGroupId.collectAsState()
+    // Built-ins are stored by internal name; show the user-facing one.
+    val servletRepository = koinInject<ServletRepository>()
+    val builtinTitles = remember(servletRepository) {
+        servletRepository.getAllServlets().associate { it.name to it.title }
+    }
     var selectedTab by remember { mutableStateOf(GROUPS_TAB) }
     var showAddGroupDialog by remember { mutableStateOf(false) }
     var showAddServerDialog by remember { mutableStateOf(false) }
@@ -223,6 +230,7 @@ fun McpSandboxGroups(coreNav: CoreNav) {
                     serverEntries = vm.serverEntries,
                     allGroups = vm.sandboxGroups,
                     defaultGroupId = defaultGroupId,
+                    builtinTitle = { builtinTitles[it] ?: it },
                     showAddServerDialog = showAddServerDialog,
                     onDismissAddServerDialog = { showAddServerDialog = false },
                     loadGroupIds = vm::groupIdsForEntry,

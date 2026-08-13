@@ -65,6 +65,7 @@ fun McpServersTab(
     serverEntries: StateFlow<List<McpServerEntry>>,
     allGroups: StateFlow<List<McpSandboxGroupEntity>>,
     defaultGroupId: Long,
+    builtinTitle: (String) -> String,
     showAddServerDialog: Boolean,
     onDismissAddServerDialog: () -> Unit,
     loadGroupIds: suspend (McpServerEntry) -> Set<Long>,
@@ -82,11 +83,18 @@ fun McpServersTab(
         editingGroupIds = editingEntry?.let { loadGroupIds(it) }
     }
 
+    // Seed new servers into the default group, but only once it has loaded and only when it can
+    // actually use HTTP servers — Index Agent groups ignore them.
+    val newServerGroupIds = groups
+        .firstOrNull { it.id == defaultGroupId && it.modelType != SandboxModelType.IndexAgent }
+        ?.let { setOf(it.id) }
+        .orEmpty()
+
     if (showAddServerDialog) {
         HttpServerEditDialog(
             initialServer = null,
             allGroups = groups,
-            initialGroupIds = emptySet(),
+            initialGroupIds = newServerGroupIds,
             onDismiss = onDismissAddServerDialog,
             onConfirm = { server, groupIds ->
                 onSaveHttpServer(server, groupIds)
@@ -105,6 +113,7 @@ fun McpServersTab(
                     entry = editing,
                     allGroups = groups,
                     defaultGroupId = defaultGroupId,
+                    builtinTitle = builtinTitle,
                     initialGroupIds = editingGroups,
                     onDismiss = { editingEntry = null },
                     onConfirm = { groupIds ->
@@ -139,6 +148,7 @@ fun McpServersTab(
             val entry = entries[index]
             McpServerEntryItem(
                 entry = entry,
+                builtinTitle = builtinTitle,
                 onClick = { editingEntry = entry }
             )
         }
@@ -209,6 +219,7 @@ private fun BuiltinGroupsDialog(
     entry: McpServerEntry.BuiltinMcpEntry,
     allGroups: List<McpSandboxGroupEntity>,
     defaultGroupId: Long,
+    builtinTitle: (String) -> String,
     initialGroupIds: Set<Long>,
     onDismiss: () -> Unit,
     onConfirm: (Set<Long>) -> Unit
@@ -217,7 +228,7 @@ private fun BuiltinGroupsDialog(
     M3Dialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(entry.builtinMcpName)
+            Text(builtinTitle(entry.builtinMcpName))
         },
         buttons = {
             TextButton(onClick = onDismiss) {
@@ -274,7 +285,9 @@ private fun HttpServerEditDialog(
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
-    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
+    // Keyed so a seed that arrives after the dialog opened (the default group loads asynchronously)
+    // still takes effect.
+    var selectedGroupIds by remember(initialGroupIds) { mutableStateOf(initialGroupIds) }
 
     // Debounced fetch of server title and prompts when URL, protocol, or auth header changes
     LaunchedEffect(url, streamable, authHeader) {
@@ -535,6 +548,7 @@ private fun HttpServerEditDialog(
 @Composable
 fun McpServerEntryItem(
     entry: McpServerEntry,
+    builtinTitle: (String) -> String,
     onClick: (McpServerEntry) -> Unit = { },
 ) {
     ListItem(
@@ -552,7 +566,7 @@ fun McpServerEntryItem(
         headlineContent = {
             Text(
                 when (entry) {
-                    is McpServerEntry.BuiltinMcpEntry -> entry.builtinMcpName
+                    is McpServerEntry.BuiltinMcpEntry -> builtinTitle(entry.builtinMcpName)
                     is McpServerEntry.HttpServerEntry ->
                         entry.server.cachedTitle.ifBlank { entry.server.name }
                 }
@@ -586,6 +600,7 @@ private fun McpServersTabPreview() {
             ),
             allGroups = MutableStateFlow(previewGroups),
             defaultGroupId = 1L,
+            builtinTitle = { "Note Creation" },
             showAddServerDialog = false,
             onDismissAddServerDialog = {},
             loadGroupIds = { emptySet() },
@@ -604,6 +619,7 @@ private fun BuiltinGroupsDialogPreview() {
             entry = McpServerEntry.BuiltinMcpEntry("clock"),
             allGroups = previewGroups,
             defaultGroupId = 1L,
+            builtinTitle = { "Timers & Alarms" },
             initialGroupIds = setOf(1L),
             onDismiss = {},
             onConfirm = {}

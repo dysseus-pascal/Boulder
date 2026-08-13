@@ -559,6 +559,7 @@ fun initKoin(
                                     get<DevConnectionCloudpebbleProxy>()
                                 }
                             }.distinctUntilChanged(),
+                            lanServer = get<DevConnectionServer>(),
                             identifier = get(),
                             protocolHandler = get(),
                             companionAppLifecycleManager = get(),

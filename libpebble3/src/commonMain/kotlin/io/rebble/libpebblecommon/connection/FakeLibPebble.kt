@@ -696,7 +696,7 @@ class FakeConnectedDevice(
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
     override val currentCompanionAppSessions: StateFlow<List<CompanionApp>> = MutableStateFlow(emptyList())
 
-    override suspend fun startDevConnection() {}
+    override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
     override val batteryLevel: Int? = 50
@@ -792,7 +792,7 @@ class FakeConnectedDeviceInRecovery(
         color = color,
     )
 
-    override suspend fun startDevConnection() {}
+    override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
     override val batteryLevel: Int? = 50

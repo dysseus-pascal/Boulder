@@ -241,15 +241,17 @@ private fun BuiltinGroupsDialog(
         }
     ) {
         Column {
-            Text("Choose which sandbox groups include this built-in MCP. It can't be removed from the default group.")
+            Text("Choose which sandbox groups include this built-in MCP.")
             Spacer(Modifier.height(8.dp))
             GroupSelectionDropdown(
                 allGroups = allGroups,
-                selectedGroupIds = selectedGroupIds,
+                selectedGroupIds = selectedGroupIds + (allGroups.filter {
+                    it.modelType == SandboxModelType.IndexAgent
+                }.map { it.id }.toSet()),
                 onSelectionChange = { selectedGroupIds = it },
                 // Builtins must stay in the default group
                 optionEnabled = { group, isSelected ->
-                    !(isSelected && group.id == defaultGroupId)
+                    !(isSelected && group.modelType == SandboxModelType.IndexAgent)
                 }
             )
         }

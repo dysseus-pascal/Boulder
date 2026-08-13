@@ -38,6 +38,7 @@ import coredevices.ring.api.NotionApi
 import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.PreferencesImpl
+import coredevices.ring.database.room.Migrate33To34
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
@@ -80,6 +81,8 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.PermissionRequester
+import coredevices.util.Platform
+import coredevices.util.isAndroid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -106,6 +109,7 @@ val experimentalModule = module {
     single {
         val builder: RoomDatabase.Builder<RingDatabase> = get()
         builder
+            .addMigrations(Migrate33To34(isAndroid = get<Platform>().isAndroid))
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)

@@ -144,33 +144,35 @@ class McpSandboxRepository(
     }
 
     suspend fun seedDatabase() {
-        val groups = groupDao.getAllFlow().first()
-        val defaultGroupId = if (groups.isEmpty()) {
-            groupDao.insertGroup(
-                McpSandboxGroupEntity(
-                    title = "Default MCP Sandbox",
-                    modelType = SandboxModelType.IndexAgent,
-                )
-            )
-        } else {
-            groups.first().id
-        }
-
-        // Backfill any builtin MCPs missing from the default group. This runs on every startup (not
-        // just first launch) so users who upgrade gain builtins added in newer versions (e.g. the
-        // calendar tool) — otherwise their existing default group would never include them.
-        val existing = builtinAssociationDao.getAssociationsForGroupFlow(defaultGroupId).first()
-            .map { it.builtinMcpName }
-            .toSet()
-        val missing = builtinMcpRepository.getAllServlets()
-            .map { it.name }
-            .filter { it !in existing }
-        if (missing.isNotEmpty()) {
-            builtinAssociationDao.insertAssociations(
-                missing.map { BuiltinMcpGroupAssociation(groupId = defaultGroupId, builtinMcpName = it) }
-            )
+        val builtinMcpNames = builtinMcpRepository.getAllServlets().map { it.name }
+        db.useWriterConnection { connection ->
+            connection.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
+                seedDefaultGroup(groupDao, builtinAssociationDao, builtinMcpNames)
+            }
         }
     }
+}
+
+/**
+ * Creates the default group holding every builtin, on first launch only. An existing group is left
+ * alone: a builtin missing from it was switched off by the user, and re-adding it would undo that.
+ * Builtins added in later versions reach existing groups through a database migration instead.
+ */
+internal suspend fun seedDefaultGroup(
+    groupDao: McpSandboxGroupDao,
+    builtinAssociationDao: BuiltinMcpGroupAssociationDao,
+    builtinMcpNames: List<String>,
+) {
+    if (groupDao.getAll().isNotEmpty()) return
+    val groupId = groupDao.insertGroup(
+        McpSandboxGroupEntity(
+            title = "Default MCP Sandbox",
+            modelType = SandboxModelType.IndexAgent,
+        )
+    )
+    builtinAssociationDao.insertAssociations(
+        builtinMcpNames.map { BuiltinMcpGroupAssociation(groupId = groupId, builtinMcpName = it) }
+    )
 }
 
 sealed class McpServerEntry {

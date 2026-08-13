@@ -85,6 +85,7 @@ import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -149,6 +150,8 @@ fun IndexSettings(coreNav: CoreNav) {
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
+    val showDefaultCaptureTypeDialog by viewModel.showDefaultCaptureTypeDialog.collectAsState()
+    val defaultCaptureType by viewModel.defaultCaptureType.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
     val platform = koinInject<Platform>()
     val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
@@ -230,6 +233,16 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeNoteShortcutDialog()
             }
+        )
+    }
+    if (showDefaultCaptureTypeDialog) {
+        DefaultCaptureTypeDialog(
+            currentType = defaultCaptureType,
+            onTypeSelected = {
+                viewModel.setDefaultCaptureType(it)
+                viewModel.closeDefaultCaptureTypeDialog()
+            },
+            onDismissRequest = viewModel::closeDefaultCaptureTypeDialog
         )
     }
     if (webhookDialogOpen) {
@@ -525,6 +538,13 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 ListItem(
+                    modifier = Modifier.clickable(onClick = viewModel::showDefaultCaptureTypeDialog),
+                    headlineContent = { Text("Default Capture") },
+                    supportingContent = { Text(defaultCaptureType.title) }
+                )
+            }
+            item {
+                ListItem(
                     modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
                     headlineContent = { Text("Webhook") },
                     supportingContent = {
@@ -666,6 +686,50 @@ fun LlmModeDialog(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun DefaultCaptureTypeDialog(
+    currentType: DefaultCaptureType,
+    onTypeSelected: (DefaultCaptureType) -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    var targetType by remember { mutableStateOf(currentType) }
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Bolt, contentDescription = null) },
+        title = { Text("Default Capture") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Cancel")
+            }
+            TextButton(onClick = { onTypeSelected(targetType) }) {
+                Text("OK")
+            }
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DefaultCaptureType.entries.forEach { type ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { targetType = type }
+                ) {
+                    RadioButton(
+                        selected = targetType == type,
+                        onClick = { targetType = type }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(type.title)
+                }
+            }
+            Text(
+                "What Index 01 captures when it can't tell what you meant.",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

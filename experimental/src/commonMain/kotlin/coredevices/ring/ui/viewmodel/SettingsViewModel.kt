@@ -14,6 +14,7 @@ import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.di.LibIndexCoroutineScope
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -134,6 +135,9 @@ class SettingsViewModel(
     val showMusicControlDialog = _showMusicControlDialog.asStateFlow()
     val musicControlMode = preferences.musicControlMode
     val debugDetailsEnabled = preferences.debugDetailsEnabled
+    private val _showDefaultCaptureTypeDialog = MutableStateFlow(false)
+    val showDefaultCaptureTypeDialog = _showDefaultCaptureTypeDialog.asStateFlow()
+    val defaultCaptureType = preferences.defaultCaptureType
     private val _showContactsDialog = MutableStateFlow(false)
     val showContactsDialog = _showContactsDialog.asStateFlow()
     private val _showSecondaryModeDialog = MutableStateFlow(false)
@@ -245,6 +249,18 @@ class SettingsViewModel(
 
     fun setMusicControlMode(mode: MusicControlMode) {
         preferences.setMusicControlMode(mode)
+    }
+
+    fun showDefaultCaptureTypeDialog() {
+        _showDefaultCaptureTypeDialog.value = true
+    }
+
+    fun closeDefaultCaptureTypeDialog() {
+        _showDefaultCaptureTypeDialog.value = false
+    }
+
+    fun setDefaultCaptureType(type: DefaultCaptureType) {
+        preferences.setDefaultCaptureType(type)
     }
 
     fun showSecondaryModeDialog() {

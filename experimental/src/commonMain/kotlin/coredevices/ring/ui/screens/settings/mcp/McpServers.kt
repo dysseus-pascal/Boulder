@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coredevices.indexai.data.McpServerDefinition
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
@@ -63,6 +64,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 fun McpServersTab(
     serverEntries: StateFlow<List<McpServerEntry>>,
+    unsupportedServers: StateFlow<List<McpServerDefinition>>,
     allGroups: StateFlow<List<McpSandboxGroupEntity>>,
     defaultGroupId: Long,
     builtinTitle: (String) -> String,
@@ -75,6 +77,7 @@ fun McpServersTab(
 ) {
     val entries by serverEntries.collectAsState()
     val groups by allGroups.collectAsState()
+    val unsupported by unsupportedServers.collectAsState()
     var editingEntry by remember { mutableStateOf<McpServerEntry?>(null) }
     var editingGroupIds by remember { mutableStateOf<Set<Long>?>(null) }
 
@@ -150,6 +153,14 @@ fun McpServersTab(
                 entry = entry,
                 builtinTitle = builtinTitle,
                 onClick = { editingEntry = entry }
+            )
+        }
+        items(unsupported.size) { index ->
+            val item = unsupported[index]
+            ListItem(
+                overlineContent = { Text("Built-in") },
+                headlineContent = { Text(item.title) },
+                supportingContent = { Text("Only available on Android") }
             )
         }
     }
@@ -600,6 +611,9 @@ private fun McpServersTabPreview() {
                     McpServerEntry.BuiltinMcpEntry("builtin-1"),
                 )
             ),
+            unsupportedServers = MutableStateFlow(listOf(
+                McpServerDefinition(name = "unsupported-1", title = "Unsupported Server")
+            )),
             allGroups = MutableStateFlow(previewGroups),
             defaultGroupId = 1L,
             builtinTitle = { "Note Creation" },

@@ -19,43 +19,46 @@ import org.koin.core.component.inject
 class BuiltinServletRepository: KoinComponent, ServletRepository {
     private val platform: Platform by inject()
 
-    override fun getAllServlets(): List<McpServerDefinition> {
-        return buildList {
-            addAll(
-                listOf(
-                    McpServerDefinition(
-                        name = NoteServlet.NAME,
-                        title = "Note Creation"
-                    ),
-                    /*McpServerDefinition(
-                        name = JsServlet.name,
-                        title = "JavaScript Evaluation"
-                    ),*/
-                    McpServerDefinition(
-                        name = ReminderServlet.NAME,
-                        title = "Reminders"
-                    ),
-                    McpServerDefinition(
-                        name = CalendarServlet.NAME,
-                        title = "Calendar"
-                    )
-                )
+    private fun buildSupportedServlets(platform: Platform): Pair<List<McpServerDefinition>, List<McpServerDefinition>> {
+        val common = listOf(
+            McpServerDefinition(
+                name = NoteServlet.NAME,
+                title = "Note Creation"
+            ),
+            /*McpServerDefinition(
+                name = JsServlet.name,
+                title = "JavaScript Evaluation"
+            ),*/
+            McpServerDefinition(
+                name = ReminderServlet.NAME,
+                title = "Reminders"
+            ),
+            McpServerDefinition(
+                name = CalendarServlet.NAME,
+                title = "Calendar"
             )
-            if (platform.isAndroid) {
-                addAll(
-                    listOf(
-                        McpServerDefinition(
-                            name = ClockServlet.name,
-                            title = "Timers & Alarms"
-                        ),
-                        McpServerDefinition(
-                            name = MessagingServlet.name,
-                            title = "Beeper Messaging"
-                        )
-                    )
-                )
-            }
-        }
+        )
+        val androidOnly = listOf(
+            McpServerDefinition(
+                name = ClockServlet.name,
+                title = "Timers & Alarms"
+            ),
+            McpServerDefinition(
+                name = MessagingServlet.name,
+                title = "Beeper Messaging"
+            )
+        )
+        val result = common + androidOnly.takeIf { platform.isAndroid }.orEmpty()
+        val unsupported = androidOnly.takeIf { !platform.isAndroid }.orEmpty()
+        return Pair(result, unsupported)
+    }
+
+    override fun getAllServlets(): List<McpServerDefinition> {
+        return buildSupportedServlets(platform).first
+    }
+
+    fun getUnsupportedServlets(): List<McpServerDefinition> {
+        return buildSupportedServlets(platform).second
     }
 
     override fun resolveName(name: String): McpIntegration? {

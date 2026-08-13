@@ -52,6 +52,7 @@ import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
+import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
@@ -59,6 +60,7 @@ import coredevices.ring.database.room.repository.McpServerEntry
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ui.M3Dialog
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
@@ -73,6 +75,7 @@ import org.koin.core.parameter.parametersOf
 
 class McpSandboxGroupsViewModel(
     val mcpSandboxRepository: McpSandboxRepository,
+    val builtinServletRepository: BuiltinServletRepository,
     private val preferences: Preferences,
     private val snackbarHostState: SnackbarHostState,
 ): ViewModel() {
@@ -91,6 +94,7 @@ class McpSandboxGroupsViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
     )
+    val unsupportedDefinitions = MutableStateFlow(builtinServletRepository.getUnsupportedServlets())
 
     fun updateModelType(groupId: Long, modelType: SandboxModelType) {
         viewModelScope.launch {
@@ -229,6 +233,7 @@ fun McpSandboxGroups(coreNav: CoreNav) {
                 SERVERS_TAB -> McpServersTab(
                     serverEntries = vm.serverEntries,
                     allGroups = vm.sandboxGroups,
+                    unsupportedServers = vm.unsupportedDefinitions,
                     defaultGroupId = defaultGroupId,
                     builtinTitle = { builtinTitles[it] ?: it },
                     showAddServerDialog = showAddServerDialog,

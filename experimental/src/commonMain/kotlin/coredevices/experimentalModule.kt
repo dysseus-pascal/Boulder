@@ -61,6 +61,7 @@ import coredevices.ring.mcpModule
 import coredevices.ring.service.FirestoreRingDebugDelegate
 import coredevices.ring.service.IndexButtonActionHandler
 import coredevices.ring.service.IndexButtonSequenceRecorder
+import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.IndexNotificationManager
 import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.ring.agent.AgentNenya
@@ -205,6 +206,7 @@ val experimentalModule = module {
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
+    singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
     single {
         IndexWebhookApiImpl(

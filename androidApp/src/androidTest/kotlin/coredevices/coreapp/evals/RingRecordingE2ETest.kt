@@ -37,6 +37,7 @@ import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -670,6 +671,7 @@ class RingRecordingE2ETest {
             SharedPreferencesSettings(context.getSharedPreferences("e2e_test_prefs", Context.MODE_PRIVATE))
         }
         singleOf(::IndexWebhookPreferences)
+        singleOf(::GestureRoutingPreferences)
 
         // Queue
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }

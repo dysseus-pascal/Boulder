@@ -30,6 +30,10 @@ import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("BasicNotificationProcessor")
 
+// Fall back to the watch's own default banner colour rather than sending these.
+private val UNUSABLE_NOTIFICATION_COLORS =
+    setOf(0, 0xFF000000.toInt(), 0xFFFFFFFF.toInt())
+
 class BasicNotificationProcessor(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val context: AppContext,
@@ -100,7 +104,7 @@ class BasicNotificationProcessor(
     ): Int? {
         return TimelineColor.findByName(app.colorName)?.argbColor()
             ?: appProperties?.color?.argbColor()
-            ?: sbn.notification.color.takeIf { it != 0 && it != 0xFF000000.toInt() }
+            ?: sbn.notification.color.takeIf { it !in UNUSABLE_NOTIFICATION_COLORS }
     }
 
     private fun selectIcon(

@@ -33,6 +33,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChanne
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentEmpty
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
@@ -496,6 +497,7 @@ internal suspend fun decideNotification(
         anyContactMuted -> NotSendContactMuted
         !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
         !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+        notification.title.isNullOrBlank() && notification.body.isNullOrBlank() -> NotSentEmpty
         isRuleFiltered() -> NotSentRuleFiltered
         !allowDuplicates && inflightNotifications.any { it.displayDataEquals(notification) } -> NotSentDuplicate
         !notificationConfig.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn

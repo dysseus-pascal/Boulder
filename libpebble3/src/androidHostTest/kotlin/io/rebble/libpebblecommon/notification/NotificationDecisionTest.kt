@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChanne
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentEmpty
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentScreenOn
@@ -140,6 +141,17 @@ class NotificationDecisionTest {
     @Test
     fun `unique notification with no inflight is sent`() = runTest {
         assertEquals(SendToWatch, decide(notification()))
+    }
+
+    @Test
+    fun `notification with no title or body is blocked`() = runTest {
+        assertEquals(NotSentEmpty, decide(notification(title = null, body = null)))
+        assertEquals(NotSentEmpty, decide(notification(title = " ", body = "")))
+    }
+
+    @Test
+    fun `notification with only a title is sent`() = runTest {
+        assertEquals(SendToWatch, decide(notification(body = null)))
     }
 
     @Test

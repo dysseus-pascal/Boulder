@@ -31,7 +31,7 @@ class IndexWebhookUploadRecordingOperation(
     private val decorated: RecordingOperation,
     private val fileId: String,
     private val recordingId: Long,
-    private val trigger: IndexWebhookRecordingTrigger?,
+    private val gesture: IndexWebhookRecordingTrigger,
 ): RecordingOperation, KoinComponent {
 
     companion object {
@@ -52,7 +52,7 @@ class IndexWebhookUploadRecordingOperation(
             return
         }
 
-        val payloadMode = webhookPreferences.payloadMode.value
+        val payloadMode = webhookPreferences.configFor(gesture).payloadMode
 
         // Read audio samples if needed
         val samples: ShortArray?
@@ -79,6 +79,6 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt, trigger)
+        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt, gesture)
     }
 }

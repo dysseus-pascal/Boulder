@@ -11,7 +11,6 @@ import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
-import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
 import coredevices.ring.service.ButtonPress
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.service.button.GestureDestination
@@ -34,6 +33,16 @@ class RecordingOperationFactory(
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
 ) {
+    companion object {
+        /** Recordings without a button sequence (phone mic, reprocessing) send on hold-and-talk. */
+        internal fun webhookGestureFor(sequence: List<ButtonPress>?): IndexWebhookRecordingTrigger =
+            if (sequence?.let { RingGesture.forSequence(it) } == RingGesture.ClickHold) {
+                IndexWebhookRecordingTrigger.DoubleClickHold
+            } else {
+                IndexWebhookRecordingTrigger.SingleClickHold
+            }
+    }
+
     suspend fun createForButtonSequence(
         recordingId: Long,
         fileId: String,
@@ -41,15 +50,10 @@ class RecordingOperationFactory(
         forcedNoteTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult),
         sequence: List<ButtonPress>?
     ): RecordingOperation {
-        val gesture = sequence?.let { RingGesture.forSequence(it) }
-        val isDoubleClickHold = gesture == RingGesture.ClickHold
-        val webhookTrigger = when {
-            isDoubleClickHold -> IndexWebhookRecordingTrigger.DoubleClickHold
-            sequence != null -> IndexWebhookRecordingTrigger.SingleClickHold
-            else -> null
-        }
         val inner = createForDestination(
-            destination = gestureRouting.recordingDestinationFor(gesture),
+            destination = gestureRouting.recordingDestinationFor(
+                sequence?.let { RingGesture.forSequence(it) }
+            ),
             recordingId = recordingId,
             fileId = fileId,
             transferId = transferId,
@@ -58,8 +62,7 @@ class RecordingOperationFactory(
         return maybeWrapWithWebhook(
             recordingId = recordingId,
             fileId = fileId,
-            isDoubleClickHold = isDoubleClickHold,
-            trigger = webhookTrigger,
+            gesture = webhookGestureFor(sequence),
             inner = inner,
         )
     }
@@ -67,25 +70,17 @@ class RecordingOperationFactory(
     private fun maybeWrapWithWebhook(
         recordingId: Long,
         fileId: String,
-        isDoubleClickHold: Boolean,
-        trigger: IndexWebhookRecordingTrigger?,
+        gesture: IndexWebhookRecordingTrigger,
         inner: RecordingOperation,
     ): RecordingOperation {
-        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank()
-        if (!configured) return inner
-        val matchesTrigger = when (indexWebhookPreferences.trigger.value) {
-            IndexWebhookTrigger.SingleClick -> !isDoubleClickHold
-            IndexWebhookTrigger.DoubleClickHold -> isDoubleClickHold
-            IndexWebhookTrigger.Both -> true
-        }
-        if (!matchesTrigger) return inner
+        if (!indexWebhookPreferences.configFor(gesture).isActive) return inner
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
-            trigger = trigger,
+            gesture = gesture,
             decorated = inner,
         )
     }

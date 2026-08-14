@@ -55,6 +55,7 @@ import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
@@ -206,10 +207,12 @@ val experimentalModule = module {
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
+    singleOf(::IndexWebhookRunRepository)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
     single {
         IndexWebhookApiImpl(
+            get(),
             get(),
             get(),
             get(),

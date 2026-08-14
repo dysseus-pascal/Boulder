@@ -545,7 +545,7 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 ListItem(
-                    modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
+                    modifier = Modifier.clickable { webhookViewModel.openDialog() },
                     headlineContent = { Text("Webhook") },
                     supportingContent = {
                         Text(

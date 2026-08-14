@@ -259,9 +259,19 @@ class RecordingProcessingQueueTest {
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
-                    trigger: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger?,
+                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
                 ) {}
-                override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+                override suspend fun sendTestEvent(
+                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
+                    url: String,
+                    headers: Map<String, String>,
+                ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
+                    ok = false,
+                    status = "DISABLED",
+                    detail = "",
+                    byteSize = 0L,
+                    durationMs = 0L,
+                )
             }
         } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)

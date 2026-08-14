@@ -362,16 +362,18 @@ class NotificationHandler(
 
     fun handleNotificationRemoved(sbn: StatusBarNotification) {
         logger.d { "onNotificationRemoved(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
-        val inflight = inflightNotifications[sbn.key]
-        if (inflight != null) {
-            inflightNotifications.remove(sbn.key)
-            notificationDeleteQueue.trySend(inflight.uuid).also {
+        val inflight = inflightNotifications.remove(sbn.key)
+        if (inflight == null) {
+            logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
+            return
+        }
+        // One key can have produced several watch notifications (e.g. MessagingStyle conversations)
+        for (uuid in listOf(inflight.uuid) + inflight.previousUuids) {
+            notificationDeleteQueue.trySend(uuid).also {
                 if (it.isFailure) {
                     logger.w { "Couldn't write notification to deletion queue" }
                 }
             }
-        } else {
-            logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
         }
     }
 

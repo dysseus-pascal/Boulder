@@ -21,6 +21,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicCo
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.imaging.ImagingService
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
@@ -153,6 +154,7 @@ class RealPebbleConnector(
     private val phoneControlManager: PhoneControlManager,
     private val musicService: MusicService,
     private val musicControlManager: MusicControlManager,
+    private val imagingService: ImagingService,
     private val firmwareUpdateManager: FirmwareUpdateManager,
     private val devConnectionManager: DevConnectionManager,
     private val screenshotService: ScreenshotService,
@@ -280,6 +282,7 @@ class RealPebbleConnector(
         companionAppLifecycleManager.init(identifier, watchInfo)
         phoneControlManager.init()
         musicControlManager.init()
+        imagingService.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
         appOrderManager.init(forceResend = watchInfo.isUnfaithful || !previouslyConnected)

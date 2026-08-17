@@ -25,7 +25,7 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         UpdateCurrentTrack(0x10u),
         UpdatePlayStateInfo(0x11u),
         UpdateVolumeInfo(0x12u),
-        UpdatePlayerInfo(0x13u)
+        UpdatePlayerInfo(0x13u),
     }
 
     class UpdateCurrentTrack(

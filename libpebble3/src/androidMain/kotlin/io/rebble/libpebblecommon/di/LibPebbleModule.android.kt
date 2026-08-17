@@ -51,6 +51,7 @@ actual val platformModule: Module = module {
         PhoneCapabilities(
             CommonPhoneCapabilities + setOf(
                 ProtocolCapsFlag.SupportsExtendedMusicProtocol,
+                ProtocolCapsFlag.SupportsImageFetch,
                 ProtocolCapsFlag.SupportsTwoWayDismissal,
             )
         )

@@ -16,11 +16,13 @@ import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.imaging.aspectSixteenths
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.vibrationPattern
+import io.rebble.libpebblecommon.notification.extractAttachment
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
@@ -63,7 +65,11 @@ class BasicNotificationProcessor(
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
-        val body = stripBidiIsolates(bigText ?: text) ?: ""
+        val attachment = sbn.extractAttachment(
+            context = context.context,
+            includeImage = notificationConfigFlow.value.sendNotificationImages && app.sendImages,
+        )
+        val body = stripBidiIsolates(attachment.caption ?: bigText ?: text) ?: ""
         val people = sbn.notification.people()
         val contactKeys = people.asContacts(context.context)
         val contactEntries = contactKeys.mapNotNull {
@@ -73,6 +79,7 @@ class BasicNotificationProcessor(
 
         val color = selectColor(app, sbn, appProperties)
         val icon = selectIcon(app, sbn, appProperties)
+        val image = attachment.image
         val notification = LibPebbleNotification(
             packageName = sbn.packageName,
             uuid = Uuid.random(),
@@ -93,6 +100,9 @@ class BasicNotificationProcessor(
             vibrationPattern = sendVibePattern,
             color = color,
             previousUuids = previousUuids,
+            imageAspect = image?.let { aspectSixteenths(it.width, it.height) },
+            image = image,
+            messageKey = attachment.messageKey,
         )
         return NotificationResult.Extracted(notification)
     }

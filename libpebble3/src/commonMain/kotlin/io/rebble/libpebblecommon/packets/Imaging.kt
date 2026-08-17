@@ -7,12 +7,14 @@ import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SString
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUShort
+import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.uuid.Uuid
 
 /**
  * Generic image-fetch endpoint (0x35). The watch pulls an image from the phone: it sends a
  * [Request] naming the type, encoding and dimensions, and the phone replies with chunked [Response]
- * messages. Album art is the first consumer; notification images etc. can reuse the endpoint.
+ * messages.
  */
 open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING) {
     val command = SUByte(m, message.value)
@@ -28,6 +30,7 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
 
     enum class ImageType(val value: UByte) {
         AlbumArt(0x00u),
+        NotificationImage(0x01u),
         ;
 
         companion object {
@@ -79,6 +82,20 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
     }
 
     /**
+     * Image for a timeline notification: the head plus the notification's item id, which is the key
+     * the phone cached the image under.
+     */
+    class NotificationImageRequest(
+        token: UByte = 0u,
+        format: UByte = 0u,
+        width: UShort = 0u,
+        height: UShort = 0u,
+        itemId: Uuid = Uuid.NIL,
+    ) : Request(ImageType.NotificationImage, token, format, width, height) {
+        val itemId = SUUID(m, itemId)
+    }
+
+    /**
      * Phone -> watch, chunked. The [body] is pre-assembled (chunk flags/offset/len, the image
      * header on the first chunk, and the pixel data) and serialised as raw trailing bytes.
      */
@@ -94,6 +111,7 @@ fun imagingPacketsRegister() {
     PacketRegistry.register(ProtocolEndpoint.IMAGING, Imaging.Message.Request.value) { bytes ->
         when (bytes.getOrNull(imageTypeOffset)) {
             Imaging.ImageType.AlbumArt.value -> Imaging.AlbumArtRequest()
+            Imaging.ImageType.NotificationImage.value -> Imaging.NotificationImageRequest()
             else -> Imaging.Request()
         }
     }

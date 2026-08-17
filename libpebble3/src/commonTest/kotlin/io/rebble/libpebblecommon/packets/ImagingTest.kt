@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.uuid.Uuid
 
 internal class ImagingTest {
     @Test
@@ -29,6 +30,27 @@ internal class ImagingTest {
         assertEquals(166, decoded.height.get().toInt())
         assertEquals("Mrs. Robinson", decoded.title.get())
         assertEquals("Simon & Garfunkel", decoded.artist.get())
+    }
+
+    @Test
+    fun notificationImageRequestRoundTrips() {
+        val itemId = Uuid.parse("18584a55-29a4-4f2f-9143-b5973dd7a423")
+        val original = Imaging.NotificationImageRequest(
+            token = 0x09u,
+            format = Imaging.Format.Palette4Bit.value,
+            width = 180u,
+            height = 135u,
+            itemId = itemId,
+        )
+
+        val decoded = PebblePacket.deserialize(original.serialize())
+
+        assertIs<Imaging.NotificationImageRequest>(decoded)
+        assertEquals(0x09u.toUByte(), decoded.token.get())
+        assertEquals(Imaging.ImageType.NotificationImage.value, decoded.imageType.get())
+        assertEquals(180, decoded.width.get().toInt())
+        assertEquals(135, decoded.height.get().toInt())
+        assertEquals(itemId, decoded.itemId.get())
     }
 
     @Test

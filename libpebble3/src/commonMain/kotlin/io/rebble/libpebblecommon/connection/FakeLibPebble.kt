@@ -304,6 +304,10 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean) {
+        // No-op
+    }
+
     override suspend fun getAppIcon(packageName: String): ImageBitmap? {
         // Return a green square as a placeholder
         val width = 48

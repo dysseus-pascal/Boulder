@@ -813,6 +813,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { pebbleFeatures.supportsVibePatterns() },
                 ),
                 basicSettingsToggleItem(
+                    title = "Send notification images",
+                    description = "Show photos sent in messages on the watch. Can also be turned off per app on the Notifications tab.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.sendNotificationImages,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    sendNotificationImages = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationImages() },
+                ),
+                basicSettingsToggleItem(
                     title = "Send local-only notifications to watch",
                     description = "Android recommends not forwarding notifications marked as local-only to external devices - check to override this",
                     topLevelType = TopLevelType.Phone,

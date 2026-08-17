@@ -4,6 +4,7 @@ class PebbleFeatures(
     private val platform: Platform,
 ) {
     fun supportsNotificationFiltering(): Boolean = platform == Platform.Android
+    fun supportsNotificationImages(): Boolean = platform == Platform.Android
     fun supportsNotificationAppSorting(): Boolean = true
     fun supportsNotifiedOnlyFilter(): Boolean = platform == Platform.Android
     fun supportsNotificationCountSorting(): Boolean = platform == Platform.Android

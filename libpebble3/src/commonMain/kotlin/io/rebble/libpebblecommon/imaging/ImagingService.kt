@@ -54,16 +54,18 @@ class ImagingService(
 
     private suspend fun handleRequest(pkt: Imaging.Request) {
         val token = pkt.token.get()
-        val handler = Imaging.ImageType.from(pkt.imageType.get())?.let { handlers[it] }
+        val typeByte = pkt.imageType.get()
+        val type = Imaging.ImageType.from(typeByte)
+        val handler = type?.let { handlers[it] }
         if (handler == null) {
-            logger.w { "no handler for image type ${pkt.imageType.get()} token=$token" }
-            return sendFlags(token, IMAGE_FLAG_UNSUPPORTED)
+            logger.w { "no handler for image type $typeByte token=$token" }
+            return sendFlags(token, typeByte, IMAGE_FLAG_UNSUPPORTED)
         }
         val width = pkt.width.get().toInt()
         val height = pkt.height.get().toInt()
         if (width !in 1..MAX_DIM || height !in 1..MAX_DIM) {
             logger.w { "image request token=$token out-of-range ${width}x$height; NO_IMAGE" }
-            return sendFlags(token, IMAGE_FLAG_NO_IMAGE)
+            return sendFlags(token, typeByte, IMAGE_FLAG_NO_IMAGE)
         }
         val image = try {
             handler.image(pkt)
@@ -74,7 +76,7 @@ class ImagingService(
             logger.w(e) { "image handler failed for token=$token (${width}x$height)" }
             null
         }
-        serveImage(token, image)
+        serveImage(token, type, image)
     }
 
     /**
@@ -82,14 +84,18 @@ class ImagingService(
      * produce when first asked — the watch accepts a later response for the same token. A null
      * [image] sends NO_IMAGE, so the watch falls back rather than waiting on the token forever.
      */
-    suspend fun serveImage(token: UByte, image: EncodedImage?) = sendLock.withLock {
-        val chunks = buildResponse(token, image)
-        logger.d { "responding token=$token: ${chunks.size} chunk(s), hasImage=${image != null}" }
+    suspend fun serveImage(
+        token: UByte,
+        type: Imaging.ImageType,
+        image: EncodedImage?,
+    ) = sendLock.withLock {
+        val chunks = buildResponse(token, type, image)
+        logger.d { "responding token=$token type=$type: ${chunks.size} chunk(s), hasImage=${image != null}" }
         chunks.forEach { protocolHandler.send(it) }
     }
 
-    private suspend fun sendFlags(token: UByte, flags: Int) = sendLock.withLock {
-        protocolHandler.send(Imaging.Response(flagsOnlyBody(token, flags)))
+    private suspend fun sendFlags(token: UByte, typeByte: UByte, flags: Int) = sendLock.withLock {
+        protocolHandler.send(Imaging.Response(flagsOnlyBody(token, typeByte, flags)))
     }
 
     companion object {
@@ -103,6 +109,12 @@ private const val IMAGE_FLAG_FIRST = 0x01
 private const val IMAGE_FLAG_LAST = 0x02
 private const val IMAGE_FLAG_NO_IMAGE = 0x04
 private const val IMAGE_FLAG_UNSUPPORTED = 0x08
+
+// The image type rides in the top nibble of the flags byte: the watch can have requests for
+// several types outstanding and the token alone doesn't say which one a response answers. Image
+// types are therefore limited to 0..15.
+private const val IMAGE_FLAG_TYPE_SHIFT = 4
+private const val IMAGE_TYPE_MASK = 0x0F
 
 // Format byte in the image header (must match the firmware's ImagingFormat).
 private const val IMAGE_FORMAT_4BIT_PALETTE = 0x02
@@ -122,10 +134,13 @@ private fun le32(value: Int, out: UByteArray, at: Int) {
     out[at + 3] = ((value shr 24) and 0xFF).toUByte()
 }
 
-private fun flagsOnlyBody(token: UByte, flags: Int): UByteArray {
+private fun flagsByte(typeByte: UByte, flags: Int): UByte =
+    (flags or ((typeByte.toInt() and IMAGE_TYPE_MASK) shl IMAGE_FLAG_TYPE_SHIFT)).toUByte()
+
+private fun flagsOnlyBody(token: UByte, typeByte: UByte, flags: Int): UByteArray {
     val body = UByteArray(8)
     body[0] = token
-    body[1] = flags.toUByte()
+    body[1] = flagsByte(typeByte, flags)
     return body
 }
 
@@ -136,9 +151,13 @@ private fun flagsOnlyBody(token: UByte, flags: Int): UByteArray {
  * The image header (dimensions, format + palette) rides on the first chunk only. A null image (or
  * one with no pixels) yields a single NO_IMAGE chunk so the watch falls back to its text screen.
  */
-private fun buildResponse(token: UByte, image: EncodedImage?): List<Imaging.Response> {
+private fun buildResponse(
+    token: UByte,
+    type: Imaging.ImageType,
+    image: EncodedImage?,
+): List<Imaging.Response> {
     if (image == null || image.pixels.isEmpty()) {
-        return listOf(Imaging.Response(flagsOnlyBody(token, IMAGE_FLAG_NO_IMAGE)))
+        return listOf(Imaging.Response(flagsOnlyBody(token, type.value, IMAGE_FLAG_NO_IMAGE)))
     }
     val header = UByteArray(6 + image.palette.size)
     le16(image.width, header, 0)
@@ -160,7 +179,7 @@ private fun buildResponse(token: UByte, image: EncodedImage?): List<Imaging.Resp
         val headerBytes = if (first) header.size else 0
         val body = UByteArray(8 + headerBytes + n)
         body[0] = token
-        body[1] = flags.toUByte()
+        body[1] = flagsByte(type.value, flags)
         le32(offset, body, 2)
         le16(n, body, 6)
         var pos = 8

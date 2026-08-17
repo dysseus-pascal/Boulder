@@ -85,7 +85,7 @@ class MusicControlManager(
                 // Late artwork arrived; answer the request we couldn't fill, if it's still relevant.
                 val pending = pendingAlbumArt ?: return@onEach
                 val art = albumArtFor(pending) ?: return@onEach
-                imagingService.serveImage(pending.token.get(), art)
+                imagingService.serveImage(pending.token.get(), Imaging.ImageType.AlbumArt, art)
             }.launchIn(watchScope)
         }
         systemMusicControl.playbackState.onEach { state ->

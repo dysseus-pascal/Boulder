@@ -64,7 +64,11 @@ class NotificationDecisionTest {
         title: String? = "Title",
         body: String? = "Body",
         key: String = "k:$packageName:${title ?: ""}:${body ?: ""}",
+        messageKey: String? = null,
+        imageAspect: UByte? = null,
     ) = LibPebbleNotification(
+        messageKey = messageKey,
+        imageAspect = imageAspect,
         packageName = packageName,
         uuid = Uuid.random(),
         groupKey = null,
@@ -106,6 +110,31 @@ class NotificationDecisionTest {
         val first = notification()
         val second = notification()
         assertEquals(NotSentDuplicate, decide(second, inflight = listOf(first)))
+    }
+
+    @Test
+    fun `consecutive photos with the same placeholder text are not duplicates`() = runTest {
+        // Messaging apps title every attachment with the sender and body them "Image", and two
+        // photos can easily share an aspect, so only the message identity tells them apart.
+        val first = notification(body = "Image", messageKey = "1000|Image", imageAspect = 12u)
+        val second = notification(body = "Image", messageKey = "2000|Image", imageAspect = 12u)
+        assertEquals(SendToWatch, decide(second, inflight = listOf(first)))
+    }
+
+    @Test
+    fun `repost of the same photo is a duplicate`() = runTest {
+        // Some apps hand out a fresh content URI for the same photo on every re-post, so nothing
+        // about the image itself can be part of the identity.
+        val first = notification(body = "Image", messageKey = "1000|Image", imageAspect = 9u)
+        val second = notification(body = "Image", messageKey = "1000|Image", imageAspect = 9u)
+        assertEquals(NotSentDuplicate, decide(second, inflight = listOf(first)))
+    }
+
+    @Test
+    fun `repost that gains a photo is sent`() = runTest {
+        val first = notification(body = "Image", messageKey = "1000|Image", imageAspect = null)
+        val second = notification(body = "Image", messageKey = "1000|Image", imageAspect = 9u)
+        assertEquals(SendToWatch, decide(second, inflight = listOf(first)))
     }
 
     @Test

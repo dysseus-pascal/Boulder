@@ -72,6 +72,10 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UIntListAttribute(attribute, block()))
     }
 
+    fun uByte(attribute: TimelineAttribute, block: () -> UByte) {
+        attributes.add(BaseAttribute.UByteAttribute(attribute, block()))
+    }
+
     fun title(block: () -> String) {
         string(TimelineAttribute.Title, block)
     }

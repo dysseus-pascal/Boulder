@@ -403,7 +403,7 @@ class AndroidSystemCalendar(
                     + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED,
             arrayOf(calendar.platformId), "BEGIN ASC"
         )?.use { cursor ->
-            logger.d("Found ${cursor.count} events for calendar ${calendar.name.obfuscate(privateLogger)}")
+            logger.d("Found ${cursor.count} events for calendar ${calendar.platformId}/${calendar.name.obfuscate(privateLogger)}")
             val list = mutableListOf<CalendarEvent>()
             while (cursor.moveToNext()) {
                 val event = resolveCalendarInstance(contentResolver, cursor, calendar.ownerId)

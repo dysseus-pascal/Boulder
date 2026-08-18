@@ -681,7 +681,8 @@ class FakeConnectedDevice(
         trackPosMs: UInt,
         playbackRatePct: UInt,
         shuffle: Boolean,
-        repeatType: RepeatType
+        repeatType: RepeatType,
+        skipSeeksWithinTrack: Boolean,
     ) {
     }
 

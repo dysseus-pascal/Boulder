@@ -55,4 +55,10 @@ data class PlaybackStatus(
     val shuffle: Boolean,
     val repeat: RepeatType,
     val volume: Int,
+    /**
+     * Whether [SystemMusicControl.nextTrack] / [SystemMusicControl.previousTrack] will seek within
+     * the current track (podcasts, audiobooks) instead of changing track. Sent to the watch so its
+     * music app can show fast-forward/rewind icons.
+     */
+    val skipSeeksWithinTrack: Boolean = false,
 )

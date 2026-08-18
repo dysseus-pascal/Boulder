@@ -210,7 +210,8 @@ object ConnectedPebble {
             trackPosMs: UInt,
             playbackRatePct: UInt,
             shuffle: Boolean,
-            repeatType: RepeatType
+            repeatType: RepeatType,
+            skipSeeksWithinTrack: Boolean,
         )
         suspend fun updatePlayerInfo(packageId: String, name: String)
         suspend fun updateVolumeInfo(volumePercent: UByte)

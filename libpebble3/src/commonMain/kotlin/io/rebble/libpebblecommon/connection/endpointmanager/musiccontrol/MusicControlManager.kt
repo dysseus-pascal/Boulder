@@ -40,6 +40,7 @@ data class PlaybackStateData(
     val playbackRatePct: UInt,
     val shuffle: Boolean,
     val repeatType: RepeatType,
+    val skipSeeksWithinTrack: Boolean,
 ) {
     companion object {
         val DEFAULT = PlaybackStateData(
@@ -48,6 +49,7 @@ data class PlaybackStateData(
             playbackRatePct = 0u,
             shuffle = false,
             repeatType = RepeatType.Off,
+            skipSeeksWithinTrack = false,
         )
     }
 }
@@ -96,6 +98,7 @@ class MusicControlManager(
                 playbackRatePct = it.playbackRatePct,
                 shuffle = it.shuffle,
                 repeatType = it.repeatType,
+                skipSeeksWithinTrack = it.skipSeeksWithinTrack,
             )
         }.launchIn(watchScope)
 
@@ -177,6 +180,7 @@ class MusicControlManager(
             || lastSentStatus?.playbackRate != status?.playbackRate
             || lastSentStatus?.shuffle != status?.shuffle
             || lastSentStatus?.repeat != status?.repeat
+            || lastSentStatus?.skipSeeksWithinTrack != status?.skipSeeksWithinTrack
         ) {
             val playbackState = if (watchConfigFlow.value.alwaysSendMusicPaused) {
                 PlaybackState.Paused
@@ -191,6 +195,7 @@ class MusicControlManager(
                     playbackRatePct = (status?.playbackRate?.times(100)?.toInt() ?: 0).toUInt(),
                     shuffle = status?.shuffle ?: false,
                     repeatType = status?.repeat ?: RepeatType.Off,
+                    skipSeeksWithinTrack = status?.skipSeeksWithinTrack ?: false,
                 )
             )
             lastPosition = TimestampedPosition(

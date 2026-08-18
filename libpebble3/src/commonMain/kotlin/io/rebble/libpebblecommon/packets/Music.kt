@@ -70,13 +70,23 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
          */
         playRate: UInt = 0u,
         shuffle: ShuffleState = ShuffleState.Unknown,
-        repeat: RepeatState = RepeatState.Unknown
+        repeat: RepeatState = RepeatState.Unknown,
+        /**
+         * Whether next/previous seeks within the track instead of changing track. Watches that
+         * predate this field ignore the trailing byte.
+         */
+        skipSeeksWithinTrack: Boolean = false,
     ) : MusicControl(Message.UpdatePlayStateInfo) {
         val state = SUByte(m, playbackState.value)
         val trackPosition = SUInt(m, trackPosition, Endian.Little)
         val playRate = SUInt(m, playRate, Endian.Little)
         val shuffle = SUByte(m, shuffle.value)
         val repeat = SUByte(m, repeat.value)
+        val skipSeeks = SUByte(m, if (skipSeeksWithinTrack) SKIP_SEEKS_WITHIN_TRACK else 0u)
+
+        companion object {
+            const val SKIP_SEEKS_WITHIN_TRACK: UByte = 1u
+        }
     }
 
     class UpdateVolumeInfo(

@@ -221,7 +221,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     Timeline("Timeline", Icons.Default.Timeline), // watch only
     QuietTime("Quiet Time", Icons.Default.DoNotDisturb),
     Connectivity("Connectivity", Icons.Default.Wifi),
-    Music("Music", Icons.Default.MusicNote), // watch only
+    Music("Music", Icons.Default.MusicNote),
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
@@ -1992,6 +1992,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfigHolder.update(coreConfig.copy(showWatchConnectionDebugInfo = it))
                     },
                     isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
+                    title = "Seek instead of Skip for Podcasts",
+                    description = "Icons will only update on updated PebbleOS version",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Music,
+                    checked = libPebbleConfig.watchConfig.musicSeekWhenAvailable,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    musicSeekWhenAvailable = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsMusic() },
                 ),
             ) + watchPrefs
         }

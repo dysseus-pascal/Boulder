@@ -97,6 +97,7 @@ data class WatchConfig(
      * Intended to be a debug option to dsiable watch settings sync.
      */
     val enableWatchSettingsSync: Boolean = true,
+    val musicSeekWhenAvailable: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

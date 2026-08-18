@@ -170,6 +170,11 @@ class HumanDateTimeParser(
     }
 
     private fun parseAbsoluteDateTime(input: String): InterpretedDateTime.AbsoluteDateTime? {
+        tonightPattern.find(input)?.let { match ->
+            val time = resolveTimeOfDay(input, match.range, "night") ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(currentDateTime.date, time))
+        }
+
         dayWordTimeOfDayPattern.find(input)?.let { match ->
             val dayWord = match.groupValues[1].let { if (it == "this") "today" else it }
             val date = parseDayWord(dayWord) ?: return null
@@ -570,6 +575,8 @@ class HumanDateTimeParser(
         private val standaloneDurationPattern = Regex("""^$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$""")
 
         // Absolute date+time patterns
+        // "tonight" is a single token, so it can't go through the day-word + time-of-day patterns.
+        private val tonightPattern = Regex("""\btonight\b""")
         private val dayWordTimeOfDayPattern = Regex("""(today|tomorrow|this)\s+(morning|afternoon|evening|night)""")
         private val dayOfWeekTimeOfDayPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(morning|afternoon|evening|night)""")
         private val dayWordTimePattern = Regex("""(today|tomorrow)\s+at\s+(.+)""")
@@ -609,6 +616,9 @@ class HumanDateTimeParser(
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
+            Regex("""tonight\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
+            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+tonight"""),
+            Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+tonight"""),
             Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR"""),
@@ -627,6 +637,7 @@ class HumanDateTimeParser(
             Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
             Regex("""\b\d{1,2}/\d{1,2}\b"""),
             Regex("""\b(?:$DAY_WORD_EXPR)\b"""),
+            Regex("""\btonight\b"""),
             Regex("""\b$DAY_OF_WEEK_EXPR\b"""),
             // Upcoming weekend. Unsupported past/recurring qualifiers ("last", "every", "this past")
             // are captured too so the candidate fails parse() and is skipped, rather than silently

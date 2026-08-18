@@ -1648,4 +1648,97 @@ class HumanDateTimeParserTest {
         assertIs<InterpretedDateTime.Relative>(result)
         assertEquals(DatePeriod(years = 1), result.period)
     }
+
+    // ===== "TONIGHT" TESTS =====
+
+    @Test
+    fun testTonightAlone() {
+        val result = parser.parse("tonight")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 21, 0), result.dateTime)
+    }
+
+    @Test
+    fun testExplicitTimeBeforeTonight() {
+        val result = parser.parse("8 p.m. tonight")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 20, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAtExplicitTimeBeforeTonight() {
+        val result = parser.parse("at 8 p.m. tonight")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 20, 0), result.dateTime)
+    }
+
+    @Test
+    fun testTonightAtExplicitTime() {
+        val result = parser.parse("tonight at 8 p.m.")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 20, 0), result.dateTime)
+    }
+
+    @Test
+    fun testTonightAtBareHourShiftsToPm() {
+        val result = parser.parse("tonight at 8")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 20, 0), result.dateTime)
+    }
+
+    @Test
+    fun testTonightWithMinutes() {
+        val result = parser.parse("tonight at 8:30")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 20, 30), result.dateTime)
+    }
+
+    @Test
+    fun testLaterTonight() {
+        val result = parser.parse("later tonight")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 15, 21, 0), result.dateTime)
+    }
+
+    @Test
+    fun testTomorrowNightNotTreatedAsTonight() {
+        val result = parser.parse("tomorrow night")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 21, 0), result.dateTime)
+    }
+
+    @Test
+    fun testParseFromMessageExtractsExplicitTimeBeforeTonight() {
+        val result = parser.parseFromMessage(
+            "remind me to take the sheets off the bed and prepare for the mattress delivery at 8 p.m. tonight"
+        )
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result?.dateTime)
+        assertEquals(
+            LocalDateTime(2025, 1, 15, 20, 0),
+            (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime
+        )
+        assertEquals("at 8 p.m. tonight", result.matchedText.lowercase())
+    }
+
+    @Test
+    fun testParseFromMessageExtractsTonightAtBareHour() {
+        val result = parser.parseFromMessage("remind me tonight at 8 to take the bins out")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result?.dateTime)
+        assertEquals(
+            LocalDateTime(2025, 1, 15, 20, 0),
+            (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime
+        )
+        assertEquals("tonight at 8", result.matchedText.lowercase())
+    }
+
+    @Test
+    fun testParseFromMessageExtractsBareTonight() {
+        val result = parser.parseFromMessage("remind me tonight to take the bins out")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result?.dateTime)
+        assertEquals(
+            LocalDateTime(2025, 1, 15, 21, 0),
+            (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime
+        )
+        assertEquals("tonight", result.matchedText.lowercase())
+    }
 }

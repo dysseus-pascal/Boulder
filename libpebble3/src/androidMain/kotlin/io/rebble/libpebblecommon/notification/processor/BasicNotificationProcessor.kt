@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.notification.extractAttachment
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
+import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.stripBidiIsolates
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -41,6 +42,7 @@ class BasicNotificationProcessor(
     private val context: AppContext,
     private val contactDao: ContactDao,
     private val vibePatternDao: VibePatternDao,
+    private val privateLogger: PrivateLogger,
 ) : NotificationProcessor {
     override suspend fun extractNotification(
         sbn: StatusBarNotification,
@@ -68,6 +70,7 @@ class BasicNotificationProcessor(
         val attachment = sbn.extractAttachment(
             context = context.context,
             includeImage = notificationConfigFlow.value.sendNotificationImages && app.sendImages,
+            privateLogger = privateLogger,
         )
         val body = stripBidiIsolates(attachment.caption ?: bigText ?: text) ?: ""
         val people = sbn.notification.people()

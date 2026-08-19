@@ -11,6 +11,7 @@ import android.os.Build
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.util.PrivateLogger
 
 private val logger = Logger.withTag("NotificationImage")
 
@@ -58,8 +59,9 @@ data class NotificationAttachment(
 fun StatusBarNotification.extractAttachment(
     context: Context,
     includeImage: Boolean,
+    privateLogger: PrivateLogger,
 ): NotificationAttachment {
-    val batch = messageBatch()
+    val batch = messageBatch(privateLogger)
     val image = if (!includeImage) {
         null
     } else {
@@ -92,13 +94,13 @@ private fun StatusBarNotification.bigPicture(context: Context): Bitmap? {
     return (icon.loadDrawable(context) as? BitmapDrawable)?.bitmap
 }
 
-private fun StatusBarNotification.messageBatch(): List<NotificationCompat.MessagingStyle.Message> {
+private fun StatusBarNotification.messageBatch(privateLogger: PrivateLogger): List<NotificationCompat.MessagingStyle.Message> {
     val messages = NotificationCompat.MessagingStyle
         .extractMessagingStyleFromNotification(notification)
         ?.messages
     val newest = messages?.lastOrNull()
     if (newest == null) {
-        logger.v { "$packageName: not a MessagingStyle notification" }
+        logger.v { "${privateLogger.obfuscate(packageName)}: not a MessagingStyle notification" }
         return emptyList()
     }
     val batch = messages.asReversed().takeWhile {

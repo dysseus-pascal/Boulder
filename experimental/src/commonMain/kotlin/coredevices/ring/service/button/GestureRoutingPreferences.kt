@@ -66,6 +66,7 @@ private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.NextTrack -> "next_track"
     GestureDestination.IndexAgent -> "index_agent"
     GestureDestination.WebSearch -> "web_search"
+    GestureDestination.WebhookOnly -> "webhook_only"
     GestureDestination.Nothing -> "nothing"
     is GestureDestination.McpSandbox -> SANDBOX_PREFIX + (groupId?.toString() ?: "")
 }
@@ -77,6 +78,7 @@ private fun decodeDestination(raw: String): GestureDestination? = when {
     raw == "next_track" -> GestureDestination.NextTrack
     raw == "index_agent" -> GestureDestination.IndexAgent
     raw == "web_search" -> GestureDestination.WebSearch
+    raw == "webhook_only" -> GestureDestination.WebhookOnly
     raw == "nothing" -> GestureDestination.Nothing
     else -> null
 }

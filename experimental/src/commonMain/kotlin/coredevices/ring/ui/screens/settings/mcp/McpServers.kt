@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -43,15 +44,17 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
-import coredevices.indexai.data.McpServerDefinition
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
 import coredevices.mcp.data.McpPrompt
+import coredevices.ring.agent.IndexAction
 import coredevices.ring.database.room.repository.McpServerEntry
 import coredevices.ring.ui.PreviewWrapper
+import coredevices.ring.agent.BuiltinServletRepository
+import org.koin.compose.koinInject
 import coredevices.ui.M3Dialog
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import kotlinx.coroutines.delay
@@ -64,7 +67,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 fun McpServersTab(
     serverEntries: StateFlow<List<McpServerEntry>>,
-    unsupportedServers: StateFlow<List<McpServerDefinition>>,
+    builtinActions: StateFlow<List<IndexAction>>,
     allGroups: StateFlow<List<McpSandboxGroupEntity>>,
     defaultGroupId: Long,
     builtinTitle: (String) -> String,
@@ -72,12 +75,13 @@ fun McpServersTab(
     onDismissAddServerDialog: () -> Unit,
     loadGroupIds: suspend (McpServerEntry) -> Set<Long>,
     onSaveHttpServer: (HttpMcpServerEntity, Set<Long>) -> Unit,
+    onSetActionEnabled: (String, Boolean) -> Unit,
     onSetBuiltinGroups: (String, Set<Long>) -> Unit,
     onDeleteHttpServer: (HttpMcpServerEntity) -> Unit,
 ) {
     val entries by serverEntries.collectAsState()
+    val actions by builtinActions.collectAsState()
     val groups by allGroups.collectAsState()
-    val unsupported by unsupportedServers.collectAsState()
     var editingEntry by remember { mutableStateOf<McpServerEntry?>(null) }
     var editingGroupIds by remember { mutableStateOf<Set<Long>?>(null) }
 
@@ -152,15 +156,11 @@ fun McpServersTab(
             McpServerEntryItem(
                 entry = entry,
                 builtinTitle = builtinTitle,
+                action = (entry as? McpServerEntry.BuiltinMcpEntry)?.let { builtin ->
+                    actions.firstOrNull { it.name == builtin.builtinMcpName }
+                },
+                onSetActionEnabled = onSetActionEnabled,
                 onClick = { editingEntry = entry }
-            )
-        }
-        items(unsupported.size) { index ->
-            val item = unsupported[index]
-            ListItem(
-                overlineContent = { Text("Built-in") },
-                headlineContent = { Text(item.title) },
-                supportingContent = { Text("Only available on Android") }
             )
         }
     }
@@ -235,7 +235,7 @@ private fun BuiltinGroupsDialog(
     onDismiss: () -> Unit,
     onConfirm: (Set<Long>) -> Unit
 ) {
-    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
+    var selectedGroupIds by remember(initialGroupIds) { mutableStateOf(initialGroupIds) }
     M3Dialog(
         onDismissRequest = onDismiss,
         title = {
@@ -270,7 +270,7 @@ private fun BuiltinGroupsDialog(
 }
 
 @Composable
-private fun HttpServerEditDialog(
+internal fun HttpServerEditDialog(
     initialServer: HttpMcpServerEntity?,
     allGroups: List<McpSandboxGroupEntity>,
     initialGroupIds: Set<Long>,
@@ -451,16 +451,7 @@ private fun HttpServerEditDialog(
                 allGroups = allGroups,
                 selectedGroupIds = selectedGroupIds,
                 onSelectionChange = { selectedGroupIds = it },
-                // Index Agent groups ignore HTTP servers, so only allow removal there
-                // (associations may exist from before a group's model type changed)
-                optionEnabled = { group, isSelected ->
-                    isSelected || group.modelType != SandboxModelType.IndexAgent
-                }
-            )
-            Text(
-                text = "HTTP servers can't be added to Index Agent groups as they would be ignored",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                optionEnabled = { _, _ -> true }
             )
             Spacer(Modifier.height(8.dp))
             Row(
@@ -562,6 +553,8 @@ private fun HttpServerEditDialog(
 fun McpServerEntryItem(
     entry: McpServerEntry,
     builtinTitle: (String) -> String,
+    action: IndexAction? = null,
+    onSetActionEnabled: (String, Boolean) -> Unit = { _, _ -> },
     onClick: (McpServerEntry) -> Unit = { },
 ) {
     ListItem(
@@ -587,10 +580,17 @@ fun McpServerEntryItem(
         },
         supportingContent = {
             when (entry) {
-                is McpServerEntry.HttpServerEntry -> {
-                    Text(entry.server.url)
-                }
-                else -> {}
+                is McpServerEntry.HttpServerEntry -> Text(entry.server.url)
+                is McpServerEntry.BuiltinMcpEntry -> action?.disabledReason?.let { Text(it) }
+            }
+        },
+        trailingContent = {
+            if (action != null) {
+                Switch(
+                    checked = action.enabled,
+                    enabled = action.disabledReason == null,
+                    onCheckedChange = { onSetActionEnabled(action.name, it) }
+                )
             }
         }
     )
@@ -611,9 +611,9 @@ private fun McpServersTabPreview() {
                     McpServerEntry.BuiltinMcpEntry("builtin-1"),
                 )
             ),
-            unsupportedServers = MutableStateFlow(listOf(
-                McpServerDefinition(name = "unsupported-1", title = "Unsupported Server")
-            )),
+            builtinActions = MutableStateFlow(
+                listOf(IndexAction("builtin-1", "Note Creation", enabled = true))
+            ),
             allGroups = MutableStateFlow(previewGroups),
             defaultGroupId = 1L,
             builtinTitle = { "Note Creation" },
@@ -621,6 +621,7 @@ private fun McpServersTabPreview() {
             onDismissAddServerDialog = {},
             loadGroupIds = { emptySet() },
             onSaveHttpServer = { _, _ -> },
+            onSetActionEnabled = { _, _ -> },
             onSetBuiltinGroups = { _, _ -> },
             onDeleteHttpServer = {}
         )
@@ -678,5 +679,17 @@ private fun HttpServerEditDialogEditPreview() {
             onConfirm = { _, _ -> },
             onDelete = {}
         )
+    }
+}
+
+/** Built-ins are stored by internal name; show the user-facing one. */
+@Composable
+private fun builtinTitle(builtinMcpName: String): String {
+    val servletRepository = koinInject<BuiltinServletRepository>()
+    return remember(builtinMcpName) {
+        servletRepository.getAllServlets()
+            .firstOrNull { it.name == builtinMcpName }
+            ?.title
+            ?: builtinMcpName
     }
 }

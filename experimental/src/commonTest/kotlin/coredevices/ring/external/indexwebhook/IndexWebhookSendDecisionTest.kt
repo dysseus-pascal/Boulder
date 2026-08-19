@@ -1,7 +1,7 @@
 package coredevices.ring.external.indexwebhook
 
-import coredevices.ring.service.ButtonPress
-import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.service.button.GestureDestination
+import coredevices.ring.service.button.RingGesture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,55 +12,42 @@ class IndexWebhookSendDecisionTest {
     private val configured = IndexWebhookConfig(url = "https://example.com/hook", saved = true)
 
     @Test
-    fun aSavedConfigWithAUrlSends() {
-        assertTrue(configured.isActive)
+    fun webhookOnlyRouteSendsWhenConfigured() {
+        assertTrue(configured.sendsFor(GestureDestination.WebhookOnly))
+    }
+
+    @Test
+    fun webhookOnlyRouteSendsNothingWithoutAConfig() {
+        assertFalse(IndexWebhookConfig().sendsFor(GestureDestination.WebhookOnly))
+    }
+
+    @Test
+    fun otherRoutesSendAlongsideTheirMainDestination() {
+        assertTrue(configured.sendsFor(GestureDestination.IndexAgent))
+        assertTrue(configured.sendsFor(GestureDestination.WebSearch))
+        assertTrue(configured.sendsFor(GestureDestination.McpSandbox(7L)))
+    }
+
+    @Test
+    fun otherRoutesDoNotSendWithoutAConfig() {
+        assertFalse(IndexWebhookConfig().sendsFor(GestureDestination.IndexAgent))
+    }
+
+    @Test
+    fun aGestureRoutedToNothingNeverSends() {
+        assertFalse(configured.sendsFor(GestureDestination.Nothing))
     }
 
     @Test
     fun anUnsavedOrUrllessDraftNeverSends() {
-        assertFalse(IndexWebhookConfig().isActive)
-        assertFalse(configured.copy(saved = false).isActive)
-        assertFalse(configured.copy(url = null).isActive)
-        assertFalse(configured.copy(url = "  ").isActive)
+        assertFalse(configured.copy(saved = false).sendsFor(GestureDestination.IndexAgent))
+        assertFalse(configured.copy(url = null).sendsFor(GestureDestination.IndexAgent))
+        assertFalse(configured.copy(url = "  ").sendsFor(GestureDestination.IndexAgent))
     }
 
     @Test
-    fun onlyShortThenLongSendsOnTheDoubleClickHoldConfig() {
-        assertEquals(
-            IndexWebhookRecordingTrigger.DoubleClickHold,
-            RecordingOperationFactory.webhookGestureFor(
-                listOf(ButtonPress.Short, ButtonPress.Long)
-            ),
-        )
-        assertEquals(
-            IndexWebhookRecordingTrigger.SingleClickHold,
-            RecordingOperationFactory.webhookGestureFor(listOf(ButtonPress.Long)),
-        )
-    }
-
-    @Test
-    fun aRecordingWithNoButtonSequenceStillSendsOnHoldAndTalk() {
-        assertEquals(
-            IndexWebhookRecordingTrigger.SingleClickHold,
-            RecordingOperationFactory.webhookGestureFor(null),
-        )
-    }
-
-    @Test
-    fun savingAGestureThatWasSwitchedOffLeavesItOff() {
-        assertFalse(
-            IndexWebhookSettingsViewModel.enabledAfterSave(configured.copy(saved = false))
-        )
-        assertTrue(IndexWebhookSettingsViewModel.enabledAfterSave(configured))
-    }
-
-    @Test
-    fun savingAGestureForTheFirstTimeEnablesIt() {
-        assertTrue(IndexWebhookSettingsViewModel.enabledAfterSave(IndexWebhookConfig()))
-        assertTrue(
-            IndexWebhookSettingsViewModel.enabledAfterSave(
-                IndexWebhookConfig(url = "  ", headers = mapOf("X-A" to "1"))
-            )
-        )
+    fun triggerHeaderValuesAreStable() {
+        assertEquals("single-click-hold", RingGesture.Hold.webhookTriggerValue)
+        assertEquals("double-click-hold", RingGesture.ClickHold.webhookTriggerValue)
     }
 }

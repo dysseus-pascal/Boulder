@@ -30,6 +30,7 @@ sealed interface GestureDestination {
     data object IndexAgent : Recording
     data object WebSearch : Recording
     data class McpSandbox(val groupId: Long?) : Recording
+    data object WebhookOnly : Recording
     data object Nothing : Music, Recording
 }
 
@@ -59,6 +60,7 @@ fun musicRoutesFor(mode: MusicControlMode): Map<RingGesture, GestureDestination.
 fun recordingRouteFor(mode: SecondaryMode, mcpGroupId: Long?): GestureDestination.Recording = when (mode) {
     SecondaryMode.Disabled -> GestureDestination.IndexAgent
     SecondaryMode.Search -> GestureDestination.WebSearch
+    SecondaryMode.IndexWebhook -> GestureDestination.WebhookOnly
     SecondaryMode.McpSandbox -> GestureDestination.McpSandbox(mcpGroupId)
 }
 

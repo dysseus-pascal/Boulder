@@ -62,7 +62,9 @@ import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.SecondaryMode
+import coredevices.ring.service.button.GestureDestination
+import coredevices.ring.service.button.RingGesture
+import coredevices.ring.service.button.musicRoutesFor
 import coredevices.ring.ui.screens.settings.EncryptionKeyResultDialogs
 import coredevices.ring.ui.screens.settings.EncryptionSetupDialog
 import coredevices.ring.ui.screens.settings.GTasksDialog
@@ -108,8 +110,10 @@ internal fun SetupStep(
 ) {
     BackHandler { onBack() }
     val palette = LocalPalette.current
-    val musicControlMode by viewModel.musicControlMode.collectAsState()
-    val secondaryMode by viewModel.secondaryMode.collectAsState()
+    val gestureRoutes by viewModel.gestureRoutes.collectAsState()
+    val musicPresetSelected = { mode: MusicControlMode ->
+        musicRoutesFor(mode).all { (gesture, destination) -> gestureRoutes[gesture] == destination }
+    }
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
@@ -318,25 +322,25 @@ internal fun SetupStep(
                 PressTile(
                     label = "Disabled",
                     pattern = PressPattern.None,
-                    selected = musicControlMode == MusicControlMode.Disabled,
+                    selected = musicPresetSelected(MusicControlMode.Disabled),
                     enabled = musicEnabled,
-                    onClick = { viewModel.setMusicControlMode(MusicControlMode.Disabled) },
+                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.Disabled)) },
                     modifier = Modifier.weight(1f),
                 )
                 PressTile(
                     label = "Single",
                     pattern = PressPattern.Single,
-                    selected = musicControlMode == MusicControlMode.SingleClick,
+                    selected = musicPresetSelected(MusicControlMode.SingleClick),
                     enabled = musicEnabled,
-                    onClick = { viewModel.setMusicControlMode(MusicControlMode.SingleClick) },
+                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.SingleClick)) },
                     modifier = Modifier.weight(1f),
                 )
                 PressTile(
                     label = "Double",
                     pattern = PressPattern.Double,
-                    selected = musicControlMode == MusicControlMode.DoubleClick,
+                    selected = musicPresetSelected(MusicControlMode.DoubleClick),
                     enabled = musicEnabled,
-                    onClick = { viewModel.setMusicControlMode(MusicControlMode.DoubleClick) },
+                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.DoubleClick)) },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -355,15 +359,19 @@ internal fun SetupStep(
                 PressTile(
                     label = "Disabled",
                     pattern = PressPattern.None,
-                    selected = secondaryMode == SecondaryMode.Disabled,
-                    onClick = { viewModel.setSecondaryMode(SecondaryMode.Disabled) },
+                    selected = gestureRoutes[RingGesture.ClickHold] == GestureDestination.IndexAgent,
+                    onClick = {
+                        viewModel.setGestureRoute(RingGesture.ClickHold, GestureDestination.IndexAgent)
+                    },
                     modifier = Modifier.weight(1f),
                 )
                 PressTile(
                     label = "Search",
                     pattern = PressPattern.ShortHold,
-                    selected = secondaryMode == SecondaryMode.Search,
-                    onClick = { viewModel.setSecondaryMode(SecondaryMode.Search) },
+                    selected = gestureRoutes[RingGesture.ClickHold] == GestureDestination.WebSearch,
+                    onClick = {
+                        viewModel.setGestureRoute(RingGesture.ClickHold, GestureDestination.WebSearch)
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }

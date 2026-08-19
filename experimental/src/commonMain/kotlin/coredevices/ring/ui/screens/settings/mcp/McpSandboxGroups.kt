@@ -52,7 +52,7 @@ import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
-import coredevices.ring.agent.BuiltinServletRepository
+import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
@@ -75,10 +75,16 @@ import org.koin.core.parameter.parametersOf
 
 class McpSandboxGroupsViewModel(
     val mcpSandboxRepository: McpSandboxRepository,
-    val builtinServletRepository: BuiltinServletRepository,
+    private val indexActionsRepository: IndexActionsRepository,
     private val preferences: Preferences,
     private val snackbarHostState: SnackbarHostState,
 ): ViewModel() {
+    val builtinActions = indexActionsRepository.actions.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
     val sandboxGroups = mcpSandboxRepository.getAllGroupsFlow().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -94,7 +100,6 @@ class McpSandboxGroupsViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
     )
-    val unsupportedDefinitions = MutableStateFlow(builtinServletRepository.getUnsupportedServlets())
 
     fun updateModelType(groupId: Long, modelType: SandboxModelType) {
         viewModelScope.launch {
@@ -127,6 +132,12 @@ class McpSandboxGroupsViewModel(
     fun saveHttpServer(server: HttpMcpServerEntity, groupIds: Set<Long>) {
         viewModelScope.launch {
             mcpSandboxRepository.addOrUpdateHttpServer(server, groupIds)
+        }
+    }
+
+    fun setActionEnabled(builtinMcpName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            indexActionsRepository.setActionEnabled(builtinMcpName, enabled)
         }
     }
 
@@ -232,14 +243,15 @@ fun McpSandboxGroups(coreNav: CoreNav) {
                 )
                 SERVERS_TAB -> McpServersTab(
                     serverEntries = vm.serverEntries,
+                    builtinActions = vm.builtinActions,
                     allGroups = vm.sandboxGroups,
-                    unsupportedServers = vm.unsupportedDefinitions,
                     defaultGroupId = defaultGroupId,
                     builtinTitle = { builtinTitles[it] ?: it },
                     showAddServerDialog = showAddServerDialog,
                     onDismissAddServerDialog = { showAddServerDialog = false },
                     loadGroupIds = vm::groupIdsForEntry,
                     onSaveHttpServer = vm::saveHttpServer,
+                    onSetActionEnabled = vm::setActionEnabled,
                     onSetBuiltinGroups = vm::setBuiltinGroups,
                     onDeleteHttpServer = vm::deleteHttpServer
                 )

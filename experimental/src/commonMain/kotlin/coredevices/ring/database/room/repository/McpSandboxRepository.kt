@@ -13,9 +13,12 @@ import coredevices.indexai.database.dao.HttpMcpGroupAssociationDao
 import coredevices.indexai.database.dao.HttpMcpServerDao
 import coredevices.indexai.database.dao.McpSandboxGroupDao
 import coredevices.ring.database.room.RingDatabase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class McpSandboxRepository(
@@ -24,7 +27,7 @@ class McpSandboxRepository(
     private val httpMcpServerDao: HttpMcpServerDao,
     private val httpMcpGroupAssociationDao: HttpMcpGroupAssociationDao,
     private val builtinMcpRepository: ServletRepository,
-    private val db: RingDatabase
+    private val db: RingDatabase,
 ) {
     fun getAllGroupsFlow() = groupDao.getAllFlow()
 
@@ -71,6 +74,19 @@ class McpSandboxRepository(
             builtinMcpRepository.getAllServlets().map { McpServerEntry.BuiltinMcpEntry(it.name) } +
                 servers.map { McpServerEntry.HttpServerEntry(it) }
         }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun defaultGroupEntriesFlow(): Flow<List<McpServerEntry>> =
+        getDefaultGroupFlow().flatMapLatest { group ->
+            if (group == null) flowOf(emptyList()) else getMcpServerEntriesForGroup(group.id)
+        }
+
+    suspend fun setBuiltinEnabledInDefaultGroup(builtinName: String, enabled: Boolean) {
+        val entry = McpServerEntry.BuiltinMcpEntry(builtinName)
+        val defaultGroupId = getDefaultGroupId()
+        val groups = getGroupIdsForEntry(entry)
+        setGroupsForEntry(entry, if (enabled) groups + defaultGroupId else groups - defaultGroupId)
     }
 
     suspend fun getGroupIdsForEntry(entry: McpServerEntry): Set<Long> {
@@ -144,7 +160,9 @@ class McpSandboxRepository(
     }
 
     suspend fun seedDatabase() {
-        val builtinMcpNames = builtinMcpRepository.getAllServlets().map { it.name }
+        val builtinMcpNames = builtinMcpRepository.getAllServlets()
+            .filter { it.available }
+            .map { it.name }
         db.useWriterConnection { connection ->
             connection.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
                 seedDefaultGroup(groupDao, builtinAssociationDao, builtinMcpNames)

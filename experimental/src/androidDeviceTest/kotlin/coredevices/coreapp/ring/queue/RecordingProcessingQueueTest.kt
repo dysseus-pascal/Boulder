@@ -259,18 +259,14 @@ class RecordingProcessingQueueTest {
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
-                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
+                    gesture: coredevices.ring.service.button.RingGesture,
                 ) {}
                 override suspend fun sendTestEvent(
-                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
+                    gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
-                    ok = false,
-                    status = "DISABLED",
-                    detail = "",
-                    byteSize = 0L,
-                    durationMs = 0L,
+                    ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
             }
         } bind IndexWebhookApi::class

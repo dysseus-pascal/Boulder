@@ -104,8 +104,8 @@ object TestUtil {
         val koin = KoinPlatform.getKoin()
         val builtinMcpRepository: BuiltinServletRepository = koin.get()
         val scope = CoroutineScope(Dispatchers.Default)
-        val mcpIntegrations = builtinMcpRepository.getAllServlets().map {
-            builtinMcpRepository.resolveName(it.name)!!
+        val mcpIntegrations = builtinMcpRepository.getAllServlets().mapNotNull {
+            builtinMcpRepository.resolveName(it.name)
         }
         return McpSession(
             integrations = mcpIntegrations,

@@ -1,6 +1,9 @@
 package coredevices.ring.external.indexwebhook
 
 import com.russhwolf.settings.Settings
+import coredevices.ring.service.button.GestureDestination
+import coredevices.ring.service.button.GestureKind
+import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
@@ -30,9 +33,16 @@ data class IndexWebhookConfig(
     val headers: Map<String, String> = emptyMap(),
     val saved: Boolean = false,
 ) {
-    /** A config only sends — and only counts as configured — once saved with a url. */
     val isActive: Boolean get() = saved && !url.isNullOrBlank()
 }
+
+/**
+ * A recording gesture sends to its webhook when it is routed straight there
+ * ([GestureDestination.WebhookOnly]) or when a saved config sits alongside another
+ * destination. A gesture routed to [GestureDestination.Nothing] never sends.
+ */
+fun IndexWebhookConfig.sendsFor(destination: GestureDestination.Recording): Boolean =
+    isActive && destination != GestureDestination.Nothing
 
 /**
  * Stores one [IndexWebhookConfig] per recording gesture.
@@ -52,10 +62,12 @@ class IndexWebhookPreferences(private val settings: Settings) {
         // Header name the auth token used to be hardcoded to before headers were user-settable.
         private const val LEGACY_TOKEN_HEADER = "X-Widget-Token"
 
-        // Ids of the old IndexWebhookTrigger enum, which defaulted to DoubleClickHold when unset.
-        private const val LEGACY_TRIGGER_SINGLE_CLICK = 0
-        private const val LEGACY_TRIGGER_DOUBLE_CLICK_HOLD = 1
-        private const val LEGACY_TRIGGER_BOTH = 2
+        internal val TRIGGER_KEYED_NAMES = mapOf(
+            "SingleClickHold" to RingGesture.Hold,
+            "DoubleClickHold" to RingGesture.ClickHold,
+        )
+
+        val gestures = RingGesture.entries.filter { it.kind == GestureKind.Recording }
 
         private val json = Json { ignoreUnknownKeys = true }
         private val legacyHeadersSerializer = MapSerializer(String.serializer(), String.serializer())
@@ -64,29 +76,30 @@ class IndexWebhookPreferences(private val settings: Settings) {
     private val _configs = MutableStateFlow(migrateAndLoad())
     val configs = _configs.asStateFlow()
 
-    fun configFor(gesture: IndexWebhookRecordingTrigger): IndexWebhookConfig =
+    fun configFor(gesture: RingGesture): IndexWebhookConfig =
         _configs.value[gesture] ?: IndexWebhookConfig()
 
-    fun setConfig(gesture: IndexWebhookRecordingTrigger, config: IndexWebhookConfig) {
+    fun setConfig(gesture: RingGesture, config: IndexWebhookConfig) {
         settings.putString(configKey(gesture), json.encodeToString(config))
         _configs.value = _configs.value + (gesture to config)
     }
 
-    fun clear(gesture: IndexWebhookRecordingTrigger) {
+    fun clear(gesture: RingGesture) {
         settings.remove(configKey(gesture))
         _configs.value = _configs.value + (gesture to IndexWebhookConfig())
     }
 
     /** Toggles sending without losing the stored url/headers, so re-enabling restores them. */
-    fun setEnabled(gesture: IndexWebhookRecordingTrigger, enabled: Boolean) {
+    fun setEnabled(gesture: RingGesture, enabled: Boolean) {
         setConfig(gesture, configFor(gesture).copy(saved = enabled))
     }
 
-    private fun configKey(gesture: IndexWebhookRecordingTrigger) = CONFIG_KEY_PREFIX + gesture.name
+    private fun configKey(gesture: RingGesture) = CONFIG_KEY_PREFIX + gesture.name
 
-    private fun migrateAndLoad(): Map<IndexWebhookRecordingTrigger, IndexWebhookConfig> {
+    private fun migrateAndLoad(): Map<RingGesture, IndexWebhookConfig> {
         migrateLegacySingleConfig()
-        return IndexWebhookRecordingTrigger.entries.associateWith { gesture ->
+        migrateTriggerKeyedConfigs()
+        return gestures.associateWith { gesture ->
             settings.getStringOrNull(configKey(gesture))
                 ?.let {
                     try {
@@ -99,7 +112,18 @@ class IndexWebhookPreferences(private val settings: Settings) {
         }
     }
 
-    /** The single legacy webhook only carries over to the gestures its old trigger fired on. */
+    /** Configs were briefly keyed by the webhook's own trigger enum; re-key them onto the gesture. */
+    private fun migrateTriggerKeyedConfigs() {
+        TRIGGER_KEYED_NAMES.forEach { (triggerName, gesture) ->
+            val stored = settings.getStringOrNull(CONFIG_KEY_PREFIX + triggerName) ?: return@forEach
+            if (settings.getStringOrNull(configKey(gesture)) == null) {
+                settings.putString(configKey(gesture), stored)
+            }
+            settings.remove(CONFIG_KEY_PREFIX + triggerName)
+        }
+    }
+
+    /** The single legacy webhook applies to every recording gesture, whatever its old trigger was. */
     private fun migrateLegacySingleConfig() {
         val url = settings.getStringOrNull(LEGACY_URL_KEY)
         if (url != null) {
@@ -111,9 +135,7 @@ class IndexWebhookPreferences(private val settings: Settings) {
                 headers = legacyHeaders(),
                 saved = true,
             )
-            legacyGestures().forEach {
-                settings.putString(configKey(it), json.encodeToString(config))
-            }
+            gestures.forEach { settings.putString(configKey(it), json.encodeToString(config)) }
         }
         listOf(
             LEGACY_URL_KEY,
@@ -123,13 +145,6 @@ class IndexWebhookPreferences(private val settings: Settings) {
             LEGACY_TRIGGER_KEY,
         ).forEach { settings.remove(it) }
     }
-
-    private fun legacyGestures(): List<IndexWebhookRecordingTrigger> =
-        when (settings.getInt(LEGACY_TRIGGER_KEY, LEGACY_TRIGGER_DOUBLE_CLICK_HOLD)) {
-            LEGACY_TRIGGER_SINGLE_CLICK -> listOf(IndexWebhookRecordingTrigger.SingleClickHold)
-            LEGACY_TRIGGER_BOTH -> IndexWebhookRecordingTrigger.entries
-            else -> listOf(IndexWebhookRecordingTrigger.DoubleClickHold)
-        }
 
     private fun legacyHeaders(): Map<String, String> {
         val raw = settings.getStringOrNull(LEGACY_HEADERS_KEY)

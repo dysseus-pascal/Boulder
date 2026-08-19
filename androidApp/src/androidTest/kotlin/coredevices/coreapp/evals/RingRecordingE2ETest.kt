@@ -37,7 +37,6 @@ import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
-import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -662,18 +661,14 @@ class RingRecordingE2ETest {
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
-                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
+                    gesture: coredevices.ring.service.button.RingGesture,
                 ) {}
                 override suspend fun sendTestEvent(
-                    gesture: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger,
+                    gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
-                    ok = false,
-                    status = "DISABLED",
-                    detail = "",
-                    byteSize = 0L,
-                    durationMs = 0L,
+                    ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
             }
         } bind IndexWebhookApi::class
@@ -681,7 +676,6 @@ class RingRecordingE2ETest {
             SharedPreferencesSettings(context.getSharedPreferences("e2e_test_prefs", Context.MODE_PRIVATE))
         }
         singleOf(::IndexWebhookPreferences)
-        singleOf(::GestureRoutingPreferences)
 
         // Queue
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }

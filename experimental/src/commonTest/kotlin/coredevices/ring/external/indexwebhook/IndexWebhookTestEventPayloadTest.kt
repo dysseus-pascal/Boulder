@@ -23,7 +23,7 @@ class IndexWebhookTestEventPayloadTest {
         assertEquals(
             "--BOUNDARY\r\n" +
                 "Content-Disposition: form-data; name=\"transcription\"\r\n\r\n" +
-                "$WEBHOOK_TEST_TRANSCRIPTION\r\n" +
+                "Index webhook test event\r\n" +
                 "--BOUNDARY\r\n" +
                 "Content-Disposition: form-data; name=\"test\"\r\n\r\n" +
                 "true\r\n" +
@@ -59,7 +59,7 @@ class IndexWebhookTestEventPayloadTest {
     fun testEventTriggerValueIsDistinctFromEveryGestureValue() {
         assertEquals("test-event", WEBHOOK_TEST_TRIGGER)
         assertTrue(
-            IndexWebhookRecordingTrigger.entries.none { it.headerValue == WEBHOOK_TEST_TRIGGER }
+            IndexWebhookPreferences.gestures.none { it.webhookTriggerValue == WEBHOOK_TEST_TRIGGER }
         )
     }
 }

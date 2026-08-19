@@ -25,6 +25,7 @@ enum class DefaultCaptureType(
     }
 }
 
+/** Built-in tool and JSON arguments a forced fallback capture runs. */
 data class FallbackToolCall(val toolName: String, val arguments: String)
 
 fun DefaultCaptureType.fallbackToolCall(messageText: String): FallbackToolCall = when (this) {

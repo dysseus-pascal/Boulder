@@ -1,6 +1,7 @@
 package coredevices.ring.external.indexwebhook
 
 import com.russhwolf.settings.MapSettings
+import coredevices.ring.service.button.RingGesture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,63 +15,35 @@ class IndexWebhookPreferencesTest {
     private val payloadModeKey = "index_webhook_payload_mode"
     private val triggerKey = "index_webhook_trigger"
 
-    private val legacyConfig = IndexWebhookConfig(
-        url = "https://example.com/hook",
-        payloadMode = IndexWebhookPayloadMode.Both,
-        headers = mapOf("Authorization" to "Bearer abc"),
-        saved = true,
-    )
+    @Test
+    fun recordingGesturesAreHoldAndClickHold() {
+        assertEquals(
+            listOf(RingGesture.Hold, RingGesture.ClickHold),
+            IndexWebhookPreferences.gestures,
+        )
+    }
 
-    private fun legacySettings(trigger: Int?): MapSettings {
+    @Test
+    fun legacySingleConfigIsCopiedToEveryRecordingGesture() {
         val settings = MapSettings(
             urlKey to "https://example.com/hook",
             headersKey to """{"Authorization":"Bearer abc"}""",
             payloadModeKey to IndexWebhookPayloadMode.Both.id,
+            // The old trigger only fired on double click and hold; both gestures still inherit it.
+            triggerKey to 1,
         )
-        trigger?.let { settings.putInt(triggerKey, it) }
-        return settings
-    }
 
-    @Test
-    fun aLegacyDoubleClickHoldTriggerLeavesHoldAndTalkUnconfigured() {
-        val prefs = IndexWebhookPreferences(legacySettings(trigger = 1))
+        val prefs = IndexWebhookPreferences(settings)
 
-        assertEquals(legacyConfig, prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold))
-        assertEquals(
-            IndexWebhookConfig(),
-            prefs.configFor(IndexWebhookRecordingTrigger.SingleClickHold),
+        val expected = IndexWebhookConfig(
+            url = "https://example.com/hook",
+            payloadMode = IndexWebhookPayloadMode.Both,
+            headers = mapOf("Authorization" to "Bearer abc"),
+            saved = true,
         )
-    }
-
-    @Test
-    fun aLegacySingleClickTriggerLeavesDoubleClickHoldUnconfigured() {
-        val prefs = IndexWebhookPreferences(legacySettings(trigger = 0))
-
-        assertEquals(legacyConfig, prefs.configFor(IndexWebhookRecordingTrigger.SingleClickHold))
-        assertEquals(
-            IndexWebhookConfig(),
-            prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold),
-        )
-    }
-
-    @Test
-    fun aLegacyBothTriggerMigratesEveryGesture() {
-        val prefs = IndexWebhookPreferences(legacySettings(trigger = 2))
-
-        IndexWebhookRecordingTrigger.entries.forEach {
-            assertEquals(legacyConfig, prefs.configFor(it))
-        }
-    }
-
-    @Test
-    fun aMissingLegacyTriggerMigratesAsDoubleClickHoldOnly() {
-        val prefs = IndexWebhookPreferences(legacySettings(trigger = null))
-
-        assertEquals(legacyConfig, prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold))
-        assertEquals(
-            IndexWebhookConfig(),
-            prefs.configFor(IndexWebhookRecordingTrigger.SingleClickHold),
-        )
+        assertEquals(expected, prefs.configFor(RingGesture.Hold))
+        assertEquals(expected, prefs.configFor(RingGesture.ClickHold))
+        assertTrue(prefs.configFor(RingGesture.Hold).isActive)
     }
 
     @Test
@@ -88,17 +61,10 @@ class IndexWebhookPreferencesTest {
             assertFalse(settings.hasKey(it), "legacy key $it should be gone")
         }
         val reloaded = IndexWebhookPreferences(settings)
-        assertEquals(
-            "https://example.com/hook",
-            reloaded.configFor(IndexWebhookRecordingTrigger.SingleClickHold).url,
-        )
+        assertEquals("https://example.com/hook", reloaded.configFor(RingGesture.Hold).url)
         assertEquals(
             IndexWebhookPayloadMode.TranscriptionOnly,
-            reloaded.configFor(IndexWebhookRecordingTrigger.SingleClickHold).payloadMode,
-        )
-        assertEquals(
-            IndexWebhookConfig(),
-            reloaded.configFor(IndexWebhookRecordingTrigger.DoubleClickHold),
+            reloaded.configFor(RingGesture.ClickHold).payloadMode,
         )
     }
 
@@ -110,7 +76,7 @@ class IndexWebhookPreferencesTest {
 
         assertEquals(
             mapOf("X-Widget-Token" to "secret"),
-            prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold).headers,
+            prefs.configFor(RingGesture.Hold).headers,
         )
     }
 
@@ -120,10 +86,7 @@ class IndexWebhookPreferencesTest {
 
         val prefs = IndexWebhookPreferences(settings)
 
-        assertEquals(
-            emptyMap(),
-            prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold).headers,
-        )
+        assertEquals(emptyMap(), prefs.configFor(RingGesture.Hold).headers)
     }
 
     @Test
@@ -132,7 +95,7 @@ class IndexWebhookPreferencesTest {
 
         val prefs = IndexWebhookPreferences(settings)
 
-        IndexWebhookRecordingTrigger.entries.forEach {
+        IndexWebhookPreferences.gestures.forEach {
             assertEquals(IndexWebhookConfig(), prefs.configFor(it))
             assertFalse(prefs.configFor(it).isActive)
         }
@@ -148,15 +111,11 @@ class IndexWebhookPreferencesTest {
             saved = true,
         )
 
-        IndexWebhookPreferences(settings)
-            .setConfig(IndexWebhookRecordingTrigger.SingleClickHold, hold)
+        IndexWebhookPreferences(settings).setConfig(RingGesture.Hold, hold)
 
         val reloaded = IndexWebhookPreferences(settings)
-        assertEquals(hold, reloaded.configFor(IndexWebhookRecordingTrigger.SingleClickHold))
-        assertEquals(
-            IndexWebhookConfig(),
-            reloaded.configFor(IndexWebhookRecordingTrigger.DoubleClickHold),
-        )
+        assertEquals(hold, reloaded.configFor(RingGesture.Hold))
+        assertEquals(IndexWebhookConfig(), reloaded.configFor(RingGesture.ClickHold))
     }
 
     @Test
@@ -164,73 +123,92 @@ class IndexWebhookPreferencesTest {
         val settings = MapSettings()
         val prefs = IndexWebhookPreferences(settings)
         val config = IndexWebhookConfig(url = "https://example.com", saved = true)
-        prefs.setConfig(IndexWebhookRecordingTrigger.SingleClickHold, config)
-        prefs.setConfig(IndexWebhookRecordingTrigger.DoubleClickHold, config)
+        prefs.setConfig(RingGesture.Hold, config)
+        prefs.setConfig(RingGesture.ClickHold, config)
 
-        prefs.clear(IndexWebhookRecordingTrigger.SingleClickHold)
+        prefs.clear(RingGesture.Hold)
 
-        assertEquals(
-            IndexWebhookConfig(),
-            prefs.configFor(IndexWebhookRecordingTrigger.SingleClickHold),
-        )
-        assertEquals(config, prefs.configFor(IndexWebhookRecordingTrigger.DoubleClickHold))
-        assertEquals(
-            config,
-            IndexWebhookPreferences(settings)
-                .configFor(IndexWebhookRecordingTrigger.DoubleClickHold),
-        )
+        assertEquals(IndexWebhookConfig(), prefs.configFor(RingGesture.Hold))
+        assertEquals(config, prefs.configFor(RingGesture.ClickHold))
+        assertEquals(config, IndexWebhookPreferences(settings).configFor(RingGesture.ClickHold))
     }
 
     @Test
     fun disablingKeepsUrlAndHeadersSoReEnablingRestoresThem() {
         val settings = MapSettings()
         val prefs = IndexWebhookPreferences(settings)
-        val gesture = IndexWebhookRecordingTrigger.SingleClickHold
         val config = IndexWebhookConfig(
             url = "https://example.com/hook",
             payloadMode = IndexWebhookPayloadMode.Both,
             headers = mapOf("X-A" to "1"),
             saved = true,
         )
-        prefs.setConfig(gesture, config)
+        prefs.setConfig(RingGesture.Hold, config)
 
-        prefs.setEnabled(gesture, false)
+        prefs.setEnabled(RingGesture.Hold, false)
 
-        assertFalse(prefs.configFor(gesture).isActive)
-        assertEquals(config.copy(saved = false), prefs.configFor(gesture))
+        assertFalse(prefs.configFor(RingGesture.Hold).isActive)
+        assertEquals(config.copy(saved = false), prefs.configFor(RingGesture.Hold))
         assertEquals(
             config.copy(saved = false),
-            IndexWebhookPreferences(settings).configFor(gesture),
+            IndexWebhookPreferences(settings).configFor(RingGesture.Hold),
         )
 
-        prefs.setEnabled(gesture, true)
+        prefs.setEnabled(RingGesture.Hold, true)
 
-        assertTrue(prefs.configFor(gesture).isActive)
-        assertEquals(config, prefs.configFor(gesture))
+        assertTrue(prefs.configFor(RingGesture.Hold).isActive)
+        assertEquals(config, prefs.configFor(RingGesture.Hold))
     }
 
     @Test
     fun settingEnabledWithoutAUrlKeepsHeadersAndStaysInactive() {
         val settings = MapSettings()
         val prefs = IndexWebhookPreferences(settings)
-        val gesture = IndexWebhookRecordingTrigger.SingleClickHold
         val config = IndexWebhookConfig(url = "", headers = mapOf("X-A" to "1"), saved = true)
-        prefs.setConfig(gesture, config)
+        prefs.setConfig(RingGesture.Hold, config)
 
-        prefs.setEnabled(gesture, true)
+        prefs.setEnabled(RingGesture.Hold, true)
 
-        assertFalse(prefs.configFor(gesture).isActive)
-        assertEquals(config.headers, prefs.configFor(gesture).headers)
+        assertFalse(prefs.configFor(RingGesture.Hold).isActive)
+        assertEquals(config.headers, prefs.configFor(RingGesture.Hold).headers)
+    }
+
+    @Test
+    fun triggerKeyedConfigsAreRekeyedOntoTheirGesture() {
+        val stored = """{"url":"https://example.com/hook","saved":true}"""
+        val settings = MapSettings(
+            "index_webhook_config_SingleClickHold" to stored,
+            "index_webhook_config_DoubleClickHold" to stored,
+        )
+
+        val prefs = IndexWebhookPreferences(settings)
+
+        assertEquals("https://example.com/hook", prefs.configFor(RingGesture.Hold).url)
+        assertEquals("https://example.com/hook", prefs.configFor(RingGesture.ClickHold).url)
+        assertTrue(prefs.configFor(RingGesture.Hold).isActive)
+        assertEquals(null, settings.getStringOrNull("index_webhook_config_SingleClickHold"))
+        assertEquals(null, settings.getStringOrNull("index_webhook_config_DoubleClickHold"))
+    }
+
+    @Test
+    fun anExistingGestureConfigWinsOverATriggerKeyedOne() {
+        val settings = MapSettings(
+            "index_webhook_config_SingleClickHold" to """{"url":"https://old.example","saved":true}""",
+            "index_webhook_config_Hold" to """{"url":"https://new.example","saved":true}""",
+        )
+
+        val prefs = IndexWebhookPreferences(settings)
+
+        assertEquals("https://new.example", prefs.configFor(RingGesture.Hold).url)
     }
 
     @Test
     fun corruptStoredConfigFallsBackToUnconfigured() {
-        val settings = MapSettings("index_webhook_config_SingleClickHold" to "not json")
+        val settings = MapSettings("index_webhook_config_Hold" to "not json")
 
         assertEquals(
             IndexWebhookConfig(),
-            IndexWebhookPreferences(settings)
-                .configFor(IndexWebhookRecordingTrigger.SingleClickHold),
+            IndexWebhookPreferences(settings).configFor(RingGesture.Hold),
         )
     }
 }

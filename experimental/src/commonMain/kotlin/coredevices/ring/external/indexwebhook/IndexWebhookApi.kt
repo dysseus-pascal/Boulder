@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.api.ApiClient
 import coredevices.ring.api.ApiConfig
 import coredevices.ring.audio.M4aEncoder
+import coredevices.ring.service.button.RingGesture
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -37,21 +38,15 @@ interface IndexWebhookApi {
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
-        gesture: IndexWebhookRecordingTrigger,
+        gesture: RingGesture,
     )
 
     /** POST a synthetic payload so a user can verify their endpoint before saving. */
     suspend fun sendTestEvent(
-        gesture: IndexWebhookRecordingTrigger,
+        gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
     ): IndexWebhookRunResult
-}
-
-/** Recording gesture a webhook is configured for. [headerValue] is what endpoints key off. */
-enum class IndexWebhookRecordingTrigger(val headerValue: String) {
-    SingleClickHold("single-click-hold"),
-    DoubleClickHold("double-click-hold"),
 }
 
 data class IndexWebhookRunResult(
@@ -62,11 +57,18 @@ data class IndexWebhookRunResult(
     val durationMs: Long,
 )
 
+/** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
+val RingGesture.webhookTriggerValue: String
+    get() = when (this) {
+        RingGesture.ClickHold -> "double-click-hold"
+        else -> "single-click-hold"
+    }
+
 internal const val WEBHOOK_AUDIO_SIZE_HEADER = "X-Audio-Size"
 internal const val WEBHOOK_TRIGGER_HEADER = "X-Index-Trigger"
 internal const val WEBHOOK_TEST_HEADER = "X-Index-Test"
 internal const val WEBHOOK_TEST_TRIGGER = "test-event"
-internal const val WEBHOOK_TEST_TRANSCRIPTION = "Index 01 webhook test event"
+internal const val WEBHOOK_TEST_TRANSCRIPTION = "Index webhook test event"
 
 /**
  * Generic webhook API client for uploading Index recording data.
@@ -90,7 +92,7 @@ class IndexWebhookApiImpl(
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
-        gesture: IndexWebhookRecordingTrigger,
+        gesture: RingGesture,
     ) {
         val config = webhookPreferences.configFor(gesture)
         val url = config.url
@@ -114,7 +116,7 @@ class IndexWebhookApiImpl(
                 val result = post(
                     url = url,
                     headers = config.headers,
-                    triggerValue = gesture.headerValue,
+                    triggerValue = gesture.webhookTriggerValue,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
                     transcription = transcriptionToSend,
@@ -141,7 +143,7 @@ class IndexWebhookApiImpl(
     }
 
     override suspend fun sendTestEvent(
-        gesture: IndexWebhookRecordingTrigger,
+        gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
     ): IndexWebhookRunResult {

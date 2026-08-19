@@ -2,6 +2,7 @@ package coredevices.ring.external.indexwebhook
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,16 +30,7 @@ class IndexWebhookSettingsViewModel(
     private val runRepository: IndexWebhookRunRepository,
 ) : ViewModel() {
 
-    companion object {
-        /**
-         * The enable switch writes through on tap, so Save must carry the stored flag forward or
-         * it would silently re-enable a gesture the user just switched off.
-         */
-        internal fun enabledAfterSave(stored: IndexWebhookConfig): Boolean =
-            stored.saved || stored.url.isNullOrBlank()
-    }
-
-    private val _gesture = MutableStateFlow<IndexWebhookRecordingTrigger?>(null)
+    private val _gesture = MutableStateFlow<RingGesture?>(null)
     val gesture = _gesture.asStateFlow()
 
     val dialogOpen = _gesture
@@ -50,7 +42,7 @@ class IndexWebhookSettingsViewModel(
         .map { configs -> configs.entries.firstOrNull { it.value.isActive }?.key }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** URL of any gesture with an active webhook, for the settings row summary. */
+    /** URL of any gesture with a saved webhook, for the settings row summary. */
     val webhookUrl = webhookPreferences.configs
         .map { configs -> configs.values.firstOrNull { it.isActive }?.url }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -67,37 +59,37 @@ class IndexWebhookSettingsViewModel(
     private val _testState = MutableStateFlow<WebhookTestState>(WebhookTestState.Idle)
     val testState = _testState.asStateFlow()
 
-    private val storedConfig = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
-        gesture?.let { configs[it] } ?: IndexWebhookConfig()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, IndexWebhookConfig())
-
-    /** Whether the gesture being edited currently sends. */
-    val gestureEnabled = storedConfig
-        .map { it.saved }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    /** A stored url is what makes the enable switch and "Unlink" meaningful. */
-    val gestureHasStoredUrl = storedConfig
-        .map { !it.url.isNullOrBlank() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
     val runs = _gesture
         .flatMapLatest { gesture ->
             gesture?.let { runRepository.runs(it) } ?: flowOf(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<IndexWebhookRun>())
 
-    fun openDialog(gesture: IndexWebhookRecordingTrigger? = null) {
-        val open = gesture
-            ?: configuredGesture.value
-            ?: IndexWebhookRecordingTrigger.SingleClickHold
-        loadDraft(webhookPreferences.configFor(open))
+    /** The other recording gesture, when it has a saved webhook worth copying. */
+    val copyableGesture = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
+        otherGesture(gesture)?.takeIf { configs[it]?.isActive == true }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Whether the open gesture has a stored webhook to delete, disabled ones included. */
+    val canRemove = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
+        gesture != null && configs[gesture]?.url?.isNotBlank() == true
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun openDialog(gesture: RingGesture = RingGesture.Hold) {
+        val config = webhookPreferences.configFor(gesture)
+        loadDraft(config)
         _testState.value = WebhookTestState.Idle
-        _gesture.value = open
+        _gesture.value = gesture
     }
 
     fun closeDialog() {
         _gesture.value = null
+    }
+
+    fun removeCurrentGesture() {
+        val gesture = _gesture.value ?: return
+        webhookPreferences.clear(gesture)
+        closeDialog()
     }
 
     fun updateUrlInput(url: String) {
@@ -128,9 +120,9 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
-    fun setEnabled(enabled: Boolean) {
-        val gesture = _gesture.value ?: return
-        webhookPreferences.setEnabled(gesture, enabled)
+    fun copyFromOtherGesture() {
+        val other = copyableGesture.value ?: return
+        loadDraft(webhookPreferences.configFor(other))
     }
 
     fun sendTestEvent() {
@@ -150,32 +142,19 @@ class IndexWebhookSettingsViewModel(
         val gesture = _gesture.value ?: return
         val url = _urlInput.value.trim().ifBlank { null }
         if (url == null) {
-            unlink(gesture)
+            webhookPreferences.clear(gesture)
         } else {
-            val stored = webhookPreferences.configFor(gesture)
             webhookPreferences.setConfig(
                 gesture,
                 IndexWebhookConfig(
                     url = url,
                     payloadMode = _payloadModeInput.value,
                     headers = draftHeaders(),
-                    saved = enabledAfterSave(stored),
+                    saved = true,
                 ),
             )
         }
         closeDialog()
-    }
-
-    fun clearCurrentGesture() {
-        val gesture = _gesture.value ?: return
-        unlink(gesture)
-        closeDialog()
-    }
-
-    /** Run history holds responses from the endpoint being dropped, so it goes with the config. */
-    private fun unlink(gesture: IndexWebhookRecordingTrigger) {
-        webhookPreferences.clear(gesture)
-        viewModelScope.launch { runRepository.clear(gesture) }
     }
 
     private fun loadDraft(config: IndexWebhookConfig) {
@@ -191,4 +170,7 @@ class IndexWebhookSettingsViewModel(
         .map { it.name.trim() to it.value.trim() }
         .filter { it.first.isNotEmpty() }
         .toMap()
+
+    private fun otherGesture(gesture: RingGesture?): RingGesture? =
+        gesture?.let { IndexWebhookPreferences.gestures.firstOrNull { other -> other != it } }
 }

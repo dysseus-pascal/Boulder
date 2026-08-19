@@ -83,6 +83,7 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
+import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.isAndroid
@@ -230,6 +231,7 @@ val experimentalModule = module {
     singleOf(::RingSync)
     singleOf(::IndexNotificationManager)
     singleOf(::RingPairing)
+    singleOf(::IndexSettingsSummary)
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }

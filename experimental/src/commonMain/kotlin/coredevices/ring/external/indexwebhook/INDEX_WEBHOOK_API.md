@@ -66,9 +66,9 @@ Headers are fully user-configurable in the webhook settings — add as many name
 
 `X-Audio-Size` is still added automatically when audio is included (it carries the audio byte count) and cannot be overridden.
 
-`X-Index-Trigger` is added automatically to identify the gesture that started the recording — `single-click-hold`, `double-click-hold`, or `test-event` for a manually sent test. The gesture is persisted with the processing task and preserved when a failed recording is retried. Recordings that did not start from a ring gesture — phone mic, reprocessing an existing recording — send on the `single-click-hold` config. Neither `X-Index-Trigger` nor `X-Index-Test` can be overridden by a user-configured header.
+`X-Index-Trigger` is added automatically to identify the gesture that started the recording — `single-click-hold`, `double-click-hold`, or `test-event` for a manually sent test. The gesture is persisted with the processing task and preserved when a failed recording is retried. Recordings with no known gesture do not fire a webhook at all. Neither `X-Index-Trigger` nor `X-Index-Test` can be overridden by a user-configured header.
 
-> Migration note: a previously configured single webhook carries over to the gestures its old trigger fired on — `single-click-hold`, `double-click-hold`, or both — and an auth token configured before headers were user-settable is carried over as an `X-Widget-Token` header.
+> Migration note: a previously configured single webhook is copied to both recording gestures, and an auth token configured before headers were user-settable is carried over as an `X-Widget-Token` header.
 
 ## Authentication
 

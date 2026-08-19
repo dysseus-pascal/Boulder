@@ -1,6 +1,7 @@
 package coredevices.ring.external.indexwebhook
 
 import com.russhwolf.settings.Settings
+import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -12,7 +13,7 @@ import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-/** One webhook delivery attempt, shown in the dialog's "Recent runs" list. */
+/** One webhook delivery attempt, shown in the sheet's "Recent runs" list. */
 @Serializable
 data class IndexWebhookRun(
     val timestampMs: Long,
@@ -39,18 +40,16 @@ class IndexWebhookRunRepository(private val settings: Settings) {
         private val serializer = ListSerializer(IndexWebhookRun.serializer())
     }
 
-    private val _runs = MutableStateFlow(
-        IndexWebhookRecordingTrigger.entries.associateWith { load(it) }
-    )
+    private val _runs = MutableStateFlow(migrateAndLoad())
 
     /** Recording and the test button can finish concurrently; the whole update must be atomic. */
     private val mutex = Mutex()
 
-    fun runs(gesture: IndexWebhookRecordingTrigger): Flow<List<IndexWebhookRun>> =
+    fun runs(gesture: RingGesture): Flow<List<IndexWebhookRun>> =
         _runs.map { it[gesture].orEmpty() }
 
     suspend fun record(
-        gesture: IndexWebhookRecordingTrigger,
+        gesture: RingGesture,
         ok: Boolean,
         status: String,
         detail: String,
@@ -75,14 +74,23 @@ class IndexWebhookRunRepository(private val settings: Settings) {
         }
     }
 
-    suspend fun clear(gesture: IndexWebhookRecordingTrigger) {
-        mutex.withLock {
-            settings.remove(runsKey(gesture))
-            _runs.value = _runs.value + (gesture to emptyList())
+    private fun migrateAndLoad(): Map<RingGesture, List<IndexWebhookRun>> {
+        migrateTriggerKeyedRuns()
+        return IndexWebhookPreferences.gestures.associateWith { load(it) }
+    }
+
+    /** Runs are keyed by the same names the configs were, so they need the same re-keying. */
+    private fun migrateTriggerKeyedRuns() {
+        IndexWebhookPreferences.TRIGGER_KEYED_NAMES.forEach { (triggerName, gesture) ->
+            val stored = settings.getStringOrNull(RUNS_KEY_PREFIX + triggerName) ?: return@forEach
+            if (settings.getStringOrNull(runsKey(gesture)) == null) {
+                settings.putString(runsKey(gesture), stored)
+            }
+            settings.remove(RUNS_KEY_PREFIX + triggerName)
         }
     }
 
-    private fun load(gesture: IndexWebhookRecordingTrigger): List<IndexWebhookRun> =
+    private fun load(gesture: RingGesture): List<IndexWebhookRun> =
         settings.getStringOrNull(runsKey(gesture))
             ?.let {
                 try {
@@ -93,5 +101,5 @@ class IndexWebhookRunRepository(private val settings: Settings) {
             }
             ?: emptyList()
 
-    private fun runsKey(gesture: IndexWebhookRecordingTrigger) = RUNS_KEY_PREFIX + gesture.name
+    private fun runsKey(gesture: RingGesture) = RUNS_KEY_PREFIX + gesture.name
 }

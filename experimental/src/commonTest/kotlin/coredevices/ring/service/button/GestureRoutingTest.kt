@@ -49,17 +49,6 @@ class GestureRoutingTest {
     }
 
     @Test
-    fun typicalLegacyInstallMigratesEveryGesture() {
-        val routes = routing(MusicControlMode.DoubleClick, SecondaryMode.Search).routes.value
-
-        assertEquals(GestureDestination.Nothing, routes[RingGesture.Click])
-        assertEquals(GestureDestination.PlayPause, routes[RingGesture.DoubleClick])
-        assertEquals(GestureDestination.NextTrack, routes[RingGesture.TripleClick])
-        assertEquals(GestureDestination.IndexAgent, routes[RingGesture.Hold])
-        assertEquals(GestureDestination.WebSearch, routes[RingGesture.ClickHold])
-    }
-
-    @Test
     fun musicControlModeDisabledMigratesToNothing() {
         val routes = routing(MusicControlMode.Disabled).routes.value
 
@@ -75,6 +64,15 @@ class GestureRoutingTest {
         assertEquals(GestureDestination.PlayPause, routes[RingGesture.Click])
         assertEquals(GestureDestination.NextTrack, routes[RingGesture.DoubleClick])
         assertEquals(GestureDestination.Nothing, routes[RingGesture.TripleClick])
+    }
+
+    @Test
+    fun musicControlModeDoubleClickMigratesToDoubleClickPlayPause() {
+        val routes = routing(MusicControlMode.DoubleClick).routes.value
+
+        assertEquals(GestureDestination.Nothing, routes[RingGesture.Click])
+        assertEquals(GestureDestination.PlayPause, routes[RingGesture.DoubleClick])
+        assertEquals(GestureDestination.NextTrack, routes[RingGesture.TripleClick])
     }
 
     @Test
@@ -98,6 +96,29 @@ class GestureRoutingTest {
         )
     }
 
+    /** The removed webhook mode kept sending to the webhook and ran no agent; a webhook-only
+     *  route is the same behaviour, including when no url was ever configured. */
+    @Test
+    fun legacyWebhookSecondaryModeMigratesToWebhookOnly() {
+        assertEquals(
+            GestureDestination.WebhookOnly,
+            routing(secondaryMode = SecondaryMode.IndexWebhook).destinationFor(RingGesture.ClickHold)
+        )
+        assertEquals(
+            GestureDestination.IndexAgent,
+            routing(secondaryMode = SecondaryMode.IndexWebhook).destinationFor(RingGesture.Hold)
+        )
+    }
+
+    @Test
+    fun storedSecondaryModeIdsDecodeToTheirModes() {
+        assertEquals(SecondaryMode.Disabled, SecondaryMode.fromId(0))
+        assertEquals(SecondaryMode.Search, SecondaryMode.fromId(1))
+        assertEquals(SecondaryMode.IndexWebhook, SecondaryMode.fromId(2))
+        assertEquals(SecondaryMode.McpSandbox, SecondaryMode.fromId(3))
+        assertEquals(SecondaryMode.Disabled, SecondaryMode.fromId(99))
+    }
+
     @Test
     fun holdMigratesToIndexAgent() {
         MusicControlMode.entries.forEach { music ->
@@ -113,9 +134,11 @@ class GestureRoutingTest {
 
     @Test
     fun defaultsMatchLegacyDefaults() {
+        val routes = routing().routes.value
+
         assertEquals(
             migratedRoutes(MusicControlMode.DoubleClick, SecondaryMode.Search, null),
-            routing().routes.value
+            routes
         )
     }
 
@@ -130,11 +153,13 @@ class GestureRoutingTest {
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.IndexAgent))
             assertFalse(it.accepts(GestureDestination.WebSearch))
+            assertFalse(it.accepts(GestureDestination.WebhookOnly))
             assertFalse(it.accepts(GestureDestination.McpSandbox(1L)))
         }
         recording.forEach {
             assertTrue(it.accepts(GestureDestination.IndexAgent))
             assertTrue(it.accepts(GestureDestination.WebSearch))
+            assertTrue(it.accepts(GestureDestination.WebhookOnly))
             assertTrue(it.accepts(GestureDestination.McpSandbox(1L)))
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.PlayPause))
@@ -160,13 +185,15 @@ class GestureRoutingTest {
         routing(stored = stored).apply {
             setRoute(RingGesture.Click, GestureDestination.PlayPause)
             setRoute(RingGesture.Hold, GestureDestination.McpSandbox(42L))
+            setRoute(RingGesture.ClickHold, GestureDestination.WebhookOnly)
         }
 
+        // A fresh instance ignores the legacy prefs for gestures with a stored route.
         val reloaded = routing(MusicControlMode.Disabled, SecondaryMode.Search, stored = stored)
 
         assertEquals(GestureDestination.PlayPause, reloaded.destinationFor(RingGesture.Click))
         assertEquals(GestureDestination.McpSandbox(42L), reloaded.destinationFor(RingGesture.Hold))
-        assertEquals(GestureDestination.WebSearch, reloaded.destinationFor(RingGesture.ClickHold))
+        assertEquals(GestureDestination.WebhookOnly, reloaded.destinationFor(RingGesture.ClickHold))
         assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.DoubleClick))
     }
 
@@ -189,6 +216,18 @@ class GestureRoutingTest {
         assertEquals(
             GestureDestination.IndexAgent,
             routing.recordingDestinationFor(RingGesture.DoubleClick)
+        )
+    }
+
+    @Test
+    fun holdRoutedToNothingRunsNoAgent() {
+        val routing = routing()
+        routing.setRoute(RingGesture.Hold, GestureDestination.Nothing)
+
+        assertEquals(GestureDestination.Nothing, routing.recordingDestinationFor(RingGesture.Hold))
+        assertEquals(
+            GestureDestination.WebSearch,
+            routing.recordingDestinationFor(RingGesture.ClickHold)
         )
     }
 }

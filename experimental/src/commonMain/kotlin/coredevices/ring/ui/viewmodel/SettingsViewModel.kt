@@ -14,16 +14,14 @@ import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.di.LibIndexCoroutineScope
-import coredevices.ring.agent.DefaultCaptureType
+import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -40,8 +38,6 @@ import coredevices.ring.service.RingSync
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
-import coredevices.ring.service.button.musicRoutesFor
-import coredevices.ring.service.button.recordingRouteFor
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.ui.components.QrPhotoPickResult
 import coredevices.ring.ui.components.pickQrCodeFromPhotos
@@ -114,6 +110,7 @@ class SettingsViewModel(
     private val cactusModelProvider: CactusModelProvider,
     private val appScope: LibIndexCoroutineScope,
     private val gestureRouting: GestureRoutingPreferences,
+    private val indexActionsRepository: IndexActionsRepository,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -123,11 +120,9 @@ class SettingsViewModel(
         .map { it?.uid }
         .stateIn(viewModelScope, SharingStarted.Lazily, Firebase.auth.currentUser?.uid)
     val llmMode = preferences.llmMode
-    private val _showLlmModeDialog = MutableStateFlow(false)
-    val showLlmModeDialog = _showLlmModeDialog.asStateFlow()
 
-    /** The Local LLM can't drive a sandbox group's model, so the Local LLM modes are only
-     *  offered while the default group runs the Index Agent. */
+    /** The on-device agent can't drive a sandbox group's model, so the local LLM modes are
+     *  only offered while the default group runs the Index Agent. */
     val localLlmSupported = mcpSandboxRepository.getDefaultGroupFlow()
         .map { it?.modelType == SandboxModelType.IndexAgent }
         .stateIn(
@@ -137,43 +132,26 @@ class SettingsViewModel(
         )
     private val _showModelDownloadDialog = MutableStateFlow<ModelType?>(null)
     val showModelDownloadDialog = _showModelDownloadDialog.asStateFlow()
-    private val _showMusicControlDialog = MutableStateFlow(false)
-    val showMusicControlDialog = _showMusicControlDialog.asStateFlow()
-    val musicControlMode = gestureRouting.routes
-        .map { it.asMusicControlMode() }
-        .stateIn(
-            viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = gestureRouting.routes.value.asMusicControlMode()
-        )
+    val gestureRoutes = gestureRouting.routes
     val debugDetailsEnabled = preferences.debugDetailsEnabled
-    private val _showDefaultCaptureTypeDialog = MutableStateFlow(false)
-    val showDefaultCaptureTypeDialog = _showDefaultCaptureTypeDialog.asStateFlow()
-    val defaultCaptureType = preferences.defaultCaptureType
     private val _showContactsDialog = MutableStateFlow(false)
     val showContactsDialog = _showContactsDialog.asStateFlow()
-    private val _showSecondaryModeDialog = MutableStateFlow(false)
-    val showSecondaryModeDialog = _showSecondaryModeDialog.asStateFlow()
-    private val clickHoldRoute = gestureRouting.routes.map { it[RingGesture.ClickHold] }
-    private val clickHoldRouteValue get() = gestureRouting.routes.value[RingGesture.ClickHold]
-    val secondaryMode = clickHoldRoute
-        .map { it.asSecondaryMode() }
-        .stateIn(
-            viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = clickHoldRouteValue.asSecondaryMode()
-        )
-    val secondaryModeMcpGroupId = clickHoldRoute
-        .map { (it as? GestureDestination.McpSandbox)?.groupId }
-        .stateIn(
-            viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = (clickHoldRouteValue as? GestureDestination.McpSandbox)?.groupId
-        )
     val sandboxGroups = mcpSandboxRepository.getAllGroupsFlow().stateIn(
         viewModelScope,
         started = SharingStarted.Lazily,
         initialValue = emptyList()
+    )
+
+    // Eager so the list is loaded before the section is lazily scrolled into view.
+    val indexActions = indexActionsRepository.actions.stateIn(
+        viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
+    val httpMcpDisabledReason = indexActionsRepository.httpMcpDisabledReason.stateIn(
+        viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = null
     )
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
@@ -205,6 +183,17 @@ class SettingsViewModel(
     val availableReminderProviders = _availableReminderProviders.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            updateAvailableNoteProviders()
+            updateAvailableReminderProviders()
+        }
+    }
+
+    fun setActionEnabled(name: String, enabled: Boolean) {
+        viewModelScope.launch { indexActionsRepository.setActionEnabled(name, enabled) }
+    }
+
+    fun refreshAvailableProviders() {
         viewModelScope.launch {
             updateAvailableNoteProviders()
             updateAvailableReminderProviders()
@@ -247,14 +236,6 @@ class SettingsViewModel(
         }
     }
 
-    fun showLlmModeDialog() {
-        _showLlmModeDialog.value = true
-    }
-
-    fun closeLlmModeDialog() {
-        _showLlmModeDialog.value = false
-    }
-
     fun setLlmMode(mode: LlmMode) {
         appScope.launch {
             if (mode.usesLocalCactus()) {
@@ -265,40 +246,12 @@ class SettingsViewModel(
         }
     }
 
-    fun showMusicControlDialog() {
-        _showMusicControlDialog.value = true
+    fun setGestureRoute(gesture: RingGesture, destination: GestureDestination) {
+        gestureRouting.setRoute(gesture, destination)
     }
 
-    fun closeMusicControlDialog() {
-        _showMusicControlDialog.value = false
-    }
-
-    fun setMusicControlMode(mode: MusicControlMode) {
-        gestureRouting.setRoutes(musicRoutesFor(mode))
-    }
-
-    fun showDefaultCaptureTypeDialog() {
-        _showDefaultCaptureTypeDialog.value = true
-    }
-
-    fun closeDefaultCaptureTypeDialog() {
-        _showDefaultCaptureTypeDialog.value = false
-    }
-
-    fun setDefaultCaptureType(type: DefaultCaptureType) {
-        preferences.setDefaultCaptureType(type)
-    }
-
-    fun showSecondaryModeDialog() {
-        _showSecondaryModeDialog.value = true
-    }
-
-    fun closeSecondaryModeDialog() {
-        _showSecondaryModeDialog.value = false
-    }
-
-    fun setSecondaryMode(mode: SecondaryMode, mcpSandboxGroupId: Long? = null) {
-        gestureRouting.setRoute(RingGesture.ClickHold, recordingRouteFor(mode, mcpSandboxGroupId))
+    fun setGestureRoutes(routes: Map<RingGesture, GestureDestination>) {
+        gestureRouting.setRoutes(routes)
     }
 
     fun toggleDebugDetailsEnabled() {
@@ -1194,17 +1147,4 @@ class SettingsViewModel(
             }
         }
     }
-}
-
-/** Collapses the music gesture routes back into the legacy 3-state enum the existing
- *  settings/onboarding rows still speak. Combos it can't express read as Disabled. */
-private fun Map<RingGesture, GestureDestination>.asMusicControlMode(): MusicControlMode =
-    MusicControlMode.entries.firstOrNull { mode ->
-        musicRoutesFor(mode).all { (gesture, destination) -> this[gesture] == destination }
-    } ?: MusicControlMode.Disabled
-
-private fun GestureDestination?.asSecondaryMode(): SecondaryMode = when (this) {
-    GestureDestination.WebSearch -> SecondaryMode.Search
-    is GestureDestination.McpSandbox -> SecondaryMode.McpSandbox
-    else -> SecondaryMode.Disabled
 }

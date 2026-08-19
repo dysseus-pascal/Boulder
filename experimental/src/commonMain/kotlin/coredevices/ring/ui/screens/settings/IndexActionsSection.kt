@@ -195,6 +195,7 @@ fun IndexActionsSection(
     onOpenBeeperContacts: () -> Unit,
     onGetMoreActions: () -> Unit,
     onProvidersChanged: () -> Unit,
+    showHeader: Boolean = true,
 ) {
     val gestureRouting = koinInject<GestureRoutingPreferences>()
     val routes by gestureRouting.routes.collectAsState()
@@ -238,17 +239,19 @@ fun IndexActionsSection(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        SectionHeader(
-            title = "Index Agent",
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 2.dp),
-        )
-        Text(
-            "Select which actions Index Agent can perform.",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = colors.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-        )
+        if (showHeader) {
+            SectionHeader(
+                title = "Index Agent",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 2.dp),
+            )
+            Text(
+                "Select which actions Index Agent can perform.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+            )
+        }
         CaptureSentence(
             typeLabel = captureTypeLabel(captureType),
             destinationLabel = captureDestinationLabel(captureType, noteProvider, reminderProvider),

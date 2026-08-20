@@ -165,5 +165,15 @@
                 <action android:name="coredevices.coreapp.DEV_CONNECTION" />
             </intent-filter>
         </receiver>
+
+        <!-- Sets a persisted app setting from adb (e.g. hasSeenWatchOnboarding). Same DUMP gate. -->
+        <receiver
+            android:name="coredevices.coreapp.debug.SetSettingReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="coredevices.coreapp.SET_SETTING" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -25,7 +25,6 @@ import coredevices.util.Platform
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
-import coredevices.ring.database.LastRSSIMeasurement
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
@@ -136,8 +135,6 @@ class FakePreferences : Preferences {
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
-    override val lastRSSIMeasurement: StateFlow<LastRSSIMeasurement?> = MutableStateFlow(null)
-    override fun setLastRSSIMeasurement(lastRSSIMeasurement: LastRSSIMeasurement?) {}
 }
 
 class FakeServletRepository : ServletRepository {

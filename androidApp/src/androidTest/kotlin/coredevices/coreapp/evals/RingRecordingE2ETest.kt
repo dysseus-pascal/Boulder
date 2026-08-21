@@ -24,7 +24,6 @@ import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaClientImpl
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
-import coredevices.ring.database.LastRSSIMeasurement
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
@@ -734,6 +733,4 @@ private class E2EPreferences : Preferences {
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
-    override val lastRSSIMeasurement: StateFlow<LastRSSIMeasurement?> = MutableStateFlow(null)
-    override fun setLastRSSIMeasurement(lastRSSIMeasurement: LastRSSIMeasurement?) {}
 }

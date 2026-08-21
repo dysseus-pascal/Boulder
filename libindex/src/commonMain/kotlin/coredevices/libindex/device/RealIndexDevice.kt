@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.time.Duration
 
 class RealIndexDevice(
     override val identifier: IndexIdentifier,
@@ -52,11 +53,16 @@ class RealInterviewedIndexDevice(
 
 class RealKnownIndexDevice(
     indexDevice: IndexDevice,
-    private val prefs: BasePreferences
+    private val prefs: BasePreferences,
+    private val system: IndexSystem,
 ): IndexDevice by indexDevice, KnownIndexDevice {
     override val name: String = indexDevice.name
     override fun remove() {
         prefs.setRingPaired(null)
+    }
+
+    override suspend fun measureRSSI(connectionTimeout: Duration): RSSIMeasurement {
+        return system.measureRSSI(this, connectionTimeout)
     }
 }
 
@@ -77,7 +83,7 @@ class IndexDeviceFactory(
         isUpdating: Boolean = false,
     ): IndexDevice {
         val base = RealIndexDevice(identifier, name)
-        val known = if (isPaired) RealKnownIndexDevice(base, prefs) else null
+        val known = if (isPaired) RealKnownIndexDevice(base, prefs, indexSystem) else null
 
         return when {
             known != null && satellite != null && satelliteState != null ->

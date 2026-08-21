@@ -1,6 +1,10 @@
 package coredevices.libindex.device
 
 import org.koin.core.component.KoinComponent
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+val DEFAULT_RSSI_CONNECTION_TIMEOUT = 30.seconds
 
 sealed interface IndexDevice {
     val identifier: IndexIdentifier
@@ -43,6 +47,7 @@ enum class IndexImage {
 
 interface KnownIndexDevice: IndexDevice {
     fun remove()
+    suspend fun measureRSSI(connectionTimeout: Duration = DEFAULT_RSSI_CONNECTION_TIMEOUT): RSSIMeasurement
 }
 
 sealed interface IndexPairingState {

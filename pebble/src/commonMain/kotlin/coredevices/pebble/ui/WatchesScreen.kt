@@ -135,6 +135,7 @@ import coredevices.libindex.device.IndexPairingState
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.device.PairingRequestResult
+import coredevices.libindex.device.RSSIMeasurement
 import coredevices.libindex.device.RepairableIndexDevice
 import coredevices.libindex.device.isFailsafe
 import coredevices.libindex.ui.components.Press
@@ -208,6 +209,7 @@ import org.koin.compose.koinInject
 import org.koin.dsl.module
 import theme.coreOrange
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
 expect fun scanPermission(): Permission?
@@ -728,6 +730,10 @@ fun WatchesPreview() {
                                 override val mac: String = "00:11:22:33:44:55"
                                 override fun remove() {
                                     TODO("Not yet implemented")
+                                }
+
+                                override suspend fun measureRSSI(connectionTimeout: Duration): RSSIMeasurement {
+                                    TODO()
                                 }
                             }
                         )

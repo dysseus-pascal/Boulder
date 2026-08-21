@@ -1,7 +1,9 @@
 package coredevices.ring.ui.screens.settings
 
 import BugReportButton
+import CommonRoutes
 import CoreNav
+import NextBugReportContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Troubleshoot
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -123,13 +126,17 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.DialogProperties
 import com.cactus.isCactusSupported
+import coredevices.ring.ui.viewmodel.DiagnosticsState
 import coredevices.util.CoreConfigHolder
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.PlatformSpeechRecognizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import coredevices.util.models.CactusSTTMode
+import kotlinx.coroutines.Job
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import coreapp.util.generated.resources.Res as UtilRes
@@ -154,6 +161,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
+    val diagnosticsState by viewModel.diagnosticsState.collectAsState()
     val platform = koinInject<Platform>()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
     val coreConfig by coreConfigHolder.config.collectAsState()
@@ -183,6 +191,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val noteShortcut by viewModel.noteShortcut.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
     var showLlmModeSheet by remember { mutableStateOf(false) }
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
@@ -228,6 +237,13 @@ fun IndexSettings(coreNav: CoreNav) {
         BackupDialog(
             viewModel = viewModel,
             onDismiss = { showBackupDialog = false }
+        )
+    }
+    if (showDiagnosticsDialog) {
+        DiagnosticsDialog(
+            coreNav = coreNav,
+            viewModel = viewModel,
+            onDismiss = { showDiagnosticsDialog = false }
         )
     }
 
@@ -485,6 +501,17 @@ fun IndexSettings(coreNav: CoreNav) {
                 SettingsRow(
                     title = "Ring Firmware Version",
                     subtitle = currentRingFirmware ?: "Not yet seen device",
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Diagnostics",
+                    subtitle = "Record diagnostic information from your Index 01, only needed if support asks.",
+                    enabled = ringPaired && diagnosticsState != DiagnosticsState.Running,
+                    onClick = {
+                        if (diagnosticsState != DiagnosticsState.Idle) viewModel.resetDiagnostics()
+                        showDiagnosticsDialog = true
+                    },
                 )
             }
 
@@ -1171,6 +1198,91 @@ fun BackupDialog(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun DiagnosticsDialog(
+    coreNav: CoreNav,
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val state = viewModel.diagnosticsState.collectAsState().value
+    val nextBugReportContext = koinInject<NextBugReportContext>()
+    var job by remember { mutableStateOf<Job?>(null) }
+
+    fun dismiss() {
+        job?.cancel()
+        onDismiss()
+    }
+
+    M3Dialog(
+        properties = DialogProperties(
+            dismissOnClickOutside = false
+        ),
+        onDismissRequest = ::dismiss,
+        icon = { Icon(Icons.Default.Troubleshoot, contentDescription = null) },
+        title = { Text("Index 01 Diagnostics") },
+        buttons = {
+            when (state) {
+                DiagnosticsState.Idle -> {
+                    TextButton(onClick = ::dismiss) { Text("Cancel") }
+                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text("Start") }
+                }
+                DiagnosticsState.Running -> {}
+                is DiagnosticsState.Error -> {
+                    TextButton(onClick = ::dismiss) { Text("Close") }
+                    TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text("Try Again") }
+                }
+                is DiagnosticsState.Completed -> {
+                    TextButton(onClick = ::dismiss) { Text("Done") }
+                    TextButton(onClick = {
+                        nextBugReportContext.nextContext = buildString {
+                            appendLine()
+                            append("Ring RSSI Diagnostics")
+                            append("\n======================")
+                            state.measurement.let {
+                                append("\nPhone RSSI: ${it.phoneRSSI}")
+                                append("\nRing RX RSSI: ${it.deviceRSSI}")
+                            }
+                            appendLine()
+                        }
+                        dismiss()
+                        coreNav.navigateTo(CommonRoutes.BugReport(pebble = false))
+                    }) { Text("File Bug Report") }
+                }
+            }
+        }
+    ) {
+        when (state) {
+            DiagnosticsState.Idle -> Text(
+                buildAnnotatedString {
+                    append("This checks the Bluetooth connection between your phone and Index 01. ")
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append("Place the device right next to your phone, ")
+                    }
+                    append("then tap Start.")
+                },
+            )
+            DiagnosticsState.Running -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Keep your Index 01 next to your phone and click the button...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
+            is DiagnosticsState.Error -> Text(
+                "An error occurred: ${state.message}\nPlease try again ensuring you've clicked the button to wake up the device"
+            )
+            is DiagnosticsState.Completed -> Text(
+                "Diagnostics complete. If support asked you to run this, file a bug report to send them the results."
+            )
         }
     }
 }

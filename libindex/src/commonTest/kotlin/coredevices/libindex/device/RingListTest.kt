@@ -1,5 +1,6 @@
 package coredevices.libindex.device
 
+import kotlin.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,6 +31,7 @@ class RingListTest {
         override val identifier = IndexIdentifier(id)
         override val name = deviceName
         override fun remove() {}
+        override suspend fun measureRSSI(connectionTimeout: Duration): RSSIMeasurement = RSSIMeasurement(-50f, -50f)
     }
 
     private val primaryAddress = "EA22CE312EAA"

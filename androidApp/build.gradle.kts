@@ -163,6 +163,11 @@ fun registerTestAppBuild(name: String) =
 val testApps = listOf("plugin-test", "weather-face")
 val testAppPbws = testApps.map { registerTestAppBuild(it) }
 
+// waf self-extracts its library to ~/.waf3-* on first run; two concurrent waf processes
+// racing that unpack die with "cannot import name 'Scripting' from 'waflib'". The builds
+// take ~1s each, so just serialize them.
+testAppPbws.zipWithNext().forEach { (first, second) -> second.configure { mustRunAfter(first) } }
+
 // Everything a demo watchapp generates lands outside this project's build dir, so `clean` has
 // to be told about it: the waf build tree in the app itself, and the pbws it installed.
 tasks.named<Delete>("clean") {

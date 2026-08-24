@@ -180,5 +180,7 @@ tasks.register("buildTestAppPbws") {
     dependsOn(testAppPbws)
 }
 
-// The pbws ship in this app's assets, so they have to exist before they are merged.
-tasks.matching { it.name.contains("Assets") }.configureEach { dependsOn(testAppPbws) }
+// The pbws ship in this app's assets, so anything reading that dir — asset merging, and lint's
+// model of the source sets — has to run after they land.
+tasks.matching { it.name.contains("Assets") || it.name.contains("lint", ignoreCase = true) }
+    .configureEach { dependsOn(testAppPbws) }

@@ -100,18 +100,10 @@ class IndexWebhookApiImpl(
 
         scope.launch {
             try {
-                logger.d { "Webhook upload for $recordingId (${gesture.name}, mode=${config.payloadMode})" }
+                logger.d { "Webhook upload for $recordingId (${gesture.name})" }
 
-                val m4aData: ByteArray? = if (
-                    samples != null &&
-                    config.payloadMode != IndexWebhookPayloadMode.TranscriptionOnly
-                ) {
-                    m4aEncoder.encode(samples, sampleRate)
-                } else null
-
-                val transcriptionToSend: String? = if (
-                    config.payloadMode != IndexWebhookPayloadMode.RecordingOnly
-                ) transcription else null
+                // The caller already selected the payload for the delivery's mode.
+                val m4aData: ByteArray? = samples?.let { m4aEncoder.encode(it, sampleRate) }
 
                 val result = post(
                     url = url,
@@ -119,7 +111,7 @@ class IndexWebhookApiImpl(
                     triggerValue = gesture.webhookTriggerValue,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
-                    transcription = transcriptionToSend,
+                    transcription = transcription,
                     recordedAt = recordedAt,
                     isTest = false,
                 )

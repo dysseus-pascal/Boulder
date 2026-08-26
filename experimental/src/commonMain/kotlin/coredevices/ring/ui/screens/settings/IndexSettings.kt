@@ -172,9 +172,11 @@ fun IndexSettings(coreNav: CoreNav) {
     val speechScope = rememberCoroutineScope()
     val onDeviceSpeechSupported = remember { isCactusSupported() }
     val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
-    val hasOfflineSpeechModels by produceState(false, modelDownloadStatus) {
+    val selectedSttModel = coreConfig.sttConfig.modelName
+    val hasOfflineSpeechModels by produceState(false, modelDownloadStatus, selectedSttModel) {
         value = withContext(Dispatchers.Default) {
-            modelManager.getRecommendedSTTModel().modelSlug in modelManager.getDownloadedSTTModelSlugs()
+            val slug = selectedSttModel ?: modelManager.getRecommendedSTTModel().modelSlug
+            slug in modelManager.getDownloadedSTTModelSlugs()
         }
     }
     val platformSttAvailable by produceState(false) {
@@ -397,6 +399,7 @@ fun IndexSettings(coreNav: CoreNav) {
                 SpeechSection(
                     mode = coreConfig.sttConfig.mode,
                     spokenLanguage = coreConfig.sttConfig.spokenLanguage,
+                    selectedModel = selectedSttModel,
                     onDeviceSupported = onDeviceSpeechSupported,
                     platformSttAvailable = platformSttAvailable,
                     hasOfflineModels = hasOfflineSpeechModels,
@@ -423,6 +426,13 @@ fun IndexSettings(coreNav: CoreNav) {
                                     mode = mode,
                                     modelName = modelSlug,
                                 )
+                            )
+                        )
+                    },
+                    onSelectModel = { modelSlug ->
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                sttConfig = coreConfig.sttConfig.copy(modelName = modelSlug)
                             )
                         )
                     },
@@ -584,6 +594,7 @@ internal fun SettingsRow(
                 if (onClick == null) Modifier
                 else Modifier.clickable(enabled = enabled, onClick = onClick)
             )
+            .alpha(if (enabled) 1f else 0.38f)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

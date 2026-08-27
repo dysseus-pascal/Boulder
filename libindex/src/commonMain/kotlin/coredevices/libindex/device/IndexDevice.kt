@@ -56,14 +56,28 @@ sealed interface IndexPairingState {
     data class Error(val error: IndexPairingResult) : IndexPairingState
 }
 
+/**
+ * A ring seen by a scan.
+ * See [PairableIndexDevice], [RepairableIndexDevice], [InterviewedIndexDevice]
+ */
 interface DiscoveredIndexDevice: IndexDevice {
     val rssi: Int
-    val pairingState: IndexPairingState
     val currentImage: IndexImage
+}
+
+/**
+ * Pairable device, e.g. a device on [IndexImage.Primary] firmware.
+ */
+interface PairableIndexDevice: DiscoveredIndexDevice {
+    val pairingState: IndexPairingState
     suspend fun pair(): IndexPairingResult
 }
 
-interface RepairableIndexDevice: IndexDevice {
+/**
+ * Repairable device, usually a device on [IndexImage.ProductionTest] as [forceFailsafe] will
+ * restore it.
+ */
+interface RepairableIndexDevice: DiscoveredIndexDevice {
     /**
      * Attempts to force failsafe (invalidate primary image) to repair a device in e.g. production
      * test firmware.

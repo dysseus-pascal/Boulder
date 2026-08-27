@@ -20,12 +20,19 @@ class RealIndexDevice(
 
 class RealDiscoveredIndexDevice(
     indexDevice: IndexDevice,
+    override val rssi: Int,
+    override val name: String,
+    override val currentImage: IndexImage
+): IndexDevice by indexDevice, DiscoveredIndexDevice
+
+class RealPairableIndexDevice(
+    indexDevice: IndexDevice,
     private val indexPairing: IndexPairing,
     override val rssi: Int,
     override val name: String,
     override val pairingState: IndexPairingState,
     override val currentImage: IndexImage
-): IndexDevice by indexDevice, DiscoveredIndexDevice {
+): IndexDevice by indexDevice, PairableIndexDevice {
     override suspend fun pair(): IndexPairingResult {
         return indexPairing.pairDevice(this)
     }
@@ -33,7 +40,9 @@ class RealDiscoveredIndexDevice(
 
 class RealRepairableIndexDevice(
     indexDevice: IndexDevice,
-    private val indexSystem: IndexSystem
+    private val indexSystem: IndexSystem,
+    override val rssi: Int,
+    override val currentImage: IndexImage
 ): IndexDevice by indexDevice, RepairableIndexDevice {
     override suspend fun forceFailsafe() {
         indexSystem.forceFailsafe(this)
@@ -95,13 +104,21 @@ class IndexDeviceFactory(
                 IndexImage.ProductionTest -> RealRepairableIndexDevice(
                     base,
                     indexSystem,
+                    scanResult.rssi,
+                    scanResult.currentImage,
                 )
-                else -> RealDiscoveredIndexDevice(
+                IndexImage.Primary -> RealPairableIndexDevice(
                     base,
                     indexPairing,
                     scanResult.rssi,
                     name,
                     pairingState,
+                    scanResult.currentImage
+                )
+                IndexImage.Failsafe -> RealDiscoveredIndexDevice(
+                    base,
+                    scanResult.rssi,
+                    name,
                     scanResult.currentImage
                 )
             }

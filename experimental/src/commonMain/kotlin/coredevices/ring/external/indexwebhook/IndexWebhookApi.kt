@@ -80,7 +80,7 @@ class IndexWebhookApiImpl(
     private val webhookPreferences: IndexWebhookPreferences,
     private val runRepository: IndexWebhookRunRepository,
     private val scope: CoroutineScope,
-) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes) {
+) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookApi")

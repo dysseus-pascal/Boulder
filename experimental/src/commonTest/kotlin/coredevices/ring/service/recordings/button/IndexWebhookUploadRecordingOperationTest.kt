@@ -101,6 +101,19 @@ class IndexWebhookUploadRecordingOperationTest {
     }
 
     @Test
+    fun transcriptionOnlyRecordingSendsTranscriptWithoutAudio() = runTest {
+        val api = FakeWebhookApi()
+        val inner = FakeTranscribingOp(transcript = "just the words")
+        buildDecorator(api, IndexWebhookPayloadMode.TranscriptionOnly, inner, fileId = "rec-6", recordingId = 6)
+            .run(null)
+        advanceUntilIdle()
+
+        assertEquals(1, api.calls.size)
+        assertTrue(api.calls.single().samplesNull)
+        assertEquals("just the words", api.calls.single().transcription)
+    }
+
+    @Test
     fun typedInputSendsTheTextAsTranscript() = runTest {
         val api = FakeWebhookApi()
         val inner = FakeTranscribingOp(transcript = "typed note")

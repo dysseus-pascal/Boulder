@@ -7,6 +7,8 @@ import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
+import coredevices.api.EngDashOtaApi
+import coredevices.api.EngDashOtaApiImpl
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
 import coredevices.pebble.health.HealthSyncTracker
@@ -118,4 +120,5 @@ val utilModule = module {
     single<UsersDao> { UsersDaoImpl({ get() }, get(), get(), get(), get()) }
     singleOf(::HealthSyncTracker)
     singleOf(::PlatformHealthSync)
+    singleOf(::EngDashOtaApiImpl) bind EngDashOtaApi::class
 }

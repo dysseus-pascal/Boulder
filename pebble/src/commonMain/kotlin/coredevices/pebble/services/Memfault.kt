@@ -2,6 +2,7 @@ package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.api.ensureVersionPrefix
 import coredevices.pebble.Platform
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.util.CommonBuildKonfig
@@ -106,14 +107,6 @@ class Memfault(
             "XXXXXXXXXXXX" -> "XXXX${partialMacAddress()}"
             else -> serial
         }
-    }
-}
-
-internal fun ensureVersionPrefix(version: String): String {
-    return if (version.startsWith("v")) {
-        version
-    } else {
-        "v$version"
     }
 }
 

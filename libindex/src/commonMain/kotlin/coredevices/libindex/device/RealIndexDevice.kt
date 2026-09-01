@@ -41,11 +41,13 @@ class RealPairableIndexDevice(
 class RealRepairableIndexDevice(
     indexDevice: IndexDevice,
     private val indexSystem: IndexSystem,
-    override val rssi: Int,
-    override val currentImage: IndexImage
+    private val scanResult: IndexScanResult,
 ): IndexDevice by indexDevice, RepairableIndexDevice {
+    override val rssi: Int get() = scanResult.rssi
+    override val currentImage: IndexImage get() = scanResult.currentImage
+
     override suspend fun forceFailsafe() {
-        indexSystem.forceFailsafe(this)
+        indexSystem.forceFailsafe(scanResult)
     }
 }
 
@@ -101,12 +103,7 @@ class IndexDeviceFactory(
             known != null -> known
 
             scanResult != null -> when (scanResult.currentImage) {
-                IndexImage.ProductionTest -> RealRepairableIndexDevice(
-                    base,
-                    indexSystem,
-                    scanResult.rssi,
-                    scanResult.currentImage,
-                )
+                IndexImage.ProductionTest -> RealRepairableIndexDevice(base, indexSystem, scanResult)
                 IndexImage.Primary -> RealPairableIndexDevice(
                     base,
                     indexPairing,

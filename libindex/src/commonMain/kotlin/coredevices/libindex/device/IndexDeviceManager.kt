@@ -269,11 +269,13 @@ internal fun List<IndexDevice>.upsertRing(device: IndexDevice): List<IndexDevice
     }
 }
 
+@Suppress("ArrayInDataClass")
 data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
-    val currentImage: IndexImage
+    val currentImage: IndexImage,
+    val manufacturerData: ByteArray? = null,
 )
 
 internal data class StoredPairing(val id: String?, val name: String?)

@@ -788,6 +788,7 @@ fun RingItem(
     val coreAnalytics = koinInject<CoreAnalytics>()
     val platform = koinInject<Platform>()
     val companionDevice = koinInject<CompanionDevice>()
+    val libIndex = koinInject<LibIndex>()
     val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
     var companionApproved by remember(ring.identifier) {
@@ -907,6 +908,9 @@ fun RingItem(
                                 scope.launch {
                                     try {
                                         ring.forceFailsafe()
+                                        // The ring reboots into failsafe under a new address; rescan
+                                        // so it is listed and the recovery scan loop picks it up.
+                                        libIndex.startScan()
                                     } catch (e: Exception) {
                                         logger.e(e) { "Failed to force failsafe: ${e.message}" }
                                     }

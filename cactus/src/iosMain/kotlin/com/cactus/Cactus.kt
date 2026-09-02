@@ -4,7 +4,6 @@ import cactus.*
 import kotlinx.cinterop.*
 import platform.darwin.sysctlbyname
 import platform.posix.size_tVar
-import platform.posix.sysctlbyname
 
 private val cactusSupported: Boolean by lazy {
     memScoped {

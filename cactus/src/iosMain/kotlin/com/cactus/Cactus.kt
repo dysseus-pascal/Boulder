@@ -9,7 +9,9 @@ private val cactusSupported: Boolean by lazy {
     memScoped {
         val value = alloc<IntVar>()
         val size = alloc<size_tVar>().apply { this.value = sizeOf<IntVar>().convert() }
-        sysctlbyname("hw.optional.arm.FEAT_FP16", value.ptr, size.ptr, null, 0u) == 0 && value.value != 0
+        val fp16 = sysctlbyname("hw.optional.arm.FEAT_FP16", value.ptr, size.ptr, null, 0u) == 0 && value.value != 0
+        val dotprod = sysctlbyname("hw.optional.arm.FEAT_DotProd", value.ptr, size.ptr, null, 0u) == 0 && value.value != 0
+        fp16 && dotprod
     }
 }
 

@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.StrictMode
 import androidx.annotation.RequiresApi
+import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -52,13 +53,16 @@ import kotlin.time.toJavaDuration
 
 private val logger = Logger.withTag("MainApplication")
 
-class MainApplication : Application(), SingletonImageLoader.Factory {
+class MainApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
 
     override fun onCreate() {
         super.onCreate()
@@ -218,9 +222,14 @@ fun scheduleBackgroundJob(appContext: AppContext, coreConfig: CoreConfig) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
     ).build()
-    WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
-        uniqueWorkName = "core_refresh",
-        existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
-        request = workRequest,
-    )
+    try {
+        WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
+            uniqueWorkName = "core_refresh",
+            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+            request = workRequest,
+        )
+    } catch (e: Throwable) {
+        // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
+        logger.e(e) { "Failed to schedule background job" }
+    }
 }

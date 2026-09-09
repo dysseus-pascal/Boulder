@@ -37,6 +37,8 @@ import coredevices.ring.ui.screens.home.IndexFeedScreen
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
+import coredevices.util.Platform
+import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.auth.FirebaseUser
@@ -79,6 +81,7 @@ class ExperimentalDevices(
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val indexSettingsSummary: IndexSettingsSummary,
+    private val platform: Platform,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -222,6 +225,9 @@ class ExperimentalDevices(
                 append("\n")
             }
             append("Index Debug enabled: ${preferences.debugDetailsEnabled.value}\n")
+            if (platform.isAndroid) {
+                append("PendingIntent scan enabled: ${preferences.usePendingIntentScan.value}\n")
+            }
             append("LLM mode: ${preferences.llmMode.value}\n")
             append(runCatching { indexSettingsSummary.summary() }
                 .getOrElse { "\nIndex Settings unavailable: ${it.message}" })

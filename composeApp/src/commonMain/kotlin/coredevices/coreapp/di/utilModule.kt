@@ -101,7 +101,8 @@ val utilModule = module {
                 override fun initTelemetry() {}
             },
             get(),
-            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
+            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost(),
+            get(),
         )
     }
     singleOf(::PlatformSpeechRecognizer)

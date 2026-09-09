@@ -47,7 +47,8 @@ actual val platformRingModule = module {
             collectionIndexStorage = get(),
             context = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,
-            CoroutineScope(Dispatchers.Default)
+            CoroutineScope(Dispatchers.Default),
+            useScanReceiver = prefs.usePendingIntentScan.value
         )
     }
     singleOf(::PlatformIndexNotificationManager)

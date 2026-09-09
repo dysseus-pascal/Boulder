@@ -55,6 +55,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -154,6 +156,7 @@ internal fun UriHandler.openUrlSafely(url: String) {
 @Composable
 fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
+    val snackbarHostState = remember { SnackbarHostState() }
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val llmMode by viewModel.llmMode.collectAsState()
     val localLlmSupported by viewModel.localLlmSupported.collectAsState()
@@ -161,6 +164,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
+    val pendingIntentScanEnabled by viewModel.pendingIntentScanEnabled.collectAsState()
     val diagnosticsState by viewModel.diagnosticsState.collectAsState()
     val platform = koinInject<Platform>()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
@@ -248,9 +252,11 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismiss = { showDiagnosticsDialog = false }
         )
     }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         containerColor = colors.surface,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -545,15 +551,28 @@ fun IndexSettings(coreNav: CoreNav) {
                 }
             }
             if (debugDetailsEnabled) {
-                // Panic Ring button commented out for prod — crashes the app (MOB-7937).
-                // item {
-                //     ListItem(
-                //         modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
-                //             viewModel.panicRing()
-                //         },
-                //         headlineContent = { Text("Panic Ring", color = Color.Red) }
-                //     )
-                // }
+                fun togglePendingIntentScanEnabled() {
+                    viewModel.togglePendingIntentScanEnabled()
+                    scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
+                }
+                item {
+                    SettingsRow(
+                        title = "Use PendingIntent scan",
+                        subtitle = if (platform.isAndroid) {
+                            "Experimental alternative for better background/battery performance"
+                        } else {
+                            "Available on Android only"
+                        },
+                        enabled = platform.isAndroid,
+                        onClick = ::togglePendingIntentScanEnabled,
+                        trailing = {
+                            Switch(
+                                checked = pendingIntentScanEnabled,
+                                onCheckedChange = { togglePendingIntentScanEnabled() }
+                            )
+                        }
+                    )
+                }
                 item {
                     SettingsRow(
                         title = "Restart Pre-emptive Transfer",

@@ -97,6 +97,7 @@ dependencies {
     // Components this module's manifest declares, so lint can resolve them.
     implementation(project(":util"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.work)
     implementation(libs.health.kmp)
 
     androidTestImplementation(platform(libs.firebase.bom))

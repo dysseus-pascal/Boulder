@@ -129,8 +129,10 @@ sealed class RecommendedModel {
 }
 
 fun weightsVersionFor(modelSlug: String): String = when (modelSlug) {
-    CommonBuildKonfig.CACTUS_STT_MODEL_ENG -> CommonBuildKonfig.CACTUS_WEIGHTS_VERSION_ENG
-    else -> CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+    CommonBuildKonfig.CACTUS_STT_MODEL_ENG -> CommonBuildKonfig.CACTUS_STT_ENG_WEIGHTS_VERSION
+    CommonBuildKonfig.CACTUS_LM_MODEL_NAME -> CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION
+    CommonBuildKonfig.CACTUS_STT_MODEL -> CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION
+    else -> error("Unknown model: $modelSlug")
 }
 
 data class ModelInfo(

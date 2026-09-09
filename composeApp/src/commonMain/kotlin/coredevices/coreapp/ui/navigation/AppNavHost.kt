@@ -30,6 +30,8 @@ import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
+import coredevices.ring.ui.navigation.addRingRoutes
+import coredevices.ring.ui.screens.IndexScreen
 import coredevices.ui.GenericWebViewScreen
 import coredevices.util.CommonBuildKonfig
 import kotlinx.coroutines.flow.filterNotNull
@@ -107,19 +109,16 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
         }
     }
-    val experimentalDevices: ExperimentalDevices = koinInject()
     NavHost(navController, startDestination = startDestination) {
-        experimentalDevices.addExperimentalRoutes(this, coreNav)
+        addRingRoutes(coreNav)
         addPebbleRoutes(
             coreNav,
             indexScreen = { topBarParams, navBarNav, scopedCoreNav ->
-                // Use the inner-scoped CoreNav so detail navigations
-                // (RecordingDetails, ObjectDetails, FullFeed, ...) stay
-                // inside the bottom-nav chrome.
-                experimentalDevices.IndexScreen(scopedCoreNav, topBarParams)
+                // Use the inner-scoped CoreNav so inner navigations stay inside the bottom-nav.
+                IndexScreen(scopedCoreNav, topBarParams)
             },
             addExperimentalRoutes = { scopedCoreNav ->
-                experimentalDevices.addExperimentalRoutes(this, scopedCoreNav)
+                addRingRoutes(scopedCoreNav)
             },
             isInnerScopedRoute = { it is RingRoute },
         )
@@ -198,11 +197,4 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
         }
     }
-}
-
-@Composable
-fun experimentsEnabled(): Boolean {
-    val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
-    val enableExperiments by enableExperimentalDevices.enabled.collectAsState()
-    return enableExperiments
 }

@@ -859,6 +859,7 @@ fun RingItem(
                                 onClick = {
                                     scope.launch {
                                         uiContext?.let { companionDevice.registerDevice(ring.identifier, it, false) }
+                                        companionApproved = companionDevice.hasApprovedDevice(ring.identifier)
                                         val result = try {
                                             ring.pair()
                                         } catch (e: Exception) {

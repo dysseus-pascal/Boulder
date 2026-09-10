@@ -113,6 +113,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfigProvider
@@ -448,6 +449,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val missingPermissions by permissionRequester.missingPermissions.collectAsState()
     val uiContext = rememberUiContext()
     val analyticsBackend: AnalyticsBackend = koinInject()
+    val usersDao: UsersDao = koinInject()
     val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
     val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
     val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
@@ -1928,7 +1930,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     action = {
                         scope.launch {
                             try {
-                                Firebase.auth.signOut()
+                                usersDao.signOut()
                                 libPebble.requestLockerSync()
                                 analyticsBackend.setUser(email = null)
                                 logger.d { "User signed out" }

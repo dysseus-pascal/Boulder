@@ -18,7 +18,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -86,7 +85,8 @@ class LazyLoadingMcpSessionTest {
             LazyLoadingMcpSession.LOADER_INTEGRATION_NAME, LazyLoadingMcpSession.LOAD_TOOLS_NAME,
             mapOf("group" to JsonPrimitive("wiki")), sessionContext()
         )
-        assertNull(result.semanticResult)
+        val supporting = assertIs<SemanticResult.SupportingData>(result.semanticResult)
+        assertTrue(supporting.assistiveOnly)
         assertContains(result.resultString, "Loaded 4 tools from 'wiki'")
 
         val tools = session.listTools()

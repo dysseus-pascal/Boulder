@@ -17,7 +17,9 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class LazyLoadingMcpSessionTest {
@@ -33,6 +35,13 @@ class LazyLoadingMcpSessionTest {
 
     private fun integration(name: String, toolCount: Int) =
         integration(name, *Array(toolCount) { "tool_$it" to "Does thing $it" })
+
+    private class ToggleableIntegration(name: String, toolCount: Int) : BuiltInMcpIntegration(
+        name, List(toolCount) { FakeTool("tool_$it", "Does thing $it") }
+    ) {
+        var disabled = emptySet<String>()
+        override suspend fun getDisabledTools() = disabled.toList()
+    }
 
     private fun sessionContext() = SessionContext(timeBase = null, userMessageText = CompletableDeferred("test"))
 
@@ -90,6 +99,21 @@ class LazyLoadingMcpSessionTest {
         session.closeSession()
         session.openSession()
         assertTrue(session.listTools().names().contains("wiki__tool_0"))
+    }
+
+    @Test
+    fun loaderIsReusedUntilTheDeferrableToolsChange() = runBlocking {
+        val crm = ToggleableIntegration("crm", 5)
+        val session = LazyLoadingMcpSession(
+            listOf(integration("notes", 2), crm), this, eagerIntegrations = setOf("notes"), maxEagerTools = 3
+        )
+        val first = session.listTools().loader().tool
+        assertSame(first, session.listTools().loader().tool)
+
+        crm.disabled = setOf("tool_4")
+        val rebuilt = session.listTools().loader().tool
+        assertNotSame(first, rebuilt)
+        assertContains(rebuilt.definition.description!!, "- crm (4 tools)")
     }
 
     @Test

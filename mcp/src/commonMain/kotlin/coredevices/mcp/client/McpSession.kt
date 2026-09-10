@@ -22,7 +22,6 @@ open class McpSession(
     suspend fun openSession() {
         for (integration in integrations) {
             try {
-                integration.resetCache()
                 integration.connect()
             } catch (e: Exception) {
                 // Log and continue with other integrations

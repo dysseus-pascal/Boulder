@@ -24,7 +24,9 @@ import kotlinx.serialization.json.putJsonArray
  * the life of the session.
  *
  * Callers keep using [listTools] and [callTool] as with any session, so the agent harness only
- * has to re-list tools between inference rounds to pick up what was loaded.
+ * has to re-list tools between inference rounds to pick up what was loaded. The loader is only
+ * rebuilt when the deferrable tools change, so the tool specs the model sees stay stable between
+ * rounds.
  */
 class LazyLoadingMcpSession(
     integrations: List<McpIntegration>,
@@ -42,7 +44,8 @@ class LazyLoadingMcpSession(
             return allTools
         }
         val (eager, deferrable) = allTools.partition { it.integrationName in eagerIntegrations }
-        val loadTools = LoadToolsTool(ToolCatalog(deferrable), ::load)
+        val loadTools = loader?.takeIf { it.catalog.describes(deferrable) }
+            ?: LoadToolsTool(ToolCatalog(deferrable), ::load)
         loader = loadTools
         val loaded = deferrable.filter { it.integrationName in loadedGroups }
         return eager + loaded + McpSessionTool(LOADER_INTEGRATION_NAME, loadTools)
@@ -107,6 +110,11 @@ internal class ToolCatalog(
     private val sampleDescriptionLength: Int = SAMPLE_DESCRIPTION_LENGTH,
 ) {
     val groups: Map<String, List<McpSessionTool>> = tools.groupBy { it.integrationName }
+    private val definitions = tools.definitions()
+
+    fun describes(tools: List<McpSessionTool>): Boolean = definitions == tools.definitions()
+
+    private fun List<McpSessionTool>.definitions() = map { it.integrationName to it.tool.definition }
 
     fun describe(): String = groups.entries.joinToString("\n") { (group, tools) ->
         val samples = sample(tools).joinToString(", ") { describeSample(it.tool.definition) }

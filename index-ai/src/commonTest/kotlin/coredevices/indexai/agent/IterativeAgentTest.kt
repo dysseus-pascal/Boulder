@@ -31,7 +31,6 @@ class IterativeAgentTest {
         val calls = mutableListOf<Pair<String, Map<String, JsonElement>>>()
         val contexts = mutableListOf<SessionContext>()
         var tools = emptyList<McpTool>()
-        override suspend fun resetCache() {}
         override suspend fun connect() {}
         override suspend fun close() {}
         override suspend fun listTools(): List<McpTool> = tools

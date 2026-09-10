@@ -86,7 +86,13 @@ class LazyLoadingMcpSession(
         }
         loadedGroups += group
         val names = tools.joinToString(", ") { it.tool.definition.name }
-        return ToolCallResult("Loaded ${tools.size} tools from '$group', now available to call: $names", null)
+        return ToolCallResult(
+            "Loaded ${tools.size} tools from '$group', now available to call: $names",
+            SemanticResult.SupportingData(
+                "Loaded MCP $group with ${tools.size} tools",
+                assistiveOnly = true
+            )
+        )
     }
 
     companion object {

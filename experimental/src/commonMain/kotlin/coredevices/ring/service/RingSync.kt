@@ -173,7 +173,7 @@ class RingSync(
     private val _ringEvents = MutableSharedFlow<RingEvent>(replay = 1, extraBufferCapacity = 50, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val ringEvents = _ringEvents.asSharedFlow()
 
-    val batteryVoltage = MutableSharedFlow<Pair<String, UShort?>>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val batteryVoltage = MutableSharedFlow<Pair<String, UShort?>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private fun logTransferEvent(
         latency: Long?,
@@ -893,7 +893,7 @@ class RingSync(
             appendLine("Last Seen: ${it.lastAdvertisement?.timestamp}")
             appendLine("Last RSSI: ${it.lastAdvertisement?.rssi}")
             appendLine("Last RX RSSI: ${state?.rxRSSI}")
-            appendLine("Battery Voltage: ${batteryVoltage.firstOrNull()?.second ?: "<unknown>"} mV")
+            appendLine("Battery Voltage: ${batteryVoltage.replayCache.firstOrNull()?.second ?: "<unknown>"} mV")
             appendLine("isInCollectionState: ${state?.isInCollectionState}")
             appendLine("isNearby: ${state?.isNearby}")
             appendLine("isInFailsafeMode: ${state?.isInFailsafeMode}")

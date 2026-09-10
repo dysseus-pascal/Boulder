@@ -263,6 +263,10 @@ private object UsersDaoTestImpl: UsersDao {
     ) {
     }
 
+    override suspend fun signOut() {
+        TODO("Not yet implemented")
+    }
+
     override fun init() {
         TODO("Not yet implemented")
     }

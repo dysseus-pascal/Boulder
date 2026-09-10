@@ -176,7 +176,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val platformSttDefaulted: Boolean
         get() = settings.getBoolean("platform_stt_defaulted", false)
     private val _usePendingIntentScan = MutableStateFlow(
-        pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan", false)
+        pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
 
@@ -330,7 +330,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         if (!pendingIntentScanSupported) {
             throw UnsupportedOperationException("PendingIntent scanning is Android only")
         }
-        settings.putBoolean("use_pending_intent_scan", enabled)
+        settings.putBoolean("use_pending_intent_scan_2", enabled)
         _usePendingIntentScan.value = enabled
     }
 

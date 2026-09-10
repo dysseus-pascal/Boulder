@@ -5,17 +5,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class UsePendingIntentScanPreferenceTest {
 
     @Test
-    fun defaultsToFalse() {
-        assertFalse(PreferencesImpl(MapSettings()).usePendingIntentScan.value)
+    fun defaultsToTrue() {
+        assertTrue(PreferencesImpl(MapSettings()).usePendingIntentScan.value)
     }
 
     @Test
     fun followsPlatformSupport() {
-        val settings = MapSettings("use_pending_intent_scan" to true)
+        val settings = MapSettings("use_pending_intent_scan_2" to true)
         val preferences = PreferencesImpl(settings)
 
         assertEquals(pendingIntentScanSupported, preferences.usePendingIntentScan.value)

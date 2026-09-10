@@ -538,6 +538,28 @@ fun IndexSettings(coreNav: CoreNav) {
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+            fun togglePendingIntentScanEnabled() {
+                viewModel.togglePendingIntentScanEnabled()
+                scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
+            }
+            item {
+                SettingsRow(
+                    title = "Use PendingIntent scan",
+                    subtitle = if (platform.isAndroid) {
+                        "Improves background reliability and battery consumption"
+                    } else {
+                        "Available on Android only"
+                    },
+                    enabled = platform.isAndroid,
+                    onClick = ::togglePendingIntentScanEnabled,
+                    trailing = {
+                        Switch(
+                            checked = pendingIntentScanEnabled,
+                            onCheckedChange = { togglePendingIntentScanEnabled() }
+                        )
+                    }
+                )
+            }
             item {
                 SettingsRow(
                     title = "Enable Debug Details",
@@ -551,28 +573,6 @@ fun IndexSettings(coreNav: CoreNav) {
                 }
             }
             if (debugDetailsEnabled) {
-                fun togglePendingIntentScanEnabled() {
-                    viewModel.togglePendingIntentScanEnabled()
-                    scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
-                }
-                item {
-                    SettingsRow(
-                        title = "Use PendingIntent scan",
-                        subtitle = if (platform.isAndroid) {
-                            "Experimental alternative for better background/battery performance"
-                        } else {
-                            "Available on Android only"
-                        },
-                        enabled = platform.isAndroid,
-                        onClick = ::togglePendingIntentScanEnabled,
-                        trailing = {
-                            Switch(
-                                checked = pendingIntentScanEnabled,
-                                onCheckedChange = { togglePendingIntentScanEnabled() }
-                            )
-                        }
-                    )
-                }
                 item {
                     SettingsRow(
                         title = "Restart Pre-emptive Transfer",

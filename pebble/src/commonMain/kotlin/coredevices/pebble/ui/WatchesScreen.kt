@@ -95,6 +95,7 @@ import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -444,6 +445,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 )
             )
             val rings by libIndex.rings.collectAsState()
+            val ringPairing by remember {
+                derivedStateOf {
+                    rings.any { (it as? PairableIndexDevice)?.pairingState == IndexPairingState.Pairing }
+                }
+            }
             val entriesFlow = remember {
                 combine(watchesFlow, libIndex.rings) { sortedWatches, rings ->
                     rings.map { DeviceListEntry.Ring(it) } +
@@ -507,7 +513,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     }
                 }
-                if (scanningStatus != ScanningStatus.NotScanning) {
+                if (scanningStatus != ScanningStatus.NotScanning && !ringPairing) {
                     Text(
                         text = "Scanning for devices...",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)

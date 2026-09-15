@@ -142,12 +142,17 @@ import coredevices.util.STTConfig
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.inProgress
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
 import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.transcription.SpeechModelAvailability
 import coredevices.util.transcription.SpokenLanguageOptions
+import coredevices.util.transcription.platformModelNeedsDownload
+import coredevices.util.transcription.platformModelState
+import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -358,6 +363,26 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
+    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
+    val platformSttAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
+    }
+    val platformDownloadStatus by platformSpeechRecognizer.downloadStatus.collectAsState()
+    val platformModelAvailability by produceState(
+        SpeechModelAvailability.Unsupported,
+        coreConfig.sttConfig.spokenLanguage,
+        platformDownloadStatus,
+        platformSttAvailable,
+    ) {
+        value = if (platformSttAvailable) {
+            withContext(Dispatchers.Default) {
+                platformSpeechRecognizer.modelAvailability(coreConfig.sttConfig.spokenLanguage)
+            }
+        } else {
+            SpeechModelAvailability.Unsupported
+        }
+    }
+    val platformNeedsDownload = platformModelNeedsDownload(platformModelAvailability, platformDownloadStatus)
     if (showSpokenLanguageDialog) {
         SpokenLanguagePickerDialog(
             selectedCode = coreConfig.sttConfig.spokenLanguage,
@@ -368,6 +393,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     )
                 )
                 showSpokenLanguageDialog = false
+                if (coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly) {
+                    scope.launch {
+                        val availability = platformSpeechRecognizer.modelAvailability(code)
+                        if (platformModelNeedsDownload(availability, platformDownloadStatus)) {
+                            navBarNav?.navigateTo(CommonRoutes.SpeechModelDownloadDialog)
+                        }
+                    }
+                }
             },
             onDismissRequest = { showSpokenLanguageDialog = false },
         )
@@ -463,10 +496,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         }
     }
     val cactusSupported = remember { isCactusSupported() }
-    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
-    val platformSttAvailable by produceState(false) {
-        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
-    }
     val bootConfigProvider: BootConfigProvider = koinInject()
     val rebbleVoiceAvailable by produceState(false, loggedIn) {
         value = withContext(Dispatchers.Default) {
@@ -1505,6 +1534,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                     )
                                 }
                             }
+                            if (isPlatform && platformNeedsDownload) {
+                                navBarNav?.navigateTo(CommonRoutes.SpeechModelDownloadDialog)
+                            }
                         }
                     },
                     itemText = { mode ->
@@ -1520,13 +1552,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         }
                     },
                     extraSupportingContent = {
-                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.let { state ->
+                        modelDownloadState.takeIf { it.inProgress }?.let { state ->
                             Column {
                                 Text(
                                     text = "Downloading in the background...",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                                state.progress?.let { progress ->
+                                (state as? ModelDownloadStatus.Downloading)?.progress?.let { progress ->
                                     CoreLinearProgressIndicator(
                                         progress = { progress },
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
@@ -1561,11 +1593,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
                 ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "System Speech Model",
+                    description = "${spokenLanguageLabel(coreConfig.sttConfig.spokenLanguage)} · " +
+                        platformModelState(platformModelAvailability, platformDownloadStatus),
+                    keywords = "system stt speech recognition model download language",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    show = { coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly },
+                    action = { nav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) }
+                        .takeIf { platformNeedsDownload },
+                ) },
                 basicSettingsActionItem(
                     title = "Spoken Language",
-                    description = coreConfig.sttConfig.spokenLanguage
-                        ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
-                        ?: "Automatic",
+                    description = spokenLanguageLabel(coreConfig.sttConfig.spokenLanguage),
                     keywords = "language stt speech recognition locale iso",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,

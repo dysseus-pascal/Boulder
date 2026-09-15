@@ -450,6 +450,7 @@ fun IndexSettings(coreNav: CoreNav) {
                         )
                     },
                     onRequireSignIn = { showSignInDialog = true },
+                    onShowModelDownload = { coreNav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) },
                 )
             }
             item {

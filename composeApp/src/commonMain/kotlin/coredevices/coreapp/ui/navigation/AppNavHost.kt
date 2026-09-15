@@ -16,11 +16,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
 import co.touchlab.kermit.Logger
-import coredevices.EnableExperimentalDevices
-import coredevices.ExperimentalDevices
 import coredevices.ring.ui.navigation.RingRoute
+import coredevices.coreapp.ui.SpeechModelDownloadDialog
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
@@ -122,6 +122,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             },
             isInnerScopedRoute = { it is RingRoute },
         )
+        dialog<CommonRoutes.SpeechModelDownloadDialog> {
+            SpeechModelDownloadDialog(onDismiss = { coreNav.goBack() })
+        }
         if (CommonBuildKonfig.QA) {
             composable<CommonRoutes.BugReport>(
                 deepLinks = listOf(

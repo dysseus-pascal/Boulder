@@ -232,7 +232,7 @@ val experimentalModule = module {
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
-    singleOf(::IndexNotificationManager)
+    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), getOrNull()) }
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
     singleOf(::ExperimentalDevices)

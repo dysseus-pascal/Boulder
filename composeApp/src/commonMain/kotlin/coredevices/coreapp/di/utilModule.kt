@@ -32,6 +32,7 @@ import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
+import coredevices.util.transcription.LocalTranscriptionService
 import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowRESTTranscriptionService
@@ -44,6 +45,7 @@ import dev.gitlive.firebase.firestore.persistentCacheSettings
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import theme.RealThemeProvider
 import theme.ThemeProvider
@@ -107,8 +109,8 @@ val utilModule = module {
     }
     singleOf(::PlatformSpeechRecognizer)
     single {
-        HybridTranscriptionService(get(), get(), get(), get(), get(), get())
-    } bind TranscriptionService::class
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get())
+    } binds arrayOf(TranscriptionService::class, LocalTranscriptionService::class)
     singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get(), get(), get(), get()) }

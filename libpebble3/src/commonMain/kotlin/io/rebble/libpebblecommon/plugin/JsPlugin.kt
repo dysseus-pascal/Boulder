@@ -159,6 +159,9 @@ class JsPlugin(
         }
     }
 
+    /** Derived once: the manifest is fixed for the life of the plugin. */
+    private val networkPolicy = PluginNetworkPolicy(manifest.usesPermissions)
+
     private fun newSession(): Session {
         // XHR drives the JS side by evaluating statements that must land in order — readyState
         // before the response body before the events — so callbacks queue rather than race.
@@ -169,6 +172,7 @@ class JsPlugin(
             httpInterceptorManager = httpInterceptorManager,
             appUuid = pluginUuid,
             client = httpClient,
+            networkPolicy = networkPolicy,
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.

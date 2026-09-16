@@ -26,6 +26,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusModelPathProvider
@@ -73,6 +74,7 @@ val utilModule = module {
     singleOf(::EnableExperimentalDevices)
     singleOf(::AppResumed)
     singleOf(::DoneInitialOnboarding)
+    single { SecondaryProfileWarning(get(), get<coredevices.util.Platform>().isSecondaryProfile) }
     singleOf(::AppUpdateTracker)
     singleOf(::RealCoreAnalytics) bind CoreAnalytics::class
     single { getCoreRoomDatabase(get()) }

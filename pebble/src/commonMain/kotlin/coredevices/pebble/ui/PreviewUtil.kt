@@ -53,6 +53,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -154,6 +155,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { NotificationAppScreenViewModel() }
     single { NotificationAppsScreenViewModel() }
     single { DoneInitialOnboarding() }
+    single { SecondaryProfileWarning(get(), isSecondaryProfile = false) }
     val storeSourceDao = object : AppstoreSourceDao {
         override suspend fun insertSource(source: AppstoreSource): Long = 0
 

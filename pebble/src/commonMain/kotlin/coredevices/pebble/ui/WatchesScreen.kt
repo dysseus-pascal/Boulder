@@ -795,6 +795,7 @@ fun RingItem(
     val platform = koinInject<Platform>()
     val companionDevice = koinInject<CompanionDevice>()
     val libIndex = koinInject<LibIndex>()
+    val coreConfig by koinInject<CoreConfigFlow>().flow.collectAsState()
     val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
     var companionApproved by remember(ring.identifier) {
@@ -809,13 +810,14 @@ fun RingItem(
             )
         },
         supportingContent = {
-            val stateText = when (ring) {
-                is DiscoveredIndexDevice -> when (ring.currentImage) {
+            val stateText = when {
+                ring is DiscoveredIndexDevice -> when (ring.currentImage) {
                     IndexImage.Failsafe -> "Failsafe mode"
                     IndexImage.ProductionTest -> "Production test mode"
                     IndexImage.Primary -> "Available to pair"
                 }
-                is InterviewedIndexDevice if (ring.updating) -> "Updating..."
+                ring is InterviewedIndexDevice && ring.updating -> "Updating..."
+                coreConfig.disableRingBluetoothSync -> "Bluetooth Sync Disabled"
                 else -> "Ready"
             }
             Column {
@@ -943,7 +945,7 @@ fun RingItem(
                     }
                     else -> {}
                 }
-                if (ring is KnownIndexDevice && !companionApproved) {
+                if (ring is KnownIndexDevice && !companionApproved && !coreConfig.disableRingBluetoothSync) {
                     Text(
                         text = "Limited background access",
                         color = MaterialTheme.colorScheme.error,

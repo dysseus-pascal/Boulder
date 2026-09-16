@@ -225,6 +225,7 @@ class ExperimentalDevices(
                 append("\n")
             }
             append("Index Debug enabled: ${preferences.debugDetailsEnabled.value}\n")
+            append("Secondary profile: ${platform.isSecondaryProfile}\n")
             if (platform.isAndroid) {
                 append("PendingIntent scan enabled: ${preferences.usePendingIntentScan.value}\n")
             }

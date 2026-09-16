@@ -22,7 +22,9 @@ import coredevices.libindex.device.isFailsafe
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.isIOS
 import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
@@ -270,19 +272,26 @@ class RingSync(
             satelliteManager.lastRing.onEach {
                 _lastRing.value = it
             }.launchIn(this)
+            val secondaryProfileWarning = get<SecondaryProfileWarning>()
+            if (secondaryProfileWarning.pending) {
+                logger.i { "Waiting for secondary profile prompt before starting ring sync" }
+                secondaryProfileWarning.awaitDecision()
+            }
             // Run the satellite scan/sync loop when a ring is paired, or when an unpaired
             // ring is discovered in failsafe mode so it can be recovered via the scan.
-            combine(prefs.ringPaired, deviceManager.rings) { paired, rings ->
+            combine(prefs.ringPaired, deviceManager.rings, get<CoreConfigFlow>().flow) { paired, rings, config ->
                 val isPaired = paired != null
                 val isFailsafe = rings.any { it is DiscoveredIndexDevice && it.isFailsafe }
-                isPaired to isFailsafe
-            }.distinctUntilChanged().map { (isPaired, isFailsafe) ->
-                if (isPaired) {
+                Triple(isPaired, isFailsafe, config.disableRingBluetoothSync)
+            }.distinctUntilChanged().map { (isPaired, isFailsafe, syncDisabled) ->
+                if (syncDisabled) {
+                    logger.i { "Ring Bluetooth sync disabled in settings, not running sync job" }
+                } else if (isPaired) {
                     logger.d { "Ring is paired, enabling sync job" }
                 } else if (isFailsafe) {
                     logger.d { "Failsafe ring discovered, enabling sync job to allow recovery" }
                 }
-                isPaired || isFailsafe
+                (isPaired || isFailsafe) && !syncDisabled
             }.collectLatest { syncEnabled ->
                 if (syncEnabled) {
                     var lastIdx: Int = -1

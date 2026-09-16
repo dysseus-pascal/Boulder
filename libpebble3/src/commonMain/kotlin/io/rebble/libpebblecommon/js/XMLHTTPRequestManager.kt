@@ -45,6 +45,12 @@ class XMLHTTPRequestManager(
      * something a plugin author wrote.
      */
     private val networkPolicy: PluginNetworkPolicy = PluginNetworkPolicy.unrestricted,
+    /**
+     * The JS object responses are delivered into: `<jsTarget>._instances.get(id)`. PKJS gets the
+     * `XMLHttpRequest` class it writes against; a plugin gets `fetch`'s own registry, so nothing
+     * has to hand a plugin an XHR just to carry a reply back.
+     */
+    private val jsTarget: String = "XMLHttpRequest",
 ): JsEngineInterface, AutoCloseable {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
@@ -129,7 +135,7 @@ class XMLHTTPRequestManager(
         private val headers = mutableMapOf<String, Any>()
         var requestJob: Job? = null
 
-        private val jsInstance = "XMLHttpRequest._instances.get($id)"
+        private val jsInstance = "$jsTarget._instances.get($id)"
 
         private fun changeReadyState(newState: Int) {
             eval("$jsInstance.readyState = $newState")

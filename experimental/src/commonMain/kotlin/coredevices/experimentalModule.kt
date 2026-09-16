@@ -84,6 +84,7 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
+import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
@@ -235,6 +236,7 @@ val experimentalModule = module {
     single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), getOrNull()) }
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
+    singleOf(::IndexRebootLogStore)
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }

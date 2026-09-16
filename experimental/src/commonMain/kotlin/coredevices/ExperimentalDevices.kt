@@ -19,6 +19,8 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.ring.bugreport.IndexRebootLogEntry
+import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.pebble.ui.TopBarParams
@@ -81,6 +83,7 @@ class ExperimentalDevices(
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val indexSettingsSummary: IndexSettingsSummary,
+    private val rebootLogStore: IndexRebootLogStore,
     private val platform: Platform,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
@@ -217,6 +220,8 @@ class ExperimentalDevices(
         )
         attachments
     }
+
+    fun rebootLog(): List<IndexRebootLogEntry> = rebootLogStore.entries()
 
     suspend fun debugSummary(): String {
         return buildString {

@@ -120,5 +120,5 @@ val utilModule = module {
     single<UsersDao> { UsersDaoImpl({ get() }, get(), get(), get(), get()) }
     singleOf(::HealthSyncTracker)
     singleOf(::PlatformHealthSync)
-    singleOf(::EngDashOtaApiImpl) bind EngDashOtaApi::class
+    single { EngDashOtaApiImpl() } bind EngDashOtaApi::class
 }

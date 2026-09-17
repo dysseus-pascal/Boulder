@@ -20,7 +20,9 @@ interface EngDashOtaApi {
     ): EngDashLatestResult?
 }
 
-class EngDashOtaApiImpl: ApiClient(CommonBuildKonfig.USER_AGENT_VERSION), EngDashOtaApi {
+class EngDashOtaApiImpl(
+    private val baseUrl: String = BASE_URL,
+) : ApiClient(CommonBuildKonfig.USER_AGENT_VERSION), EngDashOtaApi {
     /**
      * Get the latest firmware
      * @return the latest artifacts or `null` if nothing available
@@ -31,7 +33,7 @@ class EngDashOtaApiImpl: ApiClient(CommonBuildKonfig.USER_AGENT_VERSION), EngDas
         currentVersion: String?,
         deviceMac: String?
     ): EngDashLatestResult? {
-        val resp = client.get(Url("$BASE_URL/ota/latest")) {
+        val resp = client.get(Url("$baseUrl/ota/latest")) {
             maybeFirebaseAuth()
             parameter("device_serial", deviceSerial)
             parameter("hardware_version", hardwareVersion)

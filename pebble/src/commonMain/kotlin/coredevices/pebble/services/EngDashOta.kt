@@ -3,7 +3,6 @@ package coredevices.pebble.services
 import co.touchlab.kermit.Logger
 import coredevices.pebble.services.Memfault.Companion.serialForMemfault
 import coredevices.pebble.services.PebbleHttpClient.Companion.authFor
-import coredevices.util.CommonBuildKonfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
@@ -31,11 +30,9 @@ class EngDashOta(
     private val logger = Logger.withTag("EngDashOta")
 
     suspend fun getLatestFirmware(watch: WatchInfo): FirmwareUpdateCheckResult {
-        val baseUrl = CommonBuildKonfig.BUG_URL
-            ?: return FirmwareUpdateCheckResult.UpdateCheckFailed("No eng-dash URL configured")
         val token = pebbleHttpClient.authFor(HttpClientAuthType.Core)
         val response = try {
-            httpClient.get("$baseUrl/ota/latest") {
+            httpClient.get("$BASE_URL/ota/latest") {
                 token?.let { bearerAuth(token) }
                 parameter("device_serial", watch.serialForMemfault())
                 parameter("hardware_version", watch.platform.revision)
@@ -93,6 +90,10 @@ class EngDashOta(
                 FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             }
         }
+    }
+
+    companion object {
+        private const val BASE_URL = "https://dash.repebble.com/api"
     }
 }
 

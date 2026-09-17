@@ -106,6 +106,9 @@ import co.touchlab.kermit.Logger
 import com.cactus.isCactusSupported
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.wispr_flow_logo_black
+import coreapp.pebble.generated.resources.wispr_flow_logo_white
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
@@ -142,10 +145,10 @@ import coredevices.util.STTConfig
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
-import coredevices.util.models.inProgress
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
+import coredevices.util.models.inProgress
 import coredevices.util.rememberUiContext
 import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.SpeechModelAvailability
@@ -170,9 +173,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import coreapp.pebble.generated.resources.Res
-import coreapp.pebble.generated.resources.wispr_flow_logo_black
-import coreapp.pebble.generated.resources.wispr_flow_logo_white
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -1461,21 +1461,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                 watchConfig = libPebbleConfig.watchConfig.copy(
                                     enableWatchSettingsSync = it
                                 )
-                            )
-                        )
-                    },
-                    isDebugSetting = true,
-                ),
-                basicSettingsToggleItem(
-                    title = "Use Core OTA service",
-                    description = "Check Core Devices service for Core watch firmware updates instead of Memfault (falls back to Memfault on failure)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
-                    checked = coreConfig.useEngDashOta,
-                    onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                useEngDashOta = it,
                             )
                         )
                     },

@@ -68,9 +68,10 @@ interface Preferences: BasePreferences {
     fun setLastBackupCount(count: Int?)
     fun setPlatformSttDefaulted()
     fun setUsePendingIntentScan(enabled: Boolean)
-
     val defaultCaptureType: StateFlow<DefaultCaptureType>
     fun setDefaultCaptureType(type: DefaultCaptureType)
+    val targetCalendar: StateFlow<Int?>
+    fun setTargetCalendar(calendarId: Int?)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -344,6 +345,19 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setDefaultCaptureType(type: DefaultCaptureType) {
         settings.putInt("default_capture_type", type.id)
         _defaultCaptureType.value = type
+    }
+
+    private val _targetCalendar = MutableStateFlow(
+        settings.getIntOrNull("target_calendar")
+    )
+    override val targetCalendar: StateFlow<Int?> = _targetCalendar.asStateFlow()
+
+    override fun setTargetCalendar(calendarId: Int?) {
+        calendarId?.let {
+            settings.putInt("target_calendar", calendarId)
+        } ?: settings.remove("target_calendar")
+
+        _targetCalendar.value = calendarId
     }
 }
 

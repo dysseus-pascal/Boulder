@@ -332,7 +332,9 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override suspend fun createEvent(event: NewCalendarEvent): String? = null
+    override suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String? = null
+
+    override suspend fun defaultCalendar(): CalendarEntity? = null
 
     // OtherPebbleApps interface
     override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =

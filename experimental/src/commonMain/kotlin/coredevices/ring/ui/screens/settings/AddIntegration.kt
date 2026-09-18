@@ -60,6 +60,7 @@ import coredevices.util.PermissionResult
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -192,9 +193,11 @@ const val PHONE_CALENDAR_TITLE = "Phone Calendar"
  */
 @Composable
 fun PhoneCalendarDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onConnected: () -> Unit = onDismiss,
 ) {
     val preferences = koinInject<Preferences>()
+    val libPebble = koinInject<LibPebble>()
     val permissionRequester = koinInject<PermissionRequester>()
     val uiContext = rememberUiContext()
     var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
@@ -204,7 +207,7 @@ fun PhoneCalendarDialog(
         onDismissRequest = onDismiss,
         title = { Text(PHONE_CALENDAR_TITLE) },
         buttons = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = { if (state is SignInState.Success) onConnected() else onDismiss() }) {
                 Text(if (state is SignInState.Success) "Done" else "Cancel")
             }
             if (state !is SignInState.Success) {
@@ -218,6 +221,8 @@ fun PhoneCalendarDialog(
                             state = when (permissionRequester.requestPermission(Permission.Calendar, ctx)) {
                                 PermissionResult.Granted -> {
                                     preferences.setPhoneCalendarEnabled(true)
+                                    // Sync calendars into the db now so the target picker isn't empty.
+                                    libPebble.doStuffAfterPermissionsGranted()
                                     SignInState.Success
                                 }
                                 PermissionResult.RejectedForever -> {

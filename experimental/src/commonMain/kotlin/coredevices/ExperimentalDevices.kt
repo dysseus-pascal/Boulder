@@ -25,6 +25,7 @@ import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
+import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.ShortcutActionHandler
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
@@ -85,6 +86,7 @@ class ExperimentalDevices(
     private val indexSettingsSummary: IndexSettingsSummary,
     private val rebootLogStore: IndexRebootLogStore,
     private val platform: Platform,
+    private val targetCalendarSeeder: TargetCalendarSeeder,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -123,6 +125,7 @@ class ExperimentalDevices(
             sandboxRepository.seedDatabase()
         }
         ringDelegate.init()
+        scope.launch { targetCalendarSeeder.seedIfNeeded() }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
             NotifierManager.getLocalNotifier().notify {

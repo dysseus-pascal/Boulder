@@ -204,7 +204,8 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
 
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
 internal enum class ActionsDialog {
-    AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar
+    AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar,
+    TargetCalendar,
 }
 
 @Composable
@@ -304,8 +305,14 @@ fun IndexActionsSection(
                         ActionsSheet.ReminderDestination
                     }
                 },
-                onSettings = onOpenBeeperContacts
-                    .takeIf { action.name == MessagingServlet.name && action.disabledReason == null },
+                onSettings = when {
+                    action.disabledReason != null -> null
+                    action.name == MessagingServlet.name -> onOpenBeeperContacts
+                    action.name == CalendarServlet.NAME -> {
+                        { dialog = ActionsDialog.TargetCalendar }
+                    }
+                    else -> null
+                },
                 onConnect = actionConnectDialog(action)?.let { target -> { dialog = target } },
                 onToggle = { onSetActionEnabled(action.name, it) },
             )
@@ -394,7 +401,11 @@ fun IndexActionsSection(
         ActionsDialog.GoogleTasks -> GTasksDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Obsidian -> ObsidianDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Tasker -> TaskerDialog(onDismiss = closeConnectDialog)
-        ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(onDismiss = { dialog = null })
+        ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(
+            onDismiss = { dialog = null },
+            onConnected = { dialog = ActionsDialog.TargetCalendar },
+        )
+        ActionsDialog.TargetCalendar -> TargetCalendarDialog(onDismiss = { dialog = null })
         null -> {}
     }
 }

@@ -303,9 +303,9 @@ sealed class FirmwareUpdateCheckResult {
 interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>
     fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
-
-    /** Create an event in the device's primary/default calendar. Returns the new event id, or null. */
-    suspend fun createEvent(event: NewCalendarEvent): String?
+    suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String?
+    /** The synced calendar matching the platform's default for new events, if known. */
+    suspend fun defaultCalendar(): CalendarEntity?
 }
 
 fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {

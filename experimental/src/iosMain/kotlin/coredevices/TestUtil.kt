@@ -235,6 +235,8 @@ private object PreferencesTestImpl: Preferences {
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
+    override val targetCalendar: StateFlow<Int?> = MutableStateFlow(null)
+    override fun setTargetCalendar(calendarId: Int?) {}
 }
 
 private object UsersDaoTestImpl: UsersDao {

@@ -167,3 +167,9 @@ data class ImageShape(
 data class BooleanShape(
     val value: Boolean,
 )
+
+/** A native plugin operation that failed with one of the [PluginErrors] codes. */
+class PluginNativeException(
+    val code: String,
+    message: String,
+) : Exception(message)

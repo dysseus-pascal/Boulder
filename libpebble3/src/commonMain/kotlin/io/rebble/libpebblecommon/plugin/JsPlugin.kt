@@ -31,6 +31,8 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -47,6 +49,8 @@ class JsPlugin(
     private val httpInterceptorManager: HttpInterceptorManager,
     /** Bundled config page HTML, when the manifest names one. */
     private val configPageHtml: String? = null,
+    /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
+    private val oauthApi: PluginOAuthApi? = null,
 ) : Plugin, ConfigMessageTarget {
 
     override val pluginUuid: Uuid = Uuid.parse(manifest.uuid)
@@ -148,13 +152,13 @@ class JsPlugin(
         }
     }
 
-    private suspend fun awaitReply(send: suspend (Int) -> Unit): String? {
+    private suspend fun awaitReply(timeout: Duration = REQUEST_TIMEOUT, send: suspend (Int) -> Unit): String? {
         val deferred = CompletableDeferred<String>()
         val id = nextRequestId++
         pending[id] = deferred
         return try {
             send(id)
-            withTimeoutOrNull(REQUEST_TIMEOUT) { deferred.await() }
+            withTimeoutOrNull(timeout) { deferred.await() }
         } finally {
             pending.remove(id)
         }
@@ -162,6 +166,9 @@ class JsPlugin(
 
     /** Derived once: the manifest is fixed for the life of the plugin. */
     private val networkPolicy = PluginNetworkPolicy(manifest.usesPermissions)
+
+    /** Wired only when the plugin declares an `oauth` connector and the host has an OAuth API. */
+    private val oauth = oauthApi?.takeIf { manifest.oauth.isNotEmpty() }
 
     private fun newSession(): Session {
         // XHR drives the JS side by evaluating statements that must land in order — readyState
@@ -183,14 +190,19 @@ class JsPlugin(
             appContext = appContext,
             eval = { js -> evals.trySend(js) },
         )
-        val engine = JsEngine(appContext, scope, manifest.name, listOf(Bridge(), xhr, localStorage))
-        return Session(engine, xhr, localStorage, evals, scope.launch { for (js in evals) engine.eval(js) })
+        val oauthBridge = oauth?.let {
+            PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, manifest.uuid, manifest.oauth.keys, it)
+        }
+        val interfaces = listOfNotNull(Bridge(), xhr, localStorage, oauthBridge)
+        val engine = JsEngine(appContext, scope, manifest.name, interfaces)
+        return Session(engine, xhr, localStorage, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
     }
 
     private inner class Session(
         val engine: JsEngine,
         private val xhr: XMLHTTPRequestManager,
         private val localStorage: JsEngineLocalStorage,
+        private val oauthBridge: PluginOAuthJsBridge?,
         private val evals: Channel<String>,
         private val pump: Job,
     ) {
@@ -200,6 +212,7 @@ class JsPlugin(
             engine.eval(BASE64_JS)
             engine.eval(FETCH_JS)
             engine.eval(PLUGIN_HOST_JS)
+            oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
             engine.eval(script)
         }
 
@@ -207,6 +220,7 @@ class JsPlugin(
             evals.close()
             pump.cancel()
             xhr.close()
+            oauthBridge?.close()
             engine.stop()
         }
     }
@@ -248,7 +262,7 @@ class JsPlugin(
     override suspend fun onConfigMessage(json: String): String? = configLock.withLock {
         val session = openConfigSessionLocked() ?: return@withLock null
         try {
-            awaitReply { id -> session.engine.eval("globalThis.__pluginConfigMessage($id, $json)") }
+            awaitReply(CONFIG_REQUEST_TIMEOUT) { id -> session.engine.eval("globalThis.__pluginConfigMessage($id, $json)") }
         } catch (e: Exception) {
             logger.w(e) { "config message failed" }
             null
@@ -294,5 +308,9 @@ class JsPlugin(
 
     private companion object {
         val REQUEST_TIMEOUT = 20.seconds
+
+        // An interactive OAuth sign-in (browser round-trip) outlasts a data-read timeout; the UI
+        // closes the config session anyway, so this only bounds a wedged plugin.
+        val CONFIG_REQUEST_TIMEOUT = 5.minutes
     }
 }

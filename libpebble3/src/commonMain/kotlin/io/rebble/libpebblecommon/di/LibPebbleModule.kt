@@ -128,6 +128,7 @@ import io.rebble.libpebblecommon.plugin.CalendarPlugin
 import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
 import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.services.AppFetchService
@@ -327,6 +328,7 @@ fun initKoin(
     proxyTokenProvider: StateFlow<String?>,
     transcriptionProvider: TranscriptionProvider,
     injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
+    pluginOAuthApi: PluginOAuthApi? = null,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -456,7 +458,9 @@ fun initKoin(
                     ) + get<PlatformPlugins>().plugins
                 }
                 singleOf(::PluginRegistry)
-                singleOf(::BundledPluginLoader)
+                single {
+                    BundledPluginLoader(get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi)
+                }
                 singleOf(::FirmwareDownloader)
                 singleOf(::InterruptedFirmwareUpdates)
                 singleOf(::JsTokenUtil)

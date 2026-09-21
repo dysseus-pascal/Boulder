@@ -27,9 +27,21 @@ data class PluginManifest(
      * and the network permissions are enforced at the plugin's one way out.
      */
     val usesPermissions: List<PluginPermission> = emptyList(),
+    /**
+     * Hosted OAuth connectors this plugin may use, keyed by slug. The host will only run a broker
+     * flow for a slug declared here, so a plugin cannot reach a connector by guessing its name.
+     */
+    val oauth: Map<String, OAuthConnector> = emptyMap(),
     val sources: List<SourceDeclaration> = emptyList(),
     val actions: List<ActionDeclaration> = emptyList(),
 )
+
+/**
+ * A declared hosted-OAuth connector. Empty today — its presence under a slug is the whole
+ * declaration (see [PluginManifest.oauth]); fields land here if a connector ever needs options.
+ */
+@Serializable
+class OAuthConnector
 
 @Serializable
 data class SourceDeclaration(

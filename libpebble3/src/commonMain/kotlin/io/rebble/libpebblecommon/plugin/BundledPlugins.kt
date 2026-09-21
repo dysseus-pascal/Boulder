@@ -46,6 +46,7 @@ class BundledPluginLoader(
     private val watchConfig: WatchConfigFlow,
     private val settings: Settings,
     private val scope: LibPebbleCoroutineScope,
+    private val oauthApi: PluginOAuthApi? = null,
 ) {
     private val logger = Logger.withTag("BundledPluginLoader")
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -144,7 +145,7 @@ class BundledPluginLoader(
         registry.registerPlugin(
             JsPlugin(
                 manifest, script, appContext, scope, httpClient, httpInterceptorManager,
-                configPageHtml,
+                configPageHtml, oauthApi,
             )
         )
         logger.i {
@@ -156,7 +157,14 @@ class BundledPluginLoader(
     private data class BundledApp(val fileName: String, val uuid: Uuid)
 
     private companion object {
-        val BUNDLED = listOf("hue", "stocks")
+        val BUNDLED = listOf(
+            "hue",
+            "stocks",
+//            "spotify", Not included until we have a prod dev account users can actually log in to
+            "notion",
+            "ticktick",
+            "todoist",
+        )
 
         val BUNDLED_APPS = listOf(
             BundledApp("plugin-test.pbw", Uuid.parse("8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e")),

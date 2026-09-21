@@ -144,7 +144,9 @@ class XMLHTTPRequestManager(
 
         private fun dispatchEvent(event: XHREvent) {
             val evt = "{\"type\": \"${event.toJsName()}\"}"
-            eval("$jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
+            // The fetch shim drops its instance on the resolving event, so a trailing one (load is
+            // followed by loadend) would otherwise call a method on undefined.
+            eval("$jsInstance && $jsInstance._dispatchEvent(${Json.encodeToString(event.toJsName())}, ${Json.encodeToString(evt)})")
         }
 
         fun open(method: String, url: String, async: Boolean?, user: String?, password: String?) {

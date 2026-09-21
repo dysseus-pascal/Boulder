@@ -112,6 +112,10 @@ Comments should be concise. Specifically:
     - Comments describing inner workings of a method easily become stale when the code changes; don't write them in the first place unless really needed.
     - Keep any comments which *are* required minimal and concise.
 
+### 12. Imports
+
+Always use imports where possible, rather than fully-qualified references in the code. Don't ever use wildcard imports.
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.

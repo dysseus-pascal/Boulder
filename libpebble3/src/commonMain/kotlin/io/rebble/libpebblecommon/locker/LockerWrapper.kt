@@ -10,10 +10,15 @@ import kotlin.uuid.Uuid
 enum class AppType(val code: String) {
     Watchface("watchface"),
     Watchapp("watchapp"),
+    /** A pbw that carries only a plugin (no watchapp binary): registered, never synced to a watch. */
+    Plugin("plugin"),
     ;
 
     companion object {
         fun fromString(value: String): AppType? = entries.firstOrNull { it.code == value }
+
+        /** Types with an app store, so home feeds are preloaded per-type. Plugins have no store. */
+        val storeTypes = listOf(Watchface, Watchapp)
     }
 }
 

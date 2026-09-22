@@ -12,15 +12,9 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 @Serializable
 data class PluginManifest(
-    val uuid: String,
-    val name: String,
+    // No uuid/name: a plugin's identity is its pbw's (appinfo uuid + name).
     val description: String = "",
     val script: String = "plugin.js",
-    /**
-     * Settings page. Either an http(s) URL or, for a page shipped alongside the script, a
-     * bundled filename.
-     */
-    val configPage: String? = null,
     /**
      * What the user has to let this plugin do. Declared once for the whole plugin rather than
      * per source: a plugin reaches its API the same way whichever of its sources is being read,

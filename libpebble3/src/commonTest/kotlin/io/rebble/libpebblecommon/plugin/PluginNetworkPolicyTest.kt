@@ -154,7 +154,7 @@ class PluginNetworkPolicyTest {
         // service is the one internet host it may reach.
         val manifest = Json.decodeFromString(
             PluginManifest.serializer(),
-            """{"uuid":"$UUID","name":"Hue","usesPermissions":["LocalNetwork",
+            """{"usesPermissions":["LocalNetwork",
                {"name":"Internet","parameters":{"domains":["discovery.meethue.com"]}}]}""",
         )
         val policy = PluginNetworkPolicy(manifest.usesPermissions)

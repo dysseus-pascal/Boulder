@@ -57,7 +57,7 @@ private fun WatchPref<*>.kind(): SettingKind = when (this) {
  */
 class WatchSettingsPlugin(
     private val watchPrefs: WatchPrefs,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_WATCH_SETTINGS_UUID
     override val name: String = "Watch Settings"
 

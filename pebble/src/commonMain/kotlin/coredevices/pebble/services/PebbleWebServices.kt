@@ -477,7 +477,7 @@ data class AppStoreHomeResult(
 )
 
 fun AppType.storeString() = when (this) {
-    AppType.Watchapp -> "apps"
+    AppType.Watchapp, AppType.Plugin -> "apps"
     AppType.Watchface -> "faces"
 }
 

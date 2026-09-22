@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.plugin
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
-import io.ktor.http.encodeURLPathPart
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.JsEngine
@@ -41,28 +40,23 @@ import kotlin.uuid.Uuid
  * are one-shot. Sessions are cold-started per request and torn down immediately.
  */
 class JsPlugin(
+    override val pluginUuid: Uuid,
+    override val name: String,
     private val manifest: PluginManifest,
-    private val script: String,
+    /** Read lazily at session start, so bundled/sideloaded scripts aren't all loaded up front. */
+    private val script: suspend () -> String,
     private val appContext: AppContext,
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
     private val httpInterceptorManager: HttpInterceptorManager,
-    /** Bundled config page HTML, when the manifest names one. */
-    private val configPageHtml: String? = null,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
 ) : Plugin, ConfigMessageTarget {
 
-    override val pluginUuid: Uuid = Uuid.parse(manifest.uuid)
-    override val name: String = manifest.name
     override val sources: List<SourceDeclaration> = manifest.sources
-    override val configPageUrl: String? = manifest.configPage?.let { page ->
-        if (page.startsWith("http://") || page.startsWith("https://")) page
-        else configPageHtml?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
-    }
     override val actions: List<ActionDeclaration> = manifest.actions
 
-    private val logger = Logger.withTag("JsPlugin-${manifest.name}")
+    private val logger = Logger.withTag("JsPlugin-$name")
     private val lenientJson = Json { ignoreUnknownKeys = true }
     private val pending = mutableMapOf<Int, CompletableDeferred<String>>()
 
@@ -128,7 +122,7 @@ class JsPlugin(
             null
         } else {
             SourceEnvelope(
-                pluginUuid = manifest.uuid,
+                pluginUuid = pluginUuid.toString(),
                 validUntilMs = parsed.validUntilMs,
                 instances = parsed.instances,
             )
@@ -186,15 +180,15 @@ class JsPlugin(
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
         val localStorage = JsEngineLocalStorage(
-            scopedSettingsUuid = manifest.uuid,
+            scopedSettingsUuid = pluginUuid.toString(),
             appContext = appContext,
             eval = { js -> evals.trySend(js) },
         )
         val oauthBridge = oauth?.let {
-            PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, manifest.uuid, manifest.oauth.keys, it)
+            PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid.toString(), manifest.oauth.keys, it)
         }
         val interfaces = listOfNotNull(Bridge(), xhr, localStorage, oauthBridge)
-        val engine = JsEngine(appContext, scope, manifest.name, interfaces)
+        val engine = JsEngine(appContext, scope, name, interfaces)
         return Session(engine, xhr, localStorage, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
     }
 
@@ -213,7 +207,7 @@ class JsPlugin(
             engine.eval(FETCH_JS)
             engine.eval(PLUGIN_HOST_JS)
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
-            engine.eval(script)
+            engine.eval(script())
         }
 
         suspend fun stop() {

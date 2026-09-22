@@ -53,6 +53,12 @@ data class LockerEntry(
     val capabilities: List<String>? = null,
     @ColumnInfo(defaultValue = "NULL")
     val grantedPermissions: List<String>? = null,
+    /** Serialized [io.rebble.libpebblecommon.plugin.PluginManifest] when this pbw carries a plugin. Phone-only; not synced to the watch. */
+    @ColumnInfo(defaultValue = "NULL")
+    val pluginManifest: String? = null,
+    /** The pbw's appinfo `configPage` (an http(s) URL, or a filename in the pbw). Phone-only. */
+    @ColumnInfo(defaultValue = "NULL")
+    val configPage: String? = null,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), id).toBytes()
 

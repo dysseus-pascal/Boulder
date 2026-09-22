@@ -268,7 +268,7 @@ fun AppstoreSourceItem(
                     if (cols.isNotEmpty()) {
                         Text(
                             text = when (appType) {
-                                AppType.Watchapp -> "Watchapp Collections"
+                                AppType.Watchapp, AppType.Plugin -> "Watchapp Collections"
                                 AppType.Watchface -> "Watchface Collections"
                             },
                             modifier = Modifier.padding(start = 32.dp),

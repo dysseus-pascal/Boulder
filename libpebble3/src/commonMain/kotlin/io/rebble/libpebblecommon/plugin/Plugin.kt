@@ -19,10 +19,6 @@ interface Plugin {
     /** Display name, shown to the user and to an LLM caller. */
     val name: String
 
-    /** Page to open when the user configures this plugin, already resolved to a loadable URL. */
-    val configPageUrl: String?
-        get() = null
-
     val sources: List<SourceDeclaration>
 
     val actions: List<ActionDeclaration>

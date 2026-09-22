@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -68,7 +69,6 @@ import coredevices.pebble.services.isLoggedIn
 import coredevices.pebble.services.isRebbleFeed
 import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
-import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
 import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -292,7 +292,11 @@ fun CommonApp.SettingsButton(
             remember(
                 this,
                 connected
-            ) { isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System) }
+            ) {
+                // A plugin's config page is phone-side, so it doesn't need the app synced or a watch.
+                type == AppType.Plugin ||
+                    isCompatible && isSynced() && (connected || commonAppType is CommonAppType.System)
+            }
 
         PebbleElevatedButton(
             text = "Settings",
@@ -382,7 +386,7 @@ private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(
 ): List<StoreCategory> {
     return cache.readCategories(appType, this) ?: when (appType) {
         AppType.Watchface -> DEFAULT_CATEGORIES_FACES
-        AppType.Watchapp -> DEFAULT_CATEGORIES_APPS
+        AppType.Watchapp, AppType.Plugin -> DEFAULT_CATEGORIES_APPS
     }
 }
 
@@ -486,7 +490,8 @@ fun LockerWrapper.asCommonApp(
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
         screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
             ?: anyPlatform?.screenshotImageUrl,
-        isCompatible = compatiblePlatform.isCompatible(),
+        // Plugins run on the phone, so they're compatible with any (or no) connected watch.
+        isCompatible = properties.type == AppType.Plugin || compatiblePlatform.isCompatible(),
         hearts = when (this) {
             is LockerWrapper.NormalApp -> properties.hearts
             is LockerWrapper.SystemApp -> null
@@ -494,11 +499,11 @@ fun LockerWrapper.asCommonApp(
         description = compatiblePlatform?.description ?: anyPlatform?.description,
         isNativelyCompatible = when (this) {
             is LockerWrapper.NormalApp -> {
-                val nativelyCompatible = when {
+                when {
+                    properties.type == AppType.Plugin -> true
                     watchType != null && watchType.performsScaling() -> properties.platforms.any { it.watchType == watchType }
                     else -> true
                 }
-                nativelyCompatible
             }
 
             is LockerWrapper.SystemApp -> true
@@ -651,6 +656,7 @@ fun StoreSearchResult.asCommonApp(
 fun AppType.icon(): ImageVector = when (this) {
     AppType.Watchface -> Icons.Filled.BrowseGallery
     AppType.Watchapp -> Icons.Filled.AutoAwesomeMotion
+    AppType.Plugin -> Icons.Filled.Power
 }
 
 fun CommonAppType.canStartApp(): Boolean = when (this) {
@@ -663,7 +669,6 @@ class NativeLockerAddUtil(
     private val libPebble: LibPebble,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val webServices: PebbleWebServices,
-    private val coreConfig: CoreConfigFlow,
 ) {
     suspend fun addAppToLocker(
         app: CommonAppType.Store,
@@ -742,11 +747,13 @@ fun LockerEntryCompanionApp.asCompanionApp(): CompanionApp = CompanionApp(
 fun AppType.myCollectionName(): String = when (this) {
     AppType.Watchface -> "My Watchfaces"
     AppType.Watchapp -> "My Apps"
+    AppType.Plugin -> "My Plugins"
 }
 
 fun AppType.shortName(): String = when (this) {
     AppType.Watchface -> "Faces"
     AppType.Watchapp -> "Apps"
+    AppType.Plugin -> "Plugins"
 }
 
 private var hasShownScrollHint = false
@@ -757,6 +764,13 @@ fun AppsFilterRow(
     sharedLockerViewModel: SharedLockerViewModel,
     showWatchfaceOrderSetting: Boolean,
 ) {
+    val config by rememberLibPebble().config.collectAsState()
+    val tabTypes = if (config.watchConfig.enablePlugins) AppType.entries else AppType.storeTypes
+    LaunchedEffect(tabTypes) {
+        if (selectedType != null && selectedType.value !in tabTypes) {
+            selectedType.value = AppType.Watchface
+        }
+    }
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
         if (!hasShownScrollHint && scrollState.maxValue > 0) {
@@ -790,11 +804,11 @@ fun AppsFilterRow(
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.height(height).padding(0.dp),
                 ) {
-                    AppType.entries.forEachIndexed { index, appType ->
+                    tabTypes.forEachIndexed { index, appType ->
                         SegmentedButton(
                             shape = SegmentedButtonDefaults.itemShape(
                                 index = index,
-                                count = AppType.entries.size
+                                count = tabTypes.size
                             ),
                             selected = selectedType.value == appType,
                             onClick = { selectedType.value = appType },

@@ -33,7 +33,7 @@ class CalendarPlugin(
     private val systemCalendar: SystemCalendar,
     private val calendarDao: CalendarDao,
     private val timeProvider: TimeProvider,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_CALENDAR_UUID
     override val name: String = "Calendar"
 

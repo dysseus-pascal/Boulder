@@ -55,6 +55,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.DailySleep
@@ -194,6 +195,8 @@ class FakeLibPebble : LibPebble {
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }
     }
+
+    override suspend fun appConfigPageUrl(uuid: Uuid): String? = null
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
 
@@ -487,7 +490,7 @@ class FakeLibPebble : LibPebble {
     override fun registerPlugin(plugin: Plugin) {
     }
 
-    override fun configurablePlugins(): List<ConfigurablePlugin> = emptyList()
+    override fun nativePlugins(): Flow<List<NativePlugin>> = flowOf(emptyList())
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
 

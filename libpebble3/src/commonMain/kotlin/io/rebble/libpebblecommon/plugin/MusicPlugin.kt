@@ -24,7 +24,7 @@ import kotlin.uuid.Uuid
  */
 class MusicPlugin(
     private val music: SystemMusicControl,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_MUSIC_UUID
     override val name: String = "Music"
 

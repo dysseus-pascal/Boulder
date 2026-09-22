@@ -36,7 +36,7 @@ class NotificationsPlugin(
     private val connection: AndroidPebbleNotificationListenerConnection,
     private val notificationAppDao: NotificationAppRealDao,
     private val appContext: AppContext,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_NOTIFICATIONS_UUID
     override val name: String = "Notifications"
 

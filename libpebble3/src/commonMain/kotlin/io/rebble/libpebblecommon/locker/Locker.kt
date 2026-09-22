@@ -6,6 +6,7 @@ import com.russhwolf.settings.set
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.CancellationException
 import io.ktor.utils.io.readRemaining
@@ -28,6 +29,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.disk.pbw.hasWatchappBuild
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerModelWrapper
@@ -62,6 +64,10 @@ import kotlin.uuid.Uuid
 
 class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
 
+interface AppFileReader {
+    suspend fun getAppFile(uuid: Uuid, name: String): String?
+}
+
 class Locker(
     private val watchManager: WatchManager,
     database: Database,
@@ -75,7 +81,7 @@ class Locker(
     private val errorTracker: ErrorTracker,
     private val coroutineScope: LibPebbleCoroutineScope,
     private val settings: Settings,
-) : LockerApi {
+) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
     private val timelineReminderDao = database.timelineReminderDao()
@@ -105,7 +111,9 @@ class Locker(
         searchQuery: String?,
         limit: Int
     ): Flow<List<LockerWrapper>> =
-        lockerEntryDao.getAllFlow(type.code, searchQuery, limit)
+        // The Plugins tab shows every pbw that carries a plugin, watchapp-hosted ones included.
+        (if (type == AppType.Plugin) lockerEntryDao.getPluginEntriesFlow(searchQuery, limit)
+        else lockerEntryDao.getAllFlow(type.code, searchQuery, limit))
             .map { entries ->
                 entries.mapNotNull { app ->
                     app.wrap(config)
@@ -133,6 +141,27 @@ class Locker(
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
+
+    private suspend fun pbwFor(uuid: Uuid): PbwApp? {
+        val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null
+        return try {
+            PbwApp(lockerPBWCache.getPBWFileForApp(uuid, version, this))
+        } catch (e: Exception) {
+            logger.w(e) { "no cached pbw for $uuid" }
+            null
+        }
+    }
+
+    override suspend fun appConfigPageUrl(uuid: Uuid): String? {
+        // V2 config pages won't work with plugins disabled (no messaging channel)
+        if (!config.value.enablePlugins) return null
+        val page = lockerEntryDao.getEntryFlow(uuid).first()?.configPage ?: return null
+        if (page.startsWith("http://") || page.startsWith("https://")) return page
+        // A bundled page still needs its HTML from the pbw, delivered as a data URL.
+        return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
+    }
+
+    override suspend fun getAppFile(uuid: Uuid, name: String): String? = pbwFor(uuid)?.getTextFile(name)
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
         libPebbleCoroutineScope.async {
@@ -253,7 +282,11 @@ class Locker(
      */
     suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
-        val type = if (pbwApp.info.watchapp.watchface) AppType.Watchface else AppType.Watchapp
+        val type = when {
+            pbwApp.info.plugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin
+            pbwApp.info.watchapp.watchface -> AppType.Watchface
+            else -> AppType.Watchapp
+        }
         val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type))
         lockerPBWCache.deleteApp(lockerEntry.id)  // Clear old version(s) if re-sideloading
         pbwApp.source().buffered().use {
@@ -709,4 +742,5 @@ abstract class LockerPBWCache(private val context: AppContext) {
 fun orderIndexForInsert(type: AppType) = when (type) {
     AppType.Watchface -> -1
     AppType.Watchapp -> SystemApps.entries.size
+    AppType.Plugin -> 0
 }

@@ -54,6 +54,21 @@
       "Calendar",
       "Notifications",
       "Location"
-    ]
+    ],
+    "configPage": "config.html",
+    "plugin": {
+      "uuid": "8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e",
+      "name": "Plugin Demo: Dashboard",
+      "description": "Demo plugin: serves a demo/message source whose text is set from the config page.",
+      "script": "plugin.js",
+      "sources": [
+        {
+          "category": "demo",
+          "items": ["message"],
+          "properties": { "text": ["shortText"] },
+          "suggestedRefreshIntervalSec": 300
+        }
+      ]
+    }
   }
 }

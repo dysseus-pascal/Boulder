@@ -1,36 +1,40 @@
 package io.rebble.libpebblecommon.plugin
 
 import io.rebble.libpebblecommon.WatchConfigFlow
-import io.rebble.libpebblecommon.connection.ConfigurablePlugin
 import io.rebble.libpebblecommon.connection.Plugins
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlin.uuid.Uuid
 
 /**
- * App-wide registry of available plugins. Built-ins are injected via the Koin `Set<Plugin>`
+ * App-wide registry of available plugins. Built-ins are injected via the Koin `Set<NativePlugin>`
  * binding; JS plugins [register] themselves once their manifest has been loaded.
  */
 class PluginRegistry(
-    builtIns: Set<Plugin>,
+    builtIns: Set<NativePlugin>,
     private val watchConfig: WatchConfigFlow,
 ) : Plugins {
-    private val registered = MutableStateFlow(builtIns.associateBy { it.pluginUuid })
+    private val registered = MutableStateFlow<Map<Uuid, Plugin>>(builtIns.associateBy { it.pluginUuid })
 
     /** Every lookup goes through here, so disabling plugins hides them all. */
     private val plugins: Collection<Plugin>
         get() = if (watchConfig.value.enablePlugins) registered.value.values else emptyList()
 
-    override fun configurablePlugins(): List<ConfigurablePlugin> = plugins.mapNotNull { plugin ->
-        plugin.configPageUrl?.let {
-            ConfigurablePlugin(plugin.pluginUuid.toString(), plugin.name, it)
-        }
-    }
+    override fun nativePlugins(): Flow<List<NativePlugin>> =
+        registered.map { it.values.filterIsInstance<NativePlugin>() }
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? =
         findPlugin(pluginUuid) as? ConfigMessageTarget
 
     override fun registerPlugin(plugin: Plugin) {
         registered.update { it + (plugin.pluginUuid to plugin) }
+    }
+
+    /** Drop a JS plugin whose pbw left the locker. Built-ins are never unregistered. */
+    fun unregisterPlugin(pluginUuid: Uuid) {
+        registered.update { it - pluginUuid }
     }
 
     /**

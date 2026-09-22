@@ -30,7 +30,7 @@ private class FakePlugin(
     override val name: String,
     override val sources: List<SourceDeclaration> = emptyList(),
     override val actions: List<ActionDeclaration> = emptyList(),
-) : Plugin {
+) : NativePlugin {
     override fun observe(
         category: String,
         item: String,
@@ -257,8 +257,6 @@ class PluginManifestTest {
             PluginManifest.serializer(),
             """
             {
-              "uuid": "6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40",
-              "name": "Hue",
               "description": "lights",
               "script": "plugin.js",
               "usesPermissions": [
@@ -298,7 +296,6 @@ class PluginManifestTest {
             """.trimIndent(),
         )
 
-        assertEquals("Hue", manifest.name)
         assertEquals(1, manifest.sources.size)
         assertEquals(30, manifest.sources[0].suggestedRefreshIntervalSec)
         assertTrue(manifest.sources[0].supportsMultiple)
@@ -331,7 +328,7 @@ class PluginManifestTest {
     fun aPluginNeedsNoPermissionsAtAll() {
         val manifest = Json.decodeFromString(
             PluginManifest.serializer(),
-            """{"uuid":"$UUID_A","name":"Stocks","sources":[{"category":"finance",
+            """{"sources":[{"category":"finance",
                "items":["stock"],"properties":{"price":["shortText"]}}]}""",
         )
         assertTrue(manifest.usesPermissions.isEmpty())
@@ -342,7 +339,7 @@ class PluginManifestTest {
     fun defaultsFillInForAMinimalManifest() {
         val manifest = Json.decodeFromString(
             PluginManifest.serializer(),
-            """{"uuid":"$UUID_A","name":"Minimal"}""",
+            """{}""",
         )
         assertEquals("plugin.js", manifest.script)
         assertTrue(manifest.sources.isEmpty())

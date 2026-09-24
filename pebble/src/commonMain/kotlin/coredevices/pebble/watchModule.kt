@@ -213,7 +213,7 @@ val watchModule = module {
     factoryOf(::WeatherFetcher)
     singleOf(::WeatherPlugin)
     singleOf(::ConfigPageSessions)
-    factoryOf(::LanguagePackRepository)
+    singleOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
     singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)

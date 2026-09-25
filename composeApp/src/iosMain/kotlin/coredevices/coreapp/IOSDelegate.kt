@@ -1,0 +1,481 @@
+package coredevices.coreapp
+
+import co.touchlab.crashkios.crashlytics.enableCrashlytics
+import co.touchlab.crashkios.crashlytics.setCrashlyticsUnhandledExceptionHook
+import co.touchlab.kermit.Logger
+import co.touchlab.kermit.Severity
+import cocoapods.FirebaseMessaging.FIRMessaging
+import cocoapods.FirebaseMessaging.FIRMessagingAPNSTokenType
+import cocoapods.GoogleSignIn.GIDSignIn
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.memory.MemoryCache
+import coil3.request.crossfade
+import coil3.svg.SvgDecoder
+import com.eygraber.uri.toUri
+import com.mmk.kmpnotifier.extensions.onApplicationDidReceiveRemoteNotification
+import com.mmk.kmpnotifier.notification.NotifierManager
+import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import coredevices.ExperimentalDevices
+import coredevices.analytics.AnalyticsBackend
+import coredevices.coreapp.di.apiModule
+import coredevices.coreapp.di.iosDefaultModule
+import coredevices.coreapp.di.utilModule
+import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
+import coredevices.coreapp.util.FileLogWriter
+import coredevices.coreapp.util.initLogging
+import coredevices.experimentalModule
+import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.PebbleDeepLinkHandler
+import io.rebble.libpebblecommon.connection.LibPebble
+import coredevices.pebble.watchModule
+import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
+import coredevices.ring.reminders.ReminderCompleter
+import coredevices.ring.reminders.ReminderDeepLinkResolver
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigHolder
+import coredevices.util.DoneInitialOnboarding
+import coredevices.util.OAuthRedirectHandler
+import coredevices.util.transcription.NativeSpeechAnalyzerBridge
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.crashlytics.crashlytics
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.Platform
+import kotlinx.datetime.toKotlinInstant
+import kotlinx.datetime.toNSDate
+import okio.ByteString.Companion.toByteString
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
+import org.koin.core.component.inject
+import org.koin.core.context.startKoin
+import org.koin.dsl.bind
+import org.koin.dsl.module
+import platform.BackgroundTasks.BGAppRefreshTaskRequest
+import platform.BackgroundTasks.BGTaskScheduler
+import platform.Foundation.NSBundle
+import platform.Foundation.NSUserDefaults
+import platform.Foundation.NSData
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
+import platform.Foundation.NSURL
+import platform.Foundation.NSUserActivity
+import platform.Foundation.NSUserActivityTypeBrowsingWeb
+import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.isLowPowerModeEnabled
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationState
+import platform.UIKit.UIBackgroundFetchResult
+import platform.UIKit.registerForRemoteNotifications
+import platform.UserNotifications.UNNotificationResponse
+import kotlin.time.Clock
+
+private val logger = Logger.withTag("IOSDelegate")
+
+object IOSDelegate : KoinComponent {
+    private val fileLogWriter: FileLogWriter by inject()
+    private val commonAppDelegate: CommonAppDelegate by inject()
+    private val pebbleAppDelegate: PebbleAppDelegate by inject()
+    private val doneInitialOnboarding: DoneInitialOnboarding by inject()
+    private val coreConfigHolder: CoreConfigHolder by inject()
+    private val experimentalDevices: ExperimentalDevices by inject()
+    private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
+    private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    fun registerNativeSpeechAnalyzer(
+        isSupported: () -> Boolean,
+        cancelTranscription: () -> Unit,
+        transcribeWavFile: (String, String?, (String?, String?) -> Unit) -> Unit,
+    ) {
+        NativeSpeechAnalyzerBridge.isSupported = isSupported
+        NativeSpeechAnalyzerBridge.cancelTranscription = cancelTranscription
+        NativeSpeechAnalyzerBridge.transcribeWavFile = transcribeWavFile
+    }
+
+    fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {
+        NativeSpeechAnalyzerBridge.supportedLanguageTags.value = tags
+    }
+
+    fun handleOpenUrl(url: NSURL): Boolean {
+        val uri = url.toUri()
+        if (!oAuthRedirectHandler.handleOAuthRedirect(uri)) {
+            logger.d("IOSDelegate handleOpenUrl $url")
+            val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
+            val coreDeepLinkHandler: CoreDeepLinkHandler = get()
+            return GIDSignIn.sharedInstance.handleURL(url) ||
+                    uri?.let {
+                        pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
+                    } ?: false
+        } else {
+            return true
+        }
+    }
+
+    /**
+     * Attaches a QEMU emulator watch at "host:port", for automated testing. Reachable only via a
+     * launch argument (see [didFinishLaunching]), which nothing but simctl/Xcode can set, so it is
+     * safe to keep in release builds for CI.
+     */
+    fun addQemuWatch(address: String) {
+        logger.i("adding QEMU watch at $address")
+        val libPebble: LibPebble = get()
+        libPebble.addQemuWatch(address, connect = true)
+    }
+
+    private fun initPebble() {
+        val pebbleDelegate: PebbleAppDelegate = get()
+        pebbleDelegate.init()
+    }
+
+    fun didFinishLaunching(
+        application: UIApplication,
+        logAnalyticsEvent: (String, Map<String, Any>?) -> Unit,
+        addGlobalAnalyticsProperty: (String, String?) -> Unit,
+        setAnalyticsEnabled: (Boolean) -> Unit
+    ): Boolean {
+        logger.d("IOSDelegate didFinishLaunching")
+        val analyticsBackendLogger = object : AnalyticsBackend {
+            override fun logEvent(
+                name: String,
+                parameters: Map<String, Any>?
+            ) {
+                logAnalyticsEvent(name, parameters)
+            }
+
+            override fun addGlobalProperty(name: String, value: String?) {
+                addGlobalAnalyticsProperty(name, value)
+            }
+
+            override fun setEnabled(enabled: Boolean) {
+                setAnalyticsEnabled(enabled)
+            }
+        }
+        val analyticsBackendModule = module {
+            single { analyticsBackendLogger } bind AnalyticsBackend::class
+        }
+        startKoin {
+            modules(
+                iosDefaultModule,
+                experimentalModule,
+                apiModule,
+                utilModule,
+                watchModule,
+                analyticsBackendModule,
+            )
+        }
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .crossfade(true)
+                .memoryCache {
+                    MemoryCache.Builder()
+                        .maxSizePercent(context, 0.25)
+                        .build()
+                }
+                .components {
+                    add(AnimatedSkiaImageDecoder.Factory())
+                    add(SvgDecoder.Factory())
+                }
+                .build()
+        }
+        setupCrashlytics()
+        initLogging()
+        NSNotificationCenter.defaultCenter.addObserverForName(
+            name = NSProcessInfoPowerStateDidChangeNotification,
+            `object` = null,
+            queue = null,
+        ) { _ ->
+            val isLowPowerMode = NSProcessInfo.processInfo.isLowPowerModeEnabled()
+            logger.i { "Power state changed: isLowPowerMode=$isLowPowerMode" }
+        }
+        val crashedPreviously = Firebase.crashlytics.didCrashOnPreviousExecution()
+        if (crashedPreviously) {
+            logger.e { "Previous app crash detected!" }
+        }
+
+        BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
+            identifier = REFRESH_TASK_IDENTIFIER,
+            usingQueue = null,
+        ) { task ->
+            if (task == null) return@registerForTaskWithIdentifier
+
+            // Schedule the next task immediately, before doing work.
+            // If scheduled in finally, a SIGKILL mid-task breaks the chain.
+            requestBgRefresh(force = false, coreConfigHolder.config.value)
+
+            val job = bgTaskScope.launch {
+                try {
+                    logger.d { "Background refresh task started" }
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                    logger.d { "Background refresh task completed successfully" }
+                    task.setTaskCompletedWithSuccess(true)
+                } catch (e: Exception) {
+                    logger.e(e) { "Background refresh task failed" }
+                    task.setTaskCompletedWithSuccess(false)
+                }
+            }
+
+            task.expirationHandler = {
+                logger.w { "Background refresh task expired!" }
+                job.cancel()
+                task.setTaskCompletedWithSuccess(false)
+            }
+        }
+
+        requestBgRefresh(force = false, coreConfigHolder.config.value)
+        val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
+        val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
+        // launchState=background means iOS started us on its own (BLE, background refresh, push)
+        // rather than the user opening the app.
+        logger.i {
+            "didFinishLaunching() appVersion=$appVersion appVersionShort=$appVersionShort " +
+                    "launchState=${application.applicationState.stateName()}"
+        }
+        reportPreviousRunOutcome()
+        // Can only use Koin after this point
+
+        // Initialize NotifierManager early to prevent crashes when PushMessaging tries to use it
+        NotifierManager.initialize(
+            configuration = NotificationPlatformConfiguration.Ios(
+                showPushNotification = false
+            )
+        )
+        experimentalDevices.appInit()
+        initPebble()
+        GlobalScope.launch(Dispatchers.Main) {
+            // Don't do this before we request permissions (it requests permissions - we want to
+            // manage that as part of onboarding).
+            doneInitialOnboarding.doneInitialOnboarding.await()
+
+            logger.d { "registering for push notifications.." }
+            application.registerForRemoteNotifications()
+        }
+        commonAppDelegate.init()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            while (true) {
+                try {
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                } catch (e: Exception) {
+                    logger.e(e) { "Periodic background sync failed" }
+                }
+                delay(coreConfigHolder.config.value.weatherSyncInterval)
+            }
+        }
+        return true
+    }
+
+    fun userNotificationCenterDidReceiveResponse(
+        response: UNNotificationResponse,
+        completionHandler: () -> Unit
+    ) {
+        logger.d { "userNotificationCenterDidReceive" }
+        val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
+
+        // Reminder notifications carry only the reminder id; the feed item to deep link to
+        // isn't linked when the notification is scheduled, so resolve it now (at tap time).
+        val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
+        if (reminderId != null) {
+            // "Done" button (MOB-8439): mark the backing item complete in the background without
+            // opening the app. Completing it cancels the reminder and dismisses the notification.
+            if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
+                val completer: ReminderCompleter = get()
+                bgTaskScope.launch {
+                    runCatching { completer.markDone(reminderId) }
+                        .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                    withContext(Dispatchers.Main) { completionHandler() }
+                }
+                return
+            }
+            val resolver: ReminderDeepLinkResolver = get()
+            bgTaskScope.launch {
+                val link = resolver.resolveDeepLink(reminderId)
+                logger.d { "Handling reminder deep link from notification: $link" }
+                withContext(Dispatchers.Main) {
+                    NSURL.URLWithString(link)?.let { handleOpenUrl(it) }
+                    completionHandler()
+                }
+            }
+            return
+        }
+
+        val action = response.actionIdentifier
+        val deepLink = userInfo["notification-deepLink"] as? String
+        val actionDeepLink = userInfo["$action-deepLink"] as? String
+        val deepLinkToHandle = actionDeepLink ?: deepLink
+        if (deepLinkToHandle != null) {
+            logger.d { "Handling deep link from notification: $deepLinkToHandle" }
+            handleOpenUrl(NSURL.URLWithString(deepLinkToHandle)!!)
+        }
+        completionHandler()
+    }
+
+    @OptIn(ExperimentalNativeApi::class)
+    private fun setupCrashlytics() {
+        // Debug builds never upload their dSYMs, so their crashes can't be symbolicated.
+        if (Platform.isDebugBinary) {
+            Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
+            return
+        }
+        enableCrashlytics()
+        setCrashlyticsUnhandledExceptionHook()
+    }
+
+    fun applicationWillTerminate() {
+        NSUserDefaults.standardUserDefaults.setBool(true, RUN_EXITED_CLEANLY_KEY)
+        fileLogWriter.logBlockingAndFlush(Severity.Info, "applicationWillTerminate", "IOSDelegate", null)
+    }
+
+    /**
+     * iOS doesn't tell us why the previous run ended. We set a flag at launch and only clear it in
+     * [applicationWillTerminate], so anything else — jetsam, crash, or the user swiping the app
+     * away — shows up here as an unclean exit. [RUN_LAST_STATE_KEY] narrows it down: "background"
+     * means we were killed while backgrounded, which is the case that leaves the watch stranded.
+     */
+    private fun reportPreviousRunOutcome() {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val hadPreviousRun = defaults.objectForKey(RUN_EXITED_CLEANLY_KEY) != null
+        val exitedCleanly = defaults.boolForKey(RUN_EXITED_CLEANLY_KEY)
+        val lastState = defaults.stringForKey(RUN_LAST_STATE_KEY) ?: "unknown"
+        if (hadPreviousRun && !exitedCleanly) {
+            logger.w { "previous run ended without applicationWillTerminate (lastState=$lastState)" }
+        } else if (hadPreviousRun) {
+            logger.i { "previous run exited cleanly" }
+        }
+        defaults.setBool(false, RUN_EXITED_CLEANLY_KEY)
+    }
+
+    private fun recordAppState(state: String) {
+        NSUserDefaults.standardUserDefaults.setObject(state, RUN_LAST_STATE_KEY)
+    }
+
+    fun sceneDidBecomeActive() {
+        logger.v { "sceneDidBecomeActive" }
+        pebbleAppDelegate.onAppResumed()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            try {
+                commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+            } catch (e: Exception) {
+                logger.e(e) { "Foreground sync failed" }
+            }
+        }
+    }
+
+    fun sceneWillResignActive() {
+        logger.v { "sceneWillResignActive" }
+    }
+
+    fun sceneWillEnterForeground() {
+        logger.v { "sceneWillEnterForeground" }
+        recordAppState("foreground")
+    }
+
+    fun sceneDidEnterBackground() {
+        logger.v { "sceneDidEnterBackground" }
+        recordAppState("background")
+    }
+
+    fun applicationDidReceiveMemoryWarning() {
+        logger.w { "applicationDidReceiveMemoryWarning" }
+    }
+
+    fun applicationDidEnterBackground() {
+        fileLogWriter.logBlockingAndFlush(Severity.Info, "applicationDidEnterBackground", "IOSDelegate", null)
+    }
+
+    fun applicationDidRegisterForRemoteNotificationsWithDeviceToken(deviceToken: NSData) {
+        val messaging = FIRMessaging.messaging()
+        val initialSetup = messaging.APNSToken == null
+        logger.d { "applicationDidRegisterForRemoteNotificationsWithDeviceToken: ${deviceToken.toByteString()}, initialSetup=$initialSetup" }
+        val tokenType = if (isDevelopmentEntitlement()) {
+            FIRMessagingAPNSTokenType.FIRMessagingAPNSTokenTypeSandbox
+        } else {
+            FIRMessagingAPNSTokenType.FIRMessagingAPNSTokenTypeProd
+        }
+        messaging.setAPNSToken(deviceToken, tokenType)
+    }
+
+    fun applicationDidReceiveRemoteNotification(userInfo: Map<Any?, *>, fetchCompletionHandler: (ULong) -> Unit) {
+        val messaging = FIRMessaging.messaging()
+        messaging.appDidReceiveMessage(userInfo)
+        NotifierManager.onApplicationDidReceiveRemoteNotification(userInfo)
+        fetchCompletionHandler(UIBackgroundFetchResult.UIBackgroundFetchResultNewData.value)
+    }
+
+    fun applicationWillContinue(userActivity: NSUserActivity): Boolean {
+        if (userActivity.activityType != NSUserActivityTypeBrowsingWeb) {
+            return false
+        }
+        val url = userActivity.webpageURL ?: return false
+        return handleOpenUrl(url)
+    }
+
+    private fun isDevelopmentEntitlement(): Boolean {
+        val path = NSBundle.mainBundle.pathForResource("embedded", "mobileprovision")
+            ?: return false
+        val data = NSData.dataWithContentsOfFile(path)
+            ?.toByteString()
+            ?.utf8()
+            ?.replace("\t", "")
+            ?: return false
+        return data.contains("<key>aps-environment</key>\n<string>development</string>")
+    }
+
+
+}
+
+private const val REFRESH_TASK_IDENTIFIER = "coredevices.coreapp.sync"
+private const val RUN_EXITED_CLEANLY_KEY = "coreapp.runExitedCleanly"
+private const val RUN_LAST_STATE_KEY = "coreapp.runLastState"
+
+private fun UIApplicationState.stateName(): String = when (this) {
+    UIApplicationState.UIApplicationStateActive -> "active"
+    UIApplicationState.UIApplicationStateInactive -> "inactive"
+    UIApplicationState.UIApplicationStateBackground -> "background"
+}
+
+fun requestBgRefresh(force: Boolean, coreConfig: CoreConfig) {
+    val interval = coreConfig.weatherSyncInterval
+    BGTaskScheduler.sharedScheduler.getPendingTaskRequestsWithCompletionHandler { tasks ->
+        val alreadyScheduledTask = (tasks as? List<BGAppRefreshTaskRequest>)?.find {
+            it.identifier == REFRESH_TASK_IDENTIFIER
+        }
+        val alreadyScheduledNext = alreadyScheduledTask?.earliestBeginDate?.toKotlinInstant()
+        val hasValidAlreadyScheduledTask = if (alreadyScheduledNext == null) {
+            logger.d { "No existing scheduled task" }
+            false
+        } else {
+            val timeToEarliestBegin = alreadyScheduledNext - Clock.System.now()
+            if (timeToEarliestBegin > interval) {
+                logger.d { "Existing scheduled task is too far in the future" }
+                false
+            } else {
+                logger.d { "Existing valid task: $alreadyScheduledNext" }
+                true
+            }
+        }
+
+        if (hasValidAlreadyScheduledTask && !force) {
+            return@getPendingTaskRequestsWithCompletionHandler
+        }
+        if (force) {
+            logger.d { "Forcing reschedule because force=true" }
+        }
+
+        val request = BGAppRefreshTaskRequest(REFRESH_TASK_IDENTIFIER)
+        request.earliestBeginDate = (Clock.System.now() + interval).toNSDate()
+        try {
+            val success = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
+            logger.d { "requestBgRefresh: Scheduled new task (interval=$interval). Success = $success" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to submit task request" }
+        }
+    }
+}

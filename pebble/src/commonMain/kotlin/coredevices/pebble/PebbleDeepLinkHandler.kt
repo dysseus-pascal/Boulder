@@ -1,0 +1,417 @@
+package coredevices.pebble
+
+import co.touchlab.kermit.Logger
+import com.eygraber.uri.Uri
+import coredevices.analytics.CoreAnalytics
+import coredevices.database.AppstoreSourceDao
+import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.libindex.device.REQUEST_URI_HOST
+import coredevices.pebble.account.PebbleAccount
+import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.REBBLE_FEED_URL
+import coredevices.pebble.ui.NavBarRoute
+import coredevices.pebble.ui.PebbleNavBarRoutes
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlin.time.Duration.Companion.seconds
+
+expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
+
+expect fun writeFile(appContext: AppContext, uri: Uri): Path?
+
+interface PebbleDeepLinkHandler {
+    val initialLockerSync: StateFlow<Boolean>
+    val snackBarMessages: SharedFlow<String>
+    val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?>
+
+    /**
+     * Set when the user taps the "Index 01 background access limited" notification. The Watches
+     * screen observes this and re-runs the CompanionDeviceManager association for the paired ring
+     * (which needs a foreground Activity), then calls [consumeRequestIndexCompanion].
+     */
+    val requestIndexCompanion: StateFlow<Boolean>
+
+    val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?>
+    fun consumeRequestIndexCompanion()
+    fun confirmPendingFirmwareSideload()
+    fun dismissPendingFirmwareSideload()
+    fun sideloadFirmware(file: Path)
+    fun showMessage(message: String)
+    fun handle(uri: Uri?): Boolean
+
+    /** Show a navbar tab on the watch home screen (same mechanism as pebble://navbar links). */
+    fun navigateToTab(route: NavBarRoute)
+}
+
+data class PendingFirmwareSideload(val file: Path, val fileName: String)
+
+class RealPebbleDeepLinkHandler(
+    private val pebbleAccount: PebbleAccount,
+    private val libPebble: LibPebble,
+    private val analytics: CoreAnalytics,
+    private val context: AppContext,
+    private val appstoreSourceDao: AppstoreSourceDao,
+    private val firmwareUpdateUiTracker: FirmwareUpdateUiTracker,
+) : PebbleDeepLinkHandler {
+    private val logger = Logger.withTag("PebbleDeepLinkHandler")
+    private val _initialLockerSync = MutableStateFlow(false)
+    override val initialLockerSync: StateFlow<Boolean> = _initialLockerSync.asStateFlow()
+    private val _snackBarMessages = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    override val snackBarMessages: SharedFlow<String> = _snackBarMessages.asSharedFlow()
+    private val _navigateToPebbleDeepLink = MutableStateFlow<PebbleDeepLink?>(null)
+    override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
+    private val _requestIndexCompanion = MutableStateFlow(false)
+    override val requestIndexCompanion: StateFlow<Boolean> = _requestIndexCompanion.asStateFlow()
+    private val _pendingFirmwareSideload = MutableStateFlow<PendingFirmwareSideload?>(null)
+    override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
+        _pendingFirmwareSideload.asStateFlow()
+    private var reservedSideloadCount = 0
+
+    override fun consumeRequestIndexCompanion() {
+        _requestIndexCompanion.value = false
+    }
+
+    override fun navigateToTab(route: NavBarRoute) {
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+    }
+
+    data class PebbleDeepLink(
+        val route: NavBarRoute,
+        var consumed: Boolean = false,
+    )
+
+    override fun handle(uri: Uri?): Boolean {
+        uri ?: return false
+        return when {
+            uri.scheme == "pebble" -> {
+                when (uri.host) {
+                    CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
+                    STORE_URL -> handleAppstore(
+                        uri.getQueryParameter(STORE_SOURCE_PARAM) ?: REBBLE_FEED_URL,
+                        uri.path,
+                    )
+                    ADD_STORE_FEED_HOST -> handleAddStoreFeed(uri)
+                    NAVBAR_URL -> handleNavbar(uri.path)
+                    REGISTER_INDEX_COMPANION_HOST -> handleRegisterIndexCompanion()
+                    SHOW_WATCHES_HOST -> handleShowWatches(uri.path)
+//                    UPDATE_WATCH_NOW_HOST -> handleShowWatches(uri.path)
+                    else -> false
+                }
+            }
+
+            uri.scheme == "https" || uri.scheme == "http" -> {
+                when {
+                    uri.host == GITHUB_OAUTH_CALLBACK_HOST &&
+                            uri.pathSegments.firstOrNull() == GITHUB_OAUTH_CALLBACK_PATH -> handleGithubAuth(
+                        uri
+                    )
+
+                    else -> false
+                }
+            }
+
+            uri.scheme == "pebblejs" && uri.host?.startsWith("close") == true -> {
+                val data = uri.encodedFragment ?: return false
+                libPebble.watches.value
+                    .filterIsInstance<ConnectedPebbleDevice>()
+                    .firstOrNull { it.currentPKJSSession.value != null }
+                    ?.currentPKJSSession
+                    ?.value
+                    ?.triggerOnWebviewClosed(data) ?: run {
+                        logger.w { "No PKJS session found, cannot handle webview close" }
+                        return false
+                    }
+                true
+            }
+
+            uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleLanguagePack(uri, uri.lastPathSegment!!)
+            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri, uri.lastPathSegment!!)
+            uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleApp(uri)
+            uri.scheme == "content" -> handleContentFallback(uri)
+            else -> false
+        }
+    }
+
+    private fun handleContentFallback(uri: Uri): Boolean {
+        logger.v { "handleContentFallback() $uri" }
+        val name = readNameFromContentUri(context, uri)
+        if (name == null) {
+            logger.w { "handleContentFallback: couldn't get name for $uri" }
+            return false
+        }
+        logger.d { "filename: $name" }
+        return when {
+            name.endsWith(".pbl") -> handleLanguagePack(uri, name)
+            name.endsWith(".pbz") -> handleFirmware(uri, name)
+            name.endsWith(".pbw") -> handleApp(uri)
+            else -> false
+        }
+    }
+
+    private fun handleLanguagePack(uri: Uri, name: String): Boolean {
+        logger.v { "handleLanguagePack() $uri" }
+        val file = writeFile(context, uri)
+        if (file == null) {
+            logger.w { "handleLanguagePack: couldn't write file" }
+            _snackBarMessages.tryEmit("Failed to load language pack file")
+            return false
+        }
+        val connectedWatch =
+            libPebble.watches.value.filterIsInstance<ConnectedPebble.Language>().firstOrNull()
+        if (connectedWatch == null) {
+            logger.w { "handleLanguagePack: no connected watch" }
+            _snackBarMessages.tryEmit("Failed to load language pack: no connected watch")
+            return false
+        }
+        _snackBarMessages.tryEmit("Installing language pack...")
+        connectedWatch.installLanguagePack(file, name)
+        return true
+    }
+
+    private fun handleFirmware(uri: Uri, fileName: String): Boolean {
+        logger.v { "handleFirmware() $uri" }
+        val file = writeFile(context, uri)
+        if (file == null) {
+            logger.w { "handleFirmware: couldn't write file" }
+            _snackBarMessages.tryEmit("Failed to read firmware file")
+            return false
+        }
+        val previous = _pendingFirmwareSideload.value
+        val reserved = reserveSideloadCopy(file)
+        _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName)
+        previous?.takeIf { it.file != reserved }
+            ?.let { SystemFileSystem.delete(it.file, mustExist = false) }
+        navigateToTab(PebbleNavBarRoutes.WatchesRoute)
+        return true
+    }
+
+    private fun reserveSideloadCopy(shared: Path): Path {
+        val directory = shared.parent ?: return shared
+        if (reservedSideloadCount == 0) {
+            sweepStaleSideloadCopies(directory)
+        }
+        val reserved = Path(directory, "$RESERVED_SIDELOAD_PREFIX${reservedSideloadCount++}.pbz")
+        return try {
+            SystemFileSystem.delete(reserved, mustExist = false)
+            SystemFileSystem.atomicMove(shared, reserved)
+            reserved
+        } catch (e: Exception) {
+            logger.w(e) { "reserveSideloadCopy: falling back to the shared path" }
+            shared
+        }
+    }
+
+    private fun sweepStaleSideloadCopies(directory: Path) {
+        try {
+            SystemFileSystem.list(directory)
+                .filter { it.name.startsWith(RESERVED_SIDELOAD_PREFIX) }
+                .forEach { SystemFileSystem.delete(it, mustExist = false) }
+        } catch (e: Exception) {
+            logger.w(e) { "sweepStaleSideloadCopies failed" }
+        }
+    }
+
+    override fun confirmPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        sideloadFirmware(pending.file)
+    }
+
+    override fun dismissPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        SystemFileSystem.delete(pending.file, mustExist = false)
+    }
+
+    override fun showMessage(message: String) {
+        _snackBarMessages.tryEmit(message)
+    }
+
+    override fun sideloadFirmware(file: Path) {
+        GlobalScope.launch {
+            val watches = withTimeoutOrNull(CONNECTED_WATCH_TIMEOUT) {
+                libPebble.watches
+                    .map { it.filterIsInstance<ConnectedPebble.Firmware>() }
+                    .first { it.isNotEmpty() }
+            }
+            if (watches == null) {
+                logger.w { "sideloadFirmware: no connected watch after $CONNECTED_WATCH_TIMEOUT" }
+                _snackBarMessages.tryEmit("Failed to sideload firmware: no connected watch")
+                return@launch
+            }
+            logger.i { "sideloadFirmware: sideloading to ${watches.size} watch(es)" }
+            navigateToTab(PebbleNavBarRoutes.WatchesRoute)
+            _snackBarMessages.tryEmit("Sideloading firmware...")
+            watches.forEach {
+                it.sideloadFirmware(file)
+            }
+        }
+    }
+
+    private fun handleApp(uri: Uri): Boolean {
+        logger.v { "handleApp() $uri" }
+        val file = writeFile(context, uri)
+        if (file == null) {
+            logger.w { "handleApp: couldn't write file" }
+            return false
+        }
+        GlobalScope.launch {
+            libPebble.sideloadApp(file)
+        }
+        return true
+    }
+
+    private fun handleBootConfig(path: String?): Boolean {
+        logger.d { "handleBootConfig()" }
+        val token = parseTokenFrom(path)
+        if (path == null || token == null) {
+            logger.w("couldn't find token")
+            return false
+        }
+        GlobalScope.launch {
+            pebbleAccount.setToken(token = token, bootUrl = path)
+            _initialLockerSync.value = true
+            libPebble.requestLockerSync().await()
+            libPebble.checkForFirmwareUpdates(false)
+            _initialLockerSync.value = false
+            analytics.logEvent("rebble.logged-in")
+        }
+        return true
+    }
+
+    private fun handleAppstore(storeUrl: String, path: String?): Boolean {
+        if (path == null) {
+            return false
+        }
+        logger.v { "handleAppstore: $path" }
+        GlobalScope.launch {
+            val appId = path.removePrefix("/").removeSuffix("/")
+            val store = appstoreSourceDao.getAllEnabledSourcesFlow().firstOrNull()?.find {
+                it.url == storeUrl
+            }
+            if (store == null) {
+                _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
+                return@launch
+            }
+            val route = PebbleNavBarRoutes.LockerAppRoute(
+                uuid = null,
+                storedId = appId,
+                storeSource = store.id,
+            )
+            _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+        }
+        return true
+    }
+
+    private fun handleAddStoreFeed(uri: Uri): Boolean {
+        val route = parseAddStoreFeedFrom(uri) ?: run {
+            logger.w { "handleAddStoreFeed: expected pebble://$ADD_STORE_FEED_HOST/{name}/{url}" }
+            return false
+        }
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+        return true
+    }
+
+    private fun handleShowWatches(path: String?): Boolean {
+        if (path != null) {
+            firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
+        }
+        val route = PebbleNavBarRoutes.WatchesRoute
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+        return true
+    }
+
+    // Show the Watches tab and ask it to (re-)register the paired ring as a companion device.
+    private fun handleRegisterIndexCompanion(): Boolean {
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(PebbleNavBarRoutes.WatchesRoute)
+        _requestIndexCompanion.value = true
+        return true
+    }
+
+    private fun handleNavbar(path: String?): Boolean {
+        if (path == null) {
+            return false
+        }
+        logger.v { "handleNavbar: $path" }
+        return when (path.removePrefix("/").removeSuffix("/")) {
+            "index" -> {
+                _navigateToPebbleDeepLink.value = PebbleDeepLink(PebbleNavBarRoutes.IndexRoute)
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    private fun handleGithubAuth(uri: Uri): Boolean {
+        val code = uri.getQueryParameter("code")
+        val state = uri.getQueryParameter("state")
+        val error = uri.getQueryParameter("error")
+        if (state == null) {
+            logger.w("handleGithubAuth: state is null")
+            return false
+        }
+        return true
+    }
+
+    companion object {
+        private val CONNECTED_WATCH_TIMEOUT = 60.seconds
+        private const val RESERVED_SIDELOAD_PREFIX = "pending_sideload_"
+        private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
+        private const val STORE_URL: String = "appstore"
+        private const val STORE_SOURCE_PARAM: String = "source"
+        private const val ADD_STORE_FEED_HOST: String = "add-store-feed"
+        private const val NAVBAR_URL: String = "navbar"
+        private val SHOW_WATCHES_HOST = "show-watches"
+//        private val UPDATE_WATCH_NOW_HOST = "update-watch-now"
+        private val REGISTER_INDEX_COMPANION_HOST = IndexPlatformBluetoothAssociations.REQUEST_URI_HOST
+        val NOTIFICATION_INTENT_URI_SHOW_WATCHES = Uri.parse("pebble://${SHOW_WATCHES_HOST}")
+        val NOTIFICATION_INTENT_URI_REGISTER_INDEX_COMPANION = Uri.parse("pebble://${REGISTER_INDEX_COMPANION_HOST}")
+//        val NOTIFICATION_INTENT_URI_UPDATE_NOW = Uri.parse("pebble://${UPDATE_WATCH_NOW_HOST}")
+        private const val GITHUB_OAUTH_CALLBACK_HOST: String = "cloud.repebble.com"
+        private const val GITHUB_OAUTH_CALLBACK_PATH: String = "githubAuth"
+        private val TOKEN_REGEX = Regex("access_token=(.*)&t=")
+        private val logger = Logger.withTag("PebbleDeepLinkHandler")
+
+        fun updateNowUri(identifier: PebbleIdentifier): Uri = Uri.parse("pebble://${SHOW_WATCHES_HOST}/${identifier.asString}")
+
+        /** `pebble://add-store-feed/{name}/{url}`, both segments percent-encoded. */
+        internal fun parseAddStoreFeedFrom(uri: Uri): PebbleNavBarRoutes.AppstoreSettingsRoute? {
+            val segments = uri.pathSegments
+            if (segments.size != 2) return null
+            val (name, url) = segments
+            if (name.isBlank() || url.isBlank()) return null
+            return PebbleNavBarRoutes.AppstoreSettingsRoute(
+                addSourceName = name,
+                addSourceUrl = url,
+            )
+        }
+
+        internal fun parseTokenFrom(path: String?): String? {
+            if (path == null) {
+                logger.w("handleBootConfig: path is null")
+                return null
+            }
+            val bootConfigUrl: String = path.replaceFirst("/", "")
+            val token = TOKEN_REGEX.find(bootConfigUrl)?.groups?.get(1)?.value
+            return token
+        }
+    }
+}

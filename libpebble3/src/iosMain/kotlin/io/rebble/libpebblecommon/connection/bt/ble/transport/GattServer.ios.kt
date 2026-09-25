@@ -1,0 +1,439 @@
+package io.rebble.libpebblecommon.connection.bt.ble.transport
+
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.BleConfigFlow
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE_SERVICE_UUID
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.web.withTimeoutOr
+import kotlinx.cinterop.ObjCSignatureOverride
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.convert
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.usePinned
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import platform.CoreBluetooth.CBATTErrorRequestNotSupported
+import platform.CoreBluetooth.CBATTErrorSuccess
+import platform.CoreBluetooth.CBATTRequest
+import platform.CoreBluetooth.CBAttributePermissionsReadable
+import platform.CoreBluetooth.CBAttributePermissionsWriteable
+import platform.CoreBluetooth.CBCentral
+import platform.CoreBluetooth.CBCharacteristic
+import platform.CoreBluetooth.CBCharacteristicPropertyNotify
+import platform.CoreBluetooth.CBCharacteristicPropertyRead
+import platform.CoreBluetooth.CBCharacteristicPropertyWriteWithoutResponse
+import platform.CoreBluetooth.CBManagerStatePoweredOn
+import platform.CoreBluetooth.CBManagerStateUnknown
+import platform.CoreBluetooth.CBMutableCharacteristic
+import platform.CoreBluetooth.CBMutableService
+import platform.CoreBluetooth.CBPeripheralManager
+import platform.CoreBluetooth.CBPeripheralManagerDelegateProtocol
+import platform.CoreBluetooth.CBPeripheralManagerOptionRestoreIdentifierKey
+import platform.CoreBluetooth.CBService
+import platform.CoreBluetooth.CBUUID
+import platform.Foundation.NSData
+import platform.Foundation.NSError
+import platform.Foundation.NSUUID
+import platform.Foundation.create
+import platform.darwin.NSObject
+import platform.posix.memcpy
+import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
+
+data class RegisteredDevice(
+    val dataChannel: SendChannel<ByteArray>,
+    val device: PebbleBleIdentifier,
+    val notificationsEnabled: Boolean,
+)
+
+fun Uuid.asCbUuid(): CBUUID = CBUUID.UUIDWithString(toString())
+
+private fun CBUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
+
+fun NSUUID.asUuid(): Uuid = Uuid.parse(UUIDString())
+
+private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).apply {
+    if (length > 0u) {
+        usePinned {
+            memcpy(it.addressOf(0), bytes, length)
+        }
+    }
+}
+
+private fun ByteArray.toNSData(): NSData = memScoped {
+    NSData.create(
+        bytes = allocArrayOf(this@toNSData),
+        length = size.convert(),
+    )
+}
+
+actual class GattServer(
+    private val bleConfigFlow: BleConfigFlow,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+) : NSObject(), CBPeripheralManagerDelegateProtocol {
+    private val logger = Logger.withTag("GattServer")
+    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
+        delegate = this,
+        queue = null,
+        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
+    )
+    private val registeredDevices: MutableMap<PebbleBleIdentifier, RegisteredDevice> =
+        mutableMapOf()
+    private val registeredServices = mutableMapOf<Uuid, CBMutableService>()
+    private var wasSubscribedAtRestore = false
+    private var wasRestoredFromKilledState = false
+    private val addServicesMutex = Mutex()
+
+    private fun verboseLog(message: () -> String) {
+        if (bleConfigFlow.value.verbosePpogLogging) {
+            logger.v(message = message)
+        }
+    }
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        willRestoreState: Map<Any?, *>
+    ) {
+        val restoredServices = willRestoreState["kCBRestoredServices"] as? List<CBMutableService>
+        restoredServices?.forEach { service ->
+            (service.characteristics as? List<CBMutableCharacteristic>)?.forEach { c ->
+                if (c.subscribedCentrals?.isNotEmpty() ?: false) {
+                    logger.d { "${c.UUID} was subscribed at restore time" }
+                    wasSubscribedAtRestore = true
+                }
+            }
+            registeredServices[service.UUID.asUuid()] = service
+        }
+        wasRestoredFromKilledState = true
+        logger.d { "restoredServices" }
+    }
+
+    private fun findCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid
+    ): CBMutableCharacteristic? =
+        (registeredServices[serviceUuid]?.characteristics as? List<CBMutableCharacteristic>)
+            ?.firstOrNull { it.UUID.asUuid() == characteristicUuid }
+
+    actual suspend fun addServices() {
+        addServicesMutex.withLock {
+            logger.d("addServices: waiting for power on${if (wasRestoredFromKilledState) " (restored from killed state)" else ""}")
+            peripheralManagerState.first { it == CBManagerStatePoweredOn }
+            addService(
+                PPOGATT_DEVICE_SERVICE_UUID_SERVER,
+                listOf(
+                    CBMutableCharacteristic(
+                        type = META_CHARACTERISTIC_SERVER.asCbUuid(),
+                        properties = CBCharacteristicPropertyRead,
+                        value = null,
+                        permissions = CBAttributePermissionsReadable,// CBAttributePermissionsReadEncryptionRequired,
+                    ),
+                    CBMutableCharacteristic(
+                        type = PPOGATT_DEVICE_CHARACTERISTIC_SERVER.asCbUuid(),
+                        properties = CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyNotify,
+                        value = null,
+                        permissions = CBAttributePermissionsWriteable// CBAttributePermissionsWriteEncryptionRequired,
+                    ),
+                ),
+            )
+            addService(
+                FAKE_SERVICE_UUID,
+                listOf(
+                    CBMutableCharacteristic(
+                        type = FAKE_SERVICE_UUID.asCbUuid(),
+                        properties = CBCharacteristicPropertyRead,
+                        value = null,
+                        permissions = CBAttributePermissionsReadable, //CBAttributePermissionsReadEncryptionRequired,
+                    ),
+                ),
+            )
+            wasRestoredFromKilledState = false
+        }
+    }
+
+    private suspend fun addService(
+        serviceUuid: Uuid,
+        characteristics: List<CBMutableCharacteristic>,
+    ) {
+        if (findCharacteristic(serviceUuid, characteristics.first().UUID.asUuid()) != null) {
+            if (!wasRestoredFromKilledState) {
+                logger.d { "service $serviceUuid already present!" }
+                return
+            }
+            // App was killed and relaunched. Remove and re-add the service to send a
+            // service-changed indication to the connected watch, prompting it to redo
+            // service discovery and re-establish the PPoG session.
+            logger.d { "service $serviceUuid present from state restoration — re-adding to trigger service-changed indication" }
+            peripheralManager.removeService(registeredServices[serviceUuid]!!)
+            registeredServices.remove(serviceUuid)
+        }
+        logger.d("addService: $serviceUuid")
+        val service = CBMutableService(type = serviceUuid.asCbUuid(), primary = true)
+        service.setCharacteristics(characteristics)
+        serviceAdded.onSubscription {
+            peripheralManager.addService(service)
+        }.first { it.uuid == serviceUuid }
+        registeredServices[serviceUuid] = service
+        logger.d("/addService: $serviceUuid")
+    }
+
+    actual suspend fun removeServices() {
+        addServicesMutex.withLock {
+            logger.d("removeServices")
+            registeredServices.values.forEach { service ->
+                peripheralManager.removeService(service)
+            }
+            registeredServices.clear()
+        }
+    }
+
+    actual suspend fun closeServer() {
+    }
+
+    private val _characteristicReadRequest = MutableSharedFlow<ServerCharacteristicReadRequest>()
+    actual val characteristicReadRequest: Flow<ServerCharacteristicReadRequest> =
+        _characteristicReadRequest.asSharedFlow()
+
+    actual fun registerDevice(
+        identifier: PebbleBleIdentifier,
+        sendChannel: SendChannel<ByteArray>,
+    ) {
+        logger.d("registerDevice: $identifier")
+        registeredDevices[identifier] =
+            RegisteredDevice(
+                dataChannel = sendChannel,
+                device = identifier,
+                notificationsEnabled = false,
+            )
+    }
+
+    actual fun unregisterDevice(identifier: PebbleBleIdentifier) {
+        registeredDevices.remove(identifier)
+    }
+
+    private data class MessageToSend(
+        val identifier: PebbleBleIdentifier,
+        val serviceUuid: Uuid,
+        val characteristicUuid: Uuid,
+        val data: ByteArray,
+    ) {
+        val status = MutableStateFlow<Boolean?>(null)
+    }
+
+    private val sendQueue = Channel<MessageToSend>(50)
+
+    actual suspend fun sendData(
+        identifier: PebbleBleIdentifier,
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid,
+        data: ByteArray,
+    ): SendResult {
+        val message = MessageToSend(
+            identifier = identifier,
+            serviceUuid = serviceUuid,
+            characteristicUuid = characteristicUuid,
+            data = data,
+        )
+        return withTimeoutOr(
+            timeout = SEND_TIMEOUT,
+            block = {
+                sendQueue.send(message)
+                if (message.status.filterNotNull().first()) {
+                    SendResult.Success
+                } else {
+                    SendResult.Failed
+                }
+            },
+            onTimeout = {
+                logger.w { "Timeout sending data to $identifier" }
+                SendResult.Failed
+            },
+        )
+    }
+
+    actual fun initServer() {
+        libPebbleCoroutineScope.launch {
+            sendQueue.consumeEach { messageToSend ->
+                val result = realSend(messageToSend)
+                messageToSend.status.value = result
+            }
+        }
+    }
+
+    private suspend fun realSend(messageToSend: MessageToSend): Boolean {
+        val cbCharacteristic = findCharacteristic(
+            serviceUuid = messageToSend.serviceUuid,
+            characteristicUuid = messageToSend.characteristicUuid,
+        )
+        if (cbCharacteristic == null) {
+            logger.w("sendData: couldn't find characteristic for $messageToSend")
+            return false
+        }
+        val central = (cbCharacteristic.subscribedCentrals as? List<CBCentral>)?.firstOrNull {
+            it.identifier.asUuid().toString().asPebbleBleIdentifier() == messageToSend.identifier
+        }
+        if (central == null) {
+            logger.w("sendData: couldn't find central for ${messageToSend.identifier}")
+            return false
+        }
+        return try {
+            withTimeout(SEND_TIMEOUT) {
+                while (true) {
+                    peripheralManagerReady.value = false
+                    if (peripheralManager.updateValue(
+                            value = messageToSend.data.toNSData(),
+                            forCharacteristic = cbCharacteristic,
+                            onSubscribedCentrals = listOf(central),
+                        )
+                    ) {
+                        return@withTimeout true
+                    }
+                    // Write did not succeed; wait for queue to drain
+                    peripheralManagerReady.first { ready -> ready }
+                }
+                false
+            }
+        } catch (e: TimeoutCancellationException) {
+            logger.e { "timeout sending" }
+            false
+        }
+    }
+
+    actual fun wasRestoredWithSubscribedCentral(): Boolean {
+        return wasSubscribedAtRestore
+    }
+
+    private val peripheralManagerState = MutableStateFlow(CBManagerStateUnknown)
+
+    override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
+        logger.d("peripheralManagerDidUpdateState: ${peripheral.state}")
+        if (peripheral.state == CBManagerStatePoweredOn) {
+            val rePublishAfterRestore = bleConfigFlow.value.republishGattServicesOnRestore &&
+                    wasRestoredFromKilledState &&
+                    registeredServices.isNotEmpty()
+            peripheralManagerState.value = CBManagerStatePoweredOn
+            if (rePublishAfterRestore) {
+                logger.d("auto re-publishing services after BT state restore (republishGattServicesOnRestore=true)")
+                libPebbleCoroutineScope.launch { addServices() }
+            }
+        }
+    }
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didReceiveWriteRequests: List<*>,
+    ) {
+        didReceiveWriteRequests.mapNotNull { it as? CBATTRequest }.forEach { request ->
+            verboseLog { "writeRequest: ${request.characteristic.UUID} / ${request.value}" }
+            val identifier = request.central.identifier.asUuid().toString().asPebbleBleIdentifier()
+            val device = registeredDevices[identifier]
+            if (device == null) {
+                logger.w("write request for unknown device: $identifier")
+                peripheralManager.respondToRequest(request, CBATTErrorRequestNotSupported)
+                return@forEach
+            }
+            val value = request.value
+            if (value == null) {
+                logger.w("write request with null value: $identifier")
+                peripheralManager.respondToRequest(request, CBATTErrorRequestNotSupported)
+                return@forEach
+            }
+            val result = device.dataChannel.trySend(value.toByteArray())
+            if (result.isFailure) {
+                logger.e("didReceiveWriteRequests error writing to channel: $result")
+            }
+            peripheralManager.respondToRequest(request, CBATTErrorSuccess)
+        }
+    }
+
+    @ObjCSignatureOverride
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        central: CBCentral,
+        didSubscribeToCharacteristic: CBCharacteristic,
+    ) {
+        val identifier = central.identifier.asUuid().toString().asPebbleBleIdentifier()
+        logger.d("didSubscribeToCharacteristic: device=$identifier cuuid=${didSubscribeToCharacteristic.UUID}")
+        val device = registeredDevices[identifier] ?: return
+        registeredDevices[identifier] = device.copy(notificationsEnabled = true)
+    }
+
+    @ObjCSignatureOverride
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        central: CBCentral,
+        didUnsubscribeFromCharacteristic: CBCharacteristic,
+    ) {
+        logger.d("didUnsubscribeFromCharacteristic")
+        wasSubscribedAtRestore = false
+    }
+
+    private val serviceAdded = MutableSharedFlow<ServerServiceAdded>()
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didAddService: CBService,
+        error: NSError?,
+    ) {
+        logger.d("didAddService error=$error")
+        runBlocking {
+            serviceAdded.emit(ServerServiceAdded(didAddService.UUID.asUuid()))
+        }
+    }
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didReceiveReadRequest: CBATTRequest,
+    ) {
+        logger.d("didReceiveReadRequest for ${didReceiveReadRequest.characteristic.UUID}")
+        runBlocking {
+            _characteristicReadRequest.emit(
+                ServerCharacteristicReadRequest(
+                    deviceId = didReceiveReadRequest.central.identifier.asUuid().toString()
+                        .asPebbleBleIdentifier(),
+                    uuid = didReceiveReadRequest.characteristic.UUID.asUuid(),
+                    respond = { bytes ->
+                        didReceiveReadRequest.setValue(bytes.toNSData())
+                        peripheralManager.respondToRequest(didReceiveReadRequest, CBATTErrorSuccess)
+                        true
+                    },
+                )
+            )
+        }
+    }
+
+    private val peripheralManagerReady = MutableStateFlow(true)
+
+    override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
+        verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
+        peripheralManagerReady.value = true
+    }
+}
+
+private val SEND_TIMEOUT = 8.seconds
+
+
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+    return GattServer(bleConfigFlow, libPebbleCoroutineScope)
+}

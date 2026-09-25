@@ -1,0 +1,138 @@
+package coredevices.coreapp.di
+
+import AppUpdateTracker
+import NextBugReportContext
+import com.russhwolf.settings.Settings
+import coredevices.CoreBackgroundSync
+import coredevices.EnableExperimentalDevices
+import coredevices.analytics.CoreAnalytics
+import coredevices.analytics.RealCoreAnalytics
+import coredevices.api.WisprFlowAuth
+import coredevices.coreapp.CommonAppDelegate
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
+import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
+import coredevices.coreapp.ui.screens.BugReportProcessor
+import coredevices.coreapp.ui.screens.OnboardingViewModel
+import coredevices.coreapp.util.FileLogWriter
+import coredevices.database.CoreDatabase
+import coredevices.database.UserConfigDao
+import coredevices.database.getCoreRoomDatabase
+import coredevices.coreapp.account.SignedOutUsersDao
+import coredevices.firestore.UsersDao
+import coredevices.util.AppResumed
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigFlow
+import coredevices.util.CoreConfigHolder
+import coredevices.util.DoneInitialOnboarding
+import coredevices.util.OAuthRedirectHandler
+import coredevices.util.models.ModelManager
+import coredevices.util.transcription.dictationThreadCount
+import coredevices.util.transcription.DeviceSpeedEstimator
+import coredevices.util.transcription.DictationSpeedTracker
+import coredevices.util.transcription.CactusModelPathProvider
+import coredevices.util.transcription.WhisperTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
+import coredevices.util.transcription.SelfHostedServerStore
+import coredevices.util.transcription.SelfHostedTranscriptionService
+import coredevices.util.transcription.KirinkiTranscriptionService
+import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.transcription.TranscriptionService
+import coredevices.util.transcription.WisprFlowRESTTranscriptionService
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.firestore.FirebaseFirestore
+import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
+import dev.gitlive.firebase.firestore.firestore
+import dev.gitlive.firebase.firestore.firestoreSettings
+import dev.gitlive.firebase.firestore.persistentCacheSettings
+import org.koin.core.module.dsl.singleOf
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.bind
+import org.koin.dsl.module
+import theme.RealThemeProvider
+import theme.ThemeProvider
+
+val utilModule = module {
+    single<FirebaseFirestore> {
+        Firebase.firestore.apply {
+            settings = firestoreSettings {
+                cacheSettings = persistentCacheSettings {
+                    sizeBytes = FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED
+                }
+            }
+        }
+    }
+
+    singleOf(::FileLogWriter)
+    singleOf(::BugReportProcessor)
+    singleOf(::NextBugReportContext)
+    singleOf(::CommonAppDelegate) bind CoreBackgroundSync::class
+    singleOf(::CoreDeepLinkHandler)
+    singleOf(::RealThemeProvider) bind ThemeProvider::class
+    single { Settings() }
+    viewModelOf(::OnboardingViewModel)
+    singleOf(::EnableExperimentalDevices)
+    singleOf(::AppResumed)
+    singleOf(::DoneInitialOnboarding)
+    singleOf(::AppUpdateTracker)
+    singleOf(::RealCoreAnalytics) bind CoreAnalytics::class
+    single { getCoreRoomDatabase(get()) }
+    single { get<CoreDatabase>().analyticsDao() }
+    single { get<CoreDatabase>().appstoreSourceDao() }
+    single { get<CoreDatabase>().appstoreCollectionDao() }
+    single { get<CoreDatabase>().weatherLocationDao() }
+    single { get<CoreDatabase>().heartsDao() }
+    single { get<CoreDatabase>().memfaultChunkDao() }
+    single { get<CoreDatabase>().analyticsHeartbeatDao() }
+    single { UserConfigDao { get() } }
+    single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
+    single { CoreConfigFlow(get<CoreConfigHolder>().config) }
+    // The speed probe runs on the thread count a dictation would get at
+    // that moment, so its score and the decode it predicts share one
+    // threading policy.
+    single {
+        DeviceSpeedEstimator(
+            settings = get(),
+            threadCount = { dictationThreadCount(get<CoreConfigHolder>().config.value.sttConfig) },
+        )
+    }
+    single { ModelManager(get(), get(), getOrNull(), get()) }
+    single { DictationSpeedTracker(get()) }
+    singleOf(::OAuthRedirectHandler)
+    singleOf(::WisprFlowAuth)
+    single {
+        WhisperTranscriptionService(
+            get(),
+            getOrNull<CactusModelPathProvider>() ?: object : CactusModelPathProvider {
+                override suspend fun getSTTModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override suspend fun getLMModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override suspend fun getModelPath(modelId: String, allowReinstall: Boolean): String = throw IllegalStateException("CactusModelPathProvider not available")
+                override fun isModelDownloaded(modelName: String): Boolean = false
+                override fun getDownloadedModels(): List<String> = emptyList()
+                override fun getIncompatibleModels(): List<String> = emptyList()
+                override fun deleteModel(modelName: String) {}
+                override fun getModelSizeBytes(modelName: String): Long = 0L
+                override fun initTelemetry() {}
+            },
+            get(),
+            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost(),
+            speedTracker = get(),
+        )
+    }
+    singleOf(::PlatformSpeechRecognizer)
+    single {
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), selfHosted = get())
+    } bind TranscriptionService::class
+    // Fork: the self-hosted transcription server and what it remembers
+    // (encrypted bearer token, pinned certificate).
+    single { SelfHostedServerStore(get(), get()) }
+    single { SelfHostedTranscriptionService(get(), get()) }
+    singleOf(::WisprFlowRESTTranscriptionService)
+    singleOf(::KirinkiTranscriptionService)
+    // Fork: permanently signed out. UsersDaoImpl's auth-restoration observer
+    // would loop forever against the Firebase stubs on any install that once
+    // had an account; see SignedOutUsersDao.
+    single<UsersDao> { SignedOutUsersDao }
+    singleOf(::HealthSyncTracker)
+    singleOf(::PlatformHealthSync)
+}

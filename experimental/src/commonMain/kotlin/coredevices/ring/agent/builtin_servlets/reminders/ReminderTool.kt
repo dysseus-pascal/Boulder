@@ -1,0 +1,240 @@
+package coredevices.ring.agent.builtin_servlets.reminders
+
+import co.touchlab.kermit.Logger
+import coredevices.indexai.time.HumanDateTimeParser
+import coredevices.indexai.time.InterpretedDateTime
+import coredevices.indexai.util.JsonSnake
+import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
+import coredevices.mcp.asFrozenClock
+import coredevices.mcp.data.SemanticResult
+import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.ui.isLocale24HourFormat
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+
+class ReminderTool: BuiltInMcpTool(
+    definition = Tool(
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        inputSchema = ToolSchema(
+            properties = JsonObject(
+                mapOf(
+                    "date_time_human" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
+                        ).toJson()
+                    ),
+                    "duration_human" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
+                        ).toJson()
+                    ),
+                    "notification_hours_before" to JsonObject(
+                        mapOf(
+                            "type" to "number",
+                            "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
+                        ).toJson()
+                    ),
+                    "message" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "The message to remind the user e.g. 'Buy more milk'"
+                        ).toJson()
+                    ),
+                )
+            ),
+            required = listOf(
+                "message"
+            )
+        )
+    ),
+    extraContext = """
+        Only pass times to 'create_reminder' that the user actually said. If the user started to specify a reminder time but it was cut off, do not guess one and do not create the reminder; tell the user the time was missing. Omit the time fields entirely for reminders without a time.
+    """.trimIndent()
+), KoinComponent {
+    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
+
+    companion object Companion {
+        const val TOOL_NAME = "create_reminder"
+        const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder, asks to remember to do something ('remind me to...', 'remember to...'), or wants to be reminded at a specific time or date."
+        private val logger = Logger.withTag("ReminderTool")
+    }
+
+    @Serializable
+    private data class RemindArgs(
+        val date_time_human: String? = null,
+        val duration_human: String? = null,
+        val notification_hours_before: Double? = null,
+        val message: String
+    )
+
+    @Serializable
+    data class RemindResult(
+        val success: Boolean,
+        val errorMessage: String? = null,
+        val reminderId: String? = null
+    )
+
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
+        val remindArgs = JsonSnake.decodeFromString<RemindArgs>(jsonInput)
+        val instant = (remindArgs.date_time_human ?: remindArgs.duration_human)?.let { dateTimeHuman ->
+            val tz = TimeZone.currentSystemDefault()
+            // Anchor time resolution to when the user actually spoke. When that's unknown, only
+            // absolute times can fall back to the current clock; relative ones are refused.
+            val timeBase = context.timeBase
+            val anchor = timeBase ?: Clock.System.now()
+            val parser = HumanDateTimeParser(clock = anchor.asFrozenClock(), timeZone = tz)
+            val parsed = parser.parse(dateTimeHuman)
+            if (timeBase == null && parsed is InterpretedDateTime.Relative) {
+                return ToolCallResult(
+                    JsonSnake.encodeToString(
+                        RemindResult(
+                            success = false,
+                            errorMessage = "Cannot resolve relative time '$dateTimeHuman': the " +
+                                    "recording's original time is unknown. Use an absolute " +
+                                    "time, or create the reminder without a time."
+                        )
+                    ),
+                    SemanticResult.GenericFailure(
+                        "Couldn't determine when the recording was made",
+                        llmRecoverable = false
+                    )
+                )
+            }
+            when (parsed) {
+                is InterpretedDateTime.AbsoluteDate -> {
+                    logger.d { "Parsed absolute date: $parsed will assume 9am" }
+                    LocalDateTime(
+                        date = parsed.date,
+                        time = LocalTime(9, 0)
+                    )
+                }
+                is InterpretedDateTime.AbsoluteDateTime -> {
+                    logger.d { "Parsed absolute date time: $parsed" }
+                    parsed.dateTime
+                }
+                is InterpretedDateTime.AbsoluteTime -> {
+                    logger.d { "Parsed absolute time: $parsed" }
+                    val currentTime = anchor.toLocalDateTime(tz)
+                    if (parsed.time < currentTime.time) {
+                        val is12HourFormat = !isLocale24HourFormat()
+                        if (is12HourFormat && parsed.time.hour in 1..11 && !parsed.amPmExplicit) {
+                            // If the parsed time is in the past for today, and the locale is 12-hour format, there's a chance it was an AM/PM issue.
+                            // For example, if it's currently 3pm and the user said "at 3", it might have been parsed as 3am which has already passed.
+                            logger.d { "Parsed time is in the past and locale is 12-hour format, assuming it's an AM/PM parsing issue and adding 12 hours" }
+                            val correctedTime = LocalTime(
+                                hour = (parsed.time.hour + 12) % 24,
+                                minute = parsed.time.minute,
+                                second = parsed.time.second
+                            )
+
+                            if (correctedTime < currentTime.time) {
+                                logger.d { "Corrected time is still in the past, assuming it's for tomorrow" }
+                                LocalDateTime(
+                                    date = currentTime.date.plus(DatePeriod(days = 1)),
+                                    time = parsed.time
+                                )
+                            } else {
+                                logger.d { "Corrected time is not in the past, assuming it's for today" }
+                                LocalDateTime(
+                                    date = currentTime.date,
+                                    time = correctedTime
+                                )
+                            }
+                        } else {
+                            logger.d { "Parsed time has already passed today, assuming it's for tomorrow" }
+                            LocalDateTime(
+                                date = currentTime.date.plus(DatePeriod(days = 1)),
+                                time = parsed.time
+                            )
+                        }
+                    } else {
+                        logger.d { "Parsed time has not passed today, assuming it's for today" }
+                        LocalDateTime(
+                            date = currentTime.date,
+                            time = parsed.time
+                        )
+                    }
+                }
+                is InterpretedDateTime.Relative -> {
+                    logger.d { "Parsed relative date time: $parsed" }
+                    val currentTime = anchor
+                    val period = parsed.period
+                    if (period != null) {
+                        val local = currentTime.toLocalDateTime(tz)
+                        val newDate = local.date.plus(period)
+                        (LocalDateTime(newDate, local.time).toInstant(tz) + parsed.duration).toLocalDateTime(tz)
+                    } else {
+                        (currentTime + parsed.duration).toLocalDateTime(tz)
+                    }
+                }
+                null -> {
+                    logger.e { "Failed to parse date time: '$dateTimeHuman'" }
+                    return ToolCallResult(
+                        JsonSnake.encodeToString(
+                            RemindResult(
+                                success = false,
+                                errorMessage = "Failed to parse date time: '$dateTimeHuman'. " +
+                                        "Retry with the same date/time rephrased in simple English " +
+                                        "like 'on August 20 at 9am', 'tomorrow at 13:00' or 'in 2 hours'. " +
+                                        "If it cannot be expressed that way, create the reminder without a time."
+                            )
+                        ),
+                        SemanticResult.GenericFailure(
+                            "Failed to parse time",
+                            llmRecoverable = true
+                        )
+                    )
+                }
+            }.toInstant(tz)
+        }
+
+        // Lead time only makes sense alongside a reminder time; ignore otherwise.
+        val notifyBefore = instant?.let {
+            remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
+        }
+
+        return try {
+            val reminderId = reminderIntegrationFactory.createReminderIntegration()
+                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
+            ToolCallResult(
+                JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
+                SemanticResult.TaskCreation(
+                    title = remindArgs.message,
+                    deadline = instant,
+                    localReminderId = reminderId.toIntOrNull(),
+                    notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
+                )
+            )
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to create reminder" }
+            ToolCallResult(
+                JsonSnake.encodeToString(
+                    RemindResult(
+                        success = false,
+                        errorMessage = e.message
+                    )
+                ),
+                SemanticResult.GenericFailure("Failed to create reminder: ${e.message}")
+            )
+        }
+    }
+}

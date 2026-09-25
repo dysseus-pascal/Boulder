@@ -1,0 +1,178 @@
+package coredevices.ring.agent.builtin_servlets.clock
+
+import co.touchlab.kermit.Logger
+import coredevices.indexai.time.HumanDateTimeParser
+import coredevices.indexai.time.InterpretedDateTime
+import coredevices.indexai.util.JsonSnake
+import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
+import coredevices.mcp.asFrozenClock
+import coredevices.mcp.data.SemanticResult
+import coredevices.mcp.data.ToolCallResult
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Instant
+
+class SetTimerTool : BuiltInMcpTool(
+    definition = Tool(
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        inputSchema = ToolSchema(
+            properties = JsonObject(
+                mapOf(
+                    "time_human" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "The duration or target end time to set the timer for in human readable format e.g. '1 hour and 30 minutes', '45 minutes', 'for 1:50pm', 'at 13:30'",
+                        ).toJson()
+                    )
+                )
+            ),
+            required = listOf("time_human")
+        )
+    ),
+    extraContext = """
+        When using the 'set_timer' tool, lean towards setting timers for durations when it's ambiguous, for example a timer for '3:20' should be set for '3 hours and 20 minutes' not 'at 3:20'.
+        Only pass a duration or end time the user actually said. If the request has no duration or end time (e.g. it cuts off like 'start the timer for'), do not call this tool and do not guess a value.
+    """.trimIndent()
+) {
+    companion object {
+        private val logger = Logger.withTag(SetTimerTool::class.simpleName!!)
+        const val TOOL_NAME = "set_timer"
+        const val TOOL_DESCRIPTION =
+            "Set a timer for the specified duration or end time"
+
+        fun interpretedTimeToFireTime(interpreted: InterpretedDateTime, now: Instant, tz: TimeZone): Instant {
+            return when (interpreted) {
+                is InterpretedDateTime.AbsoluteDate -> {
+                    // assume 9am
+                    LocalDateTime(
+                        date = interpreted.date,
+                        time = LocalTime(9, 0)
+                    ).toInstant(tz)
+                }
+                is InterpretedDateTime.AbsoluteDateTime -> {
+                    interpreted.dateTime.toInstant(tz)
+                }
+                is InterpretedDateTime.AbsoluteTime -> {
+                    val todayDateTime = now.toLocalDateTime(tz)
+                    if (interpreted.time >= todayDateTime.time) {
+                        LocalDateTime(
+                            date = todayDateTime.date,
+                            time = interpreted.time
+                        ).toInstant(tz)
+                    } else {
+                        // time has already passed today, set for tomorrow
+                        val tomorrowDate = (now + 1.days).toLocalDateTime(tz).date
+                        LocalDateTime(
+                            date = tomorrowDate,
+                            time = interpreted.time
+                        ).toInstant(tz)
+                    }
+                }
+                is InterpretedDateTime.Relative -> {
+                    val period = interpreted.period
+                    if (period != null) {
+                        val local = now.toLocalDateTime(tz)
+                        val newDate = local.date.plus(period)
+                        LocalDateTime(newDate, local.time).toInstant(tz) + interpreted.duration
+                    } else {
+                        now + interpreted.duration
+                    }
+                }
+            }
+        }
+    }
+
+    @Serializable
+    private data class SetTimerArgs(
+        @SerialName("time_human")
+        val timeHuman: String,
+    )
+
+    @Serializable
+    private data class SetTimerResult(
+        val success: Boolean,
+        @EncodeDefault(EncodeDefault.Mode.NEVER)
+        @SerialName("error_message")
+        val errorMessage: String? = null,
+    )
+
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
+        val setTimerArgs = JsonSnake.decodeFromString<SetTimerArgs>(jsonInput)
+        val tz = TimeZone.currentSystemDefault()
+        // The timer should end relative to when the user actually spoke. When that's unknown,
+        // only absolute end times can fall back to the current clock; durations are refused.
+        val timeBase = context.timeBase
+        val anchor = timeBase ?: Clock.System.now()
+        val parser = HumanDateTimeParser(clock = anchor.asFrozenClock())
+        val interpreted = parser.parse(setTimerArgs.timeHuman)
+            ?: return ToolCallResult(
+                JsonSnake.encodeToString(
+                    SetTimerResult(
+                        success = false,
+                        errorMessage = "Could not parse time: '${setTimerArgs.timeHuman}'"
+                    )
+                ),
+                SemanticResult.GenericFailure("Could not parse time: '${setTimerArgs.timeHuman}'", llmRecoverable = true)
+            )
+        if (timeBase == null && interpreted is InterpretedDateTime.Relative) {
+            return ToolCallResult(
+                JsonSnake.encodeToString(
+                    SetTimerResult(
+                        success = false,
+                        errorMessage = "Cannot set a timer for a duration: the recording's original time is unknown"
+                    )
+                ),
+                SemanticResult.GenericFailure(
+                    "Couldn't determine when the recording was made",
+                    llmRecoverable = false
+                )
+            )
+        }
+        val fireTime = interpretedTimeToFireTime(interpreted, anchor, tz)
+        // Remaining time from the actual present, so processing delay doesn't shift the end time
+        val duration = fireTime - Clock.System.now()
+        if (duration.isNegative()) {
+            return ToolCallResult(
+                JsonSnake.encodeToString(
+                    SetTimerResult(
+                        success = false,
+                        errorMessage = "Specified time is in the past"
+                    )
+                ),
+                SemanticResult.GenericFailure("Specified time is in the past", llmRecoverable = false)
+            )
+        }
+        return try {
+            setTimer(duration)
+            val actualFireTime = Clock.System.now() + duration
+            ToolCallResult(
+                JsonSnake.encodeToString(SetTimerResult(success = true)),
+                SemanticResult.TimerCreation(fireTime - anchor, actualFireTime)
+            )
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to set timer via tool" }
+            ToolCallResult(
+                JsonSnake.encodeToString(SetTimerResult(success = false, errorMessage = e.message)),
+                SemanticResult.GenericFailure("Failed: ${e.message}")
+            )
+        }
+    }
+}
+
+expect suspend fun setTimer(duration: Duration, title: String? = null, skipUI: Boolean = true)

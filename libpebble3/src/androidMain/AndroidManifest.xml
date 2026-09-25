@@ -1,0 +1,81 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Request legacy Bluetooth permissions on older devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- bluetooth -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- Include "neverForLocation" only if you can strongly assert that
+         your app never derives physical location from Bluetooth scan results. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- Set maxSdkVersion to 30 if you can strongly assert that, on
+         Android 12 and higher, your app never derives physical location from
+         Bluetooth scan results and doesn't need location access for any other
+         purpose. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_USE_DATA_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_WATCH" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.MANAGE_ONGOING_CALLS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
+    <uses-feature android:name="android.software.companion_device_setup"/>
+
+    <!-- This should not be used in the new apps any more, leaving here for the backwards compatibility -->
+    <uses-permission android:name="io.rebble.pebblekit2.permission.RECEIVE_DATA_FROM_WATCH" />
+
+    <application>
+        <service android:name="io.rebble.libpebblecommon.notification.LibPebbleNotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="io.rebble.libpebblecommon.notification.LibPebbleNotificationListener.BIND_LOCAL" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations|alerting">
+            </meta-data>
+        </service>
+        <service
+            android:name="io.rebble.libpebblecommon.calls.LibPebbleInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS"
+                android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <service android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleSenderReceiver"
+                 android:exported="true">
+            <intent-filter>
+                <action android:name="io.rebble.pebblekit2.SEND_DATA_TO_WATCH"/>
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

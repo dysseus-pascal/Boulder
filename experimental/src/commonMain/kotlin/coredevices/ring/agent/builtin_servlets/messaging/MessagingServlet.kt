@@ -1,0 +1,55 @@
+package coredevices.ring.agent.builtin_servlets.messaging
+
+import co.touchlab.kermit.Logger
+import coredevices.mcp.SessionContext
+import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.database.Preferences
+import coredevices.ring.isBeeperAvailable
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+object MessagingServlet: BuiltInMcpIntegration(
+    name = "builtin_messaging",
+    tools = listOf(
+        SendBeeperMessageTool(),
+    )
+), KoinComponent {
+    private val logger by lazy { Logger.withTag("MessagingServlet") }
+    private val prefs: Preferences by inject()
+    override suspend fun getDisabledTools(): List<String> {
+        val approvedContacts = prefs.approvedBeeperContacts.value
+        return if (approvedContacts.isEmpty()) {
+            logger.d { "No approved contacts for messaging tools, disabling them." }
+            listOf(SendBeeperMessageToolConstants.TOOL_NAME)
+        } else {
+            emptyList()
+        }
+    }
+
+    override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
+        return if (prefs.approvedBeeperContacts.value.isNotEmpty()) {
+            buildString {
+                appendLine(super.getExtraContext(sessionContext))
+                appendLine("Approved contacts for ${SendBeeperMessageToolConstants.TOOL_NAME}:")
+                prefs.approvedBeeperContacts.value.forEach { contact ->
+                    appendLine("- ${contact.name} ${contact.nickname?.let { "(Nickname: $it)" } ?: ""}".trim())
+                }
+            }
+        } else {
+            super.getExtraContext(sessionContext)
+        }
+    }
+}
+/** Beeper needs to be installed and to have granted access before the agent can message through it. */
+fun beeperUnavailableReason(permissionRequester: PermissionRequester): Flow<String?> =
+    permissionRequester.grantedPermissions.map { granted ->
+        when {
+            !isBeeperAvailable() -> "Beeper isn't installed on this phone"
+            Permission.Beeper !in granted -> "Allow access to Beeper in your phone's settings"
+            else -> null
+        }
+    }

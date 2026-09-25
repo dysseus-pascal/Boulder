@@ -1,0 +1,327 @@
+package io.rebble.libpebblecommon.connection.bt.ble.transport.impl
+
+import co.touchlab.kermit.Logger
+import com.juul.kable.DiscoveredCharacteristic
+import com.juul.kable.DiscoveredService
+import com.juul.kable.Peripheral
+import com.juul.kable.State
+import com.juul.kable.State.Disconnected.Status
+import com.juul.kable.WriteType
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
+import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.PlatformIdentifier
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnectionResult
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattDescriptor
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattService
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
+
+expect fun peripheralFromIdentifier(
+    identifier: PebbleBleIdentifier,
+    name: String,
+    autoConnect: Boolean,
+): Peripheral?
+
+class KableGattConnector(
+    private val identifier: PebbleBleIdentifier,
+    platformIdentifier: PlatformIdentifier.BlePlatformIdentifier,
+    private val scope: ConnectionCoroutineScope,
+    private val blePlatformConfig: BlePlatformConfig,
+) : GattConnector {
+    private val logger = Logger.withTag("KableGattConnector/${identifier.asString}")
+    private val peripheral = platformIdentifier.peripheral
+    private val autoConnect = platformIdentifier.autoConnect
+
+    private val _disconnected = CompletableDeferred<ConnectionFailureReason>()
+    override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
+    private val attemptedConnection = MutableStateFlow(false)
+
+    override suspend fun connect(): GattConnectionResult {
+        if (!peripheral.scope.isActive) {
+            logger.w { "connect(): peripheral already closed!" }
+            _disconnected.complete(ConnectionFailureReason.PeripheralAlreadyClosed)
+            return GattConnectionResult.Failure(ConnectionFailureReason.PeripheralAlreadyClosed)
+        }
+        scope.launch {
+            val disconnected = peripheral.state.dropWhile {
+                // Skip initial disconnected state before we connect
+                it is State.Disconnected
+            }.filterIsInstance<State.Disconnected>().first()
+            logger.i { "Disconnection: status=${disconnected.status}" }
+            _disconnected.complete(disconnected.status.asFailureReason())
+        }
+        var timedOut = false
+        val connectTimeoutJob = scope.launch {
+            delay(if (autoConnect) AUTO_CONNECT_TIMEOUT else CONNECT_TIMEOUT)
+            timedOut = true
+            logger.w { "Connect timeout — force-disconnecting peripheral" }
+            peripheral.disconnect()
+        }
+        return try {
+            attemptedConnection.value = true
+            peripheral.connect()
+            scope.launch {
+                peripheral.services.collect {
+                    logger.d { "services = $it (size = ${it?.size})" }
+                }
+            }
+            GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral, blePlatformConfig))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val disconnectReason = withTimeoutOrNull(2.seconds) { _disconnected.await() }
+            if (timedOut) {
+                GattConnectionResult.Failure(ConnectionFailureReason.ConnectTimeout)
+            } else {
+                logger.e("error connecting.. waiting for disconnection to reason", e)
+                GattConnectionResult.Failure(disconnectReason ?: ConnectionFailureReason.FailedToConnect)
+            }
+        } finally {
+            connectTimeoutJob.cancel()
+        }
+    }
+
+    override suspend fun disconnect() {
+        logger.d { "disconnect()..." }
+        peripheral.disconnect()
+        peripheral.close()
+        if (!attemptedConnection.value) {
+            logger.d { "Marking $identifier as disconnected (never attempted connection)" }
+            _disconnected.complete(ConnectionFailureReason.NotAnError_NeverAttmpedConnection)
+        }
+        logger.d { "/disconnect()..." }
+    }
+
+    override fun close() {
+        peripheral.close()
+    }
+
+    companion object {
+        private val CONNECT_TIMEOUT = 60.seconds
+        // The OS can stop honouring a pending autoConnect without telling us; re-arm periodically
+        // rather than waiting forever.
+        private val AUTO_CONNECT_TIMEOUT = 20.minutes
+    }
+}
+
+private fun Status?.asFailureReason(): ConnectionFailureReason = when (this) {
+    Status.Cancelled, Status.CentralDisconnected, Status.ConnectionLimitReached,
+    Status.EncryptionTimedOut, Status.Failed, Status.L2CapFailure,
+    Status.LinkManagerProtocolTimeout, Status.PeripheralDisconnected,
+    Status.UnknownDevice-> ConnectionFailureReason.FailedToConnect
+    Status.Timeout -> ConnectionFailureReason.ConnectTimeout
+    is Status.Unknown -> {
+        when (this.status) {
+            5 -> ConnectionFailureReason.GattInsufficientAuth
+            147 -> ConnectionFailureReason.GattErrorUnknown147
+            else -> ConnectionFailureReason.GattErrorUnknown
+        }
+    }
+    null -> ConnectionFailureReason.FailedToConnect
+}
+
+expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
+
+/**
+ * Force a fresh GATT service rediscovery on the current connection. On Android
+ * this (a) invalidates the per-app service cache via `BluetoothGatt#refresh()`,
+ * (b) tickles Kable's own `onServiceChanged` channel so Kable re-runs its
+ * `discoverServices()` internally, and (c) suspends until Kable's `services`
+ * StateFlow re-emits (or a timeout fires). After success, `peripheral.services.value`
+ * reflects the fresh list — no manual pipeline needed on the caller side.
+ *
+ * All three steps use reflection into Kable internals (`connection`, `gatt`,
+ * `callback`, `onServiceChanged`) and Android's hidden `refresh()` method. If
+ * any step fails, returns false and the caller falls back to whatever cache
+ * Android + Kable already have.
+ *
+ * Returns false on platforms without an equivalent mechanism (iOS, JVM stub).
+ */
+expect suspend fun Peripheral.refreshServicesNative(): Boolean
+
+class KableConnectedGattClient(
+    val identifier: PebbleBleIdentifier,
+    val peripheral: Peripheral,
+    private val blePlatformConfig: BlePlatformConfig,
+) : ConnectedGattClient {
+    private val logger = Logger.withTag("KableConnectedGattClient-${identifier.asString}")
+
+    override suspend fun discoverServices(): Boolean {
+        // Kable already discovered upon connect
+        return true
+    }
+
+    private fun mapServices() = peripheral.services.value?.map { it.asGattService() }
+
+    override fun subscribeToCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid,
+        onSubscription: (suspend () -> Unit)?,
+    ): Flow<ByteArray>? {
+        val c = findCharacteristic(serviceUuid, characteristicUuid)
+        if (c == null) {
+            logger.e("couldn't find characteristic: $characteristicUuid")
+            return null
+        }
+        return if (onSubscription != null) {
+            peripheral.observe(c) { onSubscription() }
+        } else {
+            peripheral.observe(c)
+        }
+    }
+
+    override suspend fun isBonded(): Boolean {
+        return io.rebble.libpebblecommon.connection.bt.isBonded(identifier)
+    }
+
+    fun GattWriteType.asKableWriteType() = when (this) {
+        GattWriteType.WithResponse -> WriteType.WithResponse
+        GattWriteType.NoResponse -> WriteType.WithoutResponse
+    }
+
+    override suspend fun writeCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid,
+        value: ByteArray,
+        writeType: GattWriteType,
+    ): Boolean {
+        val c = findCharacteristic(serviceUuid, characteristicUuid)
+        if (c == null) {
+            logger.e("couldn't find characteristic: $characteristicUuid")
+            return false
+        }
+        val kableWriteType = writeType.asKableWriteType()
+        return try {
+            val stallTimeout = blePlatformConfig.writeWithoutResponseStallTimeout
+            // Only WithoutResponse is retried: Kable dispatches the bytes only after the
+            // readiness signal clears, so a timed-out attempt sent nothing and the retry
+            // can't duplicate — and cancelling frees the connection's write guard,
+            // unblocking other writes wedged behind the same stall. WithResponse
+            // dispatches then awaits a completion callback, so a retry could double-write.
+            if (stallTimeout != null && kableWriteType == WriteType.WithoutResponse) {
+                writeRidingOutStall(c, characteristicUuid, value, stallTimeout)
+            } else {
+                peripheral.write(c, value, kableWriteType)
+                true
+            }
+        } catch (e: com.juul.kable.GattStatusException) {
+            logger.v("error writing characteristic", e)
+            false
+        } catch (e: IOException) {
+            logger.v("error writing characteristic", e)
+            false
+        }
+    }
+
+    private suspend fun writeRidingOutStall(
+        c: DiscoveredCharacteristic,
+        characteristicUuid: Uuid,
+        value: ByteArray,
+        timeout: Duration,
+    ): Boolean {
+        repeat(WRITE_ATTEMPTS) { i ->
+            val sent = withTimeoutOrNull(timeout) {
+                peripheral.write(c, value, WriteType.WithoutResponse)
+            } != null
+            if (sent) {
+                if (i > 0) logger.w("write recovered on attempt ${i + 1}")
+                return true
+            }
+            logger.e("write stalled >$timeout (attempt ${i + 1}/$WRITE_ATTEMPTS, $characteristicUuid)")
+        }
+        return false
+    }
+
+    override suspend fun readCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid
+    ): ByteArray? {
+        val c = findCharacteristic(serviceUuid, characteristicUuid)
+        if (c == null) {
+            logger.e("couldn't find characteristic: $characteristicUuid")
+            return null
+        }
+        return peripheral.read(c)
+    }
+
+    // Computed each time so post-connect updates to Kable's services flow (e.g.
+    // via refreshServicesNative or a Service Changed indication that Kable
+    // observed) are reflected here without needing a reconnect.
+    override val services: List<GattService>?
+        get() = mapServices()
+
+    override suspend fun requestMtu(mtu: Int): Int {
+        return peripheral.requestMtuNative(mtu)
+    }
+
+    override suspend fun getMtu(): Int {
+        return peripheral.maximumWriteValueLengthForType(WriteType.WithoutResponse) + MTU_OVERHEAD
+    }
+
+    override suspend fun refreshServicesNative(): Boolean {
+        return peripheral.refreshServicesNative()
+    }
+
+    override fun close() {
+        peripheral.close()
+    }
+
+    private fun findCharacteristic(
+        serviceUuid: Uuid,
+        characteristicUuid: Uuid
+    ): DiscoveredCharacteristic? {
+        return peripheral.services.value
+            ?.firstOrNull { it.serviceUuid == serviceUuid }
+            ?.characteristics
+            ?.firstOrNull { it.characteristicUuid == characteristicUuid }
+    }
+
+    companion object {
+        /** Kable is nice and computes what is useable by us - but we already do that elsewhere, so
+         * put the overhead back in */
+        private const val MTU_OVERHEAD = 3
+
+        /** WithoutResponse write attempts when [BlePlatformConfig.writeWithoutResponseStallTimeout]
+         * is set. 2 × 5s stays within PPoG's 10s packet timeout; one re-issue covers the
+         * observed bluetoothd stall, and a still-stuck link falls through to teardown. */
+        private const val WRITE_ATTEMPTS = 2
+    }
+}
+
+private fun DiscoveredService.asGattService(): GattService = GattService(
+    uuid = serviceUuid,
+    characteristics = characteristics.map { c ->
+        GattCharacteristic(
+            uuid = c.characteristicUuid,
+            properties = c.properties.value,
+            permissions = c.properties.value, // TODO right?
+            descriptors = c.descriptors.map { d ->
+                GattDescriptor(
+                    uuid = d.descriptorUuid,
+                    permissions = 0, // not provided by kable
+                )
+            },
+        )
+    },
+)

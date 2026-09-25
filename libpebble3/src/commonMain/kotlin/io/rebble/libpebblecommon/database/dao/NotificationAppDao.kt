@@ -1,0 +1,153 @@
+package io.rebble.libpebblecommon.database.dao
+
+import androidx.room.Dao
+import androidx.room.Embedded
+import androidx.room.Query
+import androidx.room.Transaction
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
+import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.asNotificationAppItem
+import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
+import kotlinx.coroutines.flow.Flow
+import kotlin.time.Clock
+
+data class AppWithCount(
+    @Embedded val app: NotificationAppItem,
+    val count: Int,
+)
+
+@Dao
+interface NotificationAppRealDao : NotificationAppItemDao {
+    @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
+    suspend fun allApps(): List<NotificationAppItem>
+
+    @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
+    fun allAppsFlow(): Flow<List<NotificationAppItem>>
+
+    @Query("SELECT a.*, COUNT(ne.id) as count " +
+            "FROM NotificationAppItemEntity a " +
+            "LEFT JOIN NotificationEntity ne ON a.packageName = ne.pkg " +
+            "WHERE a.deleted = 0 " +
+            "GROUP BY a.packageName " +
+            "ORDER BY a.name ASC")
+    fun allAppsWithCountsFlow(): Flow<List<AppWithCount>>
+
+    @Transaction
+    suspend fun updateAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconCode: String?,
+    ) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppState: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(
+            vibePatternName = vibePatternName,
+            colorName = colorName,
+            iconCode = iconCode,
+//            stateUpdated = Clock.System.now().asMillisecond(),
+        ))
+    }
+
+    /**
+     * Marks the app record dirty so BlobDB re-serializes it (picking up the current rules from
+     * NotificationRuleEntity, which value() reads at serialization time). Call after any rule
+     * upsert/delete for this package. No-op if the app row doesn't exist yet — rules are serialized
+     * when the row is first created (e.g. on the app's first notification).
+     */
+    @Transaction
+    suspend fun bumpRulesFingerprint(packageName: String) {
+        val existing = getEntry(packageName) ?: return
+        insertOrReplace(existing.copy(rulesUpdated = Clock.System.now().asMillisecond()))
+    }
+
+    @Transaction
+    suspend fun updateAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppAllowDuplicates: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(allowDuplicates = allowDuplicates))
+    }
+
+    @Transaction
+    suspend fun updateAppSendImages(packageName: String, sendImages: Boolean) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppSendImages: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(sendImages = sendImages))
+    }
+
+    @Transaction
+    suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppMuteState: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(
+            muteState = muteState,
+            stateUpdated = Clock.System.now().asMillisecond(),
+            muteExpiration = null,
+        ))
+    }
+
+    @Transaction
+    suspend fun updateAllAppMuteStates(muteState: MuteState) {
+        insertOrReplace(allApps().map {
+            it.copy(
+                muteState = muteState,
+                stateUpdated = Clock.System.now().asMillisecond(),
+            )
+        })
+    }
+
+    @Transaction
+    override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
+        val writeItem = write.asNotificationAppItem()
+        if (writeItem == null) {
+            logger.e { "Couldn't decode app notification item from write: $write" }
+            return BlobResponse.BlobStatus.InvalidData
+        }
+        val existingItem = getEntry(writeItem.packageName)
+        logger.d { "existingItem=$existingItem writeItem=$writeItem" }
+        if (existingItem == null || writeItem.stateUpdated.instant > existingItem.stateUpdated.instant) {
+            // Watch can't modify these fields, so always preserve existing values from phone
+            val itemToSave = writeItem.copy(
+                vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
+                colorName = existingItem?.colorName ?: writeItem.colorName,
+                iconCode = existingItem?.iconCode ?: writeItem.iconCode,
+                allowDuplicates = existingItem?.allowDuplicates ?: writeItem.allowDuplicates,
+                sendImages = existingItem?.sendImages ?: writeItem.sendImages,
+                isSystemApp = existingItem?.isSystemApp ?: writeItem.isSystemApp,
+                autoAdded = existingItem?.autoAdded ?: writeItem.autoAdded,
+                // Phone-owned; the watch never sends it and asNotificationAppItem() doesn't decode it.
+                rulesUpdated = existingItem?.rulesUpdated ?: writeItem.rulesUpdated,
+            )
+            insertOrReplace(itemToSave)
+            markSyncedToWatch(
+                NotificationAppItemSyncEntity(
+                    recordId = writeItem.packageName,
+                    transport = transport,
+                    watchSynchHashcode = writeItem.recordHashCode(),
+                )
+            )
+        }
+        return BlobResponse.BlobStatus.Success
+    }
+
+    companion object {
+        private val logger = Logger.withTag("NotificationAppRealDao")
+    }
+}

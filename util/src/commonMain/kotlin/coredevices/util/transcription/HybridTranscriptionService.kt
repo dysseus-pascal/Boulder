@@ -1,0 +1,427 @@
+package coredevices.util.transcription
+
+import co.touchlab.kermit.Logger
+import coredevices.analytics.CoreAnalytics
+import coredevices.util.AudioEncoding
+import coredevices.util.CoreConfigFlow
+import coredevices.util.models.CactusSTTMode
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.Buffer
+import kotlinx.io.readByteArray
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+
+/**
+ * Mode-aware [TranscriptionService] that routes between the local whisper model
+ * ([WhisperTranscriptionService]) and the remote slot, and owns the fallback behaviour for
+ * the [CactusSTTMode] options. The remote slot is the user's self-hosted server whenever one
+ * is configured ([SelfHostedTranscriptionService]); upstream's cloud pair (WisprFlow with
+ * Kirinki as backup) stays for merge parity and cannot sign in here.
+ */
+class HybridTranscriptionService(
+    private val coreConfigFlow: CoreConfigFlow,
+    private val whisper: WhisperTranscriptionService,
+    private val wisprFlow: WisprFlowRESTTranscriptionService,
+    private val kirinki: KirinkiTranscriptionService,
+    private val analytics: CoreAnalytics,
+    private val platform: PlatformSpeechRecognizer,
+    // Fork: the user's self-hosted server, the remote backend that stands
+    // in for the cloud pair above, which cannot sign in here.
+    private val selfHosted: SelfHostedTranscriptionService? = null,
+) : TranscriptionService {
+    companion object {
+        private val logger = Logger.withTag("HybridTranscriptionService")
+        private val wisprSkipInterval = 1.seconds
+    }
+
+    // Read fresh from the config StateFlow on every access so a runtime mode/model change takes
+    // effect without restarting the app (not cached in a stateIn that nothing collects).
+    private val sttConfig get() = coreConfigFlow.value.sttConfig
+
+    private val lastErrorMutex = Mutex()
+    private var lastWisprError = Instant.DISTANT_PAST
+
+    private var _lastSuccessfulMode: CactusSTTMode? = null
+    private var _lastModelUsed: String? = null
+
+    // Diagnostics consumed by the bug report STT summary.
+    val configuredMode get() = sttConfig.mode
+    val configuredModel get() = sttConfig.modelName
+    val configuredLanguage get() = sttConfig.spokenLanguage
+    val lastSuccessfulMode get() = _lastSuccessfulMode
+    val lastModelUsed get() = _lastModelUsed ?: whisper.lastModelUsed
+    val isModelReady get() = whisper.isModelReady
+
+    override val onInitialized: Channel<Boolean> get() = whisper.onInitialized
+
+    override fun earlyInit() {
+        if (sttConfig.mode.usesLocalCactus()) {
+            whisper.earlyInit()
+        }
+    }
+
+    override suspend fun isAvailable(): Boolean {
+        return when (configuredMode) {
+            CactusSTTMode.RemoteOnly -> serverAvailable() || wisprFlow.isAvailable() || kirinki.isAvailable()
+            CactusSTTMode.LocalOnly -> whisper.isLocalAvailable()
+            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
+                serverAvailable() || wisprFlow.isAvailable() || kirinki.isAvailable() || whisper.isModelReady
+            CactusSTTMode.PlatformOnly ->
+                (platform.isAvailable() && platform.isAuthorized()) ||
+                    serverAvailable() || wisprFlow.isAvailable() || kirinki.isAvailable()
+            // Rebble modes are dispatched by STTRouter and never reach this service.
+            CactusSTTMode.RebbleOnly,
+            CactusSTTMode.RebbleFirst,
+            CactusSTTMode.RebbleFallback -> false
+        }
+    }
+
+    private suspend fun serverAvailable(): Boolean = selfHosted?.isAvailable() == true
+
+    /**
+     * Fork: the self-hosted server takes the remote slot whenever one is
+     * configured. A server that does not answer inside [initialTimeout] is
+     * unreachable for this session, so the timeout is reported as a network
+     * failure rather than as a cancellation: the fallback modes go local and
+     * the session layer reports a failure to the watch.
+     */
+    private suspend fun serverTranscribe(
+        audio: ByteArray,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        initialTimeout: Duration,
+    ): TranscriptionSessionStatus.Transcription {
+        val server = checkNotNull(selfHosted)
+        return try {
+            withTimeout(initialTimeout) {
+                server.transcribe(
+                    audioStreamFrames = flowOf(audio),
+                    sampleRate = sampleRate,
+                    language = language,
+                    conversationContext = conversationContext,
+                    dictionaryContext = dictionaryContext,
+                    contentContext = contentContext,
+                ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+            }.also { analytics.logTranscriptionSuccess("server") }
+        } catch (e: TimeoutCancellationException) {
+            analytics.logTranscriptionFailure("server", transcriptionFailureReason(e), e.message)
+            throw TranscriptionException.TranscriptionNetworkError(e, SelfHostedTranscriptionService.MODEL)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (e !is TranscriptionException.NoSpeechDetected) {
+                analytics.logTranscriptionFailure("server", transcriptionFailureReason(e), e.message)
+            }
+            throw e
+        }
+    }
+
+    private data class RoutedResult(
+        val text: String?,
+        val modeUsed: CactusSTTMode,
+        val modelUsed: String?
+    )
+
+    /**
+     * Run remote transcription: through the self-hosted server when one is configured, else via
+     * WisprFlow.
+     *
+     * When [willFallbackLocal] is false timeouts are more lenient and, on the cloud path, kirinki
+     * is used as a backup.
+     */
+    private suspend fun remoteTranscribe(
+        audio: ByteArray,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        willFallbackLocal: Boolean,
+        initialTimeout: Duration = if (willFallbackLocal) 7.seconds else 10.seconds // We reduce the timeout if we have the potential to fall back locally since some consumers (e.g. pebble firmware) have hard timeouts.
+    ): TranscriptionSessionStatus.Transcription {
+        if (serverAvailable()) {
+            return serverTranscribe(
+                audio, sampleRate, language, conversationContext, dictionaryContext, contentContext, initialTimeout,
+            )
+        }
+        suspend fun transcribeKirinki() = try {
+            kirinki.transcribe(
+                audioStreamFrames = flowOf(audio),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext
+            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first().also {
+                analytics.logTranscriptionSuccess("kirinki")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            analytics.logTranscriptionFailure("kirinki", transcriptionFailureReason(e), e.message)
+            throw e
+        }
+
+        // Kirinki is only used as a backup when there's no local model to fall back on. When a local
+        // fallback is available we let the caller handle it by propagating the WisprFlow failure.
+        val canUseKirinki = !willFallbackLocal && kirinki.isAvailable()
+
+        val skipWispr = lastErrorMutex.withLock {
+            // A session with a local fallback never skips wispr outright: a
+            // wispr failure costs at most initialTimeout before the caller
+            // falls back locally, and wispr quality is worth that attempt.
+            // canUseKirinki already excludes the local-fallback case; the
+            // last clause pins that intent if kirinki's gate ever changes.
+            ((Clock.System.now() - lastWisprError) < wisprSkipInterval && canUseKirinki) && !willFallbackLocal
+        }
+        if (skipWispr) {
+            if (canUseKirinki) {
+                logger.w { "Skipping WisprFlow transcription due to recent error, using kirinki directly" }
+                return transcribeKirinki()
+            }
+            logger.w { "Skipping WisprFlow transcription due to recent error, falling back to local" }
+            throw TranscriptionException.TranscriptionServiceUnavailable("wisprflow")
+        }
+
+        return try {
+            val res = withTimeout(initialTimeout) {
+                wisprFlow.transcribe(
+                    audioStreamFrames = flowOf(audio),
+                    sampleRate = sampleRate,
+                    language = language,
+                    conversationContext = conversationContext,
+                    dictionaryContext = dictionaryContext,
+                    contentContext = contentContext
+                ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+            }
+            lastErrorMutex.withLock {
+                lastWisprError = Instant.DISTANT_PAST
+            }
+            analytics.logTranscriptionSuccess("wisprflow")
+            res
+        } catch (e: Exception) {
+            if (e !is TimeoutCancellationException && e is CancellationException) throw e
+            analytics.logTranscriptionFailure("wisprflow", transcriptionFailureReason(e), e.message)
+            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
+            lastErrorMutex.withLock {
+                lastWisprError = Clock.System.now()
+            }
+
+            if (!canUseKirinki) {
+                logger.w(e) { "WisprFlow transcription failed, propagating to caller: ${e.message}" }
+                throw e
+            }
+            logger.w(e) { "WisprFlow transcription failed, falling back to kirinki: ${e.message}" }
+            transcribeKirinki()
+        }
+    }
+
+    private suspend fun route(
+        audio: ByteArray,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        initialTimeout: Duration? = null
+    ): RoutedResult {
+        suspend fun remote(willFallbackLocal: Boolean): TranscriptionSessionStatus.Transcription =
+            remoteTranscribe(
+                audio = audio,
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext,
+                willFallbackLocal = willFallbackLocal,
+                initialTimeout = initialTimeout ?: if (willFallbackLocal) 7.seconds else 10.seconds
+            )
+
+        logger.d { "Using transcription mode ${sttConfig.mode}" }
+        return when (val sttMode = sttConfig.mode) {
+            CactusSTTMode.RemoteOnly -> {
+                val result = remote(willFallbackLocal = false)
+                RoutedResult(result.text, sttMode, result.modelUsed)
+            }
+            CactusSTTMode.LocalOnly -> {
+                val text = whisper.transcribeLocal(audio, sampleRate)
+                RoutedResult(text, sttMode, configuredModel)
+            }
+            CactusSTTMode.PlatformOnly -> {
+                val languageTag = ((language as? STTLanguage.Specific)?.languageCodes?.firstOrNull()
+                    ?: sttConfig.spokenLanguage)?.let { toBcp47(it, null) }
+                // The mode syncs across devices; fall back to cloud where the platform
+                // engine isn't available (Android, iOS < 26), hasn't been granted the speech
+                // recognition permission, or can't transcribe the requested language. The
+                // engine publishes its locale list asynchronously shortly after launch — an
+                // empty list means "unknown yet", not unsupported, so wait briefly and try
+                // the platform engine rather than silently sending on-device-mode audio to
+                // the cloud.
+                if (!platform.isAvailable() || !platform.isAuthorized()) {
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+                val tags = if (languageTag == null) {
+                    emptyList()
+                } else {
+                    withTimeoutOrNull(2.seconds) {
+                        platform.supportedLanguageTags.first { it.isNotEmpty() }
+                    }.orEmpty()
+                }
+                val languageSupported =
+                    languageTag == null || tags.isEmpty() || tags.coversLanguage(languageTag)
+                if (!languageSupported) {
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+                val text = try {
+                    platform.transcribe(audio, sampleRate, languageTag).also {
+                        analytics.logTranscriptionSuccess("platform")
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val expected = e is TranscriptionException.NoSpeechDetected ||
+                        e is TranscriptionException.TranscriptionInProgress
+                    if (expected) throw e
+                    analytics.logTranscriptionFailure("platform", transcriptionFailureReason(e), e.message)
+                    logger.w(e) { "Platform transcription failed, falling back to remote: ${e.message}" }
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+                RoutedResult(text, sttMode, PLATFORM_STT_MODEL_NAME)
+            }
+            CactusSTTMode.RemoteFirst -> {
+                suspend fun localFallback(remoteError: Exception): RoutedResult = try {
+                    val text = whisper.transcribeLocal(audio, sampleRate)
+                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
+                    throw remoteError
+                }
+                try {
+                    val result = remote(willFallbackLocal = true)
+                    RoutedResult(result.text, sttMode, result.modelUsed)
+                } catch (e: TimeoutCancellationException) {
+                    logger.w(e) { "Remote transcription timeout, falling back to local: ${e.message}" }
+                    localFallback(TranscriptionException.TranscriptionNetworkError(e, "wisprflow"))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (e is TranscriptionException.NoSpeechDetected) throw e
+                    logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
+                    localFallback(e)
+                }
+            }
+            CactusSTTMode.LocalFirst -> {
+                try {
+                    val text = whisper.transcribeLocal(audio, sampleRate, timeout = 8.seconds)
+                    // Treat an empty/no-speech local result as a failure so we fall back to
+                    // remote, as remote is more accurate.
+                    validateContainsSpeech(text, configuredModel)
+                    RoutedResult(text, sttMode, configuredModel)
+                } catch (e: TimeoutCancellationException) {
+                    logger.w(e) { "Local transcription timed out, falling back to remote: ${e.message}" }
+                    val result = remote(willFallbackLocal = false)
+                    RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.w(e) { "Local transcription failed, falling back to remote: ${e.message}" }
+                    val result = remote(willFallbackLocal = false)
+                    RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+            }
+            // Rebble modes are routed by STTRouter and never reach this service.
+            CactusSTTMode.RebbleOnly,
+            CactusSTTMode.RebbleFirst,
+            CactusSTTMode.RebbleFallback ->
+                error("Rebble mode $sttMode should be handled by STTRouter, not HybridTranscriptionService")
+        }
+    }
+
+    override suspend fun transcribe(
+        audioStreamFrames: Flow<ByteArray>?,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        encoding: AudioEncoding,
+        initialTimeout: Duration?,
+    ): Flow<TranscriptionSessionStatus> = flow {
+        logger.d { "HybridTranscriptionService.transcribe() called" }
+        // Kick off local model init concurrently with audio collection so it's warm if we need it.
+        earlyInit()
+        emit(TranscriptionSessionStatus.Open)
+
+        if (audioStreamFrames == null) return@flow
+
+        val buffer = Buffer()
+        var audioSize = 0
+        audioStreamFrames.collect { chunk ->
+            buffer.write(chunk)
+            audioSize += chunk.size
+        }
+        logger.d { "Audio collection complete: $audioSize bytes, ${audioSize / (sampleRate * 2.0)}s" }
+
+        if (buffer.size == 0L || audioSize / (sampleRate * 2.0) < 0.1) {
+            throw TranscriptionException.NoSpeechDetected("No audio data received")
+        }
+
+        try {
+            val start = Clock.System.now()
+            val (text, modeUsed, modelUsed) = route(
+                audio = buffer.readByteArray(),
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext,
+                initialTimeout = initialTimeout,
+            )
+            val duration = Clock.System.now() - start
+            logger.d { "Transcription completed in $duration" }
+
+            validateContainsSpeech(text, modelUsed)
+            if (text != null) {
+                _lastSuccessfulMode = modeUsed
+                _lastModelUsed = modelUsed
+            }
+
+            if (!coreConfigFlow.value.obfuscateSensitiveLogs) {
+                logger.d { "Transcription text: '$text' (${text?.length} chars), used $modelUsed" }
+            } else {
+                logger.d { "Transcription text ${text?.length} chars, used $modelUsed" }
+            }
+            emit(TranscriptionSessionStatus.Transcription(
+                text?.ifBlank { null }
+                    ?: throw TranscriptionException.NoSpeechDetected("Failed to understand audio", modelUsed = modelUsed),
+                modelUsed
+            ))
+        } catch (e: TimeoutCancellationException) {
+            logger.e(e) { "Uncaught timeout during transcription" }
+            throw TranscriptionException.TranscriptionServiceUnavailable(modelUsed = configuredModel)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Transcription failed: ${e.message}" }
+            throw e
+        }
+    }
+}

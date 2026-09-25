@@ -1,0 +1,566 @@
+package io.rebble.libpebblecommon.connection
+
+import androidx.compose.runtime.Stable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.paging.PagingSource
+import co.touchlab.kermit.Logger
+import com.anopticlabs.gravel.pkjs.FixedNetworkDenyEnforcement
+import com.anopticlabs.gravel.pkjs.NetworkDenyEnforcement
+import io.rebble.libpebblecommon.ErrorTracker
+import io.rebble.libpebblecommon.Housekeeping
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.LibPebbleConfigHolder
+import io.rebble.libpebblecommon.calendar.NewCalendarEvent
+import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
+import io.rebble.libpebblecommon.calls.Call
+import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
+import io.rebble.libpebblecommon.calls.MissedCallSyncer
+import io.rebble.libpebblecommon.connection.bt.BluetoothState
+import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
+import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
+import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.configureKableCentral
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
+import io.rebble.libpebblecommon.database.dao.AppWithCount
+import io.rebble.libpebblecommon.database.dao.ChannelAndCount
+import io.rebble.libpebblecommon.database.dao.ContactWithCount
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.CalendarEntity
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
+import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.TimelinePin
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.di.initKoin
+import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.health.HealthDebugStats
+import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
+import io.rebble.libpebblecommon.js.JsTokenUtil
+import io.rebble.libpebblecommon.locker.AppBasicProperties
+import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.locker.Locker
+import io.rebble.libpebblecommon.locker.LockerWrapper
+import io.rebble.libpebblecommon.locker.WatchappPermissions
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.notification.NotificationApi
+import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.notification.VibePattern
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.performPlatformSpecificInit
+import io.rebble.libpebblecommon.services.DailySleep
+import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.WatchInfo
+import io.rebble.libpebblecommon.time.TimeChanged
+import io.rebble.libpebblecommon.util.SystemGeolocation
+import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.weather.WeatherLocationData
+import io.rebble.libpebblecommon.weather.WeatherManager
+import io.rebble.libpebblecommon.web.LockerEntry
+import io.rebble.libpebblecommon.web.LockerModelWrapper
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.launch
+import kotlinx.io.files.Path
+import org.koin.core.Koin
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.time.Duration
+import kotlin.uuid.Uuid
+
+data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
+data class PlatformFlags(val flags: UInt)
+
+typealias PebbleDevices = StateFlow<List<PebbleDevice>>
+
+sealed class PebbleConnectionEvent {
+    data class PebbleConnectedEvent(val device: CommonConnectedDevice) : PebbleConnectionEvent()
+    data class PebbleDisconnectedEvent(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
+}
+
+@Stable
+interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, WatchappPermissions, CallManagement, Calendar,
+    OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi {
+    fun init()
+
+    val config: StateFlow<LibPebbleConfig>
+    fun updateConfig(config: LibPebbleConfig)
+
+    // Generally, use these. They will act on all watches (or all connected watches, if that makes
+    // sense)
+    suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
+    suspend fun markNotificationRead(itemId: Uuid)
+    suspend fun sendPing(cookie: UInt)
+    suspend fun launchApp(uuid: Uuid)
+    suspend fun stopApp(uuid: Uuid)
+    // ....
+
+    fun doStuffAfterPermissionsGranted()
+    fun checkForFirmwareUpdates(force: Boolean)
+    suspend fun updateTimeIfNeeded()
+}
+
+sealed class UserFacingError {
+    abstract val message: String
+
+    data class FailedToDownloadPbw(override val message: String) : UserFacingError()
+    data class FailedToRemovePbwFromLocker(override val message: String) : UserFacingError()
+    data class FailedToSideloadApp(override val message: String) : UserFacingError()
+    data class FailedToScan(override val message: String) : UserFacingError()
+    data class MissingCompanionApp(
+        override val message: String,
+        val appName: String,
+        val appUuid: Uuid,
+        val downloadUrl: String?
+    ) : UserFacingError()
+}
+
+data class OtherPebbleApp(
+    val pkg: String,
+    val name: String,
+)
+
+interface HealthApi {
+    val healthSettings: Flow<HealthSettings>
+    fun updateHealthSettings(healthSettings: HealthSettings)
+    suspend fun getHealthDebugStats(): HealthDebugStats
+    fun requestHealthData(fullSync: Boolean = false)
+    fun sendHealthAveragesToWatch()
+    val healthDataUpdated: SharedFlow<Unit>
+}
+
+/**
+ * Represents the most recent heart rate reading from the watch.
+ */
+data class LatestHeartRate(
+    val bpm: Int,
+    val timestampEpochSec: Long,
+)
+
+/**
+ * Represents the most recent SpO2 (blood oxygen saturation) reading from the watch.
+ */
+data class LatestSpo2(
+    val spo2Percent: Int,
+    val quality: Int,
+    val timestampEpochSec: Long,
+)
+
+interface HealthDataApi {
+    suspend fun getLatestTimestamp(): Long?
+    suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
+    suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
+
+    /** Returns minute-level health data for the given epoch-second range. */
+    suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
+    suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
+
+    /** Returns a single aggregate (total steps, calories, distance, active minutes) for the entire range. */
+    suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates?
+
+    /** Returns the average heart rate (BPM) for non-zero readings in the range, or null if no data. */
+    suspend fun getAverageHeartRate(start: Long, end: Long): Double?
+
+    /** Returns sleep overlay entries (Sleep + DeepSleep types) in the range. */
+    suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns all sleep sessions for a given day plus aggregate totals, using the 6PM-2PM search window.
+     *  @param dayStartEpochSec start-of-day in epoch seconds (midnight local time) */
+    suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep?
+
+    /** Returns the most recent non-zero heart rate reading, or null if none exists. */
+    suspend fun getLatestHeartRateReading(): LatestHeartRate?
+
+    /**
+     * Computes the resting heart rate (BPM) for the given day from sleep + HR samples. Returns
+     * null when there's no sleep session or not enough HR samples within it.
+     *
+     * @param dayStartEpochSec start-of-day in epoch seconds (midnight local time)
+     */
+    suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int?
+
+    /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
+    suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
+
+    /** Returns SpO2 readings (percent > 0) in the epoch-second range. */
+    suspend fun getSpo2Readings(start: Long, end: Long): List<Spo2ReadingEntity>
+
+    /** Returns SpO2 readings after the given timestamp, in ascending order. */
+    suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity>
+
+    /** Returns the average SpO2 percent for readings in the range, or null if none. */
+    suspend fun getAverageSpo2(start: Long, end: Long): Double?
+
+    /** Returns the most recent SpO2 reading, or null if none exists. */
+    suspend fun getLatestSpo2Reading(): LatestSpo2?
+
+    /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
+    suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns hourly typical (historical average) step counts for the given weekday.
+     *  @param dayOfWeek kotlinx.datetime.DayOfWeek ordinal (0=Monday, 6=Sunday) */
+    suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>
+
+    /** Returns the 30-day average sleep duration in seconds. */
+    suspend fun getTypicalSleepSeconds(): Long
+
+    /** Wipes all health data and populates 30 days of fake data for testing. */
+    suspend fun populateDebugHealthData()
+}
+
+interface Weather {
+    fun updateWeatherData(weatherData: List<WeatherLocationData>)
+}
+
+interface Timeline {
+    fun insertOrReplace(pin: TimelinePin)
+    fun delete(pinUuid: Uuid)
+}
+
+interface Errors {
+    /**
+     * Errors which should be displayed to the user (e.g. using a snackbar).
+     */
+    val userFacingErrors: Flow<UserFacingError>
+}
+
+data class AnalyticsEvent(
+    val name: String,
+    val parameters: Map<String, String>,
+)
+
+interface AnalyticsEvents {
+    val analyticsEvents: Flow<AnalyticsEvent>
+}
+
+interface WatchPrefs {
+    val watchPrefs: Flow<List<WatchPreference<*>>>
+    fun setWatchPref(watchPref: WatchPreference<*>)
+}
+
+interface Watches {
+    val watches: PebbleDevices
+    val connectionEvents: Flow<PebbleConnectionEvent>
+    fun watchesDebugState(): String
+}
+
+interface WebServices {
+    suspend fun fetchLocker(): LockerModelWrapper?
+    suspend fun removeFromLocker(id: Uuid): Boolean
+    suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult
+    fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
+    fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo)
+}
+
+interface TokenProvider {
+    suspend fun getDevToken(): String?
+}
+
+data class FirmwareUpdateCheckState(
+    val checkingForUpdates: Boolean,
+    val result: FirmwareUpdateCheckResult?,
+)
+
+sealed class FirmwareUpdateCheckResult {
+    data class FoundUpdate(
+        val version: FirmwareVersion,
+        val url: String,
+        val notes: String,
+        /**
+         * Whether installing this over a higher version is intended: the update server flagged it
+         * as a downgrade, or the user picked the file themselves.
+         */
+        val canDowngrade: Boolean = false,
+    ) : FirmwareUpdateCheckResult()
+
+    data object FoundNoUpdate : FirmwareUpdateCheckResult()
+
+    data class UpdateCheckFailed(
+        val error: String,
+    ) : FirmwareUpdateCheckResult()
+}
+
+interface Calendar {
+    fun calendars(): Flow<List<CalendarEntity>>
+    fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
+
+    /** Create an event in the device's primary/default calendar. Returns the new event id, or null. */
+    suspend fun createEvent(event: NewCalendarEvent): String?
+}
+
+fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
+    return mapNotNull { it.firstOrNull { it.identifier.asString == identifier } }
+}
+
+interface Scanning {
+    val bluetoothEnabled: StateFlow<BluetoothState>
+    val isScanningBle: StateFlow<Boolean>
+    val isScanningClassic: StateFlow<Boolean>
+    fun startBleScan()
+    fun stopBleScan()
+    fun startClassicScan()
+    fun stopClassicScan()
+
+    /** Adds a watch reached over a TCP socket at [address] ("host:port"), bypassing any scan. */
+    fun addQemuWatch(address: String, connect: Boolean = false)
+}
+
+interface RequestSync {
+    fun requestLockerSync(): Deferred<Unit>
+}
+
+interface LockerApi {
+    /**
+     * @return true if the app was successfully synced and launched on all connected watches.
+     */
+    suspend fun sideloadApp(pbwPath: Path): Boolean
+    fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
+    fun getAllLockerUuids(): Flow<List<Uuid>>
+    fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
+    fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
+    suspend fun setAppOrder(id: Uuid, order: Int)
+    suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
+    suspend fun removeApp(id: Uuid): Boolean
+    suspend fun addAppToLocker(app: LockerEntry)
+    suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    fun restoreSystemAppOrder()
+    val activeWatchface: StateFlow<LockerWrapper?>
+}
+
+interface Contacts {
+    fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
+    fun getContact(id: String): Flow<ContactWithCount?>
+    fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
+    suspend fun getContactImage(lookupKey: String): ImageBitmap?
+}
+
+@Stable
+interface NotificationApps {
+    fun notificationApps(): Flow<List<AppWithCount>>
+    fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
+    fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
+    fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>>
+
+    /**
+     * Update mute state of the specified app. Updates all apps if [packageName] is null.
+     */
+    fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
+    fun updateNotificationAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconCode: String?,
+    )
+    fun updateNotificationChannelMuteState(
+        packageName: String,
+        channelId: String,
+        muteState: MuteState,
+    )
+    fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean)
+    fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean)
+
+    fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
+    fun upsertNotificationRule(rule: NotificationRuleEntity)
+    fun deleteNotificationRule(rule: NotificationRuleEntity)
+
+    /** Will only return a value on Android */
+    suspend fun getAppIcon(packageName: String): ImageBitmap?
+}
+
+interface Vibrations {
+    fun vibePatterns(): Flow<List<VibePattern>>
+    fun addCustomVibePattern(name: String, pattern: List<Long>)
+    fun deleteCustomPattern(name: String)
+}
+
+interface OtherPebbleApps {
+    /** Any other companion apps installed will likely break connecitivity (multiple PPoG services) */
+    fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>>
+}
+
+interface CallManagement {
+    val currentCall: MutableStateFlow<Call?>
+}
+
+interface PKJSToken {
+    suspend fun getAccountToken(appUuid: Uuid): String?
+}
+
+// Impl
+
+class LibPebble3(
+    private val watchManager: WatchManager,
+    private val scanning: Scanning,
+    private val locker: Locker,
+    private val timeChanged: TimeChanged,
+    private val webSyncManager: RequestSync,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val gattServerManager: GattServerManager,
+    private val bluetoothStateProvider: BluetoothStateProvider,
+    private val notificationListenerConnection: NotificationListenerConnection,
+    private val notificationApi: NotificationApi,
+    private val timelineNotificationsDao: TimelineNotificationRealDao,
+    private val actionOverrides: ActionOverrides,
+    private val phoneCalendarSyncer: PhoneCalendarSyncer,
+    private val missedCallSyncer: MissedCallSyncer,
+    private val libPebbleConfigFlow: LibPebbleConfigHolder,
+    private val health: Health,
+    private val otherPebbleApps: OtherPebbleApps,
+    private val jsTokenUtil: JsTokenUtil,
+    private val housekeeping: Housekeeping,
+    private val errorTracker: ErrorTracker,
+    private val phoneContactsSyncer: PhoneContactsSyncer,
+    private val contacts: Contacts,
+    private val analytics: AnalyticsEvents,
+    private val systemGeolocation: SystemGeolocation,
+    private val timeline: Timeline,
+    private val legacyPhoneReceiver: LegacyPhoneReceiver,
+    private val vibePatternDao: VibePatternDao,
+    private val watchPreferences: WatchPrefs,
+    private val weatherManager: WeatherManager,
+    private val watchappPermissions: WatchappPermissions,
+) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
+    NotificationApps by notificationApi, WatchappPermissions by watchappPermissions,
+    Calendar by phoneCalendarSyncer,
+    OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
+    Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
+    HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
+    Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
+    HealthDataApi by health {
+    private val logger = Logger.withTag("LibPebble3")
+    private val initialized = AtomicBoolean(false)
+
+    override fun init() {
+        if (!initialized.compareAndSet(expectedValue = false, newValue = true)) {
+            logger.w { "Already initialized!!!" }
+            return
+        }
+        WatchHardwarePlatform.init(libPebbleCoroutineScope, libPebbleConfigFlow.config)
+        bluetoothStateProvider.init()
+        gattServerManager.init()
+        watchManager.init()
+        phoneCalendarSyncer.init()
+        phoneContactsSyncer.init()
+        missedCallSyncer.init()
+        notificationListenerConnection.init(this)
+        notificationApi.init()
+        timeChanged.registerForTimeChanges {
+            logger.d("Time changed")
+            libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
+        }
+        housekeeping.init()
+        health.init()
+        legacyPhoneReceiver.init(currentCall)
+        libPebbleCoroutineScope.launch {
+            vibePatternDao.ensureAllDefaultsInserted()
+        }
+        locker.init(this)
+
+        performPlatformSpecificInit()
+    }
+
+    override val config: StateFlow<LibPebbleConfig> = libPebbleConfigFlow.config
+
+    override fun updateConfig(config: LibPebbleConfig) {
+        logger.d("Updated config: $config")
+        libPebbleConfigFlow.update(config)
+    }
+
+    override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
+
+    override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
+        timelineNotificationsDao.insertOrReplace(notification)
+        actionHandlers?.let { actionOverrides.setActionHandlers(notification.itemId, actionHandlers) }
+    }
+
+    override suspend fun markNotificationRead(itemId: Uuid) {
+        timelineNotificationsDao.markNotificationRead(itemId)
+        actionOverrides.setActionHandlers(itemId, emptyMap())
+    }
+
+    override suspend fun sendPing(cookie: UInt) {
+        forEachConnectedWatch { sendPing(cookie) }
+    }
+
+    override suspend fun launchApp(uuid: Uuid) {
+        locker.maybeSetActiveWatchface(uuid, onlyIfNotAlreadySet = false)
+        forEachConnectedWatch { launchApp(uuid) }
+    }
+
+    override suspend fun stopApp(uuid: Uuid) {
+        forEachConnectedWatch { stopApp(uuid) }
+    }
+
+    override fun doStuffAfterPermissionsGranted() {
+        phoneCalendarSyncer.handlePermissionsGranted()
+        missedCallSyncer.init()
+        phoneContactsSyncer.init()
+        watchManager.seedBondedWatchesIfNeeded()
+    }
+
+    override fun checkForFirmwareUpdates(force: Boolean) {
+        forEachConnectedWatchInAnyState { checkforFirmwareUpdate(force) }
+    }
+
+    override suspend fun updateTimeIfNeeded() {
+        forEachConnectedWatch { updateTimeIfNeeded() }
+    }
+
+    private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {
+        watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
+            it.block()
+        }
+    }
+
+    private fun forEachConnectedWatchInAnyState(block: CommonConnectedDevice.() -> Unit) {
+        watches.value.filterIsInstance<CommonConnectedDevice>().forEach {
+            it.block()
+        }
+    }
+
+    companion object {
+        private lateinit var koin: Koin
+
+        fun create(
+            /**
+             * Default config, before any changes are made.
+             *
+             * Config will be persisted - this parameter will only be used on the first init.
+             */
+            defaultConfig: LibPebbleConfig,
+            webServices: WebServices,
+            appContext: AppContext,
+            tokenProvider: TokenProvider,
+            proxyTokenProvider: StateFlow<String?>,
+            transcriptionProvider: TranscriptionProvider,
+            injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors = InjectedPKJSHttpInterceptors(emptyList()),
+            // Gravel: an embedder that reports nothing gets no PebbleKit JS for network-denied apps.
+            networkDenyEnforcement: NetworkDenyEnforcement = FixedNetworkDenyEnforcement(primaryLayerActive = false),
+        ): LibPebble {
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider, injectedPKJSHttpInterceptors, networkDenyEnforcement)
+            // Reads the persisted config (not defaultConfig), but must still precede anything that
+            // touches Kable's shared central manager. Every Koin single here is lazy, and Kable is
+            // only reached on the first scan/connect, which happens after create() returns.
+            configureKableCentral(
+                koin.get<LibPebbleConfigHolder>().config.value.bleConfig.centralStateRestoration
+            )
+            val libPebble = koin.get<LibPebble>()
+            return libPebble
+        }
+    }
+}

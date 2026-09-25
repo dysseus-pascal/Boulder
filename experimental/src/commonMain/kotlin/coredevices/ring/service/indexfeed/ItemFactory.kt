@@ -1,0 +1,262 @@
+@file:OptIn(ExperimentalTime::class)
+
+package coredevices.ring.service.indexfeed
+
+import coredevices.indexai.data.entity.ItemDocument
+import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
+import coredevices.mcp.data.SemanticResult
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import kotlinx.datetime.LocalTime
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+
+class ItemFactory {
+
+    internal fun simpleUid(): String =
+        ((Clock.System.now().toEpochMilliseconds() and 0xFFFFFF).toString(36)) +
+        "_" +
+        ((1..1_000_000).random().toString(36))
+
+    /**
+     * Maps a tool's [SemanticResult] to the feed item it should produce, stamped with the
+     * originating [toolCallId]. Returns null for results that do not create an item.
+     */
+    fun createFromSemanticResult(
+        result: SemanticResult,
+        sourceRecordingId: String,
+        createdAt: Instant,
+        toolCallId: String?,
+    ): ItemDocument? = when (result) {
+        is SemanticResult.AlarmCreation ->
+            alarmItem(sourceRecordingId, createdAt, result.fireTime, toolCallId)
+        // Calendar events live only in the phone's calendar — there is no internal event item.
+        is SemanticResult.CalendarEventCreation -> null
+        is SemanticResult.TimerCreation ->
+            timerItem(sourceRecordingId, createdAt, result.fireTime, result.requestedDuration, toolCallId)
+        is SemanticResult.MessageSent ->
+            messageItem(sourceRecordingId, createdAt, result.recipientName, result.text, result.contactId, ItemMetadata.Message.Status.Sent, toolCallId)
+        is SemanticResult.ActionLogged ->
+            actionLogItem(sourceRecordingId, createdAt, result.title, result.toolName, result.success, toolCallId, result.body)
+        is SemanticResult.SupportingData if !result.assistiveOnly ->
+            answerItem(sourceRecordingId, createdAt, result.question ?: "", result.summary ?: "", toolCallId)
+        // Notes and reminders/list items are created by the owning integration
+        is SemanticResult.TaskCreation,
+        is SemanticResult.ListItemCreation,
+        is SemanticResult.SupportingData,
+        is SemanticResult.Response,
+        is SemanticResult.GenericSuccess,
+        is SemanticResult.GenericFailure -> null
+    }
+
+    // --- Per-call item factories used by tool implementations ---
+
+    fun reminderItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        dueAt: Instant?,
+        toolCallId: String?,
+        localReminderId: Int? = null,
+        notifyBeforeMillis: Long? = null,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        dueAt = dueAt,
+        parents = listOf(LIST_TODOS_ID),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.Reminder(
+            repeat = "one_time",
+            notification = "push",
+            localReminderId = localReminderId,
+            notifyBeforeMillis = notifyBeforeMillis,
+        ),
+    )
+
+    private fun pickNoteList(listUsedHint: String?): String {
+        val hint = listUsedHint?.trim()?.lowercase() ?: return LIST_NOTES_SELF_ID
+        return when {
+            hint.isEmpty() -> LIST_NOTES_SELF_ID
+            "shopping" in hint || "grocer" in hint -> LIST_SHOPPING_ID
+            else -> LIST_NOTES_SELF_ID
+        }
+    }
+
+    fun noteItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        listHint: String?,
+        toolCallId: String?,
+        resolvedListId: String? = null,
+    ): ItemDocument {
+        val parentId = resolvedListId ?: pickNoteList(listHint)
+        // Items dictated into the Shopping list become checklist items so they
+        // can be ticked off, matching the list's checklist type (MOB-8946).
+        val metadata = if (parentId == LIST_SHOPPING_ID) ItemMetadata.Checklist else ItemMetadata.Note
+        return createItem(
+            createdAt = createdAt,
+            title = title,
+            parents = listOf(parentId),
+            recordingId = sourceRecordingId,
+            toolCallId = toolCallId,
+            metadata = metadata,
+        )
+    }
+
+    fun alarmItem(
+        sourceRecordingId: String,
+        createdAt: Instant,
+        fireTime: LocalTime,
+        toolCallId: String?,
+        repeatDays: Set<Int> = emptySet(),
+    ): ItemDocument {
+        val timeStr = fireTime.toString().substringBefore('.').take(5)
+        // The system clock app owns the alarm; surface it only on the recording,
+        // not in the Reminders list.
+        return createItem(
+            createdAt = createdAt,
+            title = "Alarm · $timeStr",
+            parents = emptyList(),
+            recordingId = sourceRecordingId,
+            toolCallId = toolCallId,
+            metadata = ItemMetadata.Scheduled(
+                fireKind = ItemMetadata.Scheduled.FireKind.Alarm,
+                fireTime = fireTime,
+                repeatDays = repeatDays.toList(),
+                enabled = true,
+            ),
+        )
+    }
+
+    fun timerItem(
+        sourceRecordingId: String,
+        createdAt: Instant,
+        dueAt: Instant?,
+        duration: Duration?,
+        toolCallId: String?,
+    ): ItemDocument {
+        val durationPretty = duration?.toString()
+        val title = "Timer" + (durationPretty?.let { " · $it" } ?: "")
+        // The system clock app owns the timer; surface it only on the recording,
+        // not in the Reminders list.
+        return createItem(
+            createdAt = createdAt,
+            title = title,
+            dueAt = dueAt,
+            parents = emptyList(),
+            recordingId = sourceRecordingId,
+            toolCallId = toolCallId,
+            metadata = ItemMetadata.Scheduled(
+                fireKind = ItemMetadata.Scheduled.FireKind.Timer,
+                duration = duration?.inWholeMilliseconds,
+            ),
+        )
+    }
+
+    fun messageItem(
+        sourceRecordingId: String,
+        createdAt: Instant,
+        recipientName: String?,
+        text: String,
+        contactId: String,
+        status: ItemMetadata.Message.Status,
+        toolCallId: String?,
+        errorMessage: String? = null,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = "Message · ${recipientName ?: contactId}",
+        body = text,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.Message(
+            integration = "beeper",
+            contact = contactId,
+            recipientName = recipientName ?: contactId,
+            text = text,
+            sentAt = createdAt,
+            status = status,
+            errorMessage = errorMessage,
+        ),
+    )
+
+    fun actionLogItem(
+        sourceRecordingId: String,
+        createdAt: Instant,
+        title: String,
+        toolName: String,
+        success: Boolean,
+        toolCallId: String?,
+        body: String = "",
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        body = body,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.ActionLog(toolName = toolName, success = success),
+    )
+
+    /** Marker item for a note/reminder handed to an external integration ("Sent to X"). */
+    fun delegatedItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        integrationName: String,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.DelegatedToIntegration(integration = integrationName),
+    )
+
+    fun answerItem(
+        sourceRecordingId: String,
+        createdAt: Instant,
+        question: String,
+        answer: String,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = question.trim().replace(Regex("""\s+"""), " "),
+        body = answer,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.Answer(question = question.trim()),
+    )
+
+    private fun createItem(
+        createdAt: Instant,
+        title: String,
+        body: String = "",
+        dueAt: Instant? = null,
+        parents: List<String>,
+        recordingId: String?,
+        toolCallId: String?,
+        metadata: ItemMetadata,
+    ): ItemDocument {
+        val autoDone = dueAt != null && dueAt.toEpochMilliseconds() < Clock.System.now().toEpochMilliseconds()
+        return ItemDocument(
+            createdAt = createdAt,
+            updatedAt = createdAt,
+            title = title,
+            body = body,
+            done = autoDone,
+            dueAt = dueAt,
+            parentListIds = parents,
+            sourceRecordingId = recordingId,
+            sourceToolCallId = toolCallId,
+            metadata = metadata,
+        )
+    }
+}

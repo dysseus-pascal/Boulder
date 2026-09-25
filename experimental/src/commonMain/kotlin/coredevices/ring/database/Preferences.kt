@@ -1,0 +1,359 @@
+package coredevices.ring.database
+
+import com.russhwolf.settings.Settings
+import coredevices.libindex.database.BasePreferences
+import coredevices.ring.agent.DefaultCaptureType
+import coredevices.ring.agent.LlmMode
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
+import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.data.NoteShortcutType
+import coredevices.util.models.CactusSTTMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+
+interface Preferences: BasePreferences {
+    val llmMode: StateFlow<LlmMode>
+    val useCactusTranscription: StateFlow<Boolean>
+    val cactusMode: CactusSTTMode
+    val ringPairedOld: StateFlow<Boolean>
+    val musicControlMode: StateFlow<MusicControlMode>
+    val debugDetailsEnabled: StateFlow<Boolean>
+    val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
+    val secondaryMode: StateFlow<SecondaryMode>
+    /** Sandbox group used when [secondaryMode] is [SecondaryMode.McpSandbox]. */
+    val secondaryModeMcpGroupId: StateFlow<Long?>
+    val reminderProvider: StateFlow<ReminderProvider>
+    val noteProvider: StateFlow<NoteProvider>
+    val noteShortcut: StateFlow<NoteShortcutType>
+    val autoDismissActionNotifications: StateFlow<Boolean>
+    val backupEnabled: StateFlow<Boolean>
+    /** Whether the user has connected the Phone Calendar integration (Accounts → Add integration).
+     *  The calendar tool stays unavailable until this is enabled AND calendar permission is granted. */
+    val phoneCalendarEnabled: StateFlow<Boolean>
+    val useEncryption: StateFlow<Boolean>
+    val encryptionKeyFingerprint: StateFlow<String?>
+    val lastWipedRing: StateFlow<String?>
+    /** Cached count of recordings in cloud, captured at the end of every
+     *  manual sync.
+     */
+    val lastBackupCount: StateFlow<Int?>
+    /** One-shot: onboarding already auto-defaulted STT to the platform engine, don't do it again. */
+    val platformSttDefaulted: Boolean
+
+    suspend fun setLlmMode(mode: LlmMode)
+    suspend fun setUseCactusTranscription(useCactus: Boolean)
+    fun setCactusMode(mode: CactusSTTMode)
+    fun setMusicControlMode(mode: MusicControlMode)
+    fun setDebugDetailsEnabled(enabled: Boolean)
+    suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
+    fun setSecondaryMode(mode: SecondaryMode)
+    fun setSecondaryModeMcpGroupId(groupId: Long?)
+    fun setReminderProvider(provider: ReminderProvider)
+    fun setNoteProvider(provider: NoteProvider)
+    fun setNoteShortcut(shortcut: NoteShortcutType)
+    fun setAutoDismissActionNotifications(enabled: Boolean)
+    fun setBackupEnabled(enabled: Boolean)
+    fun setPhoneCalendarEnabled(enabled: Boolean)
+    fun setUseEncryption(enabled: Boolean)
+    fun setEncryptionKeyFingerprint(fingerprint: String?)
+    fun setLastWipedRing(id: String?)
+    fun setLastBackupCount(count: Int?)
+    fun setPlatformSttDefaulted()
+
+    val defaultCaptureType: StateFlow<DefaultCaptureType>
+    fun setDefaultCaptureType(type: DefaultCaptureType)
+}
+
+class PreferencesImpl(private val settings: Settings): Preferences {
+
+    private val _llmMode = MutableStateFlow(
+        LlmMode.fromId(
+            settings.getIntOrNull("llm_mode")
+                // Migrated from the "use local LLM" switch this preference replaced.
+                ?: if (settings.getBoolean("use_cactus_agent", false)) {
+                    LlmMode.LocalOnly.id
+                } else {
+                    LlmMode.RemoteOnly.id
+                }
+        )
+    )
+    override val llmMode = _llmMode.asStateFlow()
+    private val _useCactusTranscription = MutableStateFlow(settings.getBoolean("use_cactus_transcription", true))
+    override val useCactusTranscription = _useCactusTranscription.asStateFlow()
+    override val cactusMode get() = CactusSTTMode.fromId(settings.getInt("cactus_mode", 0))
+    private val _ringPaired = MutableStateFlow(
+        try {
+            settings.getStringOrNull("ring_paired")
+        } catch (e: Exception) {
+            null
+        }
+    )
+    override val ringPaired = _ringPaired.asStateFlow()
+    private val _ringPairedName = MutableStateFlow(
+        try {
+            settings.getStringOrNull("ring_paired_name")
+        } catch (e: Exception) {
+            null
+        }
+    )
+    override val ringPairedName = _ringPairedName.asStateFlow()
+    override val ringPairedOld = MutableStateFlow(
+        try {
+            settings.getBoolean("ring_paired", false)
+        } catch (e: Exception) {
+            false
+        }
+    ).asStateFlow()
+    private val _musicControlMode = MutableStateFlow(MusicControlMode.fromId(settings.getInt("music_control_mode", MusicControlMode.DoubleClick.id)))
+    override val musicControlMode = _musicControlMode.asStateFlow()
+    private val _lastSyncIndex = MutableStateFlow(
+        settings.getIntOrNull("last_sync_index")
+    )
+    override val lastSyncIndex = _lastSyncIndex.asStateFlow()
+    private val _debugDetailsEnabled = MutableStateFlow(settings.getBoolean("debug_details_enabled", false))
+    override val debugDetailsEnabled = _debugDetailsEnabled.asStateFlow()
+    private val _approvedBeeperContacts = MutableStateFlow(
+        settings.getStringOrNull("approved_beeper_contacts")?.let { raw ->
+            try {
+                Json.decodeFromString<List<ApprovedBeeperContact>>(raw)
+            } catch (_: Exception) {
+                // Migrate from old format (plain list of roomId strings)
+                try {
+                    Json.decodeFromString<List<String>>(raw).map {
+                        ApprovedBeeperContact(roomId = it, name = "")
+                    }
+                } catch (_: Exception) { emptyList() }
+            }
+        } ?: emptyList()
+    )
+    override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
+    private val _secondaryMode = MutableStateFlow(
+        SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
+    )
+    override val secondaryMode = _secondaryMode.asStateFlow()
+    private val _secondaryModeMcpGroupId = MutableStateFlow(
+        settings.getLongOrNull("ring_secondary_mode_mcp_group")
+    )
+    override val secondaryModeMcpGroupId = _secondaryModeMcpGroupId.asStateFlow()
+    private val _reminderProvider = MutableStateFlow(
+        settings.getInt("reminder_provider", ReminderProvider.BuiltIn.id)
+            .let { ReminderProvider.fromId(it)!! }
+    )
+    override val reminderProvider = _reminderProvider.asStateFlow()
+    private val _noteProvider = MutableStateFlow(
+        settings.getInt("note_provider", NoteProvider.Builtin.id)
+            .let { NoteProvider.fromId(it)!! }
+    )
+    override val noteProvider = _noteProvider.asStateFlow()
+    private val _noteShortcut = MutableStateFlow<NoteShortcutType>(settings.getStringOrNull("note_shortcut")
+        ?.let { Json.decodeFromString(it) } ?: NoteShortcutType.SendToMe)
+    override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
+    private val _autoDismissActionNotifications = MutableStateFlow(settings.getBoolean("auto_dismiss_action_notifications", true))
+    override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
+    private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
+    override val backupEnabled = _backupEnabled.asStateFlow()
+    private val _phoneCalendarEnabled = MutableStateFlow(settings.getBoolean("phone_calendar_enabled", false))
+    override val phoneCalendarEnabled = _phoneCalendarEnabled.asStateFlow()
+    private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
+    override val useEncryption = _useEncryption.asStateFlow()
+    private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
+    override val encryptionKeyFingerprint = _encryptionKeyFingerprint.asStateFlow()
+    private val _lastWipedRing = MutableStateFlow(settings.getStringOrNull("last_wiped_ring"))
+    override val lastWipedRing = _lastWipedRing.asStateFlow()
+    private val _lastBackupCount = MutableStateFlow(
+        if (settings.hasKey("last_backup_count")) settings.getInt("last_backup_count", 0) else null
+    )
+    override val lastBackupCount = _lastBackupCount.asStateFlow()
+    override val platformSttDefaulted: Boolean
+        get() = settings.getBoolean("platform_stt_defaulted", false)
+
+    override suspend fun setLlmMode(mode: LlmMode) {
+        withContext(Dispatchers.IO) {
+            settings.putInt("llm_mode", mode.id)
+            _llmMode.value = mode
+        }
+    }
+
+    override suspend fun setUseCactusTranscription(useCactus: Boolean) {
+        withContext(Dispatchers.IO) {
+            settings.putBoolean("use_cactus_transcription", useCactus)
+            _useCactusTranscription.value = useCactus
+        }
+    }
+
+    override fun setCactusMode(mode: CactusSTTMode) {
+        settings.putInt("cactus_mode", mode.id)
+    }
+
+    override fun setRingPaired(id: String?) {
+        id?.let {
+            settings.putString("ring_paired", id)
+        } ?: settings.remove("ring_paired")
+        _ringPaired.value = id
+    }
+
+    override fun setRingPairedName(name: String?) {
+        name?.let {
+            settings.putString("ring_paired_name", it)
+        } ?: settings.remove("ring_paired_name")
+        _ringPairedName.value = name
+    }
+
+    override fun setMusicControlMode(mode: MusicControlMode) {
+        settings.putInt("music_control_mode", mode.id)
+        _musicControlMode.value = mode
+    }
+
+    override suspend fun setLastSyncIndex(index: Int?) {
+        _lastSyncIndex.value = index
+        withContext(Dispatchers.IO) {
+            if (index != null) {
+                settings.putInt("last_sync_index", index)
+            } else {
+                settings.remove("last_sync_index")
+            }
+        }
+    }
+
+    override fun setDebugDetailsEnabled(enabled: Boolean) {
+        settings.putBoolean("debug_details_enabled", enabled)
+        _debugDetailsEnabled.value = enabled
+    }
+
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
+        withContext(Dispatchers.IO) {
+            if (contacts != null) {
+                val json = Json.encodeToString(contacts)
+                settings.putString("approved_beeper_contacts", json)
+            } else {
+                settings.remove("approved_beeper_contacts")
+            }
+            _approvedBeeperContacts.value = contacts ?: emptyList()
+        }
+    }
+
+    override fun setSecondaryMode(mode: SecondaryMode) {
+        settings.putInt("ring_secondary_mode", mode.id)
+        _secondaryMode.value = mode
+    }
+
+    override fun setSecondaryModeMcpGroupId(groupId: Long?) {
+        if (groupId != null) {
+            settings.putLong("ring_secondary_mode_mcp_group", groupId)
+        } else {
+            settings.remove("ring_secondary_mode_mcp_group")
+        }
+        _secondaryModeMcpGroupId.value = groupId
+    }
+
+    override fun setReminderProvider(provider: ReminderProvider) {
+        settings.putInt("reminder_provider", provider.id)
+        _reminderProvider.value = provider
+    }
+
+    override fun setNoteProvider(provider: NoteProvider) {
+        settings.putInt("note_provider", provider.id)
+        _noteProvider.value = provider
+    }
+
+    override fun setNoteShortcut(shortcut: NoteShortcutType) {
+        val json = Json.encodeToString(shortcut)
+        settings.putString("note_shortcut", json)
+        _noteShortcut.value = shortcut
+    }
+
+    override fun setAutoDismissActionNotifications(enabled: Boolean) {
+        settings.putBoolean("auto_dismiss_action_notifications", enabled)
+        _autoDismissActionNotifications.value = enabled
+    }
+
+    override fun setBackupEnabled(enabled: Boolean) {
+        settings.putBoolean("backup_enabled", enabled)
+        _backupEnabled.value = enabled
+    }
+
+    override fun setPhoneCalendarEnabled(enabled: Boolean) {
+        settings.putBoolean("phone_calendar_enabled", enabled)
+        _phoneCalendarEnabled.value = enabled
+    }
+
+    override fun setUseEncryption(enabled: Boolean) {
+        settings.putBoolean("use_encryption", enabled)
+        _useEncryption.value = enabled
+    }
+
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {
+        if (fingerprint != null) {
+            settings.putString("encryption_key_fingerprint", fingerprint)
+        } else {
+            settings.remove("encryption_key_fingerprint")
+        }
+        _encryptionKeyFingerprint.value = fingerprint
+    }
+
+    override fun setLastWipedRing(id: String?) {
+        if (id != null) {
+            settings.putString("last_wiped_ring", id)
+        } else {
+            settings.remove("last_wiped_ring")
+        }
+        _lastWipedRing.value = id
+    }
+
+    override fun setLastBackupCount(count: Int?) {
+        if (count != null) {
+            settings.putInt("last_backup_count", count)
+        } else {
+            settings.remove("last_backup_count")
+        }
+        _lastBackupCount.value = count
+    }
+
+    override fun setPlatformSttDefaulted() {
+        settings.putBoolean("platform_stt_defaulted", true)
+    }
+
+    private val _defaultCaptureType = MutableStateFlow(
+        DefaultCaptureType.fromId(
+            settings.getInt("default_capture_type", DefaultCaptureType.Note.id)
+        )
+    )
+    override val defaultCaptureType = _defaultCaptureType.asStateFlow()
+
+    override fun setDefaultCaptureType(type: DefaultCaptureType) {
+        settings.putInt("default_capture_type", type.id)
+        _defaultCaptureType.value = type
+    }
+}
+
+enum class MusicControlMode(val id: Int) {
+    Disabled(0),
+    SingleClick(1),
+    DoubleClick(2);
+
+    companion object {
+        fun fromId(id: Int): MusicControlMode {
+            return entries.firstOrNull { it.id == id } ?: Disabled
+        }
+    }
+}
+
+enum class SecondaryMode(val id: Int) {
+    Disabled(0),
+    Search(1),
+    /** No longer selectable; only ever read back to migrate to a webhook-only gesture route. */
+    IndexWebhook(2),
+    McpSandbox(3);
+
+    companion object {
+        fun fromId(id: Int): SecondaryMode {
+            return entries.firstOrNull { it.id == id } ?: Disabled
+        }
+    }
+}

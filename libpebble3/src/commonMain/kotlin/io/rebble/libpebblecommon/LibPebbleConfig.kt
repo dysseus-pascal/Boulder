@@ -1,0 +1,222 @@
+package io.rebble.libpebblecommon
+
+import androidx.annotation.VisibleForTesting
+import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
+import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.PhoneAppVersion
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+
+class LibPebbleConfigHolder(
+    private val defaultValue: LibPebbleConfig,
+    private val settings: Settings,
+    private val json: Json,
+) {
+    private fun defaultValue(): LibPebbleConfig {
+        return loadFromStorage() ?: defaultValue.also { saveToStorage(it) }
+    }
+
+    private fun loadFromStorage(): LibPebbleConfig? = settings.getStringOrNull(SETTINGS_KEY)?.let { string ->
+        try {
+            json.decodeFromString(string)
+        } catch (e: SerializationException) {
+            Logger.w("Error loading settings", e)
+            null
+        }
+    }
+
+    private fun saveToStorage(value: LibPebbleConfig) {
+        settings.set(SETTINGS_KEY, json.encodeToString(value))
+    }
+
+    fun update(value: LibPebbleConfig) {
+        saveToStorage(value)
+        _config.value = value
+    }
+
+    private val _config: MutableStateFlow<LibPebbleConfig> = MutableStateFlow(defaultValue())
+    val config: StateFlow<LibPebbleConfig> = _config.asStateFlow()
+}
+
+private const val SETTINGS_KEY = "libpebble.settings"
+
+@Serializable
+data class LibPebbleConfig(
+    val bleConfig: BleConfig = BleConfig(),
+    val watchConfig: WatchConfig = WatchConfig(),
+    val notificationConfig: NotificationConfig = NotificationConfig(),
+)
+
+class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+    val value get() = flow.value
+}
+
+@Serializable
+data class WatchConfig(
+    val multipleConnectedWatchesSupported: Boolean = false,
+    val lockerSyncLimitV2: Int = 50,
+    val calendarPins: Boolean = true,
+    val calendarReminders: Boolean = true,
+    val calendarShowDeclinedEvents: Boolean = false,
+    /**
+     * Name of the vibe pattern used for every calendar reminder; the watch's own default when null.
+     */
+    val overrideCalendarVibePattern: String? = null,
+    val ignoreMissingPrf: Boolean = false,
+    val lanDevConnection: Boolean = false,
+    val verboseWatchManagerLogging: Boolean = false,
+    val autoResumeFirmwareUpdate: Boolean = true,
+    val pkjsInspectable: Boolean = false,
+    val emulateRemoteTimeline: Boolean = true,
+    /**
+     * When true, LibPebble3 will always send music state as paused, never as playing.
+     *
+     * This prevents music app from jumping to the top of the list.
+     */
+    val alwaysSendMusicPaused: Boolean = false,
+    /**
+     * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
+     */
+    val appMessageToMultipleCompanions: Boolean = true,
+    val orderWatchfacesByLastUsed: Boolean = false,
+    val unknownWatchTypePlatform: WatchType = WatchType.EMERY,
+    /**
+     * When true, BLE scan results include legacy classic-supporting Pebbles
+     * (Aplite/Basalt/Chalk). By default these are hidden so users go through the dedicated
+     * Bluetooth Classic scan instead.
+     */
+    val allowLegacyWatchesInBleScan: Boolean = false,
+    /**
+     * Intended to be a debug option to dsiable watch settings sync.
+     */
+    val enableWatchSettingsSync: Boolean = true,
+    /**
+     * Fork: global default grant for a watchapp/watchface's phone-side PebbleKit JS
+     * network access (XHR/fetch/WebSocket and the phone-side weather interceptors).
+     *
+     * This is the value applied to any app that has no explicit per-app override in
+     * the LockerAppPermission table. It ships DENY (false) on purpose: upstream let
+     * third-party watchface JS reach arbitrary servers with zero disclosure or
+     * control, so the fork's baseline is no access until the user opts in. Onboarding
+     * lets a new user flip this to allow; an upgrading user keeps the deny baseline
+     * (the field simply deserializes to its default for configs written before it
+     * existed). Per-app grants override this in either direction.
+     */
+    val watchappDefaultNetworkAllowed: Boolean = false,
+    /**
+     * Fork: global default grant for a watchapp/watchface's phone-side geolocation
+     * (navigator.geolocation, bridged to real phone GPS). Same deny-by-default
+     * rationale and override semantics as [watchappDefaultNetworkAllowed]. Upstream
+     * modelled a per-app Location permission but never wrote it, so the gate was
+     * inert and everything was effectively allowed; this restores a real default.
+     */
+    val watchappDefaultLocationAllowed: Boolean = false,
+    val musicSeekWhenAvailable: Boolean = true,
+    /**
+     * Fork: whether classic PebbleKit is reachable. Off by default: while on, any installed app
+     * can receive what classic watchapps send and send to them (DESIGN_NOTES).
+     */
+    val classicPebbleKitEnabled: Boolean = false,
+    /** Fork: whether PebbleKit 2 is reachable. On by default: its entry points check the caller. */
+    val pebbleKit2Enabled: Boolean = true,
+)
+
+class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+    val value: WatchConfig get() = flow.value.watchConfig
+}
+
+@VisibleForTesting
+fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watchConfig = this)))
+
+@Serializable
+data class BleConfig(
+    @SerialName("reversedPpog")
+    val legacyReversedPPoG: Boolean = false,
+    /**
+     * When false, ignore any reversed PPoG service the watch advertises and host forward PPoG
+     * ourselves instead. Evaluated per connection, so it takes effect on the next reconnect.
+     */
+    val useReversedPpogV2: Boolean = getPlatform() == PhoneAppVersion.OSType.Android,
+    val verbosePpogLogging: Boolean = false,
+    /**
+     * iOS only. When true, re-publish the GATT services automatically after the BT stack
+     * returns to PoweredOn following a state restoration.
+     */
+    val republishGattServicesOnRestore: Boolean = false,
+    /**
+     * Android only. After a failed connection attempt, use GATT autoConnect for subsequent
+     * attempts, so that the OS waits for the watch to appear instead of us retrying in a loop.
+     */
+    val autoConnectAfterFailure: Boolean = true,
+    /**
+     * iOS only. Opt the watch connection into CoreBluetooth state preservation/restoration so the
+     * OS can relaunch us for central-side events. Applied once during
+     * [io.rebble.libpebblecommon.connection.LibPebble3.create], because Kable's central manager can
+     * only be configured before first use — changing it takes effect on the next app launch.
+     *
+     * Also suppresses the system "Bluetooth is off" alert: Kable sets
+     * CBCentralManagerOptionShowPowerAlertKey=false whenever it passes options at all.
+     */
+    val centralStateRestoration: Boolean = false,
+    val filterScanResultsByUuid: Boolean = true,
+)
+
+class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+    val value: BleConfig get() = flow.value.bleConfig
+}
+
+@VisibleForTesting
+fun BleConfig.asFlow() = BleConfigFlow(MutableStateFlow(LibPebbleConfig(bleConfig = this)))
+
+@Serializable
+data class NotificationConfig(
+    val dumpNotificationContent: Boolean = true,
+    val obfuscateContent: Boolean = true,
+    val sendLocalOnlyNotifications: Boolean = false,
+    val storeNotifiationsForDays: Int = 7,
+    val storeDisabledNotifications: Boolean = false,
+    val addShowsUserInterfaceActions: Boolean = false,
+    val alwaysSendNotifications: Boolean = true,
+    /**
+     * Mute all notification sounds on the phone when at least one watch is connected
+     */
+    val mutePhoneNotificationSoundsWhenConnected: Boolean = false,
+    /**
+     * Mute all call alerts on the phone when at least one watch is connected
+     */
+    val mutePhoneCallSoundsWhenConnected: Boolean = false,
+    /**
+     * When [true], any notifications muted by the phone's do not disturb will not be forwarded to the watch
+     */
+    val respectDoNotDisturb: Boolean = false,
+    /**
+     * Default new apps to be enabled (else they will be disabled).
+     */
+    val defaultAppsToEnabled: Boolean = true,
+    /**
+     * When [false], no notifications will be sent at all
+     */
+    val sendNotifications: Boolean = true,
+    val sendNotificationImages: Boolean = true,
+    val useAndroidVibePatterns: Boolean = false,
+    val overrideDefaultVibePattern: String? = null,
+    /**
+     * User-defined canned responses appended to every reply action sent to the watch.
+     * Shown under "Canned messages" in the watch action menu.
+     */
+    val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
+)
+
+class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
+    val value: NotificationConfig get() = flow.value.notificationConfig
+}
+
+@VisibleForTesting
+fun NotificationConfig.asFlow() = NotificationConfigFlow(MutableStateFlow(LibPebbleConfig(notificationConfig = this)))

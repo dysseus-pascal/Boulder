@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allow user-installed CA certificates to be trusted in addition to the system
+  CA store. Since Android 7.0 (API 24), apps only trust the system store by
+  default, so PKJS apps connecting to self-hosted servers with a self-signed or
+  private-CA cert (e.g. Home Assistant over wss://) fail to connect even after
+  the user installs and trusts the cert on their device.
+-->
+<network-security-config>
+    <!-- Fork: cleartext is off app-wide, stated explicitly rather than left
+         to the targetSdk 28+ default, and diverging from upstream, which sets
+         it to true here. The manifest declares no usesCleartextTraffic either
+         (Android ignores that attribute once this file is declared, but the
+         built manifest should say what is true). User-added CAs above cover
+         the self-hosted-server case over TLS. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <!-- Android 17, under its networkSecurityConfigLocalhost flag, builds an
+         implicit localhost config that permits cleartext unless a <domain> in
+         this file is a localhost name (android17-release,
+         frameworks/base packages/NetworkSecurityConfig:
+         XmlConfigSource.parseNetworkSecurityConfig, Domain.isLocalhost,
+         NetworkSecurityConfig.getLocalhostBuilder). This entry is that domain;
+         do not remove it as redundant with base-config. It is also the file's
+         first domain-config, and with one present the platform trust manager
+         rejects a server-trust check made without a hostname (same package,
+         RootTrustManager.checkServerTrusted). -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

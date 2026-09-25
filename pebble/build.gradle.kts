@@ -1,0 +1,179 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlinx.atomicfu)
+}
+
+kotlin {
+    android {
+        namespace = "coredevices.pebble"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+
+        androidResources {
+            enable = true
+        }
+
+        withHostTestBuilder {}
+
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
+    }
+
+// Target declarations - add or remove as needed below. These define
+// which platforms this KMP module supports.
+// See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
+
+
+// For iOS targets, this is also where you should
+// configure native binary output. For more information, see:
+// https://kotlinlang.org/docs/multiplatform-build-native-binaries.html#build-xcframeworks
+
+// A step-by-step guide on how to include this library in an XCode
+// project can be found here:
+// https://developer.android.com/kotlin/multiplatform/migrate
+    val xcfName = "pebbleKit"
+
+    iosArm64 {
+        binaries.framework {
+            baseName = xcfName
+        }
+    }
+
+    iosSimulatorArm64 {
+        binaries.framework {
+            baseName = xcfName
+        }
+    }
+
+// Source set declarations.
+// Declaring a target automatically creates a source set with the same name. By default, the
+// Kotlin Gradle Plugin creates additional source sets that depend on each other, since it is
+// common to share sources between related targets.
+// See: https://kotlinlang.org/docs/multiplatform-hierarchy.html
+    sourceSets {
+        all {
+            languageSettings {
+                optIn("kotlin.uuid.ExperimentalUuidApi")
+                optIn("androidx.compose.material3.ExperimentalMaterial3Api")
+                optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
+                optIn("kotlin.time.ExperimentalTime")
+                optIn("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+            }
+        }
+        commonMain {
+            dependencies {
+                implementation(project(":libpebble3"))
+                // Fork: GMS (Google Fit backend) excluded; see the matching
+                // note in composeApp/build.gradle.kts and PlatformHealthManager.
+                implementation("com.viktormykhailiv:health-kmp:${libs.versions.health.kmp.get()}") {
+                    exclude(group = "com.google.android.gms", module = "play-services-auth")
+                    exclude(group = "com.google.android.gms", module = "play-services-fitness")
+                }
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(libs.compose.material3)
+                implementation(compose.materialIconsExtended)
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
+                implementation(libs.koin.compose.viewmodel)
+                implementation(compose.components.resources)
+                implementation(libs.androidx.navigation.compose)
+                implementation(libs.paging.compose)
+                implementation(compose.components.uiToolingPreview)
+                implementation(libs.kotlinx.io.core)
+                // Fork: multiplatform sha256 (HashingSink) for the verified
+                // firmware installer; already in the runtime graph via
+                // libpebble3's zip handling, declared here for direct use.
+                implementation(libs.okio)
+                implementation(libs.kermit)
+                implementation(project(":util"))
+                implementation(libs.serialization)
+                implementation(libs.kotlinx.datetime)
+                implementation(libs.settings)
+                implementation(libs.settings.test)
+                implementation(libs.settings.serialization)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.client.serialization.json)
+                implementation(libs.coil)
+                implementation(libs.coil.ktor)
+                implementation(libs.webview)
+                implementation(libs.backhandler)
+                api(libs.uri)
+                // Fork: inert dev.gitlive.firebase.* stand-ins replacing the
+                // real gitlive firebase-auth/firebase-firestore artifacts.
+                implementation(project(":firebase-stubs"))
+                implementation(libs.coredevices.speex)
+                api(project(":whisper"))
+                api(libs.algolia)
+                implementation(libs.reorderable)
+                implementation(libs.compass.geocoder)
+                implementation(libs.compass.geocoder.mobile)
+                implementation(libs.compass.autocomplete)
+                implementation(libs.compass.autocomplete.mobile)
+                implementation(project(":libindex"))
+            }
+        }
+
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+                // Test-only: MockEngine lets the no-telemetry tests assert that the
+                // gutted upload paths never touch the network (fork goal: strip telemetry).
+                implementation(libs.ktor.client.mock)
+                implementation(libs.coroutines.test)
+            }
+        }
+
+        androidMain {
+            dependencies {
+                // Add Android-specific dependencies here. Note that this source set depends on
+                // commonMain by default and will correctly pull the Android artifacts of any KMP
+                // dependencies declared in commonMain.
+                implementation(compose.uiTooling)
+                implementation(libs.androidx.activity.compose)
+                // SpO2 (PR #267): health-kmp 1.4.0 kennt OxygenSaturation nicht.
+                implementation(libs.health.connect)
+            }
+        }
+
+        iosMain {
+            dependencies {
+                // Add iOS-specific dependencies here. This a source set created by Kotlin Gradle
+                // Plugin (KGP) that each specific iOS target (e.g., iosX64) depends on as
+                // part of KMP’s default source set hierarchy. Note that this source set depends
+                // on common by default and will correctly pull the iOS artifacts of any
+                // KMP dependencies declared in commonMain.
+            }
+        }
+    }
+
+}
+
+compose.resources {
+    packageOfResClass = "coreapp.pebble.generated.resources"
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.addAll(listOf(
+            "-P",
+            "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=" +
+                    project.buildDir.absolutePath + "/compose_metrics",
+            "-P",
+            "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=" +
+                    project.buildDir.absolutePath + "/compose_metrics"
+        ))
+    }
+}

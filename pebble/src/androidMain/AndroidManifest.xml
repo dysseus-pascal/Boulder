@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Health Connect: blood oxygen (SpO2). health-kmp 1.4.0 doesn't model OxygenSaturation,
+         so it is requested/written directly via androidx.health.connect. SpO2 is bundled into
+         the single permission prompt hosted by HealthConnectWritePermissionActivity below,
+         alongside the standard steps/heart rate/sleep/exercise write permissions. -->
+    <uses-permission android:name="android.permission.health.WRITE_OXYGEN_SATURATION" />
+    <application>
+        <receiver android:name=".ui.TestActionReceiver" android:exported="false" />
+        <receiver android:name="coredevices.pebble.firmware.UpdateActionReceiver" android:exported="false" />
+        <receiver
+            android:name="coredevices.pebble.firmware.FirmwareSideloadReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="coredevices.pebble.SIDELOAD_FIRMWARE" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name="coredevices.pebble.health.HealthConnectWritePermissionActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
+        <!-- Derived from the installing app's id so the fork does not squat upstream's
+             authority. The basalt alias below is a PebbleKit ecosystem contract shared
+             by every Pebble companion app and must keep its exact name; it also means
+             two companion apps can never be installed side by side, which is intended. -->
+        <provider
+            android:authorities="${applicationId}.pebblekit"
+            android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider"
+            android:exported="true" />
+        <provider
+            android:authorities="com.getpebble.android.provider.basalt"
+            android:name="io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProvider"
+            tools:ignore="ExportedContentProvider"
+            android:exported="true" />
+    </application>
+</manifest>

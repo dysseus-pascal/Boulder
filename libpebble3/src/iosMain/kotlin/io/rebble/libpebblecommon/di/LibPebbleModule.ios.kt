@@ -1,0 +1,78 @@
+package io.rebble.libpebblecommon.di
+
+import io.rebble.libpebblecommon.calendar.IosCalendarActionHandler
+import io.rebble.libpebblecommon.calendar.IosSystemCalendar
+import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
+import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
+import io.rebble.libpebblecommon.calls.SystemCallLog
+import io.rebble.libpebblecommon.connection.OtherPebbleApps
+import io.rebble.libpebblecommon.connection.PhoneCapabilities
+import io.rebble.libpebblecommon.connection.PlatformFlags
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.classic.transport.ClassicScanner
+import io.rebble.libpebblecommon.connection.bt.classic.transport.IosClassicScanner
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
+import io.rebble.libpebblecommon.contacts.SystemContacts
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosLegacyPhoneReceiver
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.IosSystemContacts
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.IosSystemGeolocation
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
+import io.rebble.libpebblecommon.imaging.NoNotificationImages
+import io.rebble.libpebblecommon.imaging.NotificationImageProvider
+import io.rebble.libpebblecommon.music.SystemMusicControl
+import io.rebble.libpebblecommon.notification.NotificationAppsSync
+import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.packets.PhoneAppVersion
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.util.SystemGeolocation
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.singleOf
+import org.koin.dsl.bind
+import org.koin.dsl.module
+import kotlin.time.Duration.Companion.seconds
+
+actual val platformModule: Module = module {
+    single {
+        PhoneCapabilities(
+            CommonPhoneCapabilities + setOf(
+                ProtocolCapsFlag.SupportsNotificationFiltering,
+            )
+        )
+    }
+    single {
+        PlatformFlags(
+            PhoneAppVersion.PlatformFlag.makeFlags(PhoneAppVersion.OSType.IOS, emptyList())
+        )
+    }
+    singleOf(::IosNotificationActionHandler) bind PlatformNotificationActionHandler::class
+    singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
+    singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
+    singleOf(::IosSystemCalendar) bind SystemCalendar::class
+    singleOf(::IosCalendarActionHandler) bind PlatformCalendarActionHandler::class
+    singleOf(::IosSystemCallLog) bind SystemCallLog::class
+    singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
+    singleOf(::NoNotificationImages) bind NotificationImageProvider::class
+    singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
+    singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
+    singleOf(::IosSystemContacts) bind SystemContacts::class
+    singleOf(::IosLegacyPhoneReceiver) bind LegacyPhoneReceiver::class
+    single { PlatformConfig(syncNotificationApps = true) }
+    single { BlePlatformConfig(
+        pinAddress = false,
+        phoneRequestsPairing = false,
+        useNativeMtu = false,
+        sendPpogResetOnDisconnection = true,
+        fallbackToResetRequest = true,
+        closeGattServerWhenBtDisabled = false,
+        delayBleConnectionsAfterAppStart = true,
+        supportsPpogResetCharacteristic = true,
+        writeWithoutResponseStallTimeout = 5.seconds,
+    ) }
+    singleOf(::IosClassicScanner) bind ClassicScanner::class
+}

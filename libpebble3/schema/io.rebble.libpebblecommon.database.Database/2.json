@@ -1,0 +1,103 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "66f92e1aaa28ba4d67e6bd7d207cde3d",
+    "entities": [
+      {
+        "tableName": "BlobDBItem",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `syncStatus` TEXT NOT NULL, `watchIdentifier` TEXT NOT NULL, `watchDatabase` TEXT NOT NULL, `data` BLOB NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncStatus",
+            "columnName": "syncStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchIdentifier",
+            "columnName": "watchIdentifier",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchDatabase",
+            "columnName": "watchDatabase",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "data",
+            "columnName": "data",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "KnownWatchItem",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transportIdentifier` TEXT NOT NULL, `transportType` TEXT NOT NULL, `name` TEXT NOT NULL, `runningFwVersion` TEXT NOT NULL, `serial` TEXT NOT NULL, `connectGoal` INTEGER NOT NULL, PRIMARY KEY(`transportIdentifier`))",
+        "fields": [
+          {
+            "fieldPath": "transportIdentifier",
+            "columnName": "transportIdentifier",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transportType",
+            "columnName": "transportType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runningFwVersion",
+            "columnName": "runningFwVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serial",
+            "columnName": "serial",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "connectGoal",
+            "columnName": "connectGoal",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "transportIdentifier"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '66f92e1aaa28ba4d67e6bd7d207cde3d')"
+    ]
+  }
+}

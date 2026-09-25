@@ -1,0 +1,19 @@
+Gravel is a de-Googled, hardened fork of the Pebble mobile app by Core Devices, for Pebble and Core Devices watches on GrapheneOS, LineageOS and other phones without Google Play services or Firebase.
+
+The watch features are here: pairing, notifications and replies, calendar, music, health, weather, watchfaces and apps, firmware updates, and voice dictation. What is gone: Play services, Firebase, telemetry, analytics and crash reporting. The battery analytics page depended on that telemetry and has no data here, and the Pebble Index 01 ring and Index AI features do not work for now.
+
+Hardening:
+- Code that watchapps run inside Gravel gets no internet or location access until you grant it, per app, so some watchfaces and apps need a grant before they work fully
+- Classic PebbleKit, which broadcasts watch data to apps on your phone, is off by default; turn it on under Watch App Permissions if a companion app stops receiving watch data
+- The speech engine runs in an isolated Android process
+- Other exported Android interfaces are authorization-gated or removed, and plain-HTTP traffic is blocked
+- Core watch firmware comes from the public PebbleOS releases and is verified before install
+- App store searches are sent when you tap search, not while you type, with the search provider's analytics switched off
+
+Dictation runs on the phone with whisper.cpp, built from source; the speech model is an optional, integrity-pinned download. You can also send dictation to your own transcription server over https. Weather locations can also be entered by latitude and longitude.
+
+Gravel contacts the Core Devices and Rebble web services, Algolia when you search the app store, GitHub for firmware, and the model host when you download a speech model, as well as an app store source or transcription server you add yourself and any host a watchapp you grant internet access connects to.
+
+Background location is used so location-based watchapps and weather work while the app is closed.
+
+Gravel is not affiliated with or endorsed by Core Devices. "Pebble" and "Core Devices" are trademarks of their respective owners; Gravel is an independent fork of their GPLv3 source code.

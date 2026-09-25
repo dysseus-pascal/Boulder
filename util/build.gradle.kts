@@ -1,0 +1,220 @@
+
+import com.codingfeline.buildkonfig.compiler.FieldSpec
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+plugins {
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
+    alias(libs.plugins.composeMultiplatform)
+    alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.buildKonfig)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+room {
+    schemaDirectory("schema")
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "coreapp.util.generated.resources"
+}
+
+val properties = Properties().apply {
+    try {
+        load(rootDir.resolve("local.properties").reader())
+    } catch (e: Exception) {
+        println("local.properties file not found")
+    }
+}
+
+val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+val useKrispStubsForTests =
+    (properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: project.properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: System.getenv("USE_KRISP_STUBS_FOR_TESTS")
+        ?: "true") == "true"
+val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':').lowercase() }
+val isTestLikeInvocation = requestedTaskNames.any { taskName ->
+    taskName.contains("test") || taskName == "check"
+}
+val useKrispArtifact = enableKrisp && !(useKrispStubsForTests && isTestLikeInvocation)
+
+kotlin {
+
+// Target declarations - add or remove as needed below. These define
+// which platforms this KMP module supports.
+// See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
+    android {
+        namespace = "coredevices.util"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+
+        androidResources {
+            enable = true
+        }
+
+        withHostTestBuilder {}
+    }
+
+// For iOS targets, this is also where you should
+// configure native binary output. For more information, see:
+// https://kotlinlang.org/docs/multiplatform-build-native-binaries.html#build-xcframeworks
+
+// A step-by-step guide on how to include this library in an XCode
+// project can be found here:
+// https://developer.android.com/kotlin/multiplatform/migrate
+    val xcfName = "coreapp-util"
+
+    iosArm64 {
+        binaries.framework {
+            baseName = xcfName
+        }
+    }
+
+    iosSimulatorArm64 {
+        binaries.framework {
+            baseName = xcfName
+        }
+    }
+
+// Source set declarations.
+// Declaring a target automatically creates a source set with the same name. By default, the
+// Kotlin Gradle Plugin creates additional source sets that depend on each other, since it is
+// common to share sources between related targets.
+// See: https://kotlinlang.org/docs/multiplatform-hierarchy.html
+    sourceSets {
+        all {
+            languageSettings {
+                optIn("kotlinx.cinterop.ExperimentalForeignApi")
+                optIn("androidx.compose.material3.ExperimentalMaterial3Api")
+                optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlin.uuid.ExperimentalUuidApi")
+            }
+        }
+        commonMain {
+            dependencies {
+                implementation(libs.kotlinx.io.core)
+                implementation(libs.coroutines)
+                implementation(compose.runtime)
+                implementation(compose.ui)
+                implementation(compose.foundation)
+                implementation(libs.compose.material3)
+                implementation(compose.materialIconsExtended)
+                implementation(compose.components.resources)
+                implementation(libs.ktor.client.core)
+                implementation(libs.kermit)
+                implementation(libs.serialization)
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
+                // Fork: inert dev.gitlive.firebase.* stand-ins replacing the
+                // real gitlive firebase-auth/firebase-firestore artifacts.
+                implementation(project(":firebase-stubs"))
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.contentNegotiation)
+                implementation(libs.ktor.client.encoding)
+                implementation(libs.ktor.client.serialization.json)
+                implementation(libs.ktor.client.logging)
+                implementation(libs.webview)
+                implementation(libs.uri)
+                implementation(compose.components.uiToolingPreview)
+                implementation(project(":whisper"))
+                implementation(project(":resampler"))
+                implementation(project(":libpebble3"))
+                implementation(project(":libindex"))
+                api(project(":index-ai"))
+                implementation(libs.kmpio)
+                api(libs.room.runtime)
+                implementation(libs.sqlite.bundled)
+                api(libs.settings)
+                if (useKrispArtifact) {
+                    implementation(libs.coredevices.krispPrivate)
+                } else {
+                    implementation(project(":krisp-stubs"))
+                }
+            }
+        }
+
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+                // MapSettings, so the encrypted-setting storage contract can be tested without
+                // a device. Same artifact family and version as the Settings dep already used.
+                implementation(libs.settings.test)
+            }
+        }
+
+        getByName("androidHostTest").dependencies {
+            // Ktor's mock engine, so the self-hosted server client's request
+            // shape and error mapping are tested without a network. Same Ktor
+            // version as the client itself, already used by other modules'
+            // host tests.
+            implementation(libs.ktor.client.mock)
+        }
+
+        androidMain {
+            dependencies {
+                implementation(compose.uiTooling)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
+
+        iosMain {
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+            }
+        }
+    }
+
+}
+
+dependencies {
+    add("kspAndroid", libs.room.compiler)
+    add("kspIosArm64", libs.room.compiler)
+    add("kspIosSimulatorArm64", libs.room.compiler)
+}
+
+val headSha by lazy {
+    project.providers.exec {
+        commandLine("git", "describe", "--always", "--dirty")
+    }.standardOutput.asText.get().trim()
+}
+val enableQa = System.getenv("QA")?.toBoolean() ?: properties.getProperty("QA")?.toBoolean() ?: true
+
+fun gradleStringPropOrNull(name: String): String? {
+    val local = properties.getProperty(name)?.takeIf { it.isNotEmpty() }
+    val gradle = providers.gradleProperty(name).orNull?.takeIf { it.isNotEmpty() }
+    return local ?: gradle
+}
+
+fun gradleBooleanProp(name: String, default: Boolean): Boolean =
+    gradleStringPropOrNull(name)?.let { it == "true" } ?: default
+
+buildkonfig {
+    packageName = "coredevices.util"
+    objectName = "CommonBuildKonfig"
+    exposeObjectWithName = "CommonBuildKonfig"
+
+    defaultConfigs {
+        buildConfigField(FieldSpec.Type.STRING, "GIT_HASH", headSha)
+        buildConfigField(FieldSpec.Type.BOOLEAN, "QA", enableQa.toString())
+        buildConfigField(FieldSpec.Type.STRING, "USER_AGENT_VERSION", headSha)
+        buildConfigField(FieldSpec.Type.STRING, "BUG_URL", gradleStringPropOrNull("bugUrl"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "TOKEN_URL", gradleStringPropOrNull("tokenUrl"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "WISPR_AUTH_URL", gradleStringPropOrNull("wisprAuthUrl"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "KIRINKI_URL", gradleStringPropOrNull("kirinkiUrl"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GOOGLE_AUTH_ENABLED", gradleBooleanProp("googleAuthEnabled", default = true).toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "APPLE_AUTH_ENABLED", gradleBooleanProp("appleAuthEnabled", default = true).toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", gradleBooleanProp("githubAuthEnabled", default = true).toString())
+    }
+}

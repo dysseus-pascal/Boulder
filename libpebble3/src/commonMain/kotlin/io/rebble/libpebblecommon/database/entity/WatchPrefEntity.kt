@@ -1,0 +1,777 @@
+package io.rebble.libpebblecommon.database.entity
+
+import androidx.compose.runtime.Immutable
+import co.touchlab.kermit.Logger
+import coredev.BlobDatabase
+import coredev.GenerateRoomEntity
+import io.rebble.libpebblecommon.SystemAppIDs.HEALTH_APP_UUID
+import io.rebble.libpebblecommon.SystemAppIDs.QUIET_TIME_TOGGLE_UUID
+import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_FUTURE_UUID
+import io.rebble.libpebblecommon.database.MillisecondInstant
+import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.dao.BlobDbItem
+import io.rebble.libpebblecommon.database.dao.ValueParams
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting.Companion.toJson
+import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
+import io.rebble.libpebblecommon.structmapper.SBoolean
+import io.rebble.libpebblecommon.structmapper.SFixedList
+import io.rebble.libpebblecommon.structmapper.SFixedString
+import io.rebble.libpebblecommon.structmapper.SNullTerminatedString
+import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
+import io.rebble.libpebblecommon.structmapper.SUShort
+import io.rebble.libpebblecommon.structmapper.SUUID
+import io.rebble.libpebblecommon.structmapper.StructMappable
+import io.rebble.libpebblecommon.structmapper.StructMapper
+import io.rebble.libpebblecommon.timeline.TimelineColor
+import io.rebble.libpebblecommon.timeline.toPebbleColor
+import io.rebble.libpebblecommon.util.DataBuffer
+import io.rebble.libpebblecommon.util.Endian
+import io.rebble.libpebblecommon.util.asTimelineColor
+import io.rebble.libpebblecommon.util.toPebbleColor
+import io.rebble.libpebblecommon.util.toProtocolNumber
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
+
+@Immutable
+@GenerateRoomEntity(
+    primaryKey = "id",
+    databaseId = BlobDatabase.WatchPrefs,
+    windowBeforeSecs = -1,
+    windowAfterSecs = -1,
+    onlyInsertAfter = false,
+    sendDeletions = true,
+)
+data class WatchPrefItem(
+    val id: String,
+    val value: String,
+    val timestamp: MillisecondInstant,
+) : BlobDbItem {
+    override fun key(): UByteArray =
+        SNullTerminatedString(StructMapper(), id).toBytes()
+
+    override fun value(params: ValueParams): UByteArray? {
+        if (!params.libPebbleConfigFlow.value.watchConfig.enableWatchSettingsSync) {
+            logger.d("Watch settings sync disabled")
+            return null
+        }
+        val type = WatchPref.from(id)
+        if (type == null) {
+            logger.w { "Don't know how to encode watch pref key: $id" }
+            return null
+        }
+        logger.v { "trying to insert watch pref to watch blobdb: $id / $value" }
+        val bytes = try {
+            when (type.type) {
+                WatchPrefType.TypeString -> SNullTerminatedString(StructMapper(), value)
+                    .toBytes()
+
+                WatchPrefType.TypeUuid -> SFixedString(
+                    StructMapper(),
+                    value.length,
+                    value
+                ).toBytes()
+
+                WatchPrefType.TypeUInt8, WatchPrefType.TypeBoolean -> SUByte(
+                    StructMapper(),
+                    value.toUByte().applyOffsetForSendToWatch(id, params.platform)
+                ).toBytes()
+
+                WatchPrefType.TypeUInt16 -> SUShort(
+                    StructMapper(),
+                    value.toUShort(),
+                    endianness = Endian.Little
+                ).toBytes()
+
+                WatchPrefType.TypeUInt32 -> SUInt(
+                    StructMapper(),
+                    value.toUInt(),
+                    endianness = Endian.Little
+                ).toBytes()
+
+                WatchPrefType.TypeQuickLaunch -> {
+                    val setting = QuickLaunchSetting.fromJson(value)
+                    val struct = QLMappable(
+                        enabled = setting.enabled,
+                        uuid = setting.uuid,
+                    )
+                    struct.toBytes()
+                }
+
+                WatchPrefType.TypeColor -> {
+                    val color = TimelineColor.findByName(value)
+                    if (color == null) {
+                        logger.w { "Unknown color: $value" }
+                        null
+                    } else {
+                        SUByte(StructMapper(), color.toPebbleColor().toProtocolNumber()).toBytes()
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Error encoding watch pref record $id" }
+            return null
+        }
+        return bytes
+    }
+
+    override fun recordHashCode(): Int = hashCode()
+
+    override fun timestamp(): Instant {
+        return timestamp.instant
+    }
+}
+
+enum class WatchPrefType {
+    TypeString,
+    TypeUuid,
+    TypeBoolean,
+    TypeUInt8,
+    TypeUInt16,
+    TypeUInt32,
+    TypeQuickLaunch,
+    TypeColor,
+}
+
+private val json = Json { ignoreUnknownKeys = true }
+private val NULL_UUID = Uuid.parse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+@Serializable
+data class QuickLaunchSetting(
+    val enabled: Boolean,
+    val uuid: Uuid?,
+) {
+    companion object {
+        fun fromJson(str: String): QuickLaunchSetting = json.decodeFromString(str)
+        fun QuickLaunchSetting.toJson() = json.encodeToString(this)
+    }
+}
+
+class QLMappable(
+    enabled: Boolean = true,
+    uuid: Uuid? = null,
+) : StructMappable() {
+    val enabled = SBoolean(m, enabled)
+    val uuid = SUUID(m, uuid ?: NULL_UUID)
+}
+
+
+sealed interface WatchPref<T> {
+    val id: String
+    val displayName: String
+    val description: String?
+    val type: WatchPrefType
+    val defaultValue: T
+    fun decodeValue(value: String): T
+    fun encodeValue(value: T): String
+    fun castParent(parent: WatchPreference<*>): WatchPreference<T> = parent as WatchPreference<T>
+    val isDebugSetting: Boolean
+
+    companion object {
+        fun enumeratePrefs(): List<WatchPref<*>> = BoolWatchPref.entries
+            .plus(QuicklaunchWatchPref.entries)
+            .plus(EnumWatchPref.entries)
+            .plus(ColorWatchPref.entries)
+            .plus(RgbColorWatchPref.entries)
+            .plus(NumberWatchPref.entries)
+
+        fun from(id: String): WatchPref<*>? = enumeratePrefs().find { it.id == id }
+    }
+}
+
+enum class BoolWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: Boolean,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<Boolean> {
+    TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
+    Clock24h("clock24h", "24h clock", false),
+    StandbyMode("stationaryMode", "Standby Mode", true, description = "Watch will disable bluetooth when not in use (i.e. no movement is detected), to save power"),
+    LeftHandedMode("displayOrientationLeftHanded", "Left-handed Mode", false, description = "Button functions are reversed"),
+    Backlight("lightEnabled", "Backlight", true),
+    AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
+    BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
+    TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
+    QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
+    CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
+    AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
+    NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
+    NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
+    QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
+    QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),
+    MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
+    MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
+    MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
+    ;
+
+    override val type = WatchPrefType.TypeBoolean
+    override fun decodeValue(value: String): Boolean = value == "1"
+    override fun encodeValue(value: Boolean): String = if (value) "1" else "0"
+}
+
+enum class QuicklaunchWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: QuickLaunchSetting,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<QuickLaunchSetting> {
+    QlUp("qlUp", "Quick Launch: Hold Up", QuickLaunchSetting(false, null)),
+    QlDown("qlDown", "Quick Launch: Hold Down", QuickLaunchSetting(false, null)),
+    QlSelect("qlSelect", "Quick Launch: Hold Select", QuickLaunchSetting(false, null)),
+    QlBack("qlBack", "Quick Launch: Hold Back", QuickLaunchSetting(true, QUIET_TIME_TOGGLE_UUID)),
+    QlComboBackUp("qlComboBackUp", "Quick Launch: Hold Combo Back+Up", QuickLaunchSetting(false, null)),
+    QlComboUpDown("qlComboUpDown", "Quick Launch: Hold Combo Up+Down", QuickLaunchSetting(false, null)),
+    QlSingleClickUp(
+        "qlSingleClickUp",
+        "Quick Launch: Tap Up",
+        QuickLaunchSetting(true, HEALTH_APP_UUID)
+    ),
+    QlSingleClickDown(
+        "qlSingleClickDown",
+        "Quick Launch: Tap Down",
+        QuickLaunchSetting(true, TIMELINE_FUTURE_UUID)
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeQuickLaunch
+    override fun decodeValue(value: String): QuickLaunchSetting = try {
+        QuickLaunchSetting.fromJson(value)
+    } catch (e: Exception) {
+        defaultValue
+    }
+    override fun encodeValue(value: QuickLaunchSetting): String = value.toJson()
+}
+
+sealed interface WatchPrefEnum {
+    val code: UByte
+    val displayName: String
+}
+
+fun UByte.applyOffsetForSendToWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
+    // Apply offset for obelix/etc so we can keep the same base enum in the app
+    EnumWatchPref.TextSize.id -> (this + watchType.textSizeOffset()).toUByte()
+    else -> this
+}
+
+fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
+    // Apply offset for obelix/etc so we can keep the same base enum in the app
+    EnumWatchPref.TextSize.id -> (this - watchType.textSizeOffset()).toUByte().let {
+        // Also add check so that we don't write an invalid enum value, e.g. for a new watch type
+        if (it > ContentSize.Larger.code) {
+            ContentSize.Larger.code
+        } else if (it < ContentSize.Smaller.code) {
+            ContentSize.Smaller.code
+        } else {
+            it
+        }
+    }
+    else -> this
+}
+
+// These watch types use a different set of enum values (e.g. 1,2,3 instead of 0,1,2). So that we
+// can use the same enum and map to all watch models, we offset them when writing to/from the watch.
+fun WatchType.textSizeOffset(): UByte = when (this) {
+    WatchType.EMERY -> 1u
+    WatchType.GABBRO -> 1u
+    else -> 0u
+}
+
+enum class ContentSize(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    // Note: obelix (and in future other platforms) offset this enum. See textSizeOffset()
+    Smaller(0u, "Smaller"),
+    Default(1u, "Default"),
+    Larger(2u, "Larger"),
+}
+
+enum class AlertMask(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    AllOff(0u, "All Off"),
+    PhoneCalls(2u, "Phone Calls"),
+    Other(4u, "Other"),
+    AllOnLegacy(7u, "All On (Legacy)"),
+    AllOn(15u, "All On"),
+}
+
+enum class QuietTimeShowNotificationsMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Hide(0u, "Hide"),
+    Show(1u, "Show"),
+}
+
+enum class LegacyVibeIntensityValue(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Low(0u, "Low"),
+    Medium(1u, "Medium"),
+    High(2u, "High"),
+}
+
+enum class VibeScore(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Disabled(1u, "Disabled"),
+    StandardShortPulseLow(2u, "Standard - Low"),
+    StandardLongPulseLow(3u, "Standard - Low"),
+    StandardShortPulseHigh(4u, "Standard - High"),
+    StandardLongPulseHigh(5u, "Standard - High"),
+    Pulse(8u, "Pulse"),
+    NudgeNudge(9u, "Nudge Nudge"),
+    Jackhammer(10u, "Jackhammer"),
+    Reveille(11u, "Reveille"),
+    Mario(12u, "Mario"),
+    AlarmsLPM(13u, "ALARMS LPM"),
+    Gentle(14u, "Gentle"),
+}
+
+enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    NoVibe(0u, "No Vibe"),
+    VibeOnWrapAround(1u, "Vibe On Wrap Around"),
+    VibeOnLocked(2u, "Vibe On Locked"),
+}
+
+enum class MotionSensitivityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    VeryLow(10u, "Very Low"),
+    Low(25u, "Low"),
+    MediumLow(40u, "Medium-Low"),
+    Medium(55u, "Medium"),
+    MediumHigh(70u, "Medium-High"),
+    High(85u, "High"),
+    VeryHigh(100u, "Very High"),
+}
+
+// Codes are the percent intensity values the firmware UI exposes; see
+// pebble-firmware:src/fw/apps/system/settings/display.c (s_intensity_values/s_intensity_labels).
+enum class BacklightIntensityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Low(10u, "Low"),
+    Medium(25u, "Medium"),
+    High(50u, "High"),
+    Blinding(100u, "Blinding"),
+}
+
+// Matches BacklightTouchWake in pebble-firmware:src/fw/shell/prefs.h.
+enum class BacklightTouchWakeMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    DoubleTap(0u, "Double Tap"),
+    Tap(1u, "Tap"),
+    Off(2u, "Off"),
+}
+
+// Matches BacklightDynamicMode in pebble-firmware:src/fw/shell/prefs.h. Off disables dynamic
+// scaling; the other modes select how bright the environment must get before the backlight
+// ramps to max intensity (Bright ramps up earliest, Dim latest).
+enum class BacklightDynamicMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    Bright(1u, "Bright"),
+    Standard(2u, "Standard"),
+    Dim(3u, "Dim"),
+}
+
+// Matches BacklightPreset in pebble-firmware:src/fw/shell/prefs.h. Each preset bundles the
+// ambient sensor, dynamic mode, intensity and timeout settings; Advanced leaves them to be set
+// individually.
+enum class BacklightPresetMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    MaxBrightness(0u, "Max Brightness"),
+    Standard(1u, "Standard"),
+    BatterySaver(2u, "Battery Saver"),
+    Advanced(3u, "Advanced"),
+}
+
+// Built-in firmware languages. Codes MUST match the ShellLanguage enum in
+// pebble-firmware:src/fw/shell/prefs.h. "Custom" (0) means the watch uses whatever language pack
+// was uploaded via PutBytes (see LanguagePackInstaller); the rest are baked into the firmware.
+// Labels mirror the on-watch Settings > Display > Language menu.
+enum class WatchLanguage(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Custom(0u, "Custom (Language Pack)"),
+    English(1u, "English"),
+    Catalan(2u, "Català"),
+    German(3u, "Deutsch"),
+    Spanish(4u, "Español"),
+    French(5u, "Français"),
+    Italian(6u, "Italiano"),
+    Dutch(7u, "Nederlands"),
+    Portuguese(8u, "Português"),
+    Polish(9u, "Polski"),
+}
+
+enum class EnumWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: WatchPrefEnum,
+    val options: List<WatchPrefEnum>,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<WatchPrefEnum> {
+    TextSize("textStyle", "Text Size", ContentSize.Default, ContentSize.entries),
+    NotificationFilter(
+        "mask",
+        "Notification Filter",
+        AlertMask.AllOn,
+        listOf(AlertMask.AllOn, AlertMask.PhoneCalls, AlertMask.AllOff)
+    ),
+    QuietTimeInterruptions(
+        "dndInterruptionsMask",
+        "Quiet Time Interruptions",
+        AlertMask.AllOff,
+        listOf(AlertMask.AllOff, AlertMask.PhoneCalls)
+    ),
+    QuietTimeShowNotifications(
+        "dndShowNotifications",
+        "Quiet Time - Show Notifications",
+        QuietTimeShowNotificationsMode.Show,
+        QuietTimeShowNotificationsMode.entries
+    ),
+    LegacyVibeIntensity(
+        "vibeIntensity",
+        "System Vibration Intensity",
+        LegacyVibeIntensityValue.High,
+        LegacyVibeIntensityValue.entries
+    ),
+    VibeScoreNotifications(
+        "vibeScoreNotifications",
+        "Vibration - Notifications",
+        VibeScore.NudgeNudge,
+        listOf(
+            VibeScore.Disabled,
+            VibeScore.StandardShortPulseLow,
+            VibeScore.StandardShortPulseHigh,
+            VibeScore.Pulse,
+            VibeScore.NudgeNudge,
+            VibeScore.Jackhammer,
+            VibeScore.Mario,
+        ),
+    ),
+    VibeScoreCalls(
+        "vibeScoreIncomingCalls",
+        "Vibration - Incoming Calls",
+        VibeScore.Pulse,
+        listOf(
+            VibeScore.Disabled,
+            VibeScore.StandardLongPulseLow,
+            VibeScore.StandardLongPulseHigh,
+            VibeScore.Pulse,
+            VibeScore.NudgeNudge,
+            VibeScore.Jackhammer,
+            VibeScore.Mario,
+        ),
+    ),
+    VibeScoreAlarms(
+        "vibeScoreAlarms", "Vibration - Alarms", VibeScore.Reveille,
+        listOf(
+            VibeScore.StandardLongPulseLow,
+            VibeScore.StandardLongPulseHigh,
+            VibeScore.Pulse,
+            VibeScore.NudgeNudge,
+            VibeScore.Jackhammer,
+            VibeScore.Reveille,
+            VibeScore.Mario,
+            VibeScore.Gentle,
+        ),
+    ),
+    MenuScrollVibe(
+        "menuScrollVibeBehavior", "Menu Scrolling - Vibration", MenuScrollVibeBehaviour.NoVibe,
+        MenuScrollVibeBehaviour.entries
+    ),
+    MotionSensitivity(
+        id = "motionSensitivity",
+        displayName = "Motion Sensitivity",
+        defaultValue = MotionSensitivityLevel.Medium,
+        options = MotionSensitivityLevel.entries,
+        isDebugSetting = true,
+    ),
+    BacklightPreset(
+        id = "lightPreset",
+        displayName = "Backlight Preset",
+        description = "Bundles the ambient sensor, dynamic backlight, brightness and timeout into one mode. Choose Advanced to configure them individually.",
+        defaultValue = BacklightPresetMode.Standard,
+        options = BacklightPresetMode.entries,
+    ),
+    BacklightIntensity(
+        id = "lightIntensity",
+        displayName = "Backlight Intensity",
+        defaultValue = BacklightIntensityLevel.Medium,
+        options = BacklightIntensityLevel.entries,
+        description = "Maximum backlight brightness when on",
+    ),
+    DynamicBacklightMode(
+        id = "lightDynamicMode",
+        displayName = "Dynamic Backlight",
+        description = "Automatically adjust backlight brightness to match your environment (using light sensor). Dimmer modes stay dimmer in bright light.",
+        defaultValue = BacklightDynamicMode.Standard,
+        options = BacklightDynamicMode.entries,
+    ),
+    BacklightTouch(
+        id = "lightTouch",
+        displayName = "Backlight on Tap",
+        description = "Turn on backlight when tapping the screen",
+        defaultValue = BacklightTouchWakeMode.DoubleTap,
+        options = BacklightTouchWakeMode.entries,
+    ),
+    Language(
+        id = "language",
+        displayName = "Language",
+        description = "Built-in firmware language. Choose Custom to use an uploaded language pack.",
+        defaultValue = WatchLanguage.Custom,
+        options = WatchLanguage.entries,
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeUInt8
+    override fun decodeValue(value: String): WatchPrefEnum {
+        val code = value.toUByteOrNull() ?: return defaultValue
+        return options.firstOrNull { it.code == code } ?: defaultValue
+    }
+
+    override fun encodeValue(value: WatchPrefEnum): String = value.code.toString()
+}
+
+enum class NumberWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: Long,
+    override val type: WatchPrefType,
+    val min: Int,
+    val max: Int,
+    val unit: String,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<Long> {
+    BacklightTimeoutMs(
+        id = "lightTimeoutMs",
+        displayName = "Backlight Timeout",
+        defaultValue = 3000,
+        type = WatchPrefType.TypeUInt32,
+        min = 1,
+        max = 10000,
+        unit = "ms",
+    ),
+    AmbientLightThreshold(
+        id = "lightAmbientThreshold",
+        displayName = "Ambient Light Threshold",
+        description = "Controls how low ambient light needs to be to enable backlight (if using Ambient Light Sensor)",
+        defaultValue = 800,
+        type = WatchPrefType.TypeUInt32,
+        min = 1,
+        max = 4096,
+        unit = "",
+        isDebugSetting = true,
+    ),
+    TimelineQuickViewMinsBefore(
+        id = "timelineQuickViewBeforeTimeMin",
+        displayName = "Timeline Quick View - minutes before event",
+        defaultValue = 10,
+        type = WatchPrefType.TypeUInt16,
+        min = 0,
+        max = 30,
+        unit = "minutes",
+    ),
+    NotificationTimeoutMs(
+        id = "notifWindowTimeout",
+        displayName = "Notification Timeout",
+        description = "Notifications time out (disappear) after this period (unless Quiet Time is enabled)",
+        defaultValue = 3.minutes.inWholeMilliseconds,
+        type = WatchPrefType.TypeUInt32,
+        min = 0,
+        max = 10.minutes.inWholeMilliseconds.toInt(),
+        unit = "ms",
+    ),
+    ;
+
+    override fun decodeValue(value: String): Long = value.toLongOrNull() ?: defaultValue
+    override fun encodeValue(value: Long): String = value.toString()
+}
+
+data class RgbColorPreset(val rgb: UInt, val displayName: String)
+
+// LED_WARM_WHITE in pebble-firmware:src/fw/drivers/led_controller.h — also the firmware
+// backlight default on color-backlight boards.
+private val LED_WARM_WHITE_RGB: UInt = 0x00FFBFA2u
+
+// Quick-pick presets shown above the RGB color picker. The wire value is a free-form 24-bit
+// RGB UInt — the user can also dial in any custom color via the sliders or hex field.
+private val BACKLIGHT_COLOR_PRESETS = listOf(
+    RgbColorPreset(0x00FF0000u, "Red"),
+    RgbColorPreset(0x00FF7F00u, "Orange"),
+    RgbColorPreset(0x00FFFF00u, "Yellow"),
+    RgbColorPreset(0x007FFF00u, "Lime"),
+    RgbColorPreset(0x0000FF00u, "Green"),
+    RgbColorPreset(0x0000FFFFu, "Cyan"),
+    RgbColorPreset(0x000000FFu, "Blue"),
+    RgbColorPreset(0x007F00FFu, "Purple"),
+    RgbColorPreset(0x00FF00FFu, "Magenta"),
+    RgbColorPreset(0x00FF66CCu, "Pink"),
+    RgbColorPreset(LED_WARM_WHITE_RGB, "Warm White"),
+    RgbColorPreset(0x00FFFFFFu, "Cool White"),
+)
+
+enum class RgbColorWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: UInt,
+    val presets: List<RgbColorPreset>,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<UInt> {
+    BacklightColor(
+        id = "lightColor",
+        displayName = "Backlight Color",
+        defaultValue = LED_WARM_WHITE_RGB,
+        presets = BACKLIGHT_COLOR_PRESETS,
+        description = "LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)",
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeUInt32
+    override fun decodeValue(value: String): UInt = value.toUIntOrNull() ?: defaultValue
+    override fun encodeValue(value: UInt): String = value.toString()
+}
+
+enum class ColorWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: TimelineColor,
+    val availableColors: List<TimelineColor>?,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<TimelineColor> {
+    // Choosing a color not in the seelction list crashes the watch - don't sync yet
+//    SettingsMenuHighlightColor(
+//        "settingsMenuHighlightColor",
+//        "Settings Menu Highlight Color",
+//        TimelineColor.CobaltBlue,
+//        availableColors = listOf(
+//            TimelineColor.DarkCandyAppleRed,
+//            TimelineColor.WindsorTan,
+//            TimelineColor.ArmyGreen,
+//            TimelineColor.DarkGreen,
+//            TimelineColor.MidnightGreen,
+//            TimelineColor.CobaltBlue,
+//            TimelineColor.DukeBlue,
+//            TimelineColor.Indigo,
+//            TimelineColor.Purple,
+//            TimelineColor.JazzberryJam,
+//        ),
+//    ),
+//    AppMenuHighlightColor(
+//        "appsMenuHighlightColor",
+//        "App Menu Highlight Color",
+//        TimelineColor.VividCerulean,
+//        availableColors = listOf(
+//            TimelineColor.SunsetOrange,
+//            TimelineColor.ChromeYellow,
+//            TimelineColor.Yellow,
+//            TimelineColor.Green,
+//            TimelineColor.Cyan,
+//            TimelineColor.VividCerulean,
+//            TimelineColor.VeryLightBlue,
+//            TimelineColor.LavenderIndigo,
+//            TimelineColor.Magenta,
+//            TimelineColor.BrilliantRose,
+//        ),
+//    ),
+    ;
+
+    override val type = WatchPrefType.TypeColor
+    override fun decodeValue(value: String): TimelineColor = TimelineColor.findByName(value) ?: defaultValue
+    override fun encodeValue(value: TimelineColor): String = value.identifier
+}
+
+/**
+ * Not syncing right now:
+- watchface (we already know what the default watchface is... or should)
+- automaticTimezoneID (we set this every time we send a time message)
+- qlSetupOpened
+- timelineSettingsOpened
+- unitsDistance (see HealthSettingsEntry)
+- activityPreferences (see HealthSettingsEntry)
+- activityHealthAppOpened
+- activityWorkoutAppOpened
+- alarmsAppOpened
+- hrmPreferences (see HealthSettingsEntry)
+- heartRatePreferences (see HealthSettingsEntry)
+ - bloodOxygenPreferences (see HealthSettingsEntry)
+ - bloodOxygenActivityPreferences (see HealthSettingsEntry)
+ - spo2Preferences (see HealthSettingsEntry)
+- workerId (need UI to figure out which apps are eligible)
+- dndWeekdaySchedule (need to figure out how to do this)
+- dndWeekdayScheduleEnabled
+- dndWeekendSchedule (need to figure out how to do this)
+- dndWeekendScheduleEnabled
+ */
+
+private val logger = Logger.withTag("WatchPrefItem")
+
+fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
+    try {
+        val id = key.asByteArray().decodeToString().trimEnd('\u0000')
+        val type = WatchPref.from(id)
+        if (type == null) {
+            logger.w("Unknown watch pref type from blobdb: $id")
+            return null
+        }
+        val strValue = try {
+            when (type.type) {
+                WatchPrefType.TypeString -> value.asByteArray().decodeToString().trimEnd('\u0000')
+                WatchPrefType.TypeUuid -> Uuid.fromByteArray(value.asByteArray()).toString()
+                WatchPrefType.TypeUInt8, WatchPrefType.TypeBoolean -> value[0].applyOffsetForReceiveFromWatch(id, params.platform)
+                    .toString()
+
+                WatchPrefType.TypeUInt16 -> SUShort(
+                    StructMapper(),
+                    endianness = Endian.Little
+                ).apply {
+                    fromBytes(
+                        DataBuffer(value)
+                    )
+                }.get().toString()
+
+                WatchPrefType.TypeUInt32 -> SUInt(
+                    StructMapper(),
+                    endianness = Endian.Little
+                ).apply {
+                    fromBytes(
+                        DataBuffer(value)
+                    )
+                }.get().toString()
+
+                WatchPrefType.TypeQuickLaunch -> {
+                    val struct = QLMappable().apply { fromBytes(DataBuffer(value)) }
+                    val uuid = when (val u = struct.uuid.get()) {
+                        NULL_UUID -> null
+                        else -> u
+                    }
+                    val setting = QuickLaunchSetting(
+                        enabled = struct.enabled.get(),
+                        uuid = uuid,
+                    )
+                    setting.toJson()
+                }
+
+                WatchPrefType.TypeColor -> value.asByteArray()[0].toUByte().toPebbleColor()
+                    .asTimelineColor().identifier
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Error decoding watch pref record $id" }
+            return null
+        }
+        return WatchPrefItem(
+            id = id,
+            value = strValue,
+            timestamp = Instant.fromEpochSeconds(timestamp.toLong()).asMillisecond(),
+        )
+    } catch (e: Exception) {
+        logger.d("decoding watch pref record ${e.message}", e)
+        return null
+    }
+}
+
+private fun SFixedList<Attribute>.get(attribute: TimelineAttribute): UByteArray? =
+    list.find { it.attributeId.get() == attribute.id }?.content?.get()

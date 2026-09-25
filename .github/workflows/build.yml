@@ -1,0 +1,50 @@
+name: Bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          restore-keys: gradle-
+      - name: Version
+        id: v
+        run: |
+          ver="$(cat SPO2_VERSION)"
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "v$ver" >/dev/null; then echo "neu=nein" >> "$GITHUB_OUTPUT"; else echo "neu=ja" >> "$GITHUB_OUTPUT"; fi
+      - name: Fester Debug-Schlüssel
+        run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
+      - name: Bauen
+        run: ./gradlew :androidApp:assembleDebug
+      - name: Release
+        if: steps.v.outputs.neu == 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver="${{ steps.v.outputs.ver }}"
+          notes=".github/release/$ver.md"
+          apk="$(ls androidApp/build/outputs/apk/debug/*.apk | head -n1)"
+          cp "$apk" gravel-spo2.apk
+          gh release create "v$ver" gravel-spo2.apk --target "$GITHUB_SHA" \
+            --title "$(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"

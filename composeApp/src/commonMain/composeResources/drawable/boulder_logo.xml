@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Der Felsbrocken als Silhouette: der Startschirm faerbt das Logo weiss ein.
+     Die Facetten stehen mit schmalen Fugen nebeneinander, damit er auch
+     einfarbig als Stein zu lesen ist. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#3E5641" android:pathData="M54,0 A54,54 0 1 1 53.99,0 Z"/>
-    <group android:translateY="-3">
-        <path android:fillColor="#D6D0C4" android:pathData="M30,52 L42,38 L60,33 L54,50 Z"/>
-        <path android:fillColor="#B5AEA1" android:pathData="M60,33 L76,40 L84,56 L54,50 Z"/>
-        <path android:fillColor="#A39C8F" android:pathData="M26,70 L30,52 L54,50 L44,81 Z"/>
-        <path android:fillColor="#7F786C" android:pathData="M54,50 L84,56 L82,72 L70,80 L44,81 Z"/>
+    <group android:translateY="-3" android:scaleX="1.5" android:scaleY="1.5" android:pivotX="55" android:pivotY="57">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M31.16,51.39 L42.31,38.37 L59.05,33.72 L53.48,49.53 Z"/>
+        <path android:fillColor="#FFFFFFFF" android:pathData="M60.59,33.82 L75.47,40.33 L82.92,55.21 L55.02,49.63 Z"/>
+        <path android:fillColor="#FFFFFFFF" android:pathData="M26.88,69.53 L30.59,52.79 L52.91,50.93 L43.62,79.76 Z"/>
+        <path android:fillColor="#FFFFFFFF" android:pathData="M54.9,51.25 L82.8,56.83 L80.94,71.71 L69.78,79.15 L45.6,80.08 Z"/>
     </group>
 </vector>

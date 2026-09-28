@@ -175,7 +175,7 @@ fun OnboardingScreen(
                             painter = painterResource(Res.drawable.boulder_logo),
                             contentDescription = "Boulder logo",
                             colorFilter = ColorFilter.tint(Color.White),
-                            modifier = Modifier.height(50.dp),
+                            modifier = Modifier.height(96.dp),
                         )
                         Spacer(modifier = Modifier.height(15.dp))
                         PebbleElevatedButton(

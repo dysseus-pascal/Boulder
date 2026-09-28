@@ -13,7 +13,12 @@ enum class OverlayType(val value: Int) {
     DeepNap(4),
     Walk(5),
     Run(6),
-    OpenWorkout(7);
+    OpenWorkout(7),
+
+    // Boulder-Firmware: erkannte Bewegung (Gehen oder Laufen, mindestens zehn
+    // Minuten). Kein Training - Training ist nur, was jemand selbst startet
+    // (OverlayDataEntity.manual).
+    Movement(8);
 
     companion object {
         fun fromValue(value: Int): OverlayType? = values().firstOrNull { it.value == value }

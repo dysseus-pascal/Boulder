@@ -99,7 +99,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 46,
+    version = 47,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -138,6 +138,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 44, to = 45),
         // SpO2 (PR #267): spo2_readings table.
         AutoMigration(from = 45, to = 46),
+        // Boulder: overlay_data.manual (selbst gestartet oder erkannt)
+        AutoMigration(from = 46, to = 47),
     ],
     exportSchema = true,
 )

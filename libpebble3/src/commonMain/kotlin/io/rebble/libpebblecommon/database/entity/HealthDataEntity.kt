@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -32,5 +33,8 @@ data class OverlayDataEntity(
     val restingKiloCalories: Int,
     val activeKiloCalories: Int,
     val distanceCm: Int,
-    val offsetUTC: Int
+    val offsetUTC: Int,
+    /** Selbst gestartet (Training) statt von der Uhr erkannt. Nur die Boulder-Firmware liefert es. */
+    @ColumnInfo(defaultValue = "0")
+    val manual: Boolean = false,
 )

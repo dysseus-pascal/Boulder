@@ -227,7 +227,11 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
         var activeKiloCalories = 0
         var distanceCm = 0
 
-        if (version < 3.toUShort() || (type != OverlayType.Walk && type != OverlayType.Run)) {
+        // Schrittdaten tragen alle Schritt-Sitzungen, auch selbst gestartete
+        // Workouts und die Bewegung der Boulder-Firmware - nicht nur Walk und Run.
+        val mitSchritten = type == OverlayType.Walk || type == OverlayType.Run ||
+            type == OverlayType.OpenWorkout || type == OverlayType.Movement
+        if (version < 3.toUShort() || !mitSchritten) {
             if (version == 3.toUShort()) {
                 // Firmware 3.x includes calorie/distance data even for non-walk/run types
                 buffer.getBytes(8)
@@ -239,6 +243,19 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
             distanceCm = buffer.getUShort().toInt()
         }
 
+        // BOULDER-FIRMWARE, VERSION MIT BIT 2: nach den acht Bytes Schrittdaten
+        // (Byte 18..25) folgt an Byte 26 das Kennzeichen "selbst gestartet".
+        // Die Schrittdaten wurden oben nicht bei jeder Art gelesen - deshalb
+        // vom Satzanfang aus hinspringen.
+        var manual = false
+        if ((version.toInt() and 0b100) != 0 && itemSize.toInt() >= MANUAL_OFFSET + 1) {
+            val bisManual = MANUAL_OFFSET - (buffer.readPosition - itemStart)
+            if (bisManual >= 0 && buffer.remaining > bisManual) {
+                if (bisManual > 0) buffer.getBytes(bisManual)
+                manual = buffer.getUByte().toInt() != 0
+            }
+        }
+
         records.add(
             OverlayDataEntity(
                 startTime = startTime.toLong(),
@@ -248,7 +265,8 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
                 restingKiloCalories = restingKiloCalories,
                 activeKiloCalories = activeKiloCalories,
                 distanceCm = distanceCm,
-                offsetUTC = offsetUTC.toInt()
+                offsetUTC = offsetUTC.toInt(),
+                manual = manual,
             )
         )
 
@@ -269,6 +287,9 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
 
     return records
 }
+
+// Lage des Kennzeichens "selbst gestartet" im Sitzungssatz der Boulder-Firmware.
+private const val MANUAL_OFFSET = 26
 
 // Firmware version constants for health data parsing
 private val VERSION_FW_3_10_AND_BELOW: UShort = 5u

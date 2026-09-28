@@ -542,6 +542,19 @@ enum class NumberWatchPref(
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
 ) : WatchPref<Long> {
+    // Boulder-Firmware: der Regler zwischen Genauigkeit und Akkulaufzeit
+    // (boulder/messstufe.h). Aeltere Firmware kennt den Schluessel nicht und
+    // weist ihn ab; dann bleibt es bei ihren eigenen Takten.
+    BoulderMessstufe(
+        id = "boulderMessstufe",
+        displayName = "Precision",
+        description = "Trade battery life for detail: how often the watch measures heart rate, HRV and SpO2. Needs the Boulder firmware.",
+        defaultValue = 3,
+        type = WatchPrefType.TypeUInt8,
+        min = 1,
+        max = 5,
+        unit = "",
+    ),
     BacklightTimeoutMs(
         id = "lightTimeoutMs",
         displayName = "Backlight Timeout",

@@ -44,6 +44,8 @@ import kotlin.uuid.Uuid
 // so the displayed MM:SS value is always a clean :00 or :30.
 private const val NOTIFICATION_TIMEOUT_STEP_COUNT = 19
 
+private val MESSSTUFEN_NAMEN = listOf("Battery Saver", "Light", "Balanced", "Detailed", "Precise")
+
 // The watch overwrites these whenever a non-Advanced backlight preset is set, so showing them
 // under a preset would offer settings the watch immediately reverts.
 private val PRESET_MANAGED_BACKLIGHT_PREFS = setOf<WatchPref<*>>(
@@ -126,6 +128,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     RgbColorWatchPref.BacklightColor -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
+    NumberWatchPref.BoulderMessstufe -> Section.Health
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
@@ -180,6 +183,22 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
                 steps = NOTIFICATION_TIMEOUT_STEP_COUNT,
             )
         }
+        NumberWatchPref.BoulderMessstufe -> basicSettingsNumberItem(
+            id = pref.id,
+            title = pref.displayName,
+            description = pref.description,
+            topLevelType = TopLevelType.Watch,
+            section = pref.section(),
+            value = item.valueOrDefault(),
+            min = pref.min,
+            max = pref.max,
+            onValueChange = { libPebble.setWatchPref(item.copy(value = it)) },
+            isDebugSetting = pref.isDebugSetting,
+            defaultValue = pref.defaultValue,
+            unit = pref.unit,
+            // Dieselben Namen wie auf der Uhr (Einstellungen > Health > Precision).
+            valueFormatter = { stufe -> MESSSTUFEN_NAMEN.getOrElse(stufe.toInt() - 1) { "$stufe" } },
+        )
         else -> basicSettingsNumberItem(
             id = pref.id,
             title = pref.displayName,

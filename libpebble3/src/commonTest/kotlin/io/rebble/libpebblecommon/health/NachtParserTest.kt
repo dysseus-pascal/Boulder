@@ -22,7 +22,7 @@ class NachtParserTest {
         fun u8(v: Int) { b += (v and 0xFF).toByte() }
         fun u16(v: Int) { u8(v); u8(v shr 8) }
         fun u32(v: Long) { for (i in 0 until 4) u8((v shr (8 * i)).toInt()) }
-        u16(version); u16(324)
+        u16(version); u16(if (version and 2 != 0) 328 else 324)
         u32(beginn); u32(7200)
         u16(137); u16(660); u16(490)
         u8(52); u8(teil); u8(teile)
@@ -30,6 +30,9 @@ class NachtParserTest {
         u8(abschnitte.size)
         abschnitte.forEach { (von, bis, phase) -> u16(von); u16(bis); u8(phase) }
         repeat(60 - abschnitte.size) { repeat(5) { u8(0) } }
+        if (version and 2 != 0) {
+            u8(78); u8(69); u8(0); u8(3)
+        }
         return b.toByteArray()
     }
 
@@ -63,6 +66,23 @@ class NachtParserTest {
         assertEquals(60, teile[0].abschnitte.size)
         assertEquals(1, teile[1].teil)
         assertEquals(3, teile[1].abschnitte.single().phase)
+    }
+
+    @Test
+    fun fassung3MitAkkuUndMessstufe() {
+        val t = parseNachtData(satz(version = 3, abschnitte = listOf(Triple(137, 200, 1))), 328u).single()
+        assertEquals(78, t.nacht.akkuBeginn)
+        assertEquals(69, t.nacht.akkuEnde)
+        assertEquals(false, t.nacht.geladen)
+        assertEquals(3, t.nacht.messstufe)
+        assertEquals(1, t.abschnitte.size)
+    }
+
+    @Test
+    fun fassung1OhneAkku() {
+        val t = parseNachtData(satz(version = 1, abschnitte = emptyList()), 324u).single()
+        assertEquals(null, t.nacht.akkuBeginn)
+        assertEquals(null, t.nacht.messstufe)
     }
 
     @Test

@@ -104,7 +104,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NachtEntity::class,
         NachtAbschnittEntity::class,
     ],
-    version = 48,
+    version = 49,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -147,6 +147,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 46, to = 47),
         // Boulder: boulder_nacht und boulder_nacht_abschnitt (Tag 88)
         AutoMigration(from = 47, to = 48),
+        // Boulder: Akku-Protokoll und Messstufe je Nacht
+        AutoMigration(from = 48, to = 49),
     ],
     exportSchema = true,
 )

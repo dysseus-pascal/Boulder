@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -23,6 +24,17 @@ data class NachtEntity(
     val ruhepuls: Int,
     /** RMSSD in ms; 0 = keine Messung. */
     val hrv: Int,
+    /** Akku in % beim Einschlafen und am Ende; null, wo die Firmware es nicht schickt. */
+    @ColumnInfo(defaultValue = "NULL")
+    val akkuBeginn: Int? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val akkuEnde: Int? = null,
+    /** Hing die Uhr nachts am Kabel? Dann sagt der Verbrauch nichts. */
+    @ColumnInfo(defaultValue = "0")
+    val geladen: Boolean = false,
+    /** Die Messstufe dieser Nacht (1..5); null bei aelterer Firmware. */
+    @ColumnInfo(defaultValue = "NULL")
+    val messstufe: Int? = null,
 )
 
 /**

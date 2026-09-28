@@ -43,7 +43,7 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
         val teile = b.getUByte().toInt()
         val hrv = b.getUShort().toInt()
         val anzahl = b.getUByte().toInt()
-        val passen = (groesse - KOPF_BYTES) / ABSCHNITT_BYTES
+        val passen = minOf(ABSCHNITTE_JE_SATZ, (groesse - KOPF_BYTES) / ABSCHNITT_BYTES)
         val abschnitte = (0 until minOf(anzahl, passen)).map {
             NachtAbschnittEntity(
                 beginnUtc = beginn,
@@ -52,13 +52,28 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
                 phase = b.getUByte().toInt(),
             )
         }
-        aus += NachtTeil(
-            NachtEntity(beginn, zuLokal, einschlafen, aufwachen, schlaf, ruhepuls, hrv),
-            teil, teile, abschnitte,
-        )
+        // AB FASSUNG 3 (Bit 1): hinter den 60 Abschnitten Akku und Messstufe. Die
+        // Stelle ist fest, egal wie viele Abschnitte belegt sind.
+        var nacht = NachtEntity(beginn, zuLokal, einschlafen, aufwachen, schlaf, ruhepuls, hrv)
+        if (version and 2 != 0 && groesse >= ANHANG_OFFSET + 4) {
+            b.getBytes(ANHANG_OFFSET - (KOPF_BYTES + abschnitte.size * ABSCHNITT_BYTES))
+            val akkuBeginn = b.getUByte().toInt()
+            val akkuEnde = b.getUByte().toInt()
+            val flags = b.getUByte().toInt()
+            val stufe = b.getUByte().toInt()
+            nacht = nacht.copy(
+                akkuBeginn = akkuBeginn.takeIf { it != 0xFF },
+                akkuEnde = akkuEnde.takeIf { it != 0xFF },
+                geladen = flags and 1 != 0,
+                messstufe = stufe.takeIf { it in 1..5 },
+            )
+        }
+        aus += NachtTeil(nacht, teil, teile, abschnitte)
     }
     return aus
 }
 
 private const val KOPF_BYTES = 24
 private const val ABSCHNITT_BYTES = 5
+private const val ABSCHNITTE_JE_SATZ = 60
+private const val ANHANG_OFFSET = KOPF_BYTES + ABSCHNITTE_JE_SATZ * ABSCHNITT_BYTES

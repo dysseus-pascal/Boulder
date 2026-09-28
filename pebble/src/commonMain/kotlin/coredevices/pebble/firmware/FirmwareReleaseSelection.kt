@@ -26,6 +26,12 @@ data class ReleaseTagVersion(
     val fourth: Int,
     val componentCount: Int,
     val raw: String,
+    /**
+     * Boulder: die laufende Nummer der Boulder-Firmware aus "-bN"
+     * (v4.38.1-b3 -> 3), auch hinter einem Entwicklungsbau
+     * (v4.38.1-b3-2-gabcdef12). 0 fuer offizielle Fassungen und alles andere.
+     */
+    val boulder: Int = 0,
 ) : Comparable<ReleaseTagVersion> {
     /**
      * The manufacturing line uses four-component tags (v4.9.142.x today).
@@ -35,10 +41,11 @@ data class ReleaseTagVersion(
     val isFactoryLine: Boolean get() = componentCount >= 4
 
     /** Suffixes are ignored: main-line release tags carry none, and recovery
-     * suffixes on watch-reported versions are handled via isRecovery flags. */
+     * suffixes on watch-reported versions are handled via isRecovery flags.
+     * Boulder: nur die Nummer nach "-b" zaehlt mit, nach allen Ziffern. */
     override fun compareTo(other: ReleaseTagVersion): Int = compareValuesBy(
         this, other,
-        { it.major }, { it.minor }, { it.patch }, { it.fourth },
+        { it.major }, { it.minor }, { it.patch }, { it.fourth }, { it.boulder },
     )
 
     companion object {
@@ -46,6 +53,7 @@ data class ReleaseTagVersion(
         // (allowing an optional "-suffix") is rejected instead of being
         // prefix-truncated the way libpebble3's regex find() would.
         private val TAG_REGEX = Regex("""v?(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.*))?""")
+        private val BOULDER_REGEX = Regex("""b(\d+)(?:-.*)?""")
 
         fun from(tag: String): ReleaseTagVersion? {
             val trimmed = tag.trim()
@@ -58,6 +66,8 @@ data class ReleaseTagVersion(
                 fourth = components[3] ?: 0,
                 componentCount = components.count { it != null },
                 raw = trimmed,
+                boulder = BOULDER_REGEX.matchEntire(match.groupValues[5])
+                    ?.groupValues?.get(1)?.toIntOrNull() ?: 0,
             )
         }
     }
@@ -123,8 +133,11 @@ fun selectRelease(
         FirmwareUpdateChannel.Early -> mainLine.filter { it.hasAsset }.maxByOrNull { it.version }
         FirmwareUpdateChannel.Soaked -> {
             val byMinor = mainLine.groupBy { it.version.major to it.version.minor }
+            // BOULDER-FASSUNGEN WARTEN NICHT: sie sind vor dem Release auf der
+            // Uhr geprueft, und eine Woche Aufschub hielte eine Korrektur
+            // zurueck. Die Wartezeit gilt nur fuer offizielle Fassungen.
             val soakedMinors = byMinor.filterValues { minor ->
-                minor.minOf { it.publishedAt } + soak <= now
+                minor.any { it.version.boulder > 0 } || minor.minOf { it.publishedAt } + soak <= now
             }
             val target = soakedMinors.values.flatten().maxByOrNull { it.version } ?: return null
             if (target.hasAsset) {
@@ -144,6 +157,3 @@ fun selectRelease(
  * a documented constant so it can be tuned deliberately, not incidentally.
  */
 val SOAK_WINDOW: Duration = 7.days
-
-/** Boulder bietet keine neuere Firmware an als diese (siehe GithubReleases). */
-val FIRMWARE_HOECHSTENS: ReleaseTagVersion = ReleaseTagVersion.from("v4.38.1")!!

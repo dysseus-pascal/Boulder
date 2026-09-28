@@ -20,8 +20,9 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
- * Update checker for Core watches backed by the public PebbleOS GitHub
- * releases (fork builds ship no Memfault token, and cohorts rejects every
+ * Update checker for Core watches backed by GitHub releases - in Boulder
+ * those of the Boulder firmware (dysseus-pascal/boulder-firmware), formerly
+ * the public PebbleOS releases (fork builds ship no Memfault token, and cohorts rejects every
  * Core hardware revision, so upstream has no working source for these
  * watches here).
  *
@@ -61,12 +62,7 @@ class GithubReleases(
             is Fetched.Success -> fetched.releases
         }
         val revision = watch.platform.revision
-        // BOULDER: NICHTS UEBER 4.38.1. Ab 4.38.2 schickt die Uhr kein SpO2
-        // mehr in den Minutendaten (Commit b97d383, zurueck auf v13) - ein
-        // Update nahm Boulder also genau die Messung, fuer die es gebaut ist.
-        // Gilt, bis eine gepruefte Fassung SpO2 wieder liefert.
         val candidates = releases.mapNotNull { it.toCandidate(revision) }
-            .filter { it.selectable.version <= FIRMWARE_HOECHSTENS }
         val selected = selectRelease(candidates.map { it.selectable }, channel, clock.now())
         if (selected == null) {
             logger.w { "No selectable PebbleOS release for '$revision' among ${releases.size} releases" }
@@ -186,7 +182,11 @@ class GithubReleases(
     )
 
     companion object {
-        private const val RELEASES_URL = "https://api.github.com/repos/coredevices/PebbleOS/releases"
+        // BOULDER: DIE EIGENE FIRMWARE, nicht die von Core Devices. Sie liegt
+        // im oeffentlichen Repo boulder-firmware, weil der Fork mit dem
+        // Quellcode privat ist und diese Abfrage ohne Anmeldung laeuft. Die
+        // offizielle Firmware kennt weder die Boulder-Nacht noch Kieselsport.
+        private const val RELEASES_URL = "https://api.github.com/repos/dysseus-pascal/boulder-firmware/releases"
 
         // ~20 releases spans several weeks of both tag lines: enough history
         // for the soak policy and for the asset walk-forward on new hardware.

@@ -272,7 +272,7 @@ class GithubReleasesTest {
         assertEquals(1, requests.size)
         val request = requests.single()
         assertEquals("api.github.com", request.url.host)
-        assertEquals("/repos/coredevices/PebbleOS/releases", request.url.encodedPath)
+        assertEquals("/repos/dysseus-pascal/boulder-firmware/releases", request.url.encodedPath)
         // The only query parameter is the page size: no hardware, serial, or
         // version leaves the device.
         assertEquals(setOf("per_page"), request.url.parameters.names())
@@ -290,6 +290,36 @@ class GithubReleasesTest {
         val expectations = FirmwareArtifactExpectations()
         val checker = checker(standardBody(), expectations = expectations)
         checker.getLatestFirmware(testWatchInfo(WatchHardwarePlatform.CORE_ASTERIX, "v4.31.1"), FirmwareUpdateChannel.Soaked)
-        assertNull(expectations.lookup("https://github.com/coredevices/PebbleOS/releases/download/x/normal_asterix_v4.31.1.pbz"))
+        assertNull(expectations.lookup("https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/normal_asterix_v4.31.1.pbz"))
+    }
+
+    // --- Boulder-Firmware (v4.38.1-bN) ---
+
+    private fun boulderBody() = "[" + listOf(
+        releaseJson("v4.38.1-b2", 0, listOf(normalAsset("obelix_pvt", "v4.38.1-b2", digest('b'), 222))),
+        releaseJson("v4.38.1-b1", 3, listOf(normalAsset("obelix_pvt", "v4.38.1-b1", digest('a'), 111))),
+    ).joinToString(",") + "]"
+
+    @Test
+    fun boulderReleaseIsOfferedOnTheDayItAppears() = runTest {
+        // Ein Entwicklungsbau ohne Boulder-Nummer (so meldet sich die Uhr vor
+        // dem ersten Release): die neueste Boulder-Fassung, ohne Wartewoche.
+        val result = checker(boulderBody()).getLatestFirmware(
+            testWatchInfo(WatchHardwarePlatform.CORE_OBELIX_PVT, "v4.38.1-12-gb29995ee2"),
+            FirmwareUpdateChannel.Soaked,
+        )
+        val update = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(result)
+        assertEquals("v4.38.1-b2", update.version.stringVersion)
+        assertContains(update.url, "normal_obelix_pvt_v4.38.1-b2.pbz")
+    }
+
+    @Test
+    fun boulderReleaseIsNotOfferedAgainOnAFollowUpBuild() = runTest {
+        // Ein Bau nach b2 (b2 plus Commits) hat b2 schon.
+        val result = checker(boulderBody()).getLatestFirmware(
+            testWatchInfo(WatchHardwarePlatform.CORE_OBELIX_PVT, "v4.38.1-b2-3-gabcdef12"),
+            FirmwareUpdateChannel.Soaked,
+        )
+        assertIs<FirmwareUpdateCheckResult.FoundNoUpdate>(result)
     }
 }

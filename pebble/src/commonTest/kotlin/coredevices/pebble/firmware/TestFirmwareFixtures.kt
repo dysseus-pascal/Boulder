@@ -65,7 +65,7 @@ fun cohortsBody(sha256: String = "b".repeat(64)): String =
 
 fun assetJson(name: String, digestValue: String?, size: Long): String = buildString {
     append("""{"name":"$name",""")
-    append(""""browser_download_url":"https://github.com/coredevices/PebbleOS/releases/download/x/$name",""")
+    append(""""browser_download_url":"https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/$name",""")
     append(""""digest":${if (digestValue != null) "\"$digestValue\"" else "null"},""")
     append(""""size":$size,"content_type":"application/octet-stream"}""")
 }

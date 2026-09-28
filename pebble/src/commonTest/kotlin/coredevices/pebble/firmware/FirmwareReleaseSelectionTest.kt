@@ -218,4 +218,35 @@ class FirmwareReleaseSelectionTest {
         assertEquals("v4.31.0", selectRelease(releases, FirmwareUpdateChannel.Early, now)!!.version.raw)
         assertEquals("v4.31.0", selectRelease(releases, FirmwareUpdateChannel.Soaked, now)!!.version.raw)
     }
+
+    // --- Boulder-Nummer ---
+
+    @Test
+    fun boulderNumberIsParsedAndCompared() {
+        val b1 = ReleaseTagVersion.from("v4.38.1-b1")!!
+        val b2 = ReleaseTagVersion.from("v4.38.1-b2")!!
+        val b1dev = ReleaseTagVersion.from("v4.38.1-b1-4-gabcdef12-dirty")!!
+        val dev = ReleaseTagVersion.from("v4.38.1-12-gb29995ee2")!!
+        val offiziell = ReleaseTagVersion.from("v4.38.1")!!
+        assertEquals(1, b1.boulder)
+        assertEquals(1, b1dev.boulder)
+        assertEquals(0, dev.boulder)
+        assertEquals(0, offiziell.boulder)
+        assertTrue(b2 > b1)
+        assertTrue(b1 > offiziell)
+        assertTrue(b1 > dev)
+        assertEquals(0, b1.compareTo(b1dev))
+        // Eine neuere offizielle Grundlage bleibt neuer als jede Boulder-Nummer darauf.
+        assertTrue(ReleaseTagVersion.from("v4.39.0")!! > b2)
+    }
+
+    @Test
+    fun soakedChannelOffersAFreshBoulderReleaseAtOnce() {
+        val selected = selectRelease(
+            listOf(release("v4.38.1-b1", 0), release("v4.38.1-b2", 0)),
+            FirmwareUpdateChannel.Soaked,
+            now,
+        )
+        assertEquals("v4.38.1-b2", selected?.version?.raw)
+    }
 }

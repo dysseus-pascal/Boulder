@@ -42,7 +42,6 @@ open class Imaging(val message: Message) : PebblePacket(ProtocolEndpoint.IMAGING
         BlackWhite1Bit(0x00u),
         Color8Bit(0x01u),
         Palette4Bit(0x02u),
-        Palette4BitLz4Tiles(0x03u),
     }
 
     /**

@@ -76,7 +76,7 @@ class ImagingService(
             logger.w(e) { "image handler failed for token=$token (${width}x$height)" }
             null
         }
-        serveImage(token, type, image)
+        serveImage(token, type, image, pkt.format.get())
     }
 
     /**
@@ -88,8 +88,9 @@ class ImagingService(
         token: UByte,
         type: Imaging.ImageType,
         image: EncodedImage?,
+        requestedFormat: UByte = Imaging.Format.Palette4Bit.value,
     ) = sendLock.withLock {
-        val chunks = buildResponse(token, type, image)
+        val chunks = buildResponse(token, type, image, requestedFormat)
         logger.d { "responding token=$token type=$type: ${chunks.size} chunk(s), hasImage=${image != null}" }
         chunks.forEach { protocolHandler.send(it) }
     }
@@ -115,9 +116,6 @@ private const val IMAGE_FLAG_UNSUPPORTED = 0x08
 // types are therefore limited to 0..15.
 private const val IMAGE_FLAG_TYPE_SHIFT = 4
 private const val IMAGE_TYPE_MASK = 0x0F
-
-// Format byte in the image header (must match the firmware's ImagingFormat).
-private const val IMAGE_FORMAT_4BIT_PALETTE = 0x02
 
 // Pixel bytes per chunk; keeps each Pebble Protocol frame around 1 KB.
 private const val IMAGE_CHUNK_PIXELS = 1000
@@ -148,25 +146,33 @@ private fun flagsOnlyBody(token: UByte, typeByte: UByte, flags: Int): UByteArray
  * Split [image] into Imaging.Response chunks matching the firmware's wire format (after the command
  * byte the packet prepends):
  *   [token u8][flags u8][offset u32 LE][len u16 LE]([w u16][h u16][format u8][paletteCount u8][palette]) [pixels]
+ * Explicit format-3 album-art requests carry LZ4/raw tiles and append a u32 encoded length
+ * after the palette. This length counts tile headers and data, excluding the u32 itself.
  * The image header (dimensions, format + palette) rides on the first chunk only. A null image (or
  * one with no pixels) yields a single NO_IMAGE chunk so the watch falls back to its text screen.
  */
-private fun buildResponse(
+internal fun buildResponse(
     token: UByte,
     type: Imaging.ImageType,
     image: EncodedImage?,
+    requestedFormat: UByte = Imaging.Format.Palette4Bit.value,
 ): List<Imaging.Response> {
     if (image == null || image.pixels.isEmpty()) {
         return listOf(Imaging.Response(flagsOnlyBody(token, type.value, IMAGE_FLAG_NO_IMAGE)))
     }
-    val header = UByteArray(6 + image.palette.size)
+    val tiled = type == Imaging.ImageType.AlbumArt &&
+        requestedFormat == Imaging.Format.Palette4BitLz4Tiles.value
+    val pixels = if (tiled) TiledImageEncoder.encode(image) ?: return listOf(
+        Imaging.Response(flagsOnlyBody(token, type.value, IMAGE_FLAG_NO_IMAGE))
+    ) else image.pixels
+    val header = UByteArray(6 + image.palette.size + if (tiled) 4 else 0)
     le16(image.width, header, 0)
     le16(image.height, header, 2)
-    header[4] = IMAGE_FORMAT_4BIT_PALETTE.toUByte()
+    header[4] = if (tiled) Imaging.Format.Palette4BitLz4Tiles.value else Imaging.Format.Palette4Bit.value
     header[5] = image.palette.size.toUByte()
     image.palette.copyInto(header, 6)
 
-    val pixels = image.pixels
+    if (tiled) le32(pixels.size, header, 6 + image.palette.size)
     val total = pixels.size
     val chunks = mutableListOf<Imaging.Response>()
     var offset = 0

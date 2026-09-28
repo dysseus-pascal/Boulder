@@ -15,6 +15,9 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.NachtDao
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
@@ -98,8 +101,10 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
+        NachtEntity::class,
+        NachtAbschnittEntity::class,
     ],
-    version = 47,
+    version = 48,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -140,6 +145,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 45, to = 46),
         // Boulder: overlay_data.manual (selbst gestartet oder erkannt)
         AutoMigration(from = 46, to = 47),
+        // Boulder: boulder_nacht und boulder_nacht_abschnitt (Tag 88)
+        AutoMigration(from = 47, to = 48),
     ],
     exportSchema = true,
 )
@@ -160,6 +167,7 @@ abstract class Database : RoomDatabase() {
     abstract fun vibePatternDao(): VibePatternDao
     abstract fun healthDao(): HealthDao
     abstract fun spo2Dao(): Spo2Dao
+    abstract fun nachtDao(): NachtDao
     abstract fun healthStatDao(): HealthStatDao
     abstract fun watchPrefDao(): WatchPrefRealDao
     abstract fun weatherAppDao(): WeatherAppRealDao

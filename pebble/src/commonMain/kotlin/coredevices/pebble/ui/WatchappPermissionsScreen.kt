@@ -100,11 +100,11 @@ fun WatchappPermissionsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         item {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Some watchfaces and apps run code inside Gravel to fetch things like " +
+                    "Some watchfaces and apps run code inside Boulder to fetch things like " +
                         "weather. The defaults and per-app choices below control what that " +
                         "code can reach. Companion apps on your phone are separate Android " +
                         "apps with their own permissions; the switches further down decide " +
-                        "whether Gravel talks to them at all. Turning access off can stop " +
+                        "whether Boulder talks to them at all. Turning access off can stop " +
                         "features that rely on it, such as third-party weather, from working " +
                         "for those apps.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -236,12 +236,12 @@ fun WatchappPermissionsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
 
 private const val CLASSIC_PEBBLEKIT_INFO =
     "Classic PebbleKit is how apps made for the original Pebble phone app talk to " +
-        "watchapps. It works by broadcasting: Gravel hands what the watch sends to every " +
+        "watchapps. It works by broadcasting: Boulder hands what the watch sends to every " +
         "app on the phone that listens, because classic PebbleKit names no recipient and " +
         "defines no permission that delivery could be limited to.\n\n" +
         "Every watchapp and watchface that does not name a PebbleKit 2 companion gets a " +
         "classic PebbleKit session when it runs on the watch. That includes watchfaces " +
-        "that only run code inside Gravel and apps with no companion at all. While classic " +
+        "that only run code inside Boulder and apps with no companion at all. While classic " +
         "PebbleKit is on, whatever those apps send from the watch can be received by any " +
         "app on your phone, and any app can send messages to them.\n\n" +
         "It is off by default for that reason. Turn it on if you use a companion app made " +
@@ -337,7 +337,7 @@ fun WatchappPermissionControls(uuid: Uuid, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 4.dp),
         )
         Text(
-            "If this app runs code inside Gravel (many watchfaces do, to fetch weather), " +
+            "If this app runs code inside Boulder (many watchfaces do, to fetch weather), " +
                 "these control what that code can reach. They do not cover a separate " +
                 "companion app on your phone, which uses its own Android permissions. " +
                 "Turning internet off can stop features that need it, such as third-party " +
@@ -362,7 +362,7 @@ fun WatchappPermissionControls(uuid: Uuid, modifier: Modifier = Modifier) {
         // has PebbleKit JS, so the wording is conditional.
         if (!shouldRunPkjs(hasPkjs = true, networkGranted, networkDenyEnforced)) {
             Text(
-                "If this app runs code inside Gravel, it doesn't run while internet access " +
+                "If this app runs code inside Boulder, it doesn't run while internet access " +
                     "is off, so features that depend on it won't work.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

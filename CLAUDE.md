@@ -1,3 +1,20 @@
+# Boulder
+
+Dieses Repo ist **Boulder**, ein Fork von Gravel (unten beschrieben). Es gelten
+die Regeln von Gravel, mit diesen Abweichungen:
+
+- App-Kennung `ch.dysseus.boulder`, Name Boulder. Fassung in `BOULDER_VERSION`,
+  versionCode = Zahl der Commits. Kein F-Droid, keine `version.properties`.
+- Direkt auf `main`, jede neue Fassung wird durch die CI ein Release
+  (`.github/release/<fassung>.md`, deutsch, erste Zeile Titel ohne Nummer).
+- Gravels Health-Teil wird durch den von Kiesel-Helper ersetzt; Datalogging,
+  Parser und Rohdaten-Tabellen der Minutendaten bleiben als Quelle.
+- Firmware: nichts ueber 4.38.1 anbieten (`FIRMWARE_HOECHSTENS`).
+- Neuer eigener Code: deutsche Bezeichner und Kommentare, Kommentare erklaeren
+  das WARUM.
+
+---
+
 # Gravel
 
 Gravel is an **unofficial, Android-only fork** of the Core Devices Pebble

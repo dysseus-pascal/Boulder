@@ -37,22 +37,9 @@ val gitVersionCode = providers.exec {
     it.trim().toIntOrNull() ?: throw GradleException("Error reading current commit count")
 }
 
-// Fork: described from HEAD, so the value is a function of the built commit:
-// exactly the tag name on a tag checkout, "<tag>-<n>-g<sha>" past one, and
-// "unknown" when no tag is reachable. Upstream derives it from the newest tag
-// anywhere in the repository, so an older tag rebuilt after a newer one
-// exists reports the newer version and every branch reports the newest tag.
-// F-Droid builds a tag checkout and requires the built versionName to equal
-// the one declared for that tag, which needs the per-commit derivation.
-// The walk follows the first-parent line only: every upstream sync merge
-// makes upstream's tags reachable through its second parent, and git
-// describe gives up after ten candidate tags, so without this a non-tag
-// build reports the newest upstream tag. A release tag therefore sits on
-// master's first-parent line, which tagging the release commit gives.
-val gitVersionName = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "describe", "--tags", "--first-parent", "HEAD")
-}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }
+// Boulder: die Fassung steht in BOULDER_VERSION, wie "version" in den
+// package.json der Uhr-Apps. Die CI legt zu jeder neuen Fassung ein Release an.
+val boulderVersionName = rootProject.file("BOULDER_VERSION").readText().trim()
 
 android {
     namespace = "coredevices.coreapp"
@@ -70,10 +57,10 @@ android {
     }
 
     defaultConfig {
-        // Fork identity: the installed package is Gravel's. The Kotlin namespace above
+        // Fork identity: the installed package is Boulder. The Kotlin namespace above
         // deliberately stays "coredevices.coreapp" so source packages match upstream and
         // merges stay cheap; only the applicationId is rebranded.
-        applicationId = "com.anopticlabs.gravel.spo2"
+        applicationId = "ch.dysseus.boulder"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -491,75 +478,6 @@ abstract class VerifyApkContents : DefaultTask() {
     }
 }
 
-// Fork: F-Droid's update checker reads the versionCode of a tagged release from
-// androidApp/version.properties (the recipe's UpdateCheckData names that file);
-// it cannot count commits the way the build does. The file is bumped in the
-// commit that gets tagged, so on a tag checkout it must equal the count the
-// build itself uses, and anywhere else it names the last tagged release and only
-// its shape is checked. The task runs before every build (preBuild), so a tag
-// build with a stale file fails locally, in CI, and on the buildserver alike;
-// the unit-test copy of the check is FdroidGuardrailsTest, and F-Droid compares
-// the built APK against the recipe as a third, independent layer.
-val gitTagsAtHead = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "tag", "--points-at", "HEAD")
-}.let { exec ->
-    // Fail closed: an empty answer means "not a tag checkout" and skips the
-    // value check, so a git failure must not be mistaken for one.
-    exec.result.zip(exec.standardOutput.asText) { result, output ->
-        if (result.exitValue != 0) {
-            throw GradleException("git tag --points-at HEAD failed (exit ${result.exitValue}); cannot tell whether this is a tag checkout")
-        }
-        output.trim()
-    }
-}
-
-abstract class VerifyReleaseVersionFile : DefaultTask() {
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val versionFile: RegularFileProperty
-
-    /** Tags pointing at the built commit, one per line; empty on an untagged commit. */
-    @get:Input
-    abstract val tagsAtHead: Property<String>
-
-    @get:Input
-    abstract val builtVersionCode: Property<Int>
-
-    @TaskAction
-    fun verify() {
-        val file = versionFile.get().asFile
-        val text = file.readText()
-        // Same regex as FdroidGuardrailsTest.declaredVersionCode; LF only, so
-        // the three layers (this task, the test, the CI sed) agree on shape.
-        val declared = Regex("""versionCode=(\d+)\n?""").matchEntire(text)?.groupValues?.get(1)?.toIntOrNull()
-            ?: throw GradleException("$file must be exactly one line, versionCode=<digits>, but reads:\n$text")
-        val tags = tagsAtHead.get().lines().filter { it.isNotBlank() }
-        if (tags.isEmpty()) return
-        val built = builtVersionCode.get()
-        if (declared != built) {
-            throw GradleException(
-                "Tag ${tags.joinToString()} builds versionCode $built but $file declares $declared; " +
-                    "the release commit must set the file to the commit count it will have once committed.",
-            )
-        }
-    }
-}
-
-val verifyReleaseVersionFile = tasks.register<VerifyReleaseVersionFile>("verifyReleaseVersionFile") {
-    group = "verification"
-    description = "Fails a tag build whose version.properties disagrees with the built versionCode."
-    versionFile.set(layout.projectDirectory.file("version.properties"))
-    tagsAtHead.set(gitTagsAtHead)
-    builtVersionCode.set(gitVersionCode)
-}
-
-// preBuild is created by AGP after this script runs, hence configureEach.
-tasks.configureEach {
-    if (name == "preBuild") dependsOn(verifyReleaseVersionFile)
-}
-
 // Fork: FdroidGuardrailsTest and ExcludedAssetSentinelTest read the git-tracked
 // tree (build files, tracked binaries, sources) through git rather than
 // through declared task inputs, so Gradle cannot tell when their verdict is
@@ -578,7 +496,7 @@ androidComponents {
     onVariants { variant ->
         variant.outputs.forEach {
             it.versionCode.set(gitVersionCode)
-            it.versionName.set(gitVersionName)
+            it.versionName.set(boulderVersionName)
         }
 
         // Fork: artifact-level check of the packaging decisions above, for

@@ -55,7 +55,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coreapp.composeapp.generated.resources.Res
-import coreapp.composeapp.generated.resources.gravel_logo
+import coreapp.composeapp.generated.resources.boulder_logo
 import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.PreviewWrapper
@@ -172,8 +172,8 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Image(
-                            painter = painterResource(Res.drawable.gravel_logo),
-                            contentDescription = "Gravel logo",
+                            painter = painterResource(Res.drawable.boulder_logo),
+                            contentDescription = "Boulder logo",
                             colorFilter = ColorFilter.tint(Color.White),
                             modifier = Modifier.height(50.dp),
                         )
@@ -419,7 +419,7 @@ private fun WatchappPrivacyStage(onDone: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Some watchfaces and apps run code inside Gravel to fetch things like " +
+            text = "Some watchfaces and apps run code inside Boulder to fetch things like " +
                 "weather, which can use your internet connection and location. Choose what " +
                 "that code is allowed to do by default. Off is the safer choice, but can " +
                 "stop features that need it, such as third-party weather, from working; you " +

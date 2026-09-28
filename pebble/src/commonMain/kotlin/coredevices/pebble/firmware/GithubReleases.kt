@@ -61,7 +61,12 @@ class GithubReleases(
             is Fetched.Success -> fetched.releases
         }
         val revision = watch.platform.revision
+        // BOULDER: NICHTS UEBER 4.38.1. Ab 4.38.2 schickt die Uhr kein SpO2
+        // mehr in den Minutendaten (Commit b97d383, zurueck auf v13) - ein
+        // Update nahm Boulder also genau die Messung, fuer die es gebaut ist.
+        // Gilt, bis eine gepruefte Fassung SpO2 wieder liefert.
         val candidates = releases.mapNotNull { it.toCandidate(revision) }
+            .filter { it.selectable.version <= FIRMWARE_HOECHSTENS }
         val selected = selectRelease(candidates.map { it.selectable }, channel, clock.now())
         if (selected == null) {
             logger.w { "No selectable PebbleOS release for '$revision' among ${releases.size} releases" }

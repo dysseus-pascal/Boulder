@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulder: ein facettierter Felsbrocken, Licht von links oben. Liegt im
+     sicheren Kreis (66dp) der 108dp-Flaeche des adaptiven Symbols. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateY="-3">
+        <path android:fillColor="#D6D0C4" android:pathData="M30,52 L42,38 L60,33 L54,50 Z"/>
+        <path android:fillColor="#B5AEA1" android:pathData="M60,33 L76,40 L84,56 L54,50 Z"/>
+        <path android:fillColor="#A39C8F" android:pathData="M26,70 L30,52 L54,50 L44,81 Z"/>
+        <path android:fillColor="#7F786C" android:pathData="M54,50 L84,56 L82,72 L70,80 L44,81 Z"/>
+    </group>
+</vector>

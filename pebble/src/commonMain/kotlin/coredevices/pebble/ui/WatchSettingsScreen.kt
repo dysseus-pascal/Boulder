@@ -520,7 +520,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             listOfNotNull(
                 basicSettingsActionItem(
                     title = "App Update Available",
-                    description = "Please update the Gravel app!",
+                    description = "Please update the Boulder app!",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {

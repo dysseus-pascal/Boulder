@@ -144,3 +144,6 @@ fun selectRelease(
  * a documented constant so it can be tuned deliberately, not incidentally.
  */
 val SOAK_WINDOW: Duration = 7.days
+
+/** Boulder bietet keine neuere Firmware an als diese (siehe GithubReleases). */
+val FIRMWARE_HOECHSTENS: ReleaseTagVersion = ReleaseTagVersion.from("v4.38.1")!!

@@ -67,7 +67,7 @@ class ThemeTest {
         }
     }
 
-    // gravelPurple is darker than the orange it replaced, so black foregrounds that passed
+    // boulderGruen is darker than the orange it replaced, so black foregrounds that passed
     // WCAG AA on orange fail on it; every text role painted over a purple fill must clear 4.5:1.
     @Test
     fun `foregrounds over the brand purple meet WCAG AA for text`() {
@@ -83,7 +83,7 @@ class ThemeTest {
                     "onTertiary/tertiary" to (scheme.onTertiary to scheme.tertiary),
                 ).forEach { (pairName, colors) ->
                     val (foreground, background) = colors
-                    if (background == gravelPurple) {
+                    if (background == boulderGruen) {
                         val ratio = contrastRatio(foreground, background)
                         assertTrue(
                             ratio >= 4.5f,

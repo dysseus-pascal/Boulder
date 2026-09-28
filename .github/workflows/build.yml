@@ -30,7 +30,7 @@ jobs:
       - name: Version
         id: v
         run: |
-          ver="$(cat SPO2_VERSION)"
+          ver="$(cat BOULDER_VERSION)"
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --tags origin "v$ver" >/dev/null; then echo "neu=nein" >> "$GITHUB_OUTPUT"; else echo "neu=ja" >> "$GITHUB_OUTPUT"; fi
       - name: Fester Debug-Schlüssel
@@ -45,6 +45,6 @@ jobs:
           ver="${{ steps.v.outputs.ver }}"
           notes=".github/release/$ver.md"
           apk="$(ls androidApp/build/outputs/apk/debug/*.apk | head -n1)"
-          cp "$apk" gravel-spo2.apk
-          gh release create "v$ver" gravel-spo2.apk --target "$GITHUB_SHA" \
-            --title "$(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"
+          cp "$apk" boulder.apk
+          gh release create "v$ver" boulder.apk --target "$GITHUB_SHA" \
+            --title "$ver - $(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"

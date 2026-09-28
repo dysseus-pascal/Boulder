@@ -25,29 +25,29 @@ import org.jetbrains.compose.resources.StringResource
 import org.koin.compose.koinInject
 import theme.CoreAppTheme.Companion.asCoreAppTheme
 
-// Fork brand color, sampled from the Gravel logo artwork (art/gravel-logo.png).
+// Boulder: Moosgruen, die Farbe des Hintergrunds im App-Symbol.
 // Replaces upstream's coreOrange 0xFFFA4A36 everywhere; the launcher background in
 // util res/values/ic_launcher_background.xml is chosen to contrast with this.
-val gravelPurple = Color(0xFF9129DE)
+val boulderGruen = Color(0xFF4E7D5B)
 
-// Deepened brand purple for dialog surfaces under the onboarding scheme: white
+// Deepened brand green for dialog surfaces under the onboarding scheme: white
 // and 80 percent white body text clear the 4.5:1 AA contrast floor against this,
-// which they do not against a whitened purple. See onboardingScheme.
-val gravelPurpleDeep = lerp(gravelPurple, Color.Black, 0.2f)
+// which they do not against a whitened green. See onboardingScheme.
+val boulderGruenTief = lerp(boulderGruen, Color.Black, 0.2f)
 val coreGrey = Color(0xFF333333)
 val coreDarkGrey = Color(0xFF2B2930)
 val coreDarkGreen = Color(0xFF157a30)
 private val error = Color(0xFFFA6B66)
 val greyScheme = darkColorScheme(
-    primary = gravelPurple,
+    primary = boulderGruen,
     onPrimary = Color.White,
-    primaryContainer = gravelPurple,
+    primaryContainer = boulderGruen,
     onPrimaryContainer = Color.White,
-    secondary = gravelPurple,
+    secondary = boulderGruen,
     onSecondary = Color.White,
-    secondaryContainer = gravelPurple,
+    secondaryContainer = boulderGruen,
     onSecondaryContainer = Color.White,
-    tertiary = gravelPurple,
+    tertiary = boulderGruen,
     onTertiary = Color.White,
     tertiaryContainer = tertiaryContainerDark,
     onTertiaryContainer = onTertiaryContainerDark,
@@ -89,15 +89,15 @@ val blackScheme = greyScheme.copy(
 )
 
 val lightScheme = lightColorScheme(
-    primary = gravelPurple,
+    primary = boulderGruen,
     onPrimary = Color.White,
-    primaryContainer = gravelPurple,
+    primaryContainer = boulderGruen,
     onPrimaryContainer = Color.White,
-    secondary = gravelPurple,
+    secondary = boulderGruen,
     onSecondary = Color.White,
-    secondaryContainer = gravelPurple,
+    secondaryContainer = boulderGruen,
     onSecondaryContainer = Color.White,
-    tertiary = gravelPurple,
+    tertiary = boulderGruen,
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = tertiaryContainerLight,
     onTertiaryContainer = onTertiaryContainerLight,
@@ -126,32 +126,32 @@ val onboardingScheme = lightColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
     primaryContainer = Color.White,
-    onPrimaryContainer = gravelPurple,
+    onPrimaryContainer = boulderGruen,
     secondary = Color.White,
-    onSecondary = gravelPurple,
+    onSecondary = boulderGruen,
     secondaryContainer = Color.White,
-    onSecondaryContainer = gravelPurple,
+    onSecondaryContainer = boulderGruen,
     tertiary = Color.White,
-    onTertiary = gravelPurple,
-    background = gravelPurple,
+    onTertiary = boulderGruen,
+    background = boulderGruen,
     onBackground = Color.White,
-    surface = gravelPurple,
+    surface = boulderGruen,
     onSurface = Color.White,
-    surfaceVariant = gravelPurple,
+    surfaceVariant = boulderGruen,
     onSurfaceVariant = Color.White.copy(alpha = 0.8f),
     outline = Color.White.copy(alpha = 0.5f),
     outlineVariant = Color.White.copy(alpha = 0.3f),
-    scrim = gravelPurple,
-    surfaceContainer = gravelPurple,
+    scrim = boulderGruen,
+    surfaceContainer = boulderGruen,
     surfaceContainerHighest = Color.White.copy(alpha = 0.15f),
     // Material3 components draw on the container tiers (dialogs use
     // surfaceContainerHigh), and any tier left unset falls back to
     // lightColorScheme's near-white default, which renders this scheme's white
     // content colors invisible. Every tier must stay in the purple family;
     // legibility is pinned by OnboardingSchemeContrastTest.
-    surfaceContainerHigh = gravelPurpleDeep,
-    surfaceContainerLow = gravelPurple,
-    surfaceContainerLowest = gravelPurple,
+    surfaceContainerHigh = boulderGruenTief,
+    surfaceContainerLow = boulderGruen,
+    surfaceContainerLowest = boulderGruen,
     error = error,
     onError = Color.White,
     errorContainer = error,

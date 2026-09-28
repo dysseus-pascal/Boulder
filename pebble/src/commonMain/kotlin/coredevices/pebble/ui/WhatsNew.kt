@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
  * users on update. The popup auto-shows once per user per bump (`WhatsNewDialog` in
  * composeApp) and can be reopened any time from Settings > About.
  */
-const val WHATS_NEW_VERSION = 9
+const val WHATS_NEW_VERSION = 1
 
 /** A single announced change: a short heading and a sentence or two of body. */
 data class WhatsNewEntry(val title: String, val body: String)
@@ -33,80 +33,9 @@ data class WhatsNewEntry(val title: String, val body: String)
  */
 val whatsNewEntries: List<WhatsNewEntry> = listOf(
     WhatsNewEntry(
-        title = "The UDP block is off for now",
-        body = "Gravel 0.3.1 closed right after opening on LineageOS and systems built on " +
-            "it, because its new UDP block also stopped the phone's name lookups there. " +
-            "This version turns the UDP block off on every phone until Gravel can tell " +
-            "where it stops name lookups. While it is off, a watchface or app with " +
-            "internet access turned off does not run its code inside Gravel at all, and " +
-            "web pages inside Gravel have HTTP/3 and WebRTC over UDP again.",
-    ),
-    WhatsNewEntry(
-        title = "Internet access off covers more than web requests",
-        body = "With internet access turned off for a watchface or app, Gravel already " +
-            "refused the web requests of the code it runs. Connections that are not web " +
-            "requests, WebRTC for example, now have two layers of their own: Gravel " +
-            "blocks UDP sockets in its own process, and an app with internet access off " +
-            "runs in a sandboxed page set to allow no connections. Web pages inside " +
-            "Gravel lose HTTP/3 and WebRTC over UDP as a result. Changing the setting " +
-            "restarts the app's session. Also, Android 17 began permitting plain-HTTP " +
-            "connections to services on the phone itself; Gravel denies those again, as " +
-            "it does all other plain HTTP.",
-    ),
-    WhatsNewEntry(
-        title = "Companion apps are now your choice",
-        body = "Apps made for the original Pebble phone app talk to watchapps through " +
-            "classic PebbleKit, which broadcasts what any watchapp or watchface sends " +
-            "from the watch to every app on your phone that listens. That is now off by " +
-            "default. If a companion app of yours stops receiving watch data, turn it " +
-            "back on in Settings > Apps > Watch App Permissions. The newer PebbleKit 2, " +
-            "which only reaches apps a watchapp names, stays on and has its own switch. " +
-            "Notifications, replies and dictation are not affected.",
-    ),
-    WhatsNewEntry(
-        title = "A safer speech engine",
-        body = "The speech engine that transcribes your dictation now runs in an isolated " +
-            "process of its own, with no permissions, so a flaw reached through a speech " +
-            "model stays contained to that process.",
-    ),
-    WhatsNewEntry(
-        title = "Faster dictation, working in the background, and your own server",
-        body = "Speech recognition is optimized: the engine now uses the cores your phone " +
-            "actually gives it, and the model picker measures your phone, shows what " +
-            "each model costs, and offers a smaller one if needed for your device. " +
-            "Dictation with Gravel in the background or the screen locked, which used " +
-            "to fail on some phones, now works. And you can connect Gravel to your own " +
-            "self-hosted transcription server over https in Settings > Speech " +
-            "Recognition; nothing is sent unless you set one up.",
-    ),
-    WhatsNewEntry(
-        title = "Pictures on your wrist, and a store of your choosing",
-        body = "Notification images and album art now go to the watch when it asks for " +
-            "them, podcasts get seek instead of skip, and the weather app shows tomorrow " +
-            "hour by hour. You can add your own app store source in Settings; it is " +
-            "fetched only after you confirm it, with no account token and no search " +
-            "traffic. Firmware opened from a file now asks before installing.",
-    ),
-    WhatsNewEntry(
-        title = "Store search that waits for you",
-        body = "Searching the store now runs when you tap search, not while you type, " +
-            "so the store's search provider (Algolia) only ever sees what you submit, " +
-            "and it is asked not to keep analytics about it. Your own watchfaces and " +
-            "apps still filter as you type.",
-    ),
-    WhatsNewEntry(
-        title = "Changelogs and help that open properly",
-        body = "\"What's new in the app\" in Settings > About now shows Gravel's own " +
-            "changes (this notice), any time you want to reread it. PebbleOS release " +
-            "notes and the help centre open in your browser, replacing an in-app view " +
-            "that refused to load those pages.",
-    ),
-    WhatsNewEntry(
-        title = "Control what watchfaces and apps can reach",
-        body = "Watchfaces and apps can run code inside Gravel that uses the internet and " +
-            "your location. You can now turn that off, for everything or per app, in " +
-            "Settings > Apps > Watch App Permissions. It starts off for apps you already " +
-            "had installed; turn it on for the ones you trust.",
+        title = "Boulder",
+        body = "Boulder is Gravel with its own health features in place of the stock ones. " +
+            "This first version is Gravel renamed; the health part follows step by step.",
     ),
 )
 

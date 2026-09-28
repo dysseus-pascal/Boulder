@@ -1,1 +1,0 @@
-A de-googled, hardened fork of the Pebble companion app for de-googled phones

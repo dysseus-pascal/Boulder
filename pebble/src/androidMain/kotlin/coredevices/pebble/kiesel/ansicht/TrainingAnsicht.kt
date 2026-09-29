@@ -61,6 +61,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardDefaults
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Wochenrechnung
 import coredevices.pebble.health.HealthConnectPermissionBridge
@@ -94,7 +98,7 @@ internal fun Sport.zeichen(): ImageVector = when (this) {
 @Composable
 internal fun SportZeichen(sport: Sport, groesse: Int = 40) {
     Box(
-        Modifier.size(groesse.dp).background(Color(sport.farbe).copy(alpha = 0.18f), CircleShape),
+        Modifier.size(groesse.dp).background(Color(sport.farbe).copy(alpha = 0.28f), CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(sport.zeichen(), contentDescription = null, tint = Color(sport.farbe), modifier = Modifier.size((groesse * 0.6f).dp))
@@ -297,9 +301,24 @@ internal fun Karte(onClick: (() -> Unit)? = null, inhalt: @Composable () -> Unit
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { inhalt() }
     }
     // Die klickbare Variante: eine gewoehnliche Card nimmt Beruehrungen selbst an.
-    if (onClick != null) Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) { innen() }
-    else Card(Modifier.fillMaxWidth()) { innen() }
+    if (onClick != null) Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), colors = kartenFarben(), border = kartenRand()) { innen() }
+    else Card(Modifier.fillMaxWidth(), colors = kartenFarben(), border = kartenRand()) { innen() }
 }
+
+/**
+ * DUNKLER ALS DIE SEITE, NICHT HELLER. Materials Vorgabe legt die Karte auf
+ * die hellste Flaeche des Schemas - auf Boulders Grau ergab das hellgraue
+ * Kaesten mit blassen Farben darin, alles sah ausgewaschen aus. Eine dunkle
+ * Karte mit feinem Rand laesst Zahlen und Farben stehen; im hellen Schema
+ * bleibt sie hell, und der Rand trennt sie vom Weiss.
+ */
+@Composable
+internal fun kartenFarben(): CardColors = CardDefaults.cardColors(
+    containerColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh,
+)
+
+@Composable
+internal fun kartenRand(): BorderStroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
 /** Die letzten sieben Tage in einer Zeile: wie oft, wie lange, wie weit. */
 @Composable
@@ -330,7 +349,7 @@ internal fun Ueberschrift(text: String) {
         text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
     )
 }
@@ -338,7 +357,7 @@ internal fun Ueberschrift(text: String) {
 @Composable
 internal fun Wert(zahl: String, name: String) {
     Column {
-        Text(zahl, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(zahl, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -346,7 +365,7 @@ internal fun Wert(zahl: String, name: String) {
 @Composable
 private fun Zeile(t: TrainingEintrag, tippe: () -> Unit) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth().clickable(onClick = tippe)) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = tippe), colors = kartenFarben(), border = kartenRand()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             SportZeichen(t.sport)
             Spacer(Modifier.width(12.dp))

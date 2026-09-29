@@ -42,11 +42,14 @@ internal object Trainingsanalyse {
         if (punkte.size < 2) return emptyList()
         val start = punkte.first().zeit
         val weg = Spur.weg(punkte)
-        val roh = punkte.mapIndexed { i, p ->
+        // Ausreisser (NaN in weg) sind weder Weg noch Ort - sie fehlen hier.
+        val roh = punkte.indices.filter { !weg[it].isNaN() }.map { i ->
+            val p = punkte[i]
             val sprung = i > 0 && Spur.abstand(punkte[i - 1], p) > Spur.SPRUNG_MAX
             Streckenpunkt(weg[i], p.zeit - start, p.hoehe, 0.0, p.lat, p.lon, sprung)
         }
-        return roh.mapIndexed { i, p ->
+        if (roh.size < 2) return emptyList()
+        val geglaettet = roh.mapIndexed { i, p ->
             // Das Fenster: alle Punkte, die hoechstens fuenf Sekunden vor
             // und nach diesem liegen - aber nicht ueber einen Sprung: dort
             // vergeht Zeit ohne Weg, und das Tempo fiele auf null.
@@ -58,6 +61,98 @@ internal object Trainingsanalyse {
             val tempo = if (dt > 0) (roh[b].meter - roh[a].meter) / dt else 0.0
             p.copy(tempo = tempo.coerceIn(0.0, 30.0))
         }
+        // DER MEDIAN UEBER DREI NACHBARN NIMMT DIE SPITZE: ein einzelner
+        // GPS-Versatz bleibt auch im Fenster als Zacken auf 35 km/h stehen
+        // und wurde zur "Spitze" des Tages. Eine echte Abfahrt dauert laenger
+        // als ein Punkt und bleibt.
+        return geglaettet.mapIndexed { i, p ->
+            val vor = geglaettet.getOrNull(i - 1)?.takeIf { !p.nachSprung }
+            val nach = geglaettet.getOrNull(i + 1)?.takeIf { !it.nachSprung }
+            if (vor == null || nach == null) p
+            else p.copy(tempo = listOf(vor.tempo, p.tempo, nach.tempo).sorted()[1])
+        }
+    }
+
+    // --- Kalorien ---
+
+    /**
+     * Der Verbrauch aus dem Puls, in kcal - nach Keytel u. a. (2005).
+     *
+     * DIE UHR ZAEHLT KALORIEN AUS SCHRITTEN: eine Radfahrt mit Puls 130
+     * ergab 34 kcal. Aus Puls, Gewicht und Alter kommt man naeher heran -
+     * je Minute ein Wert, jeder Pulspunkt gilt bis zum naechsten, hoechstens
+     * eine Minute. Null, wenn Gewicht oder Alter fehlen; das ist eine
+     * Schaetzung, und ohne die beiden waere sie geraten.
+     *
+     * "Other" beim Geschlecht bekommt das Mittel beider Formeln.
+     */
+    fun kalorien(puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht): Double? {
+        if (puls.isEmpty() || gewichtKg < 20 || alter <= 0) return null
+        fun mann(hr: Double) = -55.0969 + 0.6309 * hr + 0.1988 * gewichtKg + 0.2017 * alter
+        fun frau(hr: Double) = -20.4022 + 0.4472 * hr - 0.1263 * gewichtKg + 0.074 * alter
+        var kj = 0.0
+        for (i in puls.indices) {
+            val minuten = (if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L) / 60.0
+            val hr = puls[i].bpm.toDouble()
+            val jeMinute = when (geschlecht) {
+                Geschlecht.Mann -> mann(hr)
+                Geschlecht.Frau -> frau(hr)
+                Geschlecht.Andere -> (mann(hr) + frau(hr)) / 2
+            }
+            kj += jeMinute.coerceAtLeast(0.0) * minuten
+        }
+        return kj / 4.184
+    }
+
+    enum class Geschlecht { Mann, Frau, Andere }
+
+    // --- Aussetzer des Sensors ---
+
+    /** Ein Einbruch um mehr als so viel unter den letzten guten Wert ... */
+    const val EINBRUCH_BPM = 25
+    /** ... der binnen so vieler Sekunden dorthin zurueckkehrt (drei Kurvenpunkte der Uhr) ... */
+    const val EINBRUCH_S = 45L
+    /** ... wobei "dorthin" so viel Spiel hat. */
+    const val RUECKKEHR_BPM = 15
+
+    /**
+     * Kurze Einbrueche aus der Pulskurve nehmen.
+     *
+     * DER SENSOR VERLIERT AM LENKER KURZ DEN KONTAKT und meldet dann zehn,
+     * zwanzig Sekunden lang einen Wert weit unter dem Puls - oft den Tritt
+     * statt des Herzens. Die Kurve faellt auf 90 und springt zurueck; ein
+     * Herz macht das nicht. Solche Punkte fallen weg: die Kurve laeuft
+     * darueber hinweg, und Schnitt, Maximum und Zonen rechnen ohne sie.
+     *
+     * NUR NACH UNTEN: der Anstieg am Anfang eines Trainings ist echt und
+     * schnell, und wer sprintet, hat den Sprung nach oben verdient. Ein
+     * echter Abfall (Ampel, Pause) kommt nicht binnen einer halben Minute
+     * zurueck und bleibt ebenfalls.
+     */
+    fun entstoert(puls: List<Pulspunkt>): List<Pulspunkt> {
+        if (puls.size < 3) return puls
+        val aus = ArrayList<Pulspunkt>(puls.size)
+        var i = 0
+        while (i < puls.size) {
+            val p = puls[i]
+            val gut = aus.lastOrNull()
+            if (gut == null || gut.bpm - p.bpm <= EINBRUCH_BPM) {
+                aus += p
+                i++
+                continue
+            }
+            // Ein Sprung nach unten: kommt die Kurve gleich wieder hoch?
+            var j = i + 1
+            while (j < puls.size && puls[j].sekunde - gut.sekunde <= EINBRUCH_S && abs(puls[j].bpm - gut.bpm) > RUECKKEHR_BPM) j++
+            val aussetzer = j < puls.size && puls[j].sekunde - gut.sekunde <= EINBRUCH_S
+            if (aussetzer) {
+                i = j
+            } else {
+                aus += p
+                i++
+            }
+        }
+        return aus
     }
 
     // --- Pulszonen ---

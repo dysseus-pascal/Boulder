@@ -59,6 +59,59 @@ class TrainingsanalyseTest {
     }
 
     @Test
+    fun kalorienAusDemPuls() {
+        // Eine Stunde bei 130: rund 730 kcal fuer einen Mann von 80 kg und
+        // 40 Jahren, deutlich weniger fuer eine Frau von 60 kg.
+        val puls = (0..360).map { Pulspunkt(it * 10L, 130) }
+        val er = Trainingsanalyse.kalorien(puls, 80.0, 40, Trainingsanalyse.Geschlecht.Mann)!!
+        val sie = Trainingsanalyse.kalorien(puls, 60.0, 40, Trainingsanalyse.Geschlecht.Frau)!!
+        assertEquals(730.0, er, 15.0)
+        assertTrue("sie $sie", sie in 400.0..560.0)
+        assertTrue(Trainingsanalyse.kalorien(puls, 0.0, 40, Trainingsanalyse.Geschlecht.Mann) == null)
+    }
+
+    @Test
+    fun einbruchFaelltWeg() {
+        // Alle 10 s ein Punkt um 130; nach 60 s dreissig Sekunden lang 90,
+        // dann wieder 130 - der Sensor am Lenker.
+        val puls = (0..15).map { i ->
+            Pulspunkt(i * 10L, if (i in 6..8) 90L else 130L)
+        }
+        val e = Trainingsanalyse.entstoert(puls)
+        assertEquals(13, e.size)
+        assertTrue(e.none { it.bpm == 90L })
+        assertEquals(130L, e.maxOf { it.bpm })
+        assertEquals(130L, e.minOf { it.bpm })
+    }
+
+    @Test
+    fun echterAbfallBleibt() {
+        // An der Ampel: von 140 auf 100 und dort geblieben.
+        val puls = (0..15).map { i -> Pulspunkt(i * 10L, if (i < 6) 140L else 100L) }
+        assertEquals(puls, Trainingsanalyse.entstoert(puls))
+    }
+
+    @Test
+    fun anstiegAmAnfangBleibt() {
+        // Der Puls kommt in 30 s von 85 auf 125 und ein Zacken faellt kurz
+        // auf 92: der Anstieg ist echt, der Zacken nicht.
+        val puls = listOf(85L, 110L, 125L, 92L, 128L, 130L, 131L).mapIndexed { i, b -> Pulspunkt(i * 10L, b) }
+        val e = Trainingsanalyse.entstoert(puls)
+        assertEquals(listOf(85L, 110L, 125L, 128L, 130L, 131L), e.map { it.bpm })
+    }
+
+    @Test
+    fun ausreisserMachtKeineSpitze() {
+        // Ein einzelner Punkt 40 m voraus: er zaehlte 80 m in zwei Sekunden
+        // und war die Spitze des Tages.
+        val punkte = gerade(60).mapIndexed { i, p -> if (i == 30) p.copy(lon = p.lon + 4 * 0.000131) else p }
+        val s = Trainingsanalyse.strecke(punkte)
+        assertEquals(60, s.size)
+        assertTrue("Spitze ${s.maxOf { it.tempo }}", s.maxOf { it.tempo } < 12.0)
+        assertEquals(Spur.laenge(gerade(60)), s.last().meter, 1.0)
+    }
+
+    @Test
     fun pulsUeberStreckeLiegtZwischenDenPunkten() {
         val s = Trainingsanalyse.strecke(gerade(60))
         val p = Trainingsanalyse.pulsUeberStrecke(listOf(Pulspunkt(30, 120)), s)

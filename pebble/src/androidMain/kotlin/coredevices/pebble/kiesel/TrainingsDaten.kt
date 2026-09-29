@@ -16,16 +16,20 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 
-/** Die Sportarten, wie die Ansicht sie zeigt - Farbe aus Kiesel-Helper. */
+/**
+ * Die Sportarten, wie die Ansicht sie zeigt. Die Toene sind die aus
+ * Kiesel-Helper, KRAEFTIGER: auf Boulders Grau wirkten die gedeckten
+ * Erdfarben ausgewaschen.
+ */
 internal enum class Sport(val farbe: Long) {
-    Laufen(0xFFC0582B),
-    Bike(0xFFB7862A),
-    Mtb(0xFFB7862A),
-    Wandern(0xFF6E7F3A),
-    Kraft(0xFF8A3B2E),
-    Yoga(0xFF7A4E7E),
-    Schwimmen(0xFF2E7C8A),
-    Anderes(0xFF7D6B5D);
+    Laufen(0xFFE8622E),
+    Bike(0xFFE2A422),
+    Mtb(0xFFE2A422),
+    Wandern(0xFF8DB53C),
+    Kraft(0xFFD9453A),
+    Yoga(0xFFA85CB4),
+    Schwimmen(0xFF2CB0C6),
+    Anderes(0xFF9C8B7C);
 
     /**
      * Der Name als Ressource. ALS GETTER, nicht als Feld: sonst luede schon
@@ -211,7 +215,11 @@ internal object TrainingsDaten {
         )
     }
 
-    /** Der Puls waehrend des Trainings - aus der Akte, so bekommt auch ein fremdes seine Kurve. */
+    /**
+     * Der Puls waehrend des Trainings - aus der Akte, so bekommt auch ein
+     * fremdes seine Kurve. Entstoert beim Lesen, nicht beim Schreiben: in
+     * der Akte bleibt, was der Sensor mass.
+     */
     private suspend fun puls(klient: HealthConnectClient, s: ExerciseSessionRecord): List<Pulspunkt> = try {
         klient.readRecords(
             ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(s.startTime, s.endTime))
@@ -220,6 +228,7 @@ internal object TrainingsDaten {
             .filter { !it.time.isBefore(s.startTime) && !it.time.isAfter(s.endTime) }
             .sortedBy { it.time }
             .map { Pulspunkt(Duration.between(s.startTime, it.time).seconds, it.beatsPerMinute) }
+            .let(Trainingsanalyse::entstoert)
     } catch (e: Exception) {
         emptyList()
     }

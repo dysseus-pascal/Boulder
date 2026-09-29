@@ -136,7 +136,7 @@ internal object Spur {
      */
     const val SPRUNG_MAX = 200.0
 
-    fun laenge(punkte: List<Punkt>): Double = weg(punkte).lastOrNull() ?: 0.0
+    fun laenge(punkte: List<Punkt>): Double = weg(punkte).lastOrNull { !it.isNaN() } ?: 0.0
 
     /**
      * Der zurueckgelegte Weg bis zu jedem Punkt.
@@ -146,26 +146,50 @@ internal object Spur {
      * Zittern ergaben aus neun Minuten Warten fast sechs Kilometer. Gemessen
      * wird darum vom letzten gezaehlten Punkt aus, und erst ein Abstand ueber
      * der Genauigkeit beider Punkte gilt als Bewegung.
+     *
+     * EIN AUSREISSER IST KEIN WEG. Das GPS setzt einen Punkt mal vierzig
+     * Meter neben die Fahrt und den naechsten wieder auf sie; ohne Pruefung
+     * zaehlte das achtzig Meter in drei Sekunden und war die "Spitze" des
+     * Tages. Ist der Umweg ueber einen Punkt um mehr als das Doppelte der
+     * Genauigkeit laenger als der direkte Weg zum naechsten, UND kaeme man
+     * nur mit ueber [AUSREISSER_MS] dorthin, faellt er weg: NaN im Ergebnis,
+     * damit auch die Karte ihn nicht zeichnet. Die Geschwindigkeit trennt ihn
+     * von der Kehre auf derselben Strasse - die sieht gleich aus, aber
+     * niemand wendet mit zwanzig Sachen in einem Messtakt.
      */
+    const val AUSREISSER_MS = 6.0
+
     fun weg(punkte: List<Punkt>): DoubleArray {
         val weg = DoubleArray(punkte.size)
         var anker = 0
+        var letzter = 0.0
         for (i in 1 until punkte.size) {
-            weg[i] = weg[i - 1]
+            weg[i] = letzter
             if (abstand(punkte[i - 1], punkte[i]) > SPRUNG_MAX) {
                 anker = i
                 continue
             }
             val d = abstand(punkte[anker], punkte[i])
-            // Ohne gemeldete Genauigkeit (NaN, aeltere Spuren) zaehlt jeder Schritt.
-            val schwelle = maxOf(punkte[anker].genauigkeit, punkte[i].genauigkeit).takeUnless { it.isNaN() } ?: 0f
-            if (d >= schwelle) {
-                weg[i] += d
-                anker = i
+            val schwelle = genauigkeit(punkte[anker], punkte[i])
+            if (d < schwelle) continue
+            val naechster = punkte.getOrNull(i + 1)
+            val dt = (punkte[i].zeit - punkte[anker].zeit).coerceAtLeast(1)
+            if (naechster != null && abstand(punkte[i], naechster) <= SPRUNG_MAX && d / dt > AUSREISSER_MS &&
+                d + abstand(punkte[i], naechster) - abstand(punkte[anker], naechster) > 2 * schwelle.coerceAtLeast(5f)
+            ) {
+                weg[i] = Double.NaN
+                continue
             }
+            letzter += d
+            weg[i] = letzter
+            anker = i
         }
         return weg
     }
+
+    /** Die Ungenauigkeit zweier Punkte zusammen; ohne gemeldete (NaN, aeltere Spuren) null. */
+    private fun genauigkeit(a: Punkt, b: Punkt): Float =
+        maxOf(a.genauigkeit, b.genauigkeit).takeUnless { it.isNaN() } ?: 0f
 
     /**
      * Abstand zweier Punkte nach der Haversine-Formel.

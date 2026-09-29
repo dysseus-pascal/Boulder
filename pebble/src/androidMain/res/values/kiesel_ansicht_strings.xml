@@ -11,6 +11,7 @@
     <string name="ks_t_tempo">Pace</string>
     <string name="ks_t_tempo_rad">Speed</string>
     <string name="ks_t_aufstieg">Ascent</string>
+    <string name="ks_t_kcal">kcal (from HR)</string>
     <string name="ks_t_strecke">Distance</string>
     <string name="ks_t_zeit">Time</string>
     <string name="ks_t_trainings">Workouts</string>

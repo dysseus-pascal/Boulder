@@ -78,6 +78,15 @@ class SpurTest {
     }
 
     @Test
+    fun `eine Kehre bleibt ein Weg`() {
+        // Hin und zurueck auf derselben Strasse, 100 m weit: kein Ausreisser,
+        // sondern eine Wende - und 200 m Weg.
+        val hin = (0..10).map { i -> Spur.Punkt(i * 3L, 47.0, 8.0 + i * 0.000131, null, 5f) }
+        val zurueck = (1..10).map { i -> Spur.Punkt(30 + i * 3L, 47.0, 8.0 + (10 - i) * 0.000131, null, 5f) }
+        assertEquals(200.0, Spur.laenge(hin + zurueck), 6.0)
+    }
+
+    @Test
     fun `eine einzelne Messung hat keine Laenge`() {
         assertEquals(0.0, Spur.laenge(listOf(p(0, 1.0, 1.0))), 0.001)
         assertEquals(0.0, Spur.laenge(emptyList()), 0.001)

@@ -99,7 +99,9 @@ internal fun Verlauf(
         var tief = punkte.minOf { it.wert }
         var hoch = punkte.maxOf { it.wert }
         val luft = ((hoch - tief) * 0.1).coerceAtLeast(1.0)
-        tief -= luft
+        // Die Luft unter der Linie geht nicht unter null: ein Tempo von
+        // "-4 km/h" gibt es nicht. Die Steigung darf, sie ist auch negativ.
+        tief = if (tief >= 0) (tief - luft).coerceAtLeast(0.0) else tief - luft
         hoch += luft
         val spanne = (hoch - tief).coerceAtLeast(0.1)
 
@@ -108,12 +110,12 @@ internal fun Verlauf(
 
         // Baender hinter allem - erst die senkrechten, dann die waagrechten.
         xBaender.forEach { (von, bis) ->
-            drawRect(ton.copy(alpha = 0.16f), Offset(x(von), kopf), Size(x(bis) - x(von), boden - kopf))
+            drawRect(ton.copy(alpha = 0.22f), Offset(x(von), kopf), Size(x(bis) - x(von), boden - kopf))
         }
         baender.forEach { (von, bis, farbe) ->
             val yo = y(bis.coerceAtMost(hoch)).coerceAtLeast(kopf)
             val yu = y(von.coerceAtLeast(tief)).coerceAtMost(boden)
-            if (yu > yo) drawRect(farbe.copy(alpha = 0.14f), Offset(links, yo), Size(size.width - links, yu - yo))
+            if (yu > yo) drawRect(farbe.copy(alpha = 0.26f), Offset(links, yo), Size(size.width - links, yu - yo))
         }
 
         // Drei Rasterlinien mit Wert.
@@ -137,7 +139,7 @@ internal fun Verlauf(
                 lineTo(x(punkte.first().meter), boden)
                 close()
             }
-            drawPath(f, Brush.verticalGradient(listOf(ton.copy(alpha = 0.33f), ton.copy(alpha = 0f)), kopf, boden))
+            drawPath(f, Brush.verticalGradient(listOf(ton.copy(alpha = 0.4f), ton.copy(alpha = 0f)), kopf, boden))
         }
         val breite = 2.5.dp.toPx()
         if (farbeJeWert == null) {

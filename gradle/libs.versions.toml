@@ -163,3 +163,5 @@ coredevices-krispPrivate = { group = "coredevices.krispkmp", name = "library", v
 # while its absence makes that fail at configuration time.
 # health-kmp 1.4.0 doesn't model OxygenSaturation, so we depend on connect-client directly.
 health-connect = { module = "androidx.health.connect:connect-client", version = "1.1.0" }
+# Boulder: Karten fuer die Trainingsansicht (Kieselsport), wie in Kiesel-Helper.
+osmdroid = { module = "org.osmdroid:osmdroid-android", version = "6.1.20" }

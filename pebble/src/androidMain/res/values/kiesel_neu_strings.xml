@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: neue Texte (Englisch, Deutsch). -->
+<resources>
+    <string name="ks_n_training">Training</string>
+    <string name="ks_n_protokoll">Log</string>
+    <string name="ks_n_protokoll_leer">Nothing received from Kieselsport yet.</string>
+    <string name="ks_n_akte_rechte">Health Connect access</string>
+    <string name="ks_n_akte_rechte_text">To show your workouts with heart rate, Boulder needs to read workouts, heart rate and SpO2 from Health Connect.</string>
+    <string name="ks_n_erlauben">Allow</string>
+    <string name="ks_n_puls">Heart rate</string>
+    <string name="ks_n_zonen">Time in zones</string>
+    <string name="ks_n_notiz">From the watch</string>
+    <string name="ks_n_quelle">from %1$s</string>
+    <string name="ks_n_akte_fehlt">Health Connect is not available on this phone.</string>
+    <string name="ks_n_kein_puls">No heart rate recorded.</string>
+    <string name="ks_n_spo2">SpO2 during the workout</string>
+</resources>

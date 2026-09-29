@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: neue Texte (Englisch, Deutsch). -->
+<resources>
+    <string name="ks_n_training">Training</string>
+    <string name="ks_n_protokoll">Protokoll</string>
+    <string name="ks_n_protokoll_leer">Von Kieselsport ist noch nichts angekommen.</string>
+    <string name="ks_n_akte_rechte">Zugriff auf Health Connect</string>
+    <string name="ks_n_akte_rechte_text">Um deine Trainings mit Puls zu zeigen, braucht Boulder Lesezugriff auf Trainings, Puls und SpO2 in Health Connect.</string>
+    <string name="ks_n_erlauben">Erlauben</string>
+    <string name="ks_n_puls">Puls</string>
+    <string name="ks_n_zonen">Zeit in Zonen</string>
+    <string name="ks_n_notiz">Von der Uhr</string>
+    <string name="ks_n_quelle">von %1$s</string>
+    <string name="ks_n_akte_fehlt">Health Connect ist auf diesem Telefon nicht verfügbar.</string>
+    <string name="ks_n_kein_puls">Kein Puls aufgezeichnet.</string>
+    <string name="ks_n_spo2">SpO2 während des Trainings</string>
+</resources>

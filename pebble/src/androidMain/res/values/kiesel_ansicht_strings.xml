@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_t_noch_keins">No workout yet</string>
+    <string name="ks_t_noch_keins_text">As soon as you finish one on the watch, it appears here — with the route if the phone was with you. Without Kieselsport on the watch this screen stays empty; workouts from other apps appear as soon as they are in the health record.</string>
+    <string name="ks_t_sieben_tage">THE LAST SEVEN DAYS</string>
+    <string name="ks_t_dauer">Duration</string>
+    <string name="ks_t_puls_schnitt">Avg HR</string>
+    <string name="ks_t_puls_max">Max HR</string>
+    <string name="ks_t_keine_strecke">No route — either the phone was not with you, or the location permission was missing.</string>
+    <string name="ks_t_tempo">Pace</string>
+    <string name="ks_t_tempo_rad">Speed</string>
+    <string name="ks_t_aufstieg">Ascent</string>
+    <string name="ks_t_strecke">Distance</string>
+    <string name="ks_t_zeit">Time</string>
+    <string name="ks_t_trainings">Workouts</string>
+    <string name="ks_t_saetze">%1$d sets  ·  %2$d reps</string>
+    <string name="ks_t_pause_schnitt">avg rest %1$d s</string>
+    <string name="ks_t_bahnen">%1$d lengths, %2$d s each on average (%3$d to %4$d s)</string>
+    <string name="ks_t_offen">NOT LOGGED</string>
+    <string name="ks_t_offen_text">Kieselsport recorded these routes, but Health Connect has no workout for them. Logging takes time and route from the GPS track and heart rate from Health Connect; calories and steps are missing.</string>
+    <string name="ks_t_ausblenden">Hide</string>
+    <string name="ks_t_eintragen">Log</string>
+    <string name="ks_t_welche_art">What was it?</string>
+    <string name="ks_abbrechen">Cancel</string>
+    <string name="ks_t_sieben_keins">None in the last seven days.</string>
+    <string name="ks_t_start">Start</string>
+    <string name="ks_t_ende">Finish</string>
+    <string name="ks_sport_laufen">Running</string>
+    <string name="ks_sport_bike">Bike</string>
+    <string name="ks_sport_mtb">Bike MTB</string>
+    <string name="ks_sport_wandern">Hiking</string>
+    <string name="ks_sport_kraft">Strength</string>
+    <string name="ks_sport_yoga">Yoga</string>
+    <string name="ks_sport_schwimmen">Swimming</string>
+    <string name="ks_zone_unter">below zone 1</string>
+    <string name="ks_zone_n">Zone %1$d · %2$s</string>
+    <string name="ks_zone_1">Recovery</string>
+    <string name="ks_zone_2">Base</string>
+    <string name="ks_zone_3">Endurance</string>
+    <string name="ks_zone_4">Threshold</string>
+    <string name="ks_zone_5">Maximum</string>
+    <string name="ks_ei_strecke_aufzeichnen">Record route</string>
+    <string name="ks_ei_standort_nicht">Location not allowed</string>
+    <string name="ks_ei_standort_nutzung">Only while in use — not enough</string>
+    <string name="ks_ei_standort_immer">Location always allowed</string>
+    <string name="ks_ei_kein_gps">The watch has no GPS. During a workout the phone records the route — with a visible notification in the bar, and only between start and stop. Without the permission the workout is still logged, just without a map.</string>
+    <string name="ks_ei_standort_erlauben">Allow location</string>
+    <string name="ks_ei_nur_nutzung_text">“Only while using the app” is not enough here. The workout starts on the watch while the phone is in your pocket and this app is closed — in that state Android allows no location, and the route would stay empty. “Allow all the time” is needed. Location is still only measured between start and stop of a workout.</string>
+    <string name="ks_ei_immer_erlauben">Allow all the time</string>
+    <plurals name="ks_t_n_trainings">
+        <item quantity="one">%1$d workout in three months</item>
+        <item quantity="other">%1$d workouts in three months</item>
+    </plurals>
+</resources>

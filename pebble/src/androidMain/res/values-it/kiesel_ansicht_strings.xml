@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_t_noch_keins">Ancora nessun allenamento</string>
+    <string name="ks_t_noch_keins_text">Appena ne concludi uno sull\'orologio, compare qui — con il percorso se il telefono era con te. Senza Kieselsport sull\'orologio questa schermata resta vuota; gli allenamenti di altre app compaiono appena sono nella cartella salute.</string>
+    <string name="ks_t_sieben_tage">GLI ULTIMI SETTE GIORNI</string>
+    <string name="ks_t_dauer">Durata</string>
+    <string name="ks_t_puls_schnitt">Battito medio</string>
+    <string name="ks_t_puls_max">Battito max</string>
+    <string name="ks_t_keine_strecke">Nessun percorso — o il telefono non era con te, o mancava il permesso di posizione.</string>
+    <string name="ks_t_tempo">Ritmo</string>
+    <string name="ks_t_tempo_rad">Velocità</string>
+    <string name="ks_t_aufstieg">Salita</string>
+    <string name="ks_t_strecke">Distanza</string>
+    <string name="ks_t_zeit">Tempo</string>
+    <string name="ks_t_trainings">Allenamenti</string>
+    <string name="ks_t_saetze">%1$d serie  ·  %2$d ripetizioni</string>
+    <string name="ks_t_pause_schnitt">pausa media %1$d s</string>
+    <string name="ks_t_bahnen">%1$d vasche, %2$d s ciascuna in media (da %3$d a %4$d s)</string>
+    <string name="ks_t_offen">NON REGISTRATO</string>
+    <string name="ks_t_offen_text">Kieselsport ha registrato questi percorsi, ma in Health Connect non c\u2019è un allenamento. Aggiungendolo, durata e percorso vengono dalla traccia GPS e il battito da Health Connect; calorie e passi mancano.</string>
+    <string name="ks_t_ausblenden">Nascondi</string>
+    <string name="ks_t_eintragen">Registra</string>
+    <string name="ks_t_welche_art">Che attività era?</string>
+    <string name="ks_abbrechen">Annulla</string>
+    <string name="ks_t_sieben_keins">Nessuno negli ultimi sette giorni.</string>
+    <string name="ks_t_start">Partenza</string>
+    <string name="ks_t_ende">Arrivo</string>
+    <string name="ks_sport_laufen">Corsa</string>
+    <string name="ks_sport_bike">Bici</string>
+    <string name="ks_sport_mtb">MTB</string>
+    <string name="ks_sport_wandern">Escursione</string>
+    <string name="ks_sport_kraft">Forza</string>
+    <string name="ks_sport_yoga">Yoga</string>
+    <string name="ks_sport_schwimmen">Nuoto</string>
+    <string name="ks_zone_unter">sotto la zona 1</string>
+    <string name="ks_zone_n">Zona %1$d · %2$s</string>
+    <string name="ks_zone_1">Recupero</string>
+    <string name="ks_zone_2">Base</string>
+    <string name="ks_zone_3">Resistenza</string>
+    <string name="ks_zone_4">Soglia</string>
+    <string name="ks_zone_5">Massimo</string>
+    <string name="ks_ei_strecke_aufzeichnen">Registra percorso</string>
+    <string name="ks_ei_standort_nicht">Posizione non consentita</string>
+    <string name="ks_ei_standort_nutzung">Solo durante l\'uso — troppo poco</string>
+    <string name="ks_ei_standort_immer">Posizione sempre consentita</string>
+    <string name="ks_ei_kein_gps">L\'orologio non ha GPS. Durante un allenamento il telefono registra il percorso — con una notifica visibile nella barra, e solo tra avvio e stop. Senza il permesso l\'allenamento viene comunque registrato, solo senza mappa.</string>
+    <string name="ks_ei_standort_erlauben">Consenti posizione</string>
+    <string name="ks_ei_nur_nutzung_text">«Solo durante l\'uso» qui non basta. L\'allenamento inizia sull\'orologio mentre il telefono è in tasca e questa app è chiusa — in questo stato Android non consente la localizzazione, e il percorso resterebbe vuoto. Serve «Consenti sempre». La posizione viene comunque misurata solo tra avvio e stop di un allenamento.</string>
+    <string name="ks_ei_immer_erlauben">Consenti sempre</string>
+    <plurals name="ks_t_n_trainings">
+        <item quantity="one">%1$d allenamento in tre mesi</item>
+        <item quantity="other">%1$d allenamenti in tre mesi</item>
+    </plurals>
+</resources>

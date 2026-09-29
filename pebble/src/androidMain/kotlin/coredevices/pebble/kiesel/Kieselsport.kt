@@ -316,20 +316,22 @@ internal object Kieselsport {
         val segmente = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende)
         val runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken) else emptyList()
 
-        val notiz = buildString {
-            if (puls > 0) append(context.getString(R.string.ks_a_puls_schnitt, puls.toInt()))
-            felder[SP_PULS_MAX]?.takeIf { it > 0 }?.let { append(", " + context.getString(R.string.ks_a_max, it.toInt())) }
+        // Als Liste, damit kein Komma vorn steht, wenn etwas fehlt - ohne
+        // Puls begann die Notiz in Kiesel-Helper mit ", 3.2 km".
+        val teile = buildList {
+            if (puls > 0) add(context.getString(R.string.ks_a_puls_schnitt, puls.toInt()))
+            felder[SP_PULS_MAX]?.takeIf { it > 0 }?.let { add(context.getString(R.string.ks_a_max, it.toInt())) }
             if (strecke > 0) {
-                append(", " + km(strecke) + " km (GPS)")
+                add(km(strecke) + " km (GPS)")
             } else {
-                felder[SP_METER]?.takeIf { it > 0 }?.let { append(", " + km(it.toDouble()) + " km") }
+                felder[SP_METER]?.takeIf { it > 0 }?.let { add(km(it.toDouble()) + " km") }
             }
-            if (kcal > 0) append(", $kcal kcal")
-            abschnittsnotiz(context, felder, abschnitte)?.let {
-                if (isNotEmpty()) append(" — ")
-                append(it)
-            }
-        }.ifBlank { null }
+            if (kcal > 0) add("$kcal kcal")
+        }
+        val notiz = listOfNotNull(
+            teile.joinToString(", ").ifBlank { null },
+            abschnittsnotiz(context, felder, abschnitte),
+        ).joinToString(" — ").ifBlank { null }
 
         // ERST MIT ALLEM, DANN OHNE DIE ABSCHNITTE: die Akte prueft Saetze und
         // Bahnen streng und weist im Zweifel den GANZEN Eintrag ab.
@@ -383,6 +385,53 @@ internal object Kieselsport {
         // Die Pulskurve, falls die Uhr sie schon geliefert hat.
         if (Pulskurve.eintragen(context, beginn)) meldung += ", " + context.getString(R.string.ks_a_pulskurve)
         return meldung
+    }
+
+    /**
+     * Ein Training nachtragen, von dem nur die Spur blieb - die Art weiss nur,
+     * wer dabei war, sie kommt deshalb vom Aufrufer.
+     *
+     * DIESELBE KENNUNG WIE BEIM NORMALEN WEG: kommt die Zusammenfassung doch
+     * noch, ersetzt sie diesen Eintrag. Kalorien und Schritte fehlen - die
+     * zaehlte die Uhr.
+     */
+    suspend fun nachtragen(context: Context, beginn: Long, art: Long): String {
+        val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
+        if (punkte.size < 2) return context.getString(R.string.ks_a_nicht_eingetragen)
+        val klient = Akte(context).bereit() ?: return context.getString(R.string.ks_g_akte_fehlt)
+        val anfang = Instant.ofEpochSecond(beginn)
+        val ende = Instant.ofEpochSecond(maxOf(punkte.last().zeit, beginn + 60))
+        val (satzart, name) = artAlsSatzart(context, art)
+        val strecke = Spur.laenge(punkte)
+        // Der Puls aus der Akte - nur der eigene, den Kieselsport geschickt hat.
+        val pulse = try {
+            klient.readRecords(
+                ReadRecordsRequest(
+                    androidx.health.connect.client.records.HeartRateRecord::class,
+                    TimeRangeFilter.between(anfang, ende),
+                )
+            ).records.filter { it.metadata.dataOrigin.packageName == context.packageName }
+                .flatMap { it.samples }.map { it.beatsPerMinute }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val notiz = buildString {
+            if (pulse.isNotEmpty()) {
+                append(context.getString(R.string.ks_a_puls_schnitt, pulse.average().toInt()))
+                append(", " + context.getString(R.string.ks_a_max, pulse.max().toInt()))
+                append(", ")
+            }
+            append(km(strecke) + " km (GPS)")
+        }
+        val satz = ExerciseSessionRecord(
+            startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
+            exerciseType = satzart, title = name, notes = notiz,
+            metadata = vonDerUhr("kieselsport-$beginn"),
+            exerciseRoute = routeAus(punkte),
+        )
+        val minuten = Duration.between(anfang, ende).toMinutes().toInt()
+        val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
+        return schreibe(context, satz, kurz).also { KieselVerlauf.merke(context, it) }
     }
 
     fun routeAus(punkte: List<Spur.Punkt>): ExerciseRoute = ExerciseRoute(punkte.map { p ->

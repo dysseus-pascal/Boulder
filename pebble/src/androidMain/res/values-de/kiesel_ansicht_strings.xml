@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_t_noch_keins">Noch kein Training</string>
+    <string name="ks_t_noch_keins_text">Sobald du auf der Uhr eines beendest, steht es hier — mit Strecke, wenn das Telefon dabei war. Ohne Kieselsport auf der Uhr bleibt dieser Schirm leer; Trainings anderer Apps erscheinen, sobald sie in der Gesundheitsakte stehen.</string>
+    <string name="ks_t_sieben_tage">DIE LETZTEN SIEBEN TAGE</string>
+    <string name="ks_t_dauer">Dauer</string>
+    <string name="ks_t_puls_schnitt">Puls Ø</string>
+    <string name="ks_t_puls_max">Puls max</string>
+    <string name="ks_t_keine_strecke">Keine Strecke — entweder war das Telefon nicht dabei, oder die Standortberechtigung fehlte.</string>
+    <string name="ks_t_tempo">Tempo</string>
+    <string name="ks_t_tempo_rad">Tempo</string>
+    <string name="ks_t_aufstieg">Aufstieg</string>
+    <string name="ks_t_strecke">Strecke</string>
+    <string name="ks_t_zeit">Zeit</string>
+    <string name="ks_t_trainings">Trainings</string>
+    <string name="ks_t_saetze">%1$d Sätze  ·  %2$d Wdh.</string>
+    <string name="ks_t_pause_schnitt">Pause Ø %1$d s</string>
+    <string name="ks_t_bahnen">%1$d Bahnen, je %2$d s im Schnitt (%3$d bis %4$d s)</string>
+    <string name="ks_t_offen">NICHT EINGETRAGEN</string>
+    <string name="ks_t_offen_text">Für diese Strecken hat Kieselsport aufgezeichnet, in Health Connect steht aber kein Training dazu. Nachtragen übernimmt Zeit und Route aus der GPS-Spur und den Puls aus Health Connect; Kalorien und Schritte fehlen.</string>
+    <string name="ks_t_ausblenden">Ausblenden</string>
+    <string name="ks_t_eintragen">Eintragen</string>
+    <string name="ks_t_welche_art">Was war es?</string>
+    <string name="ks_abbrechen">Abbrechen</string>
+    <string name="ks_t_sieben_keins">In den letzten sieben Tagen keines.</string>
+    <string name="ks_t_start">Start</string>
+    <string name="ks_t_ende">Ende</string>
+    <string name="ks_sport_laufen">Laufen</string>
+    <string name="ks_sport_bike">Bike</string>
+    <string name="ks_sport_mtb">Bike MTB</string>
+    <string name="ks_sport_wandern">Wandern</string>
+    <string name="ks_sport_kraft">Kraft</string>
+    <string name="ks_sport_yoga">Yoga</string>
+    <string name="ks_sport_schwimmen">Schwimmen</string>
+    <string name="ks_zone_unter">unter Zone 1</string>
+    <string name="ks_zone_n">Zone %1$d · %2$s</string>
+    <string name="ks_zone_1">Erholung</string>
+    <string name="ks_zone_2">Grundlage</string>
+    <string name="ks_zone_3">Ausdauer</string>
+    <string name="ks_zone_4">Schwelle</string>
+    <string name="ks_zone_5">Maximal</string>
+    <string name="ks_ei_strecke_aufzeichnen">Strecke aufzeichnen</string>
+    <string name="ks_ei_standort_nicht">Standort nicht erlaubt</string>
+    <string name="ks_ei_standort_nutzung">Nur während der Nutzung — zu wenig</string>
+    <string name="ks_ei_standort_immer">Standort immer erlaubt</string>
+    <string name="ks_ei_kein_gps">Die Uhr hat kein GPS. Während eines Trainings zeichnet das Telefon die Strecke auf — mit sichtbarer Meldung in der Leiste, und nur zwischen Start und Stop. Ohne die Erlaubnis wird das Training trotzdem eingetragen, nur ohne Karte.</string>
+    <string name="ks_ei_standort_erlauben">Standort erlauben</string>
+    <string name="ks_ei_nur_nutzung_text">»Nur während der Nutzung« genügt hier nicht. Das Training beginnt auf der Uhr, während das Telefon in der Tasche liegt und diese App zu ist — in diesem Zustand lässt Android keine Ortung zu, und die Strecke bliebe leer. Nötig ist »Immer erlauben«. Gemessen wird trotzdem nur zwischen Start und Stop eines Trainings.</string>
+    <string name="ks_ei_immer_erlauben">Immer erlauben</string>
+    <plurals name="ks_t_n_trainings">
+        <item quantity="one">%1$d Training in drei Monaten</item>
+        <item quantity="other">%1$d Trainings in drei Monaten</item>
+    </plurals>
+</resources>

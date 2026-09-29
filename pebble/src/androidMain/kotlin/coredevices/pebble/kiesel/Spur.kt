@@ -183,10 +183,13 @@ internal object Spur {
     fun hoehenmeter(punkte: List<Punkt>): Double {
         var summe = 0.0
         var bezug: Double? = null
-        punkte.forEach { p ->
-            val h = p.hoehe ?: return@forEach
+        punkte.forEachIndexed { i, p ->
+            val h = p.hoehe ?: return@forEachIndexed
+            // Nach einem Sprung beginnt die Hoehe neu: ein wiedergefundener
+            // Empfang (oder der erste Fix an einem alten Ort) ist kein Anstieg.
+            if (i > 0 && abstand(punkte[i - 1], p) > SPRUNG_MAX) { bezug = h; return@forEachIndexed }
             val b = bezug
-            if (b == null) { bezug = h; return@forEach }
+            if (b == null) { bezug = h; return@forEachIndexed }
             if (h - b >= STEIGUNG_MIN) { summe += h - b; bezug = h }
             else if (b - h >= STEIGUNG_MIN) { bezug = h }
         }

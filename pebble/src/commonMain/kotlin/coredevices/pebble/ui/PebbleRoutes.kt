@@ -73,6 +73,13 @@ object PebbleNavBarRoutes {
     @Serializable
     data object IndexRoute : NavBarRoute
 
+    // Boulder: die Trainingsansicht von Kieselsport.
+    @Serializable
+    data object TrainingRoute : NavBarRoute
+
+    @Serializable
+    data class TrainingDetailRoute(val id: String) : NavBarRoute
+
     @Serializable
     data class AppstoreSettingsRoute(
         val addSourceName: String? = null,
@@ -192,6 +199,13 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrainingRoute>(viewModel) {
+        TrainingScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrainingDetailRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TrainingDetailRoute = it.toRoute()
+        TrainingDetailScreen(topBarParams, nav, route.id)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

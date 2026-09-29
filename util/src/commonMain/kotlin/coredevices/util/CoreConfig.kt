@@ -93,7 +93,6 @@ data class CoreConfig(
     val interceptPKJSWeather: Boolean = true,
     val regularSyncInterval: Duration = 6.hours,
     val weatherSyncInterval: Duration = 1.hours,
-    val preferHealthTab: Boolean = true,
     val obfuscateSensitiveLogs: Boolean = true,
     val hidePermissionWarningBadges: Boolean = false,
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,

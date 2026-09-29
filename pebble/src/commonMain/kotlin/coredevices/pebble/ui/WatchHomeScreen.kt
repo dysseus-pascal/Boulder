@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Search
@@ -94,7 +93,6 @@ import com.russhwolf.settings.set
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
-import coreapp.pebble.generated.resources.health
 import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
 import coreapp.pebble.generated.resources.settings
@@ -175,12 +173,6 @@ class WatchHomeViewModel(
     val indexEnabled = coreConfig.flow.map {
         it.enableIndex
     }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.enableIndex)
-    val healthTrackingEnabled = libPebble.healthSettings.map {
-        it.trackingEnabled
-    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
-    val preferHealthTab = coreConfig.flow.map {
-        it.preferHealthTab
-    }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.preferHealthTab)
     val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow, hiddenFlow) { actions, searchState, title, canGoBack, hidden ->
         Params(actions, searchState, title, canGoBack, hidden)
     }.debounce(50.milliseconds)
@@ -224,8 +216,6 @@ fun WatchHomeScreen(
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
         val indexEnabled = viewModel.indexEnabled.collectAsState()
-        val healthEnabledValue = viewModel.healthTrackingEnabled.collectAsState()
-        val preferHealthTab = viewModel.preferHealthTab.collectAsState()
         val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
 
         // Create a SaveableStateHolder to preserve state for each tab
@@ -236,7 +226,6 @@ fun WatchHomeScreen(
         val watchfacesNavController = rememberNavController()
         val notificationsNavController = rememberNavController()
         val indexNavController = rememberNavController()
-        val healthNavController = rememberNavController()
         val settingsNavController = rememberNavController()
 
         val navControllers = remember(
@@ -244,7 +233,6 @@ fun WatchHomeScreen(
             watchfacesNavController,
             notificationsNavController,
             indexNavController,
-            healthNavController,
             settingsNavController
         ) {
             mapOf(
@@ -252,16 +240,10 @@ fun WatchHomeScreen(
                 WatchHomeNavTab.WatchFaces to watchfacesNavController,
                 WatchHomeNavTab.Notifications to notificationsNavController,
                 WatchHomeNavTab.Index to indexNavController,
-                WatchHomeNavTab.Health to healthNavController,
                 WatchHomeNavTab.Settings to settingsNavController,
             )
         }
-        val healthEnabled = healthEnabledValue.value
-        if (healthEnabled == null) {
-            return
-        }
-
-        val currentEntries = WatchHomeNavTab.navBarEntries(indexEnabled.value, healthEnabled, preferHealthTab.value)
+        val currentEntries = WatchHomeNavTab.navBarEntries(indexEnabled.value)
         val currentTab = viewModel.selectedTab.value.let { tab ->
             if (tab in currentEntries) tab else currentEntries.first().also { viewModel.selectedTab.value = it }
         }
@@ -588,7 +570,7 @@ fun WatchHomeScreen(
                 NavigationBar(
                     modifier = Modifier.height(navBarHeight),
                 ) {
-                    WatchHomeNavTab.navBarEntries(indexEnabled.value, healthEnabled, preferHealthTab.value).forEach { route ->
+                    WatchHomeNavTab.navBarEntries(indexEnabled.value).forEach { route ->
                         NavigationBarItem(
                             selected = viewModel.selectedTab.value == route,
                             onClick = {
@@ -800,7 +782,6 @@ enum class WatchHomeNavTab(
         PebbleNavBarRoutes.IndexRoute
     ),
     Watches(Res.string.devices, Icons.Outlined.Watch, PebbleNavBarRoutes.WatchesRoute),
-    Health(Res.string.health, Icons.AutoMirrored.Filled.DirectionsRun, PebbleNavBarRoutes.HealthRoute),
     Notifications(
         Res.string.notifications,
         Icons.Outlined.Notifications,
@@ -813,16 +794,14 @@ enum class WatchHomeNavTab(
         { settingsBadgeTotal() });
 
     companion object {
-        fun navBarEntries(
-            indexEnabled: Boolean,
-            healthEnabled: Boolean,
-            preferHealthTab: Boolean,
-        ): List<WatchHomeNavTab> {
+        // Boulder: kein Health-Reiter mehr - Gravels Health-Seite ist
+        // ausgebaut, die eigene Oberflaeche kommt spaeter. Die Daten gehen
+        // weiter nach Health Connect (PlatformHealthSync).
+        fun navBarEntries(indexEnabled: Boolean): List<WatchHomeNavTab> {
             val tabs = mutableListOf(WatchFaces)
             if (indexEnabled) tabs.add(Index)
             tabs.add(Watches)
-            if (healthEnabled && (!indexEnabled || preferHealthTab)) tabs.add(Health)
-            if (!indexEnabled || !healthEnabled || !preferHealthTab) tabs.add(Notifications)
+            tabs.add(Notifications)
             tabs.add(Settings)
             return tabs
         }

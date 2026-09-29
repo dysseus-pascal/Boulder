@@ -310,7 +310,6 @@ data class SettingsItemsState(
     val debugOptionsEnabled: Boolean,
     val anyWatchSupportsSettingsSync: Boolean,
     val coreConfig: CoreConfig,
-    val healthTrackingEnabled: Boolean,
 )
 
 @Composable
@@ -342,8 +341,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     if (showCopyTokenDialog) {
         PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
     }
-    var showHealthStatsDialog by remember { mutableStateOf(false) }
-    val showFakeHealthDataDialog = remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
@@ -414,21 +411,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             }
         )
     }
-    if (showHealthStatsDialog) {
-        HealthStatsDialog(
-            libPebble = libPebble,
-            onDismissRequest = { showHealthStatsDialog = false },
-        )
-    }
-    ConfirmDialog(
-        show = showFakeHealthDataDialog,
-        title = "Populate fake health data",
-        text = "This will wipe all existing health data and replace it with 30 days of fake data. This cannot be undone.",
-        confirmText = "Wipe & Populate",
-        onConfirm = {
-            scope.launch { libPebble.populateDebugHealthData() }
-        },
-    )
     if (showSignInDialog) {
         SignInDialog(
             onDismiss = { showSignInDialog = false }
@@ -1363,49 +1345,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         }
                     },
                 ),
-                basicSettingsActionItem(
-                    title = "Open Google Fit",
-                    description = "View your synced health data in Google Fit",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    show = { healthPlatformSyncEnabled && platform == Platform.Android },
-                    action = {
-                        openGoogleFitApp(uiContext)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Show Health Tab",
-                    description = "Show Health instead of Notifications in the bottom bar",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = coreConfig.preferHealthTab,
-                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
-                    },
-                ),
-                basicSettingsActionItem(
-                    title = "View debug stats",
-                    description = "Health statistics and averages",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    keywords = "health steps sleep stats debug",
-                    action = {
-                        showHealthStatsDialog = true
-                    },
-                    show = { debugOptionsEnabled },
-                ),
-                basicSettingsActionItem(
-                    title = "Populate fake health data",
-                    description = "Warning: this will wipe all existing health data!",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    keywords = "health debug fake data populate",
-                    action = {
-                        showFakeHealthDataDialog.value = true
-                    },
-                    show = { debugOptionsEnabled },
-                ),
                 basicSettingsToggleItem(
                     title = "Enable Weather",
                     description = "Fetch weather for the current location, for the Weather App (requires location permission)",
@@ -2094,7 +2033,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         debugOptionsEnabled = debugOptionsEnabled,
         anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
         coreConfig = coreConfig,
-        healthTrackingEnabled = healthSettings.trackingEnabled,
     )
 }
 
@@ -2254,41 +2192,8 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         }
                     }
                 } else {
-                    val notificationsDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
-                    val healthDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
-
                     // When not searching, show category list
                     LazyColumn(state = listState) {
-                        if (notificationsDisplaced) {
-                            item(key = "displaced_notifications") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Notifications") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
-                                    },
-                                )
-                            }
-                        }
-                        if (healthDisplaced) {
-                            item(key = "displaced_health") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Health") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
-                                    },
-                                )
-                            }
-                        }
                         items(
                             items = sectionsToShowInList,
                             key = { it.name },
@@ -2985,7 +2890,6 @@ private fun SpokenLanguageRow(
 
 expect fun makeTokenClipEntry(token: String): ClipEntry
 
-expect fun openGoogleFitApp(uiContext: PlatformUiContext?)
 
 object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"

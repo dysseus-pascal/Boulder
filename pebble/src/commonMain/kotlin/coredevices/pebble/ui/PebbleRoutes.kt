@@ -74,9 +74,6 @@ object PebbleNavBarRoutes {
     data object IndexRoute : NavBarRoute
 
     @Serializable
-    data object HealthRoute : NavBarRoute
-
-    @Serializable
     data class AppstoreSettingsRoute(
         val addSourceName: String? = null,
         val addSourceUrl: String? = null,
@@ -195,9 +192,6 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
-    }
-    composableWithAnimations<PebbleNavBarRoutes.HealthRoute>(viewModel) {
-        HealthScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

@@ -559,6 +559,8 @@ class FakeLibPebble : LibPebble {
     override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
     override suspend fun getSpo2Readings(start: Long, end: Long) = emptyList<Spo2ReadingEntity>()
     override suspend fun getSpo2ReadingsAfter(afterTimestamp: Long) = emptyList<Spo2ReadingEntity>()
+    override suspend fun getNaechte(von: Long, bis: Long) = emptyList<io.rebble.libpebblecommon.database.entity.NachtEntity>()
+    override suspend fun getNachtAbschnitte(beginnUtc: Long) = emptyList<io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity>()
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? = null
     override suspend fun getLatestSpo2Reading(): LatestSpo2? = null
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()

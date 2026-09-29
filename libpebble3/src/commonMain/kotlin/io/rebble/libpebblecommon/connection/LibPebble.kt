@@ -37,6 +37,8 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -202,6 +204,12 @@ interface HealthDataApi {
 
     /** Returns SpO2 readings after the given timestamp, in ascending order. */
     suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity>
+
+    /** Boulder: die Naechte der Firmware (Datalogging-Tag 88), deren Beginn in [von, bis) liegt, aelteste zuerst. */
+    suspend fun getNaechte(von: Long, bis: Long): List<NachtEntity>
+
+    /** Boulder: die Schlafphasen einer Nacht, in Minuten ab ihrem Beginn. */
+    suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
 
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?

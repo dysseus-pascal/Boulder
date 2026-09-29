@@ -8,6 +8,9 @@ import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.connection.LatestSpo2
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.NachtDao
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
@@ -51,6 +54,7 @@ class Health(
     private val spo2Dao: Spo2Dao,
     private val watchManager: WatchManager,
     private val healthDataProcessor: HealthDataProcessor,
+    private val nachtDao: NachtDao,
 ) : HealthApi, HealthDataApi {
     private val logger = Logger.withTag("Health")
 
@@ -238,6 +242,10 @@ class Health(
 
     override suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity> =
         spo2Dao.getSpo2ReadingsAfter(afterTimestamp)
+
+    override suspend fun getNaechte(von: Long, bis: Long): List<NachtEntity> = nachtDao.naechte(von, bis)
+
+    override suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity> = nachtDao.abschnitte(beginnUtc)
 
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)

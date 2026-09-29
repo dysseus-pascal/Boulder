@@ -27,4 +27,5 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getWritePermission(HydrationRecord::class),
     HealthPermission.getReadPermission(HydrationRecord::class),
     HealthPermission.getWritePermission(NutritionRecord::class),
+    HealthPermission.getReadPermission(NutritionRecord::class),
 )

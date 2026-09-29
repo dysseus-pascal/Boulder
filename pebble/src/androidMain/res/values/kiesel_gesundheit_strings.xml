@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gesundheitsuebersicht in Boulder - aus Kiesel-Helper (GesundheitTab, ErnaehrungTab). -->
+<resources>
+    <string name="ks_h_bewegung">MOVEMENT</string>
+    <string name="ks_h_schritte">Steps</string>
+    <string name="ks_h_aktiv">Active</string>
+    <string name="ks_h_kcal">Active energy</string>
+    <string name="ks_h_schritte_woche">Steps, the last seven days</string>
+    <string name="ks_h_schlaf">SLEEP</string>
+    <string name="ks_h_keine_nacht">No night from the watch yet.</string>
+    <string name="ks_h_geschlafen">Asleep</string>
+    <string name="ks_h_tief">Deep</string>
+    <string name="ks_h_rem">REM</string>
+    <string name="ks_h_leicht">Light</string>
+    <string name="ks_h_wach_min">%1$d min awake</string>
+    <string name="ks_h_ohne_phasen">Without heart rate at night the watch only tells asleep from awake.</string>
+    <string name="ks_h_schlaf_woche">Sleep, the last seven nights (line: 8 h)</string>
+    <string name="ks_h_herz">HEART</string>
+    <string name="ks_h_ruhepuls">Resting HR</string>
+    <string name="ks_h_hrv">HRV (night)</string>
+    <string name="ks_h_spanne_24h">Range, 24 h</string>
+    <string name="ks_h_ruhepuls_nacht">Resting heart rate and HRV come from the night the watch measured.</string>
+    <string name="ks_h_kein_puls">No heart rate in the last 24 hours.</string>
+    <string name="ks_h_messungen">Readings</string>
+    <string name="ks_h_wasser">WATER</string>
+    <string name="ks_h_getrunken">Today</string>
+    <string name="ks_h_ziel">Goal</string>
+    <string name="ks_h_glaeser_fehlen">Glasses to go</string>
+    <string name="ks_h_kein_drinktervall">The goal comes from Drinktervall once it has reported.</string>
+    <string name="ks_h_praeparate">SUPPLEMENTS</string>
+    <string name="ks_h_koffein">CAFFEINE</string>
+    <string name="ks_h_heute">Today</string>
+    <string name="ks_h_wirkt_noch">Still active</string>
+    <string name="ks_h_zuletzt">Last</string>
+    <string name="ks_h_kaffee">Coffee</string>
+    <string name="ks_h_espresso">Espresso</string>
+    <string name="ks_h_tee">Tea</string>
+    <string name="ks_h_energy">Energy</string>
+    <string name="ks_h_wie_war_tag">HOW WAS THE DAY?</string>
+    <string name="ks_h_energie_text">1 exhausted, 5 full of energy. Kept for the trends.</string>
+    <string name="ks_h_wach">Awake</string>
+</resources>

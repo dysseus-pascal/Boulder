@@ -2,7 +2,7 @@
 <!-- Auswertung je Sportart in der Trainingsdetailansicht - aus Kiesel-Helper (VergangeneActivity). -->
 <resources>
     <string name="ks_v_spo2_titel">BLOOD OXYGEN</string>
-    <string name="ks_v_spo2_lang" formatted="false">The watch measures at the interval set in the Pebble app and discards readings taken while moving. Healthy values at rest are usually 95–100 %. A single low value is mostly a measuring error; if values stay below 90 %, talk to a doctor.</string>
+    <string name="ks_v_spo2_lang" formatted="false">The watch measures at the interval set on it and discards readings taken while moving. Healthy values at rest are usually 95–100 %. A single low value is mostly a measuring error; if values stay below 90 %, talk to a doctor.</string>
     <string name="ks_v_hrv">HRV</string>
     <string name="ks_v_spo2_hoechster">Highest</string>
     <string name="ks_v_spo2_tiefster">Lowest</string>

@@ -14,6 +14,8 @@ object SystemAppIDs {
     val SMS_APP_UUID = Uuid.parse("0863fc6a-66c5-4f62-ab8a-82ed00a98b5d")
     val REMINDERS_APP_UUID = Uuid.parse("42a07217-5491-4267-904a-d02a156752b6")
     val WORKOUT_APP_UUID = Uuid.parse("fef82c82-7176-4e22-88de-35a3fc18d43f")
+    // Boulder: Kieselsport, die Trainings-App der Boulder-Firmware (ersetzt Workout).
+    val KIESELSPORT_APP_UUID = Uuid.parse("6c386250-a6d7-4a19-a485-52541b5d7c0d")
     val WATCHFACES_APP_UUID = Uuid.parse("18e443ce-38fd-47c8-84d5-6d0c775fbe55")
     val TICTOC_APP_UUID = Uuid.parse("8f3c8686-31a1-4f5f-91f5-01600c9bdc59")
     val KICKSTART_APP_UUID = Uuid.parse("3af858c3-16cb-4561-91e7-f1ad2df8725f")

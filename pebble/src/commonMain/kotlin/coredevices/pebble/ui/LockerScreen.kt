@@ -1280,7 +1280,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     SystemApps.Music -> "drawable/music.png"
                     SystemApps.Notifications -> "drawable/notifications.png"
                     SystemApps.Alarms -> "drawable/alarms.png"
-                    SystemApps.Workout -> "drawable/workout.png"
+                    SystemApps.Kieselsport -> "drawable/kieselsport.png"
                     SystemApps.Watchfaces -> "drawable/watchfaces.png"
                     SystemApps.Health -> "drawable/health.png"
                     SystemApps.Weather -> "drawable/weather.png"

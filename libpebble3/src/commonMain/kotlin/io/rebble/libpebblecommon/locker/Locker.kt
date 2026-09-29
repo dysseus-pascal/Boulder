@@ -332,9 +332,16 @@ class Locker(
     }
 
     private suspend fun insertSystemApps(force: Boolean) {
-        val lockerApps = getAllLockerBasicInfo()
-            .first()
-            .map { it.id }
+        val vorhanden = lockerEntryDao.getAllBasicInfo()
+        // Boulder: eine Systemapp, die es in der Firmware nicht mehr gibt (Workout), faellt
+        // aus der Liste - sonst stuende sie dort als Eintrag, der nichts oeffnet.
+        vorhanden.filter { it.systemApp && findSystemApp(it.id) == null }.forEach {
+            logger.d { "Removing system app the firmware no longer has: ${it.title}" }
+            lockerEntryDao.markForDeletion(it.id)
+        }
+        // Boulder: steht eine Systemapp als gewoehnliche App da (Kieselsport aus dem
+        // Store), wird sie zur Systemapp - die Firmware bringt sie selbst mit.
+        val lockerApps = vorhanden.filter { it.systemApp || findSystemApp(it.id) == null }.map { it.id }
         val systemAppsToInsert =
             SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->
@@ -363,6 +370,18 @@ class Locker(
 
         if (systemAppsToInsert.isNotEmpty()) {
             lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimitV2)
+            // Boulder: kommt eine Systemapp spaeter dazu (Kieselsport statt Workout), stuende
+            // sie mit ihrer negativen Standardposition ganz vorn - also hinter ihren Vorgaenger.
+            if (!force) {
+                systemAppsToInsert.forEach { neu ->
+                    val system = findSystemApp(neu.id) ?: return@forEach
+                    val vorgaenger = SystemApps.entries.getOrNull(system.ordinal - 1)
+                        ?.takeIf { it.type == system.type } ?: return@forEach
+                    val stelle = lockerEntryDao.getEntry(vorgaenger.uuid)?.orderIndex ?: return@forEach
+                    val jetzt = lockerEntryDao.getEntry(neu.id)?.orderIndex ?: return@forEach
+                    lockerEntryDao.setOrder(neu.id, if (jetzt < stelle) stelle else stelle + 1, config.value.lockerSyncLimitV2)
+                }
+            }
         }
     }
 

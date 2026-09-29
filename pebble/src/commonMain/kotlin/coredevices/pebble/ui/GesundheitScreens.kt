@@ -18,3 +18,9 @@ expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: Strin
 
 @Composable
 expect fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
+@Composable
+expect fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
+@Composable
+expect fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav)

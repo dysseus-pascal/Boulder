@@ -28,11 +28,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Hiking
 import androidx.compose.material.icons.filled.Pool
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -64,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Wochenrechnung
 import coredevices.pebble.health.HealthConnectPermissionBridge
 import coredevices.pebble.kiesel.KIESEL_RECHTE
@@ -136,28 +133,11 @@ internal fun TrainingListe(
     var daten by remember { mutableStateOf<TrainingsUebersicht?>(null) }
     var fehlendeRechte by remember { mutableStateOf<Set<String>>(emptySet()) }
     var neu by remember { mutableIntStateOf(0) }
-    var protokoll by remember { mutableStateOf(false) }
-    var einstellungen by remember { mutableStateOf(false) }
     var artFuer by remember { mutableStateOf<OffeneSpur?>(null) }
     var ortsstand by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(Unit) {
-        setzeAktionen {
-            IconButton(onClick = { protokoll = true }) {
-                Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = stringResource(R.string.ks_n_protokoll))
-            }
-            IconButton(onClick = { einstellungen = true }) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.ks_n_einstellungen))
-            }
-        }
-    }
+    LaunchedEffect(Unit) { setzeAktionen {} }
     // Zurueck aus den Systemeinstellungen: dort kann sich die Erlaubnis geaendert haben.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        // Zurueck aus OsmAnd: vielleicht ist Boulder dort jetzt freigeschaltet.
-        if (Kieselstrasse.lage == Kieselstrasse.Lage.FREISCHALTEN) Kieselstrasse.versucheErneut(context)
-        ortsstand++
-        neu++
-    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { ortsstand++; neu++ }
     LaunchedEffect(neu) {
         daten = TrainingsDaten.uebersicht(context)
         fehlendeRechte = TrainingsDaten.fehlendeRechte(context)
@@ -198,27 +178,6 @@ internal fun TrainingListe(
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         }) { Text(stringResource(R.string.ks_ei_immer_erlauben)) }
-                    }
-                }
-            }
-        }
-
-        item(key = "osmand-$ortsstand") {
-            val lage = Kieselstrasse.lage
-            if (lage == Kieselstrasse.Lage.FREISCHALTEN || lage == Kieselstrasse.Lage.ABO_FEHLER) {
-                Karte {
-                    Text(stringResource(R.string.ks_o_titel), fontWeight = FontWeight.Bold)
-                    Text(stringResource(R.string.ks_o_text), style = MaterialTheme.typography.bodySmall)
-                    Text(Kieselstrasse.lageText(context), color = MaterialTheme.colorScheme.error)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { Kieselstrasse.versucheErneut(context); ortsstand++ }) {
-                            Text(stringResource(R.string.ks_o_erneut))
-                        }
-                        Kieselstrasse.osmandPaket(context)?.let { paket ->
-                            Button(onClick = {
-                                context.packageManager.getLaunchIntentForPackage(paket)?.let { context.startActivity(it) }
-                            }) { Text(stringResource(R.string.ks_o_oeffnen)) }
-                        }
                     }
                 }
             }
@@ -327,28 +286,6 @@ internal fun TrainingListe(
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = { artFuer = null }) { Text(stringResource(R.string.ks_abbrechen)) } },
-        )
-    }
-
-    if (einstellungen) EinstellungenDialog { einstellungen = false }
-
-    if (protokoll) {
-        val zeilen = remember { KieselVerlauf.alle(context) }
-        AlertDialog(
-            onDismissRequest = { protokoll = false },
-            title = { Text(stringResource(R.string.ks_n_protokoll)) },
-            text = {
-                LazyColumn(Modifier.height(400.dp)) {
-                    if (zeilen.isEmpty()) item { Text(stringResource(R.string.ks_n_protokoll_leer)) }
-                    items(zeilen) { (t, z) ->
-                        Column(Modifier.padding(vertical = 4.dp)) {
-                            Text(wannText(context, Instant.ofEpochMilli(t)), style = MaterialTheme.typography.labelSmall)
-                            Text(z, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { protokoll = false }) { Text("OK") } },
         )
     }
 }

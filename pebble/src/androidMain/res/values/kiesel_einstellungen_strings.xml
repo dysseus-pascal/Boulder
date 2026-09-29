@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulders Eintraege in Gravels Einstellungsliste. -->
+<resources>
+    <string name="ks_e_rechte">Health Connect access</string>
+    <string name="ks_e_rechte_ok">Workouts, heart rate, SpO2, HRV, water and supplements: all allowed.</string>
+    <string name="ks_e_rechte_fehlen">%1$d permissions missing. Tap to allow.</string>
+    <string name="ks_e_sicherung_kein">Back up, and take over from Kiesel-Helper. No folder chosen yet.</string>
+    <string name="ks_e_kieselsport_text">Max HR %1$d · rest %2$d s · pool %3$d m</string>
+    <string name="ks_e_standort">Location for GPS tracks</string>
+    <string name="ks_e_standort_immer">Allowed all the time.</string>
+    <string name="ks_e_standort_nutzung">Only while using the app: tracks stay empty while Boulder is in the background. Choose \"Allow all the time\".</string>
+    <string name="ks_e_standort_nicht">Not allowed: workouts get no route.</string>
+    <string name="ks_e_protokoll_text">What Kieselsport, Drinktervall and SupCycle reported, and what Boulder did with it.</string>
+    <string name="ks_e_osmand">OsmAnd turn-by-turn (Kieselstrasse)</string>
+    <string name="ks_e_osmand_fehlt">OsmAnd is not installed.</string>
+    <string name="ks_e_kartenlinks">Map links to OsmAnd</string>
+    <string name="ks_e_kartenlinks_text">Opens Google Maps and geo: links in OsmAnd. For Google Maps, add the addresses under \"Open by default\".</string>
+</resources>

@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -205,7 +207,10 @@ enum class Section(val title: String, val icon: ImageVector) {
     Apps("Apps", Icons.Default.Apps),
     Battery("Battery (Not available without telemetry)", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
-    Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
+    Health("Health", Icons.Default.Favorite),
+    // Boulder: Kieselsport und Trainings, und Kieselstrasse mit den Kartenlinks.
+    Sport("Sport", Icons.AutoMirrored.Filled.DirectionsRun),
+    Navigation("Navigation", Icons.Default.Navigation),
     Speech("Speech Recognition", Icons.Default.Mic),
     Display("Display", Icons.Default.DarkMode), // watch only
     Weather("Weather", Icons.Default.Cloud),
@@ -2028,8 +2033,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             ) + watchPrefs
         }
 
+    // Boulder: die Einstellungen aus Kiesel-Helper - ausserhalb des remember oben, weil
+    // sie ihren Stand (Rechte, OsmAnd) selbst nachfuehren.
+    val boulderItems = boulderSettingsItems(navBarNav)
     return SettingsItemsState(
-        rawSettingsItems = rawSettingsItems,
+        rawSettingsItems = rawSettingsItems + boulderItems,
         debugOptionsEnabled = debugOptionsEnabled,
         anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
         coreConfig = coreConfig,

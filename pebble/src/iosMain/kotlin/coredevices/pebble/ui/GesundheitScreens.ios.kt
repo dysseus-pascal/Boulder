@@ -22,3 +22,13 @@ actual fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: Strin
 actual fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Health is only available on Android.")
 }
+
+@Composable
+actual fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Only available on Android.")
+}
+
+@Composable
+actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Only available on Android.")
+}

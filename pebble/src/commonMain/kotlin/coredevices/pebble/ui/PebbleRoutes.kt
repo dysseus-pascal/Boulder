@@ -94,6 +94,12 @@ object PebbleNavBarRoutes {
     data object SicherungRoute : NavBarRoute
 
     @Serializable
+    data object KieselsportRoute : NavBarRoute
+
+    @Serializable
+    data object ProtokollRoute : NavBarRoute
+
+    @Serializable
     data class AppstoreSettingsRoute(
         val addSourceName: String? = null,
         val addSourceUrl: String? = null,
@@ -233,6 +239,12 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.SicherungRoute>(viewModel) {
         SicherungScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.KieselsportRoute>(viewModel) {
+        KieselsportScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.ProtokollRoute>(viewModel) {
+        ProtokollScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

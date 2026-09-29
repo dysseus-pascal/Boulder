@@ -1,10 +1,6 @@
 package coredevices.pebble.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.LaunchedEffect
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.health
@@ -17,15 +13,10 @@ import coredevices.pebble.kiesel.ansicht.TrendAnsicht
 @Composable
 actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val titel = stringResource(Res.string.health)
-    val sicherung = androidx.compose.ui.res.stringResource(coredevices.pebble.R.string.ks_b_titel)
     LaunchedEffect(Unit) {
         topBarParams.title(titel)
         topBarParams.searchAvailable(null)
-        topBarParams.actions {
-            IconButton(onClick = { nav.navigateTo(PebbleNavBarRoutes.SicherungRoute) }) {
-                Icon(Icons.Outlined.Backup, contentDescription = sicherung)
-            }
-        }
+        topBarParams.actions {}
     }
     GesundheitAnsicht(
         oeffneNacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
@@ -61,3 +52,22 @@ actual fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     }
     SicherungAnsicht()
 }
+
+@Composable
+private fun EinfacheSeite(topBarParams: TopBarParams, titelId: Int, inhalt: @Composable () -> Unit) {
+    val titel = androidx.compose.ui.res.stringResource(titelId)
+    LaunchedEffect(Unit) {
+        topBarParams.title(titel)
+        topBarParams.searchAvailable(null)
+        topBarParams.actions {}
+    }
+    inhalt()
+}
+
+@Composable
+actual fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, coredevices.pebble.R.string.ks_n_einstellungen) { coredevices.pebble.kiesel.ansicht.KieselsportAnsicht() }
+
+@Composable
+actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, coredevices.pebble.R.string.ks_n_protokoll) { coredevices.pebble.kiesel.ansicht.ProtokollAnsicht() }

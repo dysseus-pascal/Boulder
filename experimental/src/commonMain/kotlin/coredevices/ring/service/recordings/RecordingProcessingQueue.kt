@@ -291,11 +291,7 @@ class RecordingProcessingQueue(
      *       remote.
      *    3. Local copy is at-or-newer than remote → no-op.
      *
-     *  Decrypts the document first if it carries an encrypted envelope.
-     *  Public so [coredevices.ring.ui.viewmodel.SettingsViewModel]'s
-     *  manual sync can share the same code path as the auto-pull
-     *  snapshot listener — single source of truth for "ingest a remote
-     *  recording into Room." */
+     *  Decrypts the document first if it carries an encrypted envelope. */
     suspend fun ingestRemoteRecording(firestoreId: String, document: RecordingDocument) {
         val recordingEntryDao: RecordingEntryDao = get()
         val conversationMessageDao: ConversationMessageDao = get()

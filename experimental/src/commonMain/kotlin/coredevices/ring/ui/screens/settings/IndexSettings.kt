@@ -110,6 +110,8 @@ import coredevices.ring.ui.components.QrCodeImage
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
+import coredevices.ring.ui.viewmodel.BackupViewModel
+import coredevices.ring.ui.viewmodel.EncryptionViewModel
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ui.M3Dialog
@@ -241,7 +243,7 @@ fun IndexSettings(coreNav: CoreNav) {
     }
     if (showBackupDialog) {
         BackupDialog(
-            viewModel = viewModel,
+            debugDetailsEnabled = debugDetailsEnabled,
             onDismiss = { showBackupDialog = false }
         )
     }
@@ -813,25 +815,24 @@ fun NoteShortcutDialog(
 
 @Composable
 fun BackupDialog(
-    viewModel: SettingsViewModel,
-    onDismiss: () -> Unit
+    debugDetailsEnabled: Boolean,
+    onDismiss: () -> Unit,
+    backupViewModel: BackupViewModel = koinViewModel(),
+    encryptionViewModel: EncryptionViewModel = koinViewModel(),
 ) {
-    val userId by viewModel.userId.collectAsState()
-    val syncing by viewModel.syncingFeedHistory.collectAsState()
-    val syncStatus by viewModel.syncStatus.collectAsState()
-    val backupDownloading by viewModel.backupDownloading.collectAsState()
-    val backupDownloadStatus by viewModel.backupDownloadStatus.collectAsState()
-    val importing by viewModel.importing.collectAsState()
-    val importStatus by viewModel.importStatus.collectAsState()
+    val userId by backupViewModel.userId.collectAsState()
+    val backupDownloading by backupViewModel.backupDownloading.collectAsState()
+    val backupDownloadStatus by backupViewModel.backupDownloadStatus.collectAsState()
+    val importing by backupViewModel.importing.collectAsState()
+    val importStatus by backupViewModel.importStatus.collectAsState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val backupCount by viewModel.backupCount.collectAsState()
-    val backupLoading by viewModel.backupLoading.collectAsState()
-    val backupStatus by viewModel.backupStatus.collectAsState()
-    val backupEnabled by viewModel.backupEnabled.collectAsState()
-    val keyStorageStatus by viewModel.keyStorageStatus.collectAsState()
-    val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
-    val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
-    val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
+    val backupCount by backupViewModel.backupCount.collectAsState()
+    val backupLoading by backupViewModel.backupLoading.collectAsState()
+    val backupStatus by backupViewModel.backupStatus.collectAsState()
+    val backupEnabled by backupViewModel.backupEnabled.collectAsState()
+    val keyStorageStatus by encryptionViewModel.keyStorageStatus.collectAsState()
+    val encryptionKeyStatus by encryptionViewModel.encryptionKeyStatus.collectAsState()
+    val encryptionKeyLoading by encryptionViewModel.encryptionKeyLoading.collectAsState()
     val uiContext = rememberUiContext()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleteInput by remember { mutableStateOf("") }
@@ -842,12 +843,12 @@ fun BackupDialog(
     var enterKeyInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        viewModel.loadBackupCount()
+        backupViewModel.loadBackupCount()
     }
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.clearBackupStatus()
-            viewModel.clearEncryptionKeyStatus()
+            backupViewModel.clearBackupStatus()
+            encryptionViewModel.clearEncryptionKeyStatus()
         }
     }
 
@@ -866,7 +867,7 @@ fun BackupDialog(
             confirmButton = {
                 TextButton(onClick = {
                     showOverwriteKeyConfirm = false
-                    uiContext?.let { viewModel.generateAndStoreKey(it) }
+                    uiContext?.let { encryptionViewModel.generateAndStoreKey(it) }
                 }) {
                     Text("Overwrite", color = MaterialTheme.colorScheme.error)
                 }
@@ -903,7 +904,7 @@ fun BackupDialog(
                 TextButton(
                     enabled = enterKeyInput.isNotBlank() && !encryptionKeyLoading,
                     onClick = {
-                        viewModel.importKeyFromText(enterKeyInput)
+                        encryptionViewModel.importKeyFromText(enterKeyInput)
                         showEnterKeyDialog = false
                         enterKeyInput = ""
                     }
@@ -918,7 +919,7 @@ fun BackupDialog(
             }
         )
     }
-    EncryptionKeyResultDialogs(viewModel)
+    EncryptionKeyResultDialogs(encryptionViewModel)
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
@@ -948,7 +949,7 @@ fun BackupDialog(
                 TextButton(
                     enabled = deleteInput.equals("delete", ignoreCase = true) && !backupLoading,
                     onClick = {
-                        viewModel.deleteBackup()
+                        backupViewModel.deleteBackup()
                         showDeleteConfirm = false
                         deleteInput = ""
                     }
@@ -992,7 +993,7 @@ fun BackupDialog(
                 TextButton(
                     enabled = deleteLocalInput.equals("delete", ignoreCase = true) && !backupLoading,
                     onClick = {
-                        viewModel.deleteLocalFeed()
+                        backupViewModel.deleteLocalFeed()
                         showDeleteLocalConfirm = false
                         deleteLocalInput = ""
                     }
@@ -1044,13 +1045,13 @@ fun BackupDialog(
 
             // Backup enabled toggle
             ListItem(
-                modifier = Modifier.clickable { viewModel.setBackupEnabled(!backupEnabled) },
+                modifier = Modifier.clickable { backupViewModel.setBackupEnabled(!backupEnabled) },
                 headlineContent = { Text("Backup enabled") },
                 supportingContent = { Text("Automatically sync recordings to cloud") },
                 trailingContent = {
                     Switch(
                         checked = backupEnabled,
-                        onCheckedChange = { viewModel.setBackupEnabled(it) }
+                        onCheckedChange = { backupViewModel.setBackupEnabled(it) }
                     )
                 }
             )
@@ -1058,8 +1059,8 @@ fun BackupDialog(
 
             // Download full backup
             ListItem(
-                modifier = Modifier.clickable(enabled = !backupDownloading && !syncing && uiContext != null) {
-                    uiContext?.let { viewModel.downloadFullBackup(it) }
+                modifier = Modifier.clickable(enabled = !backupDownloading && uiContext != null) {
+                    uiContext?.let { backupViewModel.downloadFullBackup(it) }
                 },
                 headlineContent = { Text("Download Full Backup") },
                 supportingContent = {
@@ -1079,7 +1080,7 @@ fun BackupDialog(
                         scope.launch {
                             val path = uiContext?.let { pickZipFile(it) }
                             if (path != null) {
-                                viewModel.importBackup(path)
+                                backupViewModel.importBackup(path)
                             }
                         }
                     },
@@ -1128,7 +1129,7 @@ fun BackupDialog(
                     if (keyExists) {
                         showOverwriteKeyConfirm = true
                     } else {
-                        uiContext?.let { viewModel.generateAndStoreKey(it) }
+                        uiContext?.let { encryptionViewModel.generateAndStoreKey(it) }
                     }
                 },
                 headlineContent = { Text("Generate Encryption Key") },
@@ -1161,7 +1162,7 @@ fun BackupDialog(
             // Read key from password manager
             ListItem(
                 modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
-                    uiContext?.let { viewModel.readKeyFromCloudKeychain(it) }
+                    uiContext?.let { encryptionViewModel.readKeyFromCloudKeychain(it) }
                 },
                 headlineContent = { Text("Restore Key from Password Manager") },
                 supportingContent = {
@@ -1172,7 +1173,7 @@ fun BackupDialog(
             // Import key from a QR code photo (the backup saved at generation time)
             ListItem(
                 modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
-                    uiContext?.let { viewModel.importKeyFromQrPhoto(it) }
+                    uiContext?.let { encryptionViewModel.importKeyFromQrPhoto(it) }
                 },
                 headlineContent = { Text("Import Key from QR Code") },
                 supportingContent = {
@@ -1193,18 +1194,18 @@ fun BackupDialog(
             )
 
             // Enable/disable encryption
-            val useEncryption by viewModel.useEncryption.collectAsState()
-            val encryptionStatus by viewModel.encryptionStatus.collectAsState()
-            val enablingEncryption by viewModel.enablingEncryption.collectAsState()
+            val useEncryption by encryptionViewModel.useEncryption.collectAsState()
+            val encryptionStatus by encryptionViewModel.encryptionStatus.collectAsState()
+            val enablingEncryption by encryptionViewModel.enablingEncryption.collectAsState()
 
             if (keyStorageStatus == KeyStorageStatus.KeyLocallyAvailable) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ListItem(
                     modifier = Modifier.clickable(enabled = !enablingEncryption && (useEncryption || uiContext != null)) {
                         if (!useEncryption) {
-                            uiContext?.let { viewModel.requestEnableEncryption(it) }
+                            uiContext?.let { encryptionViewModel.requestEnableEncryption(it) }
                         } else {
-                            viewModel.disableEncryption()
+                            encryptionViewModel.disableEncryption()
                         }
                     },
                     headlineContent = {
@@ -1337,10 +1338,10 @@ fun DiagnosticsDialog(
 
 /**
  * The "key not backed up" warning and generated-key QR/backup sheet,
- * driven by [SettingsViewModel] so any host of the key flow can render them.
+ * driven by [EncryptionViewModel] so any host of the key flow can render them.
  */
 @Composable
-fun EncryptionKeyResultDialogs(viewModel: SettingsViewModel) {
+fun EncryptionKeyResultDialogs(viewModel: EncryptionViewModel = koinViewModel()) {
     val showKeyNotBackedUpDialog by viewModel.showKeyNotBackedUpDialog.collectAsState()
     val generatedKey by viewModel.generatedKey.collectAsState()
     val clipboardManager = LocalClipboardManager.current
@@ -1416,11 +1417,11 @@ fun EncryptionKeyResultDialogs(viewModel: SettingsViewModel) {
 
 /**
  * Guided "turn on encryption" dialog, driven by
- * [SettingsViewModel.encryptionSetup] through generate or restore before
+ * [EncryptionViewModel.encryptionSetup] through generate or restore before
  * encryption is enabled, so it's reusable wherever the switch lives.
  */
 @Composable
-fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
+fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
     val current by viewModel.encryptionSetup.collectAsState()
     if (current is EncryptionSetupState.Hidden) return
 

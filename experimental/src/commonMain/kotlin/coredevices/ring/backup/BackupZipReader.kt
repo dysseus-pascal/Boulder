@@ -11,12 +11,12 @@ import kotlinx.io.readByteArray
 /**
  * Reads zip entries on demand. Not safe for concurrent reads; serialise callers.
  */
-class BackupZipReader(inputPath: Path) {
+class BackupZipReader(inputPath: Path) : BackupEntrySource {
     private val zip = ZipFile(File(inputPath.toString()), FileMode.Read)
 
     suspend fun open() = zip.open()
 
-    val entryNames: Set<String>
+    override val entryNames: Set<String>
         get() = zip.entries.mapTo(LinkedHashSet()) { it.name }
 
     suspend fun readEntry(name: String, sink: Sink) {
@@ -25,7 +25,7 @@ class BackupZipReader(inputPath: Path) {
         }
     }
 
-    suspend fun readBytes(name: String): ByteArray {
+    override suspend fun readBytes(name: String): ByteArray {
         val buffer = Buffer()
         readEntry(name, buffer)
         return buffer.readByteArray()

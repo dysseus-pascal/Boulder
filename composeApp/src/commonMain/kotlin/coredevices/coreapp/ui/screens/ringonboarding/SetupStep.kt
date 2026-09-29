@@ -69,6 +69,8 @@ import coredevices.ring.ui.screens.settings.EncryptionKeyResultDialogs
 import coredevices.ring.ui.screens.settings.EncryptionSetupDialog
 import coredevices.ring.ui.screens.settings.GTasksDialog
 import coredevices.ring.ui.screens.settings.NotionDialog
+import coredevices.ring.ui.viewmodel.BackupViewModel
+import coredevices.ring.ui.viewmodel.EncryptionViewModel
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfigHolder
@@ -96,6 +98,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import theme.AppTheme
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -351,7 +354,7 @@ internal fun SetupStep(
             sub = "Your recordings sync to the cloud so you can restore them on a new phone. " +
                     "Optionally encrypt them for extra privacy.",
         ) {
-            BackupsContent(viewModel = viewModel)
+            BackupsContent()
         }
 
         // 6 — Try it out (live ring demo)
@@ -378,22 +381,24 @@ internal fun SetupStep(
 }
 
 @Composable
-private fun BackupsContent(viewModel: SettingsViewModel) {
+private fun BackupsContent() {
+    val backupViewModel = koinViewModel<BackupViewModel>()
+    val encryptionViewModel = koinViewModel<EncryptionViewModel>()
     val palette = LocalPalette.current
-    val userId by viewModel.userId.collectAsState()
+    val userId by backupViewModel.userId.collectAsState()
     val loggedIn = userId != null
-    val backupEnabled by viewModel.backupEnabled.collectAsState()
-    val useEncryption by viewModel.useEncryption.collectAsState()
-    val encryptionStatus by viewModel.encryptionStatus.collectAsState()
-    val enablingEncryption by viewModel.enablingEncryption.collectAsState()
+    val backupEnabled by backupViewModel.backupEnabled.collectAsState()
+    val useEncryption by encryptionViewModel.useEncryption.collectAsState()
+    val encryptionStatus by encryptionViewModel.encryptionStatus.collectAsState()
+    val enablingEncryption by encryptionViewModel.enablingEncryption.collectAsState()
     val uiContext = rememberUiContext()
     var showSignInDialog by remember { mutableStateOf(false) }
 
     // Encryption setup + key-result dialogs render against the app's regular
     // theme so they look like the rest of Settings, not the onboarding palette.
     AppTheme {
-        EncryptionSetupDialog(viewModel)
-        EncryptionKeyResultDialogs(viewModel)
+        EncryptionSetupDialog(encryptionViewModel)
+        EncryptionKeyResultDialogs(encryptionViewModel)
     }
     if (showSignInDialog) {
         SignInDialog(onDismiss = { showSignInDialog = false })
@@ -427,7 +432,7 @@ private fun BackupsContent(viewModel: SettingsViewModel) {
                     else "Recordings stay on this device only",
                     checked = backupEnabled,
                     enabled = true,
-                    onCheckedChange = { viewModel.setBackupEnabled(it) },
+                    onCheckedChange = { backupViewModel.setBackupEnabled(it) },
                 )
                 HorizontalDivider(thickness = 1.dp, color = palette.outlineVariant)
                 BackupSwitchRow(
@@ -441,9 +446,9 @@ private fun BackupsContent(viewModel: SettingsViewModel) {
                             (useEncryption || uiContext != null),
                     onCheckedChange = { enable ->
                         if (enable) {
-                            uiContext?.let { viewModel.beginEncryptionSetup(it) }
+                            uiContext?.let { encryptionViewModel.beginEncryptionSetup(it) }
                         } else {
-                            viewModel.disableEncryption()
+                            encryptionViewModel.disableEncryption()
                         }
                     },
                     trailing = if (enablingEncryption) {

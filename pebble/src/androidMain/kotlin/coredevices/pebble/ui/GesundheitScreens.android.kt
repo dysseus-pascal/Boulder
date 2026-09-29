@@ -6,6 +6,7 @@ import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.health
 import org.jetbrains.compose.resources.stringResource
 import coredevices.pebble.kiesel.ansicht.GesundheitAnsicht
+import coredevices.pebble.kiesel.ansicht.NachtAnsicht
 
 @Composable
 actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
@@ -15,5 +16,14 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
     }
-    GesundheitAnsicht()
+    GesundheitAnsicht(oeffneNacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) })
+}
+
+@Composable
+actual fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Long) {
+    LaunchedEffect(Unit) {
+        topBarParams.searchAvailable(null)
+        topBarParams.actions {}
+    }
+    NachtAnsicht(beginnUtc) { topBarParams.title(it) }
 }

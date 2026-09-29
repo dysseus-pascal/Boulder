@@ -7,3 +7,8 @@ import androidx.compose.runtime.Composable
 actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Health is only available on Android.")
 }
+
+@Composable
+actual fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Long) {
+    Text("Health is only available on Android.")
+}

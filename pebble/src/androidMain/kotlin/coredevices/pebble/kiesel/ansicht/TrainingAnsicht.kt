@@ -354,10 +354,13 @@ internal fun TrainingListe(
 }
 
 @Composable
-internal fun Karte(inhalt: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+internal fun Karte(onClick: (() -> Unit)? = null, inhalt: @Composable () -> Unit) {
+    val innen: @Composable () -> Unit = {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { inhalt() }
     }
+    // Die klickbare Variante: eine gewoehnliche Card nimmt Beruehrungen selbst an.
+    if (onClick != null) Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) { innen() }
+    else Card(Modifier.fillMaxWidth()) { innen() }
 }
 
 /** Die letzten sieben Tage in einer Zeile: wie oft, wie lange, wie weit. */

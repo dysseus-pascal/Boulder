@@ -22,6 +22,7 @@ import kotlin.math.pow
 
 /** Eine Nacht der Firmware, in Zeitpunkten statt Minuten ab dem Fensterbeginn. */
 internal data class Nacht(
+    val beginnUtc: Long,
     val einschlafen: Instant,
     val aufwachen: Instant,
     val schlafMinuten: Int,
@@ -73,6 +74,7 @@ internal object Gesundheitsrechnung {
         val beginn = Instant.ofEpochSecond(e.beginnUtc)
         fun zeit(min: Int) = beginn.plusSeconds(min * 60L)
         return Nacht(
+            beginnUtc = e.beginnUtc,
             einschlafen = zeit(e.einschlafen),
             aufwachen = zeit(e.aufwachen),
             schlafMinuten = e.schlafMinuten,
@@ -167,6 +169,31 @@ internal object Gesundheitsdaten {
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
             energie = energie(context, heute),
+        )
+    }
+
+    /** Eine Nacht mit dem Puls und SpO2 aus ihr, und den Nachbarnaechten zum Blaettern. */
+    data class NachtDetail(
+        val nacht: Nacht,
+        val puls: List<Pair<Long, Int>>,
+        val spo2: List<Pair<Long, Int>>,
+        val vorige: Long?,
+        val naechste: Long?,
+    )
+
+    suspend fun nacht(api: HealthDataApi, beginnUtc: Long): NachtDetail? = withContext(Dispatchers.IO) {
+        val umgebung = runCatching { api.getNaechte(beginnUtc - 30L * 86_400, beginnUtc + 30L * 86_400) }.getOrDefault(emptyList())
+        val e = umgebung.firstOrNull { it.beginnUtc == beginnUtc } ?: return@withContext null
+        val n = Gesundheitsrechnung.nacht(e, runCatching { api.getNachtAbschnitte(beginnUtc) }.getOrDefault(emptyList()))
+        val von = n.einschlafen.epochSecond - 1800
+        val bis = n.aufwachen.epochSecond + 1800
+        NachtDetail(
+            nacht = n,
+            puls = runCatching { api.getHealthDataForRange(von, bis) }.getOrDefault(emptyList())
+                .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate },
+            spo2 = runCatching { api.getSpo2Readings(von, bis) }.getOrDefault(emptyList()).map { it.timestamp to it.spo2Percent },
+            vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
+            naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
         )
     }
 

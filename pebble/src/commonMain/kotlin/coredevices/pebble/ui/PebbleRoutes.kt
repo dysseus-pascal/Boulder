@@ -85,6 +85,9 @@ object PebbleNavBarRoutes {
     data object GesundheitRoute : NavBarRoute
 
     @Serializable
+    data class NachtRoute(val beginnUtc: Long) : NavBarRoute
+
+    @Serializable
     data class AppstoreSettingsRoute(
         val addSourceName: String? = null,
         val addSourceUrl: String? = null,
@@ -213,6 +216,10 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.GesundheitRoute>(viewModel) {
         GesundheitScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.NachtRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.NachtRoute = it.toRoute()
+        NachtScreen(topBarParams, nav, route.beginnUtc)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

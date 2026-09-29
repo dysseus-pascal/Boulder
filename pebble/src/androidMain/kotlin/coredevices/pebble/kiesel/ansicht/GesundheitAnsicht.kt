@@ -70,7 +70,7 @@ private const val SCHLAFZIEL_MIN = 8 * 60.0
  * dafuer, nicht zwei.
  */
 @Composable
-internal fun GesundheitAnsicht() {
+internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     val libPebble = koinInject<LibPebble>()
@@ -91,7 +91,7 @@ internal fun GesundheitAnsicht() {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { Bewegung(s) }
-        item { Schlaf(s) }
+        item { Schlaf(s, oeffneNacht) }
         item { Herz(s) }
         if (s.spo2.isNotEmpty()) item { Sauerstoff(s) }
         item { Wasser(s) }
@@ -145,9 +145,9 @@ private fun Bewegung(s: GesundheitsStand) {
 }
 
 @Composable
-private fun Schlaf(s: GesundheitsStand) {
+private fun Schlaf(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
     val context = LocalContext.current
-    Karte {
+    Karte(onClick = s.nacht?.let { n -> { oeffneNacht(n.beginnUtc) } }) {
         Text(stringResource(R.string.ks_h_schlaf), style = MaterialTheme.typography.labelMedium)
         val n = s.nacht
         if (n == null) {

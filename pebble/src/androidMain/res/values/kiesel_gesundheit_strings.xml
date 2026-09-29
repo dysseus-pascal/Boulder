@@ -39,4 +39,8 @@
     <string name="ks_h_wie_war_tag">HOW WAS THE DAY?</string>
     <string name="ks_h_energie_text">1 exhausted, 5 full of energy. Kept for the trends.</string>
     <string name="ks_h_wach">Awake</string>
+    <string name="ks_h_frueher">Earlier</string>
+    <string name="ks_h_spaeter">Later</string>
+    <string name="ks_h_phasen">PHASES</string>
+    <string name="ks_h_wachphasen">AWAKE</string>
 </resources>

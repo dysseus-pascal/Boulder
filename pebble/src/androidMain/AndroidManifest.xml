@@ -10,6 +10,7 @@
     <!-- Kieselsport: HRV (Yoga, Einzelmessung) eintragen, SpO2 fuer die Frage der Uhr
          lesen, und die GPS-Spur eines Trainings im Vordergrunddienst aufzeichnen. -->
     <uses-permission android:name="android.permission.health.WRITE_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />

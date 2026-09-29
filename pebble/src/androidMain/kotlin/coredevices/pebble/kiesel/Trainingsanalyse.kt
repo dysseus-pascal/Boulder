@@ -23,6 +23,8 @@ internal object Trainingsanalyse {
         val tempo: Double,      //< m/s, geglaettet
         val lat: Double,
         val lon: Double,
+        /** Liegt ein Sprung davor (verlorener Empfang)? Die Karte reisst dort ab. */
+        val nachSprung: Boolean = false,
     )
 
     /**
@@ -32,6 +34,9 @@ internal object Trainingsanalyse {
      * Punkten im Sekundenabstand wird ein Tempo, das zwischen 10 und 40 km/h
      * flattert. Ueber ein Fenster von rund zehn Sekunden wird daraus die
      * Fahrt, die man wirklich gemacht hat.
+     *
+     * EIN SPRUNG ZAEHLT NICHT ALS WEG - wie bei Spur.laenge, sonst stuende
+     * in der Kilometertabelle eine andere Strecke als oben in der Karte.
      */
     fun strecke(punkte: List<Spur.Punkt>): List<Streckenpunkt> {
         if (punkte.size < 2) return emptyList()
@@ -39,16 +44,18 @@ internal object Trainingsanalyse {
         var meter = 0.0
         val roh = ArrayList<Streckenpunkt>(punkte.size)
         punkte.forEachIndexed { i, p ->
-            if (i > 0) meter += Spur.abstand(punkte[i - 1], p)
-            roh += Streckenpunkt(meter, p.zeit - start, p.hoehe, 0.0, p.lat, p.lon)
+            val sprung = i > 0 && Spur.abstand(punkte[i - 1], p) > Spur.SPRUNG_MAX
+            if (i > 0 && !sprung) meter += Spur.abstand(punkte[i - 1], p)
+            roh += Streckenpunkt(meter, p.zeit - start, p.hoehe, 0.0, p.lat, p.lon, sprung)
         }
         return roh.mapIndexed { i, p ->
             // Das Fenster: alle Punkte, die hoechstens fuenf Sekunden vor
-            // und nach diesem liegen.
+            // und nach diesem liegen - aber nicht ueber einen Sprung: dort
+            // vergeht Zeit ohne Weg, und das Tempo fiele auf null.
             var a = i
-            while (a > 0 && p.sekunde - roh[a - 1].sekunde <= 5) a--
+            while (a > 0 && !roh[a].nachSprung && p.sekunde - roh[a - 1].sekunde <= 5) a--
             var b = i
-            while (b < roh.size - 1 && roh[b + 1].sekunde - p.sekunde <= 5) b++
+            while (b < roh.size - 1 && !roh[b + 1].nachSprung && roh[b + 1].sekunde - p.sekunde <= 5) b++
             val dt = (roh[b].sekunde - roh[a].sekunde)
             val tempo = if (dt > 0) (roh[b].meter - roh[a].meter) / dt else 0.0
             p.copy(tempo = tempo.coerceIn(0.0, 30.0))
@@ -232,6 +239,20 @@ internal object Trainingsanalyse {
         if (werte.size < 2) return 0.0
         val m = werte.average()
         return Math.sqrt(werte.sumOf { (it - m) * (it - m) } / werte.size)
+    }
+
+    /**
+     * Die Sekunden in Bewegung: Stuecke mit mehr als 0,5 m/s. HALT AN DER
+     * AMPEL ZAEHLT NICHT, und ein Loch in der Spur (mehr als eine Minute
+     * ohne Punkt) auch nicht - dort weiss niemand, ob man fuhr.
+     */
+    fun bewegt(strecke: List<Streckenpunkt>): Long {
+        var summe = 0L
+        for (i in 1 until strecke.size) {
+            val dt = strecke[i].sekunde - strecke[i - 1].sekunde
+            if (dt in 1..60 && !strecke[i].nachSprung && strecke[i].tempo > 0.5) summe += dt
+        }
+        return summe
     }
 
     /** Zwischen welchen Werten das Tempo liegt, ohne die Ausreisser oben. */

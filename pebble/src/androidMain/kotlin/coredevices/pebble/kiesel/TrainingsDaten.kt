@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -98,6 +99,8 @@ internal data class TrainingDetail(
     val punkte: List<Spur.Punkt>,
     val puls: List<Pulspunkt>,
     val spo2: List<Pair<Long, Double>>,
+    /** Die HRV, die die Uhr zu diesem Training eintrug (Yoga) - in ms RMSSD. */
+    val hrv: Double?,
     val quelle: String,
 )
 
@@ -194,6 +197,7 @@ internal object TrainingsDaten {
             punkte = punkte,
             puls = puls(klient, s),
             spo2 = spo2(klient, s),
+            hrv = hrv(klient, s),
             quelle = quelle,
         )
     }
@@ -225,6 +229,18 @@ internal object TrainingsDaten {
             .map { Duration.between(s.startTime, it.time).seconds to it.percentage.value }
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /** Die juengste HRV waehrend des Trainings und zehn Minuten danach - wie SpO2. */
+    private suspend fun hrv(klient: HealthConnectClient, s: ExerciseSessionRecord): Double? = try {
+        klient.readRecords(
+            ReadRecordsRequest(
+                HeartRateVariabilityRmssdRecord::class,
+                TimeRangeFilter.between(s.startTime, s.endTime.plusSeconds(600)),
+            )
+        ).records.maxByOrNull { it.time }?.heartRateVariabilityMillis
+    } catch (e: Exception) {
+        null
     }
 
     /** Fehlen Leserechte in der Akte, die die Ansicht braucht? */

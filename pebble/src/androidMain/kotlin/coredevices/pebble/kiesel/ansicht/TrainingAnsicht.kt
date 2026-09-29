@@ -357,7 +357,7 @@ private fun Woche(trainings: List<TrainingEintrag>) {
 
 /** Eine Abschnittsueberschrift zwischen den Karten, wie in Kiesel-Helper. */
 @Composable
-private fun Ueberschrift(text: String) {
+internal fun Ueberschrift(text: String) {
     Text(
         text.uppercase(),
         style = MaterialTheme.typography.labelMedium,

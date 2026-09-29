@@ -38,6 +38,27 @@ class TrainingsanalyseTest {
     }
 
     @Test
+    fun bewegtOhneHalt() {
+        // 30 s fahren, 60 s an der Ampel (derselbe Punkt), 30 s fahren.
+        val fahrt = gerade(30)
+        val halt = (1..60).map { fahrt.last().copy(zeit = fahrt.last().zeit + it) }
+        val weiter = gerade(30).drop(1).map { it.copy(zeit = it.zeit + 90, lon = it.lon + 30 * 0.000131) }
+        val s = Trainingsanalyse.strecke(fahrt + halt + weiter)
+        val b = Trainingsanalyse.bewegt(s)
+        assertTrue("bewegt $b", b in 55..70)
+    }
+
+    @Test
+    fun sprungZaehltNichtAlsWeg() {
+        // Nach 30 s ein Kilometer Versatz nach Norden - verlorener Empfang.
+        val punkte = gerade(60).mapIndexed { i, p -> if (i > 30) p.copy(lat = p.lat + 0.009) else p }
+        val s = Trainingsanalyse.strecke(punkte)
+        assertTrue(s[31].nachSprung)
+        assertTrue(s.count { it.nachSprung } == 1)
+        assertEquals(Spur.laenge(punkte), s.last().meter, 0.01)
+    }
+
+    @Test
     fun pulsUeberStreckeLiegtZwischenDenPunkten() {
         val s = Trainingsanalyse.strecke(gerade(60))
         val p = Trainingsanalyse.pulsUeberStrecke(listOf(Pulspunkt(30, 120)), s)

@@ -3,9 +3,9 @@
 <resources>
     <string name="ks_n_training">Training</string>
     <string name="ks_n_protokoll">Log</string>
-    <string name="ks_n_protokoll_leer">Nothing received from Kieselsport yet.</string>
+    <string name="ks_n_protokoll_leer">Nothing received from Kieselsport, Drinktervall or SupCycle yet.</string>
     <string name="ks_n_akte_rechte">Health Connect access</string>
-    <string name="ks_n_akte_rechte_text">To show your workouts with heart rate, Boulder needs to read workouts, heart rate and SpO2 from Health Connect.</string>
+    <string name="ks_n_akte_rechte_text">Boulder needs access to workouts, heart rate, SpO2 and HRV in Health Connect to show your workouts — and to log water from Drinktervall and supplements from SupCycle.</string>
     <string name="ks_n_erlauben">Allow</string>
     <string name="ks_n_puls">Heart rate</string>
     <string name="ks_n_zonen">Time in zones</string>

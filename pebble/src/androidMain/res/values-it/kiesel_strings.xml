@@ -40,4 +40,10 @@
         <item quantity="many">Curva FC con %1$d punti registrata</item>
         <item quantity="other">Curva FC con %1$d punti registrata</item>
     </plurals>
+    <!-- Drinktervall und SupCycle -->
+    <string name="ks_w_eingetragen">%1$d ml registrati</string>
+    <string name="ks_w_uebersprungen">Saltato — %1$s ha già registrato lo stesso bicchiere</string>
+    <string name="ks_s_davon_von">%1$d integratori su %2$d</string>
+    <string name="ks_s_praeparat_n">Integratore %1$d</string>
+    <string name="ks_s_platz_n">Posto %1$d</string>
 </resources>

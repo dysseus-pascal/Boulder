@@ -247,7 +247,7 @@ internal object TrainingsDaten {
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            KIESELSPORT_RECHTE - klient.permissionController.getGrantedPermissions()
+            KIESEL_RECHTE - klient.permissionController.getGrantedPermissions()
         } catch (e: Exception) {
             emptySet()
         }

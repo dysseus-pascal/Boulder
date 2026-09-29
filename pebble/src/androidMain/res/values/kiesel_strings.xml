@@ -39,4 +39,10 @@
         <item quantity="one">Heart rate curve with %1$d point logged</item>
         <item quantity="other">Heart rate curve with %1$d points logged</item>
     </plurals>
+    <!-- Drinktervall und SupCycle -->
+    <string name="ks_w_eingetragen">%1$d ml logged</string>
+    <string name="ks_w_uebersprungen">Skipped — %1$s already logged the same glass</string>
+    <string name="ks_s_davon_von">%1$d of %2$d supplements</string>
+    <string name="ks_s_praeparat_n">Supplement %1$d</string>
+    <string name="ks_s_platz_n">Slot %1$d</string>
 </resources>

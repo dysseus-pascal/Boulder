@@ -40,4 +40,10 @@
         <item quantity="many">Courbe de FC de %1$d points enregistrée</item>
         <item quantity="other">Courbe de FC de %1$d points enregistrée</item>
     </plurals>
+    <!-- Drinktervall und SupCycle -->
+    <string name="ks_w_eingetragen">%1$d ml enregistrés</string>
+    <string name="ks_w_uebersprungen">Ignoré — %1$s a déjà enregistré le même verre</string>
+    <string name="ks_s_davon_von">%1$d compléments sur %2$d</string>
+    <string name="ks_s_praeparat_n">Complément %1$d</string>
+    <string name="ks_s_platz_n">Emplacement %1$d</string>
 </resources>

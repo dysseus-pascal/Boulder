@@ -40,4 +40,10 @@
         <item quantity="many">Curva de FC con %1$d puntos registrada</item>
         <item quantity="other">Curva de FC con %1$d puntos registrada</item>
     </plurals>
+    <!-- Drinktervall und SupCycle -->
+    <string name="ks_w_eingetragen">%1$d ml registrados</string>
+    <string name="ks_w_uebersprungen">Omitido — %1$s ya registró el mismo vaso</string>
+    <string name="ks_s_davon_von">%1$d de %2$d suplementos</string>
+    <string name="ks_s_praeparat_n">Suplemento %1$d</string>
+    <string name="ks_s_platz_n">Hueco %1$d</string>
 </resources>

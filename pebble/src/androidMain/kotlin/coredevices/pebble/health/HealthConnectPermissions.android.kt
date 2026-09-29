@@ -39,7 +39,7 @@ internal actual suspend fun requestPlatformHealthPermissions(
     // Boulder: was Kieselsport braucht, im selben Dialog - HRV eintragen, SpO2
     // fuer die Frage der Uhr lesen. Wie SpO2 nur nach Moeglichkeit: ohne sie
     // laeuft der Sync der anderen Daten trotzdem.
-    val allPerms = standardPerms + WRITE_OXYGEN_SATURATION + coredevices.pebble.kiesel.KIESELSPORT_RECHTE
+    val allPerms = standardPerms + WRITE_OXYGEN_SATURATION + coredevices.pebble.kiesel.KIESEL_RECHTE
     val granted = HealthConnectPermissionBridge.request(ctx, allPerms)
     return standardPerms.all { it in granted }
 }

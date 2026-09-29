@@ -247,8 +247,13 @@ class CompanionAppLifecycleManager(
                 )
             } else null
             pkjsApp?.let { add(it) }
-            // Fork: the PebbleKit toggles gate the platform session.
-            if (watchConfig.allowsPlatformCompanionSession(pbw.info, pkjsRunning = pkjsApp != null)) {
+            // Boulder: ein eingebauter Begleiter neben PebbleKit JS nimmt den
+            // Platz des Wegs zu Android-Apps ein (siehe BuiltInCompanions.createBeside).
+            val daneben = builtInCompanions.createBeside(lockerEntry.id, device, pkjsRunning = pkjsApp != null)
+            if (daneben != null) {
+                add(daneben)
+            } else if (watchConfig.allowsPlatformCompanionSession(pbw.info, pkjsRunning = pkjsApp != null)) {
+                // Fork: the PebbleKit toggles gate the platform session.
                 createPlatformSpecificCompanionAppControl(
                     device = device,
                     appInfo = pbw.info,

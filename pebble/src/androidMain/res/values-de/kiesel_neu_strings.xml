@@ -3,9 +3,9 @@
 <resources>
     <string name="ks_n_training">Training</string>
     <string name="ks_n_protokoll">Protokoll</string>
-    <string name="ks_n_protokoll_leer">Von Kieselsport ist noch nichts angekommen.</string>
+    <string name="ks_n_protokoll_leer">Noch nichts von Kieselsport, Drinktervall oder SupCycle empfangen.</string>
     <string name="ks_n_akte_rechte">Zugriff auf Health Connect</string>
-    <string name="ks_n_akte_rechte_text">Um deine Trainings mit Puls zu zeigen, braucht Boulder Lesezugriff auf Trainings, Puls und SpO2 in Health Connect.</string>
+    <string name="ks_n_akte_rechte_text">Boulder braucht in Health Connect Zugriff auf Trainings, Puls, SpO2 und HRV, um deine Trainings zu zeigen – und darf Wasser von Drinktervall und Präparate von SupCycle eintragen.</string>
     <string name="ks_n_erlauben">Erlauben</string>
     <string name="ks_n_puls">Puls</string>
     <string name="ks_n_zonen">Zeit in Zonen</string>

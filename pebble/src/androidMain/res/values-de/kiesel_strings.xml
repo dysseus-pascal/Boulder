@@ -39,4 +39,10 @@
         <item quantity="one">Pulskurve mit %1$d Punkt eingetragen</item>
         <item quantity="other">Pulskurve mit %1$d Punkten eingetragen</item>
     </plurals>
+    <!-- Drinktervall und SupCycle -->
+    <string name="ks_w_eingetragen">%1$d ml eingetragen</string>
+    <string name="ks_w_uebersprungen">Übersprungen — %1$s hat dasselbe Glas schon eingetragen</string>
+    <string name="ks_s_davon_von">%1$d von %2$d Präparaten</string>
+    <string name="ks_s_praeparat_n">Präparat %1$d</string>
+    <string name="ks_s_platz_n">Platz %1$d</string>
 </resources>

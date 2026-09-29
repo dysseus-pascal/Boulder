@@ -66,7 +66,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Wochenrechnung
 import coredevices.pebble.health.HealthConnectPermissionBridge
-import coredevices.pebble.kiesel.KIESELSPORT_RECHTE
+import coredevices.pebble.kiesel.KIESEL_RECHTE
 import coredevices.pebble.kiesel.KieselVerlauf
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.OffeneSpur
@@ -213,7 +213,7 @@ internal fun TrainingListe(
                     Text(stringResource(R.string.ks_n_akte_rechte_text), style = MaterialTheme.typography.bodySmall)
                     Button(onClick = {
                         scope.launch {
-                            HealthConnectPermissionBridge.request(context, KIESELSPORT_RECHTE)
+                            HealthConnectPermissionBridge.request(context, KIESEL_RECHTE)
                             neu++
                         }
                     }) { Text(stringResource(R.string.ks_n_erlauben)) }

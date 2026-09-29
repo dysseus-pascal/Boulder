@@ -485,7 +485,9 @@ internal object Kieselsport {
         return schreibe(
             context,
             HeartRateVariabilityRmssdRecord(
-                time = Instant.ofEpochSecond(wann), zoneOffset = null,
+                // Hoechstens jetzt - eine vorgehende Uhr ergaebe sonst einen
+                // Eintrag in der Zukunft, und den lehnt die Akte ab.
+                time = minOf(Instant.ofEpochSecond(wann), Instant.now()), zoneOffset = null,
                 heartRateVariabilityMillis = ms.toDouble(),
                 metadata = vonDerUhr("kieselsport-hrv-zeit-$wann"),
             ),

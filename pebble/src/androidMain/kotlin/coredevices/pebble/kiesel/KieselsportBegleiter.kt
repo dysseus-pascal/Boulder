@@ -104,12 +104,75 @@ internal class KieselsportBegleiter(
 }
 
 /**
+ * Hoert neben dem PebbleKit JS einer Uhr-App mit - fuer Drinktervall und
+ * SupCycle, deren Meldungen frueher Kiesel-Helper ueber PebbleKit Android
+ * bekam.
+ *
+ * ER BESTAETIGT NUR, WENN KEIN PEBBLEKIT JS LAEUFT: sonst tut das PebbleKit
+ * JS der Uhr-App, und eine zweite Bestaetigung braucht niemand. Ohne
+ * Netzwerk-Freigabe startet Gravel es aber nicht - dann wiederholte die Uhr
+ * jede Nachricht, die niemand bestaetigt. Die Verarbeitung
+ * laeuft wie bei Kieselsport in einer Warteschlange fuer die ganze App, damit
+ * sie das Ende der Sitzung ueberlebt.
+ */
+internal class Mithoerer(
+    private val context: Context,
+    private val uuid: Uuid,
+    private val device: CompanionAppDevice,
+    private val bestaetigen: Boolean,
+) : CompanionApp {
+    private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
+        sitzung.launch {
+            incomingAppMessages.collect {
+                if (bestaetigen) device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
+                auftraege.send(context.applicationContext to Gehoert(uuid, KieselsportBegleiter.zerlege(it.data)))
+            }
+        }
+    }
+
+    override suspend fun stop() {
+        sitzung.cancel()
+    }
+
+    private class Gehoert(val uuid: Uuid, val nachricht: KieselNachricht)
+
+    companion object {
+        private val logger = Logger.withTag("Mithoerer")
+        private val auftraege = Channel<Pair<Context, Gehoert>>(Channel.UNLIMITED)
+
+        init {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                for ((context, g) in auftraege) {
+                    try {
+                        when (g.uuid) {
+                            Drinktervall.UUID -> Drinktervall.verarbeite(context, g.nachricht)
+                            SupCycle.UUID -> SupCycle.verarbeite(context, g.nachricht)
+                            else -> null
+                        }?.let { KieselVerlauf.merke(context, it) }
+                    } catch (e: Exception) {
+                        logger.e(e) { "Nachricht von ${g.uuid} nicht verarbeitet: ${e.message}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Die Begleiter, die Boulder fest mitbringt (siehe BuiltInCompanions in
- * libpebble3). Bisher einer: Kieselsport.
+ * libpebble3): Kieselsport ganz, Drinktervall und SupCycle neben ihrem
+ * PebbleKit JS.
  */
 class BoulderBegleiter(private val context: Context) : BuiltInCompanions {
     override fun create(uuid: Uuid, device: CompanionAppDevice): CompanionApp? = when (uuid) {
         Kieselsport.UUID -> KieselsportBegleiter(context, device)
+        else -> null
+    }
+
+    override fun createBeside(uuid: Uuid, device: CompanionAppDevice, pkjsRunning: Boolean): CompanionApp? = when (uuid) {
+        Drinktervall.UUID, SupCycle.UUID -> Mithoerer(context, uuid, device, bestaetigen = !pkjsRunning)
         else -> null
     }
 }

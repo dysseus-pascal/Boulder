@@ -147,6 +147,9 @@ kotlin {
                 implementation(libs.health.connect)
                 implementation(libs.osmdroid)
                 implementation(project(":osmand-api"))
+                // Boulder: Sicherung in einen gewaehlten Ordner (SAF), taeglich per WorkManager.
+                implementation(libs.androidx.documentfile)
+                implementation(libs.androidx.work)
             }
         }
 

@@ -17,3 +17,8 @@ actual fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Lo
 actual fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: String) {
     Text("Health is only available on Android.")
 }
+
+@Composable
+actual fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Health is only available on Android.")
+}

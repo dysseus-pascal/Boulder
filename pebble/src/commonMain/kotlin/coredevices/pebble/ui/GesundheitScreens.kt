@@ -15,3 +15,6 @@ expect fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Lo
 
 @Composable
 expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: String)
+
+@Composable
+expect fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav)

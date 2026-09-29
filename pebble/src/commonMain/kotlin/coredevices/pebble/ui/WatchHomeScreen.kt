@@ -159,7 +159,8 @@ class WatchHomeViewModel(
     val selectedTab = mutableStateOf(
         when {
             coreConfig.value.enableIndex && libIndex.isAnyRingPaired() -> WatchHomeNavTab.Index
-            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
+            // Boulder: mit gekoppelter Uhr oeffnet die App beim Sport, dem ersten Reiter.
+            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.Training
             else -> WatchHomeNavTab.Watches
         }
     )
@@ -803,11 +804,12 @@ enum class WatchHomeNavTab(
         // Boulder: kein Health-Reiter mehr - Gravels Health-Seite ist
         // ausgebaut. Dafuer die Trainings von Kieselsport; die Daten gehen
         // weiter nach Health Connect (PlatformHealthSync).
+        // SPORT UND GESUNDHEIT ZUERST (Nutzerwunsch), der Rest wie bei Gravel.
+        // Die Gesundheitsuebersicht kommt an Platz zwei, sobald es sie gibt.
         fun navBarEntries(indexEnabled: Boolean): List<WatchHomeNavTab> {
-            val tabs = mutableListOf(WatchFaces)
+            val tabs = mutableListOf(Training, WatchFaces)
             if (indexEnabled) tabs.add(Index)
             tabs.add(Watches)
-            tabs.add(Training)
             tabs.add(Notifications)
             tabs.add(Settings)
             return tabs

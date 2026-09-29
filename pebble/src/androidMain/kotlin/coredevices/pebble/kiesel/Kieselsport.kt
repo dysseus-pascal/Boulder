@@ -299,16 +299,16 @@ internal object Kieselsport {
             return context.getString(R.string.ks_g_akte_fehlt)
         }
         val anfang = Instant.ofEpochSecond(beginn)
-        val ende = anfang.plusSeconds(dauer)
+        // DIE STRECKE KOMMT VOM TELEFON, nicht von der Uhr - als Route an der Sitzung.
+        val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
+        val ende = sitzungsEnde(anfang, dauer, punkte, Instant.now())
 
         val (satzart, name) = artAlsSatzart(context, felder[SP_ART] ?: -1)
         val puls = felder[SP_PULS_MITTEL] ?: 0
         val kcal = felder[SP_KCAL] ?: 0
 
-        // DIE STRECKE KOMMT VOM TELEFON, nicht von der Uhr - als Route an der Sitzung.
-        val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
         val strecke = if (punkte.size >= 2) Spur.laenge(punkte) else 0.0
-        val route = if (punkte.size >= 2) routeAus(punkte) else null
+        val route = routeAus(punkte, anfang, ende)
 
         val abschnitte = abschnitteAus(texte[SP_ABSCHNITTE])
         val bahnen = felder[SP_BAHNEN] ?: 0
@@ -400,7 +400,7 @@ internal object Kieselsport {
         if (punkte.size < 2) return context.getString(R.string.ks_a_nicht_eingetragen)
         val klient = Akte(context).bereit() ?: return context.getString(R.string.ks_g_akte_fehlt)
         val anfang = Instant.ofEpochSecond(beginn)
-        val ende = Instant.ofEpochSecond(maxOf(punkte.last().zeit, beginn + 60))
+        val ende = sitzungsEnde(anfang, 60, punkte, Instant.now())
         val (satzart, name) = artAlsSatzart(context, art)
         val strecke = Spur.laenge(punkte)
         // Der Puls aus der Akte - nur der eigene, den Kieselsport geschickt hat.
@@ -423,16 +423,38 @@ internal object Kieselsport {
             }
             append(km(strecke) + " km (GPS)")
         }
-        val satz = ExerciseSessionRecord(
-            startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
-            exerciseType = satzart, title = name, notes = notiz,
-            metadata = vonDerUhr("kieselsport-$beginn"),
-            exerciseRoute = routeAus(punkte),
-        )
+        val satz = try {
+            ExerciseSessionRecord(
+                startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
+                exerciseType = satzart, title = name, notes = notiz,
+                metadata = vonDerUhr("kieselsport-$beginn"),
+                exerciseRoute = routeAus(punkte, anfang, ende),
+            )
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Nachtragen abgewiesen: " + e.message)
+            return context.getString(R.string.ks_a_nicht_eingetragen)
+        }
         val minuten = Duration.between(anfang, ende).toMinutes().toInt()
         val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
         return schreibe(context, satz, kurz).also { KieselVerlauf.merke(context, it) }
     }
+
+    /**
+     * Das Ende der Sitzung. Die Uhr schickt die AKTIVE Dauer, ohne Pausen; die
+     * Akte verlangt aber, dass jeder Punkt der Route in der Sitzung liegt. Nach
+     * einer Pause lagen die letzten Punkte hinter Beginn + Dauer, und die Akte
+     * wies das ganze Training ab. Also bis zum letzten Punkt - hoechstens jetzt.
+     */
+    fun sitzungsEnde(anfang: Instant, dauer: Long, punkte: List<Spur.Punkt>, jetzt: Instant): Instant {
+        val aktiv = anfang.plusSeconds(dauer)
+        // Eine Sekunde hinter dem letzten Punkt: der Punkt selbst liegt dann sicher darin.
+        val letzter = punkte.lastOrNull()?.let { Instant.ofEpochSecond(it.zeit + 1) } ?: return aktiv
+        return minOf(maxOf(aktiv, letzter), maxOf(aktiv, jetzt))
+    }
+
+    /** Die Route, beschnitten auf die Sitzung - nur Punkte darin nimmt die Akte an. Null unter zwei Punkten. */
+    fun routeAus(punkte: List<Spur.Punkt>, von: Instant, bis: Instant): ExerciseRoute? =
+        punkte.filter { it.zeit >= von.epochSecond && it.zeit < bis.epochSecond }.takeIf { it.size >= 2 }?.let(::routeAus)
 
     fun routeAus(punkte: List<Spur.Punkt>): ExerciseRoute = ExerciseRoute(punkte.map { p ->
         ExerciseRoute.Location(

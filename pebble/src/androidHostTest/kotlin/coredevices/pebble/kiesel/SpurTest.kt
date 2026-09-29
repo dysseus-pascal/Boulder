@@ -128,3 +128,27 @@ class SpurTest {
         org.junit.Assert.assertEquals(5.0, Spur.hoehenmeter(punkte), 0.001)
     }
 }
+
+class SitzungsendeTest {
+    private val a = java.time.Instant.ofEpochSecond(1_000_000)
+    private fun p(t: Long) = Spur.Punkt(t, 47.0, 8.0, null, 5f)
+
+    @Test
+    fun nach_einer_pause_reicht_die_sitzung_bis_zum_letzten_punkt() {
+        // 20 min aktiv, aber die Spur lief 35 min (15 min Pause).
+        val ende = Kieselsport.sitzungsEnde(a, 1200, listOf(p(1_000_000), p(1_002_100)), a.plusSeconds(99_999))
+        org.junit.Assert.assertEquals(1_002_101L, ende.epochSecond)
+    }
+
+    @Test
+    fun ohne_spur_zaehlt_die_aktive_dauer() {
+        org.junit.Assert.assertEquals(1_001_200L, Kieselsport.sitzungsEnde(a, 1200, emptyList(), a.plusSeconds(99_999)).epochSecond)
+    }
+
+    @Test
+    fun route_ohne_punkte_vor_dem_beginn() {
+        val ende = Kieselsport.sitzungsEnde(a, 60, listOf(p(999_990), p(1_000_010), p(1_000_500)), a.plusSeconds(99_999))
+        val route = Kieselsport.routeAus(listOf(p(999_990), p(1_000_010), p(1_000_500)), a, ende)!!
+        org.junit.Assert.assertEquals(listOf(1_000_010L, 1_000_500L), route.route.map { it.time.epochSecond })
+    }
+}

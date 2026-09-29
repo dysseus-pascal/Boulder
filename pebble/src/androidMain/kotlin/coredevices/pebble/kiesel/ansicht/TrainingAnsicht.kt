@@ -276,7 +276,8 @@ internal fun TrainingListe(
                         TextButton(onClick = {
                             artFuer = null
                             scope.launch {
-                                val meldung = Kieselsport.nachtragen(context, spur.beginn, art)
+                                val meldung = runCatching { Kieselsport.nachtragen(context, spur.beginn, art) }
+                                    .getOrElse { context.getString(R.string.ks_a_nicht_eingetragen) }
                                 Toast.makeText(context, meldung, Toast.LENGTH_LONG).show()
                                 neu++
                             }

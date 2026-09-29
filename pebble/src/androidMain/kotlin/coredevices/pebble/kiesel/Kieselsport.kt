@@ -15,6 +15,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Length
 import coredevices.pebble.R
+import kotlinx.serialization.Serializable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -24,6 +25,7 @@ import java.util.Locale
 import kotlin.uuid.Uuid
 
 /** Eine Nachricht von Kieselsport, nach Art der Werte getrennt. */
+@Serializable
 internal data class KieselNachricht(
     val zahlen: Map<Int, Long>,
     val texte: Map<Int, String> = emptyMap(),
@@ -447,6 +449,10 @@ internal object Kieselsport {
             altitude = p.hoehe?.let { Length.meters(it) },
         )
     })
+
+    /** Sagt eine Meldung von verarbeite, dass die Akte den Eintrag nicht nahm? */
+    fun gescheitert(context: Context, meldung: String?): Boolean =
+        meldung == context.getString(R.string.ks_a_nicht_eingetragen) || meldung == context.getString(R.string.ks_g_akte_fehlt)
 
     /**
      * Von der Uhr gemessen, mit fester Kennung: kommt derselbe Satz noch

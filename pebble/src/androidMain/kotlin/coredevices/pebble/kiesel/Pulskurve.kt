@@ -64,9 +64,12 @@ internal object Pulskurve {
     /**
      * Die Kurve zu diesem Training in die Akte; true, wenn sie drin ist.
      *
-     * DIE KENNUNG MACHT ES WIEDERHOLBAR: derselbe Beginn ergibt dieselbe
-     * clientRecordId, und die Akte ersetzt statt zu verdoppeln. Kommt die
-     * Datei zweimal an die Reihe, steht die Kurve trotzdem einmal da.
+     * DIE KENNUNG MACHT ES WIEDERHOLBAR: derselbe Beginn und dieselbe erste
+     * Sekunde ergeben dieselbe clientRecordId, und die Akte ersetzt statt zu
+     * verdoppeln. Kommt die Datei zweimal an die Reihe, steht die Kurve
+     * trotzdem einmal da. NACH DER SEKUNDE, NICHT NACH DER NUMMER DES
+     * STUECKS: kommt eine Kurve in zwei Uebertragungen, beginnt die zweite
+     * Datei wieder bei Stueck 0 und haette den ersten Teil ersetzt.
      */
     @Synchronized
     private fun lies(context: Context, beginn: Long): List<Pair<Int, Int>> {
@@ -86,7 +89,7 @@ internal object Pulskurve {
         if (punkte.size < 2) return false
         val klient = Akte(context).bereit() ?: return false
         val anfang = Instant.ofEpochSecond(beginn)
-        val saetze = punkte.chunked(JE_EINTRAG).mapIndexed { i, stueck ->
+        val saetze = punkte.chunked(JE_EINTRAG).map { stueck ->
             HeartRateRecord(
                 startTime = anfang.plusSeconds(stueck.first().first.toLong()),
                 startZoneOffset = null,
@@ -96,7 +99,7 @@ internal object Pulskurve {
                     HeartRateRecord.Sample(anfang.plusSeconds(s.toLong()), p.toLong())
                 },
                 metadata = Metadata.autoRecorded(
-                    Device(type = Device.TYPE_WATCH), "kieselsport-puls-$beginn-$i"
+                    Device(type = Device.TYPE_WATCH), "kieselsport-puls-$beginn-${stueck.first().first}"
                 ),
             )
         }

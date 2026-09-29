@@ -17,8 +17,14 @@ class PebbleAndroidDelegate(
     private val libPebble: LibPebble,
     private val context: Context,
 ) {
+    // Boulder: die Sammler unten leben so lange wie der Prozess. Jedes Oeffnen
+    // der App ruft hierher - ohne die Sperre kam jedes Mal ein weiterer dazu.
+    private var boulderGestartet = false
+
     fun initPostPermissions() {
         libPebble.doStuffAfterPermissionsGranted()
+        if (boulderGestartet) return
+        boulderGestartet = true
         // Boulder: OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
         Kieselstrasse.begleite(context, libPebble)
         // Boulder: neue Daten von der Uhr zeichnen das Gesundheits-Widget neu.

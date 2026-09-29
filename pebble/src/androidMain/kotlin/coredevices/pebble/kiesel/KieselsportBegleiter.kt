@@ -33,12 +33,22 @@ internal class KieselsportBegleiter(
     private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
-        // Kurven, deren Eintrag frueher scheiterte (etwa ohne Erlaubnis), bei jeder Sitzung nachholen.
-        sitzung.launch { Pulskurve.alleEintragen(context.applicationContext) }
+        val app = context.applicationContext
+        // Was liegen blieb, zuerst: Nachrichten, deren Verarbeitung scheiterte,
+        // und Kurven, deren Eintrag scheiterte (etwa ohne Erlaubnis).
+        Wartend.alle(app).forEach { auftraege.send(Auftrag(app, it)) }
+        sitzung.launch { Pulskurve.alleEintragen(app) }
         sitzung.launch {
             incomingAppMessages.collect { nachricht ->
+                // Die Zusammenfassung erst auf die Platte, dann bestaetigen
+                // (siehe Wartend). NUR SIE: eine liegengebliebene Zustandsmeldung
+                // startete beim naechsten Start das GPS fuer ein laengst
+                // beendetes Training. Geht das Sichern nicht, wird trotzdem
+                // bestaetigt und direkt verarbeitet - wie bisher.
+                val n = zerlege(nachricht.data)
+                val datei = if (n.zahlen.containsKey(Kieselsport.SP_DAUER)) Wartend.lege(app, n) else null
                 device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))
-                auftraege.send(Auftrag(context.applicationContext, nachricht))
+                auftraege.send(if (datei != null) Auftrag(app, datei) else Auftrag(app, nachricht = n))
             }
         }
     }
@@ -49,7 +59,7 @@ internal class KieselsportBegleiter(
         sitzung.cancel()
     }
 
-    private class Auftrag(val context: Context, val nachricht: AppMessageData)
+    private class Auftrag(val context: Context, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null)
 
     companion object {
         private val logger = Logger.withTag("Kieselsport")
@@ -67,9 +77,12 @@ internal class KieselsportBegleiter(
         init {
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for (a in auftraege) {
+                    val n = a.nachricht ?: a.datei?.let { Wartend.lies(it) } ?: continue
                     try {
-                        Kieselsport.verarbeite(a.context, zerlege(a.nachricht.data))
-                            ?.let { KieselVerlauf.merke(a.context, it) }
+                        val meldung = Kieselsport.verarbeite(a.context, n)
+                        meldung?.let { KieselVerlauf.merke(a.context, it) }
+                        // Bleibt liegen, was die Akte nicht nahm - der naechste Start versucht es wieder.
+                        if (!Kieselsport.gescheitert(a.context, meldung)) a.datei?.delete()
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht nicht verarbeitet: ${e.message}" }
                     }

@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import kotlinx.serialization.json.Json
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -69,5 +70,20 @@ class KieselsportTest {
         assertEquals(1L, n.zahlen[Kieselsport.SP_ART])
         assertEquals("10:1:25;", n.texte[Kieselsport.SP_ABSCHNITTE])
         assertContentEquals(byteArrayOf(120, 130.toByte()), n.bytes[Kieselsport.SP_KURVE])
+    }
+
+    @Test
+    fun nachrichtUeberlebtDiePlatte() {
+        // Was Wartend ablegt, muss unveraendert zurueckkommen - auch die Bytes der Kurve.
+        val n = KieselNachricht(
+            zahlen = mapOf(Kieselsport.SP_BEGINN to 1790696270L, Kieselsport.SP_DAUER to 1332L),
+            texte = mapOf(Kieselsport.SP_ABSCHNITTE to "1,2,3"),
+            bytes = mapOf(Kieselsport.SP_KURVE to byteArrayOf(120, 125, -128)),
+        )
+        val text = Json.encodeToString(KieselNachricht.serializer(), n)
+        val zurueck = Json.decodeFromString(KieselNachricht.serializer(), text)
+        assertEquals(n.zahlen, zurueck.zahlen)
+        assertEquals(n.texte, zurueck.texte)
+        assertContentEquals(n.bytes[Kieselsport.SP_KURVE], zurueck.bytes[Kieselsport.SP_KURVE])
     }
 }

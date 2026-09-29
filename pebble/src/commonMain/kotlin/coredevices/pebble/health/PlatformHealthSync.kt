@@ -224,9 +224,9 @@ class PlatformHealthSync(
             OverlayType.Nap.value,
             OverlayType.DeepNap.value,
         )
+        // Boulder: kein Walk/Run. Erkannte Bewegung ist kein Training - aus
+        // jedem Weg zum Bus wurde sonst eines in der Akte (Firmware vor b1).
         val exerciseTypes = listOf(
-            OverlayType.Walk.value,
-            OverlayType.Run.value,
             OverlayType.OpenWorkout.value,
         )
         val allTypes = sleepTypes + exerciseTypes

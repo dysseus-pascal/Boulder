@@ -76,7 +76,7 @@ class GesundheitWidget : AppWidgetProvider() {
                 val klient = Akte(context).bereit()
                 val jetzt = Instant.now()
                 training = klient?.liesOderEigene(context, ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minusSeconds(3 * 3600), jetzt))
-                    ?.maxByOrNull { it.endTime }
+                    ?.filterNot { TrainingsDaten.erkannt(context, it) }?.maxByOrNull { it.endTime }
                 training?.let { t ->
                     puls = klient?.liesOderEigene(context, HeartRateRecord::class, TimeRangeFilter.between(t.startTime, t.endTime))
                         ?.flatMap { it.samples }?.map { it.beatsPerMinute }?.takeIf { it.isNotEmpty() }?.average()

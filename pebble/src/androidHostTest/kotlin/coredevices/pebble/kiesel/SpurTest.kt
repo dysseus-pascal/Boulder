@@ -59,6 +59,25 @@ class SpurTest {
     }
 
     @Test
+    fun `Zittern im Stehen ist kein Weg`() {
+        // Neun Minuten am selben Ort, alle drei Sekunden ein Punkt, der bis zu
+        // fuenfzehn Meter daneben liegt - bei zwanzig Metern Genauigkeit.
+        val punkte = (0 until 180).map { i ->
+            val versatz = if (i % 2 == 0) 0.0 else 0.000135
+            Spur.Punkt(i * 3L, 47.0 + versatz, 8.0, null, 20f)
+        }
+        assertEquals(0.0, Spur.laenge(punkte), 0.001)
+    }
+
+    @Test
+    fun `langsames Gehen summiert sich trotzdem`() {
+        // Vier Meter je Punkt bei zehn Metern Genauigkeit: einzeln unter der
+        // Schwelle, zusammen 400 Meter.
+        val punkte = (0..100).map { i -> Spur.Punkt(i * 3L, 47.0 + i * 0.000036, 8.0, null, 10f) }
+        assertEquals(400.0, Spur.laenge(punkte), 15.0)
+    }
+
+    @Test
     fun `eine einzelne Messung hat keine Laenge`() {
         assertEquals(0.0, Spur.laenge(listOf(p(0, 1.0, 1.0))), 0.001)
         assertEquals(0.0, Spur.laenge(emptyList()), 0.001)

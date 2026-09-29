@@ -41,12 +41,10 @@ internal object Trainingsanalyse {
     fun strecke(punkte: List<Spur.Punkt>): List<Streckenpunkt> {
         if (punkte.size < 2) return emptyList()
         val start = punkte.first().zeit
-        var meter = 0.0
-        val roh = ArrayList<Streckenpunkt>(punkte.size)
-        punkte.forEachIndexed { i, p ->
+        val weg = Spur.weg(punkte)
+        val roh = punkte.mapIndexed { i, p ->
             val sprung = i > 0 && Spur.abstand(punkte[i - 1], p) > Spur.SPRUNG_MAX
-            if (i > 0 && !sprung) meter += Spur.abstand(punkte[i - 1], p)
-            roh += Streckenpunkt(meter, p.zeit - start, p.hoehe, 0.0, p.lat, p.lon, sprung)
+            Streckenpunkt(weg[i], p.zeit - start, p.hoehe, 0.0, p.lat, p.lon, sprung)
         }
         return roh.mapIndexed { i, p ->
             // Das Fenster: alle Punkte, die hoechstens fuenf Sekunden vor

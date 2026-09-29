@@ -127,6 +127,15 @@ internal object TrainingsDaten {
 
     const val KIESEL_HELPER = "ch.dysseus.kieselhelper"
 
+    /**
+     * Erkannte Gehstrecken, die Boulders Sync bis 0.21.3 als Training eintrug
+     * (PlatformHealthSync, "pebble-exercise-"). Sie sind Bewegung, kein
+     * Training, und fehlen deshalb in der Liste.
+     */
+    fun erkannt(context: Context, s: ExerciseSessionRecord): Boolean =
+        s.metadata.dataOrigin.packageName == context.packageName &&
+            s.metadata.clientRecordId?.startsWith("pebble-exercise-") == true
+
     suspend fun uebersicht(context: Context): TrainingsUebersicht = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit()
             ?: return@withContext TrainingsUebersicht(false, emptyList(), emptyList())
@@ -137,7 +146,7 @@ internal object TrainingsDaten {
                     ExerciseSessionRecord::class,
                     TimeRangeFilter.between(jetzt.minus(Duration.ofDays(TAGE)), jetzt),
                 )
-            ).records.sortedByDescending { it.startTime }
+            ).records.filterNot { erkannt(context, it) }.sortedByDescending { it.startTime }
         } catch (e: Exception) {
             Log.w(TAG, "Trainings lesen: " + e.message)
             emptyList()

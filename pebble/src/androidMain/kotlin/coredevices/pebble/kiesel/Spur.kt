@@ -136,13 +136,35 @@ internal object Spur {
      */
     const val SPRUNG_MAX = 200.0
 
-    fun laenge(punkte: List<Punkt>): Double {
-        var summe = 0.0
+    fun laenge(punkte: List<Punkt>): Double = weg(punkte).lastOrNull() ?: 0.0
+
+    /**
+     * Der zurueckgelegte Weg bis zu jedem Punkt.
+     *
+     * NUR WAS UEBER DIE UNGENAUIGKEIT HINAUSGEHT, ZAEHLT. Im Stehen zittert der
+     * Ort um die gemeldete Genauigkeit; alle drei Sekunden zwanzig Meter
+     * Zittern ergaben aus neun Minuten Warten fast sechs Kilometer. Gemessen
+     * wird darum vom letzten gezaehlten Punkt aus, und erst ein Abstand ueber
+     * der Genauigkeit beider Punkte gilt als Bewegung.
+     */
+    fun weg(punkte: List<Punkt>): DoubleArray {
+        val weg = DoubleArray(punkte.size)
+        var anker = 0
         for (i in 1 until punkte.size) {
-            val d = abstand(punkte[i - 1], punkte[i])
-            if (d <= SPRUNG_MAX) summe += d
+            weg[i] = weg[i - 1]
+            if (abstand(punkte[i - 1], punkte[i]) > SPRUNG_MAX) {
+                anker = i
+                continue
+            }
+            val d = abstand(punkte[anker], punkte[i])
+            // Ohne gemeldete Genauigkeit (NaN, aeltere Spuren) zaehlt jeder Schritt.
+            val schwelle = maxOf(punkte[anker].genauigkeit, punkte[i].genauigkeit).takeUnless { it.isNaN() } ?: 0f
+            if (d >= schwelle) {
+                weg[i] += d
+                anker = i
+            }
         }
-        return summe
+        return weg
     }
 
     /**

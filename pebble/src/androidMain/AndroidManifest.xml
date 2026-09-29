@@ -19,6 +19,12 @@
     <uses-permission android:name="android.permission.health.READ_HYDRATION" />
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Kieselstrasse: ohne diese Zeilen ist OsmAnd fuer Boulder unsichtbar, auch wenn es laeuft. -->
+    <queries>
+        <package android:name="net.osmand.plus" />
+        <package android:name="net.osmand" />
+        <package android:name="net.osmand.dev" />
+    </queries>
     <application>
         <receiver android:name=".ui.TestActionReceiver" android:exported="false" />
         <receiver android:name="coredevices.pebble.firmware.UpdateActionReceiver" android:exported="false" />

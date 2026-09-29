@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Wochenrechnung
 import coredevices.pebble.health.HealthConnectPermissionBridge
 import coredevices.pebble.kiesel.KIESEL_RECHTE
@@ -151,7 +152,12 @@ internal fun TrainingListe(
         }
     }
     // Zurueck aus den Systemeinstellungen: dort kann sich die Erlaubnis geaendert haben.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { ortsstand++; neu++ }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        // Zurueck aus OsmAnd: vielleicht ist Boulder dort jetzt freigeschaltet.
+        if (Kieselstrasse.lage == Kieselstrasse.Lage.FREISCHALTEN) Kieselstrasse.versucheErneut(context)
+        ortsstand++
+        neu++
+    }
     LaunchedEffect(neu) {
         daten = TrainingsDaten.uebersicht(context)
         fehlendeRechte = TrainingsDaten.fehlendeRechte(context)
@@ -192,6 +198,27 @@ internal fun TrainingListe(
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         }) { Text(stringResource(R.string.ks_ei_immer_erlauben)) }
+                    }
+                }
+            }
+        }
+
+        item(key = "osmand-$ortsstand") {
+            val lage = Kieselstrasse.lage
+            if (lage == Kieselstrasse.Lage.FREISCHALTEN || lage == Kieselstrasse.Lage.ABO_FEHLER) {
+                Karte {
+                    Text(stringResource(R.string.ks_o_titel), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.ks_o_text), style = MaterialTheme.typography.bodySmall)
+                    Text(Kieselstrasse.lageText(context), color = MaterialTheme.colorScheme.error)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { Kieselstrasse.versucheErneut(context); ortsstand++ }) {
+                            Text(stringResource(R.string.ks_o_erneut))
+                        }
+                        Kieselstrasse.osmandPaket(context)?.let { paket ->
+                            Button(onClick = {
+                                context.packageManager.getLaunchIntentForPackage(paket)?.let { context.startActivity(it) }
+                            }) { Text(stringResource(R.string.ks_o_oeffnen)) }
+                        }
                     }
                 }
             }

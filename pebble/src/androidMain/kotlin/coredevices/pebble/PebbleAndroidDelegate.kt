@@ -1,5 +1,7 @@
 package coredevices.pebble
 
+import android.content.Context
+import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -8,9 +10,12 @@ import kotlinx.coroutines.flow.map
 
 class PebbleAndroidDelegate(
     private val libPebble: LibPebble,
+    private val context: Context,
 ) {
     fun initPostPermissions() {
         libPebble.doStuffAfterPermissionsGranted()
+        // Boulder: OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
+        Kieselstrasse.begleite(context, libPebble)
     }
 
     /**

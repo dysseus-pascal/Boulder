@@ -146,6 +146,7 @@ kotlin {
                 // SpO2 (PR #267): health-kmp 1.4.0 kennt OxygenSaturation nicht.
                 implementation(libs.health.connect)
                 implementation(libs.osmdroid)
+                implementation(project(":osmand-api"))
             }
         }
 

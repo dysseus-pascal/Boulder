@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Trainingsansicht in Boulder: neue Texte (Englisch, Deutsch). -->
+<!-- Trainingsansicht in Boulder: neue Texte. -->
 <resources>
     <string name="ks_n_training">Training</string>
     <string name="ks_n_protokoll">Log</string>
@@ -44,4 +44,8 @@
     <string name="ks_n_davor">Before that</string>
     <string name="ks_n_kw">Wk %1$s</string>
     <string name="ks_n_kalender_text">Four weeks. The colour is the sport, the size the duration; a ring outside means a second sport was added.</string>
+    <string name="ks_o_titel">Kieselstrasse</string>
+    <string name="ks_o_text">OsmAnd has to allow Boulder once before turn-by-turn directions reach the watch.</string>
+    <string name="ks_o_oeffnen">Open OsmAnd</string>
+    <string name="ks_o_erneut">Try again</string>
 </resources>

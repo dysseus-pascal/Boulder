@@ -551,8 +551,10 @@ class LibPebble3(
             injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors = InjectedPKJSHttpInterceptors(emptyList()),
             // Gravel: an embedder that reports nothing gets no PebbleKit JS for network-denied apps.
             networkDenyEnforcement: NetworkDenyEnforcement = FixedNetworkDenyEnforcement(primaryLayerActive = false),
+            // Boulder: fest eingebaute Begleiter, etwa fuer Kieselsport (siehe BuiltInCompanions).
+            builtInCompanions: BuiltInCompanions = NoBuiltInCompanions,
         ): LibPebble {
-            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider, injectedPKJSHttpInterceptors, networkDenyEnforcement)
+            koin = initKoin(defaultConfig, webServices, appContext, tokenProvider, proxyTokenProvider, transcriptionProvider, injectedPKJSHttpInterceptors, networkDenyEnforcement, builtInCompanions)
             // Reads the persisted config (not defaultConfig), but must still precede anything that
             // touches Kable's shared central manager. Every Koin single here is lazy, and Kable is
             // only reached on the first scan/connect, which happens after create() returns.

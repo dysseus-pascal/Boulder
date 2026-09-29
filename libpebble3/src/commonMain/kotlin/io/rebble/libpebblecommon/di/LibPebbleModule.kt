@@ -324,6 +324,7 @@ fun initKoin(
     transcriptionProvider: TranscriptionProvider,
     injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
     networkDenyEnforcement: NetworkDenyEnforcement,
+    builtInCompanions: io.rebble.libpebblecommon.connection.BuiltInCompanions,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -345,6 +346,7 @@ fun initKoin(
                 single { transcriptionProvider }
                 single { injectedPKJSHttpInterceptors }
                 single { networkDenyEnforcement }
+                single { builtInCompanions }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)

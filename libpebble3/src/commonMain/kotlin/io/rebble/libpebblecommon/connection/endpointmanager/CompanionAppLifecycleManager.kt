@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.anopticlabs.gravel.pkjs.NetworkDenyEnforcement
 import com.anopticlabs.gravel.pkjs.shouldRunPkjs
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
+import io.rebble.libpebblecommon.connection.BuiltInCompanions
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
@@ -55,6 +56,7 @@ class CompanionAppLifecycleManager(
     private val libpebbleCoroutineScope: LibPebbleCoroutineScope,
     private val watchappPermissions: WatchappPermissionResolver,
     private val networkDenyEnforcement: NetworkDenyEnforcement,
+    private val builtInCompanions: BuiltInCompanions,
 ): ConnectedPebble.PKJS, ConnectedPebble.CompanionAppControl {
     companion object {
         private val logger = Logger.withTag(CompanionAppLifecycleManager::class.simpleName!!)
@@ -69,20 +71,31 @@ class CompanionAppLifecycleManager(
     // session before acting on it.
     private var currentEntry: LockerEntry? = null
 
+    // Boulder: die Uhr-App, deren eingebauter Begleiter gerade laeuft.
+    private var currentBuiltIn: Uuid? = null
+
     // Fork: every decision about when sessions stop, start, and restart lives in
     // the coordinator (see its KDoc for the model); this class only supplies the
     // effects, which need the locker DAO, PBW cache, and WebView machinery that
     // unit tests cannot construct.
     private val sessionCoordinator = CompanionSessionCoordinator(
         latestRunningApp = { appRunStateService.runningApp.value },
-        currentSessionApp = { currentEntry?.id },
+        currentSessionApp = { currentEntry?.id ?: currentBuiltIn },
         stopSession = { handleAppStop() },
         startSession = { uuid ->
-            // Fresh lookup on every start so a permission restart also picks up the
-            // newest locker entry for the app.
-            val lockerEntry = lockerEntryDao.getEntry(uuid)
-            if (lockerEntry != null && !lockerEntry.systemApp) {
-                handleNewRunningApp(lockerEntry)
+            // Boulder: ein eingebauter Begleiter geht vor - dann gibt es keinen
+            // zweiten Weg ueber die Sammlung, und keine App bekommt dieselbe
+            // Nachricht zweimal.
+            val eingebaut = builtInCompanions.create(uuid, device)
+            if (eingebaut != null) {
+                handleBuiltInApp(uuid, eingebaut)
+            } else {
+                // Fresh lookup on every start so a permission restart also picks up the
+                // newest locker entry for the app.
+                val lockerEntry = lockerEntryDao.getEntry(uuid)
+                if (lockerEntry != null && !lockerEntry.systemApp) {
+                    handleNewRunningApp(lockerEntry)
+                }
             }
         },
     )
@@ -97,6 +110,7 @@ class CompanionAppLifecycleManager(
     private suspend fun handleAppStop() {
         activeAppScope.cancel()
         currentEntry = null
+        currentBuiltIn = null
         runningApps.value.forEach { app ->
             // Don't error out if one app fails to stop
             try {
@@ -106,6 +120,30 @@ class CompanionAppLifecycleManager(
             }
         }
         runningApps.value = emptyList()
+    }
+
+    private suspend fun handleBuiltInApp(uuid: Uuid, app: CompanionApp) {
+        try {
+            currentBuiltIn = uuid
+            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+                logger.e(throwable) { "Unhandled exception in built-in companion $uuid: ${throwable.message}" }
+            }
+            activeAppScope = connectionScope +
+                    Job() +
+                    CoroutineName("BuiltInCompanion-$uuid") +
+                    exceptionHandler
+            runningApps.value = listOf(app)
+            val channel = Channel<AppMessageData>(Channel.BUFFERED)
+            app.start(channel.receiveAsFlow())
+            activeAppScope.launch {
+                device.inboundAppMessages(uuid).collect { channel.trySend(it) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to start built-in companion for $uuid: ${e.message}" }
+            handleAppStop()
+        }
     }
 
     private suspend fun handleNewRunningApp(lockerEntry: LockerEntry) {

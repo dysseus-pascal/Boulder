@@ -110,6 +110,7 @@ import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Clock
 import kotlin.time.Duration
+import io.rebble.libpebblecommon.connection.NoBuiltInCompanions
 import kotlin.uuid.Uuid
 
 val watchModule = module {
@@ -127,6 +128,8 @@ val watchModule = module {
             get(),
             // Gravel: bound by the platform's app module; absent means not enforced.
             networkDenyEnforcement = getOrNull() ?: FixedNetworkDenyEnforcement(primaryLayerActive = false),
+            // Boulder: vom Plattformmodul gebunden (Kieselsport auf Android).
+            builtInCompanions = getOrNull() ?: NoBuiltInCompanions,
         )
     } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
 

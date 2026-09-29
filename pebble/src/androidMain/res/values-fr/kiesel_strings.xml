@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kieselsport in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_a_titel_laufen">Course</string>
+    <string name="ks_a_titel_strasse">Vélo route/gravel</string>
+    <string name="ks_a_titel_wandern">Randonnée</string>
+    <string name="ks_a_titel_kraft">Musculation</string>
+    <string name="ks_a_titel_mtb">VTT (MTB)</string>
+    <string name="ks_a_titel_yoga">Yoga</string>
+    <string name="ks_a_titel_schwimmen">Natation</string>
+    <string name="ks_training">Entraînement</string>
+    <string name="ks_a_bahnen">%1$d longueurs</string>
+    <string name="ks_a_a_m">de %1$d m</string>
+    <string name="ks_a_saetze">%1$d séries</string>
+    <string name="ks_a_wdh">%1$d rép.</string>
+    <string name="ks_a_pause">repos ⌀ %1$d s</string>
+    <string name="ks_a_pulskurve_nicht">Courbe de pouls non enregistrée</string>
+    <string name="ks_a_begonnen">%1$s commencé</string>
+    <string name="ks_a_pausiert">%1$s en pause</string>
+    <string name="ks_a_fortgesetzt">%1$s repris</string>
+    <string name="ks_a_puls_schnitt">Pouls ⌀ %1$d</string>
+    <string name="ks_a_max">max %1$d</string>
+    <string name="ks_a_eingetragen">%1$s, %2$d min%3$s enregistré</string>
+    <string name="ks_a_ohne_abschnitte">%1$s (sans les segments individuels)</string>
+    <string name="ks_a_hrv_eingetragen">HRV %1$d ms enregistrée</string>
+    <string name="ks_a_hrv">HRV %1$d ms</string>
+    <string name="ks_a_pulskurve">courbe de pouls</string>
+    <string name="ks_a_nicht_eingetragen">Non enregistré — vérifier l\'autorisation dans l\'app</string>
+    <string name="ks_a_nachgetragen">%1$s, %2$d min%3$s ajouté après coup</string>
+    <string name="ks_g_akte_fehlt">Dossier santé indisponible</string>
+    <string name="ks_sp_titel">Enregistrement : %1$s</string>
+    <string name="ks_sp_text">Le parcours vient du téléphone — la montre n\'a pas de GPS.</string>
+    <string name="ks_sp_kanal">Enregistrement du parcours</string>
+    <string name="ks_sp_kanal_text">Actif uniquement pendant un entraînement.</string>
+    <string name="ks_sp_nicht_zugelassen">Parcours non enregistré — Android n\'a pas autorisé le service : %1$s</string>
+    <string name="ks_sp_ohne_standort">Entraînement sans parcours — localisation non autorisée (Réglages, Entraînement)</string>
+    <string name="ks_sp_ohne_strecke_x">Entraînement sans parcours — %1$s</string>
+    <plurals name="ks_v_pulskurve">
+        <item quantity="one">Courbe de FC de %1$d point enregistrée</item>
+        <item quantity="many">Courbe de FC de %1$d points enregistrée</item>
+        <item quantity="other">Courbe de FC de %1$d points enregistrée</item>
+    </plurals>
+</resources>

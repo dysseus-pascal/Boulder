@@ -36,12 +36,20 @@ internal actual suspend fun requestPlatformHealthPermissions(
     val writePerms = writeTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectWritePermissions() }
     val readPerms = readTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectReadPermissions() }
     val standardPerms = writePerms + readPerms
-    val allPerms = standardPerms + WRITE_OXYGEN_SATURATION
+    // Boulder: was Kieselsport braucht, im selben Dialog - HRV eintragen, SpO2
+    // fuer die Frage der Uhr lesen. Wie SpO2 nur nach Moeglichkeit: ohne sie
+    // laeuft der Sync der anderen Daten trotzdem.
+    val allPerms = standardPerms + WRITE_OXYGEN_SATURATION + KIESELSPORT_PERMISSIONS
     val granted = HealthConnectPermissionBridge.request(ctx, allPerms)
     return standardPerms.all { it in granted }
 }
 
 private const val KEY_PERMISSIONS = "KEY_PERMISSIONS"
+
+private val KIESELSPORT_PERMISSIONS = setOf(
+    writePermission(androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord::class),
+    readPermission(androidx.health.connect.client.records.OxygenSaturationRecord::class),
+)
 
 private fun HealthDataType.toHealthConnectWritePermissions(): Set<String> = when (this) {
     HealthDataType.Steps -> setOf(writePermission(StepsRecord::class))

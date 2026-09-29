@@ -246,6 +246,11 @@ class PlatformHealthSync(
         val exerciseRecords = mutableListOf<HealthRecord>()
         for (overlay in exerciseOverlays) {
             if (overlay.duration <= 0) continue
+            // Boulder: selbst gestartete Trainings (Kieselsport in der
+            // Boulder-Firmware) traegt der Kieselsport-Empfang ein - mit Art,
+            // Route, Saetzen und Pulskurve. Hier noch einmal eingetragen,
+            // stuende jedes Training doppelt in der Akte.
+            if (overlay.manual) continue
             val startTime = Instant.fromEpochSeconds(overlay.startTime)
             val endTime = startTime + overlay.duration.seconds
 

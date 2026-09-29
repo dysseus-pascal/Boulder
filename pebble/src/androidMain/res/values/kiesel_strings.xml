@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kieselsport in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_a_titel_laufen">Running</string>
+    <string name="ks_a_titel_strasse">Bike Road/Gravel</string>
+    <string name="ks_a_titel_wandern">Hiking</string>
+    <string name="ks_a_titel_kraft">Strength</string>
+    <string name="ks_a_titel_mtb">Bike MTB</string>
+    <string name="ks_a_titel_yoga">Yoga</string>
+    <string name="ks_a_titel_schwimmen">Swimming</string>
+    <string name="ks_training">Workout</string>
+    <string name="ks_a_bahnen">%1$d lengths</string>
+    <string name="ks_a_a_m">of %1$d m</string>
+    <string name="ks_a_saetze">%1$d sets</string>
+    <string name="ks_a_wdh">%1$d reps</string>
+    <string name="ks_a_pause">rest ⌀ %1$d s</string>
+    <string name="ks_a_pulskurve_nicht">Heart rate curve not logged</string>
+    <string name="ks_a_begonnen">%1$s started</string>
+    <string name="ks_a_pausiert">%1$s paused</string>
+    <string name="ks_a_fortgesetzt">%1$s resumed</string>
+    <string name="ks_a_puls_schnitt">HR ⌀ %1$d</string>
+    <string name="ks_a_max">max %1$d</string>
+    <string name="ks_a_eingetragen">%1$s, %2$d min%3$s logged</string>
+    <string name="ks_a_ohne_abschnitte">%1$s (without the individual segments)</string>
+    <string name="ks_a_hrv_eingetragen">HRV %1$d ms logged</string>
+    <string name="ks_a_hrv">HRV %1$d ms</string>
+    <string name="ks_a_pulskurve">heart rate curve</string>
+    <string name="ks_a_nicht_eingetragen">Not logged — check the permission in the app</string>
+    <string name="ks_a_nachgetragen">%1$s, %2$d min%3$s logged afterwards</string>
+    <string name="ks_g_akte_fehlt">Health record not available</string>
+    <string name="ks_sp_titel">Recording %1$s</string>
+    <string name="ks_sp_text">The route comes from the phone — the watch has no GPS.</string>
+    <string name="ks_sp_kanal">Route recording</string>
+    <string name="ks_sp_kanal_text">Only runs during a workout.</string>
+    <string name="ks_sp_nicht_zugelassen">Route not recorded — Android did not allow the service: %1$s</string>
+    <string name="ks_sp_ohne_standort">Workout without route — location not allowed (Settings, Training)</string>
+    <string name="ks_sp_ohne_strecke_x">Workout without route — %1$s</string>
+    <plurals name="ks_v_pulskurve">
+        <item quantity="one">Heart rate curve with %1$d point logged</item>
+        <item quantity="other">Heart rate curve with %1$d points logged</item>
+    </plurals>
+</resources>

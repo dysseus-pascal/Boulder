@@ -7,6 +7,11 @@
          the single permission prompt hosted by HealthConnectWritePermissionActivity below,
          alongside the standard steps/heart rate/sleep/exercise write permissions. -->
     <uses-permission android:name="android.permission.health.WRITE_OXYGEN_SATURATION" />
+    <!-- Kieselsport: HRV (Yoga, Einzelmessung) eintragen, SpO2 fuer die Frage der Uhr
+         lesen, und die GPS-Spur eines Trainings im Vordergrunddienst aufzeichnen. -->
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <application>
         <receiver android:name=".ui.TestActionReceiver" android:exported="false" />
         <receiver android:name="coredevices.pebble.firmware.UpdateActionReceiver" android:exported="false" />
@@ -18,6 +23,11 @@
                 <action android:name="coredevices.pebble.SIDELOAD_FIRMWARE" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name="coredevices.pebble.kiesel.SpurDienst"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <activity
             android:name="coredevices.pebble.health.HealthConnectWritePermissionActivity"

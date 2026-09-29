@@ -12,6 +12,7 @@ import coredevices.ring.ui.viewmodel.ListenDialogViewModel
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.RecordingDetailsViewModel
 import coredevices.ring.ui.viewmodel.SettingsViewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -23,7 +24,18 @@ internal val viewmodelModule = module {
     viewModelOf(::AllAnswersViewModel)
     viewModelOf(::ObjectDetailViewModel)
     viewModelOf(::RecordingDetailsViewModel)
-    viewModelOf(::SettingsViewModel)
+    viewModel {
+        SettingsViewModel(
+            get(), get(), get(),
+            get(), get(), get(),
+            get(), get(), get(),
+            get(), get(), get(),
+            get(),get(), get(),
+            get(),get(), get(),
+            get(),get(), get(),
+            get(),get()
+        )
+    }
     viewModelOf(::ListenDialogViewModel)
     viewModelOf(::IndexWebhookSettingsViewModel)
     viewModelOf(::McpSandboxGroupsViewModel)

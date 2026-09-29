@@ -76,6 +76,7 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.backup.BackupExporter
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
@@ -231,6 +232,7 @@ val experimentalModule = module {
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
+    singleOf(::BackupExporter)
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)

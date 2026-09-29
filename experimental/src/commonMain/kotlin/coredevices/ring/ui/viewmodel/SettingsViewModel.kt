@@ -16,6 +16,11 @@ import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.device.RSSIMeasurement
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.IndexActionsRepository
+import coredevices.ring.backup.BackupAudioMeta
+import coredevices.ring.backup.BackupExporter
+import coredevices.ring.backup.BackupFormat
+import coredevices.ring.backup.BackupRecording
+import coredevices.ring.backup.BackupZipReader
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -39,11 +44,9 @@ import coredevices.ring.service.RingSync
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
-import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.ui.components.QrPhotoPickResult
 import coredevices.ring.ui.components.pickQrCodeFromPhotos
 import coredevices.ring.ui.components.saveQrCodeToPhotos
-import coredevices.ring.storage.BackupZipWriter
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
@@ -61,14 +64,17 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
@@ -77,21 +83,10 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import kotlinx.io.readByteArray
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-@Serializable
-private data class BackupManifest(
-    val version: Int,
-    val userId: String,
-    val email: String,
-    val exportedAt: String,
-    val recordingCount: Int
-)
 sealed class DiagnosticsState {
     object Idle : DiagnosticsState()
     object Running : DiagnosticsState()
@@ -111,6 +106,7 @@ class SettingsViewModel(
     private val recordingEntryDao: RecordingEntryDao,
     private val conversationMessageDao: ConversationMessageDao,
     private val recordingStorage: RecordingStorage,
+    private val backupExporter: BackupExporter,
     private val documentEncryptor: DocumentEncryptor,
     private val encryptionManager: EncryptionManager,
     private val noteIntegrationFactory: NoteIntegrationFactory,
@@ -852,13 +848,6 @@ class SettingsViewModel(
     val backupDownloadStatus = _backupDownloadStatus.asStateFlow()
     private val _backupDownloading = MutableStateFlow(false)
     val backupDownloading = _backupDownloading.asStateFlow()
-    private val _backupZipPath = MutableStateFlow<Path?>(null)
-    val backupZipPath = _backupZipPath.asStateFlow()
-
-    private val backupJson = Json {
-        prettyPrint = true
-        encodeDefaults = true
-    }
 
     fun downloadFullBackup(uiContext: PlatformUiContext) {
         if (_backupDownloading.value) return
@@ -866,146 +855,98 @@ class SettingsViewModel(
             _backupDownloading.value = true
             _backupDownloadStatus.value = "Starting backup..."
             val log = Logger.withTag("FullBackup")
+            var zipPath: Path? = null
             try {
-                withContext(Dispatchers.IO) {
+                val exported = withContext(Dispatchers.IO) {
                     val user = Firebase.auth.currentUser
                         ?: throw Exception("Not signed in")
                     log.i { "Starting full backup for user ${user.uid}" }
+                    val total = runCatching { firestoreRecordingsDao.getCount().toInt() }.getOrNull()
 
-                    // 1. Fetch all recording documents from Firestore
-                    _backupDownloadStatus.value = "Fetching recording list..."
-                    val allDocs = mutableListOf<Pair<String, RecordingDocument>>()
-                    var cursor: DocumentSnapshot? = null
-                    while (true) {
-                        val snapshot = firestoreRecordingsDao.getPaginated(50, cursor)
-                        val docs = snapshot.documents
-                        if (docs.isEmpty()) break
-                        for (doc in docs) {
-                            try {
-                                allDocs.add(doc.id to doc.data<RecordingDocument>())
-                            } catch (e: Exception) {
-                                log.w(e) { "Skipping malformed document ${doc.id}" }
-                            }
-                        }
-                        cursor = docs.lastOrNull()
-                        _backupDownloadStatus.value = "Found ${allDocs.size} recordings..."
-                    }
-                    log.i { "Found ${allDocs.size} recordings to backup" }
+                    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                    val path = Path(recordingStorage.getCacheDirectory(), "$today Pebble Index backup.zip")
+                    zipPath = path
 
-                    if (allDocs.isEmpty()) {
-                        _backupDownloadStatus.value = "No recordings to backup"
-                        return@withContext
-                    }
-
-                    // 2. Create zip file
-                    val now = Clock.System.now()
-                    val today = now.toLocalDateTime(TimeZone.currentSystemDefault()).date
-                    val zipName = "$today Pebble Index backup.zip"
-                    val zipPath = Path(recordingStorage.getCacheDirectory(), zipName)
-                    if (SystemFileSystem.exists(zipPath)) {
-                        SystemFileSystem.delete(zipPath)
-                    }
-                    val zip = BackupZipWriter(zipPath)
-
-                    // 3. Add manifest
-                    val manifest = backupJson.encodeToString(
-                        BackupManifest(
-                            version = 1,
-                            userId = user.uid,
-                            email = user.email ?: "unknown",
-                            exportedAt = now.toString(),
-                            recordingCount = allDocs.size
-                        )
-                    )
-                    zip.addEntry("manifest.json", manifest.encodeToByteArray())
-
-                    // 4. For each recording, add document JSON + audio files
-                    var downloaded = 0
-                    var audioFiles = 0
                     var decryptSkipped = 0
-                    for ((firestoreId, rawDoc) in allDocs) {
-                        _backupDownloadStatus.value = "Backing up ${++downloaded}/${allDocs.size}..."
-
-                        // Decrypt if encrypted — backup is always cleartext
-                        val doc = if (rawDoc.encrypted != null) {
-                            val key = documentEncryptor.getKey()
-                            if (key == null) {
-                                log.w { "Encrypted recording $firestoreId but no local key — skipping" }
-                                decryptSkipped++
-                                continue
-                            }
-                            try {
-                                documentEncryptor.decryptDocument(rawDoc, key)
-                            } catch (e: KeyFingerprintMismatchException) {
-                                log.e { "Recording $firestoreId encrypted with key ${e.expected} but local key is ${e.actual} — skipping" }
-                                decryptSkipped++
-                                continue
-                            } catch (e: TamperedException) {
-                                log.e(e) { "Recording $firestoreId failed integrity check — skipping" }
-                                decryptSkipped++
-                                continue
-                            }
-                        } else rawDoc
-
-                        // Add document JSON
-                        val docJson = backupJson.encodeToString(RecordingDocument.serializer(), doc)
-                        zip.addEntry("recordings/$firestoreId/document.json", docJson.encodeToByteArray())
-
-                        // Download audio files for each entry
-                        for (entry in doc.entries) {
-                            val fileName = entry.fileName ?: continue
-                            for (variant in listOf(fileName, "$fileName-original")) {
-                                try {
-                                    val (source, meta) = recordingStorage.openRecordingSource(variant)
-                                    source.use { src ->
-                                        val bytes = src.readByteArray()
-                                        // Add metadata as a sidecar JSON
-                                        val metaJson = "{\"sampleRate\":${meta.cachedMetadata.sampleRate},\"mimeType\":\"${meta.cachedMetadata.mimeType}\"}"
-                                        zip.addEntry("recordings/$firestoreId/$variant.meta.json", metaJson.encodeToByteArray())
-                                        zip.addEntry("recordings/$firestoreId/$variant.raw", bytes)
-                                        audioFiles++
-                                    }
-                                } catch (e: Exception) {
-                                    log.w { "Could not download audio $variant: ${e.message}" }
-                                }
-                            }
-                        }
+                    val recordings = allRecordingDocuments(log).mapNotNull { (firestoreId, rawDoc) ->
+                        decryptForBackup(firestoreId, rawDoc, log)
+                            ?.let { BackupRecording(firestoreId, it) }
+                            ?: run { decryptSkipped++; null }
                     }
-
-                    zip.close()
-                    log.i { "Backup complete: $downloaded recordings, $audioFiles audio files, $decryptSkipped skipped due to decrypt failure" }
-                    if (decryptSkipped > 0) {
-                        _backupDownloadStatus.value =
-                            "Backup complete — $decryptSkipped recordings skipped (key mismatch). Restore the original key and retry."
+                    val result = backupExporter.export(
+                        zipPath = path,
+                        userId = user.uid,
+                        email = user.email ?: "unknown",
+                        recordings = recordings,
+                    ) { done ->
+                        _backupDownloadStatus.value = "Backing up $done${total?.let { "/$it" } ?: ""}..."
                     }
-                    _backupZipPath.value = zipPath
+                    log.i { "Backup complete: ${result.recordings} recordings, ${result.audioFiles} audio files, $decryptSkipped skipped due to decrypt failure" }
+                    if (result.recordings == 0) {
+                        _backupDownloadStatus.value = "No recordings to backup"
+                        return@withContext null
+                    }
+                    path to decryptSkipped
                 }
-                // Save to Downloads via file picker
-                val zipPath = _backupZipPath.value
-                if (zipPath != null) {
+                if (exported != null) {
+                    val (path, decryptSkipped) = exported
                     _backupDownloadStatus.value = "Choose save location..."
                     try {
-                        writeToDownloads(uiContext, zipPath, "application/zip")
-                        _backupDownloadStatus.value = "Backup saved"
+                        writeToDownloads(uiContext, path, "application/zip")
+                        _backupDownloadStatus.value = if (decryptSkipped > 0) {
+                            "Backup saved — $decryptSkipped recordings skipped (key mismatch). Restore the original key and retry."
+                        } else {
+                            "Backup saved"
+                        }
                     } catch (e: Exception) {
                         _backupDownloadStatus.value = "Backup created but save failed: ${e.message}"
-                    } finally {
-                        // Clean up temp zip
-                        try { SystemFileSystem.delete(zipPath) } catch (_: Exception) {}
-                        _backupZipPath.value = null
                     }
                 }
             } catch (e: Exception) {
                 log.e(e) { "Backup failed" }
                 _backupDownloadStatus.value = "Backup failed: ${e.message}"
             } finally {
+                zipPath?.let { runCatching { SystemFileSystem.delete(it, mustExist = false) } }
                 _backupDownloading.value = false
             }
         }
     }
 
-    fun clearBackupZipPath() {
-        _backupZipPath.value = null
+    private fun allRecordingDocuments(log: Logger): Flow<Pair<String, RecordingDocument>> = flow {
+        var cursor: DocumentSnapshot? = null
+        while (true) {
+            val docs = firestoreRecordingsDao.getPaginated(50, cursor).documents
+            if (docs.isEmpty()) break
+            for (doc in docs) {
+                val data = try {
+                    doc.data<RecordingDocument>()
+                } catch (e: Exception) {
+                    log.w(e) { "Skipping malformed document ${doc.id}" }
+                    continue
+                }
+                emit(doc.id to data)
+            }
+            cursor = docs.last()
+        }
+    }
+
+    /** Backups are always cleartext; returns null when the document can't be decrypted. */
+    private suspend fun decryptForBackup(firestoreId: String, rawDoc: RecordingDocument, log: Logger): RecordingDocument? {
+        if (rawDoc.encrypted == null) return rawDoc
+        val key = documentEncryptor.getKey()
+        if (key == null) {
+            log.w { "Encrypted recording $firestoreId but no local key — skipping" }
+            return null
+        }
+        return try {
+            documentEncryptor.decryptDocument(rawDoc, key)
+        } catch (e: KeyFingerprintMismatchException) {
+            log.e { "Recording $firestoreId encrypted with key ${e.expected} but local key is ${e.actual} — skipping" }
+            null
+        } catch (e: TamperedException) {
+            log.e(e) { "Recording $firestoreId failed integrity check — skipping" }
+            null
+        }
     }
 
     // --- Backup import ---
@@ -1028,185 +969,185 @@ class SettingsViewModel(
                     log.i { "Starting backup import for user ${user.uid}" }
 
                     val reader = BackupZipReader(zipPath)
-                    val allEntries = reader.readAllEntries()
-                    reader.close()
-                    log.i { "Read ${allEntries.size} zip entries" }
+                    reader.open()
+                    try {
+                        val entryNames = reader.entryNames
+                        log.i { "Read ${entryNames.size} zip entries" }
 
-                    val entryMap = allEntries.associateBy { it.name }
+                        // Only documents are read up front; audio is read as each recording uploads
+                        data class AudioFile(val variant: String, val entryName: String, val sampleRate: Int, val mimeType: String)
+                        data class RecordingImport(val firestoreId: String, val doc: RecordingDocument, val audioFiles: List<AudioFile>)
 
-                    // Parse recordings from zip
-                    data class AudioFile(val variant: String, val data: ByteArray, val sampleRate: Int, val mimeType: String)
-                    data class RecordingImport(val firestoreId: String, val doc: RecordingDocument, val audioFiles: List<AudioFile>)
-
-                    val recordings = allEntries.mapNotNull { e ->
-                        val parts = e.name.split("/")
-                        if (parts.size >= 2 && parts[0] == "recordings") parts[1] else null
-                    }.distinct().mapNotNull { dirId ->
-                        val docEntry = entryMap["recordings/$dirId/document.json"] ?: return@mapNotNull null
-                        val doc = try {
-                            backupJson.decodeFromString(RecordingDocument.serializer(), docEntry.data.decodeToString())
-                        } catch (e: Exception) {
-                            log.w(e) { "Failed to parse document for $dirId" }
-                            return@mapNotNull null
-                        }
-                        val audioFiles = doc.entries.flatMap { entry ->
-                            val fileName = entry.fileName ?: return@flatMap emptyList()
-                            listOf(fileName, "$fileName-original").mapNotNull { variant ->
-                                val rawEntry = entryMap["recordings/$dirId/$variant.raw"] ?: return@mapNotNull null
-                                val metaEntry = entryMap["recordings/$dirId/$variant.meta.json"]
-                                var sampleRate = 16000; var mimeType = "audio/raw"
-                                if (metaEntry != null) {
-                                    val s = metaEntry.data.decodeToString()
-                                    sampleRate = Regex("\"sampleRate\":(\\d+)").find(s)?.groupValues?.get(1)?.toIntOrNull() ?: 16000
-                                    mimeType = Regex("\"mimeType\":\"([^\"]+)\"").find(s)?.groupValues?.get(1) ?: "audio/raw"
+                        val recordings = entryNames.mapNotNull { BackupFormat.recordingIdFromEntry(it) }.distinct().mapNotNull { dirId ->
+                            val docEntry = BackupFormat.documentEntry(dirId)
+                            if (docEntry !in entryNames) return@mapNotNull null
+                            val doc = try {
+                                BackupFormat.json.decodeFromString(RecordingDocument.serializer(), reader.readBytes(docEntry).decodeToString())
+                            } catch (e: Exception) {
+                                log.w(e) { "Failed to parse document for $dirId" }
+                                return@mapNotNull null
+                            }
+                            val audioFiles = doc.entries.flatMap { entry ->
+                                val fileName = entry.fileName ?: return@flatMap emptyList()
+                                listOf(fileName, "$fileName${BackupFormat.ORIGINAL_SUFFIX}").mapNotNull { variant ->
+                                    val rawEntry = BackupFormat.audioEntry(dirId, variant)
+                                    if (rawEntry !in entryNames) return@mapNotNull null
+                                    val meta = BackupFormat.audioMetaEntry(dirId, variant)
+                                        .takeIf { it in entryNames }
+                                        ?.let { BackupFormat.decodeAudioMeta(reader.readBytes(it)) }
+                                        ?: BackupAudioMeta()
+                                    AudioFile(variant, rawEntry, meta.sampleRate, meta.mimeType)
                                 }
-                                AudioFile(variant, rawEntry.data, sampleRate, mimeType)
                             }
+                            RecordingImport(dirId, doc, audioFiles)
                         }
-                        RecordingImport(dirId, doc, audioFiles)
-                    }
 
-                    // Dedup by firestoreId only. Timestamp-based dedup
-                    // was prone to cascading corruption when multiple
-                    // recordings share an epoch-millisecond timestamp
-                    // (notably ~520 of this user's docs that round-trip
-                    // to epoch-0 on the Kotlin client) — see the same
-                    // class of bug previously removed from
-                    // performFeedHistoryDownload.
-                    val existingFirestoreIds = recordingRepository.getAllFirestoreIds()
+                        // Dedup by firestoreId only. Timestamp-based dedup
+                        // was prone to cascading corruption when multiple
+                        // recordings share an epoch-millisecond timestamp
+                        // (notably ~520 of this user's docs that round-trip
+                        // to epoch-0 on the Kotlin client) — see the same
+                        // class of bug previously removed from
+                        // performFeedHistoryDownload.
+                        val existingFirestoreIds = recordingRepository.getAllFirestoreIds()
 
-                    _importStatus.value = "Importing ${recordings.size} recordings..."
-                    log.i { "Parsed ${recordings.size} recordings. ${existingFirestoreIds.size} already in local DB." }
+                        _importStatus.value = "Importing ${recordings.size} recordings..."
+                        log.i { "Parsed ${recordings.size} recordings. ${existingFirestoreIds.size} already in local DB." }
 
-                    var imported = 0
-                    var skipped = 0
-                    var audioUploaded = 0
-                    var failed = 0
-                    val counterMutex = kotlinx.coroutines.sync.Mutex()
-                    val semaphore = Semaphore(6)
-                    val encryptionKey = if (preferences.useEncryption.value) {
-                        documentEncryptor.getKey().also { key ->
-                            if (key == null) {
-                                log.w { "Encryption is enabled, but no key is available during backup import; uploading audio unencrypted" }
+                        var imported = 0
+                        var skipped = 0
+                        var audioUploaded = 0
+                        var failed = 0
+                        val counterMutex = Mutex()
+                        val zipMutex = Mutex()
+                        val semaphore = Semaphore(6)
+                        val encryptionKey = if (preferences.useEncryption.value) {
+                            documentEncryptor.getKey().also { key ->
+                                if (key == null) {
+                                    log.w { "Encryption is enabled, but no key is available during backup import; uploading audio unencrypted" }
+                                }
                             }
+                        } else {
+                            null
                         }
-                    } else {
-                        null
-                    }
 
-                    coroutineScope {
-                        recordings.map { rec ->
-                            async {
-                                semaphore.withPermit {
-                                    try {
-                                        // If this recording already exists locally (by firestoreId
-                                        // — the only stable identifier across devices), skip the
-                                        // cloud upload but still backfill entries/messages from the
-                                        // document when the local row has none.
-                                        val existingLocalRow = recordingRepository.getByFirestoreId(rec.firestoreId)
-                                        val alreadyExists = existingLocalRow != null
-                                        val localId = if (alreadyExists) {
-                                            counterMutex.withLock { skipped++ }
-                                            existingLocalRow?.id
-                                        } else {
-                                            // 1. Upload audio files to Firebase Storage (overwrite to fix partials)
-                                            for (audio in rec.audioFiles) {
-                                                recordingStorage.uploadRecordingPcm(
-                                                    id = audio.variant,
-                                                    sampleRate = audio.sampleRate,
-                                                    pcmBytes = audio.data,
-                                                    encryptionKey = encryptionKey,
-                                                )
-                                                counterMutex.withLock { audioUploaded++ }
-                                            }
-
-                                            // 2. Upload document to Firestore (preserve original ID).
-                                            // Re-encrypt if this account uses encryption — exports are cleartext
-                                            // but the cloud invariant is that encrypted users store encrypted docs.
-                                            val docToUpload = if (encryptionKey != null) {
-                                                documentEncryptor.encryptDocument(rec.doc, encryptionKey)
+                        coroutineScope {
+                            recordings.map { rec ->
+                                async {
+                                    semaphore.withPermit {
+                                        try {
+                                            // If this recording already exists locally (by firestoreId
+                                            // — the only stable identifier across devices), skip the
+                                            // cloud upload but still backfill entries/messages from the
+                                            // document when the local row has none.
+                                            val existingLocalRow = recordingRepository.getByFirestoreId(rec.firestoreId)
+                                            val alreadyExists = existingLocalRow != null
+                                            val localId = if (alreadyExists) {
+                                                counterMutex.withLock { skipped++ }
+                                                existingLocalRow?.id
                                             } else {
-                                                rec.doc
-                                            }
-                                            firestoreRecordingsDao.setRecording(rec.firestoreId, docToUpload)
+                                                // 1. Upload audio files to Firebase Storage (overwrite to fix partials)
+                                                for (audio in rec.audioFiles) {
+                                                    val pcmBytes = zipMutex.withLock { reader.readBytes(audio.entryName) }
+                                                    recordingStorage.uploadRecordingPcm(
+                                                        id = audio.variant,
+                                                        sampleRate = audio.sampleRate,
+                                                        pcmBytes = pcmBytes,
+                                                        encryptionKey = encryptionKey,
+                                                    )
+                                                    counterMutex.withLock { audioUploaded++ }
+                                                }
 
-                                            // 3. Create local feed entry (same as performFeedHistoryDownload)
-                                            recordingRepository.createRecording(
-                                                firestoreId = rec.firestoreId,
-                                                localTimestamp = rec.doc.timestamp,
-                                                assistantTitle = rec.doc.assistantSession?.title,
-                                                updated = rec.doc.updated
-                                            )
-                                        }
+                                                // 2. Upload document to Firestore (preserve original ID).
+                                                // Re-encrypt if this account uses encryption — exports are cleartext
+                                                // but the cloud invariant is that encrypted users store encrypted docs.
+                                                val docToUpload = if (encryptionKey != null) {
+                                                    documentEncryptor.encryptDocument(rec.doc, encryptionKey)
+                                                } else {
+                                                    rec.doc
+                                                }
+                                                firestoreRecordingsDao.setRecording(rec.firestoreId, docToUpload)
 
-                                        if (localId != null) {
-                                            val existingEntries = recordingEntryDao.getEntriesForRecording(localId).first()
-                                            if (existingEntries.isEmpty() && rec.doc.entries.isNotEmpty()) {
-                                                recordingEntryDao.insertRecordingEntries(
-                                                    rec.doc.entries.map { entry ->
-                                                        RecordingEntryEntity(
-                                                            recordingId = localId,
-                                                            timestamp = entry.timestamp,
-                                                            fileName = entry.fileName,
-                                                            status = entry.status,
-                                                            transcription = entry.transcription,
-                                                            transcribedUsingModel = entry.transcribedUsingModel,
-                                                            error = entry.error,
-                                                            ringTransferInfo = entry.ringTransferInfo,
-                                                            userMessageId = entry.userMessageId
-                                                        )
-                                                    }
+                                                // 3. Create local feed entry (same as performFeedHistoryDownload)
+                                                recordingRepository.createRecording(
+                                                    firestoreId = rec.firestoreId,
+                                                    localTimestamp = rec.doc.timestamp,
+                                                    assistantTitle = rec.doc.assistantSession?.title,
+                                                    updated = rec.doc.updated
                                                 )
                                             }
-                                            val messages = rec.doc.assistantSession?.messages
-                                            if (!messages.isNullOrEmpty()) {
-                                                val existingMessages = conversationMessageDao.getMessagesForRecording(localId).first()
-                                                if (existingMessages.isEmpty()) {
-                                                    conversationMessageDao.insertMessages(
-                                                        messages.map { msg ->
-                                                            ConversationMessageEntity(
+
+                                            if (localId != null) {
+                                                val existingEntries = recordingEntryDao.getEntriesForRecording(localId).first()
+                                                if (existingEntries.isEmpty() && rec.doc.entries.isNotEmpty()) {
+                                                    recordingEntryDao.insertRecordingEntries(
+                                                        rec.doc.entries.map { entry ->
+                                                            RecordingEntryEntity(
                                                                 recordingId = localId,
-                                                                document = msg
+                                                                timestamp = entry.timestamp,
+                                                                fileName = entry.fileName,
+                                                                status = entry.status,
+                                                                transcription = entry.transcription,
+                                                                transcribedUsingModel = entry.transcribedUsingModel,
+                                                                error = entry.error,
+                                                                ringTransferInfo = entry.ringTransferInfo,
+                                                                userMessageId = entry.userMessageId
                                                             )
                                                         }
                                                     )
                                                 }
+                                                val messages = rec.doc.assistantSession?.messages
+                                                if (!messages.isNullOrEmpty()) {
+                                                    val existingMessages = conversationMessageDao.getMessagesForRecording(localId).first()
+                                                    if (existingMessages.isEmpty()) {
+                                                        conversationMessageDao.insertMessages(
+                                                            messages.map { msg ->
+                                                                ConversationMessageEntity(
+                                                                    recordingId = localId,
+                                                                    document = msg
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                }
+
+                                                // Pin `updated` to the document's value — entry/message
+                                                // inserts above auto-bump it to `now()`, which would
+                                                // otherwise make the upload observer re-upload a
+                                                // freshly-imported recording.
+                                                recordingRepository.setRecordingUpdated(
+                                                    localId,
+                                                    Instant.fromEpochMilliseconds(rec.doc.updated)
+                                                )
                                             }
 
-                                            // Pin `updated` to the document's value — entry/message
-                                            // inserts above auto-bump it to `now()`, which would
-                                            // otherwise make the upload observer re-upload a
-                                            // freshly-imported recording.
-                                            recordingRepository.setRecordingUpdated(
-                                                localId,
-                                                Instant.fromEpochMilliseconds(rec.doc.updated)
-                                            )
-                                        }
+                                            if (alreadyExists) {
+                                                return@withPermit
+                                            }
 
-                                        if (alreadyExists) {
-                                            return@withPermit
+                                            val count = counterMutex.withLock { ++imported }
+                                            if (count % 5 == 0 || count == recordings.size) {
+                                                _importStatus.value = "Imported $count/${recordings.size}..."
+                                            }
+                                        } catch (e: Exception) {
+                                            counterMutex.withLock { failed++ }
+                                            log.e(e) { "Failed to import ${rec.firestoreId}: ${e.message}" }
                                         }
-
-                                        val count = counterMutex.withLock { ++imported }
-                                        if (count % 5 == 0 || count == recordings.size) {
-                                            _importStatus.value = "Imported $count/${recordings.size}..."
-                                        }
-                                    } catch (e: Exception) {
-                                        counterMutex.withLock { failed++ }
-                                        log.e(e) { "Failed to import ${rec.firestoreId}: ${e.message}" }
                                     }
                                 }
-                            }
-                        }.awaitAll()
-                    }
+                            }.awaitAll()
+                        }
 
-                    val summary = buildString {
-                        append("Done — $imported imported, $skipped already existed")
-                        append(", $audioUploaded audio files")
-                        if (failed > 0) append(", $failed failed")
+                        val summary = buildString {
+                            append("Done — $imported imported, $skipped already existed")
+                            append(", $audioUploaded audio files")
+                            if (failed > 0) append(", $failed failed")
+                        }
+                        log.i { summary }
+                        _importStatus.value = summary
+                    } finally {
+                        reader.close()
                     }
-                    log.i { summary }
-                    _importStatus.value = summary
                 }
             } catch (e: Exception) {
                 log.e(e) { "Import failed" }

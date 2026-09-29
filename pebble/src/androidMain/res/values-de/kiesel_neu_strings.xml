@@ -14,4 +14,26 @@
     <string name="ks_n_akte_fehlt">Health Connect ist auf diesem Telefon nicht verfügbar.</string>
     <string name="ks_n_kein_puls">Kein Puls aufgezeichnet.</string>
     <string name="ks_n_spo2">SpO2 während des Trainings</string>
+    <string name="ks_n_einstellungen">Kieselsport-Einstellungen</string>
+    <string name="ks_n_stand_um">So hat die Uhr sie %1$s gemeldet.</string>
+    <string name="ks_n_stand_nie">Die Uhr hat ihre Einstellungen noch nicht gemeldet – das sind die Vorgaben. Öffne Kieselsport einmal auf der Uhr.</string>
+    <string name="ks_n_maxpuls">Maximalpuls</string>
+    <string name="ks_n_maxpuls_hinweis">Die Zonen auf der Uhr und hier rechnen mit demselben Wert.</string>
+    <string name="ks_n_pause">Pause bis zum Brummen</string>
+    <string name="ks_n_nie">nie</string>
+    <string name="ks_n_empfind">Wiederholungen erkennen</string>
+    <string name="ks_n_traege">träge</string>
+    <string name="ks_n_normal">normal</string>
+    <string name="ks_n_fein">fein</string>
+    <string name="ks_n_becken">Beckenlänge</string>
+    <string name="ks_n_pin">Pin in der Timeline</string>
+    <string name="ks_n_pin_art">Sportart</string>
+    <string name="ks_n_kein_pin">kein Pin</string>
+    <string name="ks_n_pin_zeit">Uhrzeit</string>
+    <string name="ks_n_senden">An die Uhr schicken</string>
+    <string name="ks_n_schliessen">Schliessen</string>
+    <string name="ks_n_uebernommen">Die Uhr hat die Einstellungen übernommen.</string>
+    <string name="ks_n_keine_uhr">Keine Uhr verbunden.</string>
+    <string name="ks_n_keine_antwort">Die Uhr hat die Einstellungen nicht bestätigt. Ist sie in Reichweite?</string>
+    <string name="ks_n_stand_eben">Gerade eben von der Uhr gemeldet.</string>
 </resources>

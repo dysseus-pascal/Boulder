@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Hiking
 import androidx.compose.material.icons.filled.Pool
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -133,6 +134,7 @@ internal fun TrainingListe(
     var fehlendeRechte by remember { mutableStateOf<Set<String>>(emptySet()) }
     var neu by remember { mutableIntStateOf(0) }
     var protokoll by remember { mutableStateOf(false) }
+    var einstellungen by remember { mutableStateOf(false) }
     var artFuer by remember { mutableStateOf<OffeneSpur?>(null) }
     var ortsstand by remember { mutableIntStateOf(0) }
 
@@ -140,6 +142,9 @@ internal fun TrainingListe(
         setzeAktionen {
             IconButton(onClick = { protokoll = true }) {
                 Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = stringResource(R.string.ks_n_protokoll))
+            }
+            IconButton(onClick = { einstellungen = true }) {
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.ks_n_einstellungen))
             }
         }
     }
@@ -272,6 +277,8 @@ internal fun TrainingListe(
             dismissButton = { TextButton(onClick = { artFuer = null }) { Text(stringResource(R.string.ks_abbrechen)) } },
         )
     }
+
+    if (einstellungen) EinstellungenDialog { einstellungen = false }
 
     if (protokoll) {
         val zeilen = remember { KieselVerlauf.alle(context) }

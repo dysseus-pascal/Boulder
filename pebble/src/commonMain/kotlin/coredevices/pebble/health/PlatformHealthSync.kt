@@ -128,6 +128,7 @@ class PlatformHealthSync(
             syncStepsAndHeartRate()
             syncOverlays()
             syncOxygenSaturation()
+            syncNaechte()
             logger.d { "Health platform sync completed" }
         } catch (e: Exception) {
             logger.e(e) { "Health platform sync failed" }
@@ -189,6 +190,17 @@ class PlatformHealthSync(
         }
     }
 
+    private suspend fun syncNaechte() {
+        if (!supportsNaechteWriting()) return
+        val naechte = healthDataApi.getNaechte(tracker.lastSyncedNachtBeginn + 1, Long.MAX_VALUE)
+        if (naechte.isEmpty()) return
+        val mitPhasen = naechte.map { it to healthDataApi.getNachtAbschnitte(it.beginnUtc) }
+        if (writeNaechteToPlatform(mitPhasen)) {
+            tracker.lastSyncedNachtBeginn = naechte.maxOf { it.beginnUtc }
+            logger.d { "Synced ${naechte.size} nights" }
+        }
+    }
+
     private suspend fun syncOxygenSaturation() {
         if (!supportsOxygenSaturationWriting()) return
         val lastTimestamp = tracker.lastSyncedSpo2Timestamp
@@ -228,7 +240,13 @@ class PlatformHealthSync(
         var maxSyncedTimestamp = lastTimestamp
 
         // Write sleep sessions separately so exercise failures don't block sleep
-        val sleepRecords = if (supportsSleepWriting()) buildSleepSessions(sleepOverlays) else emptyList()
+        // Boulder: wo die Firmware eine Nacht gerechnet hat, schreibt syncNaechte den Schlaf
+        // mit allen Phasen; die Sitzungen aus den Aktivitaetsdaten wuerden ihn verdoppeln.
+        val nachtSpannen = if (supportsNaechteWriting() && sleepOverlays.isNotEmpty()) {
+            healthDataApi.getNaechte(sleepOverlays.minOf { it.startTime } - 86_400, sleepOverlays.maxOf { it.startTime } + 86_400)
+                .map { it.schlafSpanne() }
+        } else emptyList()
+        val sleepRecords = if (supportsSleepWriting()) buildSleepSessions(ohneFirmwareNacht(sleepOverlays, nachtSpannen)) else emptyList()
         if (sleepRecords.isNotEmpty()) {
             logger.v { "Writing ${sleepRecords.size} sleep sessions to health platform" }
             val result = healthManager.writeData(sleepRecords)
@@ -357,6 +375,10 @@ class PlatformHealthSync(
         )
     }
 }
+
+/** Boulder: Schlaf-Overlays, die in keine Nacht der Firmware fallen. */
+internal fun ohneFirmwareNacht(overlays: List<OverlayDataEntity>, naechte: List<LongRange>): List<OverlayDataEntity> =
+    overlays.filter { o -> naechte.none { n -> o.startTime < n.last && o.startTime + o.duration > n.first } }
 
 internal data class SleepStageInterval(val startSec: Long, val endSec: Long, val isDeep: Boolean)
 

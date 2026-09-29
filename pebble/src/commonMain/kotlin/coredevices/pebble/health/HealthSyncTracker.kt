@@ -17,6 +17,7 @@ class HealthSyncTracker(private val settings: Settings) {
         private const val KEY_LAST_SYNCED_STEPS = "health_sync_last_steps_timestamp"
         private const val KEY_LAST_SYNCED_OVERLAY = "health_sync_last_overlay_timestamp"
         private const val KEY_LAST_SYNCED_SPO2 = "health_sync_last_spo2_timestamp"
+        private const val KEY_LAST_SYNCED_NACHT = "health_sync_last_nacht_beginn"
     }
 
     private val _enabled = MutableStateFlow<Boolean>(settings.getBoolean(KEY_ENABLED, false))
@@ -38,4 +39,9 @@ class HealthSyncTracker(private val settings: Settings) {
     var lastSyncedSpo2Timestamp: Long
         get() = settings.getLong(KEY_LAST_SYNCED_SPO2, 0L)
         set(value) { settings[KEY_LAST_SYNCED_SPO2] = value }
+
+    // Boulder: der Beginn der zuletzt geschriebenen Firmware-Nacht.
+    var lastSyncedNachtBeginn: Long
+        get() = settings.getLong(KEY_LAST_SYNCED_NACHT, 0L)
+        set(value) { settings[KEY_LAST_SYNCED_NACHT] = value }
 }

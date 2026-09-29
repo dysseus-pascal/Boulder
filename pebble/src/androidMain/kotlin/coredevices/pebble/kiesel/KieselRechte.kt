@@ -7,6 +7,7 @@ import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
 
 /**
  * Was die Kiesel-Aufgaben in der Akte zusaetzlich brauchen - ueber den Sync
@@ -28,4 +29,6 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getReadPermission(HydrationRecord::class),
     HealthPermission.getWritePermission(NutritionRecord::class),
     HealthPermission.getReadPermission(NutritionRecord::class),
+    // Die Naechte der Firmware: Ruhepuls neben Schlaf und HRV.
+    HealthPermission.getWritePermission(RestingHeartRateRecord::class),
 )

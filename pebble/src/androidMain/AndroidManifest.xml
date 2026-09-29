@@ -62,5 +62,43 @@
             android:name="io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProvider"
             tools:ignore="ExportedContentProvider"
             android:exported="true" />
+        <!-- Kartenlinks nach OsmAnd. Die Google-Adressen gibt Android erst frei,
+             wenn man sie Boulder von Hand zuordnet; geo: geht sofort. Zwei
+             Filter, weil Android alle data-Zeilen eines Filters verschmilzt -
+             ein pathPrefix gaelte sonst auch fuer die Kurzlinks. -->
+        <activity
+            android:name="coredevices.pebble.kiesel.KartenlinkActivity"
+            android:exported="true"
+            android:label="@string/ks_k_titel"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.Dialog.NoActionBar">
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="maps.google.com" />
+                <data android:host="maps.app.goo.gl" />
+            </intent-filter>
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="www.google.com" />
+                <data android:host="google.com" />
+                <data android:host="goo.gl" />
+                <data android:pathPrefix="/maps" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="geo" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

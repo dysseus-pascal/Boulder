@@ -14,4 +14,15 @@
     <string name="ks_o_verbinde">%1$s found — connecting</string>
     <string name="ks_o_verbunden">connected to %1$s</string>
     <string name="ks_o_verbunden_v">OsmAnd connected (%1$s)</string>
+    <string name="ks_k_titel">To OsmAnd</string>
+    <string name="ks_k_lese">Reading link …</string>
+    <string name="ks_k_kein_link">No link included.</string>
+    <string name="ks_k_kein_ziel">No destination could be read from this link.</string>
+    <string name="ks_k_abgelehnt">OsmAnd did not take the destination. Is OsmAnd installed?</string>
+    <string name="ks_k_an_osmand">Map link to OsmAnd (%1$s)</string>
+    <string name="ks_k_weg_adresse">%1$s, address converted</string>
+    <string name="ks_k_weg_koordinate">%1$s, coordinate from the link</string>
+    <string name="ks_k_ort_gezeigt">Place shown</string>
+    <string name="ks_k_suche">Search handed to OsmAnd</string>
+    <string name="ks_k_ziel">Destination</string>
 </resources>

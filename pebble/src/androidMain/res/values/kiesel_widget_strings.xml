@@ -36,8 +36,6 @@
     <string name="ks_w_beschreibung">What matters right now: the night in the morning, the workout after training, the steps otherwise</string>
     <string name="ks_w_auffrischen">Refresh now</string>
     <string name="ks_w_gerade_eben">just now</string>
-    <string name="ks_w_vor_min">%1$d min ago</string>
-    <string name="ks_w_vor_h">%1$d h ago</string>
     <string name="ks_w_name">Boulder Health</string>
     <string name="ks_w_app">Boulder</string>
     <string name="ks_w_nichts">Nothing logged yet</string>

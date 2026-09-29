@@ -126,14 +126,6 @@ internal object Spur {
             .sortedDescending()
     }
 
-    fun loesche(context: Context, beginn: Long) {
-        try {
-            datei(context, beginn).delete()
-        } catch (e: Exception) {
-            Log.w(TAG, "Spur löschen: " + e.message)
-        }
-    }
-
     /**
      * Die Streckenlänge in Metern.
      *

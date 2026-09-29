@@ -33,6 +33,8 @@ internal class KieselsportBegleiter(
     private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
+        // Kurven, deren Eintrag frueher scheiterte (etwa ohne Erlaubnis), bei jeder Sitzung nachholen.
+        sitzung.launch { Pulskurve.alleEintragen(context.applicationContext) }
         sitzung.launch {
             incomingAppMessages.collect { nachricht ->
                 device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))

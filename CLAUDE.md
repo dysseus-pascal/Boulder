@@ -5,13 +5,26 @@ die Regeln von Gravel, mit diesen Abweichungen:
 
 - App-Kennung `ch.dysseus.boulder`, Name Boulder. Fassung in `BOULDER_VERSION`,
   versionCode = Zahl der Commits. Kein F-Droid, keine `version.properties`.
-- Direkt auf `main`, jede neue Fassung wird durch die CI ein Release
-  (`.github/release/<fassung>.md`, deutsch, erste Zeile Titel ohne Nummer).
-- Gravels Health-Teil wird durch den von Kiesel-Helper ersetzt; Datalogging,
-  Parser und Rohdaten-Tabellen der Minutendaten bleiben als Quelle.
-- Firmware: nichts ueber 4.38.1 anbieten (`FIRMWARE_HOECHSTENS`).
+- Direkt auf `main`; jede neue Fassung wird ein Release (`.github/release/<fassung>.md`,
+  deutsch, erste Zeile Titel ohne Nummer). Die CI auf GitHub ist wegen der
+  Abrechnung gesperrt: gebaut wird lokal (`:androidApp:assembleDebug` mit dem
+  CI-Schluessel aus `ci/debug.keystore`), das Release legt `gh release create` an.
+- Gravels Health-Teil ist ersetzt durch den von Kiesel-Helper (archiviert). Er
+  steht in `pebble/src/androidMain/kotlin/coredevices/pebble/kiesel/`: Reiter
+  Health und Training, Nachtansicht, Trends, Widget, Sicherung, die Begleiter der
+  Uhr-Apps (Kieselsport eingebaut, Drinktervall und SupCycle neben ihrem PKJS,
+  siehe `BuiltInCompanions` in libpebble3) und Kieselstrasse (OsmAnd, Modul
+  `:osmand-api`). Seine Einstellungen haengen ueber `boulderSettingsItems` in
+  Gravels Einstellungsliste (Sektionen Health, Sport, Navigation).
+- Datalogging, Parser und Rohdaten-Tabellen der Minutendaten bleiben die Quelle;
+  die Naechte rechnet die Boulder-Firmware (Tag 88, Tabelle `boulder_nacht`).
+- Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
+  (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
+- Texte nur in den Sprachen, die Gravel hat (derzeit Englisch).
 - Neuer eigener Code: deutsche Bezeichner und Kommentare, Kommentare erklaeren
   das WARUM.
+- Die Waechtertests in `:androidApp` lesen den Git-Index: nach dem Loeschen oder
+  Umbenennen von Dateien vor den Tests `git add -A`.
 
 ---
 

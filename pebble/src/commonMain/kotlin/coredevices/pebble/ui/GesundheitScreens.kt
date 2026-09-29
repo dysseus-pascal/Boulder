@@ -12,3 +12,6 @@ expect fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
 @Composable
 expect fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Long)
+
+@Composable
+expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: String)

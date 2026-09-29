@@ -70,7 +70,7 @@ private const val SCHLAFZIEL_MIN = 8 * 60.0
  * dafuer, nicht zwei.
  */
 @Composable
-internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit) {
+internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     val libPebble = koinInject<LibPebble>()
@@ -90,11 +90,11 @@ internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { Bewegung(s) }
+        item { Bewegung(s) { oeffneTrend("bewegung") } }
         item { Schlaf(s, oeffneNacht) }
-        item { Herz(s) }
+        item { Herz(s) { oeffneTrend("herz") } }
         if (s.spo2.isNotEmpty()) item { Sauerstoff(s) }
-        item { Wasser(s) }
+        item { Wasser(s) { oeffneTrend("ernaehrung") } }
         if (s.supplemente != null) item { Praeparate(s) }
         item {
             Koffein(s) { name, mg ->
@@ -130,8 +130,8 @@ private fun Hinweis(text: String) {
 }
 
 @Composable
-private fun Bewegung(s: GesundheitsStand) {
-    Karte {
+private fun Bewegung(s: GesundheitsStand, trend: () -> Unit) {
+    Karte(onClick = trend) {
         Text(stringResource(R.string.ks_h_bewegung), style = MaterialTheme.typography.labelMedium)
         Werte {
             Wert(String.format(Locale.getDefault(), "%,d", s.schritte), stringResource(R.string.ks_h_schritte))
@@ -188,8 +188,8 @@ private fun Phasenlegende() {
 }
 
 @Composable
-private fun Herz(s: GesundheitsStand) {
-    Karte {
+private fun Herz(s: GesundheitsStand, trend: () -> Unit) {
+    Karte(onClick = trend) {
         Text(stringResource(R.string.ks_h_herz), style = MaterialTheme.typography.labelMedium)
         Werte {
             s.nacht?.ruhepuls?.let { Wert("$it bpm", stringResource(R.string.ks_h_ruhepuls)) }
@@ -225,9 +225,9 @@ private fun Sauerstoff(s: GesundheitsStand) {
 }
 
 @Composable
-private fun Wasser(s: GesundheitsStand) {
+private fun Wasser(s: GesundheitsStand, trend: () -> Unit) {
     val context = LocalContext.current
-    Karte {
+    Karte(onClick = trend) {
         Text(stringResource(R.string.ks_h_wasser), style = MaterialTheme.typography.labelMedium)
         val ziel = s.wasserZiel
         Werte {

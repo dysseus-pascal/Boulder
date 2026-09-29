@@ -53,7 +53,7 @@ import java.time.format.FormatStyle
  * stuende jede Nacht einzeln im Zurueck-Stapel.
  */
 @Composable
-internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit) {
+internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend: () -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     var beginn by remember { mutableLongStateOf(start) }
@@ -83,6 +83,7 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit) {
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(enabled = d.vorige != null, onClick = { d.vorige?.let { beginn = it } }) { Text("‹ " + stringResource(R.string.ks_h_frueher)) }
+            TextButton(onClick = oeffneTrend) { Text(stringResource(R.string.ks_h_trends)) }
             TextButton(enabled = d.naechste != null, onClick = { d.naechste?.let { beginn = it } }) { Text(stringResource(R.string.ks_h_spaeter) + " ›") }
         }
         Karte {

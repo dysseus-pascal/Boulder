@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
@@ -100,6 +101,7 @@ internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: (String
             Koffein(s) { name, mg ->
                 scope.launch {
                     Gesundheitsdaten.trinkeKoffein(context, name, mg)
+                    GesundheitWidget.stosseAn(context)
                     neu++
                 }
             }

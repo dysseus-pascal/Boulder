@@ -2,6 +2,11 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.Record
+import androidx.health.connect.client.records.metadata.DataOrigin
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
+import kotlin.reflect.KClass
 
 /**
  * Die Gesundheitsakte (Health Connect), wenn es sie gibt.
@@ -17,4 +22,16 @@ internal class Akte(private val context: Context) {
         } else {
             null
         }
+}
+
+/**
+ * Lesen - und im Hintergrund nur das Eigene. Ohne das Recht, im Hintergrund zu
+ * lesen, weist Health Connect jede Abfrage ab, die fremde Eintraege treffen
+ * koennte; das Widget liest aber im Hintergrund. Beim zweiten Versuch fragt es
+ * nur nach Boulders eigenen Eintraegen - Drinktervall, Koffein, Trainings.
+ */
+internal suspend fun <T : Record> HealthConnectClient.liesOderEigene(context: Context, klasse: KClass<T>, zeit: TimeRangeFilter): List<T> = try {
+    readRecords(ReadRecordsRequest(klasse, zeit)).records
+} catch (e: Exception) {
+    readRecords(ReadRecordsRequest(klasse, zeit, dataOriginFilter = setOf(DataOrigin(context.packageName)))).records
 }

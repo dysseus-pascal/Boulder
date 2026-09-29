@@ -150,7 +150,10 @@ internal class Mithoerer(
                             Drinktervall.UUID -> Drinktervall.verarbeite(context, g.nachricht)
                             SupCycle.UUID -> SupCycle.verarbeite(context, g.nachricht)
                             else -> null
-                        }?.let { KieselVerlauf.merke(context, it) }
+                        }?.let {
+                            KieselVerlauf.merke(context, it)
+                            GesundheitWidget.stosseAn(context)
+                        }
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht von ${g.uuid} nicht verarbeitet: ${e.message}" }
                     }

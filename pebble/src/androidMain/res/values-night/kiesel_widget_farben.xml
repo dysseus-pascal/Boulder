@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ks_w_karte">#1E2427</color>
+    <color name="ks_w_linie">#313A3E</color>
+    <color name="ks_w_schrift">#E9ECEA</color>
+    <color name="ks_w_schrift_zart">#9BA5A9</color>
+    <color name="ks_w_akzent">#8CC49A</color>
+</resources>

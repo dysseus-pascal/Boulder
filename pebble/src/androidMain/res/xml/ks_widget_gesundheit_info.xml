@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Die Anmeldung des Widgets.
+
+     HALBE STUNDE ist die feinste Zeit, die Android zulaesst - alles darunter
+     wird stillschweigend auf 30 Minuten gerundet. Das reicht auch: die Zahlen
+     bewegen sich in dieser Groessenordnung, und wer es genauer will, tippt das
+     Widget an. Nach jedem eigenen Eintrag (Wasser, HRV) stoesst die App das
+     Widget ohnehin selbst an.
+
+     previewLayout statt previewImage: die Vorschau im Auswahlblatt ist dann
+     das Widget selbst, ohne dass irgendwo ein Bild gepflegt werden muss. Alte
+     Telefone uebersehen die Zeile einfach. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="150dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="140dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/ks_widget_gesundheit"
+    android:previewLayout="@layout/ks_widget_gesundheit"
+    android:description="@string/ks_w_beschreibung"
+    android:widgetCategory="home_screen" />

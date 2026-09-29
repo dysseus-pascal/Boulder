@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Das Widget: eine Buehne, die nach Lage wechselt, und drei kleine Kacheln.
+
+     DAS WIDGET WEISS, WAS GERADE ZAEHLT (siehe Widgetlage.kt). Morgens die
+     Nacht, nach dem Training das Training, sonst die Schritte. Oben links
+     steht das Wort dazu - "Nacht", "Training", "Heute" -, damit man
+     versteht, warum es anders aussieht als vor einer Stunde. Die drei kleinen
+     Kacheln zeigen, was nicht auf der Buehne ist; ein Tipp auf eine macht sie
+     fuer eine Stunde zur Buehne.
+
+     Kein Compose, kein Glance: ein Widget ist RemoteViews, und die kennen nur
+     eine Handvoll Klassen. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_wurzel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/ks_w_widget_grund"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/w_lage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/ks_h_heute"
+            android:textColor="@color/ks_w_akzent"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/w_titel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="@string/ks_w_app"
+            android:textColor="@color/ks_w_schrift_zart"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/w_stand"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:textColor="@color/ks_w_schrift_zart"
+            android:textSize="12sp" />
+
+        <ImageView
+            android:id="@+id/w_auffrischen"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="6dp"
+            android:padding="5dp"
+            android:src="@drawable/ks_w_ic_auffrischen"
+            android:contentDescription="@string/ks_w_auffrischen" />
+    </LinearLayout>
+
+    <!-- Die Buehne -->
+    <LinearLayout
+        android:id="@+id/w_buehne"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/w_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/ks_h_schritte"
+            android:textColor="@color/ks_w_schrift_zart"
+            android:textSize="11sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="bottom"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/w_gross"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="@color/ks_w_schrift"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/w_einheit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="5dp"
+                android:textColor="@color/ks_w_schrift_zart"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/w_balken"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:layout_marginTop="2dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/ks_w_widget_balken" />
+
+        <TextView
+            android:id="@+id/w_satz"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:maxLines="2"
+            android:textColor="@color/ks_w_schrift"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Die drei Kacheln -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/w_k1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:orientation="vertical">
+            <TextView android:id="@+id/w_k1_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
+            <TextView android:id="@+id/w_k1_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+            <ProgressBar android:id="@+id/w_k1_balken" style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/w_k2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:orientation="vertical">
+            <TextView android:id="@+id/w_k2_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
+            <TextView android:id="@+id/w_k2_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+            <ProgressBar android:id="@+id/w_k2_balken" style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/w_k3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView android:id="@+id/w_k3_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
+            <TextView android:id="@+id/w_k3_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+            <ProgressBar android:id="@+id/w_k3_balken" style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/w_fuss"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:maxLines="1"
+        android:textColor="@color/ks_w_schrift_zart"
+        android:textSize="11sp" />
+</LinearLayout>

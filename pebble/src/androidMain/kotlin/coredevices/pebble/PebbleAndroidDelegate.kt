@@ -1,7 +1,12 @@
 package coredevices.pebble
 
 import android.content.Context
+import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.Kieselstrasse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -16,6 +21,10 @@ class PebbleAndroidDelegate(
         libPebble.doStuffAfterPermissionsGranted()
         // Boulder: OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
         Kieselstrasse.begleite(context, libPebble)
+        // Boulder: neue Daten von der Uhr zeichnen das Gesundheits-Widget neu.
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            libPebble.healthDataUpdated.collect { GesundheitWidget.stosseAn(context) }
+        }
     }
 
     /**

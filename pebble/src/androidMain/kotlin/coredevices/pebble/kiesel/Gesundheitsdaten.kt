@@ -136,7 +136,7 @@ internal object Gesundheitsdaten {
         val klient = Akte(context).bereit()
         val wochenAnfang = heute.minusDays(6).atStartOfDay(zone).toInstant()
         val wasser = try {
-            klient?.readRecords(ReadRecordsRequest(HydrationRecord::class, TimeRangeFilter.between(wochenAnfang, jetzt)))?.records.orEmpty()
+            klient?.liesOderEigene(context, HydrationRecord::class, TimeRangeFilter.between(wochenAnfang, jetzt)).orEmpty()
         } catch (e: Exception) {
             Log.w(TAG, "Wasser lesen: " + e.message)
             emptyList()
@@ -145,8 +145,8 @@ internal object Gesundheitsdaten {
             .mapValues { (_, r) -> r.sumOf { it.volume.inMilliliters }.toInt() }
         val heuteWasser = wasser.filter { it.startTime.atZone(zone).toLocalDate() == heute }
         val koffein = try {
-            klient?.readRecords(ReadRecordsRequest(NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt)))
-                ?.records.orEmpty().mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
+            klient?.liesOderEigene(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt))
+                .orEmpty().mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
         } catch (e: Exception) {
             Log.w(TAG, "Koffein lesen: " + e.message)
             emptyList()

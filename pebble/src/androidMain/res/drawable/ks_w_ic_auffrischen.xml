@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auffrischen: ein Kreis, der nicht ganz zugeht, mit einer Spitze am Ende.
+
+     Als Vektor und nicht als Bild, aus demselben Grund wie das Zahnrad: eine
+     Datei statt fuenf Aufloesungen, und die Farbe kommt aus colors.xml, gilt
+     also bei Tag wie bei Nacht. Im Widget ist der Vektor Pflicht - RemoteViews
+     koennen keine selbst gezeichnete Sicht, nur eine Ressource. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Dreiviertelkreis, offen oben rechts. -->
+    <path
+        android:pathData="M19,12 A7,7 0 1 0 12,5"
+        android:strokeColor="@color/ks_w_schrift_zart"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- Die Spitze am offenen Ende. -->
+    <path
+        android:pathData="M11.4,1.6 L16.4,5.2 L11.4,8.8 z"
+        android:fillColor="@color/ks_w_schrift_zart" />
+</vector>

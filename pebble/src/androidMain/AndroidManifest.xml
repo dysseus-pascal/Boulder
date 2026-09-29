@@ -102,5 +102,19 @@
                 <data android:scheme="geo" />
             </intent-filter>
         </activity>
+        <!-- Das Gesundheits-Widget. Exportiert, weil der Launcher es so braucht;
+             das Antippen einer Kachel geht an den nicht exportierten Wunsch. -->
+        <receiver
+            android:name="coredevices.pebble.kiesel.GesundheitWidget"
+            android:exported="true"
+            android:label="@string/ks_w_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/ks_widget_gesundheit_info" />
+        </receiver>
+        <receiver android:name="coredevices.pebble.kiesel.Wunsch" android:exported="false" />
     </application>
 </manifest>

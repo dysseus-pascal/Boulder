@@ -201,6 +201,8 @@ class HealthDataProcessor(
         if (teile.isEmpty()) return null
         teile.forEach { t ->
             nachtDao.speichereNacht(t.nacht)
+            // Der erste Teil einer Nacht raeumt die Abschnitte der vorigen Fassung weg.
+            if (t.teil == 0) nachtDao.loescheAbschnitte(t.nacht.beginnUtc)
             nachtDao.speichereAbschnitte(t.abschnitte)
         }
         emitHealthDataUpdated()

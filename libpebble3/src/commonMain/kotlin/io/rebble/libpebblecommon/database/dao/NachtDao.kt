@@ -17,6 +17,11 @@ interface NachtDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun speichereAbschnitte(abschnitte: List<NachtAbschnittEntity>)
 
+    // Kommt eine Nacht gewachsen noch einmal (die Uhr schickt sie nach weiterem
+    // Schlaf erneut), passen die alten Abschnitte nicht mehr zu den neuen.
+    @Query("DELETE FROM boulder_nacht_abschnitt WHERE beginnUtc = :beginnUtc")
+    suspend fun loescheAbschnitte(beginnUtc: Long)
+
     @Query("SELECT * FROM boulder_nacht WHERE beginnUtc >= :von AND beginnUtc < :bis ORDER BY beginnUtc ASC")
     suspend fun naechte(von: Long, bis: Long): List<NachtEntity>
 

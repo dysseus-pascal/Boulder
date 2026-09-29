@@ -18,6 +18,7 @@ class HealthSyncTracker(private val settings: Settings) {
         private const val KEY_LAST_SYNCED_OVERLAY = "health_sync_last_overlay_timestamp"
         private const val KEY_LAST_SYNCED_SPO2 = "health_sync_last_spo2_timestamp"
         private const val KEY_LAST_SYNCED_NACHT = "health_sync_last_nacht_beginn"
+        private const val KEY_LAST_SYNCED_NACHT_STAND = "health_sync_last_nacht_stand"
     }
 
     private val _enabled = MutableStateFlow<Boolean>(settings.getBoolean(KEY_ENABLED, false))
@@ -44,4 +45,10 @@ class HealthSyncTracker(private val settings: Settings) {
     var lastSyncedNachtBeginn: Long
         get() = settings.getLong(KEY_LAST_SYNCED_NACHT, 0L)
         set(value) { settings[KEY_LAST_SYNCED_NACHT] = value }
+
+    // Boulder: Aufwachen und Schlafminuten dieser Nacht, wie sie geschrieben wurde -
+    // kommt sie gewachsen noch einmal, wird sie erneut geschrieben.
+    var lastSyncedNachtStand: String
+        get() = settings.getString(KEY_LAST_SYNCED_NACHT_STAND, "")
+        set(value) { settings[KEY_LAST_SYNCED_NACHT_STAND] = value }
 }

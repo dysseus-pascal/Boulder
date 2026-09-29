@@ -16,6 +16,7 @@ import com.viktormykhailiv.kmp.health.records.metadata.Metadata
 import coredevices.util.AppResumed
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
 import kotlinx.coroutines.CoroutineScope
@@ -116,20 +117,30 @@ class PlatformHealthSync(
     }
 
     /** Run a sync: query new data from Room DB, map to HealthKMP records, write. */
+    // Boulder: ein Anstoss waehrend eines laufenden Syncs geht nicht verloren -
+    // eine Nacht, die mitten im Sync ankam, wartete sonst auf den naechsten.
+    private val _nochmal = MutableStateFlow(false)
+
     suspend fun sync() {
         if (!tracker.enabled.value) return
-        if (!_syncing.compareAndSet(expect = false, update = true)) return
+        if (!_syncing.compareAndSet(expect = false, update = true)) {
+            _nochmal.value = true
+            return
+        }
         try {
-            if (!hasPermission()) {
-                logger.w { "No health sync permission during sync attempt!" }
-                tracker.setEnabled(false)
-                return
-            }
-            syncStepsAndHeartRate()
-            syncOverlays()
-            syncOxygenSaturation()
-            syncNaechte()
-            logger.d { "Health platform sync completed" }
+            do {
+                _nochmal.value = false
+                if (!hasPermission()) {
+                    logger.w { "No health sync permission during sync attempt!" }
+                    tracker.setEnabled(false)
+                    return
+                }
+                syncStepsAndHeartRate()
+                syncOverlays()
+                syncOxygenSaturation()
+                syncNaechte()
+                logger.d { "Health platform sync completed" }
+            } while (_nochmal.value)
         } catch (e: Exception) {
             logger.e(e) { "Health platform sync failed" }
         } finally {
@@ -192,14 +203,23 @@ class PlatformHealthSync(
 
     private suspend fun syncNaechte() {
         if (!supportsNaechteWriting()) return
-        val naechte = healthDataApi.getNaechte(tracker.lastSyncedNachtBeginn + 1, Long.MAX_VALUE)
+        // AUCH DIE ZULETZT GESCHRIEBENE NACHT NOCH EINMAL, wenn sie sich
+        // geaendert hat: die Uhr schickt eine Nacht nach weiterem Schlaf mit
+        // demselben Beginn erneut. Die Akte ersetzt sie (gleiche Kennung).
+        val letzter = tracker.lastSyncedNachtBeginn
+        val naechte = healthDataApi.getNaechte(letzter, Long.MAX_VALUE)
+            .filter { it.beginnUtc != letzter || nachtStand(it) != tracker.lastSyncedNachtStand }
         if (naechte.isEmpty()) return
         val mitPhasen = naechte.map { it to healthDataApi.getNachtAbschnitte(it.beginnUtc) }
         if (writeNaechteToPlatform(mitPhasen)) {
-            tracker.lastSyncedNachtBeginn = naechte.maxOf { it.beginnUtc }
+            val juengste = naechte.maxBy { it.beginnUtc }
+            tracker.lastSyncedNachtBeginn = juengste.beginnUtc
+            tracker.lastSyncedNachtStand = nachtStand(juengste)
             logger.d { "Synced ${naechte.size} nights" }
         }
     }
+
+    private fun nachtStand(n: NachtEntity): String = "${n.aufwachen}:${n.schlafMinuten}"
 
     private suspend fun syncOxygenSaturation() {
         if (!supportsOxygenSaturationWriting()) return

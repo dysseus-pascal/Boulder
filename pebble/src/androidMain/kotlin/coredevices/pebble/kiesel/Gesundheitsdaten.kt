@@ -94,9 +94,23 @@ internal object Gesundheitsrechnung {
     fun <T : Number> reihe(tage: List<LocalDate>, werte: Map<LocalDate, T>, null_: T): List<Pair<LocalDate, T>> =
         tage.map { it to (werte[it] ?: null_) }
 
-    /** Die Nacht, die zu [tag] gehoert: sie beginnt im Fenster am Abend davor. */
-    fun nachtTag(beginnUtc: Long, zone: ZoneId): LocalDate =
-        Instant.ofEpochSecond(beginnUtc).atZone(zone).toLocalDate().plusDays(1)
+    /**
+     * Der Tag, zu dem eine Nacht gehoert: der des Aufwachens. Nicht "Beginn
+     * des Fensters plus ein Tag": eine Nacht, die die Uhr nach langem
+     * Wachliegen in zwei Teile zerlegt hatte, lag damit zweimal auf demselben
+     * Tag, und der zweite Teil ueberschrieb den ersten.
+     */
+    fun nachtTag(beginnUtc: Long, aufwachenMin: Int, zone: ZoneId): LocalDate =
+        Instant.ofEpochSecond(beginnUtc + aufwachenMin * 60L).atZone(zone).toLocalDate()
+
+    /**
+     * Eine Nacht je Tag - die laengste. Aeltere Firmware schickte nach langem
+     * Wachliegen zwei Naechte fuer denselben Morgen; die kuerzere waere sonst
+     * der Schlaf des Tages.
+     */
+    fun jeTag(naechte: List<NachtEntity>, zone: ZoneId): List<NachtEntity> =
+        naechte.groupBy { nachtTag(it.beginnUtc, it.aufwachen, zone) }.values
+            .map { l -> l.maxBy { it.schlafMinuten } }.sortedBy { it.beginnUtc }
 }
 
 /**
@@ -122,10 +136,12 @@ internal object Gesundheitsdaten {
         val tageswerte = runCatching { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.getOrDefault(emptyList())
             .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) }
 
-        val naechte = runCatching { api.getNaechte(anfang(heute.minusDays(8)), jetzt.epochSecond) }.getOrDefault(emptyList())
+        val naechte = Gesundheitsrechnung.jeTag(
+            runCatching { api.getNaechte(anfang(heute.minusDays(8)), jetzt.epochSecond) }.getOrDefault(emptyList()), zone,
+        )
         val letzte = naechte.lastOrNull()?.takeIf { jetzt.epochSecond - it.beginnUtc < 36 * 3600 }
         val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, runCatching { api.getNachtAbschnitte(it.beginnUtc) }.getOrDefault(emptyList())) }
-        val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, zone) to it.schlafMinuten }
+        val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
         val vor24 = jetzt.epochSecond - 24 * 3600
         val puls = runCatching { api.getHealthDataForRange(vor24, jetzt.epochSecond) }.getOrDefault(emptyList())

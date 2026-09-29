@@ -44,9 +44,22 @@ class GesundheitsrechnungTest {
     }
 
     @Test
-    fun die_nacht_gehoert_zum_morgen_danach() {
-        // Fensterbeginn 20:00 UTC am 28.09. -> Nacht zum 29.09.
+    fun die_nacht_gehoert_zum_tag_des_aufwachens() {
+        // Fensterbeginn 20:00 UTC am 28.09., aufgewacht 07:00 -> Nacht zum 29.09.
         val b = LocalDate.of(2026, 9, 28).atTime(20, 0).toEpochSecond(ZoneOffset.UTC)
-        assertEquals(LocalDate.of(2026, 9, 29), Gesundheitsrechnung.nachtTag(b, ZoneOffset.UTC))
+        assertEquals(LocalDate.of(2026, 9, 29), Gesundheitsrechnung.nachtTag(b, 11 * 60, ZoneOffset.UTC))
+        // Ein Nickerchen, das noch vor Mitternacht endet, gehoert zum 28.09.
+        assertEquals(LocalDate.of(2026, 9, 28), Gesundheitsrechnung.nachtTag(b, 3 * 60, ZoneOffset.UTC))
+    }
+
+    @Test
+    fun je_tag_bleibt_die_laengste_nacht() {
+        // Aeltere Firmware: zwei Naechte fuer denselben Morgen (22-01 und 01:40-06:30).
+        val b = LocalDate.of(2026, 9, 28).atTime(20, 0).toEpochSecond(ZoneOffset.UTC)
+        val erste = NachtEntity(b, 7200, 120, 300, 175, 52, 60)
+        val zweite = NachtEntity(b + 300 * 60, 7200, 40, 330, 285, 50, 70)
+        val andere = NachtEntity(b - 86400, 7200, 130, 660, 500, 51, 65)
+        val je = Gesundheitsrechnung.jeTag(listOf(andere, erste, zweite), ZoneOffset.UTC)
+        assertEquals(listOf(andere, zweite), je)
     }
 }

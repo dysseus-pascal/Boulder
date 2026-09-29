@@ -75,14 +75,16 @@ internal object Trenddaten {
         neu["schritte"] = bewegung.mapNotNull { a -> a.steps?.takeIf { it > 0 }?.let { LocalDate.parse(a.day) to it.toDouble() } }
         neu["aktiv"] = bewegung.mapNotNull { a -> a.activeMinutes?.let { LocalDate.parse(a.day) to it.toDouble() } }
 
-        val naechte = runCatching { api.getNaechte(anfang(von), anfang(heute.plusDays(1))) }.getOrDefault(emptyList())
+        val naechte = Gesundheitsrechnung.jeTag(
+            runCatching { api.getNaechte(anfang(von), anfang(heute.plusDays(1))) }.getOrDefault(emptyList()), zone,
+        )
         val schlaf = mutableListOf<Pair<LocalDate, Double>>()
         val tief = mutableListOf<Pair<LocalDate, Double>>()
         val mitte = mutableListOf<Pair<LocalDate, Double>>()
         val ruhe = mutableListOf<Pair<LocalDate, Double>>()
         val hrv = mutableListOf<Pair<LocalDate, Double>>()
         naechte.forEach { e ->
-            val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, zone)
+            val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
             if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
             val phasen = Gesundheitsrechnung.phasenMinuten(runCatching { api.getNachtAbschnitte(e.beginnUtc) }.getOrDefault(emptyList()))
             if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()

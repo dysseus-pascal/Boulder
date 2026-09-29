@@ -38,7 +38,7 @@ internal class KieselsportBegleiter(
         sitzung.launch {
             incomingAppMessages.collect { nachricht ->
                 device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))
-                auftraege.send(Auftrag(context.applicationContext, device, nachricht))
+                auftraege.send(Auftrag(context.applicationContext, nachricht))
             }
         }
     }
@@ -49,7 +49,7 @@ internal class KieselsportBegleiter(
         sitzung.cancel()
     }
 
-    private class Auftrag(val context: Context, val device: CompanionAppDevice, val nachricht: AppMessageData)
+    private class Auftrag(val context: Context, val nachricht: AppMessageData)
 
     companion object {
         private val logger = Logger.withTag("Kieselsport")
@@ -68,15 +68,8 @@ internal class KieselsportBegleiter(
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for (a in auftraege) {
                     try {
-                        Kieselsport.verarbeite(a.context, zerlege(a.nachricht.data)) { antwort ->
-                            a.device.sendAppMessage(
-                                AppMessageData(
-                                    transactionId = a.device.transactionSequence.next(),
-                                    uuid = Kieselsport.UUID,
-                                    data = antwort,
-                                )
-                            )
-                        }?.let { KieselVerlauf.merke(a.context, it) }
+                        Kieselsport.verarbeite(a.context, zerlege(a.nachricht.data))
+                            ?.let { KieselVerlauf.merke(a.context, it) }
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht nicht verarbeitet: ${e.message}" }
                     }

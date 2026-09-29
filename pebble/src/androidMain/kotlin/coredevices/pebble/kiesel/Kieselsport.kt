@@ -70,12 +70,6 @@ internal object Kieselsport {
     const val SP_KURVE_AB = 10020
     const val SP_KURVE_ANZAHL = 10021
     const val SP_KURVE = 10022
-    const val SP_HRV_ZEIT = 10031
-    const val SP_SPO2_FRAGE = 10032
-    const val SP_SPO2_WERT = 10033
-    const val SP_SPO2_ZEIT = 10034
-    const val SP_SPO2_NACHT_MITTEL = 10035
-    const val SP_SPO2_NACHT_TIEF = 10036
 
     private const val KURVE_TAKT_S = 10
 
@@ -223,14 +217,10 @@ internal object Kieselsport {
      * null, wenn es nichts zu sagen gibt.
      *
      * DIE ART DER NACHRICHT ERGIBT SICH AUS IHREN FELDERN, in dieser
-     * Reihenfolge: Kurvenstueck, SpO2-Frage, einzelne HRV, Einstellungen,
-     * Zustand (ohne Dauer), sonst die Zusammenfassung.
+     * Reihenfolge: Kurvenstueck, Einstellungen, Zustand (ohne Dauer), sonst
+     * die Zusammenfassung.
      */
-    suspend fun verarbeite(
-        context: Context,
-        n: KieselNachricht,
-        antworte: suspend (Map<Int, Any>) -> Unit,
-    ): String? {
+    suspend fun verarbeite(context: Context, n: KieselNachricht): String? {
         val felder = n.zahlen
 
         n.bytes[SP_KURVE]?.let { werte ->
@@ -249,14 +239,6 @@ internal object Kieselsport {
                 null
             }
         }
-
-        // DIE UHR FRAGT NACH SPO2 - aus der Akte, ins Protokoll gehoert das nicht.
-        if (felder[SP_SPO2_FRAGE] != null) {
-            antworte(spo2Antwort(context))
-            return null
-        }
-
-        if (felder[SP_ART] == null) felder[SP_HRV_ZEIT]?.let { wann -> return hrvEinzeln(context, felder, wann) }
 
         // DIE EINSTELLUNGEN DER UHR - beim Start der App und nach jeder Aenderung.
         if (felder[SP_ART] == null && KieselEinstellungen.vonDerUhr(context, felder, n.texte)) return null
@@ -465,58 +447,6 @@ internal object Kieselsport {
             altitude = p.hoehe?.let { Length.meters(it) },
         )
     })
-
-    /**
-     * Die Antwort auf die SpO2-Frage der Uhr: der juengste Wert der letzten 24
-     * Stunden, dazu Schnitt und Tiefstwert der Nacht (22 bis 8 Uhr). 0 heisst:
-     * keiner da.
-     */
-    private suspend fun spo2Antwort(context: Context): Map<Int, Any> {
-        val jetzt = Instant.now()
-        val werte = try {
-            Akte(context).bereit()?.readRecords(
-                ReadRecordsRequest(
-                    OxygenSaturationRecord::class,
-                    TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt),
-                )
-            )?.records.orEmpty()
-                .filter { it.percentage.value in 50.0..100.0 }
-                .sortedBy { it.time }
-        } catch (e: Exception) {
-            Log.w(TAG, "SpO2 fuer die Uhr: " + e.message)
-            emptyList()
-        }
-        val zone = ZoneId.systemDefault()
-        val nacht = werte.filter {
-            val h = it.time.atZone(zone).hour
-            h >= 22 || h < 8
-        }.map { it.percentage.value }
-        val letzter = werte.lastOrNull()
-        return mapOf(
-            SP_SPO2_WERT to (letzter?.percentage?.value?.let { Math.round(it).toInt() } ?: 0),
-            SP_SPO2_ZEIT to (letzter?.time?.epochSecond?.toInt() ?: 0),
-            SP_SPO2_NACHT_MITTEL to (if (nacht.isEmpty()) 0 else Math.round(nacht.average()).toInt()),
-            SP_SPO2_NACHT_TIEF to (if (nacht.isEmpty()) 0 else Math.round(nacht.min()).toInt()),
-        )
-    }
-
-    private suspend fun hrvEinzeln(context: Context, felder: Map<Int, Long>, wann: Long): String? {
-        val ms = felder[SP_HRV] ?: return null
-        if (wann <= 0 || ms !in 5..300) return null
-        if (!Riegel.neu(context, "kieselsport-hrv-einzeln", wann.toString())) return null
-        return schreibe(
-            context,
-            HeartRateVariabilityRmssdRecord(
-                // Hoechstens jetzt - eine vorgehende Uhr ergaebe sonst einen
-                // Eintrag in der Zukunft, und den lehnt die Akte ab.
-                time = minOf(Instant.ofEpochSecond(wann), Instant.now()), zoneOffset = null,
-                heartRateVariabilityMillis = ms.toDouble(),
-                metadata = vonDerUhr("kieselsport-hrv-zeit-$wann"),
-            ),
-            context.getString(R.string.ks_a_hrv_eingetragen, ms.toInt()),
-            riegel = "kieselsport-hrv-einzeln",
-        )
-    }
 
     /**
      * Von der Uhr gemessen, mit fester Kennung: kommt derselbe Satz noch

@@ -20,6 +20,12 @@ die Regeln von Gravel, mit diesen Abweichungen:
   die Naechte rechnet die Boulder-Firmware (Tag 88, Tabelle `boulder_nacht`).
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
+- Gravel-Stand: 0.3.3. Remote `upstream` ist Gravel
+  (`david-cant-code/pebble-app-degoogled`). Boulder teilt keine Git-Geschichte mit
+  ihm: neue Gravel-Fassungen kommen als Patch (`git diff <alt> <neu> | git apply -3`).
+  Nicht uebernommen wird Gravels Firmware-Auswahl (Changelog-Liste, Build-Picker,
+  Firmware-Kanal): sie boete Core-Builds an und ersetzte die Boulder-Firmware.
+  Neue Oberflaechentexte sagen "Boulder", nicht "Gravel".
 - Texte nur in den Sprachen, die Gravel hat (derzeit Englisch).
 - Neuer eigener Code: deutsche Bezeichner und Kommentare, Kommentare erklaeren
   das WARUM.

@@ -187,7 +187,7 @@ class CompanionAppLifecycleManager(
                 }
             }
 
-            // Read here, for both watchers below (see CompanionSessionCoordinator.currentGeneration).
+            // Read here, for the watchers below (see CompanionSessionCoordinator.currentGeneration).
             val sessionGeneration = sessionCoordinator.currentGeneration
 
             // Fork: a PebbleKit toggle flipped while this app runs restarts its session. On
@@ -202,8 +202,9 @@ class CompanionAppLifecycleManager(
                 requestRestart = sessionCoordinator::requestRestart,
             )
 
-            // Gravel: the session is rebuilt on any change of the app's Network grant, because
-            // what a PebbleKit JS session sets up for the grant is fixed when it starts. The
+            // Gravel: the session is rebuilt on each change of the app's Network grant from the
+            // read above, because what a PebbleKit JS session sets up for the grant is fixed when
+            // it starts (a denial the watcher does not see is covered in WebViewJsRunner). The
             // watcher ends with activeAppScope, and a fresh session's watcher starts with no
             // history, so a restart cannot retrigger itself.
             if (pbw.hasPKJS) {
@@ -211,6 +212,18 @@ class CompanionAppLifecycleManager(
                     grant = watchappPermissions
                         .watchappPermissionGranted(lockerEntry.id, LockerAppPermissionType.Network),
                     builtWith = networkGranted,
+                    app = lockerEntry.id,
+                    sessionGeneration = sessionGeneration,
+                    requestRestart = sessionCoordinator::requestRestart,
+                )
+            }
+            // Gravel: a Network-denied session restarts once the switch, or whether it applies,
+            // gives another answer than this build to whether it gets its PebbleKit JS side.
+            if (pbw.hasPKJS && !networkGranted) {
+                activeAppScope.launchDeniedPkjsSwitchWatcher(
+                    config = libPebbleConfigFlow.flow,
+                    enforcement = networkDenyEnforcement,
+                    builtWith = pkjsRunning,
                     app = lockerEntry.id,
                     sessionGeneration = sessionGeneration,
                     requestRestart = sessionCoordinator::requestRestart,
@@ -232,9 +245,9 @@ class CompanionAppLifecycleManager(
         networkGranted: Boolean,
     ): List<CompanionApp> {
         return buildList {
-            val runPkjs = shouldRunPkjs(pbw.hasPKJS, networkGranted, networkDenyEnforcement.primaryLayerActive)
+            val runPkjs = shouldRunPkjs(pbw.hasPKJS, networkGranted, networkDenyEnforcement, watchConfig.deniedPkjsWithoutPrimaryLayer)
             if (pbw.hasPKJS && !runPkjs) {
-                logger.w { "Not running PebbleKit JS for ${lockerEntry.id}: Network is denied and the primary deny layer is absent" }
+                logger.w { "Not running PebbleKit JS for ${lockerEntry.id}: Network is denied, the primary deny layer is absent and the switch is off or does not apply" }
             }
             val pkjsApp = if (runPkjs) {
                 val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id, lockerEntry.version)

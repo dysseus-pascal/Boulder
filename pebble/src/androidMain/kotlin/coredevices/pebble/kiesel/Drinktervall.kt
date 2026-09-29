@@ -94,11 +94,11 @@ internal object Drinktervall {
 
         val satz = HydrationRecord(
             startTime = beginn,
-            startZoneOffset = null,
+            startZoneOffset = versatz(beginn),
             // Eine Minute: die Akte will eine Spanne, und ein Glas trinkt sich
             // nicht in einem Augenblick.
             endTime = beginn.plusSeconds(60),
-            endZoneOffset = null,
+            endZoneOffset = versatz(beginn),
             volume = Volume.milliliters(ml.toDouble()),
             metadata = Kieselsport.vonDerUhr("drinktervall-$wann"),
         )

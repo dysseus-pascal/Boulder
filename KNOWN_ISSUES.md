@@ -1024,3 +1024,14 @@ whoever the user sends it to, which may be a public issue. Gating the
 payload bytes means changing upstream's own logging calls rather than the
 fork's seams, so it is recorded here and left to the pass over what the log
 writer accepts.
+
+## Firmware signature: no revocation, and recovery mode may take an older build
+
+Boulder firmware releases carry an Ed25519 signature over tag, file name, size
+and sha256 (`FirmwareSignatur.kt`; `tools/boulder/SIGNATUR.md` in the firmware
+repo). Two limits remain: a release once signed stays valid until it is marked
+as a pre-release on GitHub (the app skips those), and a watch in recovery mode
+is offered the newest signed release even when it is older than what it ran
+before. The signature protects against a taken-over GitHub account and the
+network path, not against the developer machine that holds both the signing
+key and the GitHub token. The check needs no telemetry and no account.

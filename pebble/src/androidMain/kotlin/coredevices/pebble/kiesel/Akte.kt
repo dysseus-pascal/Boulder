@@ -1,6 +1,9 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
+import java.time.ZoneOffset
+import java.time.ZoneId
+import java.time.Instant
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.metadata.DataOrigin
@@ -15,6 +18,12 @@ import kotlin.reflect.KClass
  * sagt es dann im Protokoll, statt zu scheitern. Ob die Erlaubnis fehlt,
  * zeigt erst das Schreiben selbst - die Akte weist dann ab.
  */
+/**
+ * Der Zeitzonenversatz zu einem Zeitpunkt - fuer jeden Eintrag in die Akte.
+ * Ohne ihn zeigte die Akte auf Reisen die Ortszeit von hier statt von dort.
+ */
+internal fun versatz(t: Instant): ZoneOffset = ZoneId.systemDefault().rules.getOffset(t)
+
 internal class Akte(private val context: Context) {
     fun bereit(): HealthConnectClient? =
         if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {

@@ -5,7 +5,7 @@
 Report vulnerabilities privately through GitHub's private vulnerability
 reporting: open the repository's **Security** tab and choose **Report a
 vulnerability**, or go straight to
-[the report form](https://github.com/david-cant-code/pebble-app-degoogled/security/advisories/new).
+[the report form](https://github.com/dysseus-pascal/Boulder/security/advisories/new).
 Do not report a vulnerability in a public issue, pull request, or
 discussion.
 

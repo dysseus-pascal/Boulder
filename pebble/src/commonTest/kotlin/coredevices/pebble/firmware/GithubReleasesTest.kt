@@ -73,7 +73,7 @@ class GithubReleasesTest {
         assertContains(update.url, "normal_asterix_v4.31.1.pbz")
         assertEquals("", update.notes)
         assertEquals(
-            ExpectedFirmwareArtifact(hex('b'), 222, "v4.31.1"),
+            ExpectedFirmwareArtifact(hex('b'), 222, "v4.31.1", Signaturquelle.Signiert(sigUrl("asterix", "v4.31.1"), "normal_asterix_v4.31.1.pbz")),
             expectations.lookup(update.url),
         )
     }
@@ -172,7 +172,27 @@ class GithubReleasesTest {
         // Soaked target is 4.31.1 (digest null) and 4.31.0's digest is
         // malformed; the nearest newer verifiable release wins.
         assertEquals("v4.32.0", update.version.stringVersion)
-        assertEquals(ExpectedFirmwareArtifact(hex('a'), 111, "v4.32.0"), expectations.lookup(update.url))
+        assertEquals(
+            ExpectedFirmwareArtifact(hex('a'), 111, "v4.32.0", Signaturquelle.Signiert(sigUrl("asterix", "v4.32.0"), "normal_asterix_v4.32.0.pbz")),
+            expectations.lookup(update.url),
+        )
+    }
+
+    @Test
+    fun releaseWithoutSignatureIsTreatedAsAbsent() = runTest {
+        // Boulder: das gereifte Ziel 4.31.1 hat eine Signatur mit 63 Byte, 4.31.0
+        // gar keine - beide zaehlen nicht, und die Auswahl geht weiter zum
+        // naechsten pruefbaren Release, wie beim fehlenden Digest.
+        val body = "[" + listOf(
+            releaseJson("v4.32.0", 2, listOf(normalAsset("asterix", "v4.32.0", digest('a'), 111))),
+            releaseJson("v4.31.1", 12, listOf(normalAsset("asterix", "v4.31.1", digest('b'), 222, sigSize = 63))),
+            releaseJson("v4.31.0", 14, listOf(normalAsset("asterix", "v4.31.0", digest('c'), 333, signiert = false))),
+        ).joinToString(",") + "]"
+        val expectations = FirmwareArtifactExpectations()
+        val checker = checker(body, expectations = expectations)
+        val result = checker.getLatestFirmware(testWatchInfo(WatchHardwarePlatform.CORE_ASTERIX, "v4.30.0"), FirmwareUpdateChannel.Soaked)
+        val update = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(result)
+        assertEquals("v4.32.0", update.version.stringVersion)
     }
 
     @Test

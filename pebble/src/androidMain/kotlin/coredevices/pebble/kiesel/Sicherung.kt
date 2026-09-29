@@ -183,7 +183,10 @@ internal object Sichern {
             return@withContext context.getString(R.string.ks_b_fehlgeschlagen)
         }
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
-        val oben = p.getStringSet("spuren", emptySet()).orEmpty().toMutableSet()
+        // JE ORDNER: nach einem Ordnerwechsel gehoeren die alten Spuren auch in den neuen.
+        val schluessel = "spuren@" + ordnerUri(context)
+        // Vor 0.25.0 galt eine Liste fuer jeden Ordner: sie zaehlt einmal fuer den jetzigen.
+        val oben = (p.getStringSet(schluessel, null) ?: p.getStringSet("spuren", emptySet())).orEmpty().toMutableSet()
         var neu = 0
         spuren.filter { it.toString() !in oben }.forEach { b ->
             val inhalt = Spur.roh(context, b) ?: return@forEach
@@ -192,7 +195,7 @@ internal object Sichern {
                 neu++
             }
         }
-        p.edit().putStringSet("spuren", oben).putLong("zuletzt", System.currentTimeMillis()).apply()
+        p.edit().putStringSet(schluessel, oben).putLong("zuletzt", System.currentTimeMillis()).apply()
         context.getString(R.string.ks_b_gesichert, tage.size, neu)
     }
 
@@ -223,8 +226,10 @@ internal object Sichern {
 
     class Arbeit(context: Context, gaben: WorkerParameters) : CoroutineWorker(context, gaben) {
         override suspend fun doWork(): Result = try {
-            if (ordner(applicationContext) != null) jetzt(applicationContext, KoinPlatform.getKoin().get())
-            Result.success()
+            val meldung = if (ordner(applicationContext) != null) jetzt(applicationContext, KoinPlatform.getKoin().get()) else null
+            // Ein Fehlschlag (Ordner weg, Schreiben verweigert) ist keiner Erfolg: spaeter noch einmal.
+            val fehl = setOf(R.string.ks_b_kein_ordner, R.string.ks_b_fehlgeschlagen).map { applicationContext.getString(it) }
+            if (meldung in fehl) Result.retry() else Result.success()
         } catch (e: Exception) {
             Log.w("Sicherung", "Taeglich: " + e.message)
             Result.retry()

@@ -24,3 +24,8 @@ expect fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
 @Composable
 expect fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
+// Boulder: der Akku der Uhr aus den Naechten der Firmware - an der Stelle
+// der Akkuseite, die Gravel mit der Telemetrie herausnahm.
+@Composable
+expect fun AkkuScreen(topBarParams: TopBarParams, nav: NavBarNav)

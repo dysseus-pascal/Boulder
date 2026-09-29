@@ -87,6 +87,20 @@ class SpurTest {
     }
 
     @Test
+    fun `kaputte Zeilen kosten nur sich selbst`() {
+        // Die letzte Zeile abgeschnitten (App starb beim Schreiben), eine ohne
+        // Zeit: uebrig bleibt genau der eine ganze Punkt.
+        val punkte = Spur.ausZeilen(listOf(
+            """{"t":1,"lat":47.0,"lon":8.0,"g":5}""",
+            "",
+            """{"lat":47.0,"lon":8.0}""",
+            """{"t":2,"lat":47.""",
+        ))
+        assertEquals(1, punkte.size)
+        assertEquals(1L, punkte[0].zeit)
+    }
+
+    @Test
     fun `eine einzelne Messung hat keine Laenge`() {
         assertEquals(0.0, Spur.laenge(listOf(p(0, 1.0, 1.0))), 0.001)
         assertEquals(0.0, Spur.laenge(emptyList()), 0.001)

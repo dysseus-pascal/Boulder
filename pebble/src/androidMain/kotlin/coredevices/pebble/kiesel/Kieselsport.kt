@@ -321,7 +321,7 @@ internal object Kieselsport {
         // Bahnen streng und weist im Zweifel den GANZEN Eintrag ab.
         val satz = try {
             ExerciseSessionRecord(
-                startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
+                startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
                 exerciseType = satzart, title = name, notes = notiz,
                 metadata = vonDerUhr("kieselsport-$beginn"),
                 segments = segmente, laps = runden, exerciseRoute = route,
@@ -331,7 +331,7 @@ internal object Kieselsport {
             null
         }
         val ohne = ExerciseSessionRecord(
-            startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
+            startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
             exerciseType = satzart, title = name, notes = notiz,
             metadata = vonDerUhr("kieselsport-$beginn"),
             exerciseRoute = route,
@@ -355,7 +355,7 @@ internal object Kieselsport {
                 schreibe(
                     context,
                     HeartRateVariabilityRmssdRecord(
-                        time = ende, zoneOffset = null,
+                        time = ende, zoneOffset = versatz(ende),
                         heartRateVariabilityMillis = hrv.toDouble(),
                         metadata = vonDerUhr("kieselsport-hrv-$beginn"),
                     ),
@@ -409,7 +409,7 @@ internal object Kieselsport {
         }
         val satz = try {
             ExerciseSessionRecord(
-                startTime = anfang, startZoneOffset = null, endTime = ende, endZoneOffset = null,
+                startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
                 exerciseType = satzart, title = name, notes = notiz,
                 metadata = vonDerUhr("kieselsport-$beginn"),
                 exerciseRoute = routeAus(punkte, anfang, ende),

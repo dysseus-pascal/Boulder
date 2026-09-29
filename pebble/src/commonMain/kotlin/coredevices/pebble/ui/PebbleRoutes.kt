@@ -100,6 +100,9 @@ object PebbleNavBarRoutes {
     data object ProtokollRoute : NavBarRoute
 
     @Serializable
+    data object AkkuRoute : NavBarRoute
+
+    @Serializable
     data class AppstoreSettingsRoute(
         val addSourceName: String? = null,
         val addSourceUrl: String? = null,
@@ -245,6 +248,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.ProtokollRoute>(viewModel) {
         ProtokollScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.AkkuRoute>(viewModel) {
+        AkkuScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

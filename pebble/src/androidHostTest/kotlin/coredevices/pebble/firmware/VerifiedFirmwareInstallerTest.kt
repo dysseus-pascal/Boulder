@@ -29,6 +29,8 @@ import kotlinx.io.readByteArray
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.security.MessageDigest
+import java.security.Signature
+import java.security.KeyPairGenerator
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipEntry
@@ -57,6 +59,18 @@ class VerifiedFirmwareInstallerTest {
 
     private val tempDir = Path(Files.createTempDirectory("fork-fw-test").toString())
     private val url = "https://release-assets.example.com/normal_asterix_v4.31.1.pbz"
+    private val sigUrl = "$url.sig"
+    private val assetName = "normal_asterix_v4.31.1.pbz"
+
+    // Boulder: das JDK signiert mit einem Wegwerfschluessel, der Installer
+    // kennt nur dessen oeffentlichen Teil.
+    private val testKey = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    private val testPub = testKey.public.encoded.takeLast(32).toByteArray()
+    private var sigBytes: ByteArray? = null
+    private var sigStatus = HttpStatusCode.OK
+
+    private fun signiere(aussage: ByteArray): ByteArray =
+        Signature.getInstance("Ed25519").run { initSign(testKey.private); update(aussage); sign() }
 
     // --- Synthetic PBZ fixtures ---
 
@@ -154,6 +168,7 @@ class VerifiedFirmwareInstallerTest {
         // itself builds its own installer with a finite timeout instead of
         // using this helper.
         readStallTimeout = Duration.INFINITE,
+        signaturSchluessel = listOf(testPub),
     )
 
     private fun target(
@@ -177,12 +192,24 @@ class VerifiedFirmwareInstallerTest {
         notes = "",
     )
 
-    private suspend fun record(pbz: ByteArray, tag: String = "v4.31.1", sha256: String = sha256Hex(pbz), size: Long? = pbz.size.toLong()) {
-        expectations.record(url, ExpectedFirmwareArtifact(sha256, size, tag))
+    // Ohne Groesse (Cohorts) bleibt es der unsignierte Legacy-Weg; sonst ist
+    // das Release signiert wie die eigenen, mit der Aussage aus tag, Name,
+    // Groesse und sha256 - so, wie sie aufgezeichnet wurden.
+    private suspend fun record(
+        pbz: ByteArray, tag: String = "v4.31.1", sha256: String = sha256Hex(pbz), size: Long? = pbz.size.toLong(),
+        signiert: Boolean = size != null,
+    ) {
+        val quelle = if (signiert) {
+            sigBytes = signiere(FirmwareSignatur.aussage(tag, assetName, checkNotNull(size), sha256))
+            Signaturquelle.Signiert(sigUrl, assetName)
+        } else Signaturquelle.Unsigniert
+        expectations.record(url, ExpectedFirmwareArtifact(sha256, size, tag, quelle))
     }
 
-    private fun serving(pbz: ByteArray): suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData =
-        { respond(ByteReadChannel(pbz), HttpStatusCode.OK) }
+    private fun serving(pbz: ByteArray): suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData = { request ->
+        if (request.url.toString() == sigUrl) respond(ByteReadChannel(sigBytes ?: ByteArray(0)), sigStatus)
+        else respond(ByteReadChannel(pbz), HttpStatusCode.OK)
+    }
 
     private fun forkFilesLeft(): List<Path> =
         SystemFileSystem.list(tempDir).filter { it.name.startsWith("fork-fw-") }
@@ -425,16 +452,98 @@ class VerifiedFirmwareInstallerTest {
     }
 
     @Test
-    fun taglessManifestSkipsTheTagCheckOnly() = runTest {
+    fun taglessManifestSkipsTheTagCheckOnlyForUnsignedSources() = runTest {
         // Sources that never wrote a versionTag must not be broken by the
         // tag cross-check; the byte hash still pins the exact content.
         val pbz = singleSlotPbz(versionTag = null)
-        record(pbz)
+        record(pbz, signiert = false)
         handoffSucceeds()
         val installer = installer(backgroundScope, serving(pbz))
         installer.runInstall(target(), update())
         assertNotNull(sideloadedPath)
         assertEquals(ForkFirmwareInstallState.Idle, installer.stateValueFor("watch1"))
+    }
+
+    @Test
+    fun taglessManifestIsRefusedForSignedReleases() = runTest {
+        // Boulder: die Signatur bindet Tag und Datei; ein Paket ohne Tag im
+        // Manifest koennte unter jedem Tag wiederkommen.
+        val pbz = singleSlotPbz(versionTag = null)
+        record(pbz)
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "no version tag")
+        assertNull(sideloadedPath)
+    }
+
+    @Test
+    fun missingSignatureAssetIsRefusedBeforeTheDownload() = runTest {
+        val pbz = singleSlotPbz()
+        record(pbz)
+        sigStatus = HttpStatusCode.NotFound
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "signature download failed")
+        assertEquals(1, requests.get(), "nur die Signatur wurde geholt")
+        assertNull(sideloadedPath)
+        assertEquals(emptyList(), forkFilesLeft())
+    }
+
+    @Test
+    fun signatureOverAnotherReleaseIsRefused() = runTest {
+        // Ein gueltig signiertes Paket unter neuem Tag: die Aussage nennt den
+        // anderen Tag, also passt die Signatur nicht.
+        val pbz = singleSlotPbz()
+        record(pbz)
+        sigBytes = signiere(FirmwareSignatur.aussage("v4.31.0", assetName, pbz.size.toLong(), sha256Hex(pbz)))
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "signature invalid")
+        assertNull(sideloadedPath)
+        assertEquals(emptyList(), forkFilesLeft())
+    }
+
+    @Test
+    fun signatureFromAnUnknownKeyIsRefused() = runTest {
+        val pbz = singleSlotPbz()
+        record(pbz)
+        val fremd = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        sigBytes = Signature.getInstance("Ed25519").run {
+            initSign(fremd.private)
+            update(FirmwareSignatur.aussage("v4.31.1", assetName, pbz.size.toLong(), sha256Hex(pbz)))
+            sign()
+        }
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "signature invalid")
+        assertNull(sideloadedPath)
+    }
+
+    @Test
+    fun signatureOfTheWrongLengthIsRefused() = runTest {
+        val pbz = singleSlotPbz()
+        record(pbz)
+        sigBytes = checkNotNull(sigBytes).copyOf(63)
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "signature size mismatch")
+        assertNull(sideloadedPath)
+    }
+
+    @Test
+    fun nonHttpsSignatureUrlIsRefused() = runTest {
+        val pbz = singleSlotPbz()
+        expectations.record(url, ExpectedFirmwareArtifact(sha256Hex(pbz), pbz.size.toLong(), "v4.31.1", Signaturquelle.Signiert("http://x/sig", assetName)))
+        val installer = installer(backgroundScope, serving(pbz))
+        installer.runInstall(target(), update())
+        val state = assertIs<ForkFirmwareInstallState.Failed>(installer.stateValueFor("watch1"))
+        assertContains(state.reason, "non-https signature")
+        assertEquals(0, requests.get())
     }
 
     @Test

@@ -3,8 +3,14 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.location.Location
 import android.util.Log
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import java.io.File
 
 /**
@@ -56,7 +62,7 @@ internal object Spur {
     fun haengeAn(context: Context, beginn: Long, ort: Location) {
         if (ort.accuracy > GENAUIGKEIT_MAX) return
         try {
-            val zeile = JSONObject().apply {
+            val zeile = buildJsonObject {
                 put("t", ort.time / 1000)
                 put("lat", ort.latitude)
                 put("lon", ort.longitude)
@@ -73,22 +79,31 @@ internal object Spur {
         val d = datei(context, beginn)
         if (!d.exists()) return emptyList()
         return try {
-            d.readLines().mapNotNull { zeile ->
-                if (zeile.isBlank()) return@mapNotNull null
-                val o = JSONObject(zeile)
-                Punkt(
-                    o.optLong("t"),
-                    o.optDouble("lat"),
-                    o.optDouble("lon"),
-                    if (o.has("h")) o.optDouble("h") else null,
-                    o.optDouble("g").toFloat(),
-                )
-            }
+            ausZeilen(d.readLines())
         } catch (e: Exception) {
             Log.w(TAG, "Spur lesen: " + e.message)
             emptyList()
         }
     }
+
+    /**
+     * Die Punkte aus den Zeilen der Datei. Eine kaputte Zeile (die App starb
+     * beim Schreiben) kostet nur sie selbst, nicht die ganze Spur; eine Zeile
+     * ohne Zeit oder Ort ergibt keinen Punkt bei (0, NaN).
+     */
+    fun ausZeilen(zeilen: List<String>): List<Punkt> = zeilen.mapNotNull { zeile ->
+        if (zeile.isBlank()) return@mapNotNull null
+        // kotlinx statt org.json: das gibt es auch ohne Android, also im Host-Test.
+        val o = try { Json.parseToJsonElement(zeile).jsonObject } catch (e: Exception) { return@mapNotNull null }
+        Punkt(
+            o["t"]?.jsonPrimitive?.longOrNull ?: 0L,
+            o["lat"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+            o["lon"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+            o["h"]?.jsonPrimitive?.doubleOrNull,
+            o["g"]?.jsonPrimitive?.doubleOrNull?.toFloat() ?: Float.NaN,
+        )
+    }.filter { it.zeit > 0 && !it.lat.isNaN() && !it.lon.isNaN() }
+
 
     fun vorhanden(context: Context, beginn: Long): Boolean = datei(context, beginn).exists()
 
@@ -250,9 +265,9 @@ internal object Spur {
     }
 
     /** Für den Export als eine Datei. */
-    fun alsJson(punkte: List<Punkt>): String = JSONArray().apply {
+    fun alsJson(punkte: List<Punkt>): String = buildJsonArray {
         punkte.forEach { p ->
-            put(JSONObject().apply {
+            add(buildJsonObject {
                 put("t", p.zeit); put("lat", p.lat); put("lon", p.lon)
                 p.hoehe?.let { put("h", it) }
             })

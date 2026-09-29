@@ -83,6 +83,8 @@ internal fun Verlauf(
     zeitachse: Boolean = false,
     zaehlachse: Boolean = false,
     xBaender: List<Pair<Double, Double>> = emptyList(),
+    /** Feste Spanne der Werteachse - beim Akku 0 bis 100, sonst stuende dort 108 %. */
+    bereich: ClosedRange<Double>? = null,
 ) {
     if (punkte.size < 2) return
     val messer = rememberTextMeasurer()
@@ -103,6 +105,10 @@ internal fun Verlauf(
         // "-4 km/h" gibt es nicht. Die Steigung darf, sie ist auch negativ.
         tief = if (tief >= 0) (tief - luft).coerceAtLeast(0.0) else tief - luft
         hoch += luft
+        if (bereich != null) {
+            tief = bereich.start
+            hoch = bereich.endInclusive
+        }
         val spanne = (hoch - tief).coerceAtLeast(0.1)
 
         fun x(m: Double) = links + (size.width - links) * ((m - anfang) / (ende - anfang)).toFloat()

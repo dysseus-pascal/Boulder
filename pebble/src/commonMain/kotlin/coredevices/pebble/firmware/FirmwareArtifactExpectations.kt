@@ -12,7 +12,19 @@ data class ExpectedFirmwareArtifact(
     val sizeBytes: Long?,
     /** Release tag the artifact belongs to, cross-checked against the PBZ manifest. */
     val versionTag: String,
+    /**
+     * Boulder: woher die Authentizitaet kommt. Die eigenen Releases sind
+     * signiert (FirmwareSignatur); nur die Legacy-Quelle Cohorts ist es nicht.
+     * Im Typ, nicht als String?: ein null schaltete die Pruefung sonst still ab.
+     */
+    val signatur: Signaturquelle = Signaturquelle.Unsigniert,
 )
+
+sealed class Signaturquelle {
+    /** Die 64 Byte Ed25519-Signatur liegen als eigenes Asset neben dem Paket. */
+    data class Signiert(val url: String, val dateiname: String) : Signaturquelle()
+    data object Unsigniert : Signaturquelle()
+}
 
 /**
  * Check-time integrity metadata, keyed by download URL, for the verified

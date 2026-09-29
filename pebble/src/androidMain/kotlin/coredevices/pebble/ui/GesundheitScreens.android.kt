@@ -71,3 +71,7 @@ actual fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav) =
 @Composable
 actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) =
     EinfacheSeite(topBarParams, coredevices.pebble.R.string.ks_n_protokoll) { coredevices.pebble.kiesel.ansicht.ProtokollAnsicht() }
+
+@Composable
+actual fun AkkuScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, coredevices.pebble.R.string.ks_akku_titel) { coredevices.pebble.kiesel.ansicht.AkkuAnsicht() }

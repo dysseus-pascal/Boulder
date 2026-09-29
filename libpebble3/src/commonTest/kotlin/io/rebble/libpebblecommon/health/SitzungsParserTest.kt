@@ -37,6 +37,11 @@ class SitzungsParserTest {
         val bewegung = saetze[0]
         assertEquals(OverlayType.Movement.value, bewegung.type)
         assertEquals(2500, bewegung.steps)
+        // Reihenfolge wie ActivitySessionDataStepping in der Firmware: die
+        // Vorlage las aktive und Ruhe-kcal vertauscht.
+        assertEquals(12, bewegung.activeKiloCalories)
+        assertEquals(80, bewegung.restingKiloCalories)
+        assertEquals(1500, bewegung.distanceCm)
         assertFalse(bewegung.manual)
         val training = saetze[1]
         assertEquals(OverlayType.OpenWorkout.value, training.type)
@@ -67,6 +72,8 @@ class SitzungsParserTest {
         assertEquals(1, saetze.size)
         assertEquals(OverlayType.Walk.value, saetze[0].type)
         assertEquals(1100, saetze[0].steps)
+        assertEquals(12, saetze[0].activeKiloCalories)
+        assertEquals(80, saetze[0].restingKiloCalories)
         assertFalse(saetze[0].manual)
     }
 }

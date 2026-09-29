@@ -67,10 +67,7 @@ internal object Kartenlink {
         // NUR AUS EINEM KARTENLINK. Ein "q=" gibt es auch in einer
         // Google-Suche, und daraus ein Navigationsziel zu machen waere
         // eine Anmassung - die Pruefung hat genau das gefunden.
-        val istKarte = roh.contains("/maps", ignoreCase = true) ||
-            roh.contains("maps.google.", ignoreCase = true) ||
-            roh.contains("maps.app.goo.gl", ignoreCase = true)
-        if (!istKarte) return null
+        if (!istKarte(roh)) return null
 
         listOf("destination", "query", "daddr", "q").forEach { name ->
             abfrage(roh, name)?.takeIf { it.isNotBlank() }?.let { wert ->
@@ -118,10 +115,36 @@ internal object Kartenlink {
         text
     }
 
+    /**
+     * Der Host eines Links - nicht ein Teilstring: "maps.google.com.boese.tld"
+     * oder "?q=maps.app.goo.gl" sahen sonst aus wie Google, und die Aufloesung
+     * des Kurzlinks fragte einen fremden Host.
+     */
+    // Von Hand statt java.net.URI: das wirft bei Leerzeichen oder "|" im Link,
+    // und geteilte Links haben so etwas oft.
+    private val HOST = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://([^/?#]*)")
+    private fun host(roh: String): String? =
+        HOST.find(roh.trim())?.groupValues?.get(1)?.substringAfterLast('@')?.substringBefore(':')?.lowercase()?.takeIf { it.isNotEmpty() }
+    private fun pfad(roh: String): String {
+        val treffer = HOST.find(roh.trim()) ?: return ""
+        return roh.trim().substring(treffer.range.last + 1).substringBefore('?').substringBefore('#')
+    }
+    private fun istGoogle(host: String): Boolean =
+        Regex("^(www\\.|maps\\.)?google\\.[a-z]{2,3}(\\.[a-z]{2})?$").matches(host)
+
+    /** Ein Kartenlink von Google: Karte oder Kurzlink dorthin. */
+    fun istKarte(roh: String): Boolean {
+        val h = host(roh) ?: return false
+        // maps.google.tld nimmt Ziele auch ohne /maps im Pfad (die alte daddr-Form).
+        return (istGoogle(h) && (h.startsWith("maps.") || pfad(roh).startsWith("/maps"))) || istKurzlink(roh)
+    }
+
     /** Kurzlinks, die erst aufgeloest werden muessen. */
-    fun istKurzlink(roh: String): Boolean =
-        roh.contains("maps.app.goo.gl") || roh.contains("goo.gl/maps") ||
-            roh.contains("g.co/kgs")
+    fun istKurzlink(roh: String): Boolean {
+        val h = host(roh) ?: return false
+        return h == "maps.app.goo.gl" || (h == "goo.gl" && pfad(roh).startsWith("/maps")) ||
+            (h == "g.co" && pfad(roh).startsWith("/kgs"))
+    }
 
     /**
      * Einem Kurzlink folgen, bis er sich zu erkennen gibt.

@@ -33,6 +33,7 @@ internal class KieselsportBegleiter(
     private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
+        arbeite()
         val app = context.applicationContext
         // Was liegen blieb, zuerst: Nachrichten, deren Verarbeitung scheiterte,
         // und Kurven, deren Eintrag scheiterte (etwa ohne Erlaubnis).
@@ -74,7 +75,14 @@ internal class KieselsportBegleiter(
          */
         private val auftraege = Channel<Auftrag>(Channel.UNLIMITED)
 
-        init {
+        private var arbeitet = false
+
+        // KEIN init-BLOCK (Regel in CLAUDE.md): der Arbeiter startet mit der
+        // ersten Sitzung, nicht beim Laden der Klasse.
+        @Synchronized
+        fun arbeite() {
+            if (arbeitet) return
+            arbeitet = true
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for (a in auftraege) {
                     val n = a.nachricht ?: a.datei?.let { Wartend.lies(it) } ?: continue
@@ -132,6 +140,7 @@ internal class Mithoerer(
     private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
+        arbeite()
         sitzung.launch {
             incomingAppMessages.collect {
                 if (bestaetigen) device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
@@ -150,7 +159,14 @@ internal class Mithoerer(
         private val logger = Logger.withTag("Mithoerer")
         private val auftraege = Channel<Pair<Context, Gehoert>>(Channel.UNLIMITED)
 
-        init {
+        private var arbeitet = false
+
+        // KEIN init-BLOCK (Regel in CLAUDE.md): der Arbeiter startet mit der
+        // ersten Sitzung, nicht beim Laden der Klasse.
+        @Synchronized
+        fun arbeite() {
+            if (arbeitet) return
+            arbeitet = true
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for ((context, g) in auftraege) {
                     try {

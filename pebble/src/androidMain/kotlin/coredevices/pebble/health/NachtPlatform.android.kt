@@ -11,6 +11,7 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.Instant
+import java.time.ZoneOffset
 
 internal actual fun supportsNaechteWriting(): Boolean = true
 
@@ -27,20 +28,24 @@ internal fun nachtAlsSaetze(n: NachtEntity, abschnitte: List<NachtAbschnittEntit
     val geraet = Device(type = Device.TYPE_WATCH)
     fun zeit(min: Int): Instant = Instant.ofEpochSecond(n.beginnUtc + min * 60L)
     val aufwachen = zeit(n.aufwachen)
+    // Der Versatz, den die Uhr zur Nacht gemeldet hat - nicht der des
+    // Telefons von heute: die Uhr war dabei, das Telefon vielleicht woanders.
+    val versatzUhr = runCatching { ZoneOffset.ofTotalSeconds(n.utcZuLokal) }.getOrNull()
+    fun versatz(t: Instant): ZoneOffset = versatzUhr ?: coredevices.pebble.kiesel.versatz(t)
     val saetze = mutableListOf<Record>(
         SleepSessionRecord(
-            startTime = zeit(n.einschlafen), startZoneOffset = null,
-            endTime = aufwachen, endZoneOffset = null,
+            startTime = zeit(n.einschlafen), startZoneOffset = versatz(zeit(n.einschlafen)),
+            endTime = aufwachen, endZoneOffset = versatz(aufwachen),
             metadata = Metadata.autoRecorded(geraet, "boulder-nacht-${n.beginnUtc}"),
             stages = abschnitte.filter { it.bis > it.von }
                 .map { SleepSessionRecord.Stage(zeit(it.von), zeit(it.bis), schlafstufe(it.phase)) },
         )
     )
     if (n.ruhepuls in 20..200) {
-        saetze += RestingHeartRateRecord(aufwachen, null, n.ruhepuls.toLong(), Metadata.autoRecorded(geraet, "boulder-ruhepuls-${n.beginnUtc}"))
+        saetze += RestingHeartRateRecord(aufwachen, versatz(aufwachen), n.ruhepuls.toLong(), Metadata.autoRecorded(geraet, "boulder-ruhepuls-${n.beginnUtc}"))
     }
     if (n.hrv in 1..300) {
-        saetze += HeartRateVariabilityRmssdRecord(aufwachen, null, n.hrv.toDouble(), Metadata.autoRecorded(geraet, "boulder-nacht-hrv-${n.beginnUtc}"))
+        saetze += HeartRateVariabilityRmssdRecord(aufwachen, versatz(aufwachen), n.hrv.toDouble(), Metadata.autoRecorded(geraet, "boulder-nacht-hrv-${n.beginnUtc}"))
     }
     return saetze
 }

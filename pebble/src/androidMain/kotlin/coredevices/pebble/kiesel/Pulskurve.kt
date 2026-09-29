@@ -92,9 +92,9 @@ internal object Pulskurve {
         val saetze = punkte.chunked(JE_EINTRAG).map { stueck ->
             HeartRateRecord(
                 startTime = anfang.plusSeconds(stueck.first().first.toLong()),
-                startZoneOffset = null,
+                startZoneOffset = versatz(anfang),
                 endTime = anfang.plusSeconds(stueck.last().first.toLong() + 1),
-                endZoneOffset = null,
+                endZoneOffset = versatz(anfang),
                 samples = stueck.map { (s, p) ->
                     HeartRateRecord.Sample(anfang.plusSeconds(s.toLong()), p.toLong())
                 },

@@ -205,7 +205,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
     Apps("Apps", Icons.Default.Apps),
-    Battery("Battery (Not available without telemetry)", Icons.Default.BatteryFull),
+    Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
     Health("Health", Icons.Default.Favorite),
     // Boulder: Kieselsport und Trainings, und Kieselstrasse mit den Kartenlinks.
@@ -226,7 +226,8 @@ enum class Section(val title: String, val icon: ImageVector) {
 }
 
 fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
-    Section.Battery -> PebbleNavBarRoutes.BatterySettingsRoute
+    // Boulder: die eigene Akkuseite aus den Naechten der Firmware.
+    Section.Battery -> PebbleNavBarRoutes.AkkuRoute
     else -> null
 }
 
@@ -2212,7 +2213,8 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             // Battery analytics is upstream's server-rendered page, fed by the
                             // watch-telemetry relay this fork strips; with no data source left,
                             // the entry stays visible but disabled.
-                            val sectionEnabled = section != Section.Battery
+                            // Boulder: die Akkuseite hat mit den Naechten der Firmware wieder eine Quelle.
+                            val sectionEnabled = true
                             ListItem(
                                 leadingContent = {
                                     Icon(

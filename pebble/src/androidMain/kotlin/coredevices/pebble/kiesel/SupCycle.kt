@@ -98,9 +98,9 @@ internal object SupCycle {
             try {
                 klient?.insertRecords(listOf(NutritionRecord(
                     startTime = jetzt,
-                    startZoneOffset = null,
+                    startZoneOffset = versatz(jetzt),
                     endTime = jetzt.plusSeconds(60),
-                    endZoneOffset = null,
+                    endZoneOffset = versatz(jetzt),
                     name = name,
                     // TAG PLUS PLATZ als Kennung: meldet SupCycle denselben
                     // Haken noch einmal, ersetzt die Akte den Eintrag.

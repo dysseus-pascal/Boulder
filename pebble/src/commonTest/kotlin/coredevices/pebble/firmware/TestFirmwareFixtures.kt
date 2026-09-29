@@ -70,8 +70,16 @@ fun assetJson(name: String, digestValue: String?, size: Long): String = buildStr
     append(""""size":$size,"content_type":"application/octet-stream"}""")
 }
 
-fun normalAsset(revision: String, tag: String, digestValue: String?, size: Long): String =
-    assetJson("normal_${revision}_$tag.pbz", digestValue, size)
+// Boulder: ein Release zaehlt nur mit seiner 64-Byte-Signatur neben dem
+// Paket; die Fixture liefert beide Assets, damit die vorhandenen Tests
+// weiter Releases mit Asset sehen. `signiert = false` fuer ein Release ohne.
+fun normalAsset(revision: String, tag: String, digestValue: String?, size: Long, signiert: Boolean = true, sigSize: Long = 64): String {
+    val name = "normal_${revision}_$tag.pbz"
+    val paket = assetJson(name, digestValue, size)
+    return if (signiert) paket + "," + assetJson("$name.sig", null, sigSize) else paket
+}
+
+fun sigUrl(revision: String, tag: String): String = "https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/normal_${revision}_$tag.pbz.sig"
 
 fun releaseJson(
     tag: String,

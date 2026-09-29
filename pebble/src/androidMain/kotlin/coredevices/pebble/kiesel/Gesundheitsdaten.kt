@@ -225,8 +225,8 @@ internal object Gesundheitsdaten {
         val jetzt = Instant.now()
         try {
             Akte(context).bereit()?.insertRecords(listOf(NutritionRecord(
-                startTime = jetzt, startZoneOffset = null,
-                endTime = jetzt.plusSeconds(60), endZoneOffset = null,
+                startTime = jetzt, startZoneOffset = versatz(jetzt),
+                endTime = jetzt.plusSeconds(60), endZoneOffset = versatz(jetzt),
                 name = name,
                 caffeine = Mass.milligrams(mg.toDouble()),
                 metadata = Metadata.manualEntryWithId("koffein-${jetzt.epochSecond}", Device(type = Device.TYPE_PHONE)),

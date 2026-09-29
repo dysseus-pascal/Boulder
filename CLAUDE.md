@@ -27,6 +27,11 @@ die Regeln von Gravel, mit diesen Abweichungen:
   Firmware-Kanal): sie boete Core-Builds an und ersetzte die Boulder-Firmware.
   Neue Oberflaechentexte sagen "Boulder", nicht "Gravel".
 - Texte nur in den Sprachen, die Gravel hat (derzeit Englisch).
+- Der Gravel-Teil unten ist Gravels Original, damit Patches billig bleiben. Was
+  dort F-Droid, `FdroidGuardrailsTest`, `version.properties` und `changelogs/`
+  betrifft, gibt es in Boulder nicht.
+- Neue Eintraege in Health Connect bekommen den Zeitzonenversatz (`versatz(t)`
+  in `Akte.kt`), sonst stehen sie auf Reisen in der falschen Ortszeit.
 - Neuer eigener Code: deutsche Bezeichner und Kommentare, Kommentare erklaeren
   das WARUM.
 - Die Waechtertests in `:androidApp` lesen den Git-Index: nach dem Loeschen oder

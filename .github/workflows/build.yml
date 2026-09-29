@@ -5,12 +5,16 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Schreiben darf nur der Release-Job - der Bau kommt mit Lesen aus.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   android:
     runs-on: ubuntu-latest
+    outputs:
+      ver: ${{ steps.v.outputs.ver }}
+      neu: ${{ steps.v.outputs.neu }}
     steps:
       - uses: actions/setup-java@v4
         with:
@@ -35,16 +39,34 @@ jobs:
           if git ls-remote --exit-code --tags origin "v$ver" >/dev/null; then echo "neu=nein" >> "$GITHUB_OUTPUT"; else echo "neu=ja" >> "$GITHUB_OUTPUT"; fi
       - name: Fester Debug-Schlüssel
         run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
+      - name: Tests
+        run: ./gradlew :libpebble3:testAndroidHostTest :pebble:testAndroidHostTest :util:testAndroidHostTest :androidApp:testDebugUnitTest
       - name: Bauen
         run: ./gradlew :androidApp:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boulder-apk
+          path: androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  release:
+    needs: android
+    if: needs.android.outputs.neu == 'ja'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: boulder-apk
+          path: apk
       - name: Release
-        if: steps.v.outputs.neu == 'ja'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ver="${{ steps.v.outputs.ver }}"
+          ver="${{ needs.android.outputs.ver }}"
           notes=".github/release/$ver.md"
-          apk="$(ls androidApp/build/outputs/apk/debug/*.apk | head -n1)"
-          cp "$apk" boulder.apk
+          cp "$(ls apk/*.apk | head -n1)" boulder.apk
           gh release create "v$ver" boulder.apk --target "$GITHUB_SHA" \
             --title "$ver - $(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"

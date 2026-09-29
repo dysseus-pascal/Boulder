@@ -95,7 +95,9 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                         text = "Approve",
                                         modifier = Modifier.padding(15.dp),
                                         textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        // Boulder: die Karte ist errorContainer, also dessen Textfarbe -
+                                        // onPrimary ist im dunklen Schema jetzt dunkel und war hier unsichtbar.
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
                                     )
                                 }
                             }

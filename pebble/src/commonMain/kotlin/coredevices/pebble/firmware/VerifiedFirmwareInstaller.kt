@@ -115,6 +115,8 @@ class VerifiedFirmwareInstaller(
     // real dispatcher since 3.5), and multi-chunk transfers lose spuriously.
     // Production always uses the default. Same seam as ModelZipInstaller's.
     private val readStallTimeout: Duration = READ_STALL_TIMEOUT,
+    // Boulder: die erlaubten Signaturschluessel - im Test ein Wegwerfschluessel.
+    private val signaturSchluessel: List<ByteArray> = FirmwareSignatur.schluessel(),
 ) {
     private val logger = Logger.withTag("VerifiedFirmwareInstaller")
     private val stateMutex = Mutex()
@@ -171,6 +173,10 @@ class VerifiedFirmwareInstaller(
             if (!update.url.startsWith("https://")) {
                 throw InstallFailure("refusing non-https download")
             }
+            val signatur = expected.signatur
+            if (signatur is Signaturquelle.Signiert && !signatur.url.startsWith("https://")) {
+                throw InstallFailure("refusing non-https signature download")
+            }
             val updateStates = watchUpdateStates(target.identifierKey)
             // Gate on the live upstream state, not a snapshot captured when
             // the device object was created: a snapshot could miss an update
@@ -180,6 +186,9 @@ class VerifiedFirmwareInstaller(
                 is FirmwareUpdateStatus.NotInProgress -> Unit
                 else -> throw InstallFailure("an install is already in progress")
             }
+            // Boulder: die Signatur zuerst - 64 Byte, und ohne sie lohnt der
+            // Download nicht. Geprueft wird sie, sobald der sha256 da ist.
+            val signaturBytes = (signatur as? Signaturquelle.Signiert)?.let { ladeSignatur(it.url) }
             val downloaded = newDownloadPath(target.identifierKey)
             path = downloaded
             val actualSha256 = downloadTo(downloaded, update.url, expected) { progress ->
@@ -188,6 +197,15 @@ class VerifiedFirmwareInstaller(
             state.value = ForkFirmwareInstallState.Verifying
             if (actualSha256 != expected.sha256Hex) {
                 throw InstallFailure("checksum mismatch")
+            }
+            if (signatur is Signaturquelle.Signiert) {
+                val groesse = expected.sizeBytes ?: throw InstallFailure("signed download without size")
+                val aussage = FirmwareSignatur.aussage(expected.versionTag, signatur.dateiname, groesse, actualSha256)
+                when (FirmwareSignatur.pruefe(aussage, checkNotNull(signaturBytes), signaturSchluessel)) {
+                    FirmwareSignatur.Ergebnis.Gueltig -> Unit
+                    FirmwareSignatur.Ergebnis.Ungueltig -> throw InstallFailure("signature invalid")
+                    FirmwareSignatur.Ergebnis.NichtVerfuegbar -> throw InstallFailure("signature check unavailable on this platform")
+                }
             }
             verifyPbz(downloaded, expected, target.platform)
             state.value = ForkFirmwareInstallState.HandedOff
@@ -222,6 +240,35 @@ class VerifiedFirmwareInstaller(
         } finally {
             stateMutex.withLock { activeInstalls -= target.identifierKey }
         }
+    }
+
+    /** Die 64 Byte Signatur - genau 64, sonst ist es keine. */
+    private suspend fun ladeSignatur(url: String): ByteArray {
+        val puffer = ByteArray(65)
+        var n = 0
+        try {
+            httpClient.prepareGet(url).execute { response ->
+                if (!response.status.isSuccess()) {
+                    throw InstallFailure("signature download failed (${response.status.value})")
+                }
+                val channel = response.bodyAsChannel()
+                while (n < puffer.size) {
+                    val read = if (readStallTimeout.isInfinite()) {
+                        channel.readAvailable(puffer, n, puffer.size - n)
+                    } else {
+                        withTimeoutOrNull(readStallTimeout) {
+                            channel.readAvailable(puffer, n, puffer.size - n)
+                        } ?: throw InstallFailure("signature download stalled")
+                    }
+                    if (read == -1) break
+                    n += read
+                }
+            }
+        } catch (e: IOException) {
+            throw InstallFailure("signature download failed (network error)")
+        }
+        if (n != 64) throw InstallFailure("signature size mismatch")
+        return puffer.copyOf(64)
     }
 
     /**
@@ -319,6 +366,11 @@ class VerifiedFirmwareInstaller(
                         "firmware version '$manifestTag' does not match release '${expected.versionTag}'",
                     )
                 }
+            } else if (expected.signatur is Signaturquelle.Signiert) {
+                // Boulder: jede eigene Firmware traegt den Tag (mkbundle.py).
+                // Ohne ihn baende die Signatur weder Tag noch Datei an das
+                // Paket - also fail closed.
+                throw InstallFailure("firmware manifest has no version tag")
             } else {
                 // Tag equality is a selection-bug guard on top of the byte
                 // hash, so a tagless manifest downgrades gracefully instead

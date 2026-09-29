@@ -101,6 +101,7 @@ class GithubReleases(
                 sha256Hex = checkNotNull(chosen.digestHex),
                 sizeBytes = checkNotNull(chosen.assetSize),
                 versionTag = chosenTag,
+                signatur = Signaturquelle.Signiert(checkNotNull(chosen.signaturUrl), checkNotNull(chosen.assetName)),
             ),
         )
         return FirmwareUpdateCheckResult.FoundUpdate(
@@ -160,14 +161,23 @@ class GithubReleases(
             ?: return null
         val asset = assets.firstOrNull { it.name == "normal_${revision}_${tagName}.pbz" }
         val digestHex = normalizeSha256Hex(asset?.digest)
+        // Boulder: ohne die 64 Byte Signatur (FirmwareSignatur) ist das Release
+        // fuer die App keins - auch die alten, die vor der Signatur erschienen.
+        val signatur = asset?.let { a -> assets.firstOrNull { it.name == a.name + ".sig" } }
+        if (asset != null && (signatur == null || signatur.size != 64L)) {
+            logger.w { "Release $tagName has no valid signature asset; ignoring it" }
+        }
         // An asset the fork cannot verify is treated as absent, so selection
         // walks to a release it can verify instead of offering this one.
-        val usable = asset != null && digestHex != null && asset.size > 0
+        val usable = asset != null && digestHex != null && asset.size > 0 &&
+            signatur != null && signatur.size == 64L
         return Candidate(
             selectable = SelectableRelease(version, published, hasAsset = usable),
             assetUrl = asset?.browserDownloadUrl,
+            assetName = asset?.name,
             assetSize = asset?.size,
             digestHex = digestHex,
+            signaturUrl = signatur?.browserDownloadUrl,
         )
     }
 
@@ -177,8 +187,10 @@ class GithubReleases(
     private data class Candidate(
         val selectable: SelectableRelease,
         val assetUrl: String?,
+        val assetName: String?,
         val assetSize: Long?,
         val digestHex: String?,
+        val signaturUrl: String?,
     )
 
     companion object {

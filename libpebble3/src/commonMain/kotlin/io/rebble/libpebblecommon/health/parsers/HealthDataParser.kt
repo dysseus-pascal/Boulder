@@ -237,9 +237,12 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
                 buffer.getBytes(8)
             }
         } else {
+            // Reihenfolge wie ActivitySessionDataStepping in der Firmware: Schritte,
+            // aktive kcal, Ruhe-kcal, Meter. Die Vorlage las aktiv und Ruhe vertauscht;
+            // das Feld heisst aus Erbschaft "Cm", traegt aber Meter.
             steps = buffer.getUShort().toInt()
-            restingKiloCalories = buffer.getUShort().toInt()
             activeKiloCalories = buffer.getUShort().toInt()
+            restingKiloCalories = buffer.getUShort().toInt()
             distanceCm = buffer.getUShort().toInt()
         }
 

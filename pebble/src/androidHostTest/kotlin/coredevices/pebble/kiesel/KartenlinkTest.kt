@@ -1,6 +1,7 @@
 package coredevices.pebble.kiesel
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -94,5 +95,21 @@ class KartenlinkTest {
         assertTrue(Kartenlink.istKurzlink("https://maps.app.goo.gl/abc123"))
         assertTrue(Kartenlink.istKurzlink("https://goo.gl/maps/xyz"))
         assertTrue(!Kartenlink.istKurzlink("https://www.google.com/maps/@1.0,2.0,15z"))
+    }
+
+    @Test
+    fun `Google im Text ist kein Google-Host`() {
+        assertNull(Kartenlink.zerlege("https://boese.example/maps.google.com/?q=47.1,8.2"))
+        assertNull(Kartenlink.zerlege("https://maps.google.com.boese.example/maps?q=47.1,8.2"))
+        assertNull(Kartenlink.zerlege("https://example.com/?q=maps.app.goo.gl"))
+        assertFalse(Kartenlink.istKurzlink("https://example.com/?u=maps.app.goo.gl/abc"))
+        assertTrue(Kartenlink.istKurzlink("https://maps.app.goo.gl/AbCdEf"))
+    }
+
+    @Test
+    fun `Leerzeichen im Link stoeren nicht`() {
+        // Geteilte Links tragen oft Text mit; der Host muss trotzdem stimmen.
+        val z = Kartenlink.zerlege("https://www.google.com/maps/place/Bahnhof+Bern/@46.9,7.4,17z?q=Bahnhof Bern")!!
+        assertEquals("Bahnhof Bern", z.text)
     }
 }

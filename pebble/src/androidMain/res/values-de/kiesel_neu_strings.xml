@@ -36,4 +36,12 @@
     <string name="ks_n_keine_uhr">Keine Uhr verbunden.</string>
     <string name="ks_n_keine_antwort">Die Uhr hat die Einstellungen nicht bestätigt. Ist sie in Reichweite?</string>
     <string name="ks_n_stand_eben">Gerade eben von der Uhr gemeldet.</string>
+    <string name="ks_n_zuletzt">Zuletzt</string>
+    <string name="ks_n_acht_wochen">Acht Wochen</string>
+    <string name="ks_n_minuten_woche">Minuten je Woche, gestapelt nach Sportart</string>
+    <string name="ks_n_woraus">Woraus es besteht</string>
+    <string name="ks_n_drei_monate">Die letzten drei Monate, nach Zeit</string>
+    <string name="ks_n_davor">Davor</string>
+    <string name="ks_n_kw">KW %1$s</string>
+    <string name="ks_n_kalender_text">Vier Wochen. Die Farbe ist die Sportart, die Grösse die Dauer; ein Ring aussen heisst, es kam eine zweite Sportart dazu.</string>
 </resources>

@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Wochenrechnung
 import coredevices.pebble.health.HealthConnectPermissionBridge
 import coredevices.pebble.kiesel.KIESELSPORT_RECHTE
 import coredevices.pebble.kiesel.KieselVerlauf
@@ -77,6 +78,7 @@ import coredevices.pebble.kiesel.TrainingsUebersicht
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Locale
 
 // --- Kleine Helfer -------------------------------------------------------------
@@ -249,8 +251,31 @@ internal fun TrainingListe(
                     Text(stringResource(R.string.ks_t_noch_keins_text), style = MaterialTheme.typography.bodySmall)
                 }
             }
+        } else {
+            // DAS JUENGSTE GLEICH UNTER DER WOCHE: was man sucht, wenn man
+            // diesen Schirm oeffnet, ist fast immer das letzte Training. Die
+            // Bilder ueber die Wochen kommen danach, der Rest der Liste zuletzt.
+            val erstes = d.trainings.first()
+            item { Ueberschrift(stringResource(R.string.ks_n_zuletzt)) }
+            item(key = erstes.id) { Zeile(erstes) { oeffne(erstes.id) } }
+            val einheiten = d.trainings.map { it.einheit }
+            item {
+                Ueberschrift(stringResource(R.string.ks_n_acht_wochen))
+                Karte {
+                    Text(stringResource(R.string.ks_n_minuten_woche), style = MaterialTheme.typography.bodySmall)
+                    Wochenstapel(Wochenrechnung.wochen(einheiten, LocalDate.now()), LocalDate.now())
+                }
+            }
+            item {
+                Ueberschrift(stringResource(R.string.ks_n_woraus))
+                Karte {
+                    Text(stringResource(R.string.ks_n_drei_monate), style = MaterialTheme.typography.bodySmall)
+                    Verteilung(Wochenrechnung.verteilung(einheiten))
+                }
+            }
+            if (d.trainings.size > 1) item { Ueberschrift(stringResource(R.string.ks_n_davor)) }
+            items(d.trainings.drop(1), key = { it.id }) { t -> Zeile(t) { oeffne(t.id) } }
         }
-        items(d.trainings, key = { it.id }) { t -> Zeile(t) { oeffne(t.id) } }
         item { Spacer(Modifier.height(12.dp)) }
     }
 
@@ -325,7 +350,21 @@ private fun Woche(trainings: List<TrainingEintrag>) {
                 if (meter > 0) Wert(kmText(meter), stringResource(R.string.ks_t_strecke))
             }
         }
+        Kalender(Wochenrechnung.tage(trainings.map { it.einheit }), LocalDate.now())
+        Text(stringResource(R.string.ks_n_kalender_text), style = MaterialTheme.typography.bodySmall)
     }
+}
+
+/** Eine Abschnittsueberschrift zwischen den Karten, wie in Kiesel-Helper. */
+@Composable
+private fun Ueberschrift(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
+    )
 }
 
 @Composable

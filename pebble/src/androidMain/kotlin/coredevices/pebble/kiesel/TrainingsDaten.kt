@@ -13,17 +13,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 /** Die Sportarten, wie die Ansicht sie zeigt - Farbe aus Kiesel-Helper. */
-internal enum class Sport(val nameId: Int, val farbe: Long) {
-    Laufen(R.string.ks_sport_laufen, 0xFFC0582B),
-    Bike(R.string.ks_sport_bike, 0xFFB7862A),
-    Mtb(R.string.ks_sport_mtb, 0xFFB7862A),
-    Wandern(R.string.ks_sport_wandern, 0xFF6E7F3A),
-    Kraft(R.string.ks_sport_kraft, 0xFF8A3B2E),
-    Yoga(R.string.ks_sport_yoga, 0xFF7A4E7E),
-    Schwimmen(R.string.ks_sport_schwimmen, 0xFF2E7C8A),
-    Anderes(R.string.ks_training, 0xFF7D6B5D);
+internal enum class Sport(val farbe: Long) {
+    Laufen(0xFFC0582B),
+    Bike(0xFFB7862A),
+    Mtb(0xFFB7862A),
+    Wandern(0xFF6E7F3A),
+    Kraft(0xFF8A3B2E),
+    Yoga(0xFF7A4E7E),
+    Schwimmen(0xFF2E7C8A),
+    Anderes(0xFF7D6B5D);
+
+    /**
+     * Der Name als Ressource. ALS GETTER, nicht als Feld: sonst luede schon
+     * die Aufzaehlung die Ressourcen, und die Rechnung (Wochenrechnung)
+     * liesse sich ohne Android nicht pruefen.
+     */
+    val nameId: Int get() = when (this) {
+        Laufen -> R.string.ks_sport_laufen
+        Bike -> R.string.ks_sport_bike
+        Mtb -> R.string.ks_sport_mtb
+        Wandern -> R.string.ks_sport_wandern
+        Kraft -> R.string.ks_sport_kraft
+        Yoga -> R.string.ks_sport_yoga
+        Schwimmen -> R.string.ks_sport_schwimmen
+        Anderes -> R.string.ks_training
+    }
 
     /** Ist die Geschwindigkeit hier die Aussage (km/h) und nicht das Tempo (min/km)? */
     val rad: Boolean get() = this == Bike || this == Mtb
@@ -63,6 +80,7 @@ internal data class TrainingEintrag(
 ) {
     val id: String get() = sitzung.metadata.id
     val minuten: Long get() = Duration.between(sitzung.startTime, sitzung.endTime).toMinutes()
+    val einheit: Einheit get() = Einheit(sitzung.startTime.atZone(ZoneId.systemDefault()).toLocalDate(), sport, minuten)
 }
 
 /** Eine Spur ohne Training in der Akte - zum Nachtragen. */

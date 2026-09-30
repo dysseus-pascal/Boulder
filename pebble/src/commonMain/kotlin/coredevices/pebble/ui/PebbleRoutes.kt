@@ -91,6 +91,9 @@ object PebbleNavBarRoutes {
     data class TrendRoute(val gruppe: String) : NavBarRoute
 
     @Serializable
+    data object HerzRoute : NavBarRoute
+
+    @Serializable
     data object SicherungRoute : NavBarRoute
 
     @Serializable
@@ -239,6 +242,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     composableWithAnimations<PebbleNavBarRoutes.TrendRoute>(viewModel) {
         val route: PebbleNavBarRoutes.TrendRoute = it.toRoute()
         TrendScreen(topBarParams, nav, route.gruppe)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.HerzRoute>(viewModel) {
+        HerzScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.SicherungRoute>(viewModel) {
         SicherungScreen(topBarParams, nav)

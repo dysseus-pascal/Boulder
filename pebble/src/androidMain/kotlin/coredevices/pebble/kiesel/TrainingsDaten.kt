@@ -156,16 +156,41 @@ internal object TrainingsDaten {
             emptyList()
         }
         val eigene = sitzungen.filter { eigen(context, it) }
-        // ZWEI APPS, EIN TRAINING: eine fremde Sitzung, die sich mit einer
-        // eigenen ueberschneidet, faellt hier heraus. In der Akte bleibt sie.
-        val gewaehlt = sitzungen.filter { s ->
-            eigen(context, s) || eigene.none { e -> s.startTime < e.endTime && e.startTime < s.endTime }
-        }
+        val gewaehlt = gewaehlt(context, sitzungen)
         val trainings = gewaehlt.map { s ->
             val punkte = Spur.lies(context, s.startTime.epochSecond)
             TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte))
         }
         TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
+    }
+
+    /**
+     * ZWEI APPS, EIN TRAINING: eine fremde Sitzung, die sich mit einer
+     * eigenen ueberschneidet, faellt heraus. In der Akte bleibt sie.
+     */
+    private fun gewaehlt(context: Context, sitzungen: List<ExerciseSessionRecord>): List<ExerciseSessionRecord> {
+        val eigene = sitzungen.filter { eigen(context, it) }
+        return sitzungen.filter { s -> eigen(context, s) || eigene.none { e -> s.startTime < e.endTime && e.startTime < s.endTime } }
+    }
+
+    /**
+     * Das juengste Training der letzten zwei Wochen, fuer die Gesundheitsseite.
+     * Nicht ueber [uebersicht]: die liest ein Vierteljahr samt Spurdateien,
+     * die Seite braucht eine einzige.
+     */
+    suspend fun letztes(context: Context): TrainingEintrag? = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext null
+        val jetzt = Instant.now()
+        val sitzungen = try {
+            klient.readRecords(
+                ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(14)), jetzt))
+            ).records.filterNot { erkannt(context, it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Letztes Training lesen: " + e.message)
+            return@withContext null
+        }
+        val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
+        TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(Spur.lies(context, s.startTime.epochSecond)))
     }
 
     /**

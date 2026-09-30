@@ -16,6 +16,10 @@ expect fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Lo
 @Composable
 expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: String)
 
+// Boulder: der Puls des Tages mit Ruhepuls, HRV und SpO2 - aus der Gesundheitsseite.
+@Composable
+expect fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 @Composable
 expect fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav)
 

@@ -319,11 +319,13 @@ internal fun Pulsband(
         val letzter = bins.last()
         val p = Offset(x(letzter.sekunde), y(letzter.median))
         // Der Ruhepuls erst ueber dem Band, damit seine Beschriftung lesbar bleibt; laeuft die
-        // Medianlinie am Ende durch sie hindurch, rutscht sie unter die Linie.
+        // Medianlinie am Ende durch sie hindurch, rutscht sie unter die Linie - und fehlt dort
+        // der Platz (der Ruhepuls liegt meist ganz unten, bei den Stunden), an deren Anfang.
         if (ruhepuls != null && ruheM != null) {
             val yRuhe = y(ruhepuls)
-            val unten = p.y > yRuhe - ruheM.size.height - 6.dp.toPx() && p.y < yRuhe + 4.dp.toPx()
-            beschrifteteLinie(yRuhe, links, rechts, linie, ruheM, gestrichelt = true, unten = unten)
+            val durch = p.y > yRuhe - ruheM.size.height - 6.dp.toPx() && p.y < yRuhe + 4.dp.toPx()
+            val platzUnten = yRuhe + 2.dp.toPx() + ruheM.size.height <= boden
+            beschrifteteLinie(yRuhe, links, rechts, linie, ruheM, gestrichelt = true, unten = durch && platzUnten, links = durch && !platzUnten)
             achse(ruhepuls)
         }
         drawCircle(farbe, 3.dp.toPx(), p)

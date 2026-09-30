@@ -42,11 +42,15 @@ jobs:
       - name: Tests
         run: ./gradlew :libpebble3:testAndroidHostTest :pebble:testAndroidHostTest :util:testAndroidHostTest :androidApp:testDebugUnitTest
       - name: Bauen
-        run: ./gradlew :androidApp:assembleDebug
+        # Release-Build (R8, nicht debuggable), signiert mit dem festen Debug-Schluessel:
+        # so installiert er sich als Update ueber jede bisherige Boulder-Fassung.
+        run: |
+          echo "LOCAL_RELEASE_BUILD=true" > local.properties
+          ./gradlew :androidApp:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: boulder-apk
-          path: androidApp/build/outputs/apk/debug/*.apk
+          path: androidApp/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
   release:

@@ -7,8 +7,13 @@ die Regeln von Gravel, mit diesen Abweichungen:
   versionCode = Zahl der Commits. Kein F-Droid, keine `version.properties`.
 - Direkt auf `main`; jede neue Fassung wird ein Release (`.github/release/<fassung>.md`,
   deutsch, erste Zeile Titel ohne Nummer). Die CI auf GitHub ist wegen der
-  Abrechnung gesperrt: gebaut wird lokal (`:androidApp:assembleDebug` mit dem
-  CI-Schluessel aus `ci/debug.keystore`), das Release legt `gh release create` an.
+  Abrechnung gesperrt: gebaut wird lokal, als Release-Build
+  (`:androidApp:assembleRelease` mit `LOCAL_RELEASE_BUILD=true` in `local.properties`,
+  signiert mit dem CI-Schluessel aus `ci/debug.keystore`, APK aus
+  `androidApp/build/outputs/apk/release/`); das Release legt `gh release create` an.
+  Der Debug-Build braucht auf dem Telefon rund die Haelfte mehr Speicher und ist
+  nur zum Entwickeln da. Release-Builds sind nicht debuggable: `run-as` geht dort
+  nicht, die Datenbank kommt nur ueber die Sicherung heraus.
 - Gravels Health-Teil ist ersetzt durch den von Kiesel-Helper (archiviert). Er
   steht in `pebble/src/androidMain/kotlin/coredevices/pebble/kiesel/`: Reiter
   Health und Training, Nachtansicht, Trends, Widget, Sicherung, die Begleiter der

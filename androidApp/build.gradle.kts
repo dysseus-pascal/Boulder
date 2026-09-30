@@ -218,6 +218,12 @@ val allowedExportedComponents = setOf(
     "receiver|androidx.profileinstaller.ProfileInstallReceiver|perm=android.permission.DUMP|read=|write=",
     "provider|io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider|perm=|read=|write=",
     "provider|io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProvider|perm=|read=|write=",
+    // Boulder: Kartenlinks kommen aus fremden Apps (Teilen, geo:, Maps-Links) - dafuer
+    // ist die Activity da; sie oeffnet nur OsmAnd und schickt nichts weiter.
+    "activity|coredevices.pebble.kiesel.KartenlinkActivity|perm=|read=|write=",
+    // Boulder: ein Homescreen-Widget muss fuer den Launcher erreichbar sein; es
+    // zeichnet nur und nimmt keine Daten an.
+    "receiver|coredevices.pebble.kiesel.GesundheitWidget|perm=|read=|write=",
 )
 
 abstract class VerifyExportedComponents : DefaultTask() {

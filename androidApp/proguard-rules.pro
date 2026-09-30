@@ -23,3 +23,8 @@
 -dontwarn com.google.android.gms.tasks.OnSuccessListener
 -dontwarn com.google.android.gms.tasks.OnFailureListener
 -dontwarn com.google.android.gms.tasks.OnCanceledListener
+
+# Boulder: OsmAnds AIDL-Parcelables (AppInfo, ADirectionInfo ...) kommen mit
+# ihrem Klassennamen aus dem OsmAnd-Prozess; R8 darf sie weder umbenennen noch
+# kuerzen, sonst findet der Parcel-Leser die Klasse nicht.
+-keep class net.osmand.aidlapi.** { *; }

@@ -30,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -195,34 +194,19 @@ private fun Werte(inhalt: @Composable () -> Unit) {
 @Composable
 private fun Zonenkarte(d: TrainingDetail, maxpuls: Int) {
     val zonen = Trainingsanalyse.zonenSekunden(d.puls, maxpuls)
-    val summe = zonen.sum().coerceAtLeast(1)
     Ueberschrift(stringResource(R.string.ks_v_pulszonen))
     Karte {
-        Hinweis(stringResource(R.string.ks_v_zeit_je_zone, maxpuls))
         Zonenbalken(zonen)
         Zonenliste(zonen, maxpuls)
-        Text(
-            stringResource(
-                when {
-                    (zonen[4] + zonen[5]) * 100 / summe >= 50 -> R.string.ks_v_hart
-                    zonen[2] + zonen[3] >= summe * 6 / 10 -> R.string.ks_v_grundlage
-                    zonen[0] + zonen[1] >= summe / 2 -> R.string.ks_v_locker
-                    else -> R.string.ks_v_gemischt
-                }
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 6.dp),
-        )
     }
 }
 
 /** Der Puls ueber die Zeit, mit den Zonen dahinter und senkrechten Baendern (Saetze, Bahnen). */
 @Composable
-private fun PulsUeberZeit(d: TrainingDetail, ton: Color, maxpuls: Int, text: String, xBaender: List<Pair<Double, Double>> = emptyList()) {
+private fun PulsUeberZeit(d: TrainingDetail, ton: Color, maxpuls: Int, xBaender: List<Pair<Double, Double>> = emptyList()) {
     if (d.puls.size < 2) return
     Ueberschrift(stringResource(R.string.ks_v_puls_zeit))
     Karte {
-        Hinweis(text)
         Verlauf(
             d.puls.map { Verlaufspunkt(it.sekunde.toDouble(), it.bpm.toDouble()) },
             ton, "bpm", baender = zonenbaender(maxpuls), zeitachse = true, xBaender = xBaender,
@@ -240,7 +224,7 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
         if (sport in setOf(Sport.Laufen, Sport.Bike, Sport.Mtb, Sport.Wandern)) {
             Hinweis(stringResource(R.string.ks_t_keine_strecke))
         }
-        PulsUeberZeit(d, ton, maxpuls, stringResource(R.string.ks_v_ohne_strecke_zeit))
+        PulsUeberZeit(d, ton, maxpuls)
         if (d.puls.size < 2) Karte { Hinweis(stringResource(R.string.ks_v_nichts_weiter)) }
         return
     }
@@ -257,7 +241,6 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
     if (pulsStrecke.size >= 2) {
         Ueberschrift(stringResource(R.string.ks_v_puls_strecke))
         Karte {
-            Hinweis(stringResource(R.string.ks_v_puls_stieg))
             Verlauf(pulsStrecke, ton, "bpm", baender = zonenbaender(maxpuls))
         }
     }
@@ -277,7 +260,6 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
                 Wert(dauerText(bewegt / 60), stringResource(R.string.ks_v_bewegt))
             }
         }
-        Hinweis(stringResource(if (wandern) R.string.ks_v_ueber_strecke else R.string.ks_v_ueber_strecke_farbe))
         Verlauf(
             Trainingsanalyse.tempoUeberStrecke(strecke), ton, "km/h",
             farbeJeWert = if (wandern) null else { kmh -> tempofarbe((((kmh / 3.6) - langsam) / (schnell - langsam)).toFloat()) },
@@ -290,14 +272,12 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
     if (wandern && mitHoehe) {
         Ueberschrift(stringResource(R.string.ks_v_steigung_karte))
         Karte {
-            Hinweis(stringResource(R.string.ks_v_steigung_legende))
             Farbkarte(strecke, remember(strecke) { Trainingsanalyse.steigung(strecke) }, -15.0, 15.0, kartenform)
             Farblegende(stringResource(R.string.ks_v_bergab, "−15"), stringResource(R.string.ks_v_bergauf, "+15"))
         }
     } else {
         Ueberschrift(stringResource(R.string.ks_v_tempo_karte))
         Karte {
-            Hinweis(stringResource(R.string.ks_v_tempo_legende))
             Farbkarte(strecke, strecke.map { it.tempo }, langsam, schnell, kartenform)
             Farblegende(tempoText(langsam, rad), tempoText(schnell, rad))
         }
@@ -401,7 +381,7 @@ private fun Kraft(d: TrainingDetail, ton: Color, maxpuls: Int) {
     val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST }
         .map { sek(it.startTime) to sek(it.endTime) }
 
-    PulsUeberZeit(d, ton, maxpuls, stringResource(R.string.ks_v_baender_saetze),
+    PulsUeberZeit(d, ton, maxpuls,
         saetze.map { it.first.toDouble() to it.second.toDouble() })
 
     if (saetze.isEmpty()) {
@@ -462,7 +442,7 @@ private fun Kraft(d: TrainingDetail, ton: Color, maxpuls: Int) {
  */
 @Composable
 private fun Yoga(d: TrainingDetail, ton: Color, maxpuls: Int) {
-    PulsUeberZeit(d, ton, maxpuls, stringResource(R.string.ks_v_ruhig))
+    PulsUeberZeit(d, ton, maxpuls)
     Ueberschrift(stringResource(R.string.ks_v_ruhe))
     Karte {
         if (d.puls.size >= 2) {
@@ -492,7 +472,6 @@ private fun Yoga(d: TrainingDetail, ton: Color, maxpuls: Int) {
         when {
             d.hrv != null -> {
                 Werte { Wert("${d.hrv.roundToInt()} ms", stringResource(R.string.ks_v_hrv) + " (RMSSD)") }
-                Hinweis(stringResource(R.string.ks_v_hrv_text))
             }
             d.puls.size < 2 -> Hinweis(stringResource(R.string.ks_v_kein_puls_hrv))
             else -> Hinweis(stringResource(R.string.ks_v_keine_hrv))
@@ -516,7 +495,7 @@ private fun Schwimmen(d: TrainingDetail, ton: Color, maxpuls: Int) {
             it.length?.inMeters,
         )
     }
-    PulsUeberZeit(d, ton, maxpuls, stringResource(R.string.ks_v_jede_zweite_bahn),
+    PulsUeberZeit(d, ton, maxpuls,
         bahnen.filterIndexed { i, _ -> i % 2 == 0 }.map { it.first.toDouble() to it.second.toDouble() })
 
     if (bahnen.isEmpty()) {
@@ -561,7 +540,6 @@ private fun Schwimmen(d: TrainingDetail, ton: Color, maxpuls: Int) {
                 farbeJeWert = { z -> tempofarbe(((langsamste - z) / (langsamste - schnellste).coerceAtLeast(1.0)).toFloat()) },
                 flaeche = false, hoehe = 140.dp, zaehlachse = true,
             )
-            Hinweis(stringResource(R.string.ks_v_bahn_legende))
         }
     }
 }
@@ -591,13 +569,10 @@ private fun Sauerstoff(d: TrainingDetail, ton: Color) {
             Wert("${werte.max().roundToInt()} %", stringResource(R.string.ks_v_spo2_hoechster))
         }
         if (d.spo2.size >= 2) {
-            Hinweis(stringResource(R.string.ks_v_spo2_zeit))
             Verlauf(
                 d.spo2.map { Verlaufspunkt(it.first.toDouble(), it.second) },
                 ton, "%", flaeche = false, hoehe = 120.dp, zeitachse = true,
             )
         }
-        Hinweis(pluralStringResource(R.plurals.ks_v_spo2_n, d.spo2.size, d.spo2.size))
-        Hinweis(stringResource(R.string.ks_v_spo2_lang))
     }
 }

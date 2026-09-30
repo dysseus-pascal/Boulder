@@ -6,8 +6,10 @@ import android.os.Build
 import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,8 +39,14 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     val scope = rememberCoroutineScope()
     // Zurueck aus den Systemeinstellungen oder aus OsmAnd: Rechte und Lage neu lesen.
     var neu by remember { mutableIntStateOf(0) }
+    val osmand = Kieselstrasse.osmandPaket(context)
+    var zuOsmand by remember { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (Kieselstrasse.lage == Kieselstrasse.Lage.FREISCHALTEN) Kieselstrasse.versucheErneut(context)
+        // Nur aus OsmAnd zurueck erneut: dort wurde vielleicht gerade freigeschaltet.
+        if (osmand != null) {
+            if (zuOsmand) Kieselstrasse.pruefe(context) else Kieselstrasse.pruefeEinmal(context)
+        }
+        zuOsmand = false
         neu++
     }
     val fehlend by produceState(emptySet<String>(), neu) { value = TrainingsDaten.fehlendeRechte(context) }
@@ -50,8 +58,8 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
 
     val k = remember(neu) { KieselEinstellungen.stand(context) }
     val zuletzt = Sichern.zuletzt(context)
-    val osmand = Kieselstrasse.osmandPaket(context)
-    val lage = Kieselstrasse.lage
+    val strasse by Kieselstrasse.stand.collectAsState()
+    val lage = strasse.lage
 
     return listOf(
         basicSettingsActionItem(
@@ -108,16 +116,18 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_e_osmand),
-            description = if (osmand == null) stringResource(R.string.ks_e_osmand_fehlt) else Kieselstrasse.lageText(context),
+            description = if (osmand == null) stringResource(R.string.ks_e_osmand_fehlt) else Kieselstrasse.lageText(context, strasse),
             topLevelType = TopLevelType.Phone,
             section = Section.Navigation,
             keywords = "osmand kieselstrasse navigation turn",
             badge = if (lage == Kieselstrasse.Lage.FREISCHALTEN || lage == Kieselstrasse.Lage.ABO_FEHLER) "!" else null,
             action = when {
                 osmand == null -> null
-                lage == Kieselstrasse.Lage.FREISCHALTEN -> context.packageManager.getLaunchIntentForPackage(osmand)?.let { oeffne(it) }
+                lage == Kieselstrasse.Lage.FREISCHALTEN -> context.packageManager.getLaunchIntentForPackage(osmand)?.let { intent ->
+                    { zuOsmand = true; oeffne(intent)() }
+                }
                 else -> {
-                    { Kieselstrasse.versucheErneut(context); neu++; Unit }
+                    { Kieselstrasse.pruefe(context); neu++; Unit }
                 }
             },
         ),

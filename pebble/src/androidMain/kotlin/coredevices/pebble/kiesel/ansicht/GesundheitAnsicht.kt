@@ -4,6 +4,7 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -55,6 +58,7 @@ import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 private val FARBE_BEWEGUNG = Color(0xFF4F8A3A)
 private val FARBE_SCHLAF = Color(0xFF2F5597)
@@ -64,6 +68,9 @@ private val FARBE_WASSER = Color(0xFF3A86C8)
 
 private const val SCHRITTZIEL = 10_000.0
 private const val SCHLAFZIEL_MIN = 8 * 60.0
+private const val SPO2_WARNUNG = 90
+/** Die Wassersaeulen reichen mindestens bis hier, sonst sieht ein leerer Tag nach viel aus. */
+private const val WASSER_SPITZE_ML = 1500.0
 
 /**
  * Die Gesundheitsuebersicht - aus Kiesel-Helper (GesundheitTab und
@@ -107,7 +114,7 @@ internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: (String
             }
         }
         item {
-            Energie(s.energie) {
+            Energie(s.energie, s.wocheEnergie) {
                 Gesundheitsdaten.setzeEnergie(context, LocalDate.now(), it)
                 neu++
             }
@@ -120,6 +127,14 @@ private fun wochentag(tag: LocalDate): String = tag.dayOfWeek.getDisplayName(Tex
 
 private fun uhrzeit(context: android.content.Context, t: Instant): String =
     DateFormat.getTimeFormat(context).format(java.util.Date(t.toEpochMilli()))
+
+/** Dauer ohne Einheit fuer die Bilder: "8:38" statt "8:38 h". */
+private fun dauerKurz(minuten: Long): String = dauerText(minuten).removeSuffix(" h")
+
+private fun literText(ml: Int): String = String.format(Locale.getDefault(), "%.1f l", ml / 1000.0)
+
+/** Das Fenster der letzten Nacht in Sekunden - fuer die Schattierung in den Tagesbildern. */
+private fun nachtfenster(s: GesundheitsStand): Pair<Long, Long>? = s.nacht?.let { it.einschlafen.epochSecond to it.aufwachen.epochSecond }
 
 @Composable
 private fun Werte(inhalt: @Composable () -> Unit) {
@@ -141,8 +156,20 @@ private fun Bewegung(s: GesundheitsStand, trend: () -> Unit) {
             Wert(kmText(s.meter), stringResource(R.string.ks_t_strecke))
             Wert("${s.kcal} kcal", stringResource(R.string.ks_h_kcal))
         }
-        Hinweis(stringResource(R.string.ks_h_schritte_woche))
-        Saeulen(s.wocheSchritte.map { (t, w) -> wochentag(t) to w.toDouble() }, FARBE_BEWEGUNG, SCHRITTZIEL)
+        if (s.wocheSchritte.all { it.second == 0L }) {
+            Hinweis(stringResource(R.string.ks_h_keine_schritte))
+        } else {
+            Hinweis(stringResource(R.string.ks_h_schritte_woche))
+            // Der Schnitt nur aus ganzen Vortagen: der heutige, halbe Tag zoege ihn nach unten.
+            val mittel = Gesundheitsrechnung.schnittDerVortage(s.wocheSchritte.dropLast(1).map { it.second.toDouble() }, 2)
+            Saeulen(
+                s.wocheSchritte.map { (t, w) -> wochentag(t) to w.toDouble() }, FARBE_BEWEGUNG, SCHRITTZIEL,
+                beschrifte = { Gesundheitsrechnung.schritteKurz(it.roundToLong()) },
+                zielText = stringResource(R.string.ks_h_ziel_kurz, Gesundheitsrechnung.schritteKurz(SCHRITTZIEL.roundToLong())),
+                mittel = mittel,
+                mittelText = mittel?.let { stringResource(R.string.ks_h_schnitt_kurz, Gesundheitsrechnung.schritteKurz(it.roundToLong())) },
+            )
+        }
     }
 }
 
@@ -172,7 +199,11 @@ private fun Schlaf(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
             if (!n.mitPhasen) Hinweis(stringResource(R.string.ks_h_ohne_phasen))
         }
         Hinweis(stringResource(R.string.ks_h_schlaf_woche))
-        Saeulen(s.wocheSchlaf.map { (t, m) -> wochentag(t) to m.toDouble() }, FARBE_SCHLAF, SCHLAFZIEL_MIN)
+        Saeulen(
+            s.wocheSchlaf.map { (t, m) -> wochentag(t) to m.toDouble() }, FARBE_SCHLAF, SCHLAFZIEL_MIN,
+            beschrifte = { dauerKurz(it.roundToLong()) },
+            zielText = stringResource(R.string.ks_h_ziel_kurz, dauerKurz(SCHLAFZIEL_MIN.roundToLong())),
+        )
     }
 }
 
@@ -194,10 +225,11 @@ private fun Herz(s: GesundheitsStand, trend: () -> Unit) {
     Karte(onClick = trend) {
         Text(stringResource(R.string.ks_h_herz), style = MaterialTheme.typography.labelMedium)
         Werte {
-            s.nacht?.ruhepuls?.let { Wert("$it bpm", stringResource(R.string.ks_h_ruhepuls)) }
+            s.nacht?.ruhepuls?.let { Wert("$it bpm", stringResource(R.string.ks_h_ruhepuls_nachts)) }
             s.nacht?.hrv?.let { Wert("$it ms", stringResource(R.string.ks_h_hrv)) }
-            if (s.puls.isNotEmpty()) {
-                Wert("${s.puls.minOf { it.second }}–${s.puls.maxOf { it.second }}", stringResource(R.string.ks_h_spanne_24h))
+            // Ein Schnitt aus einer Nacht waere nur der Ruhepuls noch einmal.
+            if (s.ruhepulsWoche.size >= 2) {
+                Wert("${s.ruhepulsWoche.average().roundToInt()} bpm", stringResource(R.string.ks_h_ruhepuls_schnitt, s.ruhepulsWoche.size))
             }
         }
         if (s.nacht?.ruhepuls == null && s.nacht?.hrv == null) Hinweis(stringResource(R.string.ks_h_ruhepuls_nacht))
@@ -205,7 +237,11 @@ private fun Herz(s: GesundheitsStand, trend: () -> Unit) {
             Hinweis(stringResource(R.string.ks_h_kein_puls))
         } else {
             val jetzt = Instant.now().epochSecond
-            Tageskurve(s.puls, jetzt - 24 * 3600, jetzt, FARBE_HERZ)
+            val nacht = nachtfenster(s)
+            Pulsband(s.puls, jetzt - 24 * 3600, jetzt, FARBE_HERZ, ruhepuls = s.nacht?.ruhepuls, nacht = nacht)
+            // Vom Schatten nur reden, wenn er im Bild liegt.
+            val schatten = nacht != null && nacht.first < jetzt && nacht.second > jetzt - 24 * 3600
+            Hinweis(stringResource(R.string.ks_h_pulsband_hinweis) + if (schatten) " " + stringResource(R.string.ks_h_pulsband_nacht) else "")
         }
     }
 }
@@ -216,12 +252,16 @@ private fun Sauerstoff(s: GesundheitsStand) {
         Text(stringResource(R.string.ks_v_spo2_titel), style = MaterialTheme.typography.labelMedium)
         val werte = s.spo2.map { it.second }
         Werte {
-            Wert("${werte.average().roundToInt()} %", stringResource(R.string.ks_v_spo2_schnitt))
+            Wert("${werte.average().roundToInt()} %", stringResource(R.string.ks_v_schnitt))
             Wert("${werte.min()} %", stringResource(R.string.ks_v_spo2_tiefster))
-            Wert("${werte.size}", stringResource(R.string.ks_h_messungen))
+            Wert("${werte.count { it < SPO2_WARNUNG }}", stringResource(R.string.ks_h_unter_90))
         }
         val jetzt = Instant.now().epochSecond
-        Tageskurve(s.spo2, jetzt - 24 * 3600, jetzt, FARBE_SPO2, hoehe = 100.dp)
+        // Bis 102, damit die 100er-Linie und Messpunkte bei 100 nicht am oberen Rand kleben.
+        Tageskurve(
+            s.spo2, jetzt - 24 * 3600, jetzt, FARBE_SPO2, hoehe = 100.dp,
+            bereich = minOf(88, werte.min() - 2)..102, raster = listOf(90, 95, 100), nacht = nachtfenster(s), warnUnter = SPO2_WARNUNG,
+        )
         Hinweis(stringResource(R.string.ks_v_spo2_lang))
     }
 }
@@ -232,18 +272,31 @@ private fun Wasser(s: GesundheitsStand, trend: () -> Unit) {
     Karte(onClick = trend) {
         Text(stringResource(R.string.ks_h_wasser), style = MaterialTheme.typography.labelMedium)
         val ziel = s.wasserZiel
+        val vortage = s.wocheWasser.dropLast(1).map { it.second.toDouble() }
+        // Erst ab zwei Vortagen: ein Schnitt aus einem Tag ist nur dieser Tag.
+        val mittel = Gesundheitsrechnung.schnittDerVortage(vortage, 2)
         Werte {
-            Wert(String.format(Locale.getDefault(), "%.2f l", s.wasserMl / 1000.0), stringResource(R.string.ks_h_getrunken))
+            Wert(literText(s.wasserMl), stringResource(R.string.ks_h_getrunken))
             if (ziel != null) {
-                Wert(String.format(Locale.getDefault(), "%.2f l", ziel.ml / 1000.0), stringResource(R.string.ks_h_ziel))
+                Wert(literText(ziel.ml), stringResource(R.string.ks_h_ziel))
                 // Aufgerundet: ein halbes Glas fehlt als ganzes.
                 val fehlt = ((ziel.ml - s.wasserMl).coerceAtLeast(0) + ziel.glasMl - 1) / ziel.glasMl.coerceAtLeast(1)
                 Wert("$fehlt", stringResource(R.string.ks_h_glaeser_fehlen))
+            } else if (mittel != null) {
+                Wert(literText(mittel.roundToInt()), stringResource(R.string.ks_h_wasser_schnitt, vortage.count { it > 0 }))
             }
         }
         if (s.glaeser.isNotEmpty()) Hinweis(s.glaeser.joinToString("  ·  ") { uhrzeit(context, it) })
+        // Mit Ziel zaehlt das Ziel; der Schnitt hilft nur, solange keins da ist.
+        Saeulen(
+            s.wocheWasser.map { (t, ml) -> wochentag(t) to ml.toDouble() }, FARBE_WASSER, ziel?.ml?.toDouble(),
+            beschrifte = { Gesundheitsrechnung.literKurz(it.roundToInt()) },
+            zielText = ziel?.let { stringResource(R.string.ks_h_ziel_kurz, literText(it.ml)) },
+            mittel = if (ziel == null) mittel else null,
+            mittelText = if (ziel == null) mittel?.let { stringResource(R.string.ks_h_schnitt_kurz, literText(it.roundToInt())) } else null,
+            spitzeMindestens = WASSER_SPITZE_ML,
+        )
         if (ziel == null) Hinweis(stringResource(R.string.ks_h_kein_drinktervall))
-        Saeulen(s.wocheWasser.map { (t, ml) -> wochentag(t) to ml.toDouble() }, FARBE_WASSER, ziel?.ml?.toDouble())
     }
 }
 
@@ -273,13 +326,22 @@ private fun Koffein(s: GesundheitsStand, trinke: (String, Int) -> Unit) {
     val context = LocalContext.current
     val heute = LocalDate.now()
     val zone = ZoneId.systemDefault()
+    val jetzt = Instant.now()
     val heuteMg = s.koffein.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second }
     Karte {
         Text(stringResource(R.string.ks_h_koffein), style = MaterialTheme.typography.labelMedium)
         Werte {
             Wert("${heuteMg.roundToInt()} mg", stringResource(R.string.ks_h_heute))
-            Wert("${Gesundheitsrechnung.koffeinAktiv(s.koffein, Instant.now()).roundToInt()} mg", stringResource(R.string.ks_h_wirkt_noch))
-            s.koffein.lastOrNull()?.let { Wert(uhrzeit(context, it.first), stringResource(R.string.ks_h_zuletzt)) }
+            Wert("${Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt()} mg", stringResource(R.string.ks_h_wirkt_noch))
+            s.koffein.lastOrNull()?.let { (wann, _) ->
+                val vonHeute = wann.atZone(zone).toLocalDate() == heute
+                Wert(uhrzeit(context, wann), stringResource(if (vonHeute) R.string.ks_h_zuletzt else R.string.ks_h_zuletzt_gestern))
+            }
+        }
+        if (heuteMg > 0) {
+            Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone)?.let { bett ->
+                Hinweis(stringResource(R.string.ks_h_koffein_bettzeit, uhrzeit(context, bett), Gesundheitsrechnung.koffeinAktiv(s.koffein, bett).roundToInt()))
+            }
         }
         val getraenke = listOf(
             stringResource(R.string.ks_h_kaffee) to 80, stringResource(R.string.ks_h_espresso) to 60,
@@ -292,12 +354,36 @@ private fun Koffein(s: GesundheitsStand, trinke: (String, Int) -> Unit) {
 }
 
 @Composable
-private fun Energie(wert: Int?, setze: (Int) -> Unit) {
+private fun Energie(wert: Int?, woche: List<Pair<LocalDate, Int?>>, setze: (Int) -> Unit) {
     Karte {
         Text(stringResource(R.string.ks_h_wie_war_tag), style = MaterialTheme.typography.labelMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             (1..5).forEach { n -> FilterChip(selected = wert == n, onClick = { setze(n) }, label = { Text("$n") }) }
         }
         Hinweis(stringResource(R.string.ks_h_energie_text))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            woche.forEachIndexed { i, (tag, w) ->
+                val heute = i == woche.lastIndex
+                val flaeche = if (heute) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+                Column(
+                    Modifier.weight(1f).background(flaeche, RoundedCornerShape(6.dp)).padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        wochentag(tag), style = MaterialTheme.typography.labelSmall,
+                        color = if (heute) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        w?.toString() ?: "–", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
+                        fontWeight = if (heute) FontWeight.Bold else FontWeight.Normal,
+                        color = when {
+                            heute -> MaterialTheme.colorScheme.onPrimaryContainer
+                            w == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
+            }
+        }
     }
 }

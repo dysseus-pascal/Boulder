@@ -17,7 +17,10 @@ import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.pow
 
 /** Eine Nacht der Firmware, in Zeitpunkten statt Minuten ab dem Fensterbeginn. */
@@ -41,9 +44,11 @@ internal data class GesundheitsStand(
     val aktivMinuten: Long,
     val meter: Double,
     val kcal: Long,
-    /** Die sieben Tage vor heute, aeltester zuerst. */
+    /** Schritte der letzten sieben Tage bis heute, aeltester zuerst; heute bis jetzt. */
     val wocheSchritte: List<Pair<LocalDate, Long>>,
     val nacht: Nacht?,
+    /** Ruhepulse der geladenen Naechte, aelteste zuerst - fuer den Schnitt neben der letzten Nacht. */
+    val ruhepulsWoche: List<Int>,
     /** Schlafminuten der letzten sieben Naechte, aelteste zuerst; 0 = keine Nacht. */
     val wocheSchlaf: List<Pair<LocalDate, Int>>,
     /** Puls der letzten 24 Stunden: Sekunde seit 1970, Schlaege je Minute. */
@@ -57,7 +62,12 @@ internal data class GesundheitsStand(
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
     val energie: Int?,
+    /** Die Tagesbewertung der letzten sieben Tage bis heute; null = nicht bewertet. */
+    val wocheEnergie: List<Pair<LocalDate, Int?>>,
 )
+
+/** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
+internal data class Pulsbin(val sekunde: Long, val median: Int, val tiefster: Int, val hoechster: Int)
 
 /** Was sich an den Gesundheitsdaten rechnen laesst - ohne Android, damit es pruefbar ist. */
 internal object Gesundheitsrechnung {
@@ -111,6 +121,70 @@ internal object Gesundheitsrechnung {
     fun jeTag(naechte: List<NachtEntity>, zone: ZoneId): List<NachtEntity> =
         naechte.groupBy { nachtTag(it.beginnUtc, it.aufwachen, zone) }.values
             .map { l -> l.maxBy { it.schlafMinuten } }.sortedBy { it.beginnUtc }
+
+    /**
+     * Der Puls in Fuenf-Minuten-Fenstern. Der Median statt des Mittels: ein
+     * einzelner Ausreisser der Uhr soll die Linie nicht ziehen, die Spanne
+     * zeigt ihn trotzdem. Die Bins liegen auf vollen Fuenf-Minuten-Marken.
+     */
+    fun fuenfMinuten(punkte: List<Pair<Long, Int>>): List<Pulsbin> =
+        punkte.groupBy { it.first / 300 * 300 }.toSortedMap().map { (sekunde, l) ->
+            val werte = l.map { it.second }.sorted()
+            Pulsbin(sekunde, werte[werte.size / 2], werte.first(), werte.last())
+        }
+
+    /**
+     * Rasterlinien in runden Schritten, hoechstens fuenf Striche: der kleinste
+     * Schritt ab [mindestSchritt], mit dem hoechstens fuenf Vielfache in
+     * [tief, hoch] liegen. Ein Puls will Zehner, eine SpO2-Achse Fuenfer.
+     */
+    fun raster(tief: Int, hoch: Int, mindestSchritt: Int = 1): List<Int> {
+        if (hoch < tief) return emptyList()
+        for (schritt in listOf(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000).filter { it >= mindestSchritt }) {
+            val erste = Math.floorDiv(tief + schritt - 1, schritt) * schritt
+            val linien = generateSequence(erste) { it + schritt }.takeWhile { it <= hoch }.toList()
+            if (linien.size <= 5) return linien
+        }
+        return emptyList()
+    }
+
+    /** Schritte kurz: "4.9k", "10k", darunter die Zahl selbst. */
+    fun schritteKurz(schritte: Long, locale: Locale = Locale.getDefault()): String = when {
+        schritte < 1000 -> "$schritte"
+        schritte % 1000 == 0L -> "${schritte / 1000}k"
+        else -> String.format(locale, "%.1fk", schritte / 1000.0).replace(".0k", "k").replace(",0k", "k")
+    }
+
+    /** Liter mit einer Nachkommastelle, ohne Einheit: "1.2". */
+    fun literKurz(ml: Int, locale: Locale = Locale.getDefault()): String = String.format(locale, "%.1f", ml / 1000.0)
+
+    /** Der Schnitt der Tage mit Wert, oder null, wenn weniger als [mindestens] solche Tage da sind. */
+    fun schnittDerVortage(werte: List<Double>, mindestens: Int = 1): Double? =
+        werte.filter { it > 0 }.takeIf { it.size >= mindestens }?.average()
+
+    /**
+     * Die Bettzeit als Zeitpunkt: die Uhrzeit des letzten Einschlafens, sonst
+     * 22 Uhr, auf heute gelegt. Ist sie schon vorbei, null: "um 22:54 wirken
+     * noch 1 mg" ohne Datum laese sich als heute Abend, gemeint waere morgen.
+     */
+    fun bettzeit(einschlafen: Instant?, jetzt: Instant, zone: ZoneId): Instant? {
+        val uhrzeit = einschlafen?.atZone(zone)?.toLocalTime()?.withSecond(0)?.withNano(0) ?: LocalTime.of(22, 0)
+        return jetzt.atZone(zone).toLocalDate().atTime(uhrzeit).atZone(zone).toInstant().takeIf { it.isAfter(jetzt) }
+    }
+
+    /** Zusammenhaengende Stuecke einer Bin-Reihe: mehr als [luecke] Sekunden ohne Bin trennen sie. */
+    fun stuecke(bins: List<Pulsbin>, luecke: Long = 900): List<List<Pulsbin>> {
+        val aus = mutableListOf<MutableList<Pulsbin>>()
+        bins.forEach { b ->
+            val letztes = aus.lastOrNull()
+            if (letztes == null || b.sekunde - letztes.last().sekunde > luecke) aus += mutableListOf(b) else letztes += b
+        }
+        return aus
+    }
+
+    /** Die Rasterlinien ohne die, die dem Ruhepuls naeher als [abstand] kaemen - seine Linie ersetzt sie. */
+    fun rasterOhne(raster: List<Int>, ruhepuls: Int?, abstand: Float): List<Int> =
+        if (ruhepuls == null) raster else raster.filter { abs(it - ruhepuls) >= abstand }
 }
 
 /**
@@ -132,9 +206,10 @@ internal object Gesundheitsdaten {
         fun anfang(tag: LocalDate) = tag.atStartOfDay(zone).toEpochSecond()
 
         val summe = runCatching { api.getTotalHealthData(anfang(heute), jetzt.epochSecond) }.getOrNull()
-        val woche = (7 downTo 1).map { heute.minusDays(it.toLong()) }
+        val woche = (6 downTo 0).map { heute.minusDays(it.toLong()) }
+        // Der heutige Tag steht nicht in den Tagesaggregaten - er kommt aus der Summe bis jetzt.
         val tageswerte = runCatching { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.getOrDefault(emptyList())
-            .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) }
+            .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
 
         val naechte = Gesundheitsrechnung.jeTag(
             runCatching { api.getNaechte(anfang(heute.minusDays(8)), jetzt.epochSecond) }.getOrDefault(emptyList()), zone,
@@ -175,16 +250,18 @@ internal object Gesundheitsdaten {
             kcal = (summe?.activeGramCalories ?: 0) / 1000,
             wocheSchritte = Gesundheitsrechnung.reihe(woche, tageswerte, 0L),
             nacht = nacht,
-            wocheSchlaf = Gesundheitsrechnung.reihe((6 downTo 0).map { heute.minusDays(it.toLong()) }, schlafJeTag, 0),
+            ruhepulsWoche = naechte.map { it.ruhepuls }.filter { it > 0 }.takeLast(7),
+            wocheSchlaf = Gesundheitsrechnung.reihe(woche, schlafJeTag, 0),
             puls = puls,
             spo2 = spo2,
             wasserMl = heuteWasser.sumOf { it.volume.inMilliliters }.toInt(),
             glaeser = heuteWasser.map { it.startTime }.sorted(),
-            wocheWasser = Gesundheitsrechnung.reihe((6 downTo 0).map { heute.minusDays(it.toLong()) }, wasserJeTag, 0),
+            wocheWasser = Gesundheitsrechnung.reihe(woche, wasserJeTag, 0),
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
             energie = energie(context, heute),
+            wocheEnergie = woche.map { it to energie(context, it) },
         )
     }
 

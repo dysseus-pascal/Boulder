@@ -1,6 +1,7 @@
 package coredevices.pebble.kiesel
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -58,16 +59,98 @@ class TrainingsanalyseTest {
         assertEquals(Spur.laenge(punkte), s.last().meter, 0.01)
     }
 
+    private val mann = Trainingsanalyse.Geschlecht.Mann
+
+    /** Die Radfahrt vom 29.9.2026, 17:37-18:00: Puls je Minute aus health_data. */
+    private val fahrt = listOf(
+        95, 94, 126, 121, 120, 122, 121, 128, 130, 132, 128, 122,
+        129, 125, 140, 139, 137, 140, 135, 125, 129, 125, 143, 145,
+    ).mapIndexed { i, bpm -> Pulspunkt(i * 60L, bpm.toLong()) }
+
+    /** Keytel (2005) fuer Maenner, die Formel davor - hier nur als Vergleich. */
+    private fun keytel(puls: List<Pulspunkt>, kg: Double, alter: Int) =
+        puls.sumOf { (-55.0969 + 0.6309 * it.bpm + 0.1988 * kg + 0.2017 * alter) / 4.184 }
+
     @Test
-    fun kalorienAusDemPuls() {
-        // Eine Stunde bei 130: rund 730 kcal fuer einen Mann von 80 kg und
-        // 40 Jahren, deutlich weniger fuer eine Frau von 60 kg.
-        val puls = (0..360).map { Pulspunkt(it * 10L, 130) }
-        val er = Trainingsanalyse.kalorien(puls, 80.0, 40, Trainingsanalyse.Geschlecht.Mann)!!
-        val sie = Trainingsanalyse.kalorien(puls, 60.0, 40, Trainingsanalyse.Geschlecht.Frau)!!
-        assertEquals(730.0, er, 15.0)
-        assertTrue("sie $sie", sie in 400.0..560.0)
-        assertTrue(Trainingsanalyse.kalorien(puls, 0.0, 40, Trainingsanalyse.Geschlecht.Mann) == null)
+    fun kalorienDerFahrtLiegenBeiFitbit() {
+        // Fitbit: 180 kcal in 23:12 min (7,76 je Minute). Keytel gab 11,3 je
+        // Minute. Mann, 41, 70 kg, Ruhepuls 54 aus den Naechten, Maximum 190.
+        val neu = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 190)!!
+        val jeMinute = neu / (23 + 10 / 60.0)
+        assertTrue("je Minute $jeMinute", jeMinute in 7.3..8.6)
+        assertTrue("Keytel ${keytel(fahrt, 70.0, 41)}", neu < 0.8 * keytel(fahrt, 70.0, 41))
+        // Ohne eingestelltes Maximum (Tanaka, 179): rund 198, zehn Prozent ueber Fitbit.
+        val tanaka = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, null)!!
+        assertEquals(198.0, tanaka, 2.0)
+    }
+
+    @Test
+    fun maximumWeitUeberTanakaWirdNichtGeglaubt() {
+        // 65 Jahre: Tanaka 162,5, Grenze 187,5. 190 gilt nicht, 185 schon.
+        assertEquals(
+            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, null)!!,
+            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 190)!!, 0.001,
+        )
+        assertTrue(
+            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 185)!! <
+                Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, null)!!,
+        )
+    }
+
+    @Test
+    fun ohneRuhepulsEinErsatz() {
+        // Ohne Nacht gilt 60: etwas weniger als mit 54, aber in derselben Gegend.
+        val mit = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 190)!!
+        val ohne = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, null, 190)!!
+        assertTrue("$ohne / $mit", ohne < mit && ohne > 0.9 * mit)
+        // Ohne Maximum das nach Tanaka (179): derselbe Puls ist mehr Anstrengung.
+        val tanaka = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, null)!!
+        assertTrue("$tanaka", tanaka > mit)
+    }
+
+    @Test
+    fun unterDemRuhepulsBleibtDerRuheumsatz() {
+        // Zehn Minuten bei 45, Ruhepuls 54: 3,5 ml/kg/min, 70 kg -> 1,225 kcal je Minute.
+        val ruhig = (0..60).map { Pulspunkt(it * 10L, 45) }
+        assertEquals(10 * 1.225 + 1.225 / 6, Trainingsanalyse.kalorien(ruhig, 70.0, 41, mann, 54, 190)!!, 0.01)
+    }
+
+    @Test
+    fun lueckenZaehlenNicht() {
+        // Zwei Punkte zehn Minuten auseinander: der erste gilt eine Minute, der letzte zehn Sekunden.
+        val luecke = listOf(Pulspunkt(0, 130), Pulspunkt(600, 130))
+        val dicht = (0..6).map { Pulspunkt(it * 10L, 130) }
+        assertEquals(
+            Trainingsanalyse.kalorien(dicht, 70.0, 41, mann, 54, 190)!!,
+            Trainingsanalyse.kalorien(luecke, 70.0, 41, mann, 54, 190)!!, 0.01,
+        )
+    }
+
+    @Test
+    fun ohneGewichtOderMitUnsinnNichts() {
+        assertNull(Trainingsanalyse.kalorien(fahrt, 0.0, 41, mann, 54, 190))
+        assertNull(Trainingsanalyse.kalorien(emptyList(), 70.0, 41, mann, 54, 190))
+        // Ein Maximum unter dem Ruhepuls wird durch Tanaka ersetzt, nicht geglaubt.
+        assertEquals(
+            Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, null)!!,
+            Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 50)!!, 0.001,
+        )
+    }
+
+    @Test
+    fun frauenUndAeltereMitKleinererVo2max() {
+        assertEquals(39.64, Trainingsanalyse.vo2maxMitte(41, mann), 0.01)
+        assertEquals(48.0, Trainingsanalyse.vo2maxMitte(18, mann), 0.01)
+        assertEquals(24.4, Trainingsanalyse.vo2maxMitte(90, mann), 0.01)
+        assertTrue(Trainingsanalyse.vo2maxMitte(41, Trainingsanalyse.Geschlecht.Frau) < 30.0)
+    }
+
+    @Test
+    fun ruhepulsIstDerMedianDerLetztenNaechte() {
+        assertEquals(54, Trainingsanalyse.ruhepulsAusNaechten(listOf(54, 53, 55)))
+        // Keine Messung (0) zaehlt nicht; nur die letzten sieben.
+        assertEquals(50, Trainingsanalyse.ruhepulsAusNaechten(listOf(80, 80, 0, 50, 50, 50, 50, 60, 60, 60)))
+        assertNull(Trainingsanalyse.ruhepulsAusNaechten(listOf(0, 0)))
     }
 
     @Test

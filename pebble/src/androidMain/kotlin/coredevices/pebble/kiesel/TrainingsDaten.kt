@@ -241,6 +241,15 @@ internal object TrainingsDaten {
     }
 
     /**
+     * Der mittlere Puls eines Trainings fuer die grosse Karte der Sportseite:
+     * eine Abfrage statt des ganzen Details, und derselbe Wert wie dort.
+     */
+    suspend fun mittelpuls(context: Context, s: ExerciseSessionRecord): Int? = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext null
+        puls(klient, s).takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()?.toInt()
+    }
+
+    /**
      * Der Puls waehrend des Trainings - aus der Akte, so bekommt auch ein
      * fremdes seine Kurve. Entstoert beim Lesen, nicht beim Schreiben: in
      * der Akte bleibt, was der Sensor mass.

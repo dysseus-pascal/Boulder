@@ -123,15 +123,20 @@ internal fun Kopf(titel: String, zusatz: String? = null, link: String? = null, o
             },
             Modifier.weight(1f), fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        if (link != null && onLink != null) {
-            Row(
-                Modifier.heightIn(min = 44.dp).clickable(onClick = onLink).padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(link, color = farben.primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Icon(Zeichen.weiter, null, Modifier.size(18.dp), tint = farben.primary)
-            }
-        }
+        if (link != null && onLink != null) Weiterlink(link, onLink)
+    }
+}
+
+/** Ein gruener Link mit Chevron, wie rechts im [Kopf]. */
+@Composable
+internal fun Weiterlink(text: String, onClick: () -> Unit) {
+    val farbe = MaterialTheme.colorScheme.primary
+    Row(
+        Modifier.heightIn(min = 44.dp).clickable(onClick = onClick).padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = farbe, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Icon(Zeichen.weiter, null, Modifier.size(18.dp), tint = farbe)
     }
 }
 
@@ -153,9 +158,9 @@ internal fun zahlMitEinheit(zahl: String, einheit: String?, groesse: Int = 20, e
 
 /** Der Tonkreis mit dem Zeichen darin. */
 @Composable
-internal fun Tonkreis(zeichen: ImageVector, flaeche: Color, strich: Color, alpha: Float = 0.22f) {
-    Box(Modifier.size(36.dp).background(flaeche.copy(alpha = alpha), CircleShape), contentAlignment = Alignment.Center) {
-        Icon(zeichen, null, Modifier.size(20.dp), tint = strich)
+internal fun Tonkreis(zeichen: ImageVector, flaeche: Color, strich: Color, alpha: Float = 0.22f, groesse: Dp = 36.dp, bild: Dp = 20.dp) {
+    Box(Modifier.size(groesse).background(flaeche.copy(alpha = alpha), CircleShape), contentAlignment = Alignment.Center) {
+        Icon(zeichen, null, Modifier.size(bild), tint = strich)
     }
 }
 
@@ -175,6 +180,7 @@ internal fun Zeile(
     minHoehe: Dp = 64.dp,
     modifier: Modifier = Modifier,
     chevron: Boolean? = null,
+    rechts: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
@@ -192,6 +198,7 @@ internal fun Zeile(
             if (unter != null) Text(unter, fontSize = 13.sp, lineHeight = 18.sp, color = unterFarbe ?: grau)
         }
         if (zahl != null) Text(zahlMitEinheit(zahl, einheit), lineHeight = 26.sp, maxLines = 1)
+        rechts?.invoke()
         if (chevron ?: (onClick != null)) Icon(Zeichen.weiter, null, Modifier.size(16.dp), tint = grau)
     }
 }

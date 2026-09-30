@@ -2,8 +2,6 @@
 <!-- Trainingsansicht in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
 <resources>
     <string name="ks_t_noch_keins">No workout yet</string>
-    <string name="ks_t_noch_keins_text">As soon as you finish one on the watch, it appears here — with the route if the phone was with you. Without Kieselsport on the watch this screen stays empty; workouts from other apps appear as soon as they are in the health record.</string>
-    <string name="ks_t_sieben_tage">THE LAST SEVEN DAYS</string>
     <string name="ks_t_dauer">Duration</string>
     <string name="ks_t_puls_schnitt">Avg HR</string>
     <string name="ks_t_puls_max">Max HR</string>
@@ -14,14 +12,10 @@
     <string name="ks_t_kcal">kcal (from HR)</string>
     <string name="ks_t_strecke">Distance</string>
     <string name="ks_t_zeit">Time</string>
-    <string name="ks_t_trainings">Workouts</string>
-    <string name="ks_t_offen">NOT LOGGED</string>
-    <string name="ks_t_offen_text">Kieselsport recorded these routes, but Health Connect has no workout for them. Logging takes time and route from the GPS track and heart rate from Health Connect; calories and steps are missing.</string>
     <string name="ks_t_ausblenden">Hide</string>
     <string name="ks_t_eintragen">Log</string>
     <string name="ks_t_welche_art">What was it?</string>
     <string name="ks_abbrechen">Cancel</string>
-    <string name="ks_t_sieben_keins">None in the last seven days.</string>
     <string name="ks_t_start">Start</string>
     <string name="ks_t_ende">Finish</string>
     <string name="ks_sport_laufen">Running</string>
@@ -37,11 +31,45 @@
     <string name="ks_zone_3">Endurance</string>
     <string name="ks_zone_4">Threshold</string>
     <string name="ks_zone_5">Maximum</string>
-    <string name="ks_ei_strecke_aufzeichnen">Record route</string>
     <string name="ks_ei_standort_nicht">Location not allowed</string>
-    <string name="ks_ei_standort_nutzung">Only while in use — not enough</string>
-    <string name="ks_ei_kein_gps">The watch has no GPS. During a workout the phone records the route — with a visible notification in the bar, and only between start and stop. Without the permission the workout is still logged, just without a map.</string>
-    <string name="ks_ei_standort_erlauben">Allow location</string>
-    <string name="ks_ei_nur_nutzung_text">“Only while using the app” is not enough here. The workout starts on the watch while the phone is in your pocket and this app is closed — in that state Android allows no location, and the route would stay empty. “Allow all the time” is needed. Location is still only measured between start and stop of a workout.</string>
-    <string name="ks_ei_immer_erlauben">Allow all the time</string>
+    <!-- Die Sportseite nach dem Entwurf "Empfehlung" (0.28): Wochenkarte, Latest, Liste nach Wochen. -->
+    <string name="ks_sp_satz">%1$s %2$s, %3$s this week.</string>
+    <string name="ks_sp_satz_nichts">%1$s %2$s, nothing yet this week.</string>
+    <string name="ks_sp_am">on %1$s</string>
+    <plurals name="ks_sp_anzahl">
+        <item quantity="one">%1$d workout</item>
+        <item quantity="other">%1$d workouts</item>
+    </plurals>
+    <string name="ks_sp_vorwoche">last week %1$s</string>
+    <string name="ks_sp_vorwoche_keins">none last week</string>
+    <string name="ks_sp_leer">No workouts yet.</string>
+    <string name="ks_sp_leer_unter">From the watch and Health Connect</string>
+    <string name="ks_sp_zuletzt">LATEST</string>
+    <string name="ks_sp_alle">All workouts</string>
+    <string name="ks_sp_einrichten">SET UP</string>
+    <string name="ks_sp_trends_unter">Eight weeks · by sport</string>
+    <string name="ks_sp_routen">Routes</string>
+    <string name="ks_sp_nur_nutzung">Only while in use</string>
+    <string name="ks_sp_hc">Health Connect</string>
+    <string name="ks_sp_hc_trainings">Workouts not shared</string>
+    <string name="ks_sp_hc_teils">Not all data shared</string>
+    <string name="ks_sp_hc_fehlt">Not available on this phone</string>
+    <plurals name="ks_sp_spuren">
+        <item quantity="one">%1$d track to add</item>
+        <item quantity="other">%1$d tracks to add</item>
+    </plurals>
+    <string name="ks_sp_spuren_titel">Tracks to add</string>
+    <string name="ks_sp_spuren_leer">No tracks left to add</string>
+    <string name="ks_sp_heute_um">Today, %1$s</string>
+    <string name="ks_sp_gestern_um">Yesterday, %1$s</string>
+    <string name="ks_sp_diese_woche">THIS WEEK</string>
+    <string name="ks_sp_letzte_woche">LAST WEEK</string>
+    <string name="ks_sp_woche_zusatz">· %1$d · %2$s</string>
+    <string name="ks_sp_90_tage">90 days</string>
+    <string name="ks_sp_keine">No workouts</string>
+    <string name="ks_sp_nichts_davor">Nothing earlier in the last 90 days</string>
+    <string name="ks_sp_alle_chip">All</string>
+    <string name="ks_sp_acht_wochen">EIGHT WEEKS</string>
+    <string name="ks_sp_nach_art">BY SPORT</string>
+    <string name="ks_sp_vier_wochen">FOUR WEEKS</string>
 </resources>

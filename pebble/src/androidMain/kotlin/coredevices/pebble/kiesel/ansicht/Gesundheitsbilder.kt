@@ -335,4 +335,6 @@ internal object Zeichen {
     val plus = bild(2f, 0f, "M12 5v14 M5 12h14")
     val hoch = bild(2.6f, 0f, "M12 19V5M6 11l6-6 6 6")
     val haken = bild(2f, 0f, "M5 12.5l4.5 4.5L19 7.5")
+    val zu = bild(2f, 0f, "M7 7l10 10M17 7L7 17")
+    val ort = bild(2f, 0f, "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z", kreis(12f, 9.8f, 2.3f))
 }

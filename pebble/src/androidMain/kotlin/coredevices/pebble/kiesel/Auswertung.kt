@@ -2,6 +2,8 @@ package coredevices.pebble.kiesel
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 /**
  * Aus Tagen ein Muster machen.
@@ -12,10 +14,13 @@ import java.time.LocalDate
  * ohne Telefon nachrechnen koennen. Die Pruefungen dazu stehen in
  * `AuswertungTest`.
  *
- * HEUTE ZAEHLT NICHT MIT. Ein angefangener Tag hat immer zu wenig Schritte;
- * wer ihn einrechnet, bekommt ein Wochenprofil, in dem der heutige Wochentag
- * immer der schwaechste ist - und das Muster waere ein Abbild der Uhrzeit, zu
- * der man hinschaut.
+ * AB DER GRENZE ZAEHLT NICHTS MIT. Ein angefangener Tag hat immer zu wenig
+ * Schritte; wer ihn einrechnet, bekommt ein Wochenprofil, in dem der heutige
+ * Wochentag immer der schwaechste ist - und das Muster waere ein Abbild der
+ * Uhrzeit, zu der man hinschaut. Wo die Grenze liegt, weiss nur der Aufrufer:
+ * eine Nacht wird auf den Tag des Aufwachens gebucht und ist am Morgen fertig,
+ * der Tag selbst erst um Mitternacht. Nachtreihen reichen darum bis
+ * einschliesslich heute (Grenze morgen), Tageszaehler nur bis gestern.
  */
 internal object Auswertung {
 
@@ -70,8 +75,8 @@ internal object Auswertung {
      */
     val WOCHENTAGE: List<DayOfWeek> = DayOfWeek.values().toList()
 
-    fun bild(reihe: List<Pair<LocalDate, Double>>, heute: LocalDate): Bild {
-        val tage = reihe.filter { it.first < heute }
+    fun bild(reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate): Bild {
+        val tage = reihe.filter { it.first < grenze }
 
         val profil = WOCHENTAGE.map { wochentag ->
             val treffer = tage.filter { it.first.dayOfWeek == wochentag }
@@ -100,8 +105,78 @@ internal object Auswertung {
             staerkster = gezaehlt.maxByOrNull { it.mittel!! },
             schwaechster = gezaehlt.minByOrNull { it.mittel!! },
             wochen = wochen,
-            veraenderung = veraenderung(tage, heute),
+            veraenderung = veraenderung(tage, grenze),
         )
+    }
+
+    /**
+     * Die letzten Kalendertage vor der Grenze, lueckenlos - Tage ohne Wert als null.
+     *
+     * Das Bild braucht jeden Tag als Fach, auch den leeren: eine Reihe, die
+     * Luecken einfach zusammenschiebt, macht aus einer Woche ohne Uhr einen
+     * scheinbar dichten Verlauf.
+     */
+    fun letzteTage(reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, anzahl: Int = 14): List<Pair<LocalDate, Double?>> {
+        val werte = reihe.toMap()
+        return (anzahl downTo 1).map { i -> grenze.minusDays(i.toLong()).let { it to werte[it] } }
+    }
+
+    /**
+     * Runde Achsenstriche zwischen zwei Werten: der kleinste Schritt aus
+     * 1, 2, 5 mal Zehnerpotenz, der hoechstens fuenf Striche ergibt. Bleiben
+     * dabei weniger als drei, wird der Bereich auf den Schritt gerundet und
+     * die Randstriche kommen dazu - die Achse darf dann ueber den Bereich
+     * hinausreichen, das Bild nimmt die aeusseren Striche als Grenzen.
+     *
+     * Striche bei min, Mitte und max sind Zahlen wie 53, 61 und 69 - niemand
+     * kann daran ablesen, wo 60 liegt. Runde Schritte kann man lesen; zwei
+     * Striche allein (55 und 60 bei 52..62) zeigen aber keinen Massstab.
+     */
+    fun achsenschritte(von: Double, bis: Double): List<Double> {
+        if (bis <= von) return listOf(von)
+        val schritte = (0..6).flatMap { k -> listOf(1.0, 2.0, 5.0).map { it * Math.pow(10.0, k.toDouble()) } }
+        val schritt = schritte.firstOrNull { striche(von, bis, it).size <= 5 } ?: schritte.last()
+        val innen = striche(von, bis, schritt)
+        if (innen.size >= 3) return innen
+        return striche(Math.floor(von / schritt) * schritt, Math.ceil(bis / schritt) * schritt, schritt)
+    }
+
+    private fun striche(von: Double, bis: Double, schritt: Double): List<Double> {
+        val erster = Math.ceil(von / schritt).toLong()
+        val letzter = Math.floor(bis / schritt).toLong()
+        return (erster..letzter).map { it * schritt }
+    }
+
+    /** Schritte kurz: ab tausend als "4.9k", die ",0" faellt weg ("10k"), darunter die Zahl. */
+    fun tausender(wert: Double, locale: Locale = Locale.getDefault()): String {
+        // Erst runden, dann die Grenze pruefen: 999.6 wuerde sonst als "1000" statt "1k" erscheinen.
+        val rund = Math.rint(wert)
+        if (rund < 1000) return "%.0f".format(locale, rund)
+        val k = "%.1f".format(locale, wert / 1000)
+        return k.removeSuffix(".0").removeSuffix(",0") + "k"
+    }
+
+    /**
+     * Wann die typische Woche fruehestens tragen kann: der erste Tag plus zwei
+     * Wochen - erst dann koennen drei Wochentage je zwei Tage haben. Eine
+     * Schaetzung, weil Luecken es spaeter machen; darum sagt der Satz "about".
+     */
+    fun typischeWocheAb(erster: LocalDate): LocalDate = erster.plusDays(14)
+
+    /**
+     * Wann der Wochenverlauf tragen kann: der Montag der dritten Kalenderwoche
+     * ab dem ersten Tag - verschoben um den Abstand von Grenze und Heute, weil
+     * der Montag erst zaehlt, wenn er vor der Grenze liegt. Fuer Tageszaehler
+     * (Grenze = heute) ist das der Dienstag; der Satz soll den Tag nennen, an
+     * dem die Karte wirklich erscheint.
+     */
+    fun wochenAb(erster: LocalDate, grenze: LocalDate, heute: LocalDate): LocalDate =
+        erster.with(DayOfWeek.MONDAY).plusWeeks(2).plusDays(ChronoUnit.DAYS.between(grenze, heute) + 1)
+
+    /** Wann ein Paar fruehestens belastbar wird - null, wenn die beiden noch keinen gemeinsamen Tag haben. */
+    fun linksAb(eins: List<Pair<LocalDate, Double>>, zwei: List<Pair<LocalDate, Double>>, grenze: LocalDate): LocalDate? {
+        val b = zwei.toMap()
+        return eins.filter { it.first < grenze && it.first in b }.minOfOrNull { it.first }?.plusDays(PAARE_MINDESTENS.toLong())
     }
 
     /**
@@ -117,11 +192,11 @@ internal object Auswertung {
      */
     private fun veraenderung(
         tage: List<Pair<LocalDate, Double>>,
-        heute: LocalDate,
+        grenze: LocalDate,
     ): Double? {
-        val jung = tage.filter { it.first >= heute.minusDays(28) }
+        val jung = tage.filter { it.first >= grenze.minusDays(28) }
         val alt = tage.filter {
-            it.first >= heute.minusDays(56) && it.first < heute.minusDays(28)
+            it.first >= grenze.minusDays(56) && it.first < grenze.minusDays(28)
         }
         if (jung.size < 7 || alt.size < 7) return null
         val a = alt.map { it.second }.average()
@@ -186,10 +261,10 @@ internal object Auswertung {
     fun zusammenhang(
         eins: List<Pair<LocalDate, Double>>,
         zwei: List<Pair<LocalDate, Double>>,
-        heute: LocalDate,
+        grenze: LocalDate,
     ): Zusammenhang {
         val b = zwei.toMap()
-        val paare = eins.filter { it.first < heute }
+        val paare = eins.filter { it.first < grenze }
             .mapNotNull { (tag, x) -> b[tag]?.let { y -> x to y } }
         val n = paare.size
         if (n < 3) return Zusammenhang(n, null, 0.0, 0.0, paare)
@@ -234,9 +309,9 @@ internal object Auswertung {
 
     fun wochenende(
         reihe: List<Pair<LocalDate, Double>>,
-        heute: LocalDate,
+        grenze: LocalDate,
     ): Wochenendbild? {
-        val tage = reihe.filter { it.first < heute }
+        val tage = reihe.filter { it.first < grenze }
         val frei = tage.filter {
             it.first.dayOfWeek == DayOfWeek.SATURDAY || it.first.dayOfWeek == DayOfWeek.SUNDAY
         }

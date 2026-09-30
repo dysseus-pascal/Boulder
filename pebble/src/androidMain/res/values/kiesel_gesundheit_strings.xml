@@ -62,18 +62,13 @@
     <string name="ks_tr_schlaf">Sleep trends</string>
     <string name="ks_tr_herz">Heart trends</string>
     <string name="ks_tr_ernaehrung">Nutrition trends</string>
-    <string name="ks_tr_zu_wenig">Not enough days yet for trends. They need at least two of each weekday.</string>
     <string name="ks_tr_typische_woche">TYPICAL WEEK – %1$s</string>
-    <string name="ks_tr_verlauf">HISTORY – %1$s</string>
+    <string name="ks_tr_verlauf">WEEKS – %1$s</string>
     <string name="ks_tr_schnitt">On average %1$s per day.</string>
     <string name="ks_tr_extreme">Strongest on %1$s (%2$s), weakest on %3$s (%4$s).</string>
     <string name="ks_tr_wochenende">Weekends %1$s, weekdays %2$s.</string>
-    <string name="ks_tr_kw">Calendar weeks, average per day. Dashed: the average of all days.</string>
     <string name="ks_tr_richtung">The last four weeks: %1$s %% against the four before.</string>
-    <string name="ks_tr_keine_richtung">Not enough weeks yet for a direction.</string>
-    <string name="ks_tr_schlaf_legende">Dark inside: deep sleep. Solid line: 8 h.</string>
     <string name="ks_tr_erreicht">%1$d of %2$d nights reached 8 hours.</string>
-    <string name="ks_tr_davon_tief">Deep sleep on average %1$s.</string>
     <string name="ks_tr_mitte">SLEEP MIDPOINT</string>
     <string name="ks_tr_mitte_naechte">Midpoint between falling asleep and waking, over %1$d nights.</string>
     <string name="ks_tr_sehr_regelmaessig">Very regular.</string>
@@ -83,7 +78,6 @@
     <string name="ks_tr_supp_legende">Bar: due; inside: taken.</string>
     <string name="ks_tr_supp_schnitt">On average %1$d %% of the due supplements were taken.</string>
     <string name="ks_tr_zusammenhaenge">LINKS</string>
-    <string name="ks_tr_paare_spaeter">Links appear once there are %1$d days with both values.</string>
     <string name="ks_tr_x_und_y">%1$s and %2$s</string>
     <string name="ks_tr_r_satz">r = %1$s over %2$d days: %3$s.</string>
     <string name="ks_tr_staerke_0">no recognisable link</string>
@@ -93,7 +87,6 @@
     <string name="ks_tr_mehr_mehr">More %1$s tends to go with more %2$s.</string>
     <string name="ks_tr_mehr_weniger">More %1$s tends to go with less %2$s.</string>
     <string name="ks_tr_keine_ursache">A link says nothing about cause and effect.</string>
-    <string name="ks_tr_fuss">Based on %1$d days since %2$s. A weekday counts from %3$d days on; today is left out.</string>
     <string name="ks_tr_n_schlaf">sleep</string>
     <string name="ks_tr_n_tief">deep sleep</string>
     <string name="ks_tr_n_ruhepuls">resting heart rate</string>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trendseiten in Boulder: die Bausteine, die schon ab dem ersten Tag tragen. -->
+<resources>
+    <string name="ks_trn_start_tag">Trends start with the first full day.</string>
+    <string name="ks_trn_start_nacht">Trends start with the first night.</string>
+    <string name="ks_trn_letzte14">LAST 14 DAYS – %1$s</string>
+    <plurals name="ks_trn_schnitt_tage">
+        <item quantity="one">Avg, 1 day</item>
+        <item quantity="other">Avg, %1$d days</item>
+    </plurals>
+    <string name="ks_trn_letzte7">Last 7 days</string>
+    <string name="ks_trn_avg">avg %1$s</string>
+    <string name="ks_trn_goal">goal %1$s</string>
+    <string name="ks_trn_so_far">so far</string>
+    <string name="ks_trn_tag_fuer_tag">DAY BY DAY</string>
+    <string name="ks_trn_tief_kurz">deep %1$s</string>
+    <string name="ks_trn_woche_ab">Typical week from about %1$s.</string>
+    <string name="ks_trn_woche_spaeter">Typical week once three weekdays have two days each.</string>
+    <string name="ks_trn_wochen_ab">Weeks from %1$s.</string>
+    <string name="ks_trn_wochen_spaeter">Weeks once three calendar weeks have data.</string>
+    <string name="ks_trn_links_ab">Links from about %1$s.</string>
+    <string name="ks_trn_links_spaeter">Links once %1$d days have both values.</string>
+    <plurals name="ks_trn_fuss_tage">
+        <item quantity="one">1 day since %2$s. Today is left out until it is complete.</item>
+        <item quantity="other">%1$d days since %2$s. Today is left out until it is complete.</item>
+    </plurals>
+    <plurals name="ks_trn_fuss_naechte">
+        <item quantity="one">1 night since %2$s.</item>
+        <item quantity="other">%1$d nights since %2$s.</item>
+    </plurals>
+</resources>

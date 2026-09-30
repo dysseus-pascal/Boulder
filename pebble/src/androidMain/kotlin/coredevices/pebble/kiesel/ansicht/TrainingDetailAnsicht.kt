@@ -38,8 +38,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.records.ExerciseSegment
 import coredevices.pebble.R
+import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
 import io.rebble.libpebblecommon.database.entity.HealthGender
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Sport
@@ -67,10 +69,25 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     // Gewicht, Alter und Geschlecht der Uhr - fuer die Kalorien aus dem Puls.
     val koerper by koinInject<LibPebble>().healthSettings.collectAsState(null)
+    val api = koinInject<HealthDataApi>()
     var detail by remember { mutableStateOf<TrainingDetail?>(null) }
     var geladen by remember { mutableStateOf(false) }
+    var ruhepuls by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(id) {
-        detail = TrainingsDaten.detail(context, id)
+        val neu = TrainingsDaten.detail(context, id)
+        // Der Ruhepuls der Naechte vor dem Training, nicht der von heute - vor
+        // der Anzeige, sonst springen die kcal nach dem Oeffnen.
+        ruhepuls = neu?.eintrag?.sitzung?.startTime?.let { start ->
+            val naechte = try {
+                api.getNaechte(start.minus(Duration.ofDays(14)).epochSecond, start.epochSecond)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+            Trainingsanalyse.ruhepulsAusNaechten(naechte.sortedBy { it.beginnUtc }.map { it.ruhepuls })
+        }
+        detail = neu
         geladen = true
     }
     val d = detail
@@ -125,7 +142,9 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                             HealthGender.Female -> Trainingsanalyse.Geschlecht.Frau
                             HealthGender.Other -> Trainingsanalyse.Geschlecht.Andere
                         }
-                        Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht)?.let {
+                        // Die Vorgabe ist kein gemessenes Maximum - dann rechnet Tanaka nach dem Alter.
+                        val gemessen = maxpuls.takeIf { it != KieselEinstellungen.MAXPULS_VORGABE }
+                        Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht, ruhepuls, gemessen)?.let {
                             Wert("≈ " + it.roundToInt(), stringResource(R.string.ks_t_kcal))
                         }
                     }

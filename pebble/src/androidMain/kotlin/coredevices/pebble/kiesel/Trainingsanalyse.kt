@@ -76,32 +76,76 @@ internal object Trainingsanalyse {
     // --- Kalorien ---
 
     /**
-     * Der Verbrauch aus dem Puls, in kcal - nach Keytel u. a. (2005).
+     * Der Verbrauch aus dem Puls, in kcal: Anteil der Pulsreserve = Anteil der
+     * Sauerstoffreserve (Swain 1997), 5 kcal je Liter Sauerstoff.
      *
-     * DIE UHR ZAEHLT KALORIEN AUS SCHRITTEN: eine Radfahrt mit Puls 130
-     * ergab 34 kcal. Aus Puls, Gewicht und Alter kommt man naeher heran -
-     * je Minute ein Wert, jeder Pulspunkt gilt bis zum naechsten, hoechstens
-     * eine Minute. Null, wenn Gewicht oder Alter fehlen; das ist eine
-     * Schaetzung, und ohne die beiden waere sie geraten.
+     * NICHT MEHR KEYTEL: der rechnet mit dem Puls an sich und gab fuer eine
+     * Radfahrt mit Puls 127 rund 250 kcal, Fitbit 180. Die Reserve zaehlt vom
+     * eigenen Ruhepuls aus. DIE VO2MAX IST DIE MITTE DER ALTERSGRUPPE (FRIEND,
+     * Kaminsky 2015), nicht Uth: der teilt durch den Ruhepuls, und der aus dem
+     * Schlaf liegt unter dem wachen - 53 statt ~40 und wieder 240 kcal.
+     * In der Reserve wiegt derselbe Unterschied wenig (Ruhepuls 60 statt 54:
+     * 4 % weniger), deshalb gilt dort der Schlafpuls.
      *
-     * "Other" beim Geschlecht bekommt das Mittel beider Formeln.
+     * GEPRUEFT AN EINER FAHRT: Norm und Uth unterscheiden sich gerade in dem,
+     * was dort passt. Wer fitter ist als die Mitte, bekommt zu wenig.
      */
-    fun kalorien(puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht): Double? {
+    fun kalorien(
+        puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht,
+        ruhepuls: Int?, maxpuls: Int?,
+    ): Double? {
         if (puls.isEmpty() || gewichtKg < 20 || alter <= 0) return null
-        fun mann(hr: Double) = -55.0969 + 0.6309 * hr + 0.1988 * gewichtKg + 0.2017 * alter
-        fun frau(hr: Double) = -20.4022 + 0.4472 * hr - 0.1263 * gewichtKg + 0.074 * alter
-        var kj = 0.0
+        val ruhe = (ruhepuls?.takeIf { it in 30..110 } ?: RUHEPULS_ERSATZ).toDouble()
+        val tanaka = 208 - 0.7 * alter
+        // Weit ueber Tanaka ist eher ein Tippfehler als ein Herz - dann Tanaka.
+        val max = maxpuls?.toDouble()?.takeIf { it > ruhe + 20 && it <= tanaka + 25 } ?: tanaka
+        if (max <= ruhe + 20) return null
+        val vo2max = vo2maxMitte(alter, geschlecht)
+        var kcal = 0.0
         for (i in puls.indices) {
             val minuten = (if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L) / 60.0
-            val hr = puls[i].bpm.toDouble()
-            val jeMinute = when (geschlecht) {
-                Geschlecht.Mann -> mann(hr)
-                Geschlecht.Frau -> frau(hr)
-                Geschlecht.Andere -> (mann(hr) + frau(hr)) / 2
-            }
-            kj += jeMinute.coerceAtLeast(0.0) * minuten
+            // Unter dem Ruhepuls bleibt der Ruheumsatz, ueber dem Maximum die VO2max.
+            val anteil = ((puls[i].bpm - ruhe) / (max - ruhe)).coerceIn(0.0, 1.0)
+            val vo2 = VO2_RUHE + anteil * (vo2max - VO2_RUHE)   // ml je kg und Minute
+            kcal += vo2 * gewichtKg / 1000 * KCAL_JE_LITER * minuten
         }
-        return kj / 4.184
+        return kcal
+    }
+
+    /** Sauerstoff in Ruhe (1 MET), ml je kg und Minute. */
+    const val VO2_RUHE = 3.5
+    const val KCAL_JE_LITER = 5.0
+    /** Ruhepuls, solange keine Nacht einen liefert - ein ueblicher Wert, eher wach als im Schlaf. */
+    const val RUHEPULS_ERSATZ = 60
+
+    /** VO2max in der Mitte (50. Perzentil) je Altersjahrzehnt, Mitte der Jahrzehnte 25 ... 75. */
+    private val VO2MAX_MANN = doubleArrayOf(48.0, 42.4, 37.8, 32.6, 28.2, 24.4)
+    private val VO2MAX_FRAU = doubleArrayOf(37.6, 30.9, 27.9, 24.3, 21.7, 19.0)
+
+    fun vo2maxMitte(alter: Int, geschlecht: Geschlecht): Double {
+        fun aus(t: DoubleArray): Double {
+            val x = ((alter - 25) / 10.0).coerceIn(0.0, t.size - 1.0)
+            val i = x.toInt().coerceAtMost(t.size - 2)
+            return t[i] + (t[i + 1] - t[i]) * (x - i)
+        }
+        return when (geschlecht) {
+            Geschlecht.Mann -> aus(VO2MAX_MANN)
+            Geschlecht.Frau -> aus(VO2MAX_FRAU)
+            Geschlecht.Andere -> (aus(VO2MAX_MANN) + aus(VO2MAX_FRAU)) / 2
+        }
+    }
+
+    /**
+     * Der Ruhepuls fuer die Kalorien: der Median der letzten Naechte.
+     *
+     * DER MEDIAN, weil eine Nacht nach Alkohol oder mit Fieber fuenf Schlaege
+     * hoeher liegt und sonst jedes Training dieser Woche billiger machte.
+     */
+    fun ruhepulsAusNaechten(werte: List<Int>, naechte: Int = 7): Int? {
+        val gute = werte.filter { it > 0 }.takeLast(naechte).sorted()
+        if (gute.isEmpty()) return null
+        val m = gute.size / 2
+        return if (gute.size % 2 == 1) gute[m] else (gute[m - 1] + gute[m]) / 2
     }
 
     enum class Geschlecht { Mann, Frau, Andere }

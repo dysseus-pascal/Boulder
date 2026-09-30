@@ -19,9 +19,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 internal object KieselEinstellungen {
     private const val DATEI = "kiesel-uhr"
+    /** Was Uhr und App annehmen, solange niemand einen Maximalpuls eingestellt hat. */
+    const val MAXPULS_VORGABE = 190
 
     data class Stand(
-        val maxpuls: Int = 190,
+        val maxpuls: Int = MAXPULS_VORGABE,
         val pause: Int = 90,
         val empfind: Int = 2,
         val becken: Int = 25,
@@ -55,7 +57,7 @@ internal object KieselEinstellungen {
     fun stand(context: Context): Stand {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         return Stand(
-            maxpuls = p.getInt("maxpuls", 190),
+            maxpuls = p.getInt("maxpuls", MAXPULS_VORGABE),
             pause = p.getInt("pause", 90),
             empfind = p.getInt("empfind", 2),
             becken = p.getInt("becken", 25),

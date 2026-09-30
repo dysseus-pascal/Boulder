@@ -10,11 +10,18 @@ import java.time.Instant
  * schickt aber mit jeder Nacht den Stand beim Einschlafen und am Ende. Daraus
  * folgt, was die Uhr nachts braucht, tagsueber braucht (vom Ende einer Nacht
  * bis zum Einschlafen der naechsten) und wie lange eine Ladung reicht. Naechte
- * am Kabel und Tage mit Laden dazwischen zaehlen nicht mit.
+ * am Kabel und Tage mit Laden dazwischen zaehlen nicht mit - ausser wer tagsueber
+ * nur wenig nachlaedt und abends trotzdem tiefer steht: der Tag wirkt dann sparsamer.
  *
- * DER MEDIAN, NICHT DER SCHNITT: eine Nacht mit Kieselsport-Training am Abend
- * oder ein Tag mit zwei Stunden Navigation zoege den Schnitt weit weg vom
- * Ueblichen.
+ * SUMME DURCH SUMME, NICHT DER MEDIAN JE NACHT: die Uhr meldet ganze Prozent.
+ * Eine Nacht von sieben Stunden mit 41 -> 39 % ist 0,28 %/h oder 0,14 oder
+ * 0,42 - je nach Rundung. Und eine "Nacht" von einer Stunde ohne Verlust
+ * ergab 0 %/h, wurde Median und machte aus 75 % "31 Tage". Ueber alle Stunden
+ * zusammen gleicht sich die Rundung aus; Stuecke unter [MINDESTSTUNDEN] zaehlen nicht.
+ *
+ * OHNE TAGESWERT KEINE RESTZEIT: tagsueber braucht die Uhr ein Vielfaches
+ * (Licht, Benachrichtigungen, Puls haeufiger), 24 h zum Nachtwert waeren
+ * Wochen, wo es Tage sind.
  */
 internal object Akkurechnung {
     data class Nacht(
@@ -27,7 +34,7 @@ internal object Akkurechnung {
     ) {
         val stunden: Double get() = (aufwachen.epochSecond - einschlafen.epochSecond) / 3600.0
         /** Verbrauch je Stunde in der Nacht; null, wo geladen wurde oder nichts zu rechnen ist. */
-        val jeStunde: Double? get() = if (geladen || prozentBis > prozentVon || stunden < 1.0) null else (prozentVon - prozentBis) / stunden
+        val jeStunde: Double? get() = if (geladen || prozentBis > prozentVon || stunden < MINDESTSTUNDEN) null else (prozentVon - prozentBis) / stunden
     }
 
     data class Stand(
@@ -53,20 +60,17 @@ internal object Akkurechnung {
                     it.akkuBeginn!!, it.akkuEnde!!, it.geladen,
                 )
             }
-        val nacht = median(naechte.mapNotNull { it.jeStunde })
+        val nacht = rate(naechte.filter { it.jeStunde != null }.map { (it.prozentVon - it.prozentBis) to it.stunden })
         val tage = naechte.zipWithNext().mapNotNull { (a, b) ->
             val stunden = (b.einschlafen.epochSecond - a.aufwachen.epochSecond) / 3600.0
-            // Steht der Akku am Abend hoeher als am Morgen, wurde geladen.
-            if (a.geladen || b.prozentVon > a.prozentBis || stunden < 1.0 || stunden > 24.0) null
-            else (a.prozentBis - b.prozentVon) / stunden
+            // Abends hoeher als morgens: geladen. Nach einer Nacht am Kabel ebenso -
+            // den Endstand misst die Uhr erst beim Abschluss der Nacht, womoeglich noch am Kabel.
+            if (a.geladen || b.prozentVon > a.prozentBis || stunden < MINDESTSTUNDEN || stunden > 24.0) null
+            else (a.prozentBis - b.prozentVon) to stunden
         }
-        val tag = median(tage)
-        val jeTag = when {
-            nacht != null && tag != null -> 8 * nacht + 16 * tag
-            nacht != null -> 24 * nacht
-            tag != null -> 24 * tag
-            else -> null
-        }?.takeIf { it > 0 }
+        val tag = rate(tage)
+        // Fehlt nur die Nacht, rechnet sie wie ein Tag: lieber zu wenig Tage als zu viele.
+        val jeTag = tag?.let { 8 * (nacht ?: it) + 16 * it }?.takeIf { it > 0 }
         val punkte = buildList {
             naechte.forEach { n ->
                 add(n.einschlafen.epochSecond to n.prozentVon)
@@ -85,9 +89,12 @@ internal object Akkurechnung {
         )
     }
 
-    fun median(werte: List<Double>): Double? {
-        if (werte.isEmpty()) return null
-        val s = werte.sorted()
-        return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
+    /** Kuerzere Naechte und Tage sagen mit ganzen Prozent nichts. */
+    const val MINDESTSTUNDEN = 3.0
+
+    /** Prozent je Stunde aus (Prozent, Stunden)-Stuecken; null ohne Stueck. */
+    fun rate(stuecke: List<Pair<Int, Double>>): Double? {
+        val stunden = stuecke.sumOf { it.second }
+        return if (stunden <= 0) null else stuecke.sumOf { it.first } / stunden
     }
 }

@@ -126,7 +126,7 @@
         <item quantity="one">About %1$d day left</item>
         <item quantity="other">About %1$d days left</item>
     </plurals>
-    <string name="ks_h_akku_offen">An estimate follows after a few nights</string>
+    <string name="ks_h_akku_offen">An estimate follows after a day without charging</string>
     <string name="ks_h_nicht_verbunden">Not connected</string>
     <string name="ks_h_bpm_jetzt">bpm now</string>
     <string name="ks_h_gemessen">Measured %1$s · last 24 hours</string>

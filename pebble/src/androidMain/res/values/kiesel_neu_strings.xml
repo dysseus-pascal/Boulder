@@ -4,13 +4,10 @@
     <string name="ks_n_training">Sport</string>
     <string name="ks_n_protokoll">Log</string>
     <string name="ks_n_protokoll_leer">Nothing received from Kieselsport, Drinktervall or SupCycle yet.</string>
-    <string name="ks_n_akte_rechte">Health Connect access</string>
-    <string name="ks_n_akte_rechte_text">Boulder needs access to workouts, heart rate, SpO2 and HRV in Health Connect to show your workouts — and to log water from Drinktervall and supplements from SupCycle.</string>
     <string name="ks_n_erlauben">Allow</string>
     <string name="ks_n_puls">Heart rate</string>
     <string name="ks_n_notiz">From the watch</string>
     <string name="ks_n_quelle">from %1$s</string>
-    <string name="ks_n_akte_fehlt">Health Connect is not available on this phone.</string>
     <string name="ks_n_einstellungen">Kieselsport settings</string>
     <string name="ks_n_stand_um">As reported by the watch %1$s.</string>
     <string name="ks_n_stand_nie">The watch has not reported its settings yet – these are the defaults. Open Kieselsport on the watch once.</string>
@@ -33,12 +30,5 @@
     <string name="ks_n_keine_uhr">No watch connected.</string>
     <string name="ks_n_keine_antwort">The watch did not confirm the settings. Is it in range?</string>
     <string name="ks_n_stand_eben">Just reported by the watch.</string>
-    <string name="ks_n_zuletzt">Latest</string>
-    <string name="ks_n_acht_wochen">Eight weeks</string>
-    <string name="ks_n_minuten_woche">Minutes per week, stacked by sport</string>
-    <string name="ks_n_woraus">What it is made of</string>
-    <string name="ks_n_drei_monate">The last three months, by time</string>
-    <string name="ks_n_davor">Before that</string>
     <string name="ks_n_kw">Wk %1$s</string>
-    <string name="ks_n_kalender_text">Four weeks. The colour is the sport, the size the duration; a ring outside means a second sport was added.</string>
 </resources>

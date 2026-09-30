@@ -80,6 +80,15 @@ object PebbleNavBarRoutes {
     @Serializable
     data class TrainingDetailRoute(val id: String) : NavBarRoute
 
+    @Serializable
+    data class TrainingAlleRoute(val tag: String? = null) : NavBarRoute
+
+    @Serializable
+    data object SportTrendRoute : NavBarRoute
+
+    @Serializable
+    data object SpurenRoute : NavBarRoute
+
     // Boulder: die Gesundheitsuebersicht (aus Kiesel-Helper).
     @Serializable
     data object GesundheitRoute : NavBarRoute
@@ -231,6 +240,16 @@ fun NavGraphBuilder.addNavBarRoutes(
     composableWithAnimations<PebbleNavBarRoutes.TrainingDetailRoute>(viewModel) {
         val route: PebbleNavBarRoutes.TrainingDetailRoute = it.toRoute()
         TrainingDetailScreen(topBarParams, nav, route.id)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrainingAlleRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TrainingAlleRoute = it.toRoute()
+        TrainingAlleScreen(topBarParams, nav, route.tag)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SportTrendRoute>(viewModel) {
+        SportTrendScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SpurenRoute>(viewModel) {
+        SpurenScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.GesundheitRoute>(viewModel) {
         GesundheitScreen(topBarParams, nav)

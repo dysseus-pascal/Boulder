@@ -12,3 +12,13 @@ expect fun TrainingScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
 @Composable
 expect fun TrainingDetailScreen(topBarParams: TopBarParams, nav: NavBarNav, id: String)
+
+/** Alle Trainings nach Wochen; [tag] (ISO-Datum) zeigt nur diesen Tag. */
+@Composable
+expect fun TrainingAlleScreen(topBarParams: TopBarParams, nav: NavBarNav, tag: String?)
+
+@Composable
+expect fun SportTrendScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
+@Composable
+expect fun SpurenScreen(topBarParams: TopBarParams, nav: NavBarNav)

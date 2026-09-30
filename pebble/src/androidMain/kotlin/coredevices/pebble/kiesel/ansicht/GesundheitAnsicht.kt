@@ -4,7 +4,6 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,13 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -111,12 +107,6 @@ internal fun GesundheitAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: (String
                     GesundheitWidget.stosseAn(context)
                     neu++
                 }
-            }
-        }
-        item {
-            Energie(s.energie, s.wocheEnergie) {
-                Gesundheitsdaten.setzeEnergie(context, LocalDate.now(), it)
-                neu++
             }
         }
         item { Spacer(Modifier.height(12.dp)) }
@@ -349,41 +339,6 @@ private fun Koffein(s: GesundheitsStand, trinke: (String, Int) -> Unit) {
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             getraenke.forEach { (name, mg) -> OutlinedButton(onClick = { trinke(name, mg) }) { Text("$name $mg") } }
-        }
-    }
-}
-
-@Composable
-private fun Energie(wert: Int?, woche: List<Pair<LocalDate, Int?>>, setze: (Int) -> Unit) {
-    Karte {
-        Text(stringResource(R.string.ks_h_wie_war_tag), style = MaterialTheme.typography.labelMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (1..5).forEach { n -> FilterChip(selected = wert == n, onClick = { setze(n) }, label = { Text("$n") }) }
-        }
-        Hinweis(stringResource(R.string.ks_h_energie_text))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            woche.forEachIndexed { i, (tag, w) ->
-                val heute = i == woche.lastIndex
-                val flaeche = if (heute) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
-                Column(
-                    Modifier.weight(1f).background(flaeche, RoundedCornerShape(6.dp)).padding(vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        wochentag(tag), style = MaterialTheme.typography.labelSmall,
-                        color = if (heute) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        w?.toString() ?: "–", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
-                        fontWeight = if (heute) FontWeight.Bold else FontWeight.Normal,
-                        color = when {
-                            heute -> MaterialTheme.colorScheme.onPrimaryContainer
-                            w == null -> MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                }
-            }
         }
     }
 }

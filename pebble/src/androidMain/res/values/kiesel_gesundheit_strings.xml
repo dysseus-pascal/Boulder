@@ -47,8 +47,6 @@
     <string name="ks_h_espresso">Espresso</string>
     <string name="ks_h_tee">Tea</string>
     <string name="ks_h_energy">Energy</string>
-    <string name="ks_h_wie_war_tag">HOW WAS THE DAY?</string>
-    <string name="ks_h_energie_text">1 exhausted, 5 full of energy. Kept for the trends.</string>
     <string name="ks_h_wach">Awake</string>
     <string name="ks_h_frueher">Earlier</string>
     <string name="ks_h_spaeter">Later</string>
@@ -93,7 +91,6 @@
     <string name="ks_tr_n_hrv">HRV</string>
     <string name="ks_tr_n_schritte">steps</string>
     <string name="ks_tr_n_aktiv">active minutes</string>
-    <string name="ks_tr_n_energie">energy</string>
     <string name="ks_tr_n_koffein">caffeine</string>
     <string name="ks_b_titel">Backup</string>
     <string name="ks_b_ordner">FOLDER</string>

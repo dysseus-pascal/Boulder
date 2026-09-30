@@ -48,7 +48,7 @@ internal object Sicherungsformat {
         "ruhepuls", "puls_min", "puls_hoch", "puls_tief", "hrv",
         "supp_faellig", "supp_genommen",
         "schlaf_von", "schlaf_bis", "schlaf_mitte",
-        "energie", "koffein_mg", "koffein_letzt",
+        "koffein_mg", "koffein_letzt",
         "puls_nacht_sd",
     )
 

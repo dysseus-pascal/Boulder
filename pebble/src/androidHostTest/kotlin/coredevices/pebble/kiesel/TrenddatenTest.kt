@@ -14,10 +14,10 @@ class TrenddatenTest {
     fun neu_gewinnt_der_speicher_fuellt_nur_luecken() {
         val v = Trenddaten.vereine(
             mapOf("schritte" to listOf(t2 to 5000.0, t3 to 6000.0)),
-            mapOf("schritte" to listOf(t1 to 100.0, t2 to 200.0), "energie" to listOf(t1 to 3.0)),
+            mapOf("schritte" to listOf(t1 to 100.0, t2 to 200.0), "wasser" to listOf(t1 to 3.0)),
         )
         assertEquals(listOf(t1 to 100.0, t2 to 5000.0, t3 to 6000.0), v["schritte"])
-        assertEquals(listOf(t1 to 3.0), v["energie"])
+        assertEquals(listOf(t1 to 3.0), v["wasser"])
     }
 
     @Test

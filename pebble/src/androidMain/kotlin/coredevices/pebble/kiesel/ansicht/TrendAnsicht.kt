@@ -322,7 +322,6 @@ private val PAARE = listOf(
     Paar("tief", R.string.ks_tr_n_tief, "hrv", R.string.ks_tr_n_hrv),
     Paar("schritte", R.string.ks_tr_n_schritte, "schlaf", R.string.ks_tr_n_schlaf),
     Paar("aktiv", R.string.ks_tr_n_aktiv, "ruhepuls", R.string.ks_tr_n_ruhepuls),
-    Paar("schlaf", R.string.ks_tr_n_schlaf, "energie", R.string.ks_tr_n_energie),
     Paar("koffein_mg", R.string.ks_tr_n_koffein, "tief", R.string.ks_tr_n_tief),
 )
 

@@ -61,9 +61,6 @@ internal data class GesundheitsStand(
     val wasserZiel: Drinktervall.Ziel?,
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
-    val energie: Int?,
-    /** Die Tagesbewertung der letzten sieben Tage bis heute; null = nicht bewertet. */
-    val wocheEnergie: List<Pair<LocalDate, Int?>>,
 )
 
 /** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
@@ -197,7 +194,6 @@ internal object Gesundheitsrechnung {
  */
 internal object Gesundheitsdaten {
     private const val TAG = "Gesundheit"
-    private const val TAGE = "kiesel-tage"
 
     suspend fun lies(context: Context, api: HealthDataApi): GesundheitsStand = withContext(Dispatchers.IO) {
         val zone = ZoneId.systemDefault()
@@ -260,8 +256,6 @@ internal object Gesundheitsdaten {
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
-            energie = energie(context, heute),
-            wocheEnergie = woche.map { it to energie(context, it) },
         )
     }
 
@@ -288,13 +282,6 @@ internal object Gesundheitsdaten {
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
         )
-    }
-
-    fun energie(context: Context, tag: LocalDate): Int? =
-        context.getSharedPreferences(TAGE, Context.MODE_PRIVATE).getInt("energie-$tag", 0).takeIf { it in 1..5 }
-
-    fun setzeEnergie(context: Context, tag: LocalDate, wert: Int) {
-        context.getSharedPreferences(TAGE, Context.MODE_PRIVATE).edit().putInt("energie-$tag", wert).apply()
     }
 
     /** Eine Tasse von Hand - als Ernaehrungseintrag mit Koffein, wie in Kiesel-Helper. */

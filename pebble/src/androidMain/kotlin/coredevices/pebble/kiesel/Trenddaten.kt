@@ -121,10 +121,6 @@ internal object Trenddaten {
         val quoten = SupCycle.quoten(context)
         neu["supp_faellig"] = quoten.map { (t, q) -> t to q.first.toDouble() }.sortedBy { it.first }
         neu["supp_genommen"] = quoten.map { (t, q) -> t to q.second.toDouble() }.sortedBy { it.first }
-        neu["energie"] = (0..TAGE.toInt()).mapNotNull { d ->
-            val t = heute.minusDays(d.toLong())
-            Gesundheitsdaten.energie(context, t)?.let { t to it.toDouble() }
-        }.sortedBy { it.first }
 
         vereine(neu, Tagesspeicher.alle(context))
     }

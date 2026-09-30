@@ -33,7 +33,7 @@
     <string name="ks_sp_kanal">Route recording</string>
     <string name="ks_sp_kanal_text">Only runs during a workout.</string>
     <string name="ks_sp_nicht_zugelassen">Route not recorded — Android did not allow the service: %1$s</string>
-    <string name="ks_sp_ohne_standort">Workout without route — location not allowed (Settings, Training)</string>
+    <string name="ks_sp_ohne_standort">Workout without route — location not allowed (Settings, Sport)</string>
     <string name="ks_sp_ohne_strecke_x">Workout without route — %1$s</string>
     <plurals name="ks_v_pulskurve">
         <item quantity="one">Heart rate curve with %1$d point logged</item>

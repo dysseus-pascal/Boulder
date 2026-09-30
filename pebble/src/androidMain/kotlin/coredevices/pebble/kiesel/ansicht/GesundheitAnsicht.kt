@@ -55,17 +55,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
-import coredevices.pebble.kiesel.DURCHGESCHLAFEN_MIN
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.HRV_SPANNE_PROZENT
 import coredevices.pebble.kiesel.Herzurteil
-import coredevices.pebble.kiesel.LERNNAECHTE
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Praeparatlage
-import coredevices.pebble.kiesel.RUHEPULS_SPANNE
 import coredevices.pebble.kiesel.SCHLAFZIEL_MIN
 import coredevices.pebble.kiesel.SCHRITTZIEL
 import coredevices.pebble.kiesel.Schlafurteil
@@ -75,7 +71,6 @@ import coredevices.pebble.kiesel.Tagessatz
 import coredevices.pebble.kiesel.Tageszeit
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.TrainingsDaten
-import coredevices.pebble.kiesel.VERGLEICHSNAECHTE
 import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.phasenAnteile
@@ -96,7 +91,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -160,7 +154,6 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         if (!satz.ohneDaten) item { SchrittKarte(s) { wege.trend("bewegung") } }
         item { GenauerKarte(wege) { trendBlatt = true } }
         item { UhrKarte(training, akkuJetzt, akku, wege) }
-        item { WorteKarte() }
         item { Spacer(Modifier.height(12.dp)) }
     }
 
@@ -248,12 +241,13 @@ private fun Tageskarte(s: GesundheitsStand, satz: Tagessatz, wege: Gesundheitswe
                 Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { Schlafring(n, satz) { n?.let { wege.nacht(it.beginnUtc) } } }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { Schrittring(satz) { wege.trend("bewegung") } }
             }
-            if (!satz.ohneDaten) {
+            val hinweis = if (satz.ohneDaten) null else herzHinweis(s)
+            if (hinweis != null) {
                 Column {
                     Trenner(0.dp)
                     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Zeichen.info, null, Modifier.padding(top = 1.dp).size(16.dp), tint = grau)
-                        Text(herzHinweis(s), fontSize = 12.sp, lineHeight = 16.sp, color = grau)
+                        Text(hinweis, fontSize = 12.sp, lineHeight = 16.sp, color = grau)
                     }
                 }
             }
@@ -261,16 +255,13 @@ private fun Tageskarte(s: GesundheitsStand, satz: Tagessatz, wege: Gesundheitswe
     }
 }
 
-/** Was ueber Ruhepuls und HRV zu sagen ist - oder wie lange das Lernen noch dauert. */
+/** Das Urteil zu Ruhepuls und HRV - nur, wenn es eins gibt; erklaert wird nichts. */
 @Composable
-private fun herzHinweis(s: GesundheitsStand): String {
-    val n = s.nacht ?: return stringResource(R.string.ks_h_ohne_nacht_hinweis, uhrzeit(LocalContext.current, zweiundzwanzigUhr()))
-    if (n.ruhepuls == null && n.hrv == null) return stringResource(R.string.ks_h_ohne_herz_nacht)
+private fun herzHinweis(s: GesundheitsStand): String? {
+    val n = s.nacht ?: return null
     val ruhe = Gesundheitsrechnung.ruhepulsUrteil(n.ruhepuls, s.ruhepulsWoche)
     val hrv = Gesundheitsrechnung.hrvUrteil(n.hrv, s.hrvWoche)
-    if (ruhe.urteil == null && hrv.urteil == null) {
-        return stringResource(R.string.ks_h_lernen, LERNNAECHTE, maxOf(ruhe.frueher, hrv.frueher))
-    }
+    if (ruhe.urteil == null && hrv.urteil == null) return null
     return urteilSatz(ruhe, hrv)
 }
 
@@ -295,8 +286,6 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Herzurteil): String {
     return teile.joinToString(" ")
 }
 
-/** Die Bettzeit, die gilt, solange keine Nacht gemessen ist (siehe Gesundheitsrechnung.bettzeit). */
-private fun zweiundzwanzigUhr(): Instant = LocalDate.now().atTime(22, 0).atZone(ZoneId.systemDefault()).toInstant()
 
 /** Ring mit Beschriftung darunter - ein Knopf, wenn er weiterfuehrt. */
 @Composable
@@ -559,16 +548,7 @@ private fun SchrittKarte(s: GesundheitsStand, trend: () -> Unit) {
                 unter, zahl(tag.schritte), minHoehe = 56.dp, onClick = trend,
             )
         }
-        val seit = woche.seit
-        val voll = woche.volleWocheAb
-        // Zaehlt die Seite erst seit heute, sagt die eine Zeile schon alles.
-        if (seit != null && voll != null && woche.tage.size > 1) {
-            Text(
-                stringResource(R.string.ks_h_zaehlt_seit, seit.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()), tagText(context, voll)),
-                Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
-                fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -578,12 +558,12 @@ private fun GenauerKarte(wege: Gesundheitswege, zeigeTrends: () -> Unit) {
     Kasten {
         Kopf(stringResource(R.string.ks_h_genauer))
         Zeile(
-            stringResource(R.string.ks_h_herz_heute), stringResource(R.string.ks_h_herz_heute_text),
+            stringResource(R.string.ks_h_herz_heute), null,
             zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) }, onClick = wege.herz,
         )
         Trenner()
         Zeile(
-            stringResource(R.string.ks_h_trends), stringResource(R.string.ks_h_trends_text),
+            stringResource(R.string.ks_h_trends), null,
             zeichen = { Tonkreis(Zeichen.trend, FLAECHE_PRAEPARAT, t.bewegung, 0.18f) }, onClick = zeigeTrends,
         )
         Spacer(Modifier.height(4.dp))
@@ -623,33 +603,6 @@ private fun UhrKarte(training: TrainingEintrag?, akkuJetzt: Int?, akku: Akkurech
             zeichen = { Tonkreis(Zeichen.uhr, grau, grau, 0.14f) },
         ) { wege.akku() }
         Spacer(Modifier.height(4.dp))
-    }
-}
-
-/** Die Fussnote: welche Schwelle hinter welchem Wort steht. */
-@Composable
-private fun WorteKarte() {
-    val context = LocalContext.current
-    val farben = MaterialTheme.colorScheme
-    val begriff = SpanStyle(fontWeight = FontWeight.Medium, color = farben.onSurface)
-    fun um(stunde: Int) = uhrzeit(context, LocalDate.now().atTime(stunde, 0).atZone(ZoneId.systemDefault()).toInstant())
-    val punkte = listOf(
-        stringResource(R.string.ks_h_w_schlaf, SCHLAFZIEL_MIN / 60),
-        stringResource(R.string.ks_h_w_durch, DURCHGESCHLAFEN_MIN),
-        stringResource(R.string.ks_h_w_gewohnt, RUHEPULS_SPANNE, HRV_SPANNE_PROZENT, VERGLEICHSNAECHTE, LERNNAECHTE),
-        stringResource(R.string.ks_h_w_noch, um(11), um(18)),
-        stringResource(R.string.ks_h_w_bett),
-    )
-    Kasten {
-        Kopf(stringResource(R.string.ks_h_worte))
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            punkte.forEach { p ->
-                Row {
-                    Text("•", Modifier.padding(start = 4.dp, end = 8.dp), fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurface)
-                    Text(mitBegriffen(p, begriff), fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant)
-                }
-            }
-        }
     }
 }
 

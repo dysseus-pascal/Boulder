@@ -196,21 +196,3 @@ internal fun Zeile(
     }
 }
 
-/**
- * Text mit <b>…</b> fuer die Begriffe der Fussnote: sie stehen heller und
- * etwas kraeftiger. Mehr Auszeichnung kennt die Seite nicht.
- */
-internal fun mitBegriffen(text: String, begriff: SpanStyle): AnnotatedString = buildAnnotatedString {
-    var rest = text
-    while (true) {
-        val a = rest.indexOf("<b>")
-        val b = rest.indexOf("</b>", a + 3)
-        if (a < 0 || b < 0) {
-            append(rest)
-            break
-        }
-        append(rest.substring(0, a))
-        withStyle(begriff) { append(rest.substring(a + 3, b)) }
-        rest = rest.substring(b + 4)
-    }
-}

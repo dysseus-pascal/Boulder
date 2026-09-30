@@ -12,7 +12,6 @@
     <string name="ks_h_ohne_phasen">Without heart rate at night the watch only tells asleep from awake.</string>
     <string name="ks_h_ruhepuls">Resting HR</string>
     <string name="ks_h_hrv">HRV (night)</string>
-    <string name="ks_h_pulsband_nacht">Shaded: last night.</string>
     <string name="ks_h_nacht_kurz">night</string>
     <string name="ks_h_praeparate">SUPPLEMENTS</string>
     <string name="ks_h_heute">Today</string>
@@ -60,9 +59,6 @@
     <string name="ks_h_anteil_ziel">%1$d %% of goal</string>
     <string name="ks_h_ring_schlaf_a11y">Last night, slept %1$s, goal %2$d h. Opens night view</string>
     <string name="ks_h_ring_schritte_a11y">Steps today, %1$s of %2$s. Opens movement trend</string>
-    <string name="ks_h_ohne_herz_nacht">No heart rate last night, so no verdict on resting heart and HRV.</string>
-    <string name="ks_h_lernen">Resting heart and HRV get a verdict once there are %1$d earlier nights to compare with (%2$d so far).</string>
-    <string name="ks_h_ohne_nacht_hinweis">Wear the watch in bed to see sleep, resting heart and HRV here. Until then, caffeine at bedtime counts to %1$s.</string>
     <string name="ks_h_beide_wie_immer">Resting heart and HRV as usual.</string>
     <string name="ks_h_ruhe_wie_immer">Resting heart as usual.</string>
     <string name="ks_h_ruhe_hoeher">Resting heart %1$d bpm above your usual.</string>
@@ -119,11 +115,8 @@
     <string name="ks_h_meiste_bisher">Most so far</string>
     <string name="ks_h_meiste_woche">Most this week</string>
     <string name="ks_h_erster_tag">First day counted</string>
-    <string name="ks_h_zaehlt_seit">Counting since %1$s. A full week shows from %2$s.</string>
     <string name="ks_h_genauer">LOOK CLOSER</string>
     <string name="ks_h_herz_heute">Heart today</string>
-    <string name="ks_h_herz_heute_text">Pulse over 24 hours, resting heart, HRV, blood oxygen</string>
-    <string name="ks_h_trends_text">Sleep, heart, movement, water and caffeine by day</string>
     <string name="ks_h_uhr">WATCH</string>
     <string name="ks_h_letztes_training">Last workout · %1$s</string>
     <string name="ks_h_heute_klein">today</string>
@@ -135,17 +128,9 @@
     </plurals>
     <string name="ks_h_akku_offen">An estimate follows after a few nights</string>
     <string name="ks_h_nicht_verbunden">Not connected</string>
-    <string name="ks_h_worte">HOW THE WORDS ARE CHOSEN</string>
-    <string name="ks_h_w_schlaf">&lt;b>Rested&lt;/b>: you slept at least your goal of %1$d h. &lt;b>Short night&lt;/b>: up to 1 h less. &lt;b>Very short night&lt;/b>: more than 1 h less.</string>
-    <string name="ks_h_w_durch">&lt;b>Slept through&lt;/b>: less than %1$d min awake.</string>
-    <string name="ks_h_w_gewohnt">&lt;b>As usual&lt;/b>: resting heart within ±%1$d bpm and HRV within ±%2$d %% of your earlier nights (up to %3$d, last night not counted). Shown once there are %4$d.</string>
-    <string name="ks_h_w_noch">&lt;b>To go&lt;/b>: your step goal minus the steps so far, shown from %1$s to %2$s. Mornings say how the night was, evenings sum up the day.</string>
-    <string name="ks_h_w_bett">&lt;b>At bedtime&lt;/b>: caffeine still active at the time you fell asleep last night.</string>
     <string name="ks_h_bpm_jetzt">bpm now</string>
     <string name="ks_h_gemessen">Measured %1$s · last 24 hours</string>
     <string name="ks_h_gemessen_alt">Last measured %1$s · chart: last 24 hours</string>
-    <string name="ks_h_puls_legende">Line: five-minute median. Band: lowest to highest.</string>
-    <string name="ks_h_puls_legende_ruhe">Dashed: resting heart %1$d.</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
     <string name="ks_h_ruhepuls_text">Lowest steady pulse asleep</string>
     <string name="ks_h_hrv_n">HRV</string>
@@ -161,13 +146,9 @@
     <string name="ks_h_gewohnt">YOUR USUAL</string>
     <string name="ks_h_herztrend">Heart trend</string>
     <string name="ks_h_lernt">Learning: %1$d of %2$d earlier nights so far.</string>
-    <string name="ks_h_lernt_text">From %1$d on, last night is compared with the average of up to %2$d earlier nights. As usual means resting heart within ±%3$d bpm and HRV within ±%4$d %%.</string>
-    <string name="ks_h_frueher_eine">Earlier night: %1$s.</string>
-    <string name="ks_h_frueher_schnitt">Earlier nights on average: %1$s.</string>
-    <string name="ks_h_gewohnt_text">Compared with the average of %1$d earlier nights: %2$s. As usual means resting heart within ±%3$d bpm and HRV within ±%4$d %%.</string>
+    <string name="ks_h_gewohnt_text">Average of %1$d earlier nights: %2$s.</string>
     <string name="ks_h_gewohnt_ohne_nacht">No night to compare yet. Your usual over %1$d earlier nights: %2$s.</string>
     <string name="ks_h_trends_titel">TRENDS</string>
-    <string name="ks_h_keine_frueheren">No earlier nights yet.</string>
     <string name="ks_tr_bewegung">Movement trends</string>
     <string name="ks_tr_schlaf">Sleep trends</string>
     <string name="ks_tr_herz">Heart trends</string>

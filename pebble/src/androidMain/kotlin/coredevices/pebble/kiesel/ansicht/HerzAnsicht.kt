@@ -38,11 +38,8 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.HRV_SPANNE_PROZENT
 import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.LERNNAECHTE
-import coredevices.pebble.kiesel.RUHEPULS_SPANNE
-import coredevices.pebble.kiesel.VERGLEICHSNAECHTE
 import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
@@ -116,14 +113,6 @@ private fun PulsKarte(s: GesundheitsStand) {
                 s.puls, jetzt - 24 * 3600, jetzt, toene().herz, ruhepuls = s.nacht?.ruhepuls, nacht = nacht, hoehe = 180.dp,
                 stundeText = { stunde.format(it) },
             )
-            // Vom Schatten nur reden, wenn er im Bild liegt.
-            val schatten = nacht != null && nacht.first < jetzt && nacht.second > jetzt - 24 * 3600
-            val legende = listOfNotNull(
-                stringResource(R.string.ks_h_puls_legende),
-                s.nacht?.ruhepuls?.let { stringResource(R.string.ks_h_puls_legende_ruhe, it) },
-                if (schatten) stringResource(R.string.ks_h_pulsband_nacht) else null,
-            ).joinToString(" ")
-            Text(legende, fontSize = 12.sp, lineHeight = 16.sp, color = grau)
         }
     }
 }
@@ -195,15 +184,6 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
                     Text(stringResource(R.string.ks_h_lernt, frueher, LERNNAECHTE), Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp)
                     Lernpunkte(frueher)
                 }
-                val nachsatz = when (frueher) {
-                    0 -> stringResource(R.string.ks_h_keine_frueheren)
-                    1 -> stringResource(R.string.ks_h_frueher_eine, werte(ruhe, hrv))
-                    else -> stringResource(R.string.ks_h_frueher_schnitt, werte(ruhe, hrv))
-                }
-                Text(
-                    stringResource(R.string.ks_h_lernt_text, LERNNAECHTE, VERGLEICHSNAECHTE, RUHEPULS_SPANNE, HRV_SPANNE_PROZENT) + " " + nachsatz,
-                    fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant,
-                )
             } else if (s.nacht == null) {
                 // Ohne letzte Nacht gibt es nichts zu vergleichen - nur den Schnitt selbst.
                 Text(
@@ -213,7 +193,7 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
             } else {
                 if (ruhe.urteil != null || hrv.urteil != null) Text(urteilSatz(ruhe, hrv), fontSize = 14.sp, lineHeight = 20.sp)
                 Text(
-                    stringResource(R.string.ks_h_gewohnt_text, frueher, werte(ruhe, hrv, LERNNAECHTE), RUHEPULS_SPANNE, HRV_SPANNE_PROZENT),
+                    stringResource(R.string.ks_h_gewohnt_text, frueher, werte(ruhe, hrv, LERNNAECHTE)),
                     fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant,
                 )
             }

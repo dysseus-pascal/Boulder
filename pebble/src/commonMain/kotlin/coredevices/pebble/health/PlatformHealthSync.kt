@@ -21,7 +21,6 @@ import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
@@ -53,8 +52,10 @@ class PlatformHealthSync(
 ) {
     private val logger = Logger.withTag("PlatformHealthSync")
 
-    private val _syncing = MutableStateFlow(false)
-    val syncing: StateFlow<Boolean> = _syncing
+    // Boulder: nie zwei Syncs parallel, und ein Anstoss waehrend eines Syncs
+    // (etwa die eine Meldung eines Schubs) holt der laufende nach.
+    private val einzellauf = Einzellauf(beiFehler = { logger.e(it) { "Health platform sync failed" } })
+    val syncing: StateFlow<Boolean> = einzellauf.laeuft
 
     /** Start observing health data updates and app foreground events, auto-syncing to the platform. */
     fun startAutoSync(scope: CoroutineScope) {
@@ -117,34 +118,21 @@ class PlatformHealthSync(
     }
 
     /** Run a sync: query new data from Room DB, map to HealthKMP records, write. */
-    // Boulder: ein Anstoss waehrend eines laufenden Syncs geht nicht verloren -
-    // eine Nacht, die mitten im Sync ankam, wartete sonst auf den naechsten.
-    private val _nochmal = MutableStateFlow(false)
-
     suspend fun sync() {
         if (!tracker.enabled.value) return
-        if (!_syncing.compareAndSet(expect = false, update = true)) {
-            _nochmal.value = true
-            return
-        }
-        try {
-            do {
-                _nochmal.value = false
-                if (!hasPermission()) {
-                    logger.w { "No health sync permission during sync attempt!" }
-                    tracker.setEnabled(false)
-                    return
-                }
-                syncStepsAndHeartRate()
-                syncOverlays()
-                syncOxygenSaturation()
-                syncNaechte()
-                logger.d { "Health platform sync completed" }
-            } while (_nochmal.value)
-        } catch (e: Exception) {
-            logger.e(e) { "Health platform sync failed" }
-        } finally {
-            _syncing.value = false
+        einzellauf.lauf {
+            // Ein Nachlauf nach entzogener Berechtigung soll nicht erneut fragen.
+            if (!tracker.enabled.value) return@lauf
+            if (!hasPermission()) {
+                logger.w { "No health sync permission during sync attempt!" }
+                tracker.setEnabled(false)
+                return@lauf
+            }
+            syncStepsAndHeartRate()
+            syncOverlays()
+            syncOxygenSaturation()
+            syncNaechte()
+            logger.d { "Health platform sync completed" }
         }
     }
 

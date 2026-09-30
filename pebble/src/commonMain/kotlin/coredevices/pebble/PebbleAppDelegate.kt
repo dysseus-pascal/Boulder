@@ -10,6 +10,7 @@ import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.health.UhrNachfrage
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
@@ -59,6 +60,8 @@ class PebbleAppDelegate(
     private val batteryChargedNotifier: BatteryChargedNotifier,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
+    // Boulder: beim Oeffnen der App die Uhr nach frischen Gesundheitsdaten fragen.
+    private val uhrNachfrage = UhrNachfrage({ libPebble.requestHealthData() }, clock)
 
     fun init() {
         logger.d { "init()" }
@@ -97,6 +100,9 @@ class PebbleAppDelegate(
                     libPebble.doStuffAfterPermissionsGranted()
                     libPebble.updateTimeIfNeeded()
                 }
+            }
+            GlobalScope.launch {
+                uhrNachfrage.beobachte(libPebble.watches)
             }
             GlobalScope.launch {
                 libPebble.analyticsEvents.collect {
@@ -205,6 +211,9 @@ class PebbleAppDelegate(
     fun onAppResumed() {
         logger.d { "onAppResumed" }
         appResumed.onAppResumed()
+        // Direkt, nicht ueber appResumed: dessen Sammler steht erst nach dem
+        // Onboarding, und das erste Oeffnen nach einem Kaltstart ginge verloren.
+        uhrNachfrage.beimOeffnen()
     }
 
     suspend fun performBackgroundWork(scope: CoroutineScope) {

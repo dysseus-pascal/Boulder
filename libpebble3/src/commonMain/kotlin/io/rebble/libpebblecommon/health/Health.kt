@@ -31,6 +31,7 @@ import io.rebble.libpebblecommon.services.decodeTypicalStepTotal
 import io.rebble.libpebblecommon.services.groupSleepSessions
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -126,7 +127,15 @@ class Health(
     override fun requestHealthData(fullSync: Boolean) {
         libPebbleCoroutineScope.launch {
             val device = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
-            device?.requestHealthData(fullSync)
+            // Boulder: der Bereich hat keinen Fehlerfaenger; bricht die Verbindung
+            // mitten in der Anfrage ab, fiele sonst die ganze App um.
+            try {
+                device?.requestHealthData(fullSync)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "requestHealthData failed" }
+            }
         }
     }
 

@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.health.parsers.parseNachtData
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -47,12 +48,24 @@ class HealthDataProcessor(
     private val pendingData = mutableMapOf<UByte, MutableList<PendingDataItem>>()
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null)
     private val lastTodayUpdateTime = MutableStateFlow(0L)
-    private val _healthDataUpdated = MutableSharedFlow<Unit>(replay = 0)
+    // Boulder: ohne Puffer wartete emit auf den langsamsten Sammler (den
+    // Health-Connect-Sync). Mit einem Platz, der den aelteren Wert verdraengt,
+    // wartet niemand, und der juengste Anstoss bleibt fuer den Nachzuegler liegen.
+    private val _healthDataUpdated = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
 
     val healthDataUpdated: SharedFlow<Unit> = _healthDataUpdated
 
-    suspend fun emitHealthDataUpdated() {
-        _healthDataUpdated.emit(Unit)
+    // Boulder: ein Schub der Uhr sind Dutzende Pakete; gemeldet wird er einmal.
+    private val schub = Schubsammler(scope) { _healthDataUpdated.tryEmit(Unit) }
+
+    // Boulder: am Schubsammler vorbei, weil das Debug-Befuellen alles auf
+    // einmal schreibt - es gibt keinen Schub abzuwarten.
+    fun emitHealthDataUpdated() {
+        _healthDataUpdated.tryEmit(Unit)
     }
 
     companion object {
@@ -134,6 +147,9 @@ class HealthDataProcessor(
                         }
                         // Today's data is included in the weekly update, no separate call needed
                         updateHealthStatsInDatabase(healthDao, healthStatDao, today, today.minus(DatePeriod(days = 29)), timeZone)
+                        // Boulder: die Neuberechnung kann laenger dauern als die Ruhe des
+                        // Schubsammlers; ohne eigenen Anstoss kaeme die Meldung vor den Zahlen.
+                        schub.stossAn()
                         lastTodayUpdateDate.value = today
                         lastTodayUpdateTime.value = now
                     } else {
@@ -205,7 +221,7 @@ class HealthDataProcessor(
             if (t.teil == 0) nachtDao.loescheAbschnitte(t.nacht.beginnUtc)
             nachtDao.speichereAbschnitte(t.abschnitte)
         }
-        emitHealthDataUpdated()
+        schub.stossAn()
         val n = teile.first().nacht
         return "Nacht ab ${n.beginnUtc}: ${n.schlafMinuten} min Schlaf, Teil ${teile.first().teil + 1}/${teile.first().teile}"
     }
@@ -247,8 +263,7 @@ class HealthDataProcessor(
             spo2Dao.insertSpo2Readings(parsed.spo2Readings)
             logger.d { "HEALTH_DATA: Inserted ${parsed.spo2Readings.size} SpO2 readings" }
         }
-        _healthDataUpdated.emit(Unit)
-        logger.d { "HEALTH_DATA: Health update event emitted successfully" }
+        schub.stossAn()
 
         return "${records.size} records (${totalSteps} steps)" +
             if (parsed.spo2Readings.isNotEmpty()) ", ${parsed.spo2Readings.size} SpO2" else ""
@@ -260,7 +275,7 @@ class HealthDataProcessor(
         if (records.isEmpty()) return null
 
         healthDao.insertOverlayDataWithDeduplication(records)
-        _healthDataUpdated.emit(Unit)
+        schub.stossAn()
 
         val totalDurationHours = kotlin.math.round(records.sumOf { it.duration } / 360.0) / 10.0
         return "${records.size} overlay records (${totalDurationHours}h total)"

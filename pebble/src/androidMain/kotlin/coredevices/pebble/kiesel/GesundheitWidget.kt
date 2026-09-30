@@ -13,6 +13,7 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
+import coredevices.pebble.health.Einzellauf
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,9 +37,18 @@ class GesundheitWidget : AppWidgetProvider() {
         val fertig = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                val stand = Gesundheitsdaten.lies(context, KoinPlatform.getKoin().get<HealthDataApi>())
-                val sicht = zeichne(context, stand, blick(context, stand))
-                ids.forEach { manager.updateAppWidget(it, sicht) }
+                // Boulder: jedes Zeichnen liest Datenbank und Akte ganz. Kommen
+                // Anstoesse dicht nacheinander, zeichnet der laufende Durchgang
+                // einmal nach, statt dass mehrere parallel dasselbe lesen.
+                val ausgang = zeichner.lauf {
+                    val stand = Gesundheitsdaten.lies(context, KoinPlatform.getKoin().get<HealthDataApi>())
+                    val sicht = zeichne(context, stand, blick(context, stand))
+                    val alle = manager.getAppWidgetIds(ComponentName(context, GesundheitWidget::class.java)) ?: intArrayOf()
+                    (ids.toSet() + alle.toSet()).forEach { manager.updateAppWidget(it, sicht) }
+                }
+                // Die Nachlaeufe sind begrenzt, damit dieses goAsync nicht ueber seine
+                // Frist waechst; was offen blieb, bekommt einen eigenen Broadcast.
+                if (ausgang == Einzellauf.Ausgang.OFFEN) stosseAn(context)
             } catch (e: Exception) {
                 Log.w("Widget", "Zeichnen: " + e.message)
             } finally {
@@ -48,6 +58,7 @@ class GesundheitWidget : AppWidgetProvider() {
     }
 
     companion object {
+        private val zeichner = Einzellauf(hoechstens = 2, beiFehler = { Log.w("Widget", "Zeichnen: " + it.message) })
         private const val DATEI = "kiesel-widget"
         private const val WUNSCH = "wunsch"
         private const val WUNSCH_BIS = "wunsch_bis"

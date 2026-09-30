@@ -60,6 +60,9 @@ internal object Kieselstrasse {
     const val STRASSE = 10002
     const val ANKUNFT = 10003      //< Sekunden seit 1970
     const val REST = 10004         //< Meter bis zum Ziel
+    // Nur im Kreisverkehr. Eine aeltere Uhr-Firmware kennt sie nicht und laesst sie liegen.
+    const val AUSFAHRT = 10005     //< Nummer der Ausfahrt, 1, 2, 3 ...
+    const val WINKEL = 10006       //< OsmAnds turn_angle in Grad, 0 geradeaus, + rechts
 
     private const val AKTION = "net.osmand.aidl.OsmandAidlServiceV2"
     val PAKETE = listOf("net.osmand.plus", "net.osmand", "net.osmand.dev")
@@ -416,18 +419,24 @@ internal object Kieselstrasse {
             }
             ersteAntwort = false
             val kuerzel = kurve.getString("next_turn_type")
+            val art = artAusText(kuerzel)
             val nr = ausfahrt(kuerzel)
             val name = kurve.getString("next_turn_name").orEmpty()
             // Im Kreisel ist die Ausfahrt die Anweisung, der Name nur die Bestaetigung.
+            // Die Nummer bleibt auch im Text: eine Uhr ohne AUSFAHRT zeigt sie sonst nirgends.
             val strasse = if (nr > 0) ctx.getString(R.string.ks_o_ausfahrt, nr) + (if (name.isBlank()) "" else " · $name") else name
-            melde(meter, artAusText(kuerzel), strasse, info.arrivalTime, info.leftDistance)
+            // Wohin die Ausfahrt zeigt - nur OsmAnds Winkel weiss das, die Nummer nicht.
+            // Auch ohne Nummer: die Richtung der Ausfahrt zeigt die Uhr dann trotzdem.
+            val kreisel = art == 13 || art == 14
+            val winkel = if (kreisel && kurve.containsKey("next_turn_angle")) winkelFuerUhr(kurve.getFloat("next_turn_angle")) else null
+            melde(meter, art, strasse, info.arrivalTime, info.leftDistance, nr, winkel)
             if (abruf.navigation(true)) stimme(ctx)
         } catch (e: Exception) {
             Log.w(TAG, "Nachfrage fehlgeschlagen: " + e.message)
         }
     }
 
-    private fun melde(meter: Int, art: Int, strasse: String, ankunft: Long, rest: Int) {
+    private fun melde(meter: Int, art: Int, strasse: String, ankunft: Long, rest: Int, ausfahrt: Int, winkel: Int?) {
         if (art == letzteArt && meter == letzteMeter) return
         val jetzt = jetzt()
         if (art == letzteArt && jetzt - letzterTakt < TAKT_MS) return
@@ -443,6 +452,8 @@ internal object Kieselstrasse {
         )
         if (ankunft > 0) felder[ANKUNFT] = ankunft.toInt()
         if (rest > 0) felder[REST] = rest
+        if (ausfahrt > 0) felder[AUSFAHRT] = ausfahrt
+        if (winkel != null) felder[WINKEL] = winkel
         sende(felder)
     }
 
@@ -487,6 +498,15 @@ internal object Kieselstrasse {
         s.startsWith("RNDB") -> 13
         s.startsWith("RNLB") -> 14
         else -> listOf("C", "TL", "TSLL", "TSHL", "TR", "TSLR", "TSHR", "KL", "KR", "TU", "TRU", "OFFR").indexOf(s) + 1
+    }
+
+    /** OsmAnds Winkel ganzzahlig und in -180..180, wie die Uhr ihn annimmt; null, wenn keiner. */
+    fun winkelFuerUhr(grad: Float): Int? {
+        if (grad.isNaN() || grad.isInfinite()) return null
+        var w = Math.round(grad) % 360
+        if (w > 180) w -= 360
+        if (w < -180) w += 360
+        return w
     }
 
     /** Die Ausfahrtnummer aus "RNDB3" - 0, wenn keine dasteht. */

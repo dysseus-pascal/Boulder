@@ -39,6 +39,7 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.rememberLibPebble
 import io.ktor.http.URLBuilder
+import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -197,10 +198,19 @@ internal fun normalizeWatchappSettingsUrl(url: String): String {
     val host = parsed.host.lowercase()
 
     val isLegacyRawGitHost = host == "cdn.rawgit.com" || host == "rawgit.com"
-    if (!isLegacyRawGitHost) return url
+    // Boulder: Klartext ist app-weit gesperrt (network_security_config), eine
+    // http-Seite laedt also nie. Die meisten Einstellungsseiten liegen auf Hosts
+    // mit https (github.io) - dorthin statt die Sperre fuer alle Watchapps
+    // aufzuheben.
+    val klartext = parsed.protocol == URLProtocol.HTTP
+    if (!isLegacyRawGitHost && !klartext) return url
 
     return URLBuilder(parsed).apply {
-        this.host = "raw.githack.com"
+        if (isLegacyRawGitHost) this.host = "raw.githack.com"
+        if (klartext) {
+            protocol = URLProtocol.HTTPS
+            if (port == 80) port = URLProtocol.HTTPS.defaultPort
+        }
     }.buildString()
 }
 

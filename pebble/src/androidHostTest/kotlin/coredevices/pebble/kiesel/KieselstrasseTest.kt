@@ -23,4 +23,14 @@ class KieselstrasseTest {
         assertEquals(0, Kieselstrasse.ausfahrt("TR"))
         assertEquals(0, Kieselstrasse.ausfahrt("RNDB"))
     }
+
+    @Test
+    fun winkel_fuer_die_uhr() {
+        assertEquals(90, Kieselstrasse.winkelFuerUhr(89.6f))
+        assertEquals(-90, Kieselstrasse.winkelFuerUhr(270f))
+        assertEquals(-180, Kieselstrasse.winkelFuerUhr(-180f))
+        assertEquals(179, Kieselstrasse.winkelFuerUhr(-181f))
+        assertEquals(0, Kieselstrasse.winkelFuerUhr(360f))
+        assertEquals(null, Kieselstrasse.winkelFuerUhr(Float.NaN))
+    }
 }

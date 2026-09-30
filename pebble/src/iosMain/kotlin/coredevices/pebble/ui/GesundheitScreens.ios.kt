@@ -19,6 +19,11 @@ actual fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: Strin
 }
 
 @Composable
+actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Health is only available on Android.")
+}
+
+@Composable
 actual fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Health is only available on Android.")
 }

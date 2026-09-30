@@ -47,8 +47,14 @@ internal data class GesundheitsStand(
     /** Schritte der letzten sieben Tage bis heute, aeltester zuerst; heute bis jetzt. */
     val wocheSchritte: List<Pair<LocalDate, Long>>,
     val nacht: Nacht?,
-    /** Ruhepulse der geladenen Naechte, aelteste zuerst - fuer den Schnitt neben der letzten Nacht. */
+    /**
+     * Ruhepulse der frueheren Naechte, aelteste zuerst, hoechstens sieben.
+     * OHNE DIE LETZTE NACHT: sie ist es, die mit dem Schnitt verglichen
+     * wird, und zoege ihn sonst zu sich.
+     */
     val ruhepulsWoche: List<Int>,
+    /** Die HRV derselben frueheren Naechte, wie [ruhepulsWoche]. */
+    val hrvWoche: List<Int>,
     /** Schlafminuten der letzten sieben Naechte, aelteste zuerst; 0 = keine Nacht. */
     val wocheSchlaf: List<Pair<LocalDate, Int>>,
     /** Puls der letzten 24 Stunden: Sekunde seit 1970, Schlaege je Minute. */
@@ -61,6 +67,8 @@ internal data class GesundheitsStand(
     val wasserZiel: Drinktervall.Ziel?,
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
+    /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
+    val letzteDaten: Instant?,
 )
 
 /** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
@@ -161,13 +169,19 @@ internal object Gesundheitsrechnung {
 
     /**
      * Die Bettzeit als Zeitpunkt: die Uhrzeit des letzten Einschlafens, sonst
-     * 22 Uhr, auf heute gelegt. Ist sie schon vorbei, null: "um 22:54 wirken
-     * noch 1 mg" ohne Datum laese sich als heute Abend, gemeint waere morgen.
+     * 22 Uhr, auf den laufenden Tag gelegt. Der Tag beginnt um sechs, damit
+     * 00:30 die kommende Nacht meint und nicht die vergangene. Ist sie schon
+     * vorbei, null: "um 22:54 wirken noch 1 mg" ohne Datum laese sich als
+     * heute Abend, gemeint waere morgen.
      */
     fun bettzeit(einschlafen: Instant?, jetzt: Instant, zone: ZoneId): Instant? {
         val uhrzeit = einschlafen?.atZone(zone)?.toLocalTime()?.withSecond(0)?.withNano(0) ?: LocalTime.of(22, 0)
-        return jetzt.atZone(zone).toLocalDate().atTime(uhrzeit).atZone(zone).toInstant().takeIf { it.isAfter(jetzt) }
+        val tag = jetzt.atZone(zone).minusHours(TAGESBEGINN_H).toLocalDate()
+        val bett = if (uhrzeit.hour < TAGESBEGINN_H) tag.plusDays(1) else tag
+        return bett.atTime(uhrzeit).atZone(zone).toInstant().takeIf { it.isAfter(jetzt) }
     }
+
+    private const val TAGESBEGINN_H = 6L
 
     /** Zusammenhaengende Stuecke einer Bin-Reihe: mehr als [luecke] Sekunden ohne Bin trennen sie. */
     fun stuecke(bins: List<Pulsbin>, luecke: Long = 900): List<List<Pulsbin>> {
@@ -208,9 +222,9 @@ internal object Gesundheitsdaten {
             .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
 
         val naechte = Gesundheitsrechnung.jeTag(
-            runCatching { api.getNaechte(anfang(heute.minusDays(8)), jetzt.epochSecond) }.getOrDefault(emptyList()), zone,
+            runCatching { api.getNaechte(anfang(heute.minusDays(VERGLEICHSNAECHTE + 2L)), jetzt.epochSecond) }.getOrDefault(emptyList()), zone,
         )
-        val letzte = naechte.lastOrNull()?.takeIf { jetzt.epochSecond - it.beginnUtc < 36 * 3600 }
+        val (letzte, frueher) = Gesundheitsrechnung.naechteTeilen(naechte, heute, zone)
         val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, runCatching { api.getNachtAbschnitte(it.beginnUtc) }.getOrDefault(emptyList())) }
         val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
@@ -246,7 +260,8 @@ internal object Gesundheitsdaten {
             kcal = (summe?.activeGramCalories ?: 0) / 1000,
             wocheSchritte = Gesundheitsrechnung.reihe(woche, tageswerte, 0L),
             nacht = nacht,
-            ruhepulsWoche = naechte.map { it.ruhepuls }.filter { it > 0 }.takeLast(7),
+            ruhepulsWoche = frueher.map { it.ruhepuls }.filter { it > 0 },
+            hrvWoche = frueher.map { it.hrv }.filter { it > 0 },
             wocheSchlaf = Gesundheitsrechnung.reihe(woche, schlafJeTag, 0),
             puls = puls,
             spo2 = spo2,
@@ -256,6 +271,8 @@ internal object Gesundheitsdaten {
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
+            // Die Fake-Bibliothek meldet 0 statt nichts.
+            letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
         )
     }
 

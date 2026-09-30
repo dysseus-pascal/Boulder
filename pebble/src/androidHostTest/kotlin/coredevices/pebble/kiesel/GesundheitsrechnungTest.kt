@@ -121,6 +121,11 @@ class GesundheitsbildRechnungTest {
         val zuerich = ZoneId.of("Europe/Zurich")
         val umstellung = LocalDate.of(2026, 10, 25).atTime(12, 0).atZone(zuerich).toInstant()
         assertEquals(LocalDate.of(2026, 10, 25).atTime(21, 0).toInstant(zone), Gesundheitsrechnung.bettzeit(null, umstellung, zuerich))
+        // Nach Mitternacht eingeschlafen: die Bettzeit liegt in der kommenden Nacht, nicht heute frueh.
+        val spaetEin = LocalDate.of(2026, 9, 30).atTime(0, 30).toInstant(zone)
+        assertEquals(LocalDate.of(2026, 10, 1).atTime(0, 30).toInstant(zone), Gesundheitsrechnung.bettzeit(spaetEin, mittag, zone))
+        // Um 01:00 ist 00:30 dieser Nacht vorbei.
+        assertNull(Gesundheitsrechnung.bettzeit(spaetEin, LocalDate.of(2026, 10, 1).atTime(1, 0).toInstant(zone), zone))
     }
 
     @Test

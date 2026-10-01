@@ -67,6 +67,10 @@ internal data class GesundheitsStand(
     val wasserZiel: Drinktervall.Ziel?,
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
+    /** Drinktervall auf der Uhr: nur dann Wasser und Koffein (siehe [UhrApps]). */
+    val mitDrinktervall: Boolean = true,
+    /** SupCycle auf der Uhr: nur dann die Praeparate. */
+    val mitSupCycle: Boolean = true,
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
 )
@@ -253,6 +257,7 @@ internal object Gesundheitsdaten {
             emptyList()
         }
 
+        val apps = UhrApps.installiert()
         GesundheitsStand(
             schritte = summe?.steps ?: 0,
             aktivMinuten = summe?.activeMinutes ?: 0,
@@ -271,6 +276,8 @@ internal object Gesundheitsdaten {
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
+            mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
+            mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
         )

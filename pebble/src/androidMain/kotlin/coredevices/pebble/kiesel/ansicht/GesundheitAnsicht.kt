@@ -415,23 +415,27 @@ private fun HeuteKarte(s: GesundheitsStand, wege: Gesundheitswege, zeigeKoffein:
             stringResource(R.string.ks_h_herz_n), pulsUnter, letzter?.second?.toString() ?: "–", "bpm",
             zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) },
         ) { wege.herz() }
-        Trenner()
 
-        val ziel = s.wasserZiel
-        val letztesGlas = s.glaeser.lastOrNull()
-        val wasserUnter = when {
-            letztesGlas == null -> stringResource(R.string.ks_h_kein_glas) + " · " +
-                (ziel?.let { stringResource(R.string.ks_h_ziel_liter, liter(it.ml) + " l") } ?: stringResource(R.string.ks_h_kein_ziel))
-            ziel != null -> pluralStringResource(R.plurals.ks_h_glaeser_von, ziel.glaeser, s.glaeser.size, ziel.glaeser, uhrzeit(context, letztesGlas))
-            else -> pluralStringResource(R.plurals.ks_h_glaeser_zuletzt, s.glaeser.size, s.glaeser.size, uhrzeit(context, letztesGlas)) +
-                " · " + stringResource(R.string.ks_h_kein_ziel)
+        // Wasser und Koffein nur mit Drinktervall, Praeparate nur mit SupCycle
+        // auf der Uhr (UhrApps) - sonst stuende hier "0 l" fuer jeden.
+        if (s.mitDrinktervall) {
+            Trenner()
+            val ziel = s.wasserZiel
+            val letztesGlas = s.glaeser.lastOrNull()
+            val wasserUnter = when {
+                letztesGlas == null -> stringResource(R.string.ks_h_kein_glas) + " · " +
+                    (ziel?.let { stringResource(R.string.ks_h_ziel_liter, liter(it.ml) + " l") } ?: stringResource(R.string.ks_h_kein_ziel))
+                ziel != null -> pluralStringResource(R.plurals.ks_h_glaeser_von, ziel.glaeser, s.glaeser.size, ziel.glaeser, uhrzeit(context, letztesGlas))
+                else -> pluralStringResource(R.plurals.ks_h_glaeser_zuletzt, s.glaeser.size, s.glaeser.size, uhrzeit(context, letztesGlas)) +
+                    " · " + stringResource(R.string.ks_h_kein_ziel)
+            }
+            Zeile(
+                stringResource(R.string.ks_h_wasser_n), wasserUnter, liter(s.wasserMl), "l",
+                zeichen = { Tonkreis(Zeichen.wasser, FLAECHE_WASSER, t.wasser) },
+            ) { wege.trend("ernaehrung") }
         }
-        Zeile(
-            stringResource(R.string.ks_h_wasser_n), wasserUnter, liter(s.wasserMl), "l",
-            zeichen = { Tonkreis(Zeichen.wasser, FLAECHE_WASSER, t.wasser) },
-        ) { wege.trend("ernaehrung") }
 
-        s.supplemente?.let { stand ->
+        s.supplemente?.takeIf { s.mitSupCycle }?.let { stand ->
             Trenner()
             val platz = stringResource(R.string.ks_s_platz_n)
             val z = Gesundheitsrechnung.praeparatzeile(stand.heute { String.format(platz, it) })
@@ -459,25 +463,27 @@ private fun HeuteKarte(s: GesundheitsStand, wege: Gesundheitswege, zeigeKoffein:
                 onClick = zeigePraeparate,
             )
         }
-        Trenner()
 
-        val aktiv = Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt()
-        val koffeinUnter = if (aktiv <= 0) stringResource(R.string.ks_h_koffein_keins) else {
-            val bett = Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, ZoneId.systemDefault())
-            bett?.let { stringResource(R.string.ks_h_koffein_bett, Gesundheitsrechnung.koffeinAktiv(s.koffein, it).roundToInt()) }
-                ?: stringResource(R.string.ks_h_wirkt_noch)
-        }
-        Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Zeile(
-                stringResource(R.string.ks_h_koffein_n), koffeinUnter, "$aktiv", "mg",
-                zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) },
-                onClick = zeigeKoffein, chevron = false, modifier = Modifier.weight(1f),
-            )
-            OutlinedIconButton(
-                onClick = zeigeKoffein, modifier = Modifier.padding(end = 10.dp).size(44.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            ) {
-                Icon(Zeichen.plus, stringResource(R.string.ks_h_koffein_dazu), Modifier.size(20.dp))
+        if (s.mitDrinktervall) {
+            Trenner()
+            val aktiv = Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt()
+            val koffeinUnter = if (aktiv <= 0) stringResource(R.string.ks_h_koffein_keins) else {
+                val bett = Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, ZoneId.systemDefault())
+                bett?.let { stringResource(R.string.ks_h_koffein_bett, Gesundheitsrechnung.koffeinAktiv(s.koffein, it).roundToInt()) }
+                    ?: stringResource(R.string.ks_h_wirkt_noch)
+            }
+            Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Zeile(
+                    stringResource(R.string.ks_h_koffein_n), koffeinUnter, "$aktiv", "mg",
+                    zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) },
+                    onClick = zeigeKoffein, chevron = false, modifier = Modifier.weight(1f),
+                )
+                OutlinedIconButton(
+                    onClick = zeigeKoffein, modifier = Modifier.padding(end = 10.dp).size(44.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) {
+                    Icon(Zeichen.plus, stringResource(R.string.ks_h_koffein_dazu), Modifier.size(20.dp))
+                }
             }
         }
     }

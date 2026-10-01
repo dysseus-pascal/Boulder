@@ -3,8 +3,11 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Mass
 import androidx.health.connect.client.units.Volume
 import coredevices.pebble.R
 import java.time.Duration
@@ -34,6 +37,10 @@ internal object Drinktervall {
     const val DT_GLASSES = 10001   //< das heutige Ziel in Glaesern, bei jeder Meldung
     const val DT_GLASS_ML = 10008
     const val DT_DRANK_AT = 10009
+    // Seit Drinktervall 1.14.0: ein getrunkener Kaffee, Zeitpunkt und Sorte
+    // (Sorte in den unteren vier Bits, Milch 0x10, Zucker 0x20).
+    const val DT_COFFEE_AT = 10012
+    const val DT_COFFEE_KIND = 10013
 
     /**
      * Wie weit zwei Eintraege auseinander liegen duerfen und trotzdem dasselbe
@@ -54,6 +61,50 @@ internal object Drinktervall {
     }
 
     suspend fun verarbeite(context: Context, n: KieselNachricht): String? {
+        // KAFFEE UND GLAS KOENNEN IN DERSELBEN MELDUNG STEHEN: die Uhr haengt
+        // von beiden Schlangen je das aelteste an. Beides wird eingetragen.
+        val kaffee = kaffee(context, n)
+        val wasser = wasser(context, n)
+        return listOfNotNull(kaffee, wasser).joinToString(" · ").ifEmpty { null }
+    }
+
+    /** Ein Kaffee aus Drinktervall: Koffein, kcal und Zucker in einem Ernaehrungseintrag. */
+    private suspend fun kaffee(context: Context, n: KieselNachricht): String? {
+        val wann = n.zahlen[DT_COFFEE_AT] ?: return null
+        val art = n.zahlen[DT_COFFEE_KIND] ?: return null
+        val p = Kaffeesorten.portion(art.toInt()) ?: return null
+        if (wann <= 0) return null
+        // Auch der Kaffee faehrt mit, bis das Telefon bestaetigt - also
+        // womoeglich zweimal.
+        if (!Riegel.neu(context, "drinktervall-kaffee", wann.toString())) return null
+
+        val beginn = minOf(Instant.ofEpochSecond(wann), Instant.now())
+        var name = context.getString(
+            when (p.sorte) {
+                Kaffeesorten.ESPRESSO -> R.string.ks_h_espresso
+                Kaffeesorten.LATTE_MACCHIATO -> R.string.ks_h_latte_macchiato
+                Kaffeesorten.ENERGY -> R.string.ks_h_energy_drink
+                else -> R.string.ks_h_kaffee
+            }
+        )
+        if (p.milch) name = context.getString(R.string.ks_h_mit_milch, name)
+        if (p.zucker) name = context.getString(R.string.ks_h_mit_zucker, name)
+        val satz = NutritionRecord(
+            startTime = beginn,
+            startZoneOffset = versatz(beginn),
+            endTime = beginn.plusSeconds(60),
+            endZoneOffset = versatz(beginn),
+            name = name,
+            caffeine = Mass.milligrams(p.koffeinMg),
+            energy = Energy.kilocalories(p.kcal),
+            sugar = if (p.zuckerG > 0) Mass.grams(p.zuckerG) else null,
+            metadata = Kieselsport.vonDerUhr("drinktervall-kaffee-$wann"),
+        )
+        return Kieselsport.schreibe(context, satz, context.getString(R.string.ks_w_kaffee_eingetragen, name), riegel = "drinktervall-kaffee")
+    }
+
+    /** Ein Glas Wasser aus Drinktervall - und nebenbei Ziel und Glasgroesse. */
+    private suspend fun wasser(context: Context, n: KieselNachricht): String? {
         val felder = n.zahlen
         // DIE GLASGROESSE NUR OHNE GLAS: traegt die Meldung ein Glas, steht in
         // GLASS_ML dessen Menge - und die kann eine andere sein.

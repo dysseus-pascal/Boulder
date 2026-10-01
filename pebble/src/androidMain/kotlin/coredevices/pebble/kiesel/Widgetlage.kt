@@ -105,7 +105,8 @@ internal object Widgetlage {
     private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), Zahlen.ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
     private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), Zahlen.ganz(b.aktivMin)?.plus(" min"), anteil(b.aktivMin, b.aktivZiel))
     private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), Zahlen.dauer(b.schlafMin), anteil(b.schlafMin, b.schlafZielMin))
-    private fun kWasser(b: Blick, t: Texte) = Kachel("wasser", t.text(R.string.ks_h_wasser_n), Zahlen.ganz(b.wasserMl)?.plus(" ml"), anteil(b.wasserMl, b.wasserZiel))
+    /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 ml". */
+    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Zahlen.ganz(it)?.plus(" ml"), anteil(it, b.wasserZiel)) }
 
     private fun anteil(zahl: Double?, ziel: Double?): Float {
         if (zahl == null || ziel == null || ziel <= 0) return 0f
@@ -135,7 +136,7 @@ internal object Widgetlage {
         return Lage(
             Art.MORGEN, t.text(R.string.ks_wl_nacht), t.text(R.string.ks_wl_geschlafen),
             Zahlen.dauer(min) ?: "—", "", satz, anteil(b.schlafMin, b.schlafZielMin),
-            listOf(kSchritte(b, t), kAktiv(b, t), kWasser(b, t)), null,
+            listOfNotNull(kSchritte(b, t), kAktiv(b, t), kWasser(b, t)), null,
         )
     }
 
@@ -150,7 +151,7 @@ internal object Widgetlage {
         return Lage(
             Art.TRAINING, t.text(R.string.ks_training), b.trainingName ?: t.text(R.string.ks_training),
             Zahlen.dauer(b.trainingMin?.toDouble()) ?: "—", "", satz, null,
-            listOf(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), b.trainingBeginn,
+            listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), b.trainingBeginn,
         )
     }
 
@@ -210,13 +211,13 @@ internal object Widgetlage {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_h_wasser_n),
                 Zahlen.ganz(b.wasserMl) ?: "0", "ml", satz, anteil(b.wasserMl, b.wasserZiel),
-                listOf(kSchritte(b, t), kAktiv(b, t), kSchlaf(b, t)), null,
+                listOfNotNull(kSchritte(b, t), kAktiv(b, t), kSchlaf(b, t)), null,
             )
         } else {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_w_praeparate),
                 b.offenePraeparate.size.toString(), t.text(R.string.ks_wl_offen), satz, null,
-                listOf(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+                listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), null,
             )
         }
     }
@@ -241,7 +242,7 @@ internal object Widgetlage {
             Zahlen.ganz(b.schritte) ?: "—", "",
             teile.ifEmpty { listOf(t.text(R.string.ks_wl_tag_eingetragen)) }.joinToString(" · "),
             anteil(b.schritte, b.schritteZiel),
-            listOf(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+            listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
         )
     }
 
@@ -257,7 +258,7 @@ internal object Widgetlage {
         return Lage(
             Art.TAG, t.text(R.string.ks_h_heute), t.text(R.string.ks_h_schritte),
             Zahlen.ganz(b.schritte) ?: "—", "", satz, anteil(b.schritte, b.schritteZiel),
-            listOf(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+            listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
         )
     }
 }

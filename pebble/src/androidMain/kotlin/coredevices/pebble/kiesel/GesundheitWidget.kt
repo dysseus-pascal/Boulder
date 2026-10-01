@@ -121,11 +121,12 @@ class GesundheitWidget : AppWidgetProvider() {
                 schritteZiel = 10_000.0,
                 aktivMin = s.aktivMinuten.toDouble(),
                 aktivZiel = 30.0,
-                wasserMl = s.wasserMl.toDouble(),
-                wasserZiel = s.wasserZiel?.ml?.toDouble(),
+                // Ohne Drinktervall keine Wasserkachel und keine Mahnung (UhrApps).
+                wasserMl = s.wasserMl.toDouble().takeIf { s.mitDrinktervall },
+                wasserZiel = s.wasserZiel?.ml?.toDouble()?.takeIf { s.mitDrinktervall },
                 glasMl = (s.wasserZiel?.glasMl ?: 300).toDouble(),
-                offenePraeparate = s.supplemente?.heute { String.format(platz, it) }?.filter { !it.genommen }?.map { it.name }.orEmpty(),
-                koffeinMg = s.koffein.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second },
+                offenePraeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }?.filter { !it.genommen }?.map { it.name }.orEmpty(),
+                koffeinMg = s.koffein.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second }.takeIf { s.mitDrinktervall },
                 wunsch = wunsch,
             )
         }
@@ -171,6 +172,8 @@ class GesundheitWidget : AppWidgetProvider() {
                 listOf(R.id.w_k2, R.id.w_k2_name, R.id.w_k2_wert, R.id.w_k2_balken),
                 listOf(R.id.w_k3, R.id.w_k3_name, R.id.w_k3_wert, R.id.w_k3_balken),
             )
+            // Fehlt eine Kachel (Wasser ohne Drinktervall), bleibt ihr Platz leer.
+            felder.forEachIndexed { i, f -> v.setViewVisibility(f[0], if (i < lage.kacheln.size) View.VISIBLE else View.GONE) }
             lage.kacheln.take(3).forEachIndexed { i, k ->
                 val (wurzel, name, wert, balken) = felder[i]
                 v.setTextViewText(name, k.name)

@@ -33,6 +33,8 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Drinktervall
 import coredevices.pebble.kiesel.Reihen
+import coredevices.pebble.kiesel.SupCycle
+import coredevices.pebble.kiesel.UhrApps
 import coredevices.pebble.kiesel.Trenddaten
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import org.koin.compose.koinInject
@@ -58,6 +60,9 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val api = koinInject<HealthDataApi>()
     var reihen by remember { mutableStateOf<Reihen?>(null) }
     LaunchedEffect(Unit) { reihen = Trenddaten.lies(context, api) }
+    // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
+    var mitSupCycle by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { mitSupCycle = UhrApps.hat(UhrApps.installiert(), SupCycle.UUID) }
     val titel = stringResource(
         when (gruppe) {
             "schlaf" -> R.string.ks_tr_schlaf
@@ -94,7 +99,7 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
             val ab = Auswertung.typischeWocheAb(erster)
             Leise(if (ab > heute) stringResource(R.string.ks_trn_woche_ab, datum(ab)) else stringResource(R.string.ks_trn_woche_spaeter))
         }
-        if (gruppe == "ernaehrung") Praeparattrend(d, grenze, heute)
+        if (gruppe == "ernaehrung" && mitSupCycle) Praeparattrend(d, grenze, heute)
 
         val mitWochen = getragen.filter { bilder.getValue(it.spalte).wochen.size >= 3 }
         mitWochen.forEach { Wochen(it, bilder.getValue(it.spalte), heute) }

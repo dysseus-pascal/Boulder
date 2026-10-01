@@ -20,6 +20,10 @@
     <string name="ks_h_espresso">Espresso</string>
     <string name="ks_h_tee">Tea</string>
     <string name="ks_h_energy">Energy</string>
+    <string name="ks_h_latte_macchiato">Latte macchiato</string>
+    <string name="ks_h_energy_drink">Energy drink</string>
+    <string name="ks_h_mit_milch">%1$s, milk</string>
+    <string name="ks_h_mit_zucker">%1$s, sugar</string>
     <string name="ks_h_wach">Awake</string>
     <string name="ks_h_frueher">Earlier</string>
     <string name="ks_h_spaeter">Later</string>

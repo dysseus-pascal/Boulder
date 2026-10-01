@@ -359,7 +359,7 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                 var zucker by remember(b) { mutableStateOf(start?.third ?: false) }
                 val sorten = listOf(
                     Kaffeesorten.ESPRESSO to R.string.ks_h_espresso, Kaffeesorten.KAFFEE to R.string.ks_h_kaffee,
-                    Kaffeesorten.LATTE_MACCHIATO to R.string.ks_h_latte_macchiato, Kaffeesorten.ENERGY to R.string.ks_h_energy_drink,
+                    Kaffeesorten.TEE to R.string.ks_h_tee, Kaffeesorten.ENERGY to R.string.ks_h_energy_drink,
                 )
                 sorten.forEach { (k, name) ->
                     Row(
@@ -371,10 +371,11 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                     }
                 }
                 Trenner(14.dp)
-                // Milch nur beim Kaffee - wie auf der Uhr.
-                if (sorte == Kaffeesorten.KAFFEE) Haken(stringResource(R.string.ks_b_milch), milch) { milch = it }
+                // Milch zu allem ausser dem Energy-Drink - wie auf der Uhr.
+                val mitMilch = sorte != Kaffeesorten.ENERGY
+                if (mitMilch) Haken(stringResource(R.string.ks_b_milch), milch) { milch = it }
                 Haken(stringResource(R.string.ks_b_zucker), zucker) { zucker = it }
-                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && sorte == Kaffeesorten.KAFFEE, zucker))
+                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && mitMilch, zucker))
                 if (p != null) Text(
                     stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()),
                     Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -384,7 +385,7 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                         Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && sorte == Kaffeesorten.KAFFEE, zucker) } }) {
+                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && mitMilch, zucker) } }) {
                         Text(stringResource(R.string.ks_b_speichern))
                     }
                 }

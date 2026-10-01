@@ -7,7 +7,8 @@ import coredevices.pebble.R
  * Was ein Kaffee aus Drinktervall in die Akte bringt: Koffein, kcal, Zucker.
  *
  * DIE NUMMERN KOMMEN VON DER UHR (CoffeeKind in Drinktervalls src/c/coffee.h)
- * und sind fest: 0 Espresso, 1 Kaffee, 2 Latte macchiato, 3 Energy-Drink.
+ * und sind fest: 0 Espresso, 1 Kaffee, 2 Tee (bis Drinktervall 1.16 Latte
+ * macchiato), 3 Energy-Drink.
  * Milch und Zucker stehen als Bits ueber der Sorte (COFFEE_KIND).
  *
  * Die Werte sind Durchschnitte fuer eine gewoehnliche Portion - genauer kann
@@ -16,7 +17,7 @@ import coredevices.pebble.R
 internal object Kaffeesorten {
     const val ESPRESSO = 0
     const val KAFFEE = 1
-    const val LATTE_MACCHIATO = 2
+    const val TEE = 2
     const val ENERGY = 3
     /** Ein eigenes Getraenk aus Drinktervalls Einstellungen: Werte kommen von der Uhr. */
     const val EIGEN = 4
@@ -27,8 +28,9 @@ internal object Kaffeesorten {
     /** Ein Beutel Zucker, 4 g. */
     private const val ZUCKER_G = 4.0
     private const val KCAL_JE_G_ZUCKER = 4.0
-    /** Ein Schuss Vollmilch in den Kaffee, 30 ml. */
+    /** Ein Schuss Vollmilch in Kaffee oder Tee, 30 ml - in den Espresso die Haelfte. */
     private const val MILCH_KCAL = 19.0
+    private const val MILCH_KCAL_ESPRESSO = 10.0
 
     data class Portion(val sorte: Int, val milch: Boolean, val zucker: Boolean, val koffeinMg: Double, val kcal: Double, val zuckerG: Double)
 
@@ -36,15 +38,15 @@ internal object Kaffeesorten {
     fun portion(art: Int): Portion? {
         val sorte = art and 0x0F
         val zucker = art and ZUCKER != 0
-        // Milch gibt es nur beim Kaffee: beim Macchiato gehoert sie zur Sorte.
-        val milch = sorte == KAFFEE && art and MILCH != 0
+        // Milch zu allem ausser dem Energy-Drink (seit Drinktervall 1.17).
+        val milch = sorte != ENERGY && art and MILCH != 0
         return when (sorte) {
             // 30 ml Espresso: 63 mg Koffein, praktisch ohne Energie.
-            ESPRESSO -> Portion(sorte, false, zucker, 63.0, 2.0 + zuckerKcal(zucker), zuckerG(zucker))
+            ESPRESSO -> Portion(sorte, milch, zucker, 63.0, 2.0 + (if (milch) MILCH_KCAL_ESPRESSO else 0.0) + zuckerKcal(zucker), zuckerG(zucker))
             // Eine Tasse Filterkaffee, 2 dl.
             KAFFEE -> Portion(sorte, milch, zucker, 95.0, 2.0 + (if (milch) MILCH_KCAL else 0.0) + zuckerKcal(zucker), zuckerG(zucker))
-            // Ein Espresso auf 2 dl Milch.
-            LATTE_MACCHIATO -> Portion(sorte, false, zucker, 63.0, 130.0 + zuckerKcal(zucker), zuckerG(zucker))
+            // Eine Tasse Schwarztee, 2 dl: etwa 40 mg Koffein.
+            TEE -> Portion(sorte, milch, zucker, 40.0, 2.0 + (if (milch) MILCH_KCAL else 0.0) + zuckerKcal(zucker), zuckerG(zucker))
             // Eine Dose, 250 ml: mit Zucker sind es 27 g davon, ohne bleibt fast nichts.
             ENERGY -> if (zucker) Portion(sorte, false, true, 80.0, 112.0, 27.0) else Portion(sorte, false, false, 80.0, 8.0, 0.0)
             else -> null
@@ -60,7 +62,7 @@ internal object Kaffeesorten {
 
     private fun sortenId(sorte: Int): Int = when (sorte) {
         ESPRESSO -> R.string.ks_h_espresso
-        LATTE_MACCHIATO -> R.string.ks_h_latte_macchiato
+        TEE -> R.string.ks_h_tee
         ENERGY -> R.string.ks_h_energy_drink
         else -> R.string.ks_h_kaffee
     }
@@ -83,7 +85,7 @@ internal object Kaffeesorten {
         var rest = name
         val mitZucker = rest.endsWith(zucker).also { if (it) rest = rest.removeSuffix(zucker) }
         val mitMilch = rest.endsWith(milch).also { if (it) rest = rest.removeSuffix(milch) }
-        val sorte = listOf(ESPRESSO, KAFFEE, LATTE_MACCHIATO, ENERGY).firstOrNull { context.getString(sortenId(it)) == rest }
+        val sorte = listOf(ESPRESSO, KAFFEE, TEE, ENERGY).firstOrNull { context.getString(sortenId(it)) == rest }
             // Die Handeingabe schreibt "Energy" statt "Energy drink".
             ?: if (rest == context.getString(R.string.ks_h_energy)) ENERGY else null
         return sorte?.let { Triple(it, mitMilch, mitZucker) }

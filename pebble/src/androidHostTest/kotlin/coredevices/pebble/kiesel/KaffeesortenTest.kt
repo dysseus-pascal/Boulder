@@ -21,11 +21,18 @@ class KaffeesortenTest {
     }
 
     @Test
-    fun milchZaehltNurBeimKaffee() {
-        // Ein alter Milch-Haken beim Espresso darf keine kcal bringen.
-        val p = Kaffeesorten.portion(Kaffeesorten.ESPRESSO or 0x10)!!
+    fun milchAuchBeimEspressoUndTee() {
+        // Seit Drinktervall 1.17 hat jede Kaffeeart Milch - der Espresso einen kleinen Schuss.
+        assertEquals(12.0, Kaffeesorten.portion(Kaffeesorten.ESPRESSO or 0x10)!!.kcal)
+        assertEquals(21.0, Kaffeesorten.portion(Kaffeesorten.TEE or 0x10)!!.kcal)
+        assertEquals(40.0, Kaffeesorten.portion(Kaffeesorten.TEE)!!.koffeinMg)
+    }
+
+    @Test
+    fun keineMilchImEnergyDrink() {
+        val p = Kaffeesorten.portion(Kaffeesorten.ENERGY or 0x10)!!
         assertEquals(false, p.milch)
-        assertEquals(2.0, p.kcal)
+        assertEquals(8.0, p.kcal)
     }
 
     @Test

@@ -45,4 +45,6 @@
     <string name="ks_s_davon_von">%1$d of %2$d supplements</string>
     <string name="ks_s_praeparat_n">Supplement %1$d</string>
     <string name="ks_s_platz_n">Slot %1$d</string>
+    <string name="ks_e_nachtexport">Export last night</string>
+    <string name="ks_e_nachtexport_text">Minute data of the last night as CSV, for tuning sleep stages</string>
 </resources>

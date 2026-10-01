@@ -23,10 +23,13 @@ import coredevices.pebble.health.HealthConnectPermissionBridge
 import coredevices.pebble.kiesel.KIESEL_RECHTE
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
+import coredevices.pebble.kiesel.Nachtexport
 import coredevices.pebble.kiesel.Sichern
 import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingsDaten
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 /**
  * Die Einstellungen der Kiesel-Teile als Eintraege in Gravels Liste: unter
@@ -37,6 +40,7 @@ import kotlinx.coroutines.launch
 actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val api = koinInject<HealthDataApi>()
     // Zurueck aus den Systemeinstellungen oder aus OsmAnd: Rechte und Lage neu lesen.
     var neu by remember { mutableIntStateOf(0) }
     val osmand = Kieselstrasse.osmandPaket(context)
@@ -113,6 +117,20 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
             section = Section.Sport,
             keywords = "log kieselsport drinktervall supcycle",
             action = gehe(PebbleNavBarRoutes.ProtokollRoute),
+        ),
+        // Voruebergehend, bis die Schlafregeln neben Fitbit passen (Nachtexport.kt).
+        basicSettingsActionItem(
+            title = stringResource(R.string.ks_e_nachtexport),
+            description = stringResource(R.string.ks_e_nachtexport_text),
+            topLevelType = TopLevelType.Phone,
+            section = Section.Debug,
+            keywords = "export night sleep csv minutes",
+            action = {
+                scope.launch {
+                    Nachtexport.csv(api)?.let { (name, text) -> Nachtexport.teile(context, name, text) }
+                }
+                Unit
+            },
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_e_osmand),

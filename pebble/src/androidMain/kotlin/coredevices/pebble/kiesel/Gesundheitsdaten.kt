@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import android.util.Log
+import coredevices.pebble.R
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -39,6 +40,9 @@ internal data class Nacht(
     val mitPhasen: Boolean get() = phasen[1] + phasen[2] + phasen[3] > 0
 }
 
+/** Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein Praeparat. */
+internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?)
+
 internal data class GesundheitsStand(
     val schritte: Long,
     val aktivMinuten: Long,
@@ -71,6 +75,8 @@ internal data class GesundheitsStand(
     val mitDrinktervall: Boolean = true,
     /** SupCycle auf der Uhr: nur dann die Praeparate. */
     val mitSupCycle: Boolean = true,
+    /** Getraenke und Praeparate von heute, fuer den Tagesstrahl. */
+    val eintraege: List<Tageseintrag> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
 )
@@ -249,12 +255,20 @@ internal object Gesundheitsdaten {
         val wasserJeTag = wasser.groupBy { it.startTime.atZone(zone).toLocalDate() }
             .mapValues { (_, r) -> r.sumOf { it.volume.inMilliliters }.toInt() }
         val heuteWasser = wasser.filter { it.startTime.atZone(zone).toLocalDate() == heute }
-        val koffein = try {
-            klient?.liesOderEigene(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt))
-                .orEmpty().mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
+        val nahrung = try {
+            klient?.liesOderEigene(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt)).orEmpty()
         } catch (e: Exception) {
-            Log.w(TAG, "Koffein lesen: " + e.message)
+            Log.w(TAG, "Ernaehrung lesen: " + e.message)
             emptyList()
+        }
+        val koffein = nahrung.mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
+        // WAS ES WAR, SAGT DIE KENNUNG: SupCycle schreibt "supcycle-...", alles
+        // andere mit Namen oder Koffein ist ein Getraenk.
+        val eintraege = nahrung.filter { it.startTime.atZone(zone).toLocalDate() == heute }.mapNotNull { r ->
+            val praeparat = r.metadata.clientRecordId?.startsWith("supcycle-") == true
+            val mg = r.caffeine?.inMilligrams?.takeIf { it > 0 }
+            val name = r.name?.ifBlank { null } ?: if (mg != null) context.getString(R.string.ks_h_koffein_n) else return@mapNotNull null
+            Tageseintrag(r.startTime, praeparat, name, mg)
         }
 
         val apps = UhrApps.installiert()
@@ -278,6 +292,7 @@ internal object Gesundheitsdaten {
             koffein = koffein.sortedBy { it.first },
             mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
             mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
+            eintraege = eintraege.sortedByDescending { it.zeit },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
         )

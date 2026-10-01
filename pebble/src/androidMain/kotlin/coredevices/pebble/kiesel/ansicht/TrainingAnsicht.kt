@@ -80,6 +80,9 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.R
 import coredevices.pebble.health.HealthConnectPermissionBridge
 import coredevices.pebble.kiesel.KIESEL_RECHTE
@@ -199,11 +202,11 @@ internal class Sportwege(
 )
 
 /**
- * Der Sport-Reiter nach dem Entwurf "Empfehlung": oben die Woche in einem Satz
- * und einer Reihe Tage, darunter das letzte Training gross und drei weitere
- * als Zeilen. DIE LANGE LISTE UND DIE BILDER LIEGEN EINE EBENE TIEFER: wer
- * den Reiter oeffnet, will wissen, was diese Woche war - nicht ein
- * Vierteljahr durchblaettern.
+ * Der Sport-Reiter nach Konzept B "Das letzte Training zuerst": oben das
+ * letzte Training gross mit seiner Strecke, darunter die Woche in drei Zahlen
+ * und einer Reihe Tage, dann die drei davor. DIE LANGE LISTE UND DIE BILDER
+ * LIEGEN EINE EBENE TIEFER: wer den Reiter oeffnet, will sehen, was zuletzt
+ * war - nicht ein Vierteljahr durchblaettern.
  */
 @Composable
 internal fun SportAnsicht(wege: Sportwege) {
@@ -212,6 +215,7 @@ internal fun SportAnsicht(wege: Sportwege) {
     var daten by remember { mutableStateOf<TrainingsUebersicht?>(null) }
     var fehlendeRechte by remember { mutableStateOf<Set<String>>(emptySet()) }
     var puls by remember { mutableStateOf<Int?>(null) }
+    var punkte by remember { mutableStateOf<List<Spur.Punkt>>(emptyList()) }
     var neu by remember { mutableIntStateOf(0) }
     var ortsstand by remember { mutableIntStateOf(0) }
     // Zurueck aus den Systemeinstellungen: dort kann sich die Erlaubnis geaendert haben.
@@ -222,6 +226,10 @@ internal fun SportAnsicht(wege: Sportwege) {
         daten = d
         // Erst die Seite, dann der Puls: die Abfrage haelt sonst jede Rueckkehr auf.
         puls = d.trainings.firstOrNull()?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }
+        // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein Akte-Zugriff.
+        punkte = d.trainings.firstOrNull()?.let { t ->
+            withContext(Dispatchers.IO) { runCatching { Spur.lies(context, t.sitzung.startTime.epochSecond) }.getOrDefault(emptyList()) }
+        }.orEmpty()
     }
     val ortStarter = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { ortsstand++ }
 
@@ -269,22 +277,15 @@ internal fun SportAnsicht(wege: Sportwege) {
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { Wochenkarte(d.trainings, heute, wege) }
         if (d.trainings.isEmpty()) {
+            item { Wochenkarte(d.trainings, heute, wege) }
             if (noetig.isNotEmpty()) item { Zeilenkarte(stringResource(R.string.ks_sp_einrichten), noetig) }
         } else {
-            item { LetzteKarte(d.trainings, puls, wege) }
-            item {
-                val trends: @Composable () -> Unit = {
-                    Zeile(
-                        stringResource(R.string.ks_h_trends), stringResource(R.string.ks_sp_trends_unter),
-                        zeichen = { Tonkreis(Zeichen.trend, FLAECHE_PRAEPARAT, toene().bewegung, 0.18f) },
-                        rechts = { Minibalken(Sportrechnung.achtWochen(einheiten, heute)) },
-                        onClick = wege.trends,
-                    )
-                }
-                Zeilenkarte(stringResource(R.string.ks_h_genauer), listOf(trends) + noetig)
-            }
+            val t = d.trainings.first()
+            item { Kasten { Grosses(t, puls, punkte) { wege.detail(t.id) } } }
+            item { Wochenkarte(d.trainings, heute, wege) }
+            if (d.trainings.size > 1) item { DavorKarte(d.trainings.drop(1).take(3), wege) }
+            if (noetig.isNotEmpty()) item { Zeilenkarte(stringResource(R.string.ks_sp_einrichten), noetig) }
         }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -292,58 +293,45 @@ internal fun SportAnsicht(wege: Sportwege) {
 
 @Composable
 private fun Wochenkarte(trainings: List<TrainingEintrag>, heute: LocalDate, wege: Sportwege) {
-    val context = LocalContext.current
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val einheiten = trainings.map { it.einheit }
     Kasten {
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            val letzte = trainings.firstOrNull()
-            if (letzte == null) {
+        if (trainings.isEmpty()) {
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(stringResource(R.string.ks_sp_leer), fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
                 Text(stringResource(R.string.ks_sp_leer_unter), fontSize = 14.sp, lineHeight = 20.sp, color = grau)
-                return@Column
             }
-            val lage = Sportrechnung.lage(einheiten, letzte.einheit, heute)
-            val art = stringResource(letzte.sport.nameId)
-            val tag = letzte.einheit.tag
-            val wann = when (lage.tageHer ?: 0L) {
-                0L -> stringResource(R.string.ks_h_heute_klein)
-                1L -> stringResource(R.string.ks_h_gestern_klein)
-                in 2L..6L -> stringResource(R.string.ks_sp_am, tag.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()))
-                else -> stringResource(
-                    R.string.ks_sp_am,
-                    DateUtils.formatDateTime(
-                        context, tag.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-                        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH or DateUtils.FORMAT_NO_YEAR,
-                    ),
-                )
-            }
-            val satz = if (lage.minuten > 0) stringResource(R.string.ks_sp_satz, art, wann, dauerText(lage.minuten))
-            else stringResource(R.string.ks_sp_satz_nichts, art, wann)
-            Text(
-                buildAnnotatedString {
-                    // Die Sportart vorn in ihrer Farbe, wie das Urteil auf der Health-Seite.
-                    if (satz.startsWith(art)) {
-                        withStyle(SpanStyle(color = letzte.sport.ton())) { append(art) }
-                        append(satz.substring(art.length))
-                    } else append(satz)
-                },
-                fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold,
-            )
-            val unter = listOfNotNull(
-                if (lage.anzahl > 0) pluralStringResource(R.plurals.ks_sp_anzahl, lage.anzahl, lage.anzahl) else null,
-                if (lage.vorwoche > 0) stringResource(R.string.ks_sp_vorwoche, dauerText(lage.vorwoche)) else stringResource(R.string.ks_sp_vorwoche_keins),
-            ).joinToString(" · ").replaceFirstChar { it.titlecase(Locale.getDefault()) }
-            Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(unter, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, color = grau)
-                Weiterlink(stringResource(R.string.ks_h_trends), wege.trends)
-            }
+            return@Kasten
         }
-        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        val lage = Sportrechnung.lage(einheiten, trainings.first().einheit, heute)
+        val montag = heute.with(java.time.DayOfWeek.MONDAY)
+        val meter = trainings.filter { !it.einheit.tag.isBefore(montag) && !it.einheit.tag.isAfter(heute) }.sumOf { it.meter }
+        Kopf(
+            stringResource(R.string.ks_sp_diese_woche),
+            "· " + if (lage.vorwoche > 0) stringResource(R.string.ks_sp_vorwoche, dauerText(lage.vorwoche)) else stringResource(R.string.ks_sp_vorwoche_keins),
+            stringResource(R.string.ks_h_trends), wege.trends,
+        )
+        // Drei Zahlen statt eines Satzes: wie oft, wie lange, wie weit.
+        Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 2.dp), horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+            val (zeit, einheit) = dauerTeile(lage.minuten)
+            Kennzahl("${lage.anzahl}", null, stringResource(R.string.ks_sp_trainings))
+            Kennzahl(zeit, einheit, stringResource(R.string.ks_sp_zeit))
+            if (meter > 0) Kennzahl(String.format(Locale.getDefault(), "%.1f", meter / 1000), "km", stringResource(R.string.ks_t_strecke))
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Sportrechnung.reihe(einheiten, heute).forEach { r ->
                 Tagesfeld(r, heute, Modifier.weight(1f), if (r.haupt != null) ({ wege.alle(r.tag) }) else null)
             }
         }
+    }
+}
+
+/** Eine Zahl mit Einheit und Namen darunter - wie die Werte des grossen Trainings. */
+@Composable
+private fun Kennzahl(zahl: String, einheit: String?, name: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(zahlMitEinheit(zahl, einheit), lineHeight = 26.sp, maxLines = 1, softWrap = false)
+        Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -382,16 +370,13 @@ private fun Tagesfeld(r: Reihentag, heute: LocalDate, modifier: Modifier, onClic
     }
 }
 
-/** Das letzte Training gross, die drei davor als Zeilen - der Rest liegt in "All workouts". */
+/** Die drei Trainings vor dem letzten als Zeilen - der Rest liegt in "All workouts". */
 @Composable
-private fun LetzteKarte(trainings: List<TrainingEintrag>, puls: Int?, wege: Sportwege) {
+private fun DavorKarte(trainings: List<TrainingEintrag>, wege: Sportwege) {
     val context = LocalContext.current
-    val t = trainings.first()
     Kasten {
-        Kopf(stringResource(R.string.ks_sp_zuletzt), link = stringResource(R.string.ks_sp_alle), onLink = { wege.alle(null) })
-        Grosses(t, puls) { wege.detail(t.id) }
-        if (trainings.size > 1) Trenner(14.dp)
-        trainings.drop(1).take(3).forEachIndexed { i, e ->
+        Kopf(stringResource(R.string.ks_sp_davor), link = stringResource(R.string.ks_sp_alle), onLink = { wege.alle(null) })
+        trainings.forEachIndexed { i, e ->
             if (i > 0) Trenner()
             TrainingZeile(e, trainingszeit(context, e.sitzung.startTime, true)) { wege.detail(e.id) }
         }
@@ -400,7 +385,7 @@ private fun LetzteKarte(trainings: List<TrainingEintrag>, puls: Int?, wege: Spor
 }
 
 @Composable
-private fun Grosses(t: TrainingEintrag, puls: Int?, onClick: () -> Unit) {
+private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, onClick: () -> Unit) {
     val context = LocalContext.current
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val sekunden = Duration.between(t.sitzung.startTime, t.sitzung.endTime).seconds
@@ -409,6 +394,7 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, onClick: () -> Unit) {
     val streckeName = stringResource(R.string.ks_t_strecke)
     val tempoName = stringResource(if (t.sport.rad) R.string.ks_t_tempo_rad else R.string.ks_t_tempo)
     val pulsName = stringResource(R.string.ks_t_puls_schnitt)
+    val aufName = stringResource(R.string.ks_t_aufstieg)
     // Fehlt Strecke oder Puls, fehlt die Kennzahl - nie ein Strich an ihrer Stelle.
     val werte = buildList {
         add(Triple(dZahl, dEinheit, dauerName))
@@ -419,7 +405,14 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, onClick: () -> Unit) {
             add(Triple(String.format(Locale.getDefault(), "%d:%02d", it / 60, it % 60), "/km", tempoName))
         }
         puls?.let { add(Triple("$it", "bpm", pulsName)) }
-    }
+        // Der Aufstieg statt des Tempos, wenn es bergauf ging: er sagt mehr ueber die Tour.
+        val auf = if (punkte.size >= 2) Spur.hoehenmeter(punkte) else 0.0
+        if (auf >= 10) {
+            val i = indexOfFirst { it.third == tempoName }
+            val wert = Triple(String.format(Locale.getDefault(), "%.0f", auf), "m", aufName)
+            if (i >= 0) set(i, wert) else add(wert)
+        }
+    }.take(4)
     Column(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, end = 12.dp, top = 2.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -432,6 +425,7 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, onClick: () -> Unit) {
             }
             Icon(Zeichen.weiter, null, Modifier.size(16.dp), tint = grau)
         }
+        if (punkte.size >= 2) Streckenbild(punkte, t.sport.ton())
         Row(Modifier.fillMaxWidth().padding(start = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             werte.forEach { (zahl, einheit, name) ->
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -442,6 +436,42 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, onClick: () -> Unit) {
             // Leere Faecher halten das Raster: zwei Werte stehen links, nicht gestreckt.
             repeat(4 - werte.size) { Spacer(Modifier.weight(1f)) }
         }
+    }
+}
+
+/**
+ * Die Strecke als Linie auf dunklem Grund, ohne Kartenkacheln: eine echte
+ * Karte in der Liste faenge jedes Wischen ab und laedt fuer einen Blick zu
+ * viel. Die richtige Karte hat das Detail.
+ */
+@Composable
+private fun Streckenbild(punkte: List<Spur.Punkt>, ton: Color) {
+    val grund = MaterialTheme.colorScheme.surfaceVariant
+    val rand = MaterialTheme.colorScheme.onSurface
+    Canvas(Modifier.fillMaxWidth().height(132.dp).clip(RoundedCornerShape(10.dp)).background(grund)) {
+        val lat = punkte.map { it.lat }
+        val lon = punkte.map { it.lon }
+        // Laengengrade schrumpfen zum Pol hin: mit dem Kosinus bleibt die Form echt.
+        val k = Math.cos(Math.toRadians(lat.average()))
+        val bx = (lon.max() - lon.min()) * k
+        val by = lat.max() - lat.min()
+        if (bx <= 0 && by <= 0) return@Canvas
+        val pad = 14.dp.toPx()
+        val mass = minOf((size.width - 2 * pad) / bx.coerceAtLeast(1e-9), (size.height - 2 * pad) / by.coerceAtLeast(1e-9))
+        val ox = (size.width - bx * mass) / 2
+        val oy = (size.height - by * mass) / 2
+        fun p(i: Int) = Offset(
+            (ox + (lon[i] - lon.min()) * k * mass).toFloat(),
+            (oy + (lat.max() - lat[i]) * mass).toFloat(),
+        )
+        val pfad = androidx.compose.ui.graphics.Path().apply {
+            moveTo(p(0).x, p(0).y)
+            for (i in 1 until punkte.size) lineTo(p(i).x, p(i).y)
+        }
+        drawPath(pfad, ton, style = androidx.compose.ui.graphics.drawscope.Stroke(3.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        // Start hohl, Ziel voll - wie in der Detailkarte.
+        drawCircle(grund, 5.dp.toPx(), p(0)); drawCircle(rand, 5.dp.toPx(), p(0), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+        drawCircle(rand, 5.dp.toPx(), p(punkte.lastIndex))
     }
 }
 

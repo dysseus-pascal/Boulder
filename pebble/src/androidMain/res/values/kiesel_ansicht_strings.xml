@@ -45,6 +45,9 @@
     <string name="ks_sp_leer">No workouts yet.</string>
     <string name="ks_sp_leer_unter">From the watch and Health Connect</string>
     <string name="ks_sp_zuletzt">LATEST</string>
+    <string name="ks_sp_davor">RECENT</string>
+    <string name="ks_sp_trainings">Workouts</string>
+    <string name="ks_sp_zeit">Time</string>
     <string name="ks_sp_alle">All workouts</string>
     <string name="ks_sp_einrichten">SET UP</string>
     <string name="ks_sp_trends_unter">Eight weeks · by sport</string>

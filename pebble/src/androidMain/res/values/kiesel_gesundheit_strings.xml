@@ -209,4 +209,35 @@
     <string name="ks_b_gesichert">%1$d days backed up, %2$d new tracks.</string>
     <string name="ks_b_zurueck">%1$d days read, %2$d tracks added.</string>
     <string name="ks_b_eben">Backed up just now.</string>
+    <!-- Health nach Konzept D2: der Tag als Zeitstrahl -->
+    <string name="ks_d_geschlafen">Slept</string>
+    <string name="ks_d_schritte">Steps</string>
+    <string name="ks_d_wasser">Water</string>
+    <string name="ks_d_neueste_zuerst">TODAY, NEWEST FIRST</string>
+    <string name="ks_d_jetzt">NOW</string>
+    <string name="ks_d_puls">bpm pulse</string>
+    <string name="ks_d_bewegt">%1$s walked, %2$d min active</string>
+    <string name="ks_d_koffein">Caffeine %1$d mg active</string>
+    <string name="ks_d_koffein_bett">· about %1$d mg at bedtime</string>
+    <string name="ks_d_praeparate">Supplements %1$d of %2$d</string>
+    <string name="ks_d_offen">· %1$s open</string>
+    <string name="ks_d_koffein_dazu">+ Caffeine</string>
+    <string name="ks_d_glas">Glass of water</string>
+    <string name="ks_d_heute_liter">%1$s l today</string>
+    <string name="ks_d_aufgewacht">Woke up</string>
+    <string name="ks_d_eingeschlafen">Fell asleep</string>
+    <string name="ks_d_ruhe_hrv">Resting HR %1$d, HRV %2$d ms</string>
+    <string name="ks_d_schritte_woche">STEPS THIS WEEK</string>
+    <string name="ks_d_details">DETAILS</string>
+    <string name="ks_d_letzte_nacht">Last night</string>
+    <string name="ks_d_tief_kurz">deep %1$s h</string>
+    <string name="ks_d_herz">Heart</string>
+    <string name="ks_d_ruhe">Resting %1$d</string>
+    <string name="ks_d_spo2">Blood oxygen</string>
+    <string name="ks_d_spo2_tiefster">Lowest %1$d %%</string>
+    <string name="ks_d_bewegung">Movement</string>
+    <string name="ks_d_bewegung_unter">%1$s, %2$d min, %3$d kcal</string>
+    <string name="ks_d_glaeser_von">%1$d of %2$d glasses</string>
+    <string name="ks_d_noch_offen">%1$s still open</string>
+    <string name="ks_d_koffein_unter">%1$d mg today, last %2$s</string>
 </resources>

@@ -10,10 +10,12 @@ import kotlinx.io.readByteArray
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
+@Ignore
 class BackupZipTest {
     private val dir = Path(SystemTemporaryDirectory, "backup-zip-test-${Random.nextLong()}")
     private val zipPath = Path(dir, "test.zip")

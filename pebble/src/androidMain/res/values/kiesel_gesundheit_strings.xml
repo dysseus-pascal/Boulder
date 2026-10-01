@@ -240,4 +240,46 @@
     <string name="ks_d_glaeser_von">%1$d of %2$d glasses</string>
     <string name="ks_d_noch_offen">%1$s still open</string>
     <string name="ks_d_koffein_unter">%1$d mg today, last %2$s</string>
+    <!-- Health nach Konzept F: Satz, Zeitstrahl, Liste -->
+    <string name="ks_f_morgen">Good morning</string>
+    <string name="ks_f_tag">Good afternoon</string>
+    <string name="ks_f_abend">Good evening</string>
+    <string name="ks_f_ausgeruht">Well rested</string>
+    <string name="ks_f_schlaf">%1$s: %2$s of sleep</string>
+    <string name="ks_f_ruhe_ok"> and a resting heart rate as usual</string>
+    <string name="ks_f_ruhe_hoch"> and a resting heart rate %1$d bpm above usual</string>
+    <string name="ks_f_ruhe_tief"> and a resting heart rate %1$d bpm below usual</string>
+    <plurals name="ks_f_schritte_wert">
+        <item quantity="one">%1$s step</item>
+        <item quantity="other">%1$s steps</item>
+    </plurals>
+    <string name="ks_f_schritte">. %1$s so far</string>
+    <string name="ks_f_schritte_allein">%1$s so far</string>
+    <string name="ks_f_offen">, %1$s still open</string>
+    <string name="ks_f_akku_vor">Watch at</string>
+    <plurals name="ks_f_akku_tage">
+        <item quantity="one">, about %1$d day left.</item>
+        <item quantity="other">, about %1$d days left.</item>
+    </plurals>
+    <string name="ks_f_bettzeit">Bedtime, like last night</string>
+    <string name="ks_f_koffein_dann">Caffeine then about %1$d mg</string>
+    <string name="ks_f_aufgewacht_durch">Woke up, slept through</string>
+    <string name="ks_f_wie_immer">as usual</string>
+    <plurals name="ks_f_glaeser">
+        <item quantity="one">%1$d glass · last %2$s</item>
+        <item quantity="other">%1$d glasses · last %2$s</item>
+    </plurals>
+    <string name="ks_f_koffein_heute">%1$d mg today</string>
+    <string name="ks_f_koffein_bett">~%1$d mg at bedtime</string>
+    <!-- Schlafansicht nach Konzept F -->
+    <string name="ks_n_eingeschlafen">fell asleep</string>
+    <string name="ks_n_aufgewacht">woke up</string>
+    <string name="ks_n_phasen">STAGES</string>
+    <string name="ks_n_im_bett">%1$s h in bed</string>
+    <string name="ks_n_durch_die_nacht">THROUGH THE NIGHT</string>
+    <string name="ks_n_koerper">BODY DURING SLEEP</string>
+    <string name="ks_n_schnitt">avg %1$s</string>
+    <string name="ks_n_tiefster">lowest %1$d %%</string>
+    <string name="ks_n_sieben">LAST NIGHTS</string>
+    <string name="ks_n_schnitt_h">avg %1$s h</string>
 </resources>

@@ -104,10 +104,10 @@ internal class Gesundheitswege(
 )
 
 /**
- * Die Gesundheitsseite nach Konzept D2: oben drei Zahlen, darunter der Tag als
- * Zeitstrahl - das Jetzt zuoberst, dann rueckwaerts bis in die Nacht. Danach
- * die Schritte der Woche, die Einzelheiten und die Uhr. Wer die Seite oeffnet,
- * sieht zuerst, wie es gerade steht.
+ * Die Gesundheitsseite nach Konzept F: oben ein Satz zum Tag mit dem
+ * Uhrenakku, darunter der Tag als Zeitstrahl (nur zum Ansehen), dann Herz,
+ * Wasser, Praeparate und Koffein als Zeilen und die Schritte der Woche. Das
+ * letzte Training steht im Sport-Reiter, nicht hier.
  */
 @Composable
 internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) {
@@ -124,7 +124,6 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     var neu by remember { mutableIntStateOf(0) }
     var koffeinBlatt by remember { mutableStateOf(false) }
     var praeparatBlatt by remember { mutableStateOf(false) }
-    var trendBlatt by remember { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { neu++ }
     // Neue Minutendaten von der Uhr: dann stimmen Schritte und Puls nicht mehr.
@@ -147,11 +146,10 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     val akku = remember(akkuNaechte, akkuJetzt) { Akkurechnung.rechne(akkuNaechte, akkuJetzt, Instant.now()) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { Kurzkarte(s, nacht = { s.nacht?.let { wege.nacht(it.beginnUtc) } }, bewegung = { wege.trend("bewegung") }, wasser = { wege.trend("ernaehrung") }) }
-        item { Tagesstrahl(s, training, wege, koffeinDazu = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
+        item { Tagessatz(s, akkuJetzt, akku.tageUebrig?.roundToInt(), wege.akku) }
+        item { Tagesstrahl(s, training, wege) }
+        item { Koerperliste(s, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
-        item { Detailkarte(s, wege, zeigeTrends = { trendBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
-        item { UhrKarte(training, akkuJetzt, akku, wege) }
         item { Spacer(Modifier.height(12.dp)) }
     }
 
@@ -168,10 +166,6 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         }
     }
     if (praeparatBlatt) PraeparatBlatt(s) { praeparatBlatt = false }
-    if (trendBlatt) TrendBlatt(onDismiss = { trendBlatt = false }) { gruppe ->
-        trendBlatt = false
-        wege.trend(gruppe)
-    }
 }
 
 private fun zahl(n: Long): String = String.format(Locale.getDefault(), "%,d", n)
@@ -216,42 +210,6 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Herzurteil): String {
 }
 
 
-
-@Composable
-private fun UhrKarte(training: TrainingEintrag?, akkuJetzt: Int?, akku: Akkurechnung.Stand, wege: Gesundheitswege) {
-    val context = LocalContext.current
-    val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    Kasten {
-        Kopf(stringResource(R.string.ks_h_uhr))
-        if (training != null) {
-            val tag = training.sitzung.startTime.atZone(ZoneId.systemDefault()).toLocalDate()
-            val wann = when (tag) {
-                LocalDate.now() -> stringResource(R.string.ks_h_heute_klein)
-                LocalDate.now().minusDays(1) -> stringResource(R.string.ks_h_gestern_klein)
-                else -> tagText(context, tag)
-            }
-            val unter = stringResource(R.string.ks_h_letztes_training, wann) + if (training.meter > 0) " · " + kmText(training.meter) else ""
-            val t = toene()
-            // Die Toene der Bewegung statt der Sportfarbe: Velo-Amber stuende neben dem einen Warnakzent der Seite.
-            Zeile(
-                training.sitzung.title ?: stringResource(training.sport.nameId), unter, "${training.minuten}", "min",
-                zeichen = { Tonkreis(training.sport.zeichen(), FLAECHE_BEWEGUNG, t.bewegung, 0.24f) },
-            ) { wege.training(training.id) }
-            Trenner()
-        }
-        val tage = akku.tageUebrig?.roundToInt()
-        val unter = when {
-            akkuJetzt == null -> stringResource(R.string.ks_h_nicht_verbunden)
-            tage != null -> pluralStringResource(R.plurals.ks_h_akku_tage, tage, tage)
-            else -> stringResource(R.string.ks_h_akku_offen)
-        }
-        Zeile(
-            stringResource(R.string.ks_h_akku), unter, akkuJetzt?.toString() ?: "–", if (akkuJetzt != null) "%" else null,
-            zeichen = { Tonkreis(Zeichen.uhr, grau, grau, 0.14f) },
-        ) { wege.akku() }
-        Spacer(Modifier.height(4.dp))
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -298,30 +256,6 @@ private fun PraeparatBlatt(s: GesundheitsStand, onDismiss: () -> Unit) {
                         else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))
                     },
                 )
-            }
-        }
-    }
-}
-
-/** Die vier Trendgruppen zur Wahl - die Trendseite selbst zeigt immer nur eine. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TrendBlatt(onDismiss: () -> Unit, oeffne: (String) -> Unit) {
-    val t = toene()
-    val gruppen = listOf("schlaf" to R.string.ks_tr_schlaf, "herz" to R.string.ks_tr_herz, "bewegung" to R.string.ks_tr_bewegung, "ernaehrung" to R.string.ks_tr_ernaehrung)
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            Kopf(stringResource(R.string.ks_h_trends_titel))
-            gruppen.forEachIndexed { i, (gruppe, name) ->
-                if (i > 0) Trenner()
-                Zeile(stringResource(name), onClick = { oeffne(gruppe) }, zeichen = {
-                    when (gruppe) {
-                        "schlaf" -> Tonkreis(Zeichen.mond, PHASENFARBEN[2], t.schlaf, 0.30f)
-                        "herz" -> Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz)
-                        "bewegung" -> Tonkreis(Zeichen.aktiv, FLAECHE_BEWEGUNG, t.bewegung, 0.24f)
-                        else -> Tonkreis(Zeichen.wasser, FLAECHE_WASSER, t.wasser)
-                    }
-                })
             }
         }
     }

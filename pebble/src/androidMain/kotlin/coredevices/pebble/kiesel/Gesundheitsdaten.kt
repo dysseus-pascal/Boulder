@@ -305,6 +305,8 @@ internal object Gesundheitsdaten {
         val spo2: List<Pair<Long, Int>>,
         val vorige: Long?,
         val naechste: Long?,
+        /** Bis zu sieben Naechte vor dieser, aelteste zuerst - fuer Schnitt und Saeulen. */
+        val davor: List<NachtEntity> = emptyList(),
     )
 
     suspend fun nacht(api: HealthDataApi, beginnUtc: Long): NachtDetail? = withContext(Dispatchers.IO) {
@@ -320,6 +322,7 @@ internal object Gesundheitsdaten {
             spo2 = runCatching { api.getSpo2Readings(von, bis) }.getOrDefault(emptyList()).map { it.timestamp to it.spo2Percent },
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
+            davor = umgebung.filter { it.beginnUtc < beginnUtc }.sortedBy { it.beginnUtc }.takeLast(7),
         )
     }
 

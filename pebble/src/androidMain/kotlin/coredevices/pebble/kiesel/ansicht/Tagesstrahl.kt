@@ -52,8 +52,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,15 +64,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle as Textstil
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -86,7 +81,6 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.GesundheitsStand
@@ -223,38 +217,17 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuTage: Int?, oef
         append(".")
         if (akkuJetzt != null && akkuTon != null) {
             append(" $vAkkuVor ")
-            // Symbol und Zahl sind ein Link: ein Tipp oeffnet die Akkuansicht.
+            // Nur die Zahl, in der Farbe des Stands, als Link zur Akkuansicht -
+            // ein Symbol davor stach im Satz zu sehr heraus.
             withLink(LinkAnnotation.Clickable("akku", TextLinkStyles(SpanStyle(color = akkuTon, fontWeight = FontWeight.Medium))) { oeffneAkku() }) {
-                appendInlineContent("akkusymbol", "[akku]")
-                append("$akkuJetzt %")
+                append("$akkuJetzt%")
             }
             append(vAkkuNach)
         }
     }
-    // Das Symbol so hoch wie die Schrift und auf ihrer Mitte - es soll im Satz stehen, nicht daneben.
-    val symbol = mapOf(
-        "akkusymbol" to InlineTextContent(Placeholder(1.2.em, 1.em, PlaceholderVerticalAlign.TextCenter)) {
-            Akkusymbol(akkuJetzt ?: 0, akkuTon ?: grau)
-        }
-    )
     Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(gruss, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-        Text(text, inlineContent = symbol, fontSize = 18.sp, lineHeight = 26.sp, color = grau)
-    }
-}
-
-/** Eine kleine Batterie, gefuellt nach Stand - in der Farbe des Akkustands. */
-@Composable
-private fun Akkusymbol(prozent: Int, farbe: Color) {
-    Canvas(Modifier.fillMaxSize().padding(end = 3.dp)) {
-        val strich = size.height * 0.1f
-        val w = size.width * 0.84f
-        val h = size.height * 0.56f
-        val oben = (size.height - h) / 2
-        drawRoundRect(farbe, Offset(strich / 2, oben), Size(w, h), CornerRadius(h * 0.22f), style = Stroke(strich))
-        drawRect(farbe, Offset(w + strich / 2, oben + h * 0.3f), Size(strich * 1.4f, h * 0.4f))
-        val innen = (w - strich * 2.4f) * prozent.coerceIn(0, 100) / 100f
-        drawRect(farbe, Offset(strich * 1.7f, oben + strich * 1.2f), Size(innen, h - strich * 2.4f))
+        Text(text, fontSize = 18.sp, lineHeight = 26.sp, color = grau)
     }
 }
 

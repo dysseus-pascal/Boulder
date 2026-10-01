@@ -391,7 +391,8 @@ internal object Gesundheitsdaten {
                 endTime = jetzt.plusSeconds(60), endZoneOffset = versatz(jetzt),
                 name = name,
                 caffeine = Mass.milligrams(mg.toDouble()),
-                metadata = Metadata.manualEntryWithId("koffein-${jetzt.epochSecond}", Device(type = Device.TYPE_PHONE)),
+                // Eigene Kennung per manualEntry - manualEntryWithId setzte die der Akte.
+                metadata = Metadata.manualEntry("koffein-${jetzt.epochSecond}", 0L, Device(type = Device.TYPE_PHONE)),
             ))) != null
         } catch (e: Exception) {
             Log.w(TAG, "Koffein eintragen: " + e.message)

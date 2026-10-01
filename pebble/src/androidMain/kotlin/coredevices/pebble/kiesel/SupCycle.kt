@@ -71,6 +71,36 @@ internal object SupCycle {
             tag to (f to g)
         }.toMap()
 
+    private fun kennung(tag: LocalDate, platz: Int) = "supcycle-$tag-$platz"
+
+    /**
+     * Die Eintraege zurueckgenommener Haken loeschen. Nach der Kennung - und,
+     * fuer die Eintraege bis 0.33.0 ohne Kennung, nach Namen: eigener Eintrag
+     * von heute, ohne Koffein und ohne Energie, mit dem Namen des Platzes.
+     */
+    private suspend fun entferne(context: Context, klient: androidx.health.connect.client.HealthConnectClient, tag: LocalDate, plaetze: Map<Int, String>) {
+        try {
+            val zone = java.time.ZoneId.systemDefault()
+            val von = tag.atStartOfDay(zone).toInstant()
+            val heute = klient.readRecords(
+                androidx.health.connect.client.request.ReadRecordsRequest(
+                    NutritionRecord::class,
+                    androidx.health.connect.client.time.TimeRangeFilter.between(von, von.plus(java.time.Duration.ofDays(1))),
+                    dataOriginFilter = setOf(androidx.health.connect.client.records.metadata.DataOrigin(context.packageName)),
+                )
+            ).records
+            val kennungen = plaetze.keys.map { kennung(tag, it) }.toSet()
+            val namen = plaetze.values.filter { it.isNotBlank() }.toSet()
+            val weg = heute.filter { r ->
+                r.metadata.clientRecordId in kennungen ||
+                    (r.metadata.clientRecordId == null && r.caffeine == null && r.energy == null && r.name in namen)
+            }.map { it.metadata.id }
+            if (weg.isNotEmpty()) klient.deleteRecords(NutritionRecord::class, recordIdsList = weg, clientRecordIdsList = emptyList())
+        } catch (e: Exception) {
+            Log.w(TAG, "Zurueckgenommenes Praeparat nicht geloescht: " + e.message)
+        }
+    }
+
     suspend fun verarbeite(context: Context, n: KieselNachricht): String? {
         val ymd = n.zahlen[SC_TODAY] ?: return null
         val faellig = n.zahlen[SC_DUE] ?: return null
@@ -104,11 +134,22 @@ internal object SupCycle {
                     name = name,
                     // TAG PLUS PLATZ als Kennung: meldet SupCycle denselben
                     // Haken noch einmal, ersetzt die Akte den Eintrag.
-                    metadata = Metadata.manualEntryWithId("supcycle-$tag-$platz", Device(type = Device.TYPE_PHONE)),
+                    // manualEntry, NICHT manualEntryWithId: das setzt die
+                    // Kennung der Akte selbst (fuer Updates), und die
+                    // eigene Kennung blieb leer - bis 0.33.0 so geschehen.
+                    metadata = Metadata.manualEntry(kennung(tag, platz), 0L, Device(type = Device.TYPE_PHONE)),
                 )))
             } catch (e: Exception) {
                 Log.w(TAG, "Praeparat nicht eingetragen: " + e.message)
             }
+        }
+
+        // WIEDER ABGEHAKT HEISST NICHT GENOMMEN: nimmt die Uhr einen Haken
+        // zurueck, geht auch der Eintrag aus der Akte. Sonst stuende ein
+        // Praeparat im Tagesstrahl als genommen, das die Uhr als offen fuehrt.
+        val zurueck = (0 until 64).filter { ((vorher and (genommen and faellig).inv()) shr it) and 1L == 1L }
+        if (zurueck.isNotEmpty() && klient != null) {
+            entferne(context, klient, tag, zurueck.associateWith { namen.getOrNull(it).orEmpty() })
         }
 
         p.edit()

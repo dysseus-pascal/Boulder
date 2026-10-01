@@ -232,6 +232,11 @@
     <string name="ks_d_letzte_nacht">Last night</string>
     <string name="ks_d_tief_kurz">deep %1$s h</string>
     <string name="ks_d_herz">Heart</string>
+    <string name="ks_d_tagespuls">Day average</string>
+    <string name="ks_d_tagespuls_hoch">Day %1$d above usual</string>
+    <string name="ks_d_tagespuls_tief">Day %1$d below usual</string>
+    <string name="ks_d_tagespuls_gleich">Day as usual</string>
+    <string name="ks_d_belastung">%1$d min load</string>
     <string name="ks_d_ruhe">Resting %1$d</string>
     <string name="ks_d_spo2">Blood oxygen</string>
     <string name="ks_d_spo2_tiefster">Lowest %1$d %%</string>
@@ -255,6 +260,8 @@
     </plurals>
     <string name="ks_f_schritte">. %1$s so far</string>
     <string name="ks_f_schritte_allein">%1$s so far</string>
+    <string name="ks_f_tag_haerter">, a harder day than usual</string>
+    <string name="ks_f_tag_leichter">, a quieter day than usual</string>
     <string name="ks_f_offen">, %1$s still open</string>
     <string name="ks_f_akku_vor">Watch at</string>
     <plurals name="ks_f_akku_tage">

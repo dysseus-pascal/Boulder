@@ -15,6 +15,8 @@ import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -85,6 +87,8 @@ internal data class GesundheitsStand(
     val mitSupCycle: Boolean = true,
     /** Getraenke und Praeparate von heute, fuer den Tagesstrahl. */
     val eintraege: List<Tageseintrag> = emptyList(),
+    /** Der Puls dieses Tages und der frueheren bis zur selben Uhrzeit, aelteste zuerst. */
+    val tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
     /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesstrahl. */
     val glasEintraege: List<Glaseintrag> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
@@ -96,6 +100,78 @@ internal data class Pulsbin(val sekunde: Long, val median: Int, val tiefster: In
 
 /** Was sich an den Gesundheitsdaten rechnen laesst - ohne Android, damit es pruefbar ist. */
 internal object Gesundheitsrechnung {
+    /**
+     * Der Puls eines Tages, nur wach und bis zur selben Uhrzeit wie jetzt.
+     * [wachpuls]: der Schnitt der wachen Messungen. [belastung]: Minuten mit
+     * erhoehtem Puls, gewichtet wie Zone-Minuten - ab 40 % der Pulsreserve
+     * einfach, ab 60 % doppelt. Jede Messung steht fuer die Minuten bis zur
+     * naechsten, hoechstens zehn: die Uhr misst je nach Messstufe nicht jede
+     * Minute.
+     */
+    data class Tagesherz(val tag: LocalDate, val wachpuls: Int?, val belastung: Int, val messungen: Int)
+
+    /** Weniger wache Messungen tragen keinen Tagesschnitt. */
+    const val TAGESHERZ_MINDESTENS = 24
+    /** Ab so vielen frueheren Tagen gibt es ein Urteil. */
+    const val TAGESHERZ_LERNTAGE = 5
+
+    /**
+     * Heute gegen die frueheren Tage bis zur selben Uhrzeit. Die Haerte richtet
+     * sich nach der Belastung; wo auch frueher kaum Belastung war, nach dem
+     * Wachpuls. Ohne Urteil, solange weniger als [TAGESHERZ_LERNTAGE] Tage da sind.
+     */
+    data class Tagesurteil(val heute: Tagesherz, val schnittPuls: Int?, val abstand: Int?, val haerte: Vergleich?)
+
+    fun tagesurteil(tage: List<Tagesherz>, heute: LocalDate): Tagesurteil? {
+        val jetzt = tage.firstOrNull { it.tag == heute }?.takeIf { it.wachpuls != null } ?: return null
+        val frueher = tage.filter { it.tag < heute && it.wachpuls != null }
+        if (frueher.size < TAGESHERZ_LERNTAGE) return Tagesurteil(jetzt, null, null, null)
+        val schnitt = frueher.map { it.wachpuls!! }.average().roundToInt()
+        val abstand = jetzt.wachpuls!! - schnitt
+        // Der Median, weil ein einzelner Trainingstag den Schnitt der Belastung verzerrt
+        val last = frueher.map { it.belastung }.sorted().let { it[it.size / 2] }
+        val haerte = if (last >= 10) when {
+            jetzt.belastung >= maxOf(last * 3 / 2, last + 15) -> Vergleich.HOEHER
+            jetzt.belastung <= last / 2 -> Vergleich.TIEFER
+            else -> Vergleich.WIE_IMMER
+        } else when {
+            jetzt.belastung >= 20 || abstand >= 5 -> Vergleich.HOEHER
+            abstand <= -5 -> Vergleich.TIEFER
+            else -> Vergleich.WIE_IMMER
+        }
+        return Tagesurteil(jetzt, schnitt, abstand, haerte)
+    }
+
+    fun tagesherz(
+        puls: List<Pair<Long, Int>>,
+        schlaf: List<Pair<Long, Long>>,
+        ruhepuls: Int,
+        maxpuls: Int,
+        bisUhrzeit: java.time.LocalTime,
+        zone: ZoneId,
+    ): List<Tagesherz> {
+        val reserve = (maxpuls - ruhepuls).coerceAtLeast(20)
+        val sortiert = puls.filter { it.second > 0 }.sortedBy { it.first }
+        val jeTag = linkedMapOf<LocalDate, Triple<Long, Int, Double>>()   // Summe, Anzahl, Belastung
+        sortiert.forEachIndexed { i, (sek, bpm) ->
+            if (schlaf.any { (von, bis) -> sek in von until bis }) return@forEachIndexed
+            val zeit = java.time.Instant.ofEpochSecond(sek).atZone(zone)
+            if (zeit.toLocalTime().isAfter(bisUhrzeit)) return@forEachIndexed
+            val minuten = if (i + 1 < sortiert.size) ((sortiert[i + 1].first - sek) / 60.0).coerceIn(1.0, 10.0) else 1.0
+            val anteil = (bpm - ruhepuls).toDouble() / reserve
+            val gewicht = when {
+                anteil >= 0.6 -> 2.0
+                anteil >= 0.4 -> 1.0
+                else -> 0.0
+            }
+            val alt = jeTag[zeit.toLocalDate()] ?: Triple(0L, 0, 0.0)
+            jeTag[zeit.toLocalDate()] = Triple(alt.first + bpm, alt.second + 1, alt.third + gewicht * minuten)
+        }
+        return jeTag.map { (tag, w) ->
+            Tagesherz(tag, if (w.second >= TAGESHERZ_MINDESTENS) (w.first.toDouble() / w.second).roundToInt() else null, w.third.roundToInt(), w.second)
+        }.sortedBy { it.tag }
+    }
+
     /** Halbwertszeit von Koffein, wie in Kiesel-Helper. */
     const val KOFFEIN_HALBWERT_MIN = 300.0
 
@@ -286,6 +362,15 @@ internal object Gesundheitsdaten {
         }
 
         val apps = UhrApps.installiert()
+        val tagesherz = runCatching {
+            val von = anfang(heute.minusDays(14))
+            val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
+            val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
+                (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
+            }
+            val ruhe = nacht?.ruhepuls ?: frueher.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 60
+            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, ruhe, maxpulsFuer(context), LocalTime.now(), zone)
+        }.getOrDefault(emptyList())
         GesundheitsStand(
             schritte = summe?.steps ?: 0,
             aktivMinuten = summe?.activeMinutes ?: 0,
@@ -306,6 +391,7 @@ internal object Gesundheitsdaten {
             koffein = koffein.sortedBy { it.first },
             mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
             mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
+            tagesherz = tagesherz,
             eintraege = eintraege.sortedByDescending { it.zeit },
             glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
@@ -380,6 +466,21 @@ internal object Gesundheitsdaten {
             Log.w(TAG, "Getraenk aendern: " + e.message)
             false
         }
+    }
+
+    /**
+     * Der Maximalpuls fuer die Belastung: der eingestellte, wenn er nicht die
+     * Vorgabe ist, sonst Tanaka nach dem Alter aus den Gesundheitseinstellungen
+     * der Uhr - wie bei den Kalorien eines Trainings.
+     */
+    private suspend fun maxpulsFuer(context: Context): Int {
+        val eingestellt = KieselEinstellungen.stand(context).maxpuls
+        if (eingestellt != KieselEinstellungen.MAXPULS_VORGABE) return eingestellt
+        val alter = runCatching {
+            org.koin.mp.KoinPlatform.getKoin().getOrNull<io.rebble.libpebblecommon.connection.LibPebble>()
+                ?.healthSettings?.first()?.ageYears
+        }.getOrNull()
+        return alter?.takeIf { it in 10..100 }?.let { (208 - 0.7 * it).roundToInt() } ?: KieselEinstellungen.MAXPULS_VORGABE
     }
 
     /** Eine Tasse von Hand - als Ernaehrungseintrag mit Koffein, wie in Kiesel-Helper. */

@@ -145,4 +145,58 @@ class GesundheitsbildRechnungTest {
         assertEquals(listOf(50, 60), Gesundheitsrechnung.rasterOhne(listOf(50, 60), null, 20f))
         assertTrue(Gesundheitsrechnung.rasterOhne(emptyList(), 55, 5f).isEmpty())
     }
+
+    private val zoneUtc = ZoneOffset.UTC
+    private fun sek(tag: LocalDate, stunde: Int, minute: Int) = tag.atTime(stunde, minute).toEpochSecond(ZoneOffset.UTC)
+
+    @Test
+    fun tagesherz_laesst_schlaf_und_spaeteres_weg() {
+        val tag = LocalDate.of(2026, 9, 30)
+        // Jede fuenfte Minute von 00:00 bis 23:55: die Nacht bis 06:00 schlaeft
+        val puls = (0 until 288).map { sek(tag, 0, 0) + it * 300L to (if (it < 72) 50 else 70) }
+        val schlaf = listOf(sek(tag, 0, 0) to sek(tag, 6, 0))
+        val r = Gesundheitsrechnung.tagesherz(puls, schlaf, 55, 185, java.time.LocalTime.of(12, 0), zoneUtc).single()
+        assertEquals(70, r.wachpuls)
+        assertEquals(73, r.messungen)   // 06:00 bis 12:00
+        assertEquals(0, r.belastung)
+    }
+
+    @Test
+    fun belastung_zaehlt_doppelt_ab_sechzig_prozent() {
+        val tag = LocalDate.of(2026, 9, 30)
+        // Reserve 130: ab 107 bpm einfach, ab 133 doppelt
+        val ruhig = (0 until 30).map { sek(tag, 8, it) to 70 }
+        val mittel = (0 until 20).map { sek(tag, 9, it) to 115 }
+        val hart = (0 until 10).map { sek(tag, 10, it) to 150 }
+        val r = Gesundheitsrechnung.tagesherz(ruhig + mittel + hart, emptyList(), 55, 185, java.time.LocalTime.of(23, 0), zoneUtc).single()
+        // Die letzte Minute vor einer Luecke zaehlt hoechstens zehn
+        assertEquals(10 + 19 + 2 * 10, r.belastung)
+    }
+
+    @Test
+    fun tagesherz_braucht_genug_messungen() {
+        val tag = LocalDate.of(2026, 9, 30)
+        val puls = (0 until 10).map { sek(tag, 9, it) to 80 }
+        assertNull(Gesundheitsrechnung.tagesherz(puls, emptyList(), 55, 185, java.time.LocalTime.MAX, zoneUtc).single().wachpuls)
+    }
+
+    @Test
+    fun tagesurteil_nach_belastung() {
+        val heute = LocalDate.of(2026, 9, 30)
+        val frueher = (1..7).map { Gesundheitsrechnung.Tagesherz(heute.minusDays(it.toLong()), 72, 30, 100) }
+        fun urteil(puls: Int, last: Int) = Gesundheitsrechnung.tagesurteil(frueher + Gesundheitsrechnung.Tagesherz(heute, puls, last, 100), heute)!!
+        assertEquals(Vergleich.HOEHER, urteil(77, 50).haerte)
+        assertEquals(5, urteil(77, 50).abstand)
+        assertEquals(Vergleich.WIE_IMMER, urteil(80, 35).haerte)
+        assertEquals(Vergleich.TIEFER, urteil(70, 10).haerte)
+    }
+
+    @Test
+    fun tagesurteil_ohne_belastung_nach_puls_und_erst_nach_lerntagen() {
+        val heute = LocalDate.of(2026, 9, 30)
+        val ruhig = (1..5).map { Gesundheitsrechnung.Tagesherz(heute.minusDays(it.toLong()), 70, 0, 100) }
+        assertEquals(Vergleich.HOEHER, Gesundheitsrechnung.tagesurteil(ruhig + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100), heute)!!.haerte)
+        val wenig = ruhig.take(4) + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100)
+        assertNull(Gesundheitsrechnung.tagesurteil(wenig, heute)!!.haerte)
+    }
 }

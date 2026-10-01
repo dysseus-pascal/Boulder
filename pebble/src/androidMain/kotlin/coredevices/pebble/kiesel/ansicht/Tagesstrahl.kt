@@ -202,6 +202,11 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuTage: Int?, oef
         val z = Gesundheitsrechnung.praeparatzeile(stand.heute { String.format(platz, it) })
         if (z.lage == Praeparatlage.OFFEN || z.lage == Praeparatlage.FAELLIG) z.namen.firstOrNull() else null
     }
+    val vHaerte = when (Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now())?.haerte) {
+        Vergleich.HOEHER -> stringResource(R.string.ks_f_tag_haerter)
+        Vergleich.TIEFER -> stringResource(R.string.ks_f_tag_leichter)
+        else -> null
+    }
     val vOffen = stringResource(R.string.ks_f_offen)
     val vAkkuVor = stringResource(R.string.ks_f_akku_vor)
     val vAkkuNach = akkuTage?.let { pluralStringResource(R.plurals.ks_f_akku_tage, it, it) } ?: "."
@@ -213,6 +218,8 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuTage: Int?, oef
             if (vRuhe != null) append(vRuhe)
         }
         hervor(vSchritte, schritteWert, farbe = hell)
+        // Ein gewoehnlicher Tag braucht kein Wort - nur die Abweichung zaehlt
+        if (vHaerte != null) append(vHaerte)
         if (offen != null) hervor(vOffen, offen, farbe = hell)
         append(".")
         if (akkuJetzt != null && akkuTon != null) {
@@ -458,7 +465,10 @@ private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String
     }
 }
 
-/** Das Jetzt: Puls und Bewegung - Getraenke und Praeparate stehen in der Liste darunter. */
+/**
+ * Das Jetzt: nur die Bewegung. Kein Puls - die Uhr misst nicht auf Abruf, der
+ * letzte Wert war nur ein Zufallsmoment; der Tagespuls steht in der Liste.
+ */
 @Composable
 private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean) {
     val context = LocalContext.current
@@ -478,13 +488,6 @@ private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean) {
     ) {
         Column(Modifier.padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.ks_d_jetzt), fontSize = 12.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, color = gruen)
-            val letzter = s.puls.maxByOrNull { it.first }
-            if (letzter != null && Gesundheitsrechnung.pulsFrisch(letzter.first, jetzt.epochSecond)) {
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${letzter.second}", fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(R.string.ks_d_puls), Modifier.padding(bottom = 4.dp), fontSize = 14.sp, color = grau)
-                }
-            }
             Text(stringResource(R.string.ks_d_bewegt, kmText(s.meter), s.aktivMinuten), fontSize = 14.sp, lineHeight = 19.sp)
         }
     }
@@ -563,17 +566,21 @@ internal fun Koerperliste(
     val zone = ZoneId.systemDefault()
     val zeilen = buildList<@Composable () -> Unit> {
         add {
-            val letzter = s.puls.maxByOrNull { it.first }
             val ruhe = s.nacht?.ruhepuls
-            val frisch = letzter != null && Gesundheitsrechnung.pulsFrisch(letzter.first, jetzt.epochSecond)
-            val urteil = s.nacht?.let { Gesundheitsrechnung.ruhepulsUrteil(it.ruhepuls, s.ruhepulsWoche) }?.urteil
-            val wann = if (frisch) stringResource(R.string.ks_h_puls_jetzt) else letzter?.let { zeitpunkt(context, Instant.ofEpochSecond(it.first)) }
-            val ruheText = ruhe?.let {
-                stringResource(R.string.ks_d_ruhe, it) + if (urteil == Vergleich.WIE_IMMER) ", " + stringResource(R.string.ks_f_wie_immer) else ""
+            val urteil = Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now())
+            // Der Tagesschnitt statt des letzten Werts: der sagt, wie der Tag war
+            val vergleich = when {
+                urteil?.abstand == null -> urteil?.let { stringResource(R.string.ks_d_tagespuls) }
+                urteil.abstand >= 3 -> stringResource(R.string.ks_d_tagespuls_hoch, urteil.abstand)
+                urteil.abstand <= -3 -> stringResource(R.string.ks_d_tagespuls_tief, -urteil.abstand)
+                else -> stringResource(R.string.ks_d_tagespuls_gleich)
             }
-            val unter = listOfNotNull(wann, ruheText).joinToString(" · ").ifEmpty { stringResource(R.string.ks_h_kein_puls_kurz) }
+            val last = urteil?.heute?.belastung?.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
+            val ruheText = ruhe?.takeIf { urteil == null }?.let { stringResource(R.string.ks_d_ruhe, it) }
+            val unter = listOfNotNull(vergleich, last, ruheText).joinToString(" · ").ifEmpty { stringResource(R.string.ks_h_kein_puls_kurz) }
+            val wert = urteil?.heute?.wachpuls ?: ruhe
             Zeile(
-                stringResource(R.string.ks_d_herz), unter, letzter?.second?.toString(), if (letzter != null) "bpm" else null,
+                stringResource(R.string.ks_d_herz), unter, wert?.toString(), if (wert != null) "bpm" else null,
                 zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) }, onClick = wege.herz,
             )
         }

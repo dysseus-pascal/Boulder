@@ -87,7 +87,7 @@ class JavascriptCoreJsRunner(
                 client = httpClient,
             ),
             JSTimeout(interfacesScope, evalRawFn),
-            WebSocketManager(interfacesScope, evalFn),
+            WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid)),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
@@ -186,8 +186,8 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         runBlocking(threadContext) { jsContext?.evalCatching(BASE64_JS) }
         runBlocking(threadContext) { jsContext?.evalCatching(XML_HTTP_REQUEST_JS) }
+        runBlocking(threadContext) { jsContext?.evalCatching(WEBSOCKET_JS) }
         evaluateInternalScript("JSTimeout")
-        evaluateInternalScript("WebSocket")
     }
 
     private fun setupNavigator() {

@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.di
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -444,7 +445,7 @@ fun initKoin(
                         token = proxyTokenProvider
                     )
                 }
-                single { HttpClient() }
+                single { HttpClient { install(WebSockets) } }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlin.time.Clock> { kotlin.time.Clock.System }

@@ -345,6 +345,9 @@ What a plugin has to work with:
 
 - **`fetch`** for HTTP (only to hosts in `usesPermissions`). A blocked host rejects like a network
   error. Plain-HTTP LAN devices are reachable with `LocalNetwork`.
+- **`WebSocket`** under the same rules: a blocked host fires `error` then `close`. Binary frames
+  arrive as `ArrayBuffer`. Sockets are closed when the session ends, so one only lives for the
+  request that opened it. These aren't intended for long-running connections.
 - **`localStorage`** for state, shared with your app's PKJS. A plugin is started fresh for each
   request, so don't keep state in variables.
 - **`Pebble.refreshSources(["finance/stock"])`** when data changes outside a request (for example,

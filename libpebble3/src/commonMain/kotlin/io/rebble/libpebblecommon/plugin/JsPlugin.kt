@@ -7,10 +7,12 @@ import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.JsEngine
 import io.rebble.libpebblecommon.js.JsEngineInterface
 import io.rebble.libpebblecommon.js.JsEngineLocalStorage
+import io.rebble.libpebblecommon.js.WebSocketManager
 import io.rebble.libpebblecommon.js.XMLHTTPRequestManager
 import io.rebble.libpebblecommon.js.BASE64_JS
 import io.rebble.libpebblecommon.js.FETCH_JS
 import io.rebble.libpebblecommon.js.FETCH_REGISTRY
+import io.rebble.libpebblecommon.js.WEBSOCKET_JS
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -177,6 +179,13 @@ class JsPlugin(
             networkPolicy = networkPolicy,
             jsTarget = FETCH_REGISTRY,
         )
+        val webSockets = WebSocketManager(
+            scope = scope,
+            eval = { js -> evals.trySend(js) },
+            client = httpClient,
+            appUuid = pluginUuid,
+            networkPolicy = networkPolicy,
+        )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
         val localStorage = JsEngineLocalStorage(
@@ -187,14 +196,15 @@ class JsPlugin(
         val oauthBridge = oauth?.let {
             PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid.toString(), manifest.oauth.keys, it)
         }
-        val interfaces = listOfNotNull(Bridge(), xhr, localStorage, oauthBridge)
+        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, oauthBridge)
         val engine = JsEngine(appContext, scope, name, interfaces)
-        return Session(engine, xhr, localStorage, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
+        return Session(engine, xhr, webSockets, localStorage, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
     }
 
     private inner class Session(
         val engine: JsEngine,
         private val xhr: XMLHTTPRequestManager,
+        private val webSockets: WebSocketManager,
         private val localStorage: JsEngineLocalStorage,
         private val oauthBridge: PluginOAuthJsBridge?,
         private val evals: Channel<String>,
@@ -205,6 +215,7 @@ class JsPlugin(
             engine.eval(localStorage.installJs)
             engine.eval(BASE64_JS)
             engine.eval(FETCH_JS)
+            engine.eval(WEBSOCKET_JS)
             engine.eval(PLUGIN_HOST_JS)
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
             engine.eval(script())
@@ -214,6 +225,7 @@ class JsPlugin(
             evals.close()
             pump.cancel()
             xhr.close()
+            webSockets.close()
             oauthBridge?.close()
             engine.stop()
         }

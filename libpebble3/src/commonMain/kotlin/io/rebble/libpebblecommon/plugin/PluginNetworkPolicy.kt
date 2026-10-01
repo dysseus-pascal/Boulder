@@ -5,8 +5,9 @@ import io.ktor.http.Url
 
 /**
  * What a plugin is allowed to reach over the network, derived from the `usesPermissions` it
- * declared. Enforced in [io.rebble.libpebblecommon.js.XMLHTTPRequestManager], which is every
- * plugin's only way out — the engines' own `fetch`/`WebSocket` are blocked.
+ * declared. Enforced in [io.rebble.libpebblecommon.js.XMLHTTPRequestManager] and
+ * [io.rebble.libpebblecommon.js.WebSocketManager], which are every plugin's only ways
+ * out — the engines' own `fetch`/`WebSocket` are blocked.
  *
  * A host is private or public, and each answers to its own permission: a device on the LAN needs
  * `LocalNetwork`, anything else needs `Internet`. `Internet` declared with a `domains` parameter
@@ -53,15 +54,19 @@ class PluginNetworkPolicy(permissions: List<PluginPermission>) {
             )
         )
 
+        private val requestableProtocols = setOf(
+            URLProtocol.HTTP, URLProtocol.HTTPS, URLProtocol.WS, URLProtocol.WSS,
+        )
+
         /**
-         * The host of an absolute http(s) URL. Ktor does the parsing — the same library that
-         * makes the request, so what is checked here is what is dialled. Null for anything
+         * The host of an absolute http(s) or ws(s) URL. Ktor does the parsing — the same library
+         * that makes the request, so what is checked here is what is dialled. Null for anything
          * else: a plugin has no origin to resolve a relative URL against, and `file:` /
          * `content:` are not its to read.
          */
         private fun hostOf(url: String): String? {
             val parsed = runCatching { Url(url) }.getOrNull() ?: return null
-            if (parsed.protocol != URLProtocol.HTTP && parsed.protocol != URLProtocol.HTTPS) {
+            if (parsed.protocol !in requestableProtocols) {
                 return null
             }
             return parsed.host

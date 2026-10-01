@@ -130,6 +130,16 @@ class PluginNetworkPolicyTest {
     }
 
     @Test
+    fun aWebSocketAnswersToTheSamePermissionsAsHttp() {
+        val policy = policy(internet("stream.example.com"))
+        assertTrue(policy.allows("wss://stream.example.com/v1/ticks"))
+        assertTrue(policy.allows("ws://stream.example.com:8080/"))
+        assertTrue(!policy.allows("wss://elsewhere.example.com/"))
+        assertTrue(!policy.allows("ws://192.168.1.4:81/"))
+        assertTrue(policy(localNetwork).allows("ws://192.168.1.4:81/"))
+    }
+
+    @Test
     fun onlyHttpUrlsAreRequestable() {
         val policy = policy(internet())
         assertTrue(!policy.allows("file:///etc/passwd"))

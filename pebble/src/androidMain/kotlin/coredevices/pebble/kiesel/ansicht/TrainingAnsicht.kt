@@ -425,7 +425,10 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
             }
             Icon(Zeichen.weiter, null, Modifier.size(16.dp), tint = grau)
         }
-        if (punkte.size >= 2) Streckenbild(punkte, t.sport.ton())
+        if (punkte.size >= 2) Kartenvorschau(
+            punkte.map { it.lat to it.lon }, t.sport.ton(),
+            Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(10.dp)), onClick,
+        )
         Row(Modifier.fillMaxWidth().padding(start = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             werte.forEach { (zahl, einheit, name) ->
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -436,42 +439,6 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
             // Leere Faecher halten das Raster: zwei Werte stehen links, nicht gestreckt.
             repeat(4 - werte.size) { Spacer(Modifier.weight(1f)) }
         }
-    }
-}
-
-/**
- * Die Strecke als Linie auf dunklem Grund, ohne Kartenkacheln: eine echte
- * Karte in der Liste faenge jedes Wischen ab und laedt fuer einen Blick zu
- * viel. Die richtige Karte hat das Detail.
- */
-@Composable
-private fun Streckenbild(punkte: List<Spur.Punkt>, ton: Color) {
-    val grund = MaterialTheme.colorScheme.surfaceVariant
-    val rand = MaterialTheme.colorScheme.onSurface
-    Canvas(Modifier.fillMaxWidth().height(132.dp).clip(RoundedCornerShape(10.dp)).background(grund)) {
-        val lat = punkte.map { it.lat }
-        val lon = punkte.map { it.lon }
-        // Laengengrade schrumpfen zum Pol hin: mit dem Kosinus bleibt die Form echt.
-        val k = Math.cos(Math.toRadians(lat.average()))
-        val bx = (lon.max() - lon.min()) * k
-        val by = lat.max() - lat.min()
-        if (bx <= 0 && by <= 0) return@Canvas
-        val pad = 14.dp.toPx()
-        val mass = minOf((size.width - 2 * pad) / bx.coerceAtLeast(1e-9), (size.height - 2 * pad) / by.coerceAtLeast(1e-9))
-        val ox = (size.width - bx * mass) / 2
-        val oy = (size.height - by * mass) / 2
-        fun p(i: Int) = Offset(
-            (ox + (lon[i] - lon.min()) * k * mass).toFloat(),
-            (oy + (lat.max() - lat[i]) * mass).toFloat(),
-        )
-        val pfad = androidx.compose.ui.graphics.Path().apply {
-            moveTo(p(0).x, p(0).y)
-            for (i in 1 until punkte.size) lineTo(p(i).x, p(i).y)
-        }
-        drawPath(pfad, ton, style = androidx.compose.ui.graphics.drawscope.Stroke(3.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-        // Start hohl, Ziel voll - wie in der Detailkarte.
-        drawCircle(grund, 5.dp.toPx(), p(0)); drawCircle(rand, 5.dp.toPx(), p(0), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-        drawCircle(rand, 5.dp.toPx(), p(punkte.lastIndex))
     }
 }
 

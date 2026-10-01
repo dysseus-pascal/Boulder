@@ -5,6 +5,7 @@ import android.graphics.drawable.GradientDrawable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -31,7 +32,7 @@ import java.io.File
  * App einmal verlassen hat.
  */
 @Composable
-private fun rememberKarte(): MapView {
+private fun rememberKarte(beweglich: Boolean = true): MapView {
     val context = LocalContext.current
     val karte = remember {
         // OpenStreetMap verlangt eine Kennung je App - und einen eigenen Ablageort.
@@ -41,7 +42,7 @@ private fun rememberKarte(): MapView {
         }
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
+            setMultiTouchControls(beweglich)
             zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
         }
     }
@@ -143,4 +144,43 @@ internal fun Farbkarte(
             k.invalidate()
         },
     )
+}
+
+/**
+ * Die Karte als feste Vorschau, etwa im Sport-Reiter: die Strecke in der
+ * Farbe der Sportart auf echten Kacheln. SIE NIMMT KEINE GESTEN AN - eine
+ * Karte, die mitten in einer Liste wischt, haelt die Liste fest. Ein Tipp
+ * oeffnet [onClick], dort ist die Karte beweglich.
+ */
+@Composable
+internal fun Kartenvorschau(punkte: List<Pair<Double, Double>>, ton: androidx.compose.ui.graphics.Color, modifier: Modifier, onClick: () -> Unit) {
+    val karte = rememberKarte(beweglich = false)
+    androidx.compose.foundation.layout.Box(modifier) {
+        AndroidView(
+            factory = { karte },
+            modifier = Modifier.matchParentSize(),
+            update = { k ->
+                k.overlays.clear()
+                if (punkte.size < 2) return@AndroidView
+                val geo = punkte.map { GeoPoint(it.first, it.second) }
+                val d = k.resources.displayMetrics.density
+                k.overlays += Polyline(k).apply {
+                    setPoints(geo)
+                    outlinePaint.color = Color.WHITE
+                    outlinePaint.strokeWidth = 7.5f * d
+                }
+                k.overlays += Polyline(k).apply {
+                    setPoints(geo)
+                    outlinePaint.color = ton.alsInt()
+                    outlinePaint.strokeWidth = 4.5f * d
+                }
+                k.post { k.zoomToBoundingBox(BoundingBox.fromGeoPoints(geo).increaseByScale(1.3f), false) }
+                k.invalidate()
+            },
+        )
+        // Ueber der Karte: faengt den Tipp ab, laesst das Wischen der Liste durch.
+        androidx.compose.foundation.layout.Box(
+            Modifier.matchParentSize().clickable(onClick = onClick),
+        )
+    }
 }

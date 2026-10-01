@@ -50,3 +50,14 @@ class EigenesGetraenkTest {
         assertEquals(2000.0, Kaffeesorten.eigen(99999, 5).kcal)
     }
 }
+
+class KaffeeArtTest {
+    @Test
+    fun artTraegtMilchUndZucker() {
+        // Hin und zurueck: was das Bearbeiten schreibt, liest die Portion wieder richtig.
+        val p = Kaffeesorten.portion(Kaffeesorten.art(Kaffeesorten.KAFFEE, milch = true, zucker = true))!!
+        assertEquals(true, p.milch)
+        assertEquals(true, p.zucker)
+        assertEquals(Kaffeesorten.KAFFEE, p.sorte)
+    }
+}

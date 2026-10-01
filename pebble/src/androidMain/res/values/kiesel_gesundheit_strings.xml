@@ -282,4 +282,11 @@
     <string name="ks_n_tiefster">lowest %1$d %%</string>
     <string name="ks_n_sieben">LAST NIGHTS</string>
     <string name="ks_n_schnitt_h">avg %1$s h</string>
+    <!-- Eintrag im Zeitstrahl bearbeiten (langer Druck) -->
+    <string name="ks_b_loeschen">Delete</string>
+    <string name="ks_b_speichern">Save</string>
+    <string name="ks_b_milch">Milk</string>
+    <string name="ks_b_zucker">Sugar</string>
+    <string name="ks_b_werte">%1$d mg caffeine · %2$d kcal</string>
+    <string name="ks_b_fehler">Couldn\'t change the entry</string>
 </resources>

@@ -1,5 +1,35 @@
 package coredevices.pebble.kiesel.ansicht
 
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
+import coredevices.pebble.kiesel.GesundheitWidget
+import coredevices.pebble.kiesel.Gesundheitsdaten
+import coredevices.pebble.kiesel.Kaffeesorten
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -228,8 +258,17 @@ private fun Akkusymbol(prozent: Int, farbe: Color) {
     }
 }
 
+/** Was ein langer Druck mit einem Ereignis tun kann - nur bei Boulders eigenen Eintraegen. */
+private sealed class Bearbeitung {
+    abstract val titel: String
+    abstract val zeit: Instant
+    data class Getraenk(override val titel: String, override val zeit: Instant, val id: String) : Bearbeitung()
+    data class Glas(override val titel: String, override val zeit: Instant, val id: String) : Bearbeitung()
+    data class Praeparate(override val titel: String, override val zeit: Instant, val ids: List<String>) : Bearbeitung()
+}
+
 /** Ein Ereignis des Tages auf dem Strahl. */
-private data class Ereignis(val zeit: Instant, val farbe: Color, val titel: String, val unter: String?)
+private data class Ereignis(val zeit: Instant, val farbe: Color, val titel: String, val unter: String?, val bearbeitung: Bearbeitung? = null)
 
 /**
  * Der Tag als Zeitstrahl, nur zum Ansehen: oben die Nacht, dann was heute war,
@@ -237,7 +276,8 @@ private data class Ereignis(val zeit: Instant, val farbe: Color, val titel: Stri
  * nur mit ihren Uhr-Apps (UhrApps), wie ueberall.
  */
 @Composable
-internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: Gesundheitswege) {
+internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: Gesundheitswege, geaendert: () -> Unit) {
+    var offen by remember { mutableStateOf<Bearbeitung?>(null) }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val heute = LocalDate.now()
@@ -250,17 +290,21 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
             add(Ereignis(training.sitzung.startTime, training.sport.ton(), trainingsName(training), unter))
         }
         if (s.mitDrinktervall) {
-            val letztes = s.glaeser.maxOrNull()
+            val letztes = s.glasEintraege.maxOfOrNull { it.zeit }
             // Beim letzten Glas der Stand des Tages - sonst wiederholte er sich.
-            s.glaeser.forEach { g -> add(Ereignis(g, FLAECHE_WASSER, glas, if (g == letztes) heuteLiter else null)) }
+            s.glasEintraege.forEach { g ->
+                add(Ereignis(g.zeit, FLAECHE_WASSER, glas, if (g.zeit == letztes) heuteLiter else null, if (g.eigen) Bearbeitung.Glas(glas, g.zeit, g.id) else null))
+            }
             s.eintraege.filter { !it.praeparat }.forEach { e ->
-                add(Ereignis(e.zeit, FLAECHE_KOFFEIN, e.name, e.koffeinMg?.let { "${it.roundToInt()} mg" }))
+                add(Ereignis(e.zeit, FLAECHE_KOFFEIN, e.name, e.koffeinMg?.let { "${it.roundToInt()} mg" }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
             }
         }
         if (s.mitSupCycle) {
             // Was SupCycle in einem Zug abhakte, steht als eine Zeile.
             s.eintraege.filter { it.praeparat }.groupBy { it.zeit.epochSecond / 60 }.values.forEach { gruppe ->
-                add(Ereignis(gruppe.first().zeit, FLAECHE_PRAEPARAT, gruppe.joinToString(", ") { it.name }, null))
+                val titel = gruppe.joinToString(", ") { it.name }
+                val eigene = gruppe.filter { it.eigen }.map { it.id }
+                add(Ereignis(gruppe.first().zeit, FLAECHE_PRAEPARAT, titel, null, if (eigene.isNotEmpty()) Bearbeitung.Praeparate(titel, gruppe.first().zeit, eigene) else null))
             }
         }
     }.sortedBy { it.zeit }
@@ -273,13 +317,106 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
         CompositionLocalProvider(LocalZeitBreite provides zeitBreiteMessen()) {
         Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
             s.nacht?.let { n -> Nachtblock(n, hinweis) { wege.nacht(n.beginnUtc) } }
-            ereignisse.forEach { e -> Strahlzeile(uhrzeit(context, e.zeit), e.farbe, e.titel, e.unter) }
+            ereignisse.forEach { e ->
+                Strahlzeile(uhrzeit(context, e.zeit), e.farbe, e.titel, e.unter, e.bearbeitung?.let { b -> { offen = b } })
+            }
             Jetztblock(s, jetzt, weiter = bett != null)
             if (bett != null) {
                 Bettzeile(uhrzeit(context, bett), if (bettKoffein > 0) stringResource(R.string.ks_f_koffein_dann, bettKoffein) else null)
             }
         }
         }
+    }
+    offen?.let { b -> Bearbeitungsblatt(b, onDismiss = { offen = null }) { offen = null; geaendert() } }
+}
+
+/**
+ * Das Blatt nach langem Druck: ein Getraenk umstellen oder loeschen, ein Glas
+ * oder Praeparate loeschen. Falsch gewaehlt ist auf der Uhr schnell - hier
+ * wird es richtig.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fehler = stringResource(R.string.ks_b_fehler)
+    fun ausfuehren(tat: suspend () -> Boolean) {
+        scope.launch {
+            if (!tat()) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
+            GesundheitWidget.stosseAn(context)
+            fertig()
+        }
+    }
+    // Gleich ganz offen: halb offen lagen Speichern und Loeschen unter dem Rand.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
+            Kopf(b.titel.uppercase(), "· " + uhrzeit(context, b.zeit))
+            if (b is Bearbeitung.Getraenk) {
+                val start = remember(b) { Kaffeesorten.erkenne(context, b.titel) }
+                var sorte by remember(b) { mutableIntStateOf(start?.first ?: Kaffeesorten.KAFFEE) }
+                var milch by remember(b) { mutableStateOf(start?.second ?: false) }
+                var zucker by remember(b) { mutableStateOf(start?.third ?: false) }
+                val sorten = listOf(
+                    Kaffeesorten.ESPRESSO to R.string.ks_h_espresso, Kaffeesorten.KAFFEE to R.string.ks_h_kaffee,
+                    Kaffeesorten.LATTE_MACCHIATO to R.string.ks_h_latte_macchiato, Kaffeesorten.ENERGY to R.string.ks_h_energy_drink,
+                )
+                sorten.forEach { (k, name) ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 52.dp).selectable(sorte == k, role = Role.RadioButton) { sorte = k }.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = sorte == k, onClick = null)
+                        Text(stringResource(name), Modifier.padding(start = 12.dp), fontSize = 16.sp)
+                    }
+                }
+                Trenner(14.dp)
+                // Milch nur beim Kaffee - wie auf der Uhr.
+                if (sorte == Kaffeesorten.KAFFEE) Haken(stringResource(R.string.ks_b_milch), milch) { milch = it }
+                Haken(stringResource(R.string.ks_b_zucker), zucker) { zucker = it }
+                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && sorte == Kaffeesorten.KAFFEE, zucker))
+                if (p != null) Text(
+                    stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()),
+                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { ausfuehren { Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id)) } }) {
+                        Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && sorte == Kaffeesorten.KAFFEE, zucker) } }) {
+                        Text(stringResource(R.string.ks_b_speichern))
+                    }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Spacer(Modifier.weight(1f))
+                    Button(
+                        onClick = {
+                            ausfuehren {
+                                when (b) {
+                                    is Bearbeitung.Glas -> Gesundheitsdaten.loesche(context, HydrationRecord::class, listOf(b.id))
+                                    is Bearbeitung.Praeparate -> Gesundheitsdaten.loesche(context, NutritionRecord::class, b.ids)
+                                    is Bearbeitung.Getraenk -> false
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+                    ) { Text(stringResource(R.string.ks_b_loeschen)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Haken(text: String, an: Boolean, setze: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(an, role = Role.Checkbox, onValueChange = setze).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = an, onCheckedChange = null)
+        Text(text, Modifier.padding(start = 12.dp), fontSize = 16.sp)
     }
 }
 
@@ -289,11 +426,12 @@ private fun Strahl(
     zeit: @Composable () -> Unit,
     strahl: @Composable () -> Unit,
     onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
     inhalt: @Composable () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).then(modifier),
     ) {
         Box(Modifier.width(LocalZeitBreite.current).fillMaxHeight()) { zeit() }
         Box(Modifier.width(SPALTE_STRAHL).fillMaxHeight()) { strahl() }
@@ -321,16 +459,23 @@ private fun Zeittext(text: String, farbe: Color, fett: Boolean = false, oben: Dp
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String?) {
+private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String?, lang: (() -> Unit)?) {
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val grund = MaterialTheme.colorScheme.surfaceContainer
+    val haptik = LocalHapticFeedback.current
     Strahl(
         zeit = { Zeittext(zeit, grau) },
         strahl = {
             Linie()
             Box(Modifier.offset(5.dp, 5.dp).size(12.dp).border(BorderStroke(3.dp, grund), CircleShape).background(farbe, CircleShape))
         },
+        // Nur ein langer Druck: der Strahl ist zum Ansehen, ein Tipp tut nichts.
+        modifier = if (lang != null) Modifier.combinedClickable(onClick = {}, onLongClick = {
+            haptik.performHapticFeedback(HapticFeedbackType.LongPress)
+            lang()
+        }) else Modifier,
     ) {
         Column(Modifier.padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(titel, fontSize = 15.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

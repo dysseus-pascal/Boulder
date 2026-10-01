@@ -41,7 +41,15 @@ internal data class Nacht(
 }
 
 /** Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein Praeparat. */
-internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?)
+/**
+ * Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein
+ * Praeparat. [eigen]: von Boulder geschrieben - nur solche Eintraege darf
+ * Boulder in der Akte aendern oder loeschen.
+ */
+internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?, val id: String = "", val eigen: Boolean = false)
+
+/** Ein Glas Wasser von heute, mit seiner Kennung in der Akte. */
+internal data class Glaseintrag(val zeit: Instant, val id: String, val eigen: Boolean)
 
 internal data class GesundheitsStand(
     val schritte: Long,
@@ -77,6 +85,8 @@ internal data class GesundheitsStand(
     val mitSupCycle: Boolean = true,
     /** Getraenke und Praeparate von heute, fuer den Tagesstrahl. */
     val eintraege: List<Tageseintrag> = emptyList(),
+    /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesstrahl. */
+    val glasEintraege: List<Glaseintrag> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
 )
@@ -272,7 +282,7 @@ internal object Gesundheitsdaten {
                 (r.caffeine == null && r.energy == null)
             val mg = r.caffeine?.inMilligrams?.takeIf { it > 0 }
             val name = r.name?.ifBlank { null } ?: if (mg != null) context.getString(R.string.ks_h_koffein_n) else return@mapNotNull null
-            Tageseintrag(r.startTime, praeparat, name, mg)
+            Tageseintrag(r.startTime, praeparat, name, mg, r.metadata.id, r.metadata.dataOrigin.packageName == context.packageName)
         }
 
         val apps = UhrApps.installiert()
@@ -297,6 +307,7 @@ internal object Gesundheitsdaten {
             mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
             mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
             eintraege = eintraege.sortedByDescending { it.zeit },
+            glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
         )
@@ -328,6 +339,47 @@ internal object Gesundheitsdaten {
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
             davor = umgebung.filter { it.beginnUtc < beginnUtc }.sortedBy { it.beginnUtc }.takeLast(7),
         )
+    }
+
+    /**
+     * Eintraege aus der Akte loeschen - nur Boulders eigene, andere lehnt die
+     * Akte ohnehin ab. Die Uhr erfaehrt davon nichts: ein geloeschtes Glas
+     * zaehlt Drinktervall auf der Uhr weiter.
+     */
+    suspend fun loesche(context: Context, klasse: kotlin.reflect.KClass<out androidx.health.connect.client.records.Record>, ids: List<String>): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Akte(context).bereit()?.deleteRecords(klasse, recordIdsList = ids, clientRecordIdsList = emptyList()) != null
+        } catch (e: Exception) {
+            Log.w(TAG, "Loeschen: " + e.message)
+            false
+        }
+    }
+
+    /**
+     * Ein Getraenk umstellen - etwa wenn auf der Uhr die falsche Sorte
+     * gewaehlt war. Zeit und Kennung bleiben, Name, Koffein, kcal und Zucker
+     * kommen neu aus der Sorte.
+     */
+    suspend fun aendereGetraenk(context: Context, id: String, sorte: Int, milch: Boolean, zucker: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch, zucker)) ?: return@withContext false
+        try {
+            val klient = Akte(context).bereit() ?: return@withContext false
+            val alt = klient.readRecord(NutritionRecord::class, id).record
+            klient.updateRecords(listOf(NutritionRecord(
+                startTime = alt.startTime, startZoneOffset = alt.startZoneOffset,
+                endTime = alt.endTime, endZoneOffset = alt.endZoneOffset,
+                name = Kaffeesorten.name(context, p),
+                caffeine = if (p.koffeinMg > 0) Mass.milligrams(p.koffeinMg) else null,
+                energy = androidx.health.connect.client.units.Energy.kilocalories(p.kcal),
+                sugar = if (p.zuckerG > 0) Mass.grams(p.zuckerG) else null,
+                // DIESELBEN METADATEN: daran erkennt die Akte den Eintrag, der ersetzt wird.
+                metadata = alt.metadata,
+            )))
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Getraenk aendern: " + e.message)
+            false
+        }
     }
 
     /** Eine Tasse von Hand - als Ernaehrungseintrag mit Koffein, wie in Kiesel-Helper. */

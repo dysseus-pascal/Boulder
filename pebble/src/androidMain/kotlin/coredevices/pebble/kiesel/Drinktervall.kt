@@ -89,16 +89,7 @@ internal object Drinktervall {
         if (!Riegel.neu(context, "drinktervall-kaffee", wann.toString())) return null
 
         val beginn = minOf(Instant.ofEpochSecond(wann), Instant.now())
-        var name = if (eigen) n.texte[DT_DRINK_NAME]?.ifBlank { null } ?: context.getString(R.string.ks_h_getraenk_eigen) else context.getString(
-            when (p.sorte) {
-                Kaffeesorten.ESPRESSO -> R.string.ks_h_espresso
-                Kaffeesorten.LATTE_MACCHIATO -> R.string.ks_h_latte_macchiato
-                Kaffeesorten.ENERGY -> R.string.ks_h_energy_drink
-                else -> R.string.ks_h_kaffee
-            }
-        )
-        if (p.milch) name = context.getString(R.string.ks_h_mit_milch, name)
-        if (p.zucker) name = context.getString(R.string.ks_h_mit_zucker, name)
+        val name = Kaffeesorten.name(context, p, if (eigen) n.texte[DT_DRINK_NAME]?.ifBlank { null } ?: context.getString(R.string.ks_h_getraenk_eigen) else null)
         val satz = NutritionRecord(
             startTime = beginn,
             startZoneOffset = versatz(beginn),

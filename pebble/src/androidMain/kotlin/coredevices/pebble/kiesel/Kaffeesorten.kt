@@ -1,5 +1,8 @@
 package coredevices.pebble.kiesel
 
+import android.content.Context
+import coredevices.pebble.R
+
 /**
  * Was ein Kaffee aus Drinktervall in die Akte bringt: Koffein, kcal, Zucker.
  *
@@ -54,4 +57,38 @@ internal object Kaffeesorten {
 
     private fun zuckerG(zucker: Boolean) = if (zucker) ZUCKER_G else 0.0
     private fun zuckerKcal(zucker: Boolean) = zuckerG(zucker) * KCAL_JE_G_ZUCKER
+
+    private fun sortenId(sorte: Int): Int = when (sorte) {
+        ESPRESSO -> R.string.ks_h_espresso
+        LATTE_MACCHIATO -> R.string.ks_h_latte_macchiato
+        ENERGY -> R.string.ks_h_energy_drink
+        else -> R.string.ks_h_kaffee
+    }
+
+    /** Der Name in der Akte: "Coffee, milk, sugar" - wie Drinktervall ihn schreibt. */
+    fun name(context: Context, p: Portion, eigenerName: String? = null): String {
+        var name = eigenerName ?: context.getString(sortenId(p.sorte))
+        if (p.milch) name = context.getString(R.string.ks_h_mit_milch, name)
+        if (p.zucker) name = context.getString(R.string.ks_h_mit_zucker, name)
+        return name
+    }
+
+    /**
+     * Sorte, Milch und Zucker aus einem Namen der Akte zurueck - fuer das
+     * Bearbeiten. Null, wenn der Name keine unserer Sorten ist.
+     */
+    fun erkenne(context: Context, name: String): Triple<Int, Boolean, Boolean>? {
+        val milch = context.getString(R.string.ks_h_mit_milch, "")
+        val zucker = context.getString(R.string.ks_h_mit_zucker, "")
+        var rest = name
+        val mitZucker = rest.endsWith(zucker).also { if (it) rest = rest.removeSuffix(zucker) }
+        val mitMilch = rest.endsWith(milch).also { if (it) rest = rest.removeSuffix(milch) }
+        val sorte = listOf(ESPRESSO, KAFFEE, LATTE_MACCHIATO, ENERGY).firstOrNull { context.getString(sortenId(it)) == rest }
+            // Die Handeingabe schreibt "Energy" statt "Energy drink".
+            ?: if (rest == context.getString(R.string.ks_h_energy)) ENERGY else null
+        return sorte?.let { Triple(it, mitMilch, mitZucker) }
+    }
+
+    /** Das COFFEE_KIND der Uhr zu Sorte, Milch und Zucker. */
+    fun art(sorte: Int, milch: Boolean, zucker: Boolean): Int = sorte or (if (milch) MILCH else 0) or (if (zucker) ZUCKER else 0)
 }

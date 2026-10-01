@@ -27,6 +27,8 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -43,6 +46,8 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle as Textstil
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -82,8 +87,26 @@ import kotlin.math.roundToInt
  * Wasser, Praeparate und Koffein (aus B), zuletzt die Schritte der Woche.
  */
 
-// Breit genug fuer "11:22 AM" in einer Zeile.
-private val SPALTE_ZEIT = 62.dp
+/**
+ * Die Breite der Zeitspalte: gemessen an der breitesten Uhrzeit im Format
+ * des Telefons und in seiner Schriftgroesse. Fest auf "11:22 AM" ausgelegt
+ * verschenkte sie bei 24-Stunden-Zeit ein Viertel der Zeile.
+ */
+private val LocalZeitBreite = compositionLocalOf { 62.dp }
+
+@Composable
+private fun zeitBreiteMessen(): Dp {
+    val context = LocalContext.current
+    val messer = rememberTextMeasurer()
+    val dichte = LocalDensity.current
+    val stil = Textstil(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    // Zwei Kandidaten fuer die breiteste Zeit: zweistellige Stunde am Vor- und Nachmittag.
+    val proben = listOf(LocalTime.of(10, 58), LocalTime.of(22, 58)).map { t ->
+        uhrzeit(context, t.atDate(LocalDate.now()).atZone(ZoneId.systemDefault()).toInstant())
+    }
+    val breite = proben.maxOf { messer.measure(it, stil).size.width }
+    return with(dichte) { breite.toDp() } + 6.dp
+}
 private val SPALTE_STRAHL = 22.dp
 
 private fun liter(ml: Int): String = if (ml == 0) "0" else Gesundheitsrechnung.literKurz(ml)
@@ -247,6 +270,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
 
     Kasten {
         Kopf(stringResource(R.string.ks_h_heute_bisher))
+        CompositionLocalProvider(LocalZeitBreite provides zeitBreiteMessen()) {
         Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
             s.nacht?.let { n -> Nachtblock(n, hinweis) { wege.nacht(n.beginnUtc) } }
             ereignisse.forEach { e -> Strahlzeile(uhrzeit(context, e.zeit), e.farbe, e.titel, e.unter) }
@@ -254,6 +278,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
             if (bett != null) {
                 Bettzeile(uhrzeit(context, bett), if (bettKoffein > 0) stringResource(R.string.ks_f_koffein_dann, bettKoffein) else null)
             }
+        }
         }
     }
 }
@@ -270,7 +295,7 @@ private fun Strahl(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
-        Box(Modifier.width(SPALTE_ZEIT).fillMaxHeight()) { zeit() }
+        Box(Modifier.width(LocalZeitBreite.current).fillMaxHeight()) { zeit() }
         Box(Modifier.width(SPALTE_STRAHL).fillMaxHeight()) { strahl() }
         Box(Modifier.weight(1f).padding(start = 6.dp)) { inhalt() }
     }

@@ -29,6 +29,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Pulsbin
+import kotlin.math.roundToInt
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
 import java.time.Instant
@@ -82,9 +84,10 @@ private fun DrawScope.nachtschatten(
     val anfang = maxOf(a, von)
     val ende = minOf(b, bis)
     if (ende <= anfang) return
-    drawRect(farbe, Offset(x(anfang), 0f), Size(x(ende) - x(anfang), boden))
+    drawRoundRect(farbe, Offset(x(anfang), 0f), Size(x(ende) - x(anfang), boden), CornerRadius(4.dp.toPx()))
     val m = messer.measure(text, stil)
-    if (m.size.width < x(ende) - x(anfang)) drawText(m, topLeft = Offset(x(anfang) + 4.dp.toPx(), 2.dp.toPx()))
+    // Mittig oben, wie im Entwurf: so liest man "Nacht" als Ueberschrift der Flaeche.
+    if (m.size.width < x(ende) - x(anfang)) drawText(m, topLeft = Offset((x(anfang) + x(ende) - m.size.width) / 2f, 3.dp.toPx()))
 }
 
 /**
@@ -156,7 +159,8 @@ internal fun Pulsband(
     val kraeftig = stil.copy(color = MaterialTheme.colorScheme.onSurface)
     val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
     val linie = MaterialTheme.colorScheme.onSurfaceVariant
-    val schatten = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+    // Die Nacht als deutliche Flaeche: bei 6 % sah man sie auf dem Telefon nicht.
+    val schatten = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     val nachtText = stringResource(R.string.ks_h_nacht_kurz)
     Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
         val links = 28.dp.toPx()
@@ -186,22 +190,32 @@ internal fun Pulsband(
             achse(w)
         }
 
-        Gesundheitsrechnung.stuecke(bins).forEach { st ->
+        Gesundheitsrechnung.stuecke(bins).forEach { roh ->
             // Ein einzelner Bin haette weder Flaeche noch Strecke - er wird ein Punkt.
-            if (st.size == 1) {
-                drawCircle(farbe, 2.dp.toPx(), Offset(x(st[0].sekunde), y(st[0].median)))
+            if (roh.size == 1) {
+                drawCircle(farbe, 2.dp.toPx(), Offset(x(roh[0].sekunde), y(roh[0].median)))
                 return@forEach
             }
+            // GEGLAETTET: ueber eine gute halbe Stunde gemittelt und weich
+            // gezeichnet. Fuenf-Minuten-Zacken lesen sich als Unruhe, die es
+            // nicht gab - gefragt ist der Verlauf des Tages.
+            val st = glaetten(roh, 3)
+            val oben = st.map { Offset(x(it.sekunde), y(it.hoechster)) }
+            val unten = st.map { Offset(x(it.sekunde), y(it.tiefster)) }
             val band = Path().apply {
-                st.forEachIndexed { i, b -> if (i == 0) moveTo(x(b.sekunde), y(b.hoechster)) else lineTo(x(b.sekunde), y(b.hoechster)) }
-                st.asReversed().forEach { b -> lineTo(x(b.sekunde), y(b.tiefster)) }
+                moveTo(oben.first().x, oben.first().y)
+                weich(oben)
+                lineTo(unten.last().x, unten.last().y)
+                weich(unten.asReversed())
                 close()
             }
-            drawPath(band, farbe.copy(alpha = 0.18f))
+            drawPath(band, farbe.copy(alpha = 0.22f))
+            val punkteMitte = st.map { Offset(x(it.sekunde), y(it.median)) }
             val mitte = Path().apply {
-                st.forEachIndexed { i, b -> if (i == 0) moveTo(x(b.sekunde), y(b.median)) else lineTo(x(b.sekunde), y(b.median)) }
+                moveTo(punkteMitte.first().x, punkteMitte.first().y)
+                weich(punkteMitte)
             }
-            drawPath(mitte, farbe, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(mitte, farbe, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         }
         val letzter = bins.last()
         val p = Offset(x(letzter.sekunde), y(letzter.median))
@@ -219,6 +233,30 @@ internal fun Pulsband(
             drawText(s, topLeft = Offset((x(t) - s.size.width / 2f).coerceIn(links, rechts - s.size.width), size.height - s.size.height))
         }
     }
+}
+
+/** Gleitendes Mittel ueber [halb] Bins nach jeder Seite - Median, Tiefster und Hoechster je fuer sich. */
+private fun glaetten(bins: List<Pulsbin>, halb: Int): List<Pulsbin> = bins.indices.map { i ->
+    val fenster = bins.subList(maxOf(0, i - halb), minOf(bins.size, i + halb + 1))
+    Pulsbin(
+        bins[i].sekunde,
+        fenster.map { it.median }.average().roundToInt(),
+        fenster.map { it.tiefster }.average().roundToInt(),
+        fenster.map { it.hoechster }.average().roundToInt(),
+    )
+}
+
+/**
+ * Durch die Punkte weich weiterzeichnen: Kurven von Mitte zu Mitte mit den
+ * Punkten als Stuetzen. Der Pfad steht schon auf dem ersten Punkt.
+ */
+private fun Path.weich(p: List<Offset>) {
+    if (p.size < 3) { p.drop(1).forEach { lineTo(it.x, it.y) }; return }
+    for (i in 1 until p.lastIndex) {
+        val mitte = Offset((p[i].x + p[i + 1].x) / 2f, (p[i].y + p[i + 1].y) / 2f)
+        quadraticTo(p[i].x, p[i].y, mitte.x, mitte.y)
+    }
+    lineTo(p.last().x, p.last().y)
 }
 
 /** Volle Stunden zwischen [von] und [bis] (Sekunden), hoechstens fuenf Beschriftungen. */

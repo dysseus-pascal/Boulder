@@ -173,12 +173,6 @@ internal object Auswertung {
     fun wochenAb(erster: LocalDate, grenze: LocalDate, heute: LocalDate): LocalDate =
         erster.with(DayOfWeek.MONDAY).plusWeeks(2).plusDays(ChronoUnit.DAYS.between(grenze, heute) + 1)
 
-    /** Wann ein Paar fruehestens belastbar wird - null, wenn die beiden noch keinen gemeinsamen Tag haben. */
-    fun linksAb(eins: List<Pair<LocalDate, Double>>, zwei: List<Pair<LocalDate, Double>>, grenze: LocalDate): LocalDate? {
-        val b = zwei.toMap()
-        return eins.filter { it.first < grenze && it.first in b }.minOfOrNull { it.first }?.plusDays(PAARE_MINDESTENS.toLong())
-    }
-
     /**
      * Die Richtung: vier Wochen gegen vier Wochen.
      *
@@ -205,88 +199,68 @@ internal object Auswertung {
     }
 
     /**
-     * Zwei Groessen gegeneinander.
+     * Zwei Gruppen von Tagen gegeneinander - "HRV nach kurzen Naechten" gegen
+     * "nach laengeren". Kein Korrelationskoeffizient: der sagt wenig und
+     * klingt nach mehr. Hier steht ein Unterschied in der Einheit der Groesse.
      *
-     * DIE EINZIGE STELLE, DIE EINEN ZUSAMMENHANG BEHAUPTET - und deshalb die,
-     * die am meisten Vorsicht braucht. Gerechnet wird der Korrelationskoeffizient
-     * nach Pearson und eine Ausgleichsgerade nach kleinsten Quadraten; beides
-     * sagt NICHTS ueber Ursache und Wirkung. Wer lange schlaeft, hat vielleicht
-     * einen tieferen Ruhepuls - oder wer einen tieferen Ruhepuls hat, schlaeft
-     * besser, oder beides haengt an einem dritten, das hier gar nicht steht.
+     * KLAR heisst: der Unterschied der Mediane ist mindestens zweimal so gross
+     * wie sein Standardfehler. Darunter ist er von der Schwankung von Tag zu
+     * Tag nicht zu trennen, und die Karte sagt "no difference".
      */
-    data class Zusammenhang(
-        val n: Int,
-        /** Pearson, -1 bis 1. `null`, wenn eine Seite gar nicht schwankt. */
-        val r: Double?,
-        val steigung: Double,
-        val achse: Double,
-        val punkte: List<Pair<Double, Double>>,
+    data class Gruppenvergleich(
+        val a: List<Double>,
+        val b: List<Double>,
+        val medianA: Double,
+        val medianB: Double,
+        /** Median A minus Median B. */
+        val unterschied: Double,
+        /** Die uebliche Streuung von Tag zu Tag (gepoolte Standardabweichung). */
+        val streuung: Double,
+        val klar: Boolean,
     ) {
-        /** Reicht die Zahl der Tage fuer eine Aussage? */
-        val belastbar: Boolean get() = n >= PAARE_MINDESTENS && r != null
-
-        /**
-         * Die Staerke als Stufe: 0 kein erkennbarer, 1 schwach, 2 mittel,
-         * 3 deutlich. Die Worte dazu stehen in den Ressourcen - als ganze
-         * Saetze, weil sich "ein schwacher Zusammenhang" nicht in jeder
-         * Sprache aus Adjektiv und Nomen zusammensetzen laesst.
-         *
-         * Die Grenzen sind Konvention, keine Naturkonstante - aber eine Zahl
-         * wie 0,37 allein sagt den meisten Menschen nichts, und "schwach" ist
-         * ehrlicher als das Schweigen dazu.
-         */
-        val stufe: Int
-            get() {
-                val betrag = kotlin.math.abs(r ?: 0.0)
-                return when {
-                    betrag < 0.2 -> 0
-                    betrag < 0.4 -> 1
-                    betrag < 0.6 -> 2
-                    else -> 3
-                }
-            }
+        val genug: Boolean get() = a.size >= VERGLEICH_MINDESTENS && b.size >= VERGLEICH_MINDESTENS
     }
 
-    /** Unter so vielen gemeinsamen Tagen wird kein Zusammenhang gezeigt. */
-    const val PAARE_MINDESTENS = 14
+    /** So viele Tage braucht jede Gruppe, damit ein Vergleich erscheint. */
+    const val VERGLEICH_MINDESTENS = 5
+    /** Ueber so viele Tage wird verglichen. */
+    const val VERGLEICH_TAGE = 30L
 
     /**
-     * Die Tage verbinden, an denen BEIDE Groessen etwas wissen.
-     *
-     * Ein Tag mit Schlaf, aber ohne Ruhepuls gehoert in kein Paar. Ihn mit
-     * einem Mittelwert aufzufuellen hiesse, eine Messung zu erfinden, und
-     * gerade hier faellt so etwas nicht auf: die Wolke sieht danach sogar
-     * ordentlicher aus.
+     * Die Werte von [ziel] in den [VERGLEICH_TAGE] Tagen vor [grenze], nach
+     * [gruppe] aufgeteilt: true Gruppe A, false Gruppe B, null gehoert zu keiner
+     * (etwa wenn die Bedingung an dem Tag unbekannt ist).
      */
-    fun zusammenhang(
-        eins: List<Pair<LocalDate, Double>>,
-        zwei: List<Pair<LocalDate, Double>>,
-        grenze: LocalDate,
-    ): Zusammenhang {
-        val b = zwei.toMap()
-        val paare = eins.filter { it.first < grenze }
-            .mapNotNull { (tag, x) -> b[tag]?.let { y -> x to y } }
-        val n = paare.size
-        if (n < 3) return Zusammenhang(n, null, 0.0, 0.0, paare)
-
-        val mx = paare.sumOf { it.first } / n
-        val my = paare.sumOf { it.second } / n
-        var sxy = 0.0; var sxx = 0.0; var syy = 0.0
-        paare.forEach { (x, y) ->
-            sxy += (x - mx) * (y - my)
-            sxx += (x - mx) * (x - mx)
-            syy += (y - my) * (y - my)
+    fun vergleich(ziel: List<Pair<LocalDate, Double>>, grenze: LocalDate, gruppe: (LocalDate) -> Boolean?): Gruppenvergleich {
+        val von = grenze.minusDays(VERGLEICH_TAGE)
+        val a = mutableListOf<Double>()
+        val b = mutableListOf<Double>()
+        ziel.filter { !it.first.isBefore(von) && it.first.isBefore(grenze) }.forEach { (tag, w) ->
+            when (gruppe(tag)) {
+                true -> a += w
+                false -> b += w
+                null -> Unit
+            }
         }
-        if (sxx <= 0.0 || syy <= 0.0) return Zusammenhang(n, null, 0.0, my, paare)
-
-        val steigung = sxy / sxx
-        return Zusammenhang(
-            n = n,
-            r = sxy / kotlin.math.sqrt(sxx * syy),
-            steigung = steigung,
-            achse = my - steigung * mx,
-            punkte = paare,
-        )
+        fun median(l: List<Double>): Double {
+            if (l.isEmpty()) return 0.0
+            val s = l.sorted()
+            return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
+        }
+        fun varianz(l: List<Double>): Double {
+            if (l.size < 2) return 0.0
+            val m = l.average()
+            return l.sumOf { (it - m) * (it - m) } / (l.size - 1)
+        }
+        val ma = median(a)
+        val mb = median(b)
+        val streuung = if (a.size + b.size > 2) {
+            kotlin.math.sqrt(((a.size - 1).coerceAtLeast(0) * varianz(a) + (b.size - 1).coerceAtLeast(0) * varianz(b)) / (a.size + b.size - 2).coerceAtLeast(1))
+        } else 0.0
+        // Der Standardfehler des Unterschieds; der Median streut etwa 1.25-mal so stark wie der Mittelwert.
+        val fehler = if (a.isNotEmpty() && b.isNotEmpty()) 1.25 * streuung * kotlin.math.sqrt(1.0 / a.size + 1.0 / b.size) else Double.MAX_VALUE
+        val unterschied = ma - mb
+        return Gruppenvergleich(a, b, ma, mb, unterschied, streuung, a.isNotEmpty() && b.isNotEmpty() && kotlin.math.abs(unterschied) >= 2 * fehler && fehler > 0)
     }
 
     /**

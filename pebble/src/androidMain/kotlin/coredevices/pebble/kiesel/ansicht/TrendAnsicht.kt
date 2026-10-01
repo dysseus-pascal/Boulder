@@ -49,8 +49,8 @@ import kotlin.math.roundToInt
 /**
  * Die Trends einer Gruppe. Je Messgroesse die Bausteine, die schon tragen:
  * die letzten vierzehn Tage vom ersten Tag an, die typische Woche ab drei
- * Wochentagen, die Wochen ab drei Kalenderwochen, die Zusammenhaenge ab
- * vierzehn gemeinsamen Tagen. Was noch nicht traegt, kuendigt sich als leise
+ * Wochentagen, die Wochen ab drei Kalenderwochen, die Vergleiche ab fuenf
+ * Tagen je Gruppe. Was noch nicht traegt, kuendigt sich als leise
  * Zeile mit Datum an - eine Seite, die nur "zu wenig" sagt, schaut niemand
  * ein zweites Mal an.
  */
@@ -62,7 +62,12 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     LaunchedEffect(Unit) { reihen = Trenddaten.lies(context, api) }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
     var mitSupCycle by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { mitSupCycle = UhrApps.hat(UhrApps.installiert(), SupCycle.UUID) }
+    var mitDrinktervall by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        val apps = UhrApps.installiert()
+        mitSupCycle = UhrApps.hat(apps, SupCycle.UUID)
+        mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID)
+    }
     val titel = stringResource(
         when (gruppe) {
             "schlaf" -> R.string.ks_tr_schlaf
@@ -109,7 +114,7 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
         }
 
         if (gruppe == "schlaf") Schlafmitte(d, grenze)
-        Zusammenhaenge(d, gruppe, heute)
+        Vergleiche(d, gruppe, heute, mitDrinktervall)
 
         val tage = getragen.flatMap { g -> d[g.spalte].orEmpty().map { it.first } }.filter { it < grenze }.distinct()
         Leise(pluralStringResource(if (nacht) R.plurals.ks_trn_fuss_naechte else R.plurals.ks_trn_fuss_tage, tage.size, tage.size, datum(tage.min())))
@@ -318,66 +323,3 @@ private fun Praeparattrend(d: Reihen, grenze: LocalDate, heute: LocalDate) {
     }
 }
 
-/** Ein Paar, nach dem man wirklich fragt - Namen als Ressourcen fuer die Satzmitte. */
-private data class Paar(val x: String, val nameX: Int, val y: String, val nameY: Int)
-
-private val PAARE = listOf(
-    Paar("schlaf", R.string.ks_tr_n_schlaf, "ruhepuls", R.string.ks_tr_n_ruhepuls),
-    Paar("schlaf", R.string.ks_tr_n_schlaf, "hrv", R.string.ks_tr_n_hrv),
-    Paar("tief", R.string.ks_tr_n_tief, "hrv", R.string.ks_tr_n_hrv),
-    Paar("schritte", R.string.ks_tr_n_schritte, "schlaf", R.string.ks_tr_n_schlaf),
-    Paar("aktiv", R.string.ks_tr_n_aktiv, "ruhepuls", R.string.ks_tr_n_ruhepuls),
-    Paar("koffein_mg", R.string.ks_tr_n_koffein, "tief", R.string.ks_tr_n_tief),
-)
-
-private val BEZUG = mapOf(
-    "bewegung" to setOf("schritte", "aktiv"),
-    "schlaf" to setOf("schlaf", "tief"),
-    "herz" to setOf("ruhepuls", "hrv"),
-    "ernaehrung" to setOf("koffein_mg"),
-)
-
-/** Wie eine Groesse an der Achse steht: Minuten als Dauer, Schritte mit Tausendertrennung. */
-private fun achsform(spalte: String): (Double) -> String = when (spalte) {
-    "schlaf", "tief", "aktiv" -> { w -> dauerText(w.roundToInt().toLong()) }
-    "schritte" -> { w -> String.format(Locale.getDefault(), "%,.0f", w) }
-    "koffein_mg" -> { w -> "${w.roundToInt()} mg" }
-    else -> { w -> "${w.roundToInt()}" }
-}
-
-@Composable
-private fun Zusammenhaenge(d: Reihen, gruppe: String, heute: LocalDate) {
-    val bezug = BEZUG[gruppe].orEmpty()
-    val paare = PAARE.filter { it.x in bezug || it.y in bezug }
-    if (paare.isEmpty()) return
-    // Ein Paar aus Nacht und Tag reicht nur so weit wie seine strengere Seite:
-    // die heutige Nacht ist fertig, die heutigen Schritte sind es nicht.
-    fun grenze(p: Paar) = minOf(grenzeVon(p.x, heute), grenzeVon(p.y, heute))
-    val bilder = paare.map { it to Auswertung.zusammenhang(d[it.x].orEmpty(), d[it.y].orEmpty(), grenze(it)) }.filter { it.second.belastbar }
-    if (bilder.isEmpty()) {
-        val ab = paare.mapNotNull { Auswertung.linksAb(d[it.x].orEmpty(), d[it.y].orEmpty(), grenze(it)) }.minOrNull() ?: return
-        Leise(if (ab > heute) stringResource(R.string.ks_trn_links_ab, datum(ab)) else stringResource(R.string.ks_trn_links_spaeter, Auswertung.PAARE_MINDESTENS))
-        return
-    }
-    Ueberschrift(stringResource(R.string.ks_tr_zusammenhaenge))
-    bilder.forEach { (p, z) ->
-        val nx = stringResource(p.nameX)
-        val ny = stringResource(p.nameY)
-        Karte {
-            Text(stringResource(R.string.ks_tr_x_und_y, nx, ny).replaceFirstChar { it.titlecase(Locale.getDefault()) }, fontWeight = FontWeight.Bold)
-            Streubild(z, FARBE_SCHLAF_T, achsform(p.x), achsform(p.y))
-            val r = z.r ?: 0.0
-            val staerke = stringResource(
-                when (z.stufe) {
-                    0 -> R.string.ks_tr_staerke_0
-                    1 -> R.string.ks_tr_staerke_1
-                    2 -> R.string.ks_tr_staerke_2
-                    else -> R.string.ks_tr_staerke_3
-                }
-            )
-            Satz(stringResource(R.string.ks_tr_r_satz, String.format(Locale.getDefault(), "%.2f", r), z.n, staerke) +
-                if (abs(r) >= 0.2) " " + stringResource(if (r > 0) R.string.ks_tr_mehr_mehr else R.string.ks_tr_mehr_weniger, nx, ny) else "")
-        }
-    }
-    Leise(stringResource(R.string.ks_tr_keine_ursache))
-}

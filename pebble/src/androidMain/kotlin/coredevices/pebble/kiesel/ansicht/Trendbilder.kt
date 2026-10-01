@@ -261,37 +261,3 @@ internal fun Tagesbild(
         linien(messer, stil, linie, links, size.width, marke?.let { Linie(y(it), zielText) }, mittel?.let { Linie(y(it), mittelText) }, belegt)
     }
 }
-
-/** Zwei Groessen gegeneinander: jeder Tag ein Punkt, dazu die Ausgleichsgerade. */
-@Composable
-internal fun Streubild(z: Auswertung.Zusammenhang, farbe: Color, formX: (Double) -> String, formY: (Double) -> String) {
-    if (z.punkte.size < 3) return
-    val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val raster = MaterialTheme.colorScheme.outlineVariant
-    Canvas(Modifier.fillMaxWidth().height(170.dp).padding(top = 8.dp)) {
-        val links = 36.dp.toPx()
-        val fuss = 16.dp.toPx()
-        val boden = size.height - fuss
-        val xs = z.punkte.map { it.first }
-        val ys = z.punkte.map { it.second }
-        val (x0, x1) = xs.min() to xs.max().coerceAtLeast(xs.min() + 1e-6)
-        val (y0, y1) = ys.min() to ys.max().coerceAtLeast(ys.min() + 1e-6)
-        fun px(x: Double) = links + ((x - x0) / (x1 - x0)).toFloat() * (size.width - links - 4.dp.toPx())
-        fun py(y: Double) = boden - ((y - y0) / (y1 - y0)).toFloat() * (boden - 6.dp.toPx())
-        drawLine(raster, Offset(links, boden), Offset(size.width, boden), 1.dp.toPx())
-        drawLine(raster, Offset(links, 0f), Offset(links, boden), 1.dp.toPx())
-        z.punkte.forEach { (x, y) -> drawCircle(farbe.copy(alpha = 0.6f), 3.dp.toPx(), Offset(px(x), py(y))) }
-        if (z.r != null) {
-            drawLine(farbe, Offset(px(x0), py(z.achse + z.steigung * x0)), Offset(px(x1), py(z.achse + z.steigung * x1)), 2.dp.toPx())
-        }
-        listOf(y0, y1).forEach { y ->
-            val m = messer.measure(formY(y), stil)
-            drawText(m, topLeft = Offset(links - 4.dp.toPx() - m.size.width, (py(y) - m.size.height / 2f).coerceIn(0f, boden - m.size.height)))
-        }
-        listOf(x0, x1).forEach { x ->
-            val m = messer.measure(formX(x), stil)
-            drawText(m, topLeft = Offset((px(x) - m.size.width / 2f).coerceIn(links, size.width - m.size.width), size.height - m.size.height))
-        }
-    }
-}

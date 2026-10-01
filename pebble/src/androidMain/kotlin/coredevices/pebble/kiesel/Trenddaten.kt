@@ -83,12 +83,16 @@ internal object Trenddaten {
         val mitte = mutableListOf<Pair<LocalDate, Double>>()
         val ruhe = mutableListOf<Pair<LocalDate, Double>>()
         val hrv = mutableListOf<Pair<LocalDate, Double>>()
+        val ein = mutableListOf<Pair<LocalDate, Double>>()
         naechte.forEach { e ->
             val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
             if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
             val phasen = Gesundheitsrechnung.phasenMinuten(runCatching { api.getNachtAbschnitte(e.beginnUtc) }.getOrDefault(emptyList()))
             if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()
             if (e.aufwachen > e.einschlafen) {
+                // Das Einschlafen in Minuten ab 18 Uhr des Vortags, wie die Mitte - fuer "spaet ins Bett".
+                ein += tag to (Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L).epochSecond -
+                    tag.minusDays(1).atTime(18, 0).atZone(zone).toEpochSecond()) / 60.0
                 mitte += tag to schlafMitte(
                     Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L), Instant.ofEpochSecond(e.beginnUtc + e.aufwachen * 60L), zone,
                 )
@@ -101,6 +105,7 @@ internal object Trenddaten {
         neu["schlaf_mitte"] = mitte
         neu["ruhepuls"] = ruhe
         neu["hrv"] = hrv
+        neu["einschlafen"] = ein
 
         val klient = Akte(context).bereit()
         suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>> = try {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -380,14 +381,16 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
     ) {
         Column(Modifier.padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.ks_d_eingeschlafen), fontSize = 15.sp, lineHeight = 20.sp)
+            // Das Hypnogramm wie in der Schlafansicht - der Verlauf sagt mehr als Anteile.
+            if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 96.dp)
             if (n.mitPhasen) {
-                val phasen = listOf(3 to R.string.ks_h_rem, 1 to R.string.ks_h_leicht, 2 to R.string.ks_h_tief)
-                Anteilsbalken(phasen.map { (p, _) -> n.phasen[p] to PHASENFARBEN[p] })
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val phasen = listOf(2 to R.string.ks_h_tief, 3 to R.string.ks_h_rem, 1 to R.string.ks_h_leicht)
+                // Umbrechen nur zwischen den Eintraegen, nie mitten in einem.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     phasen.forEach { (p, name) ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             Box(Modifier.size(8.dp).background(PHASENFARBEN[p], CircleShape))
-                            Text(stringResource(name) + " " + stundenMinuten(n.phasen[p]), fontSize = 12.sp, lineHeight = 16.sp, color = grau)
+                            Text(stringResource(name) + " " + stundenMinuten(n.phasen[p]), fontSize = 12.sp, lineHeight = 16.sp, color = grau, maxLines = 1, softWrap = false)
                         }
                     }
                 }

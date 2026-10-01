@@ -265,7 +265,11 @@ internal object Gesundheitsdaten {
         // WAS ES WAR, SAGT DIE KENNUNG: SupCycle schreibt "supcycle-...", alles
         // andere mit Namen oder Koffein ist ein Getraenk.
         val eintraege = nahrung.filter { it.startTime.atZone(zone).toLocalDate() == heute }.mapNotNull { r ->
-            val praeparat = r.metadata.clientRecordId?.startsWith("supcycle-") == true
+            // PRAEPARAT IST, WAS NICHTS ENTHAELT: ohne Koffein und ohne Energie
+            // ist ein Eintrag kein Getraenk. Die Kennung "supcycle-" allein trug
+            // nicht: auf dem Telefon standen SupCycles Haken als Getraenke da.
+            val praeparat = r.metadata.clientRecordId?.startsWith("supcycle-") == true ||
+                (r.caffeine == null && r.energy == null)
             val mg = r.caffeine?.inMilligrams?.takeIf { it > 0 }
             val name = r.name?.ifBlank { null } ?: if (mg != null) context.getString(R.string.ks_h_koffein_n) else return@mapNotNull null
             Tageseintrag(r.startTime, praeparat, name, mg)

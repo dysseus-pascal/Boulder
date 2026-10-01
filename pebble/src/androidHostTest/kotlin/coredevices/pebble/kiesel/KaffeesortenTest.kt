@@ -40,3 +40,13 @@ class KaffeesortenTest {
         assertNull(Kaffeesorten.portion(7))
     }
 }
+
+class EigenesGetraenkTest {
+    @Test
+    fun werteVonDerUhrBegrenzt() {
+        val p = Kaffeesorten.eigen(180, 0)
+        assertEquals(180.0, p.kcal)
+        assertEquals(0.0, p.koffeinMg)
+        assertEquals(2000.0, Kaffeesorten.eigen(99999, 5).kcal)
+    }
+}

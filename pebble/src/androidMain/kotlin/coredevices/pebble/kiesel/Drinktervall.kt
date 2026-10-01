@@ -41,6 +41,10 @@ internal object Drinktervall {
     // (Sorte in den unteren vier Bits, Milch 0x10, Zucker 0x20).
     const val DT_COFFEE_AT = 10012
     const val DT_COFFEE_KIND = 10013
+    // Seit 1.16.0: ein eigenes Getraenk (Sorte 4) bringt Name, kcal und Koffein mit.
+    const val DT_DRINK_NAME = 10033
+    const val DT_DRINK_KCAL = 10034
+    const val DT_DRINK_MG = 10035
 
     /**
      * Wie weit zwei Eintraege auseinander liegen duerfen und trotzdem dasselbe
@@ -72,14 +76,20 @@ internal object Drinktervall {
     private suspend fun kaffee(context: Context, n: KieselNachricht): String? {
         val wann = n.zahlen[DT_COFFEE_AT] ?: return null
         val art = n.zahlen[DT_COFFEE_KIND] ?: return null
-        val p = Kaffeesorten.portion(art.toInt()) ?: return null
+        // Ein eigenes Getraenk rechnet nicht Boulder, es kommt fertig von der Uhr.
+        val eigen = (art.toInt() and 0x0F) == Kaffeesorten.EIGEN
+        val p = if (eigen) {
+            Kaffeesorten.eigen(n.zahlen[DT_DRINK_KCAL] ?: 0, n.zahlen[DT_DRINK_MG] ?: 0)
+        } else {
+            Kaffeesorten.portion(art.toInt())
+        } ?: return null
         if (wann <= 0) return null
         // Auch der Kaffee faehrt mit, bis das Telefon bestaetigt - also
         // womoeglich zweimal.
         if (!Riegel.neu(context, "drinktervall-kaffee", wann.toString())) return null
 
         val beginn = minOf(Instant.ofEpochSecond(wann), Instant.now())
-        var name = context.getString(
+        var name = if (eigen) n.texte[DT_DRINK_NAME]?.ifBlank { null } ?: context.getString(R.string.ks_h_getraenk_eigen) else context.getString(
             when (p.sorte) {
                 Kaffeesorten.ESPRESSO -> R.string.ks_h_espresso
                 Kaffeesorten.LATTE_MACCHIATO -> R.string.ks_h_latte_macchiato
@@ -95,7 +105,8 @@ internal object Drinktervall {
             endTime = beginn.plusSeconds(60),
             endZoneOffset = versatz(beginn),
             name = name,
-            caffeine = Mass.milligrams(p.koffeinMg),
+            // Ohne Koffein kein Koffeinfeld - sonst zaehlte ein Smoothie als 0-mg-Dosis.
+            caffeine = if (p.koffeinMg > 0) Mass.milligrams(p.koffeinMg) else null,
             energy = Energy.kilocalories(p.kcal),
             sugar = if (p.zuckerG > 0) Mass.grams(p.zuckerG) else null,
             metadata = Kieselsport.vonDerUhr("drinktervall-kaffee-$wann"),

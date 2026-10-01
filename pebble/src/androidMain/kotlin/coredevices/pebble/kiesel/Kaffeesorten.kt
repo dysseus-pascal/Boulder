@@ -15,6 +15,8 @@ internal object Kaffeesorten {
     const val KAFFEE = 1
     const val LATTE_MACCHIATO = 2
     const val ENERGY = 3
+    /** Ein eigenes Getraenk aus Drinktervalls Einstellungen: Werte kommen von der Uhr. */
+    const val EIGEN = 4
 
     private const val MILCH = 0x10
     private const val ZUCKER = 0x20
@@ -45,6 +47,10 @@ internal object Kaffeesorten {
             else -> null
         }
     }
+
+    /** Ein eigenes Getraenk, wie die Uhr es meldet - unsinnige Werte begrenzt. */
+    fun eigen(kcal: Long, mg: Long): Portion =
+        Portion(EIGEN, false, false, mg.coerceIn(0, 1000).toDouble(), kcal.coerceIn(0, 2000).toDouble(), 0.0)
 
     private fun zuckerG(zucker: Boolean) = if (zucker) ZUCKER_G else 0.0
     private fun zuckerKcal(zucker: Boolean) = zuckerG(zucker) * KCAL_JE_G_ZUCKER

@@ -88,15 +88,14 @@ internal fun AkkuAnsicht() {
                 Wert(zahl(stand.nachtJeStunde, 1), stringResource(R.string.ks_akku_nacht))
                 Wert(zahl(stand.tagJeStunde, 1), stringResource(R.string.ks_akku_tag))
             }
-            Text(
-                stringResource(if (stand.naechte.isEmpty()) R.string.ks_akku_keine else R.string.ks_akku_hinweis),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Nur der Leerzustand; wie geschaetzt wird, erklaert die Seite nicht (keine Textwaende).
+            if (stand.naechte.isEmpty()) {
+                Text(stringResource(R.string.ks_akku_keine), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         if (stand.punkte.size >= 2) {
             Ueberschrift(stringResource(R.string.ks_akku_verlauf))
             Karte {
-                Text(stringResource(R.string.ks_akku_verlauf_text), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // Die Achse zaehlt Tage seit dem ersten Punkt.
                 val erster = stand.punkte.first().first
                 Verlauf(

@@ -3,7 +3,7 @@
 <resources>
     <string name="ks_trn_start_tag">Trends start with the first full day.</string>
     <string name="ks_trn_start_nacht">Trends start with the first night.</string>
-    <string name="ks_trn_letzte14">LAST 14 DAYS – %1$s</string>
+    <string name="ks_trn_letzte14">LAST 14 DAYS · %1$s</string>
     <plurals name="ks_trn_schnitt_tage">
         <item quantity="one">Avg, 1 day</item>
         <item quantity="other">Avg, %1$d days</item>
@@ -14,18 +14,24 @@
     <string name="ks_trn_so_far">so far</string>
     <string name="ks_trn_tag_fuer_tag">DAY BY DAY</string>
     <string name="ks_trn_tief_kurz">deep %1$s</string>
-    <string name="ks_trn_woche_ab">Typical week from about %1$s.</string>
-    <string name="ks_trn_woche_spaeter">Typical week once three weekdays have two days each.</string>
-    <string name="ks_trn_wochen_ab">Weeks from %1$s.</string>
-    <string name="ks_trn_wochen_spaeter">Weeks once three calendar weeks have data.</string>
+    <string name="ks_trn_woche_ab">Typical week from %1$s</string>
+    <string name="ks_trn_wochen_ab">Weeks from %1$s</string>
     <string name="ks_trn_links_ab">Links from about %1$s.</string>
     <string name="ks_trn_links_spaeter">Links once %1$d days have both values.</string>
-    <plurals name="ks_trn_fuss_tage">
-        <item quantity="one">1 day since %2$s. Today is left out until it is complete.</item>
-        <item quantity="other">%1$d days since %2$s. Today is left out until it is complete.</item>
-    </plurals>
-    <plurals name="ks_trn_fuss_naechte">
-        <item quantity="one">1 night since %2$s.</item>
-        <item quantity="other">%1$d nights since %2$s.</item>
-    </plurals>
+    <string name="ks_trn_typische_woche">TYPICAL WEEK · %1$s</string>
+    <string name="ks_trn_verlauf">WEEKS · %1$s</string>
+    <string name="ks_trn_zeitraum">last %1$d days</string>
+    <string name="ks_trn_ernaehrung">Water &amp; caffeine trends</string>
+    <!-- Unter den Wochenbildern: Zahl und kurzes Label statt Satz. -->
+    <string name="ks_trn_schnitt">Avg %1$s</string>
+    <string name="ks_trn_extreme">Highest %1$s %2$s · lowest %3$s %4$s</string>
+    <string name="ks_trn_wochenende">Weekends %1$s · weekdays %2$s</string>
+    <string name="ks_trn_richtung">4 weeks vs 4 before: %1$s %%</string>
+    <string name="ks_trn_erreicht">%1$d/%2$d nights ≥ %3$s</string>
+    <string name="ks_trn_supp_schnitt">%1$d %% taken</string>
+    <!-- What makes a difference: "very short" wie das Urteil auf Health (unter 7 h). -->
+    <string name="ks_trv_hrv_kurz">HRV after very short nights</string>
+    <string name="ks_trv_schritte_kurz">Steps after very short nights</string>
+    <string name="ks_trv_koffein_kurz">Caffeine after very short nights</string>
+    <string name="ks_trv_unter_30_aktiv">After &lt;30 active min</string>
 </resources>

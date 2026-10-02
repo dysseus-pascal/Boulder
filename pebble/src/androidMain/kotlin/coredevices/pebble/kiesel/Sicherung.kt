@@ -33,9 +33,14 @@ import java.time.LocalDate
  * Das Sicherungsformat - dasselbe wie in Kiesel-Helper (Sicherung), damit
  * Boulder dessen Sicherung lesen kann und eine eigene dieselbe Form hat:
  * `{fassung, erzeugt, app, tage:[{datum, spalte: wert}], einstellungen, spuren:[beginn]}`.
+ *
+ * AB FASSUNG 2 stehen in Boulders `tage` nur eigene Werte; die zurueckgeholte
+ * Vorgeschichte (Kiesel-Helper) steht getrennt in `vorgeschichte`. Bis
+ * Fassung 1 war beides vermischt - eine solche Datei gilt beim Zurueckholen
+ * ganz als Vorgeschichte.
  */
 internal object Sicherungsformat {
-    const val FASSUNG = 1
+    const val FASSUNG = 2
     const val KIESEL_HELPER = "kiesel-helper.json"
     const val BOULDER = "boulder.json"
     const val SPURORDNER = "spuren"
@@ -50,22 +55,37 @@ internal object Sicherungsformat {
         "schlaf_von", "schlaf_bis", "schlaf_mitte",
         "koffein_mg", "koffein_letzt",
         "puls_nacht_sd",
+        // Boulders eigene Spalte fuer "spaet ins Bett"; sie wurde gesichert, aber nie zurueckgeholt.
+        "einschlafen",
     )
 
-    data class Stand(val fassung: Int, val erzeugt: String, val tage: List<Pair<LocalDate, Map<String, Double>>>, val spuren: List<Long>)
+    data class Stand(
+        val fassung: Int,
+        val erzeugt: String,
+        val tage: List<Pair<LocalDate, Map<String, Double>>>,
+        val spuren: List<Long>,
+        val vorgeschichte: List<Pair<LocalDate, Map<String, Double>>> = emptyList(),
+    )
 
-    fun alsJson(tage: List<Pair<LocalDate, Map<String, Double>>>, spuren: List<Long>, erzeugt: String): String = buildJsonObject {
-        put("fassung", FASSUNG)
-        put("erzeugt", erzeugt)
-        put("app", "Boulder")
-        put("tage", buildJsonArray {
-            tage.sortedBy { it.first }.forEach { (tag, werte) ->
+    fun alsJson(
+        tage: List<Pair<LocalDate, Map<String, Double>>>,
+        spuren: List<Long>,
+        erzeugt: String,
+        vorgeschichte: List<Pair<LocalDate, Map<String, Double>>> = emptyList(),
+    ): String = buildJsonObject {
+        fun tageJson(l: List<Pair<LocalDate, Map<String, Double>>>) = buildJsonArray {
+            l.sortedBy { it.first }.forEach { (tag, werte) ->
                 add(buildJsonObject {
                     put("datum", tag.toString())
                     werte.toSortedMap().forEach { (k, v) -> put(k, v) }
                 })
             }
-        })
+        }
+        put("fassung", FASSUNG)
+        put("erzeugt", erzeugt)
+        put("app", "Boulder")
+        put("tage", tageJson(tage))
+        put("vorgeschichte", tageJson(vorgeschichte))
         put("einstellungen", buildJsonObject {})
         put("spuren", buildJsonArray { spuren.sorted().forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
     }.toString()
@@ -76,14 +96,14 @@ internal object Sicherungsformat {
             val w = Json.parseToJsonElement(text).jsonObject
             val fassung = w["fassung"]?.jsonPrimitive?.int ?: return null
             if (fassung <= 0) return null
-            val tage = w["tage"]?.jsonArray.orEmpty().mapNotNull { e ->
+            fun tage(feld: String) = w[feld]?.jsonArray.orEmpty().mapNotNull { e ->
                 val z = e as? JsonObject ?: return@mapNotNull null
                 val tag = runCatching { LocalDate.parse(z["datum"]?.jsonPrimitive?.content) }.getOrNull() ?: return@mapNotNull null
                 val werte = SPALTEN.mapNotNull { s -> z[s]?.jsonPrimitive?.doubleOrNull?.takeIf { !it.isNaN() }?.let { s to it } }.toMap()
                 if (werte.isEmpty()) null else tag to werte
             }
             val spuren = w["spuren"]?.jsonArray.orEmpty().mapNotNull { it.jsonPrimitive.longOrNull?.takeIf { v -> v > 0 } }
-            Stand(fassung, w["erzeugt"]?.jsonPrimitive?.content.orEmpty(), tage, spuren)
+            Stand(fassung, w["erzeugt"]?.jsonPrimitive?.content.orEmpty(), tage("tage"), spuren, tage("vorgeschichte"))
         } catch (e: Exception) {
             null
         }
@@ -92,10 +112,16 @@ internal object Sicherungsformat {
     /**
      * Kiesel-Helpers Spalten, wie Boulder sie liest: der geschaetzte Ruhepuls
      * (puls_min) gilt nur, wo kein gemessener dasteht - wie dort in den Trends.
+     * Der Beginn der Nacht (schlaf_von, Minuten ab 18 Uhr) ist Boulders
+     * "einschlafen". "aktiv" bleibt gespeichert, die Trends blenden es aus
+     * ([Trenddaten.OHNE_VORGESCHICHTE]): in Kiesel-Helper war es die
+     * Trainingsdauer, aber eine Boulder-Sicherung der Fassung 1 traegt darunter
+     * auch Boulders eigene Aktivminuten - gestrichen waeren sie verloren.
      */
     fun fuerBoulder(werte: Map<String, Double>): Map<String, Double> {
         val aus = werte.toMutableMap()
         if ("ruhepuls" !in aus) werte["puls_min"]?.let { aus["ruhepuls"] = it }
+        if ("einschlafen" !in aus) werte["schlaf_von"]?.let { aus["einschlafen"] = it }
         return aus
     }
 }
@@ -175,11 +201,13 @@ internal object Sichern {
 
     suspend fun jetzt(context: Context, api: HealthDataApi): String = withContext(Dispatchers.IO) {
         val o = ordner(context)?.takeIf { it.erreichbar } ?: return@withContext context.getString(R.string.ks_b_kein_ordner)
-        val reihen = Trenddaten.lies(context, api)
-        val tage = reihen.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
+        val stand = Trenddaten.lies(context, api)
+        fun jeTag(r: Reihen) = r.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
             .groupBy { it.first }.map { (tag, l) -> tag to l.associate { it.second to it.third } }
+        val tage = jeTag(stand.eigen)
         val spuren = Spur.alle(context)
-        if (!o.lege(Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString()))) {
+        // Die Vorgeschichte getrennt: beim Zurueckholen soll sie wieder nur die Zeit davor fuellen.
+        if (!o.lege(Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString(), jeTag(stand.vorgeschichte)))) {
             return@withContext context.getString(R.string.ks_b_fehlgeschlagen)
         }
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
@@ -203,17 +231,34 @@ internal object Sichern {
      * Holt aus dem Ordner, was hier fehlt: aus Boulders eigener Sicherung und
      * aus der von Kiesel-Helper. Tage nur, wo Boulder den Wert nicht kennt;
      * Spuren nur, wo keine liegt.
+     *
+     * Boulders eigene Uhrwerte gehen ins eigene Fach des Tagesspeichers, alles
+     * andere in die Vorgeschichte - die fuellt nur die Zeit vor dem ersten
+     * eigenen Wert (Wasser, Koffein und Praeparate kennt Boulder sonst aus
+     * Akte und Einstellungen).
      */
     suspend fun zurueck(context: Context): String = withContext(Dispatchers.IO) {
         val o = ordner(context) ?: return@withContext context.getString(R.string.ks_b_kein_ordner)
-        val staende = listOf(Sicherungsformat.BOULDER, Sicherungsformat.KIESEL_HELPER).mapNotNull { Sicherungsformat.ausJson(o.hole(it)) }
+        val staende = listOf(Sicherungsformat.BOULDER, Sicherungsformat.KIESEL_HELPER)
+            .mapNotNull { datei -> Sicherungsformat.ausJson(o.hole(datei))?.let { datei to it } }
         if (staende.isEmpty()) return@withContext context.getString(R.string.ks_b_keine_sicherung)
-        var tage = 0
+        val tage = mutableSetOf<LocalDate>()
         var spuren = 0
-        staende.forEach { s ->
+        staende.forEach { (datei, s) ->
+            val eigen = datei == Sicherungsformat.BOULDER && s.fassung >= 2
             s.tage.forEach { (tag, werte) ->
+                if (eigen) {
+                    val (uhr, rest) = werte.entries.partition { it.key in Trenddaten.UHRREIHEN }
+                    Tagesspeicher.ergaenzeEigene(context, tag, uhr.associate { it.key to it.value })
+                    Tagesspeicher.ergaenze(context, tag, rest.associate { it.key to it.value })
+                } else {
+                    Tagesspeicher.ergaenze(context, tag, Sicherungsformat.fuerBoulder(werte))
+                }
+                tage += tag
+            }
+            s.vorgeschichte.forEach { (tag, werte) ->
                 Tagesspeicher.ergaenze(context, tag, Sicherungsformat.fuerBoulder(werte))
-                tage++
+                tage += tag
             }
             s.spuren.forEach { b ->
                 if (Spur.vorhanden(context, b)) return@forEach
@@ -221,7 +266,7 @@ internal object Sichern {
                 if (Spur.schreibeRoh(context, b, inhalt)) spuren++
             }
         }
-        context.getString(R.string.ks_b_zurueck, tage, spuren)
+        context.getString(R.string.ks_b_zurueck, tage.size, spuren)
     }
 
     class Arbeit(context: Context, gaben: WorkerParameters) : CoroutineWorker(context, gaben) {

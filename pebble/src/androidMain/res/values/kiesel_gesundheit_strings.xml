@@ -161,7 +161,7 @@
     <string name="ks_h_24h">LAST 24 HOURS</string>
     <string name="ks_h_nicht_gemessen">Not measured</string>
     <string name="ks_h_gewohnt">YOUR USUAL</string>
-    <string name="ks_h_herztrend">Heart trend</string>
+    <string name="ks_h_herztrend">Trends</string>
     <string name="ks_h_lernt">Learning %1$d/%2$d</string>
     <string name="ks_h_gewohnt_text">avg %2$s · %1$d nights</string>
     <string name="ks_h_trends_titel">TRENDS</string>

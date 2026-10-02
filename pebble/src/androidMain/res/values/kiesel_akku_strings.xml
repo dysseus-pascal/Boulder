@@ -10,9 +10,7 @@
     <string name="ks_akku_nacht">%/h at night</string>
     <string name="ks_akku_tag">%/h by day</string>
     <string name="ks_akku_verlauf">TWO WEEKS</string>
-    <string name="ks_akku_verlauf_text">Charge at bedtime and at the end of each night, as the watch reported it. The line counts days.</string>
     <string name="ks_akku_naechte">NIGHT BY NIGHT</string>
     <string name="ks_akku_geladen">charging</string>
-    <string name="ks_akku_keine">The watch reports its charge with every night. After the first night with the Boulder firmware, the consumption appears here.</string>
-    <string name="ks_akku_hinweis">Estimates from the last two weeks: charge used per hour over all nights and days of at least 3 h, without charging.</string>
+    <string name="ks_akku_keine">No nights reported yet.</string>
 </resources>

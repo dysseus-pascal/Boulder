@@ -29,6 +29,34 @@ class SicherungsformatTest {
     }
 
     @Test
+    fun eigene_werte_und_vorgeschichte_bleiben_getrennt() {
+        val eigen = listOf(t2 to mapOf("schritte" to 8000.0, "einschlafen" to 290.0))
+        val davor = listOf(t1 to mapOf("schritte" to 4200.0))
+        val s = Sicherungsformat.ausJson(Sicherungsformat.alsJson(eigen, emptyList(), "jetzt", davor))!!
+        assertEquals(Sicherungsformat.FASSUNG, s.fassung)
+        // "einschlafen" kommt zurueck - sonst fehlte "Resting HR after a late bedtime" jede gesicherte Nacht.
+        assertEquals(eigen, s.tage)
+        assertEquals(davor, s.vorgeschichte)
+    }
+
+    @Test
+    fun alte_sicherung_hat_keine_getrennte_vorgeschichte() {
+        val s = Sicherungsformat.ausJson("""{"fassung":1,"erzeugt":"x","app":"Boulder","tage":[{"datum":"2026-09-01","schritte":5000}],"spuren":[]}""")!!
+        assertEquals(1, s.fassung)
+        assertEquals(emptyList(), s.vorgeschichte)
+    }
+
+    @Test
+    fun kiesel_helper_spalten_fuer_boulder() {
+        val w = Sicherungsformat.fuerBoulder(mapOf("schlaf_von" to 310.0, "aktiv" to 45.0, "schritte" to 4200.0))
+        assertEquals(310.0, w["einschlafen"])
+        // "aktiv" bleibt gespeichert: in einer Boulder-Sicherung der Fassung 1 sind es auch eigene Aktivminuten.
+        assertEquals(45.0, w["aktiv"])
+        assertEquals(4200.0, w["schritte"])
+        assertEquals(300.0, Sicherungsformat.fuerBoulder(mapOf("schlaf_von" to 310.0, "einschlafen" to 300.0))["einschlafen"])
+    }
+
+    @Test
     fun keine_sicherung_ergibt_nichts() {
         assertNull(Sicherungsformat.ausJson("""{"hallo":1}"""))
         assertNull(Sicherungsformat.ausJson("kein json"))

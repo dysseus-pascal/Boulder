@@ -210,12 +210,57 @@ class GesundheitsbildRechnungTest {
     }
 
     @Test
-    fun tagesurteil_ohne_belastung_nach_puls_und_erst_nach_lerntagen() {
+    fun tagesurteil_ohne_belastung_allein_nach_belastung_und_erst_nach_lerntagen() {
         val heute = LocalDate.of(2026, 9, 30)
         val ruhig = (1..5).map { Gesundheitsrechnung.Tagesherz(heute.minusDays(it.toLong()), 70, 0, 100) }
-        assertEquals(Vergleich.HOEHER, Gesundheitsrechnung.tagesurteil(ruhig + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100), heute)!!.haerte)
+        // Der Satz sagt "more load than usual": ein hoeherer Wachpuls ohne Belastung ist das nicht.
+        val pulsHoeher = Gesundheitsrechnung.tagesurteil(ruhig + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100), heute)!!
+        assertEquals(Vergleich.WIE_IMMER, pulsHoeher.haerte)
+        assertEquals(6, pulsHoeher.abstand)
+        assertEquals(Vergleich.HOEHER, Gesundheitsrechnung.tagesurteil(ruhig + Gesundheitsrechnung.Tagesherz(heute, 70, 20, 100), heute)!!.haerte)
         val wenig = ruhig.take(4) + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100)
         assertNull(Gesundheitsrechnung.tagesurteil(wenig, heute)!!.haerte)
+    }
+
+    @Test
+    fun ohne_nacht_zaehlt_vor_sechs_nicht_als_wach() {
+        val tag = LocalDate.of(2026, 9, 30)
+        val zonen = Gesundheitsrechnung.pulsZonen(55, 185)
+        // Alle fuenf Minuten von 00:00 bis 12:00, bis sechs Schlafpuls, ohne Nacht auf dem Telefon.
+        val puls = (0 until 144).map { sek(tag, 0, 0) + it * 300L to (if (it < 72) 50 else 72) }
+        fun wach(bis: java.time.LocalTime, heute: LocalDate?, schlaf: List<Pair<Long, Long>> = emptyList()) =
+            Gesundheitsrechnung.tagesherz(puls, schlaf, zonen, bis, zoneUtc, heute).single().wachpuls
+        // Ein frueherer Tag behaelt seinen Schnitt ab sechs - frueher fiel er ganz weg.
+        assertEquals(72, wach(java.time.LocalTime.of(10, 0), tag.plusDays(1)))
+        // Heute am Morgen kann die Nacht noch kommen: kein Urteil.
+        assertNull(wach(java.time.LocalTime.of(10, 0), tag))
+        // Ab Mittag hat die Uhr jede Nacht abgeschlossen.
+        assertEquals(72, wach(java.time.LocalTime.of(12, 0), tag))
+        // Ist die Nacht da, zaehlt der Tag wie immer.
+        assertEquals(72, wach(java.time.LocalTime.of(10, 0), tag, listOf(sek(tag, 0, 0) to sek(tag, 6, 0))))
+        // Uhr nachts abgelegt, erst ab sieben am Arm: nichts zu verwechseln, auch heute morgen.
+        val abSieben = puls.filter { it.first >= sek(tag, 7, 0) }
+        assertEquals(72, Gesundheitsrechnung.tagesherz(abSieben, emptyList(), zonen, java.time.LocalTime.of(10, 0), zoneUtc, tag).single().wachpuls)
+    }
+
+    @Test
+    fun ohne_nacht_zaehlt_ein_lauf_vor_sechs_in_die_belastung() {
+        val tag = LocalDate.of(2026, 9, 30)
+        val grenzen = Gesundheitsrechnung.pulsZonen(55, 185)
+        // 05:30 bis 05:49 kraeftig (zaehlt doppelt), ab 05:50 ruhig: nur der Wachpuls laesst die Zeit vor sechs weg.
+        val lauf = (30 until 50).map { sek(tag, 5, it) to 150 }
+        val ruhig = (0 until 40).map { sek(tag, 5, 50) + it * 60L to 70 }
+        val r = Gesundheitsrechnung.tagesherz(lauf + ruhig, emptyList(), grenzen, java.time.LocalTime.of(12, 0), zoneUtc, tag.plusDays(1)).single()
+        assertEquals(2 * 20, r.belastung)
+        assertEquals(70, r.wachpuls)
+    }
+
+    @Test
+    fun pulsspitze_mit_zeit_der_juengsten() {
+        // Zweimal 120 als Median: die Zeit der juengsten, damit "yesterday" nur steht, wenn es keine heutige gibt.
+        val punkte = listOf(t0 to 120, t0 + 600 to 80, t0 + 1200 to 120, t0 + 1800 to 90)
+        assertEquals((t0 + 1200) / 300 * 300 to 120, Gesundheitsrechnung.pulsSpitze(punkte))
+        assertNull(Gesundheitsrechnung.pulsSpitze(emptyList()))
     }
 
     // Ein beliebiger fester Zeitpunkt - es zaehlen nur die Abstaende der Messungen.

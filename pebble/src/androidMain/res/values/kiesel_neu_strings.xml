@@ -12,7 +12,7 @@
     <string name="ks_n_stand_um">As reported by the watch %1$s.</string>
     <string name="ks_n_stand_nie">Defaults · not yet reported by the watch</string>
     <string name="ks_n_maxpuls">Max heart rate</string>
-    <string name="ks_n_maxpuls_hinweis">At 190, Boulder estimates it from your age.</string>
+    <string name="ks_n_maxpuls_alter">From age · %1$d</string>
     <string name="ks_n_pause">Rest until buzz</string>
     <string name="ks_n_nie">never</string>
     <string name="ks_n_empfind">Rep detection</string>

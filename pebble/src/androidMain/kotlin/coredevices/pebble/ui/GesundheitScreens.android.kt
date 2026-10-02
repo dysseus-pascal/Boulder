@@ -61,7 +61,8 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 
 @Composable
 actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
-    val titel = androidString(R.string.ks_h_herz_heute)
+    // "Heart", nicht "Heart today": die Seite zeigt auch die Nacht und 24 Stunden Puls.
+    val titel = androidString(R.string.ks_h_herz_n)
     LaunchedEffect(Unit) {
         topBarParams.title(titel)
         topBarParams.searchAvailable(null)

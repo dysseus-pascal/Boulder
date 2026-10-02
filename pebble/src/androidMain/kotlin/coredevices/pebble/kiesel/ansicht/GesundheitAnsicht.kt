@@ -78,7 +78,6 @@ import coredevices.pebble.kiesel.phasenAnteile
 import coredevices.pebble.kiesel.praeparatzeile
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ringAnteil
-import coredevices.pebble.kiesel.ruhepulsUrteil
 import coredevices.pebble.kiesel.schrittwoche
 import coredevices.pebble.kiesel.tagesSatz
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -93,7 +92,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /** Wohin die Seite fuehrt - die Navigation selbst haengt in GesundheitScreens. */
 internal class Gesundheitswege(
@@ -120,7 +118,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     val uhren by libPebble.watches.collectAsState()
     val akkuJetzt = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
     var stand by remember { mutableStateOf<GesundheitsStand?>(null) }
-    var training by remember { mutableStateOf<TrainingEintrag?>(null) }
+    var trainings by remember { mutableStateOf<List<TrainingEintrag>>(emptyList()) }
     var akkuNaechte by remember { mutableStateOf<List<NachtEntity>>(emptyList()) }
     var uhrzeitDesStands by remember { mutableStateOf(LocalTime.now()) }
     var neu by remember { mutableIntStateOf(0) }
@@ -134,7 +132,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         stand = Gesundheitsdaten.lies(context, api)
         uhrzeitDesStands = LocalTime.now()
         geladen()
-        training = TrainingsDaten.letztes(context)
+        trainings = TrainingsDaten.heute(context)
         val jetzt = Instant.now()
         akkuNaechte = runCatching { api.getNaechte(jetzt.minus(Duration.ofDays(14)).epochSecond, jetzt.epochSecond) }.getOrDefault(emptyList())
     }
@@ -148,8 +146,8 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     val akku = remember(akkuNaechte, akkuJetzt) { Akkurechnung.rechne(akkuNaechte, akkuJetzt, Instant.now()) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { Tagessatz(s, akkuJetzt, akku.tageUebrig?.roundToInt(), wege.akku) }
-        item { Tagesstrahl(s, training, wege) { neu++ } }
+        item { Tagessatz(s, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
+        item { Tagesstrahl(s, trainings, wege) { neu++ } }
         item { Koerperliste(s, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }
@@ -180,15 +178,17 @@ private fun tagText(context: Context, tag: LocalDate): String = DateUtils.format
 /** Das Datum oben rechts neben "Health": "Wed, Sep 30". */
 internal fun heuteText(context: Context): String = tagText(context, LocalDate.now())
 
-/** Das Urteil zu Ruhepuls und HRV - nur, wenn es eins gibt; erklaert wird nichts. */
+/**
+ * Das Urteil zur HRV fuer den Nachtblock - nur, wenn es eins gibt; erklaert
+ * wird nichts. Das zum Ruhepuls steht schon im Satz darueber und hier nicht
+ * noch einmal.
+ */
 @Composable
 internal fun herzHinweis(s: GesundheitsStand): String? {
-    val n = s.nacht ?: return null
-    val ruhe = Gesundheitsrechnung.ruhepulsUrteil(n.ruhepuls, s.ruhepulsWoche)
+    if (s.nacht == null) return null
     // Die HRV nach ihrem Band, wie die HRV-Karte der Herzseite
-    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull())
-    if (ruhe.urteil == null && hrv == null) return null
-    return urteilSatz(ruhe, hrv)
+    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull()) ?: return null
+    return urteilSatz(Herzurteil(0, null, null, 0), hrv)
 }
 
 /** Der Satz zu Ruhepuls und HRV, wenn wenigstens eins davon ein Urteil hat. */

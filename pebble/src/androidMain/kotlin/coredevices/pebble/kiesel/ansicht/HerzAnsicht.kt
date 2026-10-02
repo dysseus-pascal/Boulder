@@ -42,10 +42,7 @@ import coredevices.pebble.kiesel.BLUTDRUCK_TAGE
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.LERNNAECHTE
-import coredevices.pebble.kiesel.hrvUrteil
-import coredevices.pebble.kiesel.naechteSchnitt
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import coredevices.pebble.kiesel.tageZurueck
@@ -63,10 +60,11 @@ import kotlin.math.roundToInt
 private const val SPO2_WARNUNG = 90
 
 /**
- * "Heart today": der Puls der letzten 24 Stunden und der Blutdruck der
- * Manschette, dazu Ruhepuls, HRV und SpO2 der letzten Nacht und was Boulder
- * ueber die frueheren Naechte weiss. Das Pulsband stand frueher auf der
- * Uebersicht; hier hat es Platz und verdraengt nichts.
+ * "Heart": oben der Tagespuls wie in der Herzzeile, dann der Puls der letzten
+ * 24 Stunden und der Blutdruck der Manschette, dazu Ruhepuls und SpO2 der
+ * letzten Nacht, die HRV an ihrem Band und was Boulder ueber die frueheren
+ * Naechte weiss. Das Pulsband stand frueher auf der Uebersicht; hier hat es
+ * Platz und verdraengt nichts.
  */
 @Composable
 internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
@@ -115,11 +113,19 @@ private fun PulsKarte(s: GesundheitsStand) {
             // Wie bei Google Health: oben die Spanne des Tages, dann wo der hoechste Wert lag -
             // aus der Reihe, die das Pulsband zeichnet, damit Satz und Kurve dasselbe zeigen.
             val (tiefster, hoechster) = Gesundheitsrechnung.pulsSpanne(s.puls) ?: (letzter.second to letzter.second)
+            val tag = tagespuls(s)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(zahlMitEinheit("$tiefster–$hoechster", "bpm", 30, 16), lineHeight = 36.sp)
+                // Was die Herzzeile auf Health zeigt, steht hier wieder: wer sie antippt, findet seine Zahl.
+                if (tag != null) Text((listOf("${tag.wachpuls} bpm") + tag.teile).joinToString(" · "), fontSize = 14.sp, lineHeight = 20.sp)
                 if (s.pulsZonen.size == 3) {
                     val zone = zonenNamen[Gesundheitsrechnung.pulsZone(hoechster, s.pulsZonen)]
-                    Text(stringResource(R.string.ks_h_puls_hoch, hoechster, zone.lowercase()), fontSize = 14.sp, lineHeight = 20.sp)
+                    // Mit Zeit: im 24-Stunden-Fenster kann die Spitze von gestern Abend sein.
+                    val wann = Gesundheitsrechnung.pulsSpitze(s.puls)?.let { zeitpunkt(context, Instant.ofEpochSecond(it.first)) }
+                    Text(
+                        stringResource(R.string.ks_h_puls_hoch, hoechster, zone.lowercase()) + (wann?.let { " · $it" } ?: ""),
+                        fontSize = 14.sp, lineHeight = 20.sp,
+                    )
                 }
                 // "now" nur, solange der Wert frisch ist - eine Stunde alter Puls ist nicht der jetzige.
                 val frisch = Gesundheitsrechnung.pulsFrisch(letzter.first, jetzt)
@@ -237,13 +243,17 @@ private fun Legende(punkte: List<Legendenpunkt>) {
     }
 }
 
+/**
+ * Ruhepuls und SpO2 der letzten Nacht - die HRV steht in ihrer Karte darueber
+ * und hier nicht noch einmal.
+ */
 @Composable
 private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
     val context = LocalContext.current
     val n = s.nacht
     // SpO2 der Nacht, wenn es eine gibt; sonst der letzten 24 Stunden - dann heisst die Karte auch so.
     val spo2 = if (n == null) s.spo2.map { it.second }
-    else s.spo2.filter { it.first in n.einschlafen.epochSecond..n.aufwachen.epochSecond }.map { it.second }
+    else s.spo2.filter { it.first in n.spanne }.map { it.second }
     if (n == null && spo2.isEmpty()) return
     Kasten {
         if (n != null) {
@@ -254,14 +264,8 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
             ) { oeffneNacht(n.beginnUtc) }
             Zeile(
                 stringResource(R.string.ks_h_ruhepuls_n),
-                if (n.ruhepuls != null) stringResource(R.string.ks_h_ruhepuls_text) else stringResource(R.string.ks_h_nicht_gemessen),
+                if (n.ruhepuls != null) null else stringResource(R.string.ks_h_nicht_gemessen),
                 n.ruhepuls?.toString() ?: "–", n.ruhepuls?.let { "bpm" }, minHoehe = 56.dp,
-            )
-            Trenner(14.dp)
-            Zeile(
-                stringResource(R.string.ks_h_hrv_n),
-                if (n.hrv != null) stringResource(R.string.ks_h_hrv_text) else stringResource(R.string.ks_h_nicht_gemessen),
-                n.hrv?.toString() ?: "–", n.hrv?.let { "ms" }, minHoehe = 56.dp,
             )
         } else {
             Kopf(stringResource(R.string.ks_h_24h))
@@ -281,45 +285,29 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
 }
 
 /**
- * Die Werte des Vergleichs: "55 bpm, 54 ms" - was es davon gibt, nur die
- * Schnitte aus [LERNNAECHTE] Naechten: ein HRV-Wert aus einer Nacht ist kein
- * "average of 3 earlier nights".
+ * Der Ruhepuls gegen die frueheren Naechte: das Urteil und der Schnitt, aus
+ * dem es kommt - dieselbe Nachtzahl fuer beides. Die HRV hat ihr Band in der
+ * HRV-Karte; hier stand sie ein drittes Mal, mit einem zweiten "usual" (dem
+ * Schnitt von sieben Naechten) und einer Nachtzahl, die zum Ruhepuls gehoerte.
  */
-private fun werte(ruhe: Herzurteil, hrv: Pair<Int, Double?>): String = listOfNotNull(
-    ruhe.schnitt?.takeIf { ruhe.frueher >= LERNNAECHTE }?.let { "${it.roundToInt()} bpm" },
-    hrv.second?.takeIf { hrv.first >= LERNNAECHTE }?.let { "${it.roundToInt()} ms" },
-).joinToString(", ")
-
 @Composable
 private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
     val farben = MaterialTheme.colorScheme
     val ruhe = Gesundheitsrechnung.ruhepulsUrteil(s.nacht?.ruhepuls, s.ruhepulsWoche)
-    // Die HRV nach ihrem Band, wie die HRV-Karte darueber - ein zweiter Massstab widersprach ihr.
-    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull())
-    // Ihr Schnitt der frueheren Naechte bleibt als Zahl stehen, nur das Urteil kommt vom Band.
-    val hrvSchnitt = Gesundheitsrechnung.naechteSchnitt(s.hrvWoche)
-    val frueher = maxOf(ruhe.frueher, hrvSchnitt.first)
     Kasten {
         Kopf(stringResource(R.string.ks_h_gewohnt), link = stringResource(R.string.ks_h_herztrend), onLink = oeffneTrend)
         Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (frueher < LERNNAECHTE) {
-                // Das Band reicht 30 Tage zurueck, der Lernstand nur eine Woche: nach
-                // einer Pause ohne Uhr gibt es das HRV-Urteil schon, bevor er voll ist.
-                if (hrv != null) Text(urteilSatz(ruhe, hrv), fontSize = 14.sp, lineHeight = 20.sp)
+            val schnitt = ruhe.schnitt
+            if (ruhe.frueher < LERNNAECHTE || schnitt == null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.ks_h_lernt, frueher, LERNNAECHTE), Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp)
-                    Lernpunkte(frueher)
+                    Text(stringResource(R.string.ks_h_lernt, ruhe.frueher, LERNNAECHTE), Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp)
+                    Lernpunkte(ruhe.frueher)
                 }
-            } else if (s.nacht == null) {
-                // Ohne letzte Nacht gibt es nichts zu vergleichen - nur den Schnitt selbst.
-                Text(
-                    stringResource(R.string.ks_h_gewohnt_ohne_nacht, frueher, werte(ruhe, hrvSchnitt)),
-                    fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant,
-                )
             } else {
-                if (ruhe.urteil != null || hrv != null) Text(urteilSatz(ruhe, hrv), fontSize = 14.sp, lineHeight = 20.sp)
+                // Ohne letzte Nacht kein Urteil - dann steht nur der Schnitt da.
+                if (ruhe.urteil != null) Text(urteilSatz(ruhe, null), fontSize = 14.sp, lineHeight = 20.sp)
                 Text(
-                    stringResource(R.string.ks_h_gewohnt_text, frueher, werte(ruhe, hrvSchnitt)),
+                    stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, "${schnitt.roundToInt()} bpm"),
                     fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant,
                 )
             }

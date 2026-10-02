@@ -97,11 +97,12 @@ class TrainingsanalyseTest {
     }
 
     @Test
-    fun maximumWeitUeberTanakaWirdNichtGeglaubt() {
-        // 65 Jahre: Tanaka 162,5, Grenze 187,5. 190 gilt nicht, 185 schon.
-        assertEquals(
-            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, null)!!,
-            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 190)!!, 0.001,
+    fun derUebergebeneMaximalpulsGiltUnveraendert() {
+        // 65 Jahre: Tanaka 162,5. Geprueft hat Herzgrenzen schon - hier gilt, was kommt,
+        // auch ueber Tanaka + 25, damit Zonen und kcal mit demselben Wert rechnen.
+        assertTrue(
+            Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 190)!! <
+                Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 185)!!,
         )
         assertTrue(
             Trainingsanalyse.kalorien(fahrt, 70.0, 65, mann, 54, 185)!! <
@@ -142,11 +143,8 @@ class TrainingsanalyseTest {
     fun ohneGewichtOderMitUnsinnNichts() {
         assertNull(Trainingsanalyse.kalorien(fahrt, 0.0, 41, mann, 54, 190))
         assertNull(Trainingsanalyse.kalorien(emptyList(), 70.0, 41, mann, 54, 190))
-        // Ein Maximum unter dem Ruhepuls wird durch Tanaka ersetzt, nicht geglaubt.
-        assertEquals(
-            Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, null)!!,
-            Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 50)!!, 0.001,
-        )
+        // Ein Maximum kaum ueber dem Ruhepuls gibt keine Reserve, mit der sich rechnen liesse.
+        assertNull(Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 50))
     }
 
     @Test

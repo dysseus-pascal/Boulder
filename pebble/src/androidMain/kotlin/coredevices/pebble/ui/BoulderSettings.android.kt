@@ -20,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.health.frageAlleAkteRechte
+import coredevices.pebble.kiesel.Herzgrenzen
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Nachtexport
@@ -61,6 +62,8 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     val appSeite = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 
     val k = remember(neu) { KieselEinstellungen.stand(context) }
+    // Der Maximalpuls, mit dem gerechnet wird: ohne Einstellung der nach dem Alter, nicht die 190 der Uhr.
+    val maximum by produceState<Herzgrenzen.Maximum?>(null, neu) { value = Herzgrenzen.maximum(context, null) }
     val zuletzt = Sichern.zuletzt(context)
     val strasse by Kieselstrasse.stand.collectAsState()
     val lage = strasse.lage
@@ -89,7 +92,11 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_n_einstellungen),
-            description = stringResource(R.string.ks_e_kieselsport_text, k.maxpuls, k.pause, k.becken),
+            description = stringResource(
+                R.string.ks_e_kieselsport_text,
+                maximum?.let { if (it.nachAlter) stringResource(R.string.ks_e_maxpuls_alter, it.wert) else "${it.wert}" } ?: "–",
+                k.pause, k.becken,
+            ),
             topLevelType = TopLevelType.Phone,
             section = Section.Sport,
             keywords = "kieselsport max heart rate pool rest pin",

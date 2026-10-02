@@ -41,6 +41,13 @@ internal data class Nacht(
 ) {
     data class Abschnitt(val von: Instant, val bis: Instant, val phase: Int)
     val mitPhasen: Boolean get() = phasen[1] + phasen[2] + phasen[3] > 0
+    /**
+     * Die Nacht, wie die Nachtansicht sie zeigt: alle Abschnitte, ohne sie
+     * Einschlafen bis Aufwachen. Auch die Herzseite nimmt ihr SpO2 daraus -
+     * sonst nannten beide einen anderen Tiefstwert derselben Nacht.
+     */
+    val spanne: LongRange get() =
+        (abschnitte.minOfOrNull { it.von.epochSecond } ?: einschlafen.epochSecond)..(abschnitte.maxOfOrNull { it.bis.epochSecond } ?: aufwachen.epochSecond)
 }
 
 /** Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein Praeparat. */
@@ -92,6 +99,7 @@ internal data class GesundheitsStand(
     val wocheSchlaf: List<Pair<LocalDate, Int>>,
     /** Puls der letzten 24 Stunden: Sekunde seit 1970, Schlaege je Minute. */
     val puls: List<Pair<Long, Int>>,
+    /** SpO2 der letzten 24 Stunden, mit Nacht ab ihrem Einschlafen - auch wenn das laenger her ist. */
     val spo2: List<Pair<Long, Int>>,
     val wasserMl: Int,
     val glaeser: List<Instant>,
@@ -118,6 +126,8 @@ internal data class GesundheitsStand(
     val pulsZonen: List<Int> = emptyList(),
     /** Die HRV der letzten sieben Naechte mit dem persoenlichen Band, aelteste zuerst. */
     val hrvTage: List<Gesundheitsrechnung.HrvTag> = emptyList(),
+    /** Ohne [nacht]: der Beginn der juengsten Nacht ueberhaupt - der Weg zu ihr und zu den frueheren. */
+    val juengsteNacht: Long? = null,
 )
 
 /** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
@@ -141,9 +151,12 @@ internal object Gesundheitsrechnung {
     const val TAGESHERZ_LERNTAGE = 5
 
     /**
-     * Heute gegen die frueheren Tage bis zur selben Uhrzeit. Die Haerte richtet
-     * sich nach der Belastung; wo auch frueher kaum Belastung war, nach dem
-     * Wachpuls. Ohne Urteil, solange weniger als [TAGESHERZ_LERNTAGE] Tage da sind.
+     * Heute gegen die frueheren Tage bis zur selben Uhrzeit. [abstand]: der
+     * Wachpuls gegen seinen Schnitt, fuer die Herzzeile. [haerte]: allein die
+     * Belastung gegen ihren Median - der Satz sagt "more load than usual".
+     * Frueher entschied ohne Belastung der Wachpuls mit, und der Satz sprach
+     * von einem "harder day", waehrend die Herzzeile "Day as usual" sagte.
+     * Ohne Urteil, solange weniger als [TAGESHERZ_LERNTAGE] Tage da sind.
      */
     data class Tagesurteil(val heute: Tagesherz, val schnittPuls: Int?, val abstand: Int?, val haerte: Vergleich?)
 
@@ -159,10 +172,9 @@ internal object Gesundheitsrechnung {
             jetzt.belastung >= maxOf(last * 3 / 2, last + 15) -> Vergleich.HOEHER
             jetzt.belastung <= last / 2 -> Vergleich.TIEFER
             else -> Vergleich.WIE_IMMER
-        } else when {
-            jetzt.belastung >= 20 || abstand >= 5 -> Vergleich.HOEHER
-            abstand <= -5 -> Vergleich.TIEFER
-            else -> Vergleich.WIE_IMMER
+        } else {
+            // Kaum Belastung als Mass: weniger als fast nichts gibt es nicht, mehr erst ab 20 Minuten.
+            if (jetzt.belastung >= 20) Vergleich.HOEHER else Vergleich.WIE_IMMER
         }
         return Tagesurteil(jetzt, schnitt, abstand, haerte)
     }
@@ -172,6 +184,18 @@ internal object Gesundheitsrechnung {
      * Grenzen wie das Pulsband - mit dem exakten Anteil der Reserve zaehlte
      * ein Puls auf der Grenze hier einfach, waehrend die Kurve ihn schon in
      * der naechsten Zone faerbte.
+     *
+     * OHNE NACHT ZAEHLT VOR SECHS NICHTS ALS WACH: die Uhr kann am Arm
+     * gewesen sein, ohne dass eine Nacht auf dem Telefon ist, und ihr
+     * Schlafpuls drueckte den Schnitt ("Day 6 below usual"). Der Rest des
+     * Tages zaehlt - wer die Uhr nachts laedt und um halb sechs anlegt,
+     * behaelt seinen Tagesschnitt. In die Belastung zaehlt alles: Schlafpuls
+     * liegt unter der ersten Zone und wiegt ohnehin nichts.
+     *
+     * [heute] OHNE NACHT KEIN WACHPULS, wenn vor sechs gemessen wurde und es
+     * vor [NACHT_SPAETESTENS_H] Uhr ist: die Nacht ist dann vielleicht nur
+     * noch nicht auf dem Telefon, und der Schlaf nach sechs zaehlte als wach.
+     * Spaeter hat die Uhr jede Nacht abgeschlossen.
      */
     fun tagesherz(
         puls: List<Pair<Long, Int>>,
@@ -179,26 +203,42 @@ internal object Gesundheitsrechnung {
         grenzen: List<Int>,
         bisUhrzeit: java.time.LocalTime,
         zone: ZoneId,
+        heute: LocalDate? = null,
     ): List<Tagesherz> {
         val sortiert = puls.filter { it.second > 0 }.sortedBy { it.first }
         val jeTag = linkedMapOf<LocalDate, Triple<Long, Int, Double>>()   // Summe, Anzahl, Belastung
+        val mitNacht = schlaf.map { Instant.ofEpochSecond(it.second).atZone(zone).toLocalDate() }.toSet()
+        val nachtsGemessen = mutableSetOf<LocalDate>()
         sortiert.forEachIndexed { i, (sek, bpm) ->
             if (schlaf.any { (von, bis) -> sek in von until bis }) return@forEachIndexed
             val zeit = java.time.Instant.ofEpochSecond(sek).atZone(zone)
             if (zeit.toLocalTime().isAfter(bisUhrzeit)) return@forEachIndexed
+            val tag = zeit.toLocalDate()
+            val vielleichtSchlaf = zeit.hour < TAGESBEGINN_H && tag !in mitNacht
+            if (vielleichtSchlaf) nachtsGemessen += tag
             val minuten = if (i + 1 < sortiert.size) ((sortiert[i + 1].first - sek) / 60.0).coerceIn(1.0, 10.0) else 1.0
             val gewicht = when (pulsZone(bpm, grenzen)) {
                 0 -> 0.0
                 1 -> 1.0
                 else -> 2.0
             }
-            val alt = jeTag[zeit.toLocalDate()] ?: Triple(0L, 0, 0.0)
-            jeTag[zeit.toLocalDate()] = Triple(alt.first + bpm, alt.second + 1, alt.third + gewicht * minuten)
+            val alt = jeTag[tag] ?: Triple(0L, 0, 0.0)
+            jeTag[tag] = if (vielleichtSchlaf) alt.copy(third = alt.third + gewicht * minuten)
+            else Triple(alt.first + bpm, alt.second + 1, alt.third + gewicht * minuten)
         }
+        val wartet = heute != null && heute in nachtsGemessen && bisUhrzeit.hour < NACHT_SPAETESTENS_H
         return jeTag.map { (tag, w) ->
-            Tagesherz(tag, if (w.second >= TAGESHERZ_MINDESTENS) (w.first.toDouble() / w.second).roundToInt() else null, w.third.roundToInt(), w.second)
+            val wach = if (w.second >= TAGESHERZ_MINDESTENS && !(wartet && tag == heute)) (w.first.toDouble() / w.second).roundToInt() else null
+            Tagesherz(tag, wach, w.third.roundToInt(), w.second)
         }.sortedBy { it.tag }
     }
+
+    /**
+     * Bis dahin kann die Nacht von heute noch kommen: das Nachtfenster der
+     * Uhr endet um elf, eine offene Nacht schliesst sie bis eine Stunde
+     * danach ab (boulder/nacht.c, NACHLAUF_MIN).
+     */
+    const val NACHT_SPAETESTENS_H = 12
 
     /** Halbwertszeit von Koffein, wie in Kiesel-Helper. */
     const val KOFFEIN_HALBWERT_MIN = 300.0
@@ -322,6 +362,18 @@ internal object Gesundheitsrechnung {
     fun pulsSpanne(punkte: List<Pair<Long, Int>>): Pair<Int, Int>? {
         val mediane = fuenfMinuten(punkte).map { it.median }
         return if (mediane.isEmpty()) null else mediane.min() to mediane.max()
+    }
+
+    /**
+     * Wann der hoechste Wert der [pulsSpanne] lag (Sekunde des Fensters) und
+     * welcher es war - der juengste, wenn er mehrmals vorkommt. Die Herzseite
+     * zeigt 24 Stunden: ohne Zeit las sich eine Spitze von gestern Abend als
+     * heutige.
+     */
+    fun pulsSpitze(punkte: List<Pair<Long, Int>>): Pair<Long, Int>? {
+        val bins = fuenfMinuten(punkte)
+        val hoechster = bins.maxOfOrNull { it.median } ?: return null
+        return bins.last { it.median == hoechster }.let { it.sekunde to it.median }
     }
 
     /**
@@ -487,7 +539,10 @@ internal object Gesundheitsdaten {
         val vor24 = jetzt.epochSecond - 24 * 3600
         val puls = runCatching { api.getHealthDataForRange(vor24, jetzt.epochSecond) }.getOrDefault(emptyList())
             .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
-        val spo2 = runCatching { api.getSpo2Readings(vor24, jetzt.epochSecond) }.getOrDefault(emptyList())
+        // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
+        // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
+        val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
+        val spo2 = runCatching { api.getSpo2Readings(spo2Von, jetzt.epochSecond) }.getOrDefault(emptyList())
             .map { it.timestamp to it.spo2Percent }
 
         val klient = Akte(context).bereit()
@@ -544,15 +599,21 @@ internal object Gesundheitsdaten {
             val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
-            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, zonen, LocalTime.now(), zone)
+            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, zonen, LocalTime.now(), zone, heute)
         }.getOrDefault(emptyList())
         // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal
         // HRV_FENSTER Naechte davor - die Naechte oben reichen nur eine Woche zurueck.
+        val langeNaechte = runCatching {
+            Gesundheitsrechnung.jeTag(api.getNaechte(anfang(heute.minusDays(6L + Gesundheitsrechnung.HRV_FENSTER + 1)), jetzt.epochSecond), zone)
+        }.getOrDefault(emptyList())
         val hrvTage = runCatching {
-            val alle = api.getNaechte(anfang(heute.minusDays(6L + Gesundheitsrechnung.HRV_FENSTER + 1)), jetzt.epochSecond)
-            val jeTag = Gesundheitsrechnung.jeTag(alle, zone).associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
+            val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
             Gesundheitsrechnung.hrvWoche(jeTag, heute)
         }.getOrDefault(emptyList())
+        // Ohne Nacht von heute fuehrt nur dieser Weg zu den frueheren Naechten und
+        // zu Sleep trends; nach Wochen ohne Uhr reichen die 37 Tage oben nicht.
+        val juengste = if (nacht != null) null else langeNaechte.lastOrNull()?.beginnUtc
+            ?: runCatching { api.getNaechte(0, jetzt.epochSecond) }.getOrDefault(emptyList()).maxOfOrNull { it.beginnUtc }
         GesundheitsStand(
             schritte = summe?.steps ?: 0,
             aktivMinuten = summe?.activeMinutes ?: 0,
@@ -581,6 +642,7 @@ internal object Gesundheitsdaten {
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,
+            juengsteNacht = juengste,
         )
     }
 
@@ -595,12 +657,22 @@ internal object Gesundheitsdaten {
         val davor: List<NachtEntity> = emptyList(),
     )
 
+    /**
+     * EINE NACHT JE TAG UND DIE FRUEHEREN WIE AUF HEALTH: geblaettert und
+     * verglichen wird nur mit der laengsten Nacht jedes Tages, die frueheren
+     * aus derselben Woche davor ([Gesundheitsrechnung.naechteTeilen]). Roh
+     * zaehlte ein Kurzschlaf am Morgen als eigene Nacht - zwei Saeulen "Tu",
+     * und der Schnitt fiel auf 5:31 h, waehrend die Trends 7:42 h sagten.
+     */
     suspend fun nacht(api: HealthDataApi, beginnUtc: Long): NachtDetail? = withContext(Dispatchers.IO) {
-        val umgebung = runCatching { api.getNaechte(beginnUtc - 30L * 86_400, beginnUtc + 30L * 86_400) }.getOrDefault(emptyList())
-        val e = umgebung.firstOrNull { it.beginnUtc == beginnUtc } ?: return@withContext null
+        val zone = ZoneId.systemDefault()
+        val roh = runCatching { api.getNaechte(beginnUtc - 30L * 86_400, beginnUtc + 30L * 86_400) }.getOrDefault(emptyList())
+        val e = roh.firstOrNull { it.beginnUtc == beginnUtc } ?: return@withContext null
+        val umgebung = Gesundheitsrechnung.jeTag(roh, zone)
+        val (_, frueher) = Gesundheitsrechnung.naechteTeilen(umgebung, Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone), zone)
         val n = Gesundheitsrechnung.nacht(e, runCatching { api.getNachtAbschnitte(beginnUtc) }.getOrDefault(emptyList()))
-        val von = n.einschlafen.epochSecond - 1800
-        val bis = n.aufwachen.epochSecond + 1800
+        val von = minOf(n.einschlafen.epochSecond, n.spanne.first) - 1800
+        val bis = maxOf(n.aufwachen.epochSecond, n.spanne.last) + 1800
         NachtDetail(
             nacht = n,
             puls = runCatching { api.getHealthDataForRange(von, bis) }.getOrDefault(emptyList())
@@ -608,7 +680,7 @@ internal object Gesundheitsdaten {
             spo2 = runCatching { api.getSpo2Readings(von, bis) }.getOrDefault(emptyList()).map { it.timestamp to it.spo2Percent },
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
-            davor = umgebung.filter { it.beginnUtc < beginnUtc }.sortedBy { it.beginnUtc }.takeLast(7),
+            davor = frueher,
         )
     }
 

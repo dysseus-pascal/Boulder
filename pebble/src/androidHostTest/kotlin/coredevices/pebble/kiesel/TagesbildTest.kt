@@ -276,4 +276,40 @@ class TagesbildTest {
         assertEquals(1L, g.tageZurueck(LocalDate.of(2026, 9, 29).atTime(21, 14).toInstant(ZoneOffset.UTC), jetzt, zone))
         assertEquals(3L, g.tageZurueck(LocalDate.of(2026, 9, 27).atTime(12, 0).toInstant(ZoneOffset.UTC), jetzt, zone))
     }
+
+    @Test
+    fun ruhepuls_urteil_am_gezeigten_schnitt() {
+        // Schnitt 52.5, gezeigt 53: 55 sind 2 daneben, also wie immer - nicht 2.5, gerundet 3.
+        val u = g.ruhepulsUrteil(55, listOf(52, 53, 52, 53))
+        assertEquals(Vergleich.WIE_IMMER, u.urteil)
+        assertEquals(2, u.abstand)
+        val tiefer = g.ruhepulsUrteil(50, listOf(52, 53, 52, 53))
+        assertEquals(Vergleich.TIEFER, tiefer.urteil)
+        assertEquals(3, tiefer.abstand)
+    }
+
+    @Test
+    fun fruehere_naechte_nur_aus_der_woche_davor() {
+        val heute = LocalDate.of(2026, 9, 30)
+        // Zwei Wochen ohne Uhr: die Naechte von damals zaehlen nicht zum Schnitt.
+        val alt = (15..20).map { nachtAm(heute.minusDays(it.toLong())) }
+        val neu = listOf(nachtAm(heute.minusDays(2)), nachtAm(heute.minusDays(1)))
+        assertEquals(neu, g.naechteTeilen(alt + neu, heute, zone).second)
+        // Fuer eine Nacht mitten im Monat (Nachtansicht) gilt dasselbe, spaetere Naechte stoeren nicht.
+        val mitte = heute.minusDays(10)
+        val monat = (0..20).map { nachtAm(heute.minusDays(it.toLong())) }
+        val (letzte, frueher) = g.naechteTeilen(monat, mitte, zone)
+        assertEquals(nachtAm(mitte), letzte)
+        assertEquals((7 downTo 1).map { nachtAm(mitte.minusDays(it.toLong())) }, frueher)
+    }
+
+    @Test
+    fun sync_alt_erst_nach_einer_stunde() {
+        val jetzt = Instant.ofEpochSecond(10_000)
+        // Verbunden liegt der letzte Minutenwert 20 bis 35 Minuten zurueck - das ist nicht "alt".
+        assertFalse(g.syncAlt(Instant.ofEpochSecond(10_000 - 35 * 60), jetzt))
+        assertFalse(g.syncAlt(Instant.ofEpochSecond(10_000 - 60 * 60), jetzt))
+        assertTrue(g.syncAlt(Instant.ofEpochSecond(10_000 - 60 * 60 - 1), jetzt))
+        assertFalse(g.syncAlt(null, jetzt))
+    }
 }

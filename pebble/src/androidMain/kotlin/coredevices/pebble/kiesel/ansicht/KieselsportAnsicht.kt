@@ -7,20 +7,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -28,10 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Herzgrenzen
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.rememberLibPebble
 import kotlinx.coroutines.launch
@@ -73,11 +80,31 @@ internal fun KieselsportAnsicht() {
             style = MaterialTheme.typography.bodySmall,
         )
         Abschnitt(stringResource(R.string.ks_n_puls))
-        Stufer(
+        // "Nach Alter" ist ein eigener Zustand, nicht die Zahl 190: zur Uhr geht
+        // die Schaetzung selbst, damit ihre Zonen die der App sind. Erst nach dem
+        // Laden entscheiden - vorher saehe jedes Alter wie keines aus.
+        val schaetzung by produceState<Herzgrenzen.Maximum?>(null) { value = Herzgrenzen.maximum(null, Herzgrenzen.alter(), null) }
+        val nachAlter = schaetzung?.takeIf { it.nachAlter }?.wert
+        // Der zuletzt eingestellte Wert: "From age" an und wieder aus soll ihn nicht verlieren.
+        var eigener by remember { mutableStateOf(stand.maxpuls.takeIf { stand.maxpulsGesetzt }) }
+        LaunchedEffect(nachAlter) { if (nachAlter != null && !entwurf.maxpulsGesetzt) entwurf = entwurf.copy(maxpuls = nachAlter) }
+        // Ohne Alter gibt es nichts zu schaetzen: kein Schalter, der eine Schaetzung behauptet.
+        if (nachAlter != null) Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(!entwurf.maxpulsGesetzt, role = Role.Switch) { ausAlter ->
+                entwurf = entwurf.copy(maxpulsGesetzt = !ausAlter, maxpuls = if (ausAlter) nachAlter else eigener ?: nachAlter)
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stringResource(R.string.ks_n_maxpuls_alter, nachAlter), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = !entwurf.maxpulsGesetzt, onCheckedChange = null)
+        }
+        if (schaetzung != null && (entwurf.maxpulsGesetzt || nachAlter == null)) Stufer(
             stringResource(R.string.ks_n_maxpuls), (120..220).toList(), entwurf.maxpuls, grob = 5,
             text = { "$it" },
-        ) { entwurf = entwurf.copy(maxpuls = it) }
-        Text(stringResource(R.string.ks_n_maxpuls_hinweis), style = MaterialTheme.typography.bodySmall)
+        ) {
+            entwurf = entwurf.copy(maxpuls = it, maxpulsGesetzt = true)
+            eigener = it
+        }
 
         Abschnitt(stringResource(R.string.ks_sport_kraft))
         val nie = stringResource(R.string.ks_n_nie)

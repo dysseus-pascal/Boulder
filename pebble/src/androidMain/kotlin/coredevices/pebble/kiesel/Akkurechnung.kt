@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel
 
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.Instant
+import kotlin.math.floor
 
 /**
  * Der Akku der Uhr aus dem, was Boulder ohnehin hat.
@@ -91,6 +92,22 @@ internal object Akkurechnung {
 
     /** Kuerzere Naechte und Tage sagen mit ganzen Prozent nichts. */
     const val MINDESTSTUNDEN = 3.0
+
+    /** Die Restzeit im Satz auf Health: [wert] ganze Tage, oder ganze Stunden, wenn [stunden]. */
+    data class Restzeit(val wert: Int, val stunden: Boolean)
+
+    /**
+     * Abgerundet, unter einem Tag in Stunden, unter einer Stunde gar nicht.
+     * Gerundet stand bei 0,4 Tagen "about 0 days left", und bei 1,5 versprach
+     * der Satz zwei - bei der Restzeit ist Aufrunden die falsche Seite. Die
+     * Farbe der Prozentzahl zeigt den knappen Stand auch ohne Zahl.
+     */
+    fun restzeit(tageUebrig: Double?): Restzeit? {
+        val tage = tageUebrig ?: return null
+        if (tage >= 1) return Restzeit(floor(tage).toInt(), stunden = false)
+        val stunden = floor(tage * 24).toInt()
+        return if (stunden >= 1) Restzeit(stunden, stunden = true) else null
+    }
 
     /** Prozent je Stunde aus (Prozent, Stunden)-Stuecken; null ohne Stueck. */
     fun rate(stuecke: List<Pair<Int, Double>>): Double? {

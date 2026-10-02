@@ -260,24 +260,27 @@ internal object TrainingsDaten {
     }
 
     /**
-     * Das juengste Training der letzten zwei Wochen, fuer die Gesundheitsseite.
-     * Nicht ueber [uebersicht]: die liest ein Vierteljahr samt Spurdateien,
-     * die Seite braucht eine einzige.
+     * Die Trainings von heute, aelteste zuerst, fuer den Zeitstrahl der
+     * Gesundheitsseite. Alle, nicht nur das juengste: neben der Fahrt am Abend
+     * fehlte sonst der Lauf am Morgen. Nicht ueber [uebersicht]: die liest ein
+     * Vierteljahr samt Spurdateien, die Seite braucht einen Tag.
      */
-    suspend fun letztes(context: Context): TrainingEintrag? = withContext(Dispatchers.IO) {
-        val klient = Akte(context).bereit() ?: return@withContext null
+    suspend fun heute(context: Context): List<TrainingEintrag> = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext emptyList()
         val jetzt = Instant.now()
+        val anfang = jetzt.atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
         val sitzungen = try {
             klient.readRecords(
-                ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(14)), jetzt))
+                ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(anfang, jetzt))
             ).records.filterNot { erkannt(context, it) }
         } catch (e: Exception) {
-            Log.w(TAG, "Letztes Training lesen: " + e.message)
-            return@withContext null
+            Log.w(TAG, "Trainings von heute lesen: " + e.message)
+            return@withContext emptyList()
         }
-        val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
         // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
-        eintrag(context, s, eigeneDistanzen(klient, context, s.startTime, s.endTime))
+        val distanzen = eigeneDistanzen(klient, context, anfang, jetzt)
+        gewaehlt(context, sitzungen).filter { !it.startTime.isBefore(anfang) }.sortedBy { it.startTime }
+            .map { s -> eintrag(context, s, distanzen) }
     }
 
     /**

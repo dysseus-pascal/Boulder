@@ -9,7 +9,7 @@
     <string name="ks_h_rem">REM</string>
     <string name="ks_h_leicht">Light</string>
     <string name="ks_h_wach_min">%1$d min awake</string>
-    <string name="ks_h_ohne_phasen">Without heart rate at night the watch only tells asleep from awake.</string>
+    <string name="ks_h_ohne_phasen">No stages</string>
     <string name="ks_h_ruhepuls">Resting HR</string>
     <string name="ks_h_hrv">HRV (night)</string>
     <string name="ks_h_nacht_kurz">night</string>
@@ -36,7 +36,7 @@
     <string name="ks_h_schlaf_n">Sleep</string>
     <string name="ks_h_trends">Trends</string>
     <!-- Die Seite nach dem Entwurf "Empfehlung" (0.27): Tagessatz, Ringe, Zeilen. -->
-    <string name="ks_h_urteil_ausgeruht">Rested</string>
+    <string name="ks_h_urteil_ausgeruht">Well rested</string>
     <string name="ks_h_urteil_kurz">Short night</string>
     <string name="ks_h_urteil_sehr_kurz">Very short night</string>
     <string name="ks_h_satz_durch">%1$s, and you slept through.</string>
@@ -114,7 +114,7 @@
     <string name="ks_h_nachtansicht">Night view</string>
     <string name="ks_h_h_geschlafen">h asleep</string>
     <string name="ks_h_schritte_tage">STEPS BY DAY</string>
-    <string name="ks_h_ziel_zahl">· goal %1$s</string>
+    <string name="ks_h_ziel_zahl">goal %1$s</string>
     <string name="ks_h_heute_n">Today</string>
     <string name="ks_h_bisher_sync">So far, synced %1$s</string>
     <string name="ks_h_bisher">So far</string>
@@ -122,7 +122,6 @@
     <string name="ks_h_meiste_woche">Most this week</string>
     <string name="ks_h_erster_tag">First day counted</string>
     <string name="ks_h_genauer">LOOK CLOSER</string>
-    <string name="ks_h_herz_heute">Heart today</string>
     <string name="ks_h_uhr">WATCH</string>
     <string name="ks_h_letztes_training">Last workout · %1$s</string>
     <string name="ks_h_heute_klein">today</string>
@@ -152,22 +151,19 @@
     <string name="ks_h_hrv_drin">In range</string>
     <string name="ks_h_hrv_draussen">Out of range</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
-    <string name="ks_h_ruhepuls_text">Lowest steady pulse asleep</string>
     <string name="ks_h_hrv_n">HRV</string>
-    <string name="ks_h_hrv_text">Median of the night (RMSSD)</string>
     <string name="ks_h_spo2_n">Blood oxygen</string>
-    <string name="ks_h_spo2_keins">Average · lowest %1$d %%, none under 90 %%</string>
+    <string name="ks_h_spo2_keins">Lowest %1$d %%</string>
     <plurals name="ks_h_spo2_unter">
-        <item quantity="one">Average · lowest %1$d %%, %2$d under 90 %%</item>
-        <item quantity="other">Average · lowest %1$d %%, %2$d under 90 %%</item>
+        <item quantity="one">Lowest %1$d %% · %2$d under 90 %%</item>
+        <item quantity="other">Lowest %1$d %% · %2$d under 90 %%</item>
     </plurals>
     <string name="ks_h_24h">LAST 24 HOURS</string>
     <string name="ks_h_nicht_gemessen">Not measured</string>
     <string name="ks_h_gewohnt">YOUR USUAL</string>
     <string name="ks_h_herztrend">Heart trend</string>
-    <string name="ks_h_lernt">Learning: %1$d of %2$d earlier nights so far.</string>
-    <string name="ks_h_gewohnt_text">Average of %1$d earlier nights: %2$s.</string>
-    <string name="ks_h_gewohnt_ohne_nacht">No night to compare yet. Your usual over %1$d earlier nights: %2$s.</string>
+    <string name="ks_h_lernt">Learning %1$d/%2$d</string>
+    <string name="ks_h_gewohnt_text">avg %2$s · %1$d nights</string>
     <string name="ks_h_trends_titel">TRENDS</string>
     <string name="ks_tr_bewegung">Movement trends</string>
     <string name="ks_tr_schlaf">Sleep trends</string>
@@ -252,7 +248,11 @@
     <string name="ks_d_tagespuls_tief">Day %1$d below usual</string>
     <string name="ks_d_tagespuls_gleich">Day as usual</string>
     <string name="ks_d_belastung">%1$d min load</string>
-    <string name="ks_d_ruhe">Resting %1$d</string>
+    <string name="ks_d_ruhe">Resting</string>
+    <string name="ks_d_zuletzt">Last %1$s</string>
+    <string name="ks_d_nur_ruhe">Resting HR %1$d</string>
+    <string name="ks_d_nur_hrv">HRV %1$d ms</string>
+    <string name="ks_d_keine_nacht">No night recorded</string>
     <string name="ks_d_spo2">Blood oxygen</string>
     <string name="ks_d_blutdruck_kurz">BP\u00A0%1$d/%2$d</string>
     <string name="ks_d_blutdruck_schnitt">avg %1$d/%2$d</string>
@@ -266,7 +266,6 @@
     <string name="ks_f_morgen">Good morning</string>
     <string name="ks_f_tag">Good afternoon</string>
     <string name="ks_f_abend">Good evening</string>
-    <string name="ks_f_ausgeruht">Well rested</string>
     <string name="ks_f_schlaf">%1$s: %2$s of sleep</string>
     <string name="ks_f_ruhe_ok"> and a resting heart rate as usual</string>
     <string name="ks_f_ruhe_hoch"> and a resting heart rate %1$d bpm above usual</string>
@@ -277,15 +276,17 @@
     </plurals>
     <string name="ks_f_schritte">. %1$s so far</string>
     <string name="ks_f_schritte_allein">%1$s so far</string>
-    <string name="ks_f_tag_haerter">, a harder day than usual</string>
-    <string name="ks_f_tag_leichter">, a quieter day than usual</string>
+    <string name="ks_f_tag_haerter">, more load than usual</string>
+    <string name="ks_f_tag_leichter">, less load than usual</string>
     <string name="ks_f_offen">, %1$s still open</string>
     <string name="ks_f_akku_vor">Watch at</string>
     <plurals name="ks_f_akku_tage">
         <item quantity="one">, about %1$d day left.</item>
         <item quantity="other">, about %1$d days left.</item>
     </plurals>
+    <string name="ks_f_akku_stunden">, about %1$d h left.</string>
     <string name="ks_f_bettzeit">Bedtime, like last night</string>
+    <string name="ks_f_bettzeit_vorgabe">Bedtime</string>
     <string name="ks_f_koffein_dann">Caffeine then about %1$d mg</string>
     <string name="ks_f_aufgewacht_durch">Woke up, slept through</string>
     <string name="ks_f_wie_immer">as usual</string>
@@ -335,7 +336,7 @@
     <string name="ks_v_unter_7">Under 7 h</string>
     <string name="ks_v_ab_7">7 h and more</string>
     <string name="ks_v_aktiver_tag">After 30+ active min</string>
-    <string name="ks_v_ruhiger_tag">After a quieter day</string>
+    <string name="ks_v_ruhiger_tag">After &lt;30 active min</string>
     <string name="ks_v_nach_23">Asleep after 23:00</string>
     <string name="ks_v_vor_23">Asleep before 23:00</string>
     <string name="ks_v_viele_schritte">After 10,000+ steps</string>

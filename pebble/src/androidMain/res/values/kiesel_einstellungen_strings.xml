@@ -5,7 +5,8 @@
     <string name="ks_e_rechte_ok">Workouts, heart rate, SpO2, HRV, water and supplements: all allowed.</string>
     <string name="ks_e_rechte_fehlen">%1$d permissions missing. Tap to allow.</string>
     <string name="ks_e_sicherung_kein">Back up, and take over from Kiesel-Helper. No folder chosen yet.</string>
-    <string name="ks_e_kieselsport_text">Max HR %1$d · rest %2$d s · pool %3$d m</string>
+    <string name="ks_e_kieselsport_text">Max HR %1$s · rest %2$d s · pool %3$d m</string>
+    <string name="ks_e_maxpuls_alter">%1$d · age</string>
     <string name="ks_e_standort">Location for GPS tracks</string>
     <string name="ks_e_standort_immer">Allowed all the time.</string>
     <string name="ks_e_standort_nutzung">Only while using the app: tracks stay empty while Boulder is in the background. Choose \"Allow all the time\".</string>

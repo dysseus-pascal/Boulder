@@ -98,9 +98,9 @@ internal object Trainingsanalyse {
     ): Double? {
         if (puls.isEmpty() || gewichtKg < 20 || alter <= 0) return null
         val ruhe = (ruhepuls?.takeIf { it in 30..110 } ?: RUHEPULS_ERSATZ).toDouble()
-        val tanaka = 208 - 0.7 * alter
-        // Weit ueber Tanaka ist eher ein Tippfehler als ein Herz - dann Tanaka.
-        val max = maxpuls?.toDouble()?.takeIf { it > ruhe + 20 && it <= tanaka + 25 } ?: tanaka
+        // Den Maximalpuls prueft allein Herzgrenzen - eine zweite Pruefung hier verwarf
+        // einen Wert, mit dem die Zonen derselben Seite rechneten. Ohne Wert Tanaka.
+        val max = maxpuls?.toDouble() ?: (208 - 0.7 * alter)
         if (max <= ruhe + 20) return null
         val vo2max = vo2maxMitte(alter, geschlecht)
         var kcal = 0.0

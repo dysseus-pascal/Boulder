@@ -362,6 +362,7 @@ internal object Zeichen {
 
     val aktiv = bild(2f, 0f, kreis(12f, 13f, 7f), "M12 9v4l2.5 2 M10 3h4")
     val herz = bild(2f, 0f, "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
+    val druck = bild(2f, 0f, "M4 17a8 8 0 0 1 16 0", "M12 17l3.5-5")
     val wasser = bild(2f, 0f, "M12 3.5s-6 6.6-6 10.5a6 6 0 0 0 12 0c0-3.9-6-10.5-6-10.5z")
     val kapsel = bild(2f, -45f, "M7 8.5h10a3.5 3.5 0 0 1 0 7H7a3.5 3.5 0 0 1 0-7z", "M12 8.5v7")
     val tasse = bild(2f, 0f, "M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z M16 11h1.5a2.5 2.5 0 0 1 0 5H16 M8.5 3.5v2.5 M12.5 3.5v2.5")

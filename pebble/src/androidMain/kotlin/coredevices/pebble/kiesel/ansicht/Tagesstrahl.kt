@@ -584,6 +584,19 @@ internal fun Koerperliste(
                 zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) }, onClick = wege.herz,
             )
         }
+        // Nur wer misst, bekommt die Zeile - ohne Manschette waere sie immer leer.
+        Gesundheitsrechnung.blutdruckzeile(s.blutdruck)?.let { b ->
+            add {
+                val unter = listOfNotNull(
+                    zeitpunkt(context, b.letzte.zeit),
+                    b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) },
+                ).joinToString(" · ")
+                Zeile(
+                    stringResource(R.string.ks_d_blutdruck), unter, "${b.letzte.oben}/${b.letzte.unten}", "mmHg",
+                    zeichen = { Tonkreis(Zeichen.druck, FLAECHE_HERZ, t.herz) },
+                )
+            }
+        }
         if (s.mitDrinktervall) add {
             val letztes = s.glaeser.maxOrNull()
             val unter = if (letztes == null) stringResource(R.string.ks_h_kein_glas)

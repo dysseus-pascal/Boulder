@@ -85,6 +85,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.time.Duration

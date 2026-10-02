@@ -232,7 +232,10 @@ internal object SupCycle {
      * Einnahmen, die im Tagesstrahl geloescht wurden: sie zaehlen in Liste,
      * Satz und Quote nicht mehr als genommen, obwohl die Uhr den Haken behaelt.
      * Nimmt die Uhr ihn zurueck und setzt ihn neu, gilt er wieder.
+     *
+     * Gesperrt wie das Schreiben in [verarbeite]: beide fuehren denselben Stand.
      */
+    @Synchronized
     fun verwirf(context: Context, kennungen: List<String?>) {
         val p = context.getSharedPreferences(HEUTE, Context.MODE_PRIVATE)
         val tag = p.getString("tag", null) ?: return
@@ -373,7 +376,8 @@ internal object SupCycle {
         val vorherGenommen = if (gleicherTag) p.getLong("genommen", 0) else 0L
         val gleich = gleicheNamen(bekannt, namen)
         var eingetragen = if (gleicherTag) p.getLong("eingetragen", vorherGenommen) and gleich else 0L
-        val verworfen = if (gleicherTag) p.getLong("verworfen", 0) and genommen and gleich else 0L
+        val verworfenGelesen = if (gleicherTag) p.getLong("verworfen", 0) else 0L
+        var verworfen = verworfenGelesen and genommen and gleich
         // DER VORTAG GEHT NICHT VERLOREN: was an ihm abgehakt, aber nicht
         // eingetragen ist, holt sein liegengebliebener Stand nach (siehe nachtrag).
         if (gemerkt != null && !gleicherTag) {
@@ -398,15 +402,26 @@ internal object SupCycle {
         val bleibt = if (geloescht) 0L else maske(zurueck)
         eingetragen = (eingetragen and genommen) or bleibt
 
-        p.edit().apply {
-            putString("tag", tag.toString())
-            putString("namen", namen.joinToString("\n"))
-            putLong("faellig", faellig)
-            putLong("genommen", genommen)
-            putLong("eingetragen", eingetragen)
-            putLong("verworfen", verworfen)
-            if (planBytes != null) putString("plan", Base64.encodeToString(planBytes, Base64.NO_WRAP))
-            apply()
+        // WAS DER TAGESSTRAHL INZWISCHEN VERWARF, BLEIBT VERWORFEN: zwischen Lesen
+        // und Schreiben liegen Aufrufe an die Akte, und [verwirf] fuehrt denselben
+        // Stand - ohne Abgleich ueberschriebe dieser ihn, die geloeschte Einnahme
+        // zaehlte wieder als genommen.
+        synchronized(this) {
+            if (gleicherTag) {
+                val inzwischen = p.getLong("verworfen", 0) and verworfenGelesen.inv() and genommen
+                verworfen = verworfen or inzwischen
+                eingetragen = eingetragen and inzwischen.inv()
+            }
+            p.edit().apply {
+                putString("tag", tag.toString())
+                putString("namen", namen.joinToString("\n"))
+                putLong("faellig", faellig)
+                putLong("genommen", genommen)
+                putLong("eingetragen", eingetragen)
+                putLong("verworfen", verworfen)
+                if (planBytes != null) putString("plan", Base64.encodeToString(planBytes, Base64.NO_WRAP))
+                apply()
+            }
         }
         val (wieViele, davon) = merkeQuote(context, tag.toString(), faellig, genommen and verworfen.inv())
         if (gescheitert) {

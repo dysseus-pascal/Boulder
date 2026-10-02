@@ -33,5 +33,4 @@
     <string name="ks_trv_hrv_kurz">HRV after very short nights</string>
     <string name="ks_trv_schritte_kurz">Steps after very short nights</string>
     <string name="ks_trv_koffein_kurz">Caffeine after very short nights</string>
-    <string name="ks_trv_unter_30_aktiv">After &lt;30 active min</string>
 </resources>

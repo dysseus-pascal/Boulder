@@ -151,7 +151,6 @@
     <string name="ks_h_hrv_drin">In range</string>
     <string name="ks_h_hrv_draussen">Out of range</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
-    <string name="ks_h_hrv_n">HRV</string>
     <string name="ks_h_spo2_n">Blood oxygen</string>
     <string name="ks_h_spo2_keins">Lowest %1$d %%</string>
     <plurals name="ks_h_spo2_unter">
@@ -293,7 +292,6 @@
         <item quantity="one">%1$d glass · last %2$s</item>
         <item quantity="other">%1$d glasses · last %2$s</item>
     </plurals>
-    <string name="ks_f_koffein_bett">~%1$d mg at bedtime</string>
     <string name="ks_f_koffein_aktiv">%1$d mg active</string>
     <!-- Schlafansicht nach Konzept F -->
     <string name="ks_n_eingeschlafen">fell asleep</string>

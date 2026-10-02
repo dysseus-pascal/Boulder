@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
+import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Trainingsanalyse
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -73,6 +74,13 @@ internal fun AkkuAnsicht() {
     val zone = ZoneId.systemDefault()
     fun uhr(t: Instant) = DateFormat.getTimeFormat(context).format(java.util.Date(t.toEpochMilli()))
     fun zahl(w: Double?, nachkomma: Int) = w?.let { String.format(Locale.getDefault(), "%.${nachkomma}f", it) } ?: "–"
+    // Ohne Wert nur der Strich: "≈ –" las sich wie ein Darstellungsfehler.
+    fun ungefaehr(w: Double?, nachkomma: Int) = w?.let { "≈ " + zahl(it, nachkomma) } ?: "–"
+    // Dieselben Naechte wie die Schlafseite, die laengste je Aufwachtag: ein Nachschlaf
+    // am Morgen stand sonst als eigene Nacht da. Gerechnet wird weiter mit allen
+    // Stuecken - jedes traegt zwei echte Akkustaende.
+    val tagesnaechte = remember(geladen) { Gesundheitsrechnung.jeTag(geladen, zone).map { it.beginnUtc }.toSet() }
+    val liste = stand.naechte.filter { it.beginnUtc in tagesnaechte }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -82,9 +90,9 @@ internal fun AkkuAnsicht() {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Wert(aktuell?.let { "$it %" } ?: "–", stringResource(R.string.ks_akku_jetzt))
                 // Abgerundet wie die Restzeit im Satz auf Health: lieber zu wenig als zu viel.
-                Wert("≈ " + zahl(stand.tageUebrig?.let { kotlin.math.floor(it * 10) / 10 }, 1), stringResource(R.string.ks_akku_uebrig))
-                Wert("≈ " + zahl(stand.jeTag, 0), stringResource(R.string.ks_akku_je_tag))
-                Wert("≈ " + zahl(stand.tageJeLadung, 1), stringResource(R.string.ks_akku_je_ladung))
+                Wert(ungefaehr(stand.tageUebrig?.let { kotlin.math.floor(it * 10) / 10 }, 1), stringResource(R.string.ks_akku_uebrig))
+                Wert(ungefaehr(stand.jeTag, 0), stringResource(R.string.ks_akku_je_tag))
+                Wert(ungefaehr(stand.tageJeLadung, 1), stringResource(R.string.ks_akku_je_ladung))
                 Wert(zahl(stand.nachtJeStunde, 1), stringResource(R.string.ks_akku_nacht))
                 Wert(zahl(stand.tagJeStunde, 1), stringResource(R.string.ks_akku_tag))
             }
@@ -96,18 +104,21 @@ internal fun AkkuAnsicht() {
         if (stand.punkte.size >= 2) {
             Ueberschrift(stringResource(R.string.ks_akku_verlauf))
             Karte {
-                // Die Achse zaehlt Tage seit dem ersten Punkt.
-                val erster = stand.punkte.first().first
+                // Die Achse in Tagen ab Mitternacht des ersten Tages: jeder ganze Wert ist ein
+                // Tagesbeginn und traegt sein Datum. Gezaehlte Tage ("1") sagten ohne Erklaerung nichts.
+                val ersterTag = Instant.ofEpochSecond(stand.punkte.first().first).atZone(zone).toLocalDate()
+                val mitternacht = ersterTag.atStartOfDay(zone).toEpochSecond()
                 Verlauf(
-                    stand.punkte.map { (t, p) -> Trainingsanalyse.Verlaufspunkt((t - erster) / 86400.0, p.toDouble()) },
+                    stand.punkte.map { (t, p) -> Trainingsanalyse.Verlaufspunkt((t - mitternacht) / 86400.0, p.toDouble()) },
                     Color(0xFF2CB0C6), "%", zaehlachse = true, bereich = 0.0..100.0,
+                    achsenText = { kurzDatum(ersterTag.plusDays(it.toLong())) },
                 )
             }
         }
-        if (stand.naechte.isNotEmpty()) {
+        if (liste.isNotEmpty()) {
             Ueberschrift(stringResource(R.string.ks_akku_naechte))
             Karte {
-                stand.naechte.asReversed().forEach { n ->
+                liste.asReversed().forEach { n ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(n.aufwachen.atZone(zone).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)), fontWeight = FontWeight.Bold)

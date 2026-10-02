@@ -2331,8 +2331,10 @@ fun basicSettingsActionItem(
                         Badge {
                             Text(text = badge)
                         }
+                        // Boulder: der Abstand gehoert zum Abzeichen - ohne es rueckte der
+                        // Titel gegen seine Beschreibung ein.
+                        Spacer(modifier = Modifier.width(5.dp))
                     }
-                    Spacer(modifier = Modifier.width(5.dp))
                     if (button != null) {
                         button()
                     } else {

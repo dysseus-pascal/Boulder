@@ -13,11 +13,15 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -59,14 +63,20 @@ private class Linie(val y: Float, val text: String)
  * Zahlen darueber, und die andere Linie zaehlt mit. Ein "avg 31" quer ueber
  * einer Saeule oder dicht an einer Zahl ("avg 55 54") liest sich als eine
  * Zahl. Ist nirgends Platz, steht sie dort, wo sie am wenigsten verdeckt.
+ *
+ * DIE LINIEN SETZEN UNTER JEDER SCHRIFT AUS: `zahlen` sind die Werte ueber
+ * den Saeulen. Liegt eine Saeule knapp unter Ziel oder Schnitt, liefen die
+ * Linien sonst mitten durch ihre Zahl ("6:46" durchgestrichen).
  */
 private fun DrawScope.linien(
-    messer: TextMeasurer, stil: TextStyle, farbe: Color, von: Float, bis: Float, marke: Linie?, mittel: Linie?, belegt: List<Rect> = emptyList(),
+    messer: TextMeasurer, stil: TextStyle, farbe: Color, von: Float, bis: Float, marke: Linie?, mittel: Linie?,
+    belegt: List<Rect> = emptyList(), zahlen: List<Rect> = emptyList(),
 ) {
     val abstand = 2.dp.toPx()
     // Der Mindestabstand zu allem Belegten - knapper liest es sich als eine Zeile.
     val luft = 6.dp.toPx()
     val besetzt = belegt.map { it.inflate(luft) }.toMutableList()
+    val gesetzt = mutableListOf<Pair<TextLayoutResult, Offset>>()
     fun setze(l: Linie, andere: Linie?) {
         val m = messer.measure(l.text, stil)
         val w = m.size.width.toFloat()
@@ -81,14 +91,23 @@ private fun DrawScope.linien(
         val xe = generateSequence(bis - w) { it - 4.dp.toPx() }.takeWhile { it >= von }.toList().ifEmpty { listOf(von) }
         // minBy nimmt bei Gleichstand den ersten: so weit rechts wie moeglich, ueber der Linie vor darunter.
         val ort = xe.flatMap { x -> listOf(Offset(x, ueber), Offset(x, unter)) }.minBy { stoerung(it) }
-        drawText(m, topLeft = ort)
+        gesetzt += m to ort
         besetzt += Rect(ort, Size(w, h)).inflate(luft)
     }
-    marke?.let { drawLine(farbe, Offset(von, it.y), Offset(bis, it.y), 1.5.dp.toPx()) }
-    mittel?.let { drawLine(farbe, Offset(von, it.y), Offset(bis, it.y), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))) }
     // Das Ziel zuerst: es ist die feste Groesse, der Mittelwert weicht aus.
     marke?.let { setze(it, mittel) }
     mittel?.let { setze(it, marke) }
+    // Nur seitlich erweitert: die eigene Beschriftung steht 2 dp ueber oder unter
+    // ihrer Linie, hoeher ausgespart verloere sie dort ein Stueck.
+    val luecken = Path()
+    (zahlen + gesetzt.map { (m, o) -> Rect(o, Size(m.size.width.toFloat(), m.size.height.toFloat())) }).forEach {
+        luecken.addRect(Rect(it.left - abstand, it.top, it.right + abstand, it.bottom))
+    }
+    clipPath(luecken, ClipOp.Difference) {
+        marke?.let { drawLine(farbe, Offset(von, it.y), Offset(bis, it.y), 1.5.dp.toPx()) }
+        mittel?.let { drawLine(farbe, Offset(von, it.y), Offset(bis, it.y), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))) }
+    }
+    gesetzt.forEach { (m, o) -> drawText(m, topLeft = o) }
 }
 
 /**
@@ -157,6 +176,7 @@ internal fun Trendsaeulen(
         val passt = texte.maxOf { t -> t?.let { messer.measure(it, fett).size.width } ?: 0 } <= fach - 2.dp.toPx()
         val mitZahl = beschriftete(saeulen.mapIndexed { i, s -> s.wert.takeIf { texte[i] != null } }, passt)
         val belegt = mutableListOf<Rect>()
+        val zahlen = mutableListOf<Rect>()
         if (pegel) {
             striche.forEach { s ->
                 drawLine(raster, Offset(links, y(s)), Offset(size.width, y(s)), 1.dp.toPx())
@@ -199,6 +219,7 @@ internal fun Trendsaeulen(
                     val ecke0 = Offset(mitte - m.size.width / 2f, oben.coerceAtLeast(0f))
                     drawText(m, topLeft = ecke0)
                     belegt += Rect(ecke0, Size(m.size.width.toFloat(), m.size.height.toFloat()))
+                    zahlen += belegt.last()
                 }
             }
             val m = messer.measure(s.name, if (s.hervor) fett else stil)
@@ -208,7 +229,7 @@ internal fun Trendsaeulen(
                 drawText(h, topLeft = Offset(mitte - h.size.width / 2f, boden + 2.dp.toPx() + m.size.height))
             }
         }
-        linien(messer, stil, linie, links, size.width, marke?.let { Linie(y(it), zielText) }, mittel?.let { Linie(y(it), mittelText) }, belegt)
+        linien(messer, stil, linie, links, size.width, marke?.let { Linie(y(it), zielText) }, mittel?.let { Linie(y(it), mittelText) }, belegt, zahlen)
     }
 }
 
@@ -256,6 +277,7 @@ internal fun Tagesbild(
         val mitZahl = beschriftete(tage.map { it.second }, passt)
         val letzter = tage.indexOfLast { it.second != null }
         val belegt = mutableListOf<Rect>()
+        val zahlen = mutableListOf<Rect>()
         tage.forEachIndexed { i, (tag, _) ->
             if (tag.dayOfWeek == DayOfWeek.SATURDAY || tag.dayOfWeek == DayOfWeek.SUNDAY) {
                 drawRect(wochenende, Offset(links + fach * i, kopf), Size(fach, boden - kopf))
@@ -295,12 +317,13 @@ internal fun Tagesbild(
                 val ecke0 = Offset(mitte - m.size.width / 2f, (y(w) - abstand - m.size.height).coerceAtLeast(0f))
                 drawText(m, topLeft = ecke0)
                 belegt += Rect(ecke0, Size(m.size.width.toFloat(), m.size.height.toFloat()))
+                zahlen += belegt.last()
             }
             if (tag.dayOfWeek == DayOfWeek.MONDAY) {
                 val m = messer.measure(tag.format(datum), stil)
                 drawText(m, topLeft = Offset((mitte - m.size.width / 2f).coerceIn(links, maxOf(links, size.width - m.size.width)), size.height - m.size.height))
             }
         }
-        linien(messer, stil, linie, links, size.width, marke?.let { Linie(y(it), zielText) }, mittel?.let { Linie(y(it), mittelText) }, belegt)
+        linien(messer, stil, linie, links, size.width, marke?.let { Linie(y(it), zielText) }, mittel?.let { Linie(y(it), mittelText) }, belegt, zahlen)
     }
 }

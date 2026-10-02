@@ -731,15 +731,12 @@ internal fun Koerperliste(
         }
         if (s.mitDrinktervall) add {
             // Gross die Menge des Tages wie im Widget; was davon noch wirkt, steht benannt darunter.
+            // Was zur Schlafenszeit noch wirkt, steht nur im Strahl bei "Bedtime" - hier
+            // doppelt brach die Zeile neben dem "+" auf zwei Zeilen um.
             val heuteMg = Gesundheitsrechnung.koffeinHeute(s.koffein, LocalDate.now(), zone).roundToInt()
             val aktiv = Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt()
-            val bett = Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone)
-            val dann = bett?.let { Gesundheitsrechnung.koffeinAktiv(s.koffein, it).roundToInt() }
             val unter = if (aktiv <= 0) stringResource(R.string.ks_h_koffein_keins)
-            else listOfNotNull(
-                stringResource(R.string.ks_f_koffein_aktiv, aktiv),
-                dann?.takeIf { it > 0 }?.let { stringResource(R.string.ks_f_koffein_bett, it) },
-            ).joinToString(" · ")
+            else stringResource(R.string.ks_f_koffein_aktiv, aktiv)
             val dazu = stringResource(R.string.ks_h_koffein_dazu)
             Zeile(
                 stringResource(R.string.ks_h_koffein_n), unter, "$heuteMg", "mg",
@@ -782,7 +779,8 @@ internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
             s.wocheSchritte.forEachIndexed { i, (tag, schritte) ->
                 val letzte = i == s.wocheSchritte.lastIndex
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (schritte > 0) String.format(Locale.getDefault(), "%.1fk", schritte / 1000.0) else "", fontSize = 11.sp, lineHeight = 14.sp, color = grau, maxLines = 1)
+                    // Abgerundet wie "goal 10k" daneben und die Trends: 9'960 gerundet als "10.0k" unter der Ziellinie widerspraeche ihr.
+                    Text(if (schritte > 0) Auswertung.tausender(schritte.toDouble()) else "", fontSize = 11.sp, lineHeight = 14.sp, color = grau, maxLines = 1)
                     val gruen = if (schritte >= SCHRITTZIEL) FLAECHE_BEWEGUNG else FLAECHE_BEWEGUNG.copy(alpha = 0.75f)
                     Canvas(Modifier.fillMaxWidth().height(64.dp)) {
                         drawRoundRect(leer, Offset.Zero, size, CornerRadius(4.dp.toPx()))

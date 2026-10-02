@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Trainingsanalyse
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** Die Farben der Zonen - dieselben wie auf der Uhr (Kieselsport, thema.c). */
 internal val ZONENFARBEN = listOf(
@@ -68,7 +70,8 @@ internal fun zonenbaender(maxpuls: Int): List<Triple<Double, Double, Color>> = (
  * [xBaender] senkrechte (Saetze, Bahnen). [farbeJeWert] faerbt die Linie
  * Stueck fuer Stueck nach dem Wert - beim Tempo blau bis rot wie auf der
  * Karte. Mit [zeitachse] sind die `meter` der Punkte Sekunden, und die Achse
- * zeigt Minuten; mit [zaehlachse] zaehlt sie nur (Bahn 1, 2, ...).
+ * zeigt Minuten; mit [zaehlachse] zaehlt sie nur (Bahn 1, 2, ...), mit
+ * [achsenText] dazu beschriftet (beim Akku das Datum jedes Tagesbeginns).
  */
 @Composable
 internal fun Verlauf(
@@ -85,6 +88,7 @@ internal fun Verlauf(
     xBaender: List<Pair<Double, Double>> = emptyList(),
     /** Feste Spanne der Werteachse - beim Akku 0 bis 100, sonst stuende dort 108 %. */
     bereich: ClosedRange<Double>? = null,
+    achsenText: ((Int) -> String)? = null,
 ) {
     if (punkte.size < 2) return
     val messer = rememberTextMeasurer()
@@ -178,7 +182,22 @@ internal fun Verlauf(
         // hineinliefe, faellt weg.
         val rechtsBreite = if (rechts.isEmpty()) 0 else messer.measure(rechts, stil).size.width
         val grenze = size.width - rechtsBreite - 4.dp.toPx()
-        if (schritt > 0) {
+        if (zaehlachse && achsenText != null) {
+            // Jeder wievielte ganze Wert ein Datum bekommt, aus der breitesten Beschriftung:
+            // feste Schritte liessen "Sep 29" und "Sep 30" ueber zwei Wochen ineinanderlaufen.
+            val ganze = (ceil(anfang).toInt()..floor(ende).toInt()).toList()
+            val jeEinheit = (size.width - links) / (ende - anfang).toFloat()
+            val breiteste = ganze.maxOfOrNull { messer.measure(achsenText(it), stil).size.width } ?: 0
+            val jeder = listOf(1, 2, 3, 7, 14).firstOrNull { it * jeEinheit >= breiteste + 8.dp.toPx() } ?: 28
+            ganze.filter { (it - ganze.first()) % jeder == 0 }.forEach { k ->
+                val m = messer.measure(achsenText(k), stil)
+                val xk = x(k.toDouble())
+                // Am Rand faellt sie weg statt zu ruecken - verschoben stuende sie unter dem falschen Tag.
+                if (xk - m.size.width / 2f >= links && xk + m.size.width / 2f <= size.width) {
+                    drawText(m, topLeft = Offset(xk - m.size.width / 2f, size.height - m.size.height))
+                }
+            }
+        } else if (schritt > 0) {
             var k = if (zaehlachse) schritt.coerceAtLeast(anfang.toInt()) else schritt
             while (k < bis) {
                 val m = messer.measure("$k", stil)

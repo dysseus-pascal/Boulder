@@ -56,12 +56,12 @@ private class Texte(val frage: Int, val nameA: Int, val nameB: Int)
 private fun texte(art: Vergleichsfragen.Art): Texte = when (art) {
     Vergleichsfragen.Art.HRV_KURZ -> Texte(R.string.ks_trv_hrv_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
     // "Quieter day" hiess auf Health die Pulsbelastung - hier zaehlen nur Schritt-Aktivminuten, also sagt die Gruppe das.
-    Vergleichsfragen.Art.RUHE_AKTIV -> Texte(R.string.ks_v_ruhe_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_trv_unter_30_aktiv)
+    Vergleichsfragen.Art.RUHE_AKTIV -> Texte(R.string.ks_v_ruhe_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag)
     Vergleichsfragen.Art.RUHE_SPAET -> Texte(R.string.ks_v_ruhe_spaet, R.string.ks_v_nach_23, R.string.ks_v_vor_23)
     Vergleichsfragen.Art.HRV_SCHRITTE -> Texte(R.string.ks_v_hrv_schritte, R.string.ks_v_viele_schritte, R.string.ks_v_weniger_schritte)
     Vergleichsfragen.Art.RUHE_WOCHENENDE -> Texte(R.string.ks_v_ruhe_wochenende, R.string.ks_v_wochenende, R.string.ks_v_unter_woche)
     Vergleichsfragen.Art.TIEF_KOFFEIN -> Texte(R.string.ks_v_tief_koffein, R.string.ks_v_viel_koffein, R.string.ks_v_wenig_koffein)
-    Vergleichsfragen.Art.SCHLAF_AKTIV -> Texte(R.string.ks_v_schlaf_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_trv_unter_30_aktiv)
+    Vergleichsfragen.Art.SCHLAF_AKTIV -> Texte(R.string.ks_v_schlaf_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag)
     Vergleichsfragen.Art.SCHRITTE_KURZ -> Texte(R.string.ks_trv_schritte_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
     Vergleichsfragen.Art.KOFFEIN_KURZ -> Texte(R.string.ks_trv_koffein_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
 }

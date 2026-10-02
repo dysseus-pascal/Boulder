@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,9 +33,12 @@ import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Pulsbin
 import kotlin.math.roundToInt
+import coredevices.pebble.kiesel.Blutdruck
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -314,6 +318,67 @@ internal fun HrvWoche(
     }
 }
 
+/**
+ * Die Blutdrucksitzungen zwischen [von] und [bis]: je Sitzung ein Strich von
+ * diastolisch bis systolisch mit einem Punkt an jedem Ende - beide Werte
+ * und ihr Abstand auf einen Blick. Die Zeit laeuft durch, nicht in
+ * Tagesfaechern: morgens und abends gemessen stuenden sonst zwei Striche
+ * aufeinander. Die letzte Sitzung kraeftig, die frueheren blasser; die
+ * Zahlen rechts wie bei [HrvWoche], unter jedem Montag sein Datum.
+ */
+@Composable
+internal fun Blutdruckbild(
+    sitzungen: List<Blutdruck>,
+    von: Instant,
+    bis: Instant,
+    farbe: Color,
+    hoehe: Dp = 150.dp,
+    tagText: (LocalDate) -> String,
+) {
+    val (tief, hoch) = Gesundheitsrechnung.blutdruckachse(sitzungen) ?: return
+    val messer = rememberTextMeasurer()
+    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
+    val zone = ZoneId.systemDefault()
+    // Blass als deckende Mischung mit der Karte: mit Alpha laege der Strich im Punkt doppelt und dunkelte ihn fleckig.
+    val blass = farbe.copy(alpha = 0.5f).compositeOver(kartenFarben().containerColor)
+    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
+        val rechts = size.width - 30.dp.toPx()
+        val fuss = 18.dp.toPx()
+        val kopf = 6.dp.toPx()
+        val boden = size.height - fuss
+        // Ein Punkt Abstand zu beiden Seiten: eine Sitzung von eben laege sonst halb unter den Zahlen.
+        val rand = 6.dp.toPx()
+        val spanne = (bis.epochSecond - von.epochSecond).coerceAtLeast(1)
+        fun x(t: Instant) = rand + (rechts - 2 * rand) * (t.epochSecond - von.epochSecond).coerceIn(0, spanne) / spanne.toFloat()
+        fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
+
+        Gesundheitsrechnung.raster(tief, hoch, 10).forEach { w ->
+            drawLine(rasterFarbe, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
+            val m = messer.measure("$w", stil)
+            drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
+        }
+        sitzungen.forEachIndexed { i, s ->
+            val f = if (i == sitzungen.lastIndex) farbe else blass
+            val oben = Offset(x(s.zeit), y(s.oben))
+            val unten = Offset(x(s.zeit), y(s.unten))
+            drawLine(f, oben, unten, 2.dp.toPx(), cap = StrokeCap.Round)
+            drawCircle(f, 3.dp.toPx(), oben)
+            drawCircle(f, 3.dp.toPx(), unten)
+        }
+        // Die Montage als Zeitachse, mittig unter ihrem Tag - wie im Tagesbild der Trends.
+        var tag = von.atZone(zone).toLocalDate()
+        while (!tag.isAfter(bis.atZone(zone).toLocalDate())) {
+            if (tag.dayOfWeek == DayOfWeek.MONDAY) {
+                val mitte = x(tag.atTime(12, 0).atZone(zone).toInstant())
+                val m = messer.measure(tagText(tag), stil)
+                drawText(m, topLeft = Offset((mitte - m.size.width / 2f).coerceIn(0f, maxOf(0f, rechts - m.size.width)), size.height - m.size.height))
+            }
+            tag = tag.plusDays(1)
+        }
+    }
+}
+
 /** Gleitendes Mittel ueber [halb] Bins nach jeder Seite - Median, Tiefster und Hoechster je fuer sich. */
 private fun glaetten(bins: List<Pulsbin>, halb: Int): List<Pulsbin> = bins.indices.map { i ->
     val fenster = bins.subList(maxOf(0, i - halb), minOf(bins.size, i + halb + 1))
@@ -441,7 +506,6 @@ internal object Zeichen {
 
     val aktiv = bild(2f, 0f, kreis(12f, 13f, 7f), "M12 9v4l2.5 2 M10 3h4")
     val herz = bild(2f, 0f, "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
-    val druck = bild(2f, 0f, "M4 17a8 8 0 0 1 16 0", "M12 17l3.5-5")
     val wasser = bild(2f, 0f, "M12 3.5s-6 6.6-6 10.5a6 6 0 0 0 12 0c0-3.9-6-10.5-6-10.5z")
     val kapsel = bild(2f, -45f, "M7 8.5h10a3.5 3.5 0 0 1 0 7H7a3.5 3.5 0 0 1 0-7z", "M12 8.5v7")
     val tasse = bild(2f, 0f, "M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z M16 11h1.5a2.5 2.5 0 0 1 0 5H16 M8.5 3.5v2.5 M12.5 3.5v2.5")

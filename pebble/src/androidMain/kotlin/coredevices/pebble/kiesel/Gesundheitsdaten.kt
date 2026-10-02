@@ -57,6 +57,12 @@ internal const val BLUTDRUCK_TAGE = 30L
 /** Messungen mit weniger Abstand gehoeren zu einer Sitzung an der Manschette. */
 internal const val BLUTDRUCK_SITZUNG_S = 15 * 60L
 
+/**
+ * So viele Kalendertage zaehlt die letzte Sitzung fuer die Herzzeile. Neben
+ * dem Puls von heute laese sich ein Wert von vor Wochen wie ein heutiger.
+ */
+internal const val BLUTDRUCK_ZEILE_TAGE = 7L
+
 /** Eine Blutdruckmessung aus der Akte, in mmHg. */
 internal data class Blutdruck(val zeit: Instant, val oben: Int, val unten: Int)
 
@@ -218,8 +224,10 @@ internal object Gesundheitsrechnung {
         )
     }
 
-    /** Die letzte Sitzung, gemittelt, und ab drei Sitzungen der Schnitt der Zeitspanne. */
-    data class Blutdruckzeile(val letzte: Blutdruck, val schnitt: Pair<Int, Int>?)
+    /** Jede Sitzung gemittelt, aelteste zuerst, und ab drei Sitzungen der Schnitt der Zeitspanne. */
+    data class Blutdruckstand(val sitzungen: List<Blutdruck>, val schnitt: Pair<Int, Int>?) {
+        val letzte: Blutdruck get() = sitzungen.last()
+    }
 
     /**
      * Die Messungen in Sitzungen, aelteste zuerst: weniger als
@@ -237,9 +245,9 @@ internal object Gesundheitsrechnung {
         return aus
     }
 
-    fun blutdruckzeile(messungen: List<Blutdruck>): Blutdruckzeile? {
+    fun blutdruckstand(messungen: List<Blutdruck>): Blutdruckstand? {
         val sitzungen = blutdrucksitzungen(messungen)
-        val letzte = sitzungen.lastOrNull() ?: return null
+        if (sitzungen.isEmpty()) return null
         // Der Schnitt ueber die Sitzungsmittel, nicht ueber gerundete Werte - sonst rundete er zweimal.
         fun oben(s: List<Blutdruck>) = s.map { it.oben }.average()
         fun unten(s: List<Blutdruck>) = s.map { it.unten }.average()
@@ -248,7 +256,23 @@ internal object Gesundheitsrechnung {
             l.map(::oben).average().roundToInt() to l.map(::unten).average().roundToInt()
         }
         // Die Sitzung traegt die Zeit ihrer ersten Messung: da begann das Messen.
-        return Blutdruckzeile(Blutdruck(letzte.first().zeit, oben(letzte).roundToInt(), unten(letzte).roundToInt()), schnitt)
+        return Blutdruckstand(sitzungen.map { Blutdruck(it.first().zeit, oben(it).roundToInt(), unten(it).roundToInt()) }, schnitt)
+    }
+
+    /** Die letzte Sitzung fuer die Herzzeile, wenn sie in den letzten [BLUTDRUCK_ZEILE_TAGE] Kalendertagen liegt. */
+    fun blutdruckFuerHerzzeile(messungen: List<Blutdruck>, jetzt: Instant, zone: ZoneId): Blutdruck? =
+        blutdruckstand(messungen)?.letzte?.takeIf { tageZurueck(it.zeit, jetzt, zone) < BLUTDRUCK_ZEILE_TAGE }
+
+    /**
+     * Die y-Achse des Blutdruckbilds in mmHg: fuenf mmHg Luft unter dem
+     * tiefsten und ueber dem hoechsten Wert, auf Zehner gerundet - so liegt
+     * kein Punkt am Rand, und die Zahlen der Achse bleiben rund.
+     */
+    fun blutdruckachse(sitzungen: List<Blutdruck>): Pair<Int, Int>? {
+        if (sitzungen.isEmpty()) return null
+        val tief = sitzungen.minOf { minOf(it.oben, it.unten) } - 5
+        val hoch = sitzungen.maxOf { maxOf(it.oben, it.unten) } + 5
+        return Math.floorDiv(tief, 10) * 10 to Math.floorDiv(hoch + 9, 10) * 10
     }
 
     /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */

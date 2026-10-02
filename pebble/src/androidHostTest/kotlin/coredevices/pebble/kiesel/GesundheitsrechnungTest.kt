@@ -224,27 +224,54 @@ class GesundheitsbildRechnungTest {
 
     @Test
     fun blutdruck_zeigt_die_letzte_messung_und_ab_drei_den_schnitt() {
-        assertNull(Gesundheitsrechnung.blutdruckzeile(emptyList()))
+        assertNull(Gesundheitsrechnung.blutdruckstand(emptyList()))
         val zwei = listOf(messung(86_400, 130, 85), messung(0, 120, 80))
-        val z = Gesundheitsrechnung.blutdruckzeile(zwei)!!
+        val z = Gesundheitsrechnung.blutdruckstand(zwei)!!
         assertEquals(130, z.letzte.oben)
         assertNull(z.schnitt)
         val drei = zwei + messung(43_200, 125, 81)
-        assertEquals(125 to 82, Gesundheitsrechnung.blutdruckzeile(drei)!!.schnitt)
+        assertEquals(125 to 82, Gesundheitsrechnung.blutdruckstand(drei)!!.schnitt)
     }
 
     @Test
     fun blutdruck_mittelt_eine_sitzung() {
         // Drei Messungen hintereinander an der Manschette: eine Sitzung, noch kein Schnitt.
         val sitzung = listOf(messung(120, 128, 80), messung(0, 130, 84), messung(60, 126, 82))
-        val z = Gesundheitsrechnung.blutdruckzeile(sitzung)!!
+        val z = Gesundheitsrechnung.blutdruckstand(sitzung)!!
         assertEquals(messung(0, 128, 82), z.letzte)
         assertNull(z.schnitt)
         // Zwei Sitzungen mehr: der Schnitt ueber die Sitzungen 128/82, 120/80 und 112/72.
         val mehr = sitzung + messung(86_400, 120, 80) + messung(172_800, 110, 70) + messung(173_100, 114, 74)
-        val m = Gesundheitsrechnung.blutdruckzeile(mehr)!!
+        val m = Gesundheitsrechnung.blutdruckstand(mehr)!!
         assertEquals(120 to 78, m.schnitt)
         assertEquals(messung(172_800, 112, 72), m.letzte)
+        // Fuer das Bild jede Sitzung als ein Strich, aelteste zuerst.
+        assertEquals(listOf(messung(0, 128, 82), messung(86_400, 120, 80), messung(172_800, 112, 72)), m.sitzungen)
+    }
+
+    @Test
+    fun herzzeile_nennt_den_blutdruck_nur_aus_den_letzten_sieben_tagen() {
+        val zone = ZoneOffset.UTC
+        val jetzt = LocalDate.of(2026, 10, 2).atTime(9, 0).toInstant(zone)
+        fun am(tag: LocalDate, stunde: Int) = Blutdruck(tag.atTime(stunde, 0).toInstant(zone), 128, 82)
+        assertNull(Gesundheitsrechnung.blutdruckFuerHerzzeile(emptyList(), jetzt, zone))
+        // Kalendertage, nicht 7 x 24 Stunden: der 26. Sept. zaehlt noch, der 25. auch am Abend nicht mehr, obwohl keine 7 x 24 Stunden vergangen sind.
+        assertEquals(am(LocalDate.of(2026, 9, 26), 7), Gesundheitsrechnung.blutdruckFuerHerzzeile(listOf(am(LocalDate.of(2026, 9, 26), 7)), jetzt, zone))
+        assertNull(Gesundheitsrechnung.blutdruckFuerHerzzeile(listOf(am(LocalDate.of(2026, 9, 25), 22)), jetzt, zone))
+        // Es zaehlt die letzte Sitzung - eine aeltere davor aendert nichts.
+        val beide = listOf(am(LocalDate.of(2026, 9, 10), 8), am(LocalDate.of(2026, 10, 1), 20))
+        assertEquals(am(LocalDate.of(2026, 10, 1), 20), Gesundheitsrechnung.blutdruckFuerHerzzeile(beide, jetzt, zone))
+    }
+
+    @Test
+    fun blutdruckachse_mit_luft_auf_zehner_gerundet() {
+        assertNull(Gesundheitsrechnung.blutdruckachse(emptyList()))
+        assertEquals(70 to 130, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 120, 80))))
+        // 76 - 5 = 71 nach unten auf 70, 135 + 5 = 140 bleibt, 136 + 5 = 141 geht auf 150.
+        assertEquals(70 to 140, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 135, 88))))
+        assertEquals(70 to 150, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 136, 88))))
+        // Mit Zehnerschritten waeren das acht Linien; das Raster nimmt Zwanziger.
+        assertEquals(listOf(80, 100, 120, 140), Gesundheitsrechnung.raster(70, 140, 10))
     }
 
     @Test

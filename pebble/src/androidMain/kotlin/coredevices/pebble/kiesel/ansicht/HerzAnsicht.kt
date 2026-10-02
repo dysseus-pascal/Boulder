@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
+import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.BLUTDRUCK_TAGE
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
@@ -46,10 +48,13 @@ import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.naechteSchnitt
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
+import coredevices.pebble.kiesel.tageZurueck
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.compose.koinInject
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -58,10 +63,10 @@ import kotlin.math.roundToInt
 private const val SPO2_WARNUNG = 90
 
 /**
- * "Heart today": der Puls der letzten 24 Stunden, dazu Ruhepuls, HRV und
- * SpO2 der letzten Nacht und was Boulder ueber die frueheren Naechte weiss.
- * Das Pulsband stand frueher auf der Uebersicht; hier hat es Platz und
- * verdraengt nichts.
+ * "Heart today": der Puls der letzten 24 Stunden und der Blutdruck der
+ * Manschette, dazu Ruhepuls, HRV und SpO2 der letzten Nacht und was Boulder
+ * ueber die frueheren Naechte weiss. Das Pulsband stand frueher auf der
+ * Uebersicht; hier hat es Platz und verdraengt nichts.
  */
 @Composable
 internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
@@ -78,9 +83,13 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    // Vor der Liste gerechnet: ein leeres Item bekaeme seinen Abstand trotzdem, und ohne Manschette ist es meist leer.
+    val blutdruck = remember(s.blutdruck) { Gesundheitsrechnung.blutdruckstand(s.blutdruck) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { PulsKarte(s) }
+        // Wach gemessen wie der Puls darueber; HRV, letzte Nacht und "Your usual" bleiben als Nachtteil beisammen.
+        if (blutdruck != null) item { BlutdruckKarte(blutdruck) }
         item { HrvKarte(s) }
         item { NachtwerteKarte(s, oeffneNacht) }
         item { GewohntKarte(s, oeffneTrend) }
@@ -171,6 +180,44 @@ private fun HrvKarte(s: GesundheitsStand) {
                     ),
                 )
             }
+        }
+    }
+}
+
+/** "Today 8:14 AM", "Yesterday 8:14 AM", sonst mit Datum - am Zeilenanfang, darum gross. */
+private fun messzeit(context: Context, t: Instant): String =
+    when (Gesundheitsrechnung.tageZurueck(t, Instant.now(), ZoneId.systemDefault())) {
+        0L -> context.getString(R.string.ks_kp_heute) + " " + uhrzeit(context, t)
+        1L -> context.getString(R.string.ks_kp_gestern) + " " + uhrzeit(context, t)
+        else -> zeitpunkt(context, t)
+    }
+
+/**
+ * Der Blutdruck der Manschette: die letzte Sitzung gross, ab drei Sitzungen
+ * der Schnitt daneben, darunter jede Sitzung der letzten [BLUTDRUCK_TAGE]
+ * Tage. Ohne Messung fehlt die Karte - die Uhr misst keinen Blutdruck.
+ */
+@Composable
+private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand) {
+    val context = LocalContext.current
+    val grau = MaterialTheme.colorScheme.onSurfaceVariant
+    val jetzt = Instant.now()
+    // Das Datum wie unter den Saeulen der Trends.
+    val datum = remember { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()) }
+    Kasten {
+        Kopf(stringResource(R.string.ks_h_blutdruck_k), stringResource(R.string.ks_kp_tage_zusatz, BLUTDRUCK_TAGE.toInt()))
+        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(zahlMitEinheit("${b.letzte.oben}/${b.letzte.unten}", "mmHg", 30, 16), lineHeight = 36.sp)
+                Text(
+                    listOfNotNull(
+                        messzeit(context, b.letzte.zeit),
+                        b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) },
+                    ).joinToString(" · "),
+                    fontSize = 13.sp, lineHeight = 19.sp, color = grau,
+                )
+            }
+            Blutdruckbild(b.sitzungen, jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt, toene().herz, tagText = datum::format)
         }
     }
 }

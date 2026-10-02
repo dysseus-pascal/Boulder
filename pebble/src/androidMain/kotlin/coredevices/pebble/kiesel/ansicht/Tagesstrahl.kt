@@ -554,7 +554,7 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
     }
 }
 
-/** Herz, Wasser, Praeparate, Koffein als Zeilen - jede fuehrt eine Ebene tiefer. */
+/** Herz samt Blutdruck, Koerper, Wasser, Praeparate, Koffein als Zeilen - jede fuehrt eine Ebene tiefer. */
 @Composable
 internal fun Koerperliste(
     s: GesundheitsStand,
@@ -579,27 +579,18 @@ internal fun Koerperliste(
             }
             val last = urteil?.heute?.belastung?.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
             val ruheText = ruhe?.takeIf { urteil == null }?.let { stringResource(R.string.ks_d_ruhe, it) }
-            val unter = listOfNotNull(vergleich, last, ruheText).joinToString(" · ").ifEmpty { stringResource(R.string.ks_h_kein_puls_kurz) }
+            val puls = listOfNotNull(vergleich, last, ruheText).ifEmpty { listOf(stringResource(R.string.ks_h_kein_puls_kurz)) }
+            // Der Blutdruck hinten an, auch neben zwei Pulsteilen - selbst dann bleibt die Zeile auf 412 dp zweizeilig.
+            val druck = Gesundheitsrechnung.blutdruckFuerHerzzeile(s.blutdruck, jetzt, zone)
+                ?.let { stringResource(R.string.ks_d_blutdruck_kurz, it.oben, it.unten) }
+            val unter = (puls + listOfNotNull(druck)).joinToString(" · ")
             val wert = urteil?.heute?.wachpuls ?: ruhe
             Zeile(
                 stringResource(R.string.ks_d_herz), unter, wert?.toString(), if (wert != null) "bpm" else null,
                 zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) }, onClick = wege.herz,
             )
         }
-        // Nur wer misst, bekommt die Zeile - ohne Manschette waere sie immer leer.
-        Gesundheitsrechnung.blutdruckzeile(s.blutdruck)?.let { b ->
-            add {
-                val unter = listOfNotNull(
-                    zeitpunkt(context, b.letzte.zeit),
-                    b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) },
-                ).joinToString(" · ")
-                Zeile(
-                    stringResource(R.string.ks_d_blutdruck), unter, "${b.letzte.oben}/${b.letzte.unten}", "mmHg",
-                    zeichen = { Tonkreis(Zeichen.druck, FLAECHE_HERZ, t.herz) },
-                )
-            }
-        }
-        // Die Waage wie die Manschette: nur wer sich wiegt, bekommt die Zeile.
+        // Nur wer sich wiegt, bekommt die Zeile - ohne Waage waere sie immer leer.
         koerperzeile(s, wege.koerper)?.let { add(it) }
         if (s.mitDrinktervall) add {
             val letztes = s.glaeser.maxOrNull()

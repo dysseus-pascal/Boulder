@@ -143,6 +143,7 @@
     <string name="ks_h_zone_spitze">Peak</string>
     <string name="ks_h_hrv_woche">HRV</string>
     <string name="ks_h_hrv_woche_zusatz">· last 7 nights</string>
+    <string name="ks_h_blutdruck_k">BLOOD PRESSURE</string>
     <string name="ks_h_hrv_im_band">Last night, in your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_unter_band">Last night, below your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_ueber_band">Last night, above your range of %1$d–%2$d ms</string>
@@ -253,8 +254,8 @@
     <string name="ks_d_belastung">%1$d min load</string>
     <string name="ks_d_ruhe">Resting %1$d</string>
     <string name="ks_d_spo2">Blood oxygen</string>
-    <string name="ks_d_blutdruck">Blood pressure</string>
-    <string name="ks_d_blutdruck_schnitt">30-day avg %1$d/%2$d</string>
+    <string name="ks_d_blutdruck_kurz">BP\u00A0%1$d/%2$d</string>
+    <string name="ks_d_blutdruck_schnitt">avg %1$d/%2$d</string>
     <string name="ks_d_spo2_tiefster">Lowest %1$d %%</string>
     <string name="ks_d_bewegung">Movement</string>
     <string name="ks_d_bewegung_unter">%1$s, %2$d min, %3$d kcal</string>

@@ -84,7 +84,7 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
 
 /**
  * Die Zeile "Body" fuer die Liste der Gesundheitsseite, oder null: ohne
- * Gewicht und Fett der letzten 90 Tage gibt es keine, wie beim Blutdruck.
+ * Gewicht und Fett der letzten 90 Tage gibt es keine.
  * Sie liest selbst, neu mit jedem [anlass] - der GesundheitsStand bleibt so,
  * wie das Widget ihn kennt.
  */

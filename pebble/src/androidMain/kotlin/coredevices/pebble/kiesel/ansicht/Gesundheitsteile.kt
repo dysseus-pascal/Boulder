@@ -65,15 +65,24 @@ internal data class Toene(
     val wasser: Color,
     val koffein: Color,
     val warnung: Color,
+    /** Pulszonen leicht, moderat, kraeftig, Spitze - die Farben von Google Health. */
+    val zonen: List<Color>,
+    /** HRV im persoenlichen Band (Punkte und Band) und daneben. */
+    val imBand: Color,
+    val ausserBand: Color,
 )
 
 private val DUNKEL = Toene(
     schlaf = Color(0xFF7FA7D9), schlafPlus = Color(0xFFC3D6EF), bewegung = Color(0xFF9BD0A6), herz = Color(0xFFE8776C),
     wasser = Color(0xFF6FA9DC), koffein = Color(0xFFD09A62), warnung = Color(0xFFE0A33A),
+    zonen = listOf(Color(0xFF4FC3F7), Color(0xFF5BD47A), Color(0xFFF6BF26), Color(0xFFEF6B5E)),
+    imBand = Color(0xFF5BD47A), ausserBand = Color(0xFFF6BF26),
 )
 private val HELL = Toene(
     schlaf = Color(0xFF2F5597), schlafPlus = Color(0xFF8FB0DE), bewegung = Color(0xFF3B6E2B), herz = Color(0xFFB03427),
     wasser = Color(0xFF2B6FA8), koffein = Color(0xFF7A4E22), warnung = Color(0xFF8A5F00),
+    zonen = listOf(Color(0xFF0277BD), Color(0xFF2E7D32), Color(0xFFB26A00), Color(0xFFC62828)),
+    imBand = Color(0xFF2E7D32), ausserBand = Color(0xFFB26A00),
 )
 
 @Composable

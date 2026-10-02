@@ -134,9 +134,23 @@
     </plurals>
     <string name="ks_h_akku_offen">An estimate follows after a day without charging</string>
     <string name="ks_h_nicht_verbunden">Not connected</string>
-    <string name="ks_h_bpm_jetzt">bpm now</string>
-    <string name="ks_h_gemessen">Measured %1$s · last 24 hours</string>
-    <string name="ks_h_gemessen_alt">Last measured %1$s · chart: last 24 hours</string>
+    <string name="ks_h_puls_hoch">High of %1$d bpm in %2$s zone</string>
+    <string name="ks_h_puls_neu">Now %1$d bpm, measured %2$s · last 24 hours</string>
+    <string name="ks_h_puls_alt">Last %1$d bpm, measured %2$s · last 24 hours</string>
+    <string name="ks_h_zone_leicht">Light</string>
+    <string name="ks_h_zone_moderat">Moderate</string>
+    <string name="ks_h_zone_kraeftig">Vigorous</string>
+    <string name="ks_h_zone_spitze">Peak</string>
+    <string name="ks_h_hrv_woche">HRV</string>
+    <string name="ks_h_hrv_woche_zusatz">· last 7 nights</string>
+    <string name="ks_h_hrv_im_band">Last night, in your range of %1$d–%2$d ms</string>
+    <string name="ks_h_hrv_unter_band">Last night, below your range of %1$d–%2$d ms</string>
+    <string name="ks_h_hrv_ueber_band">Last night, above your range of %1$d–%2$d ms</string>
+    <string name="ks_h_hrv_ohne_band">Last night · your range appears after %1$d nights with HRV</string>
+    <string name="ks_h_hrv_keine">Not measured last night</string>
+    <string name="ks_h_hrv_band">Personal range</string>
+    <string name="ks_h_hrv_drin">In range</string>
+    <string name="ks_h_hrv_draussen">Out of range</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
     <string name="ks_h_ruhepuls_text">Lowest steady pulse asleep</string>
     <string name="ks_h_hrv_n">HRV</string>

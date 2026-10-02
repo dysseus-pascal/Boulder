@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
@@ -42,8 +43,6 @@ internal val PHASENFARBEN = listOf(
     Color(0xFFE0A33A), Color(0xFF7FA7D9), Color(0xFF2F5597), Color(0xFF9B6BC9), Color(0xFF6C8EBF),
 )
 
-/** Gestrichelt ist ein Bezugswert (Mittel, Ruhepuls), durchgezogen das Ziel. */
-private fun DrawScope.gestrichelt() = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
 
 /**
  * Die Nacht in vier Bahnen - wach oben, tief unten - wie das Hypnogramm in
@@ -133,104 +132,161 @@ internal fun Tageskurve(
 }
 
 /**
- * Der Puls der letzten 24 Stunden als Band: fuenf Minuten je Bin, die
- * Medianlinie darueber, die Spanne tiefster..hoechster als Flaeche. Ein
- * Band statt tausend Punkte: die Punkte verschmieren zu einem roten Nebel,
- * das Band zeigt Ruhe und Belastung auf einen Blick. Luecken ueber einer
- * Viertelstunde brechen Linie und Band - dort war die Uhr nicht am Arm.
- * Der Ruhepuls liegt gestrichelt darin und ersetzt die Rasterlinien, die ihm
- * zu nah kaemen.
+ * Der Puls der letzten 24 Stunden wie bei Google Health und Garmin: graue
+ * Saeulen fuer die Spanne jeder halben Stunde, darueber die Linie in der
+ * Farbe ihrer Zone, die Zonengrenzen als gepunktete Linien mit ihrer Zahl
+ * rechts. Die Linie ist nur leicht geglaettet (eine Viertelstunde): staerker
+ * gemittelt erreichte ein kurzer Anstieg seine Zone nicht mehr, und gerade
+ * der soll zu sehen sein. Luecken ueber einer Viertelstunde brechen die Linie
+ * - dort war die Uhr nicht am Arm.
+ *
+ * [zonen]: die Grenzen moderat, kraeftig, Spitze; [farben]: leicht, moderat,
+ * kraeftig, Spitze.
  */
 @Composable
 internal fun Pulsband(
     punkte: List<Pair<Long, Int>>,
     von: Long,
     bis: Long,
-    farbe: Color,
-    ruhepuls: Int? = null,
+    zonen: List<Int>,
+    farben: List<Color>,
     nacht: Pair<Long, Long>? = null,
-    hoehe: Dp = 130.dp,
+    hoehe: Dp = 200.dp,
     stundeText: (ZonedDateTime) -> String = { "${it.hour}" },
 ) {
     val bins = Gesundheitsrechnung.fuenfMinuten(punkte)
-    if (bins.isEmpty()) return
+    if (bins.isEmpty() || zonen.size != 3 || farben.size != 4) return
     val messer = rememberTextMeasurer()
     val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val kraeftig = stil.copy(color = MaterialTheme.colorScheme.onSurface)
-    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
-    val linie = MaterialTheme.colorScheme.onSurfaceVariant
+    val saeule = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
     // Die Nacht als deutliche Flaeche: bei 6 % sah man sie auf dem Telefon nicht.
-    val schatten = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    val schatten = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
     val nachtText = stringResource(R.string.ks_h_nacht_kurz)
     Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val links = 28.dp.toPx()
-        // Rechts bleibt Platz fuer die Zahl neben dem letzten Punkt - der liegt am "jetzt", also am Rand.
-        val rechts = size.width - 26.dp.toPx()
-        val fuss = 16.dp.toPx()
-        // Oben etwas Luft: eine Rasterlinie genau am Rand truege ihre Zahl halb ausserhalb.
+        // Die Zahlen rechts, wie bei Google: links beginnt die Kurve am Rand.
+        val rechts = size.width - 30.dp.toPx()
+        val fuss = 18.dp.toPx()
         val kopf = 6.dp.toPx()
         val boden = size.height - fuss
-        val tief = minOf(bins.minOf { it.tiefster }, ruhepuls ?: Int.MAX_VALUE) - 2
-        // Mindestens 30 Schlaege Spanne, damit drei Zehnerlinien hineinpassen.
-        val hoch = (maxOf(bins.maxOf { it.hoechster }, ruhepuls ?: 0) + 2).coerceAtLeast(tief + 30)
+        // Unten auf einer Zehnerlinie, hoechstens 40; oben ueber der Spitzengrenze,
+        // damit alle drei Grenzen im Bild stehen - auch an einem ruhigen Tag.
+        val tief = (minOf(bins.minOf { it.tiefster } - 5, 40) / 10) * 10
+        val hoch = maxOf(zonen[2] + 8, bins.maxOf { it.hoechster } + 4)
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
-        fun x(t: Long) = links + (rechts - links) * (t - von) / spanne
+        fun x(t: Long) = rechts * (t - von) / spanne
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
         nachtschatten(nacht, von, bis, ::x, boden, schatten, nachtText, messer, stil)
 
-        // Der Abstand in Schlaegen, unter dem sich zwei Achsenzahlen beruehren.
-        val zuNah = 12.dp.toPx() * (hoch - tief) / (boden - kopf)
-        val raster = Gesundheitsrechnung.rasterOhne(Gesundheitsrechnung.raster(tief, hoch, 10), ruhepuls, zuNah)
-        fun achse(w: Int) {
+        // Gepunktet: runde Punkte statt Striche, wie die Vorlage.
+        val punktiert = PathEffect.dashPathEffect(floatArrayOf(0.1f, 9.dp.toPx()))
+        fun grenze(w: Int, farbe: Color) {
+            drawLine(farbe, Offset(0f, y(w)), Offset(rechts, y(w)), 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = punktiert)
             val m = messer.measure("$w", stil)
-            drawText(m, topLeft = Offset(links - 4.dp.toPx() - m.size.width, y(w) - m.size.height / 2f))
+            drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
-        raster.forEach { w ->
-            drawLine(rasterFarbe, Offset(links, y(w)), Offset(rechts, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
-            achse(w)
+        grenze(tief, farben[0])
+        zonen.forEachIndexed { i, w -> grenze(w, farben[i + 1]) }
+
+        // Die Spanne je halbe Stunde als Saeule hinter der Linie.
+        bins.groupBy { it.sekunde / 1800 }.forEach { (_, l) ->
+            val mitte = x(l.first().sekunde / 1800 * 1800 + 900)
+            val oben = y(l.maxOf { it.hoechster })
+            val unten = y(l.minOf { it.tiefster })
+            val breite = 5.dp.toPx()
+            drawRoundRect(saeule, Offset(mitte - breite / 2, oben), Size(breite, (unten - oben).coerceAtLeast(breite)), CornerRadius(breite / 2))
         }
 
+        // Jede Zone zeichnet dieselbe Linie, beschnitten auf ihren Streifen:
+        // so wechselt die Farbe genau an der Grenze, mitten im Strich.
+        val streifen = listOf(boden + 20f) + zonen.map { y(it) } + listOf(-20f)
+        val dicke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         Gesundheitsrechnung.stuecke(bins).forEach { roh ->
-            // Ein einzelner Bin haette weder Flaeche noch Strecke - er wird ein Punkt.
             if (roh.size == 1) {
-                drawCircle(farbe, 2.dp.toPx(), Offset(x(roh[0].sekunde), y(roh[0].median)))
+                val z = Gesundheitsrechnung.pulsZone(roh[0].median, zonen)
+                drawCircle(farben[z], 2.5.dp.toPx(), Offset(x(roh[0].sekunde), y(roh[0].median)))
                 return@forEach
             }
-            // GEGLAETTET: ueber eine gute halbe Stunde gemittelt und weich
-            // gezeichnet. Fuenf-Minuten-Zacken lesen sich als Unruhe, die es
-            // nicht gab - gefragt ist der Verlauf des Tages.
-            val st = glaetten(roh, 3)
-            val oben = st.map { Offset(x(it.sekunde), y(it.hoechster)) }
-            val unten = st.map { Offset(x(it.sekunde), y(it.tiefster)) }
-            val band = Path().apply {
-                moveTo(oben.first().x, oben.first().y)
-                weich(oben)
-                lineTo(unten.last().x, unten.last().y)
-                weich(unten.asReversed())
-                close()
+            val st = glaetten(roh, 1)
+            val p = st.map { Offset(x(it.sekunde), y(it.median)) }
+            val linie = Path().apply {
+                moveTo(p.first().x, p.first().y)
+                weich(p)
             }
-            drawPath(band, farbe.copy(alpha = 0.22f))
-            val punkteMitte = st.map { Offset(x(it.sekunde), y(it.median)) }
-            val mitte = Path().apply {
-                moveTo(punkteMitte.first().x, punkteMitte.first().y)
-                weich(punkteMitte)
+            for (z in 0..3) {
+                clipRect(left = -10f, top = streifen[z + 1], right = size.width, bottom = streifen[z]) {
+                    drawPath(linie, farben[z], style = dicke)
+                }
             }
-            drawPath(mitte, farbe, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         }
         val letzter = bins.last()
-        val p = Offset(x(letzter.sekunde), y(letzter.median))
-        // Ohne Beschriftung im Bild: die Legende unter dem Band nennt den Ruhepuls schon.
-        if (ruhepuls != null) {
-            drawLine(linie, Offset(links, y(ruhepuls)), Offset(rechts, y(ruhepuls)), 1.dp.toPx(), pathEffect = gestrichelt())
-            achse(ruhepuls)
-        }
-        drawCircle(farbe, 3.dp.toPx(), p)
-        val m = messer.measure("${letzter.median}", kraeftig)
-        drawText(m, topLeft = Offset(p.x + 5.dp.toPx(), (p.y - m.size.height / 2f).coerceIn(0f, boden - m.size.height)))
+        drawCircle(farben[Gesundheitsrechnung.pulsZone(letzter.median, zonen)], 3.5.dp.toPx(), Offset(x(letzter.sekunde), y(letzter.median)))
 
         stundenstriche(von, bis, stundeText) { t, text ->
-            val s = messer.measure(text, stil)
-            drawText(s, topLeft = Offset((x(t) - s.size.width / 2f).coerceIn(links, rechts - s.size.width), size.height - s.size.height))
+            val m = messer.measure(text, stil)
+            drawText(m, topLeft = Offset((x(t) - m.size.width / 2f).coerceIn(0f, rechts - m.size.width), size.height - m.size.height))
+        }
+    }
+}
+
+/**
+ * Die HRV der letzten sieben Naechte wie bei Google Health und Garmin: das
+ * persoenliche Band als Flaeche, Tag fuer Tag so breit, wie es an dem Tag
+ * galt, darueber die Naechte als verbundene Punkte - gruen im Band, in
+ * [ausserhalb] daneben. Ohne Band (zu wenig fruehere Naechte) nur die Punkte.
+ */
+@Composable
+internal fun HrvWoche(
+    tage: List<Gesundheitsrechnung.HrvTag>,
+    farbe: Color,
+    ausserhalb: Color,
+    hoehe: Dp = 170.dp,
+    tagText: (java.time.LocalDate) -> String,
+) {
+    val werte = tage.mapNotNull { it.wert }
+    if (werte.isEmpty()) return
+    val messer = rememberTextMeasurer()
+    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val flaeche = farbe.copy(alpha = 0.16f)
+    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
+    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
+        val rechts = size.width - 30.dp.toPx()
+        val fuss = 18.dp.toPx()
+        val kopf = 6.dp.toPx()
+        val boden = size.height - fuss
+        val alle = werte + tage.mapNotNull { it.band }.flatMap { listOf(it.first, it.second) }
+        val tief = ((alle.min() - 6).coerceAtLeast(0) / 5) * 5
+        val hoch = maxOf(alle.max() + 6, tief + 20)
+        val spalte = rechts / tage.size
+        fun x(i: Int) = spalte * (i + 0.5f)
+        fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
+
+        Gesundheitsrechnung.raster(tief, hoch, 5).takeLast(4).forEach { w ->
+            drawLine(rasterFarbe, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
+            val m = messer.measure("$w", stil)
+            drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
+        }
+        // Das Band als Treppe: jede Spalte so hoch wie das Band ihres Tages,
+        // die erste und letzte bis an den Rand.
+        tage.forEachIndexed { i, t ->
+            val (u, o) = t.band ?: return@forEachIndexed
+            val links = if (i == 0) 0f else spalte * i
+            val breite = if (i == tage.lastIndex) rechts - links else spalte * (i + 1) - links
+            drawRect(flaeche, Offset(links, y(o)), Size(breite + 0.5f, y(u) - y(o)))
+        }
+        val punkte = tage.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) } }
+        for (i in 1 until punkte.size) drawLine(farbe, punkte[i - 1], punkte[i], 2.dp.toPx(), cap = StrokeCap.Round)
+        tage.forEachIndexed { i, t ->
+            val w = t.wert ?: return@forEachIndexed
+            val f = if (t.imBand == false) ausserhalb else farbe
+            val p = Offset(x(i), y(w))
+            val letzte = i == tage.lastIndex
+            drawCircle(f, 4.dp.toPx(), p)
+            // Die letzte Nacht mit einem Ring darum, wie der Auswahlpunkt der Vorlage.
+            if (letzte) drawCircle(f, 7.5.dp.toPx(), p, style = Stroke(2.dp.toPx()))
+        }
+        tage.forEachIndexed { i, t ->
+            val m = messer.measure(tagText(t.tag), stil)
+            drawText(m, topLeft = Offset(x(i) - m.size.width / 2f, size.height - m.size.height))
         }
     }
 }

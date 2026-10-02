@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -48,6 +50,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.compose.koinInject
 import java.time.Instant
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -77,6 +80,7 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { PulsKarte(s) }
+        item { HrvKarte(s) }
         item { NachtwerteKarte(s, oeffneNacht) }
         item { GewohntKarte(s, oeffneTrend) }
         item { Spacer(Modifier.height(12.dp)) }
@@ -87,32 +91,100 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
 private fun PulsKarte(s: GesundheitsStand) {
     val context = LocalContext.current
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
+    val t = toene()
     val jetzt = Instant.now().epochSecond
     val letzter = s.puls.maxByOrNull { it.first }
+    val zonenNamen = listOf(R.string.ks_h_zone_leicht, R.string.ks_h_zone_moderat, R.string.ks_h_zone_kraeftig, R.string.ks_h_zone_spitze)
+        .map { stringResource(it) }
     Kasten {
         Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (letzter == null) {
                 Text(stringResource(R.string.ks_h_kein_puls_kurz), fontSize = 14.sp, color = grau)
                 return@Column
             }
+            // Wie bei Google Health: oben die Spanne des Tages, dann wo der hoechste Wert lag.
+            val tiefster = s.puls.minOf { it.second }
+            val hoechster = s.puls.maxOf { it.second }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(zahlMitEinheit("$tiefster–$hoechster", "bpm", 30, 16), lineHeight = 36.sp)
+                if (s.pulsZonen.size == 3) {
+                    val zone = zonenNamen[Gesundheitsrechnung.pulsZone(hoechster, s.pulsZonen)]
+                    Text(stringResource(R.string.ks_h_puls_hoch, hoechster, zone.lowercase()), fontSize = 14.sp, lineHeight = 20.sp)
+                }
                 // "now" nur, solange der Wert frisch ist - eine Stunde alter Puls ist nicht der jetzige.
                 val frisch = Gesundheitsrechnung.pulsFrisch(letzter.first, jetzt)
                 val wann = Instant.ofEpochSecond(letzter.first)
-                Text(zahlMitEinheit("${letzter.second}", if (frisch) stringResource(R.string.ks_h_bpm_jetzt) else "bpm", 30, 16), lineHeight = 36.sp)
                 Text(
-                    if (frisch) stringResource(R.string.ks_h_gemessen, uhrzeit(context, wann))
-                    else stringResource(R.string.ks_h_gemessen_alt, zeitpunkt(context, wann)),
-                    fontSize = 14.sp, lineHeight = 20.sp, color = grau,
+                    if (frisch) stringResource(R.string.ks_h_puls_neu, letzter.second, uhrzeit(context, wann))
+                    else stringResource(R.string.ks_h_puls_alt, letzter.second, zeitpunkt(context, wann)),
+                    fontSize = 13.sp, lineHeight = 19.sp, color = grau,
                 )
             }
             val nacht = s.nacht?.let { it.einschlafen.epochSecond to it.aufwachen.epochSecond }
             // Die Stunden im Format des Systems, wie jede andere Uhrzeit der Seite.
             val stunde = DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "H" else "h a", Locale.getDefault())
             Pulsband(
-                s.puls, jetzt - 24 * 3600, jetzt, toene().herz, ruhepuls = s.nacht?.ruhepuls, nacht = nacht, hoehe = 180.dp,
+                s.puls, jetzt - 24 * 3600, jetzt, s.pulsZonen, t.zonen, nacht = nacht, hoehe = 200.dp,
                 stundeText = { stunde.format(it) },
             )
+            Legende(zonenNamen.zip(t.zonen).map { (name, farbe) -> Legendenpunkt(name, farbe) })
+        }
+    }
+}
+
+/**
+ * Die HRV der letzten sieben Naechte mit dem persoenlichen Band - was als
+ * gewohnt gilt, sieht man so auf einen Blick, statt es aus einem Schnitt
+ * herauszulesen.
+ */
+@Composable
+private fun HrvKarte(s: GesundheitsStand) {
+    val tage = s.hrvTage
+    if (tage.none { it.wert != null }) return
+    val t = toene()
+    val grau = MaterialTheme.colorScheme.onSurfaceVariant
+    val letzte = tage.last()
+    val band = letzte.band
+    Kasten {
+        Kopf(stringResource(R.string.ks_h_hrv_woche), stringResource(R.string.ks_h_hrv_woche_zusatz))
+        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(zahlMitEinheit(letzte.wert?.toString() ?: "–", letzte.wert?.let { "ms" }, 30, 16), lineHeight = 36.sp)
+                val satz = when {
+                    letzte.wert == null -> stringResource(R.string.ks_h_hrv_keine)
+                    band == null -> stringResource(R.string.ks_h_hrv_ohne_band, Gesundheitsrechnung.HRV_MINDESTENS)
+                    letzte.wert < band.first -> stringResource(R.string.ks_h_hrv_unter_band, band.first, band.second)
+                    letzte.wert > band.second -> stringResource(R.string.ks_h_hrv_ueber_band, band.first, band.second)
+                    else -> stringResource(R.string.ks_h_hrv_im_band, band.first, band.second)
+                }
+                Text(satz, fontSize = 13.sp, lineHeight = 19.sp, color = grau)
+            }
+            HrvWoche(tage, t.imBand, t.ausserBand) { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            if (tage.any { it.band != null }) {
+                Legende(
+                    listOfNotNull(
+                        Legendenpunkt(stringResource(R.string.ks_h_hrv_band), t.imBand.copy(alpha = 0.3f), eckig = true),
+                        Legendenpunkt(stringResource(R.string.ks_h_hrv_drin), t.imBand),
+                        // Daneben nur, wenn es in der Woche vorkommt - sonst erklaerte die Legende eine Farbe, die fehlt.
+                        Legendenpunkt(stringResource(R.string.ks_h_hrv_draussen), t.ausserBand).takeIf { tage.any { it.imBand == false } },
+                    ),
+                )
+            }
+        }
+    }
+}
+
+private data class Legendenpunkt(val text: String, val farbe: Color, val eckig: Boolean = false)
+
+/** Farbpunkte mit ihrem Namen unter einem Bild, mittig. */
+@Composable
+private fun Legende(punkte: List<Legendenpunkt>) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        punkte.forEach { p ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).background(p.farbe, if (p.eckig) RoundedCornerShape(2.dp) else CircleShape))
+                Text(p.text, Modifier.padding(start = 6.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

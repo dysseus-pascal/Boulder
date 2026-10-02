@@ -102,6 +102,10 @@ internal data class GesundheitsStand(
     val blutdruck: List<Blutdruck> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
+    /** Die Grenzen moderat, kraeftig, Spitze in bpm (siehe [Gesundheitsrechnung.pulsZonen]). */
+    val pulsZonen: List<Int> = emptyList(),
+    /** Die HRV der letzten sieben Naechte mit dem persoenlichen Band, aelteste zuerst. */
+    val hrvTage: List<Gesundheitsrechnung.HrvTag> = emptyList(),
 )
 
 /** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
@@ -310,6 +314,50 @@ internal object Gesundheitsrechnung {
         return aus
     }
 
+    /**
+     * Die Pulszonen des Tages als Anteile der Pulsreserve (Karvonen): ab 40 %
+     * moderat, ab 60 % kraeftig, ab 80 % Spitze. Dieselben Schwellen wie die
+     * Belastung in [tagesherz] - was die Kurve gruen faerbt, zaehlt dort
+     * einfach, was gelb ist, doppelt. Mit Ruhepuls 53 und Maximalpuls 187
+     * gibt das 107, 133 und 160, nahe an dem, was Google Health zeigt.
+     */
+    fun pulsZonen(ruhepuls: Int, maxpuls: Int): List<Int> {
+        val reserve = (maxpuls - ruhepuls).coerceAtLeast(20)
+        return listOf(0.4, 0.6, 0.8).map { (ruhepuls + it * reserve).roundToInt() }
+    }
+
+    /** 0 leicht, 1 moderat, 2 kraeftig, 3 Spitze. */
+    fun pulsZone(bpm: Int, grenzen: List<Int>): Int = grenzen.count { bpm >= it }
+
+    /** Eine Nacht der HRV-Woche: ihr Wert und das Band, das bis dahin als gewohnt galt. */
+    data class HrvTag(val tag: LocalDate, val wert: Int?, val band: Pair<Int, Int>?) {
+        val imBand: Boolean? get() = if (wert == null || band == null) null else wert in band.first..band.second
+    }
+
+    /** So viele Naechte vor einem Tag bilden sein Band. */
+    const val HRV_FENSTER = 30
+    /** Mit weniger Naechten gibt es kein Band - es waere Zufall. */
+    const val HRV_MINDESTENS = 7
+
+    /**
+     * Die sieben Naechte bis [heute], jede mit ihrem persoenlichen Band: Schnitt
+     * plus/minus eine Standardabweichung der [HRV_FENSTER] Naechte davor. Das
+     * Band jedes Tages aus SEINEN Vortagen, nicht eines fuer die ganze Woche:
+     * so wandert es mit, wie bei Google Health und Garmin, und die Nacht selbst
+     * zieht ihr Band nicht zu sich. Mindestens 3 ms breit nach jeder Seite,
+     * sonst laege bei sehr gleichmaessigen Naechten jede neue daneben.
+     */
+    fun hrvWoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<HrvTag> = (6 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
+        val vorher = werte.filter { (t, w) -> w > 0 && t < tag && !t.isBefore(tag.minusDays(HRV_FENSTER.toLong())) }.values.map { it.toDouble() }
+        val band = vorher.takeIf { it.size >= HRV_MINDESTENS }?.let { v ->
+            val mittel = v.average()
+            val sd = kotlin.math.sqrt(v.sumOf { (it - mittel) * (it - mittel) } / (v.size - 1))
+            val halb = maxOf(sd, 3.0)
+            (mittel - halb).roundToInt().coerceAtLeast(1) to (mittel + halb).roundToInt()
+        }
+        HrvTag(tag, werte[tag]?.takeIf { it > 0 }, band)
+    }
+
     /** Die Rasterlinien ohne die, die dem Ruhepuls naeher als [abstand] kaemen - seine Linie ersetzt sie. */
     fun rasterOhne(raster: List<Int>, ruhepuls: Int?, abstand: Float): List<Int> =
         if (ruhepuls == null) raster else raster.filter { abs(it - ruhepuls) >= abstand }
@@ -394,14 +442,22 @@ internal object Gesundheitsdaten {
         }
 
         val apps = UhrApps.installiert()
+        val ruhe = nacht?.ruhepuls ?: frueher.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 60
+        val maxpuls = maxpulsFuer(context)
         val tagesherz = runCatching {
             val von = anfang(heute.minusDays(14))
             val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
             val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
-            val ruhe = nacht?.ruhepuls ?: frueher.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 60
-            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, ruhe, maxpulsFuer(context), LocalTime.now(), zone)
+            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, ruhe, maxpuls, LocalTime.now(), zone)
+        }.getOrDefault(emptyList())
+        // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal
+        // HRV_FENSTER Naechte davor - die Naechte oben reichen nur eine Woche zurueck.
+        val hrvTage = runCatching {
+            val alle = api.getNaechte(anfang(heute.minusDays(6L + Gesundheitsrechnung.HRV_FENSTER + 1)), jetzt.epochSecond)
+            val jeTag = Gesundheitsrechnung.jeTag(alle, zone).associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
+            Gesundheitsrechnung.hrvWoche(jeTag, heute)
         }.getOrDefault(emptyList())
         GesundheitsStand(
             schritte = summe?.steps ?: 0,
@@ -429,6 +485,8 @@ internal object Gesundheitsdaten {
             glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
+            pulsZonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls),
+            hrvTage = hrvTage,
         )
     }
 

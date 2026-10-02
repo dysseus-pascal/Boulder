@@ -212,4 +212,40 @@ class GesundheitsbildRechnungTest {
         val drei = zwei + Blutdruck(Instant.ofEpochSecond(beginn + 50), 125, 81)
         assertEquals(125 to 82, Gesundheitsrechnung.blutdruckzeile(drei)!!.schnitt)
     }
+
+    @Test
+    fun pulszonenAusDerReserve() {
+        // Ruhepuls 53, Maximalpuls 187: 40/60/80 % der Reserve von 134.
+        val z = Gesundheitsrechnung.pulsZonen(53, 187)
+        assertEquals(listOf(107, 133, 160), z)
+        assertEquals(0, Gesundheitsrechnung.pulsZone(80, z))
+        assertEquals(1, Gesundheitsrechnung.pulsZone(107, z))
+        assertEquals(2, Gesundheitsrechnung.pulsZone(150, z))
+        assertEquals(3, Gesundheitsrechnung.pulsZone(170, z))
+    }
+
+    @Test
+    fun hrvBandAusDenVortagen() {
+        val heute = LocalDate.of(2026, 10, 2)
+        // 30 Naechte vor der Woche abwechselnd 40 und 50 ms: Schnitt 45, Abweichung gut 5.
+        val werte = (1..40).associate { heute.minusDays(it.toLong()) to if (it % 2 == 0) 40 else 50 } + (heute to 70)
+        val woche = Gesundheitsrechnung.hrvWoche(werte, heute)
+        assertEquals(7, woche.size)
+        assertEquals(heute, woche.last().tag)
+        assertEquals(40 to 50, woche.last().band)
+        assertEquals(false, woche.last().imBand)
+        assertEquals(true, woche.first().imBand)
+    }
+
+    @Test
+    fun hrvOhneBandBeiZuWenigNaechten() {
+        val heute = LocalDate.of(2026, 10, 2)
+        val werte = (0..5).associate { heute.minusDays(it.toLong()) to 45 }
+        val woche = Gesundheitsrechnung.hrvWoche(werte, heute)
+        assertNull(woche.last().band)
+        assertNull(woche.last().imBand)
+        // Ein ganz gleichmaessiges Band ist mindestens 3 ms breit nach jeder Seite.
+        val gleich = (1..10).associate { heute.minusDays(it.toLong()) to 45 }
+        assertEquals(42 to 48, Gesundheitsrechnung.hrvWoche(gleich, heute).last().band)
+    }
 }

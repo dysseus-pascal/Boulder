@@ -324,13 +324,15 @@ internal object TrainingsDaten {
     }
 
     /**
-     * Welche Rechte der Akte fehlen - genau die, die der eine Dialog fragt, damit
+     * Welche Rechte der Akte fehlen - die, die der eine Dialog fragt, damit
      * Zahl, Abzeichen und Sportzeile nichts melden, was er nicht beheben kann.
+     * Die der Waage zaehlen nicht: wer keine hat, verweigert sie zu Recht und
+     * soll dafuer keine Dauerwarnung sehen. Erteilen laesst sie sich trotzdem.
      */
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            fehlendeAkteRechte(klient)
+            fehlendeAkteRechte(klient) - KOERPER_RECHTE
         } catch (e: Exception) {
             emptySet()
         }

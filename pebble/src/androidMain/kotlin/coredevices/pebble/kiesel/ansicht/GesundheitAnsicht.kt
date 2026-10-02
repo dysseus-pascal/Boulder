@@ -102,6 +102,7 @@ internal class Gesundheitswege(
     val herz: () -> Unit,
     val training: (String) -> Unit,
     val akku: () -> Unit,
+    val koerper: () -> Unit,
 )
 
 /**

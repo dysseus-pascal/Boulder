@@ -20,6 +20,7 @@ import coredevices.pebble.kiesel.ansicht.GesundheitAnsicht
 import coredevices.pebble.kiesel.ansicht.Gesundheitswege
 import coredevices.pebble.kiesel.ansicht.HerzAnsicht
 import coredevices.pebble.kiesel.ansicht.KieselsportAnsicht
+import coredevices.pebble.kiesel.ansicht.KoerperAnsicht
 import coredevices.pebble.kiesel.ansicht.NachtAnsicht
 import coredevices.pebble.kiesel.ansicht.ProtokollAnsicht
 import coredevices.pebble.kiesel.ansicht.SicherungAnsicht
@@ -52,6 +53,7 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             herz = { nav.navigateTo(PebbleNavBarRoutes.HerzRoute) },
             training = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },
             akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
+            koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
         ),
         geladen = { heute = heuteText(context) },
     )
@@ -70,6 +72,10 @@ actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         oeffneTrend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("herz")) },
     )
 }
+
+@Composable
+actual fun KoerperScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, R.string.ks_kp_titel) { KoerperAnsicht() }
 
 @Composable
 actual fun NachtScreen(topBarParams: TopBarParams, nav: NavBarNav, beginnUtc: Long) {

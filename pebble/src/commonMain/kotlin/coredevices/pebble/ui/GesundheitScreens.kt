@@ -20,6 +20,10 @@ expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: Strin
 @Composable
 expect fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
+// Boulder: Gewicht und Zusammensetzung einer Waage aus Health Connect - aus der Gesundheitsseite.
+@Composable
+expect fun KoerperScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 @Composable
 expect fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav)
 

@@ -88,9 +88,9 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { PulsKarte(s) }
-        // Wach gemessen wie der Puls darueber; HRV, letzte Nacht und "Your usual" bleiben als Nachtteil beisammen.
-        if (blutdruck != null) item { BlutdruckKarte(blutdruck) }
         item { HrvKarte(s) }
+        // Nach der HRV: die beiden Verlaeufe ueber Tage stehen beisammen, der Puls des Tages bleibt oben.
+        if (blutdruck != null) item { BlutdruckKarte(blutdruck) }
         item { NachtwerteKarte(s, oeffneNacht) }
         item { GewohntKarte(s, oeffneTrend) }
         item { Spacer(Modifier.height(12.dp)) }

@@ -58,10 +58,12 @@ internal object Trainingswerte {
         if (punkte.size < 2) return emptyList()
         val start = punkte.first().zeit
         val aus = mutableListOf<Pair<Long, Double>>()
-        var letzte = Long.MIN_VALUE
+        // Null statt Long.MIN_VALUE: t - Long.MIN_VALUE laeuft ueber, wird
+        // negativ und verwarf so jede Probe.
+        var letzte: Long? = null
         for (p in Trainingsanalyse.strecke(punkte)) {
             val t = start + p.sekunde
-            if (t < von || t >= bis || t - letzte < TEMPO_TAKT_S) continue
+            if (t < von || t >= bis || (letzte != null && t - letzte < TEMPO_TAKT_S)) continue
             aus += t to p.tempo
             letzte = t
         }

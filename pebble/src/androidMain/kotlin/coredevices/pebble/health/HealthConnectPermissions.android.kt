@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -13,6 +15,9 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import com.viktormykhailiv.kmp.health.HealthDataType
 import com.viktormykhailiv.kmp.health.HealthManager
+import coredevices.pebble.kiesel.Akte
+import coredevices.pebble.kiesel.KIESEL_RECHTE
+import coredevices.pebble.kiesel.nurVerfuegbare
 import kotlin.reflect.KClass
 import kotlinx.coroutines.CompletableDeferred
 
@@ -33,12 +38,12 @@ internal actual suspend fun requestPlatformHealthPermissions(
 ): Boolean {
     if (!healthManager.isAvailable().getOrDefault(false)) return false
     val ctx = context()
+    val klient = Akte(ctx).bereit() ?: return false
     val standardPerms = standardRechte(readTypes, writeTypes)
-    // Boulder: was Kieselsport braucht, im selben Dialog - HRV eintragen, SpO2
-    // fuer die Frage der Uhr lesen. Wie SpO2 nur nach Moeglichkeit: ohne sie
-    // laeuft der Sync der anderen Daten trotzdem.
-    val allPerms = standardPerms + WRITE_OXYGEN_SATURATION + coredevices.pebble.kiesel.KIESEL_RECHTE
-    val granted = HealthConnectPermissionBridge.request(ctx, allPerms)
+    // Boulder: was Kieselsport braucht, im selben Dialog - dieselbe Menge wie
+    // aus Einstellungen und Sportansicht. Wie SpO2 nur nach Moeglichkeit: ohne
+    // sie laeuft der Sync der anderen Daten trotzdem.
+    val granted = HealthConnectPermissionBridge.request(ctx, standardPerms + alleAkteRechte(klient))
     return standardPerms.all { it in granted }
 }
 
@@ -46,12 +51,37 @@ private fun standardRechte(readTypes: List<HealthDataType>, writeTypes: List<Hea
     writeTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectWritePermissions() } +
         readTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectReadPermissions() }
 
-/** Boulder: jedes Recht, das die App in der Akte haben kann - der Inhalt des einen Dialogs. */
-internal fun alleAkteRechte(): Set<String> =
-    standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
-        WRITE_OXYGEN_SATURATION + coredevices.pebble.kiesel.KIESEL_RECHTE
+/**
+ * Boulder: jedes Recht, das die App in dieser Akte haben kann - der Inhalt des
+ * einen Dialogs und zugleich, was Einstellungen und Sportansicht als fehlend
+ * zaehlen. Eine Stelle, damit Zahl und Dialog nicht auseinanderlaufen.
+ */
+internal fun alleAkteRechte(klient: HealthConnectClient): Set<String> =
+    nurVerfuegbare(
+        standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
+            WRITE_OXYGEN_SATURATION + KIESEL_RECHTE
+    ) { funktion ->
+        // Kann die Akte nicht sagen, was sie kann, fehlt ihr die Funktion - lieber
+        // ein Recht nicht fragen als es fuer immer als fehlend zaehlen.
+        runCatching { klient.features.getFeatureStatus(funktion) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE }
+            .getOrDefault(false)
+    }
+
+/** Boulder: was davon noch nicht erteilt ist. */
+internal suspend fun fehlendeAkteRechte(klient: HealthConnectClient): Set<String> =
+    alleAkteRechte(klient) - klient.permissionController.getGrantedPermissions()
+
+/**
+ * Boulder: der eine Dialog aus Einstellungen und Sportansicht. Am Sync aendert
+ * er nichts; ohne Akte gibt es nichts zu fragen.
+ */
+internal suspend fun frageAlleAkteRechte(context: Context) {
+    val klient = Akte(context).bereit() ?: return
+    HealthConnectPermissionBridge.request(context, alleAkteRechte(klient))
+}
 
 private const val KEY_PERMISSIONS = "KEY_PERMISSIONS"
+private const val KEY_ANFRAGE = "KEY_ANFRAGE"
 
 private fun HealthDataType.toHealthConnectWritePermissions(): Set<String> = when (this) {
     HealthDataType.Steps -> setOf(writePermission(StepsRecord::class))
@@ -79,35 +109,58 @@ private fun readPermission(recordType: KClass<out Record>): String =
     HealthPermission.getReadPermission(recordType)
 
 internal object HealthConnectPermissionBridge {
-    @Volatile
-    private var pending: CompletableDeferred<Set<String>?>? = null
+    private val anfragen = Anfragen<Set<String>>()
 
+    /**
+     * Returns the granted subset. Throws CancellationException when a newer request supersedes
+     * this one: that is no answer, and callers must not read it as a denial.
+     */
     suspend fun request(context: Context, permissions: Set<String>): Set<String> {
-        val deferred = begin()
-        return try {
+        val (nummer, antwort) = anfragen.neu()
+        try {
             context.startActivity(
                 Intent(context, HealthConnectWritePermissionActivity::class.java)
                     .putExtra(KEY_PERMISSIONS, permissions.toTypedArray())
+                    .putExtra(KEY_ANFRAGE, nummer)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            deferred.await() ?: emptySet()
         } catch (e: Exception) {
             logger.w(e) { "Failed launching Health Connect permission request" }
-            complete(null)
-            emptySet()
+            anfragen.beantworte(nummer, null)
         }
+        // Boulder: await steht ausserhalb des catch. Frueher fing catch (Exception)
+        // die CancellationException der abgeloesten Anfrage, beantwortete mit
+        // complete(null) die NEUE gleich mit und schaltete so den Sync aus.
+        return antwort.await() ?: emptySet()
     }
 
-    private fun begin(): CompletableDeferred<Set<String>?> {
-        pending?.cancel()
-        val deferred = CompletableDeferred<Set<String>?>()
-        pending = deferred
-        return deferred
+    fun complete(nummer: Long, result: Set<String>?) = anfragen.beantworte(nummer, result)
+}
+
+/**
+ * Boulder: wer auf welchen Dialog wartet. Nur die juengste Anfrage ist offen -
+ * kam ihr Dialog nie auf, haengt sonst jede weitere. Eine neue bricht die alte
+ * ab, statt sie mit "nichts erteilt" zu beantworten.
+ */
+internal class Anfragen<T> {
+    private var nummer = 0L
+    private var offen: CompletableDeferred<T?>? = null
+
+    @Synchronized
+    fun neu(): Pair<Long, CompletableDeferred<T?>> {
+        offen?.cancel()
+        val antwort = CompletableDeferred<T?>()
+        offen = antwort
+        nummer++
+        return nummer to antwort
     }
 
-    fun complete(result: Set<String>?) {
-        pending?.complete(result)
-        pending = null
+    /** Die Antwort eines abgeloesten Dialogs faellt weg: sie gehoert nicht zur offenen Anfrage. */
+    @Synchronized
+    fun beantworte(anfrage: Long, antwort: T?) {
+        if (anfrage != nummer) return
+        offen?.complete(antwort)
+        offen = null
     }
 }
 
@@ -119,7 +172,7 @@ class HealthConnectWritePermissionActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted: Set<String> ->
-        HealthConnectPermissionBridge.complete(granted)
+        HealthConnectPermissionBridge.complete(intent.getLongExtra(KEY_ANFRAGE, -1L), granted)
         finish()
     }
 
@@ -130,7 +183,7 @@ class HealthConnectWritePermissionActivity : ComponentActivity() {
             requestPermissionLauncher.launch(permissions)
         } catch (e: Exception) {
             logger.w(e) { "Failed launching Health Connect permission contract" }
-            HealthConnectPermissionBridge.complete(null)
+            HealthConnectPermissionBridge.complete(intent.getLongExtra(KEY_ANFRAGE, -1L), null)
             finish()
         }
     }

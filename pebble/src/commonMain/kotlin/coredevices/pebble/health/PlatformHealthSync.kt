@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.StateFlow
@@ -86,17 +87,25 @@ class PlatformHealthSync(
         return healthManager.isAvailable().getOrDefault(false)
     }
 
-    /** Request write permissions. Returns true if granted. */
-    suspend fun requestPermissions(): Boolean {
+    /**
+     * Request write permissions. Returns true if granted.
+     *
+     * Boulder: [nurEinschalten] fuer den Dialog beim Start - er darf den Sync
+     * einschalten, nie aus: wer ihn wegwischt, hat den Sync nicht abgewaehlt.
+     */
+    suspend fun requestPermissions(nurEinschalten: Boolean = false): Boolean {
         val success = try {
             requestPlatformHealthPermissions(healthManager, RequestedReadTypes, RequestedWriteTypes)
+        } catch (e: CancellationException) {
+            // Boulder: abgeloest von einer neueren Anfrage - keine Antwort, keine Ablehnung.
+            throw e
         } catch (e: Exception) {
             logger.w(e) { "Health platform doesn't support requested types" }
-            tracker.setEnabled(false)
+            syncNachFrage(false, nurEinschalten)?.let(tracker::setEnabled)
             return false
         }
         logger.v { "requestPermissions success=$success" }
-        tracker.setEnabled(success)
+        syncNachFrage(success, nurEinschalten)?.let(tracker::setEnabled)
         GlobalScope.launch {
             sync()
         }
@@ -117,13 +126,29 @@ class PlatformHealthSync(
         return result.getOrDefault(false)
     }
 
+    /** Boulder: wie [hasPermission], aber null, wenn die Akte nicht antwortet. */
+    private suspend fun berechtigt(): Boolean? = try {
+        healthManager.isAuthorized(readTypes = RequestedReadTypes, writeTypes = RequestedWriteTypes)
+            .onFailure { logger.w(it) { "Health platform permission check failed" } }
+            .getOrNull()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "Health platform permission check failed" }
+        null
+    }
+
     /** Run a sync: query new data from Room DB, map to HealthKMP records, write. */
     suspend fun sync() {
         if (!tracker.enabled.value) return
         einzellauf.lauf {
             // Ein Nachlauf nach entzogener Berechtigung soll nicht erneut fragen.
             if (!tracker.enabled.value) return@lauf
-            if (!hasPermission()) {
+            // Boulder: nur ein klares Nein der Akte schaltet aus. Antwortet sie
+            // gerade nicht (Update, Dienst startet), wartet der Sync auf den
+            // naechsten Anstoss, statt sich ohne den Schalter abzuschalten.
+            val berechtigt = berechtigt() ?: return@lauf
+            if (!berechtigt) {
                 logger.w { "No health sync permission during sync attempt!" }
                 tracker.setEnabled(false)
                 return@lauf
@@ -383,6 +408,13 @@ class PlatformHealthSync(
         )
     }
 }
+
+/**
+ * Boulder: der Stand des Syncs nach einer Rechtefrage, null fuer unveraendert.
+ * Der Schalter setzt wie bei Gravel beides; der Dialog beim Start nur ein.
+ */
+internal fun syncNachFrage(erteilt: Boolean, nurEinschalten: Boolean): Boolean? =
+    if (erteilt || !nurEinschalten) erteilt else null
 
 /** Boulder: Schlaf-Overlays, die in keine Nacht der Firmware fallen. */
 internal fun ohneFirmwareNacht(overlays: List<OverlayDataEntity>, naechte: List<LongRange>): List<OverlayDataEntity> =

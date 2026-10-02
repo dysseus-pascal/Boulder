@@ -19,8 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
-import coredevices.pebble.health.HealthConnectPermissionBridge
-import coredevices.pebble.health.alleAkteRechte
+import coredevices.pebble.health.frageAlleAkteRechte
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Nachtexport
@@ -53,6 +52,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
         zuOsmand = false
         neu++
     }
+    // Dieselbe Menge, die die Aktion unten fragt - Zahl und Abzeichen verschwinden mit dem Dialog.
     val fehlend by produceState(emptySet<String>(), neu) { value = TrainingsDaten.fehlendeRechte(context) }
     fun gehe(route: NavBarRoute): () -> Unit = { navBarNav?.navigateTo(route) }
     fun oeffne(intent: Intent): () -> Unit = {
@@ -73,7 +73,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
             section = Section.Health,
             keywords = "health connect permissions water supplements sleep",
             badge = if (fehlend.isNotEmpty()) "!" else null,
-            action = { scope.launch { HealthConnectPermissionBridge.request(context, alleAkteRechte()); neu++ } },
+            action = { scope.launch { frageAlleAkteRechte(context); neu++ } },
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_b_titel),

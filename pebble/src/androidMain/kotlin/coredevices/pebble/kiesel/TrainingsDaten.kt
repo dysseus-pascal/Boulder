@@ -11,6 +11,7 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
+import coredevices.pebble.health.fehlendeAkteRechte
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -322,11 +323,14 @@ internal object TrainingsDaten {
         null
     }
 
-    /** Fehlen Leserechte in der Akte, die die Ansicht braucht? */
+    /**
+     * Welche Rechte der Akte fehlen - genau die, die der eine Dialog fragt, damit
+     * Zahl, Abzeichen und Sportzeile nichts melden, was er nicht beheben kann.
+     */
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            KIESEL_RECHTE - klient.permissionController.getGrantedPermissions()
+            fehlendeAkteRechte(klient)
         } catch (e: Exception) {
             emptySet()
         }

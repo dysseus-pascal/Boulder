@@ -5,12 +5,12 @@ import android.util.Log
 import coredevices.pebble.R
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import androidx.health.connect.client.units.Mass
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
@@ -50,13 +50,19 @@ internal data class Nacht(
         (abschnitte.minOfOrNull { it.von.epochSecond } ?: einschlafen.epochSecond)..(abschnitte.maxOfOrNull { it.bis.epochSecond } ?: aufwachen.epochSecond)
 }
 
-/** Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein Praeparat. */
 /**
- * Ein Eintrag des heutigen Tages aus der Akte: ein Getraenk oder ein
- * Praeparat. [eigen]: von Boulder geschrieben - nur solche Eintraege darf
- * Boulder in der Akte aendern oder loeschen.
+ * Ein Ernaehrungseintrag aus der Akte: ein Getraenk oder ein Praeparat.
+ * [eigen]: von Boulder geschrieben - nur solche Eintraege darf
+ * Boulder in der Akte aendern oder loeschen. [kennung]: die eigene Kennung
+ * (clientRecordId), an der ein SupCycle-Eintrag seinen Platz traegt.
  */
-internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?, val id: String = "", val eigen: Boolean = false)
+internal data class Tageseintrag(
+    val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?,
+    val id: String = "", val eigen: Boolean = false, val kennung: String? = null,
+)
+
+/** Was ein Ernaehrungseintrag der Akte auf der Gesundheitsseite ist. */
+internal enum class Eintragsart { GETRAENK, PRAEPARAT }
 
 /** So weit zurueck zaehlt der Blutdruck: wer selten misst, misst kaum einmal die Woche. */
 internal const val BLUTDRUCK_TAGE = 30L
@@ -73,8 +79,12 @@ internal const val BLUTDRUCK_ZEILE_TAGE = 7L
 /** Eine Blutdruckmessung aus der Akte, in mmHg. */
 internal data class Blutdruck(val zeit: Instant, val oben: Int, val unten: Int)
 
-/** Ein Glas Wasser von heute, mit seiner Kennung in der Akte. */
-internal data class Glaseintrag(val zeit: Instant, val id: String, val eigen: Boolean)
+/**
+ * Wasser aus der Akte, mit seiner Kennung. [eigen]: ein Glas von
+ * Drinktervall - nur das ist ein "Glas"; was andere Apps eintragen, hat
+ * seine eigene Menge.
+ */
+internal data class Glaseintrag(val zeit: Instant, val id: String, val eigen: Boolean, val ml: Int = 0)
 
 internal data class GesundheitsStand(
     val schritte: Long,
@@ -102,6 +112,7 @@ internal data class GesundheitsStand(
     /** SpO2 der letzten 24 Stunden, mit Nacht ab ihrem Einschlafen - auch wenn das laenger her ist. */
     val spo2: List<Pair<Long, Int>>,
     val wasserMl: Int,
+    /** Die Glaeser von Drinktervall - Wasser anderer Apps zaehlt in [wasserMl], aber nicht als Glas. */
     val glaeser: List<Instant>,
     /** Wasser je Tag, sieben Tage bis heute. */
     val wocheWasser: List<Pair<LocalDate, Int>>,
@@ -128,6 +139,13 @@ internal data class GesundheitsStand(
     val hrvTage: List<Gesundheitsrechnung.HrvTag> = emptyList(),
     /** Ohne [nacht]: der Beginn der juengsten Nacht ueberhaupt - der Weg zu ihr und zu den frueheren. */
     val juengsteNacht: Long? = null,
+    /**
+     * Eigene Getraenke und Glaeser von gestern, hoechstens 24 Stunden alt:
+     * der Strahl zeigt nur heute, und ein Fehleintrag kurz vor Mitternacht
+     * muss sich auch danach noch aendern lassen.
+     */
+    val gestern: List<Tageseintrag> = emptyList(),
+    val gesternGlaeser: List<Glaseintrag> = emptyList(),
 )
 
 /** Fuenf Minuten Puls: der mittlere Wert und die Spanne, in der er lag. */
@@ -319,6 +337,27 @@ internal object Gesundheitsrechnung {
     fun koffeinAktiv(dosen: List<Pair<Instant, Double>>, jetzt: Instant): Double = dosen
         .filter { !it.first.isAfter(jetzt) }
         .sumOf { (wann, mg) -> mg * 0.5.pow(Duration.between(wann, jetzt).toMinutes() / KOFFEIN_HALBWERT_MIN) }
+
+    /** Das Koffein des Kalendertags [heute] - eine Rechnung fuer Seite und Widget. */
+    fun koffeinHeute(dosen: List<Pair<Instant, Double>>, heute: LocalDate, zone: ZoneId): Double =
+        dosen.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second }
+
+    /**
+     * Was ein Ernaehrungseintrag ist - null, wenn er auf der Gesundheitsseite
+     * nichts verloren hat. PRAEPARAT IST, WAS NICHTS ENTHAELT, oder SupCycles
+     * Kennung. GETRAENK NUR MIT KOFFEIN ODER AUS BOULDER: eine Mahlzeit aus
+     * einer Essens-App hat kcal, ist aber kein Getraenk und kein Kaffeepunkt.
+     * [mahlzeit]: der Eintrag nennt eine Mahlzeit (mealType) - dann ist er
+     * auch ohne kcal kein Praeparat.
+     */
+    fun einordnung(eigen: Boolean, kennung: String?, koffeinMg: Double?, kcal: Double?, mahlzeit: Boolean = false): Eintragsart? = when {
+        kennung?.startsWith("supcycle-") == true -> Eintragsart.PRAEPARAT
+        eigen && (kennung?.startsWith("drinktervall-kaffee-") == true || kennung?.startsWith("koffein-") == true) -> Eintragsart.GETRAENK
+        (koffeinMg ?: 0.0) > 0 -> Eintragsart.GETRAENK
+        mahlzeit -> null
+        (kcal ?: 0.0) <= 0 -> Eintragsart.PRAEPARAT
+        else -> null
+    }
 
     /** Werte je Tag auf eine lueckenlose Reihe bringen; fehlende Tage zaehlen 0. */
     fun <T : Number> reihe(tage: List<LocalDate>, werte: Map<LocalDate, T>, null_: T): List<Pair<LocalDate, T>> =
@@ -563,18 +602,17 @@ internal object Gesundheitsdaten {
             emptyList()
         }
         val koffein = nahrung.mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
-        // WAS ES WAR, SAGT DIE KENNUNG: SupCycle schreibt "supcycle-...", alles
-        // andere mit Namen oder Koffein ist ein Getraenk.
-        val eintraege = nahrung.filter { it.startTime.atZone(zone).toLocalDate() == heute }.mapNotNull { r ->
-            // PRAEPARAT IST, WAS NICHTS ENTHAELT: ohne Koffein und ohne Energie
-            // ist ein Eintrag kein Getraenk. Die Kennung "supcycle-" allein trug
-            // nicht: auf dem Telefon standen SupCycles Haken als Getraenke da.
-            val praeparat = r.metadata.clientRecordId?.startsWith("supcycle-") == true ||
-                (r.caffeine == null && r.energy == null)
+        val alleEintraege = nahrung.mapNotNull { r ->
+            val eigen = r.metadata.dataOrigin.packageName == context.packageName
             val mg = r.caffeine?.inMilligrams?.takeIf { it > 0 }
+            val mahlzeit = r.mealType != MealType.MEAL_TYPE_UNKNOWN
+            val art = Gesundheitsrechnung.einordnung(eigen, r.metadata.clientRecordId, mg, r.energy?.inKilocalories, mahlzeit) ?: return@mapNotNull null
             val name = r.name?.ifBlank { null } ?: if (mg != null) context.getString(R.string.ks_h_koffein_n) else return@mapNotNull null
-            Tageseintrag(r.startTime, praeparat, name, mg, r.metadata.id, r.metadata.dataOrigin.packageName == context.packageName)
+            Tageseintrag(r.startTime, art == Eintragsart.PRAEPARAT, name, mg, r.metadata.id, eigen, r.metadata.clientRecordId)
         }
+        val eintraege = alleEintraege.filter { it.zeit.atZone(zone).toLocalDate() == heute }
+        val vorEinemTag = jetzt.minus(Duration.ofHours(24))
+        val gesternWasser = wasser.filter { it.startTime.isAfter(vorEinemTag) && it.startTime.atZone(zone).toLocalDate() < heute }
 
         // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
         // deren App ueber die Akte, deshalb auch fremde Eintraege.
@@ -627,7 +665,7 @@ internal object Gesundheitsdaten {
             puls = puls,
             spo2 = spo2,
             wasserMl = heuteWasser.sumOf { it.volume.inMilliliters }.toInt(),
-            glaeser = heuteWasser.map { it.startTime }.sorted(),
+            glaeser = heuteWasser.filter { it.metadata.dataOrigin.packageName == context.packageName }.map { it.startTime }.sorted(),
             wocheWasser = Gesundheitsrechnung.reihe(woche, wasserJeTag, 0),
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
@@ -637,14 +675,19 @@ internal object Gesundheitsdaten {
             tagesherz = tagesherz,
             eintraege = eintraege.sortedByDescending { it.zeit },
             blutdruck = blutdruck,
-            glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
+            glasEintraege = heuteWasser.map { glaseintrag(context, it) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,
             juengsteNacht = juengste,
+            gestern = alleEintraege.filter { it.eigen && !it.praeparat && it.zeit.atZone(zone).toLocalDate() < heute }.sortedBy { it.zeit },
+            gesternGlaeser = gesternWasser.map { glaseintrag(context, it) }.filter { it.eigen }.sortedBy { it.zeit },
         )
     }
+
+    private fun glaseintrag(context: Context, r: HydrationRecord) =
+        Glaseintrag(r.startTime, r.metadata.id, r.metadata.dataOrigin.packageName == context.packageName, r.volume.inMilliliters.roundToInt())
 
     /** Eine Nacht mit dem Puls und SpO2 aus ihr, und den Nachbarnaechten zum Blaettern. */
     data class NachtDetail(
@@ -701,23 +744,17 @@ internal object Gesundheitsdaten {
     /**
      * Ein Getraenk umstellen - etwa wenn auf der Uhr die falsche Sorte
      * gewaehlt war. Zeit und Kennung bleiben, Name, Koffein, kcal und Zucker
-     * kommen neu aus der Sorte.
+     * kommen neu aus der Sorte ([art] wie COFFEE_KIND der Uhr).
      */
-    suspend fun aendereGetraenk(context: Context, id: String, sorte: Int, milch: Boolean, zucker: Boolean, koffeinfrei: Boolean): Boolean = withContext(Dispatchers.IO) {
-        val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch, zucker, koffeinfrei)) ?: return@withContext false
+    suspend fun aendereGetraenk(context: Context, id: String, art: Int): Boolean = withContext(Dispatchers.IO) {
+        val p = Kaffeesorten.portion(art) ?: return@withContext false
         try {
             val klient = Akte(context).bereit() ?: return@withContext false
             val alt = klient.readRecord(NutritionRecord::class, id).record
-            klient.updateRecords(listOf(NutritionRecord(
-                startTime = alt.startTime, startZoneOffset = alt.startZoneOffset,
-                endTime = alt.endTime, endZoneOffset = alt.endZoneOffset,
-                name = Kaffeesorten.name(context, p),
-                caffeine = if (p.koffeinMg > 0) Mass.milligrams(p.koffeinMg) else null,
-                energy = androidx.health.connect.client.units.Energy.kilocalories(p.kcal),
-                sugar = if (p.zuckerG > 0) Mass.grams(p.zuckerG) else null,
-                // DIESELBEN METADATEN: daran erkennt die Akte den Eintrag, der ersetzt wird.
-                metadata = alt.metadata,
-            )))
+            // DIESELBEN METADATEN: daran erkennt die Akte den Eintrag, der ersetzt wird.
+            klient.updateRecords(listOf(
+                Kaffeesorten.satz(p, Kaffeesorten.name(context, p), alt.metadata, alt.startTime, alt.endTime, alt.startZoneOffset ?: versatz(alt.startTime), alt.endZoneOffset ?: versatz(alt.endTime)),
+            ))
             true
         } catch (e: Exception) {
             Log.w(TAG, "Getraenk aendern: " + e.message)
@@ -725,18 +762,14 @@ internal object Gesundheitsdaten {
         }
     }
 
-    /** Eine Tasse von Hand - als Ernaehrungseintrag mit Koffein, wie in Kiesel-Helper. */
-    suspend fun trinkeKoffein(context: Context, name: String, mg: Int): Boolean = withContext(Dispatchers.IO) {
+    /** Eine Tasse von Hand - mit denselben Werten, die die Uhr fuer diese Sorte eintraegt. */
+    suspend fun trinkeKoffein(context: Context, art: Int): Boolean = withContext(Dispatchers.IO) {
+        val p = Kaffeesorten.portion(art) ?: return@withContext false
         val jetzt = Instant.now()
         try {
-            Akte(context).bereit()?.insertRecords(listOf(NutritionRecord(
-                startTime = jetzt, startZoneOffset = versatz(jetzt),
-                endTime = jetzt.plusSeconds(60), endZoneOffset = versatz(jetzt),
-                name = name,
-                caffeine = Mass.milligrams(mg.toDouble()),
-                // Eigene Kennung per manualEntry - manualEntryWithId setzte die der Akte.
-                metadata = Metadata.manualEntry("koffein-${jetzt.epochSecond}", 0L, Device(type = Device.TYPE_PHONE)),
-            ))) != null
+            // Eigene Kennung per manualEntry - manualEntryWithId setzte die der Akte.
+            val metadaten = Metadata.manualEntry("koffein-${jetzt.epochSecond}", 0L, Device(type = Device.TYPE_PHONE))
+            Akte(context).bereit()?.insertRecords(listOf(Kaffeesorten.satz(p, Kaffeesorten.name(context, p), metadaten, jetzt))) != null
         } catch (e: Exception) {
             Log.w(TAG, "Koffein eintragen: " + e.message)
             false

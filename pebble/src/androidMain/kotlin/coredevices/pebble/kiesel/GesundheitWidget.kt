@@ -119,8 +119,8 @@ class GesundheitWidget : AppWidgetProvider() {
                 wasserMl = s.wasserMl.toDouble().takeIf { s.mitDrinktervall },
                 wasserZiel = s.wasserZiel?.ml?.toDouble()?.takeIf { s.mitDrinktervall },
                 glasMl = (s.wasserZiel?.glasMl ?: 300).toDouble(),
-                offenePraeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }?.filter { !it.genommen }?.map { it.name }.orEmpty(),
-                koffeinMg = s.koffein.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second }.takeIf { s.mitDrinktervall },
+                praeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }.orEmpty(),
+                koffeinMg = Gesundheitsrechnung.koffeinHeute(s.koffein, heute, zone).takeIf { s.mitDrinktervall },
                 wunsch = wunsch,
             )
         }

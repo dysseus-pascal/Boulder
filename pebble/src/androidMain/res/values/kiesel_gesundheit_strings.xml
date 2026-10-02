@@ -260,7 +260,6 @@
     <string name="ks_d_bewegung">Movement</string>
     <string name="ks_d_bewegung_unter">%1$s, %2$d min, %3$d kcal</string>
     <string name="ks_d_glaeser_von">%1$d of %2$d glasses</string>
-    <string name="ks_d_noch_offen">%1$s still open</string>
     <string name="ks_d_koffein_unter">%1$d mg today, last %2$s</string>
     <!-- Health nach Konzept F: Satz, Zeitstrahl, Liste -->
     <string name="ks_f_morgen">Good morning</string>
@@ -294,8 +293,8 @@
         <item quantity="one">%1$d glass · last %2$s</item>
         <item quantity="other">%1$d glasses · last %2$s</item>
     </plurals>
-    <string name="ks_f_koffein_heute">%1$d mg today</string>
     <string name="ks_f_koffein_bett">~%1$d mg at bedtime</string>
+    <string name="ks_f_koffein_aktiv">%1$d mg active</string>
     <!-- Schlafansicht nach Konzept F -->
     <string name="ks_n_eingeschlafen">fell asleep</string>
     <string name="ks_n_aufgewacht">woke up</string>

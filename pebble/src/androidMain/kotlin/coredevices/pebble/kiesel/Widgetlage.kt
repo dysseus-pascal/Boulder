@@ -50,7 +50,8 @@ internal object Widgetlage {
         val wasserMl: Double?,
         val wasserZiel: Double?,
         val glasMl: Double,
-        val offenePraeparate: List<String>,
+        /** Die Praeparate von heute, wie die Gesundheitsseite sie zeigt - mit Planzeit. */
+        val praeparate: List<SupCycle.Eintrag>,
         val koffeinMg: Double?,
         /** Von Hand gewaehlt, gilt bis dann. */
         val wunsch: Art?,
@@ -74,6 +75,8 @@ internal object Widgetlage {
     private val TRAINING_FRIST: Duration = Duration.ofHours(2)
     private val MORGEN_FRIST: Duration = Duration.ofHours(3)
     private const val ABEND_AB = 20
+    /** Ohne Planzeit mahnt das Widget erst ab dieser Stunde - morgens ist nichts versaeumt. */
+    private const val PRAEPARATE_OHNE_PLAN_AB = 11
 
     fun ermittle(b: Blick, t: Texte): Lage {
         val art = b.wunsch ?: when {
@@ -105,8 +108,8 @@ internal object Widgetlage {
     private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), Zahlen.ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
     private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), Zahlen.ganz(b.aktivMin)?.plus(" min"), anteil(b.aktivMin, b.aktivZiel))
     private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), Zahlen.dauer(b.schlafMin), anteil(b.schlafMin, b.schlafZielMin))
-    /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 ml". */
-    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Zahlen.ganz(it)?.plus(" ml"), anteil(it, b.wasserZiel)) }
+    /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 l". In Litern wie die App. */
+    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Zahlen.liter(it) + " l", anteil(it, b.wasserZiel)) }
 
     private fun anteil(zahl: Double?, ziel: Double?): Float {
         if (zahl == null || ziel == null || ziel <= 0) return 0f
@@ -163,10 +166,9 @@ internal object Widgetlage {
      * dafuer nicht.
      */
     private fun erinnerung(b: Blick, t: Texte): Pair<String, String>? {
-        // Praeparate: ab elf Uhr, wenn noch welche offen sind.
-        if (b.offenePraeparate.isNotEmpty() && b.jetzt.hour >= 11) {
-            val namen = b.offenePraeparate.take(2).joinToString(", ") +
-                (if (b.offenePraeparate.size > 2) " …" else "")
+        val versaeumt = versaeumtePraeparate(b)
+        if (versaeumt.isNotEmpty()) {
+            val namen = versaeumt.take(2).joinToString(", ") + (if (versaeumt.size > 2) " …" else "")
             return "praeparate" to t.text(R.string.ks_wl_noch_offen, namen)
         }
         // Wasser: was bis jetzt haette getrunken sein sollen - zwei Glaeser
@@ -180,6 +182,15 @@ internal object Widgetlage {
         }
         return null
     }
+
+    /**
+     * Die Praeparate, an die zu erinnern ist: nicht genommen, und ihre
+     * Planzeit ist vorbei - das Abendpraeparat ist mittags noch nicht
+     * versaeumt. Ohne Planzeit ab [PRAEPARATE_OHNE_PLAN_AB] Uhr.
+     */
+    fun versaeumtePraeparate(b: Blick): List<String> = b.praeparate.filter { e ->
+        !e.genommen && (e.zeit?.let { !b.jetzt.toLocalTime().isBefore(it) } ?: (b.jetzt.hour >= PRAEPARATE_OHNE_PLAN_AB))
+    }.map { it.name }
 
     /**
      * Welcher Anteil des Tagesziels bis zu dieser Stunde getrunken sein soll.
@@ -207,16 +218,17 @@ internal object Widgetlage {
 
     private fun erinnerungLage(b: Blick, t: Texte): Lage {
         val (was, satz) = erinnerung(b, t) ?: ("" to "")
-        return if (was == "wasser") {
+        // Ohne Mahnung fuehrte die Wasserkachel hierher - dann das Wasser, nicht "0 open".
+        return if (was != "praeparate") {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_h_wasser_n),
-                Zahlen.ganz(b.wasserMl) ?: "0", "ml", satz, anteil(b.wasserMl, b.wasserZiel),
+                Zahlen.liter(b.wasserMl ?: 0.0), "l", satz, anteil(b.wasserMl, b.wasserZiel),
                 listOfNotNull(kSchritte(b, t), kAktiv(b, t), kSchlaf(b, t)), null,
             )
         } else {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_w_praeparate),
-                b.offenePraeparate.size.toString(), t.text(R.string.ks_wl_offen), satz, null,
+                versaeumtePraeparate(b).size.toString(), t.text(R.string.ks_wl_offen), satz, null,
                 listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), null,
             )
         }
@@ -274,4 +286,6 @@ internal object Zahlen {
     fun ganz(d: Double?): String? = d?.let { String.format(java.util.Locale.getDefault(), "%,d", it.roundToInt()) }
     fun eine(d: Double?): String? = d?.let { String.format(java.util.Locale.getDefault(), "%.1f", it) }
     fun dauer(min: Double?): String? = min?.roundToInt()?.let { m -> if (m >= 60) String.format(java.util.Locale.getDefault(), "%d:%02d h", m / 60, m % 60) else "$m min" }
+    /** Wasser in Litern wie auf der Gesundheitsseite ("1.2"), ohne Einheit. */
+    fun liter(ml: Double): String = if (ml <= 0) "0" else Gesundheitsrechnung.literKurz(ml.roundToInt())
 }

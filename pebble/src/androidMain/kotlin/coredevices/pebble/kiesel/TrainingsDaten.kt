@@ -295,11 +295,15 @@ internal object TrainingsDaten {
         null
     }
 
-    /** Fehlen Leserechte in der Akte, die die Ansicht braucht? */
+    /**
+     * Fehlen Leserechte in der Akte, die die Ansicht braucht? Die der Waage
+     * zaehlen nicht: wer keine hat, verweigert sie zu Recht und soll dafuer
+     * keine Dauerwarnung sehen. Erteilen laesst sie sich trotzdem.
+     */
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            KIESEL_RECHTE - klient.permissionController.getGrantedPermissions()
+            KIESEL_RECHTE - KOERPER_RECHTE - klient.permissionController.getGrantedPermissions()
         } catch (e: Exception) {
             emptySet()
         }

@@ -24,6 +24,11 @@ actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 }
 
 @Composable
+actual fun KoerperScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Health is only available on Android.")
+}
+
+@Composable
 actual fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Health is only available on Android.")
 }

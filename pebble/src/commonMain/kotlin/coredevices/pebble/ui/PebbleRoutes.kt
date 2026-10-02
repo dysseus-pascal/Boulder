@@ -103,6 +103,9 @@ object PebbleNavBarRoutes {
     data object HerzRoute : NavBarRoute
 
     @Serializable
+    data object KoerperRoute : NavBarRoute
+
+    @Serializable
     data object SicherungRoute : NavBarRoute
 
     @Serializable
@@ -264,6 +267,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.HerzRoute>(viewModel) {
         HerzScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.KoerperRoute>(viewModel) {
+        KoerperScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.SicherungRoute>(viewModel) {
         SicherungScreen(topBarParams, nav)

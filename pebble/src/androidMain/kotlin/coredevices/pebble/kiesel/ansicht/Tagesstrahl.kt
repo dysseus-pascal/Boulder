@@ -599,6 +599,8 @@ internal fun Koerperliste(
                 )
             }
         }
+        // Die Waage wie die Manschette: nur wer sich wiegt, bekommt die Zeile.
+        koerperzeile(s, wege.koerper)?.let { add(it) }
         if (s.mitDrinktervall) add {
             val letztes = s.glaeser.maxOrNull()
             val unter = if (letztes == null) stringResource(R.string.ks_h_kein_glas)

@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SpeedRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
@@ -91,7 +92,8 @@ internal object Trainingswerte {
                 metadata = Kieselsport.vonDerUhr("kieselsport-distanz-$beginn"),
             ))
         }
-        val auf = if (punkte.size >= 2) Spur.hoehenmeter(punkte) else 0.0
+        // Derselbe Aufstieg, den Sportseite und Detail zeigen (Trainingsanalyse.hoehen).
+        val auf = Trainingsanalyse.aufstieg(punkte)
         if (auf > 0) {
             schreibe(klient, ElevationGainedRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
@@ -121,8 +123,8 @@ internal object Trainingswerte {
     /**
      * Die aktiven Kalorien aus dem Puls der Sitzung - dieselbe Rechnung wie in
      * der Trainingsansicht (derselbe Puls, Ruhe- und Maximalpuls aus
-     * [herzgrenzenVor]), ohne den Ruheumsatz. Ohne Gewicht oder Alter in den
-     * Einstellungen der Uhr bleibt es bei den Kalorien der Uhr.
+     * [herzgrenzenVor], Koerper aus [koerperVor]), ohne den Ruheumsatz. Ohne
+     * Gewicht oder Alter bleibt es bei den Kalorien der Uhr.
      *
      * AUS DER AKTE, NICHT AUS DER KURVENDATEI: die Uhr schickt eine Kurve auch
      * in Stuecken, und die Datei haelt nur das juengste. Aus ihr gerechnet,
@@ -130,9 +132,11 @@ internal object Trainingswerte {
      *
      * NUR MIT SITZUNG: erst sie gibt das Fenster. Kommt die Kurve vorher, rechnet
      * [Kieselsport] nach dem Eintragen der Sitzung.
+     *
+     * Gibt zurueck, was neu in der Akte steht - null, wenn nichts zu tun war.
      */
-    suspend fun schreibeKalorienAusPuls(context: Context, beginn: Long) {
-        val klient = Akte(context).bereit() ?: return
+    suspend fun schreibeKalorienAusPuls(context: Context, beginn: Long): Double? {
+        val klient = Akte(context).bereit() ?: return null
         val sitzung = try {
             eigene(klient, context, ExerciseSessionRecord::class, Instant.ofEpochSecond(beginn), Instant.ofEpochSecond(beginn + 1))
                 .firstOrNull { it.metadata.clientRecordId == Kieselsport.kennung(beginn) }
@@ -141,13 +145,14 @@ internal object Trainingswerte {
         } catch (e: Exception) {
             Log.w(TAG, "Sitzung fuer die Kalorien: " + e.message)
             null
-        } ?: return
-        kalorienAusPuls(context, klient, sitzung)
+        } ?: return null
+        return kalorienAusPuls(context, klient, sitzung)
     }
 
     /**
      * Die Puls-Kalorien der eigenen Trainings der letzten Wochen nachholen, wo
-     * sie fehlen oder auf weniger Puls beruhen, als jetzt in der Akte steht.
+     * sie fehlen oder auf weniger Puls beruhen, als jetzt in der Akte steht -
+     * oder ohne die Waage gerechnet wurden, die jetzt lesbar ist ([fassungAusPuls]).
      *
      * SCHEITERT DIE RECHNUNG (Recht fehlt, Gewicht fehlt, die Uhr antwortet
      * nicht), ist die Kurvendatei trotzdem weg - in der Akte steht die Kurve
@@ -173,20 +178,28 @@ internal object Trainingswerte {
      * Die Fassung der Puls-Kalorien: je mehr Pulswerte, desto hoeher. So
      * uebergeht die Akte einen unvollstaendigeren Stand, statt mit ihm einen
      * vollstaendigeren zu ersetzen.
+     *
+     * BEI GLEICHEM PULS SCHLAEGT DIE WAAGE: im Hintergrund gibt die Akte ohne
+     * Sonderrecht kein fremdes Gewicht heraus, die Rechnung nimmt dann das
+     * eingestellte. Sonst bliebe dieser Stand fuer immer; so ersetzt ihn die
+     * erste Rechnung, die die Waage lesen kann (spaetestens das Detail).
+     * Doppelt gezaehlt, damit jede Fassung bis 0.42 (2 + Pulswerte) darunter liegt.
      */
-    fun fassungAusPuls(pulswerte: Int): Long = FASSUNG_PULS_BIS_0_40 + pulswerte
+    fun fassungAusPuls(pulswerte: Int, waage: Boolean): Long =
+        FASSUNG_PULS_BIS_0_40 + 2L * pulswerte + (if (waage) 1 else 0)
 
     /** Lohnt es, neu zu schreiben? Nur, wenn die Akte nichts so Vollstaendiges hat. */
     fun lohntSich(vorhanden: Long?, fassung: Long): Boolean = vorhanden == null || vorhanden < fassung
 
-    private suspend fun kalorienAusPuls(context: Context, klient: HealthConnectClient, s: ExerciseSessionRecord) {
+    private suspend fun kalorienAusPuls(context: Context, klient: HealthConnectClient, s: ExerciseSessionRecord): Double? {
         val beginn = s.startTime.epochSecond
         try {
             // Roh gezaehlt: das Entstoeren wirft je nach Kurve andere Punkte weg,
             // die Zahl der Messungen waechst dagegen nur mit dem, was ankommt.
             val roh = TrainingsDaten.rohpuls(klient, context, s)
-            if (roh.isEmpty()) return
-            val fassung = fassungAusPuls(roh.size)
+            if (roh.isEmpty()) return null
+            val koerper = koerperVor(context, klient, s.startTime) ?: return null
+            val fassung = fassungAusPuls(roh.size, koerper.ausWaage)
             val vorhanden = try {
                 eigene(klient, context, ActiveCaloriesBurnedRecord::class, s.startTime, s.endTime)
                     .firstOrNull { it.metadata.clientRecordId == "kieselsport-kcal-$beginn" }?.metadata?.clientRecordVersion
@@ -196,20 +209,19 @@ internal object Trainingswerte {
                 // Nicht lesbar heisst nur: neu schreiben - die Akte behaelt trotzdem die hoehere Fassung.
                 null
             }
-            if (!lohntSich(vorhanden, fassung)) return
-            val koin = KoinPlatform.getKoin()
-            val koerper = withTimeoutOrNull(5_000) { koin.get<LibPebble>().healthSettings.first() } ?: return
-            val (ruhepuls, maxpuls) = herzgrenzenVor(context, koin.get<HealthDataApi>(), s.startTime)
+            if (!lohntSich(vorhanden, fassung)) return null
+            val (ruhepuls, maxpuls) = herzgrenzenVor(context, KoinPlatform.getKoin().get<HealthDataApi>(), s.startTime)
             val kcal = Trainingsanalyse.aktiveKalorien(
-                Trainingsanalyse.entstoert(roh), koerper.weightDag / 100.0, koerper.ageYears, geschlecht(koerper.gender), ruhepuls, maxpuls,
-            ) ?: return
-            if (kcal <= 0) return
-            schreibe(klient, kalorien(beginn, s.startTime, s.endTime, kcal, fassung))
+                Trainingsanalyse.entstoert(roh), koerper.kg, koerper.alter, koerper.geschlecht, ruhepuls, maxpuls,
+            ) ?: return null
+            if (kcal <= 0) return null
+            return kcal.takeIf { schreibe(klient, kalorien(beginn, s.startTime, s.endTime, kcal, fassung)) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Meist fehlt ein Recht - der naechste Start holt es nach (holeKalorienNach).
             Log.w(TAG, "Kalorien aus dem Puls: " + e.message)
+            return null
         }
     }
 
@@ -232,6 +244,37 @@ internal object Trainingswerte {
         return ruhe to Herzgrenzen.maxpuls(context, ruhe)
     }
 
+    /** Gewicht, Alter und Geschlecht fuer die Kalorien eines Trainings; [ausWaage]: das Gewicht kam von ihr. */
+    data class Koerper(val kg: Double, val alter: Int, val geschlecht: Trainingsanalyse.Geschlecht, val ausWaage: Boolean = false)
+
+    /**
+     * Der Koerper fuer ein Training, das so beginnt: Alter und Geschlecht aus
+     * den Einstellungen, das Gewicht DER WAAGE VOR DEM TRAINING - so wie die
+     * Body-Seite es zeigt. Nur ohne Waage das von Hand eingestellte. Vor dem
+     * Training, damit sich die Kalorien eines alten Trainings nicht mit jeder
+     * neuen Wiegung aendern (wie die Naechte in [herzgrenzenVor]).
+     */
+    suspend fun koerperVor(context: Context, klient: HealthConnectClient?, start: Instant): Koerper? {
+        val e = withTimeoutOrNull(5_000) { KoinPlatform.getKoin().get<LibPebble>().healthSettings.first() } ?: return null
+        val waage = klient?.let { waageVor(it, context, start) }
+        return Koerper(waage ?: e.weightDag / 100.0, e.ageYears, geschlecht(e.gender), ausWaage = waage != null)
+    }
+
+    /** Die juengste Wiegung im Jahr vor [start]; im Hintergrund ohne Sonderrecht nur eigene, also keine. */
+    private suspend fun waageVor(klient: HealthConnectClient, context: Context, start: Instant): Double? = try {
+        klient.readRecords(
+            ReadRecordsRequest(
+                WeightRecord::class, TimeRangeFilter.between(start.minus(Duration.ofDays(365)), start),
+                ascendingOrder = false, pageSize = 1,
+            )
+        ).records.firstOrNull()?.weight?.inKilograms?.takeIf { it in 20.0..400.0 }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Gewicht lesen: " + e.message)
+        null
+    }
+
     /** Boulders eigene Saetze - die gibt die Akte auch im Hintergrund heraus. */
     private suspend fun <T : Record> eigene(
         klient: HealthConnectClient, context: Context, art: kotlin.reflect.KClass<T>, von: Instant, bis: Instant,
@@ -251,14 +294,14 @@ internal object Trainingswerte {
         metadata = Metadata.autoRecorded(Device(type = Device.TYPE_WATCH), "kieselsport-kcal-$beginn", fassung),
     )
 
-    private suspend fun schreibe(klient: HealthConnectClient, satz: Record) {
-        try {
-            klient.insertRecords(listOf(satz))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Meist fehlt das Recht fuer diese eine Satzart.
-            Log.w(TAG, satz::class.simpleName + " nicht eingetragen: " + e.message)
-        }
+    private suspend fun schreibe(klient: HealthConnectClient, satz: Record): Boolean = try {
+        klient.insertRecords(listOf(satz))
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Meist fehlt das Recht fuer diese eine Satzart.
+        Log.w(TAG, satz::class.simpleName + " nicht eingetragen: " + e.message)
+        false
     }
 }

@@ -86,4 +86,55 @@ class KieselsportTest {
         assertEquals(n.texte, zurueck.texte)
         assertContentEquals(n.bytes[Kieselsport.SP_KURVE], zurueck.bytes[Kieselsport.SP_KURVE])
     }
+
+    @Test
+    fun saetzeNachDerPauseRueckenUmIhreLaengeNachHinten() {
+        // Satz bei aktiver Sekunde 10 und 80; dazwischen 10 min Pause ab Sekunde 60.
+        val anfang = Instant.ofEpochSecond(1_000_000)
+        val pausen = listOf(Trainingspausen.Pause(1_000_060, 1_000_660))
+        val ende = anfang.plusSeconds(1200)
+        val s = Kieselsport.alsSegmente(Kieselsport.abschnitteAus("10:12:40;80:10:35"), anfang, ende, pausen)
+        val saetze = s.filter { it.segmentType == androidx.health.connect.client.records.ExerciseSegment.EXERCISE_SEGMENT_TYPE_OTHER_WORKOUT }
+        assertEquals(anfang.plusSeconds(10), saetze[0].startTime)
+        // Ohne die Pausen staende der zweite Satz bei 80 s, mitten in der Pause.
+        assertEquals(anfang.plusSeconds(680), saetze[1].startTime)
+        // Ruhe nur ausserhalb der Pause: 50-60 und 660-680.
+        val ruhe = s.filter { it.segmentType == androidx.health.connect.client.records.ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST }
+        assertEquals(listOf(50L to 60L, 660L to 680L), ruhe.map { it.startTime.epochSecond - 1_000_000 to it.endTime.epochSecond - 1_000_000 })
+        // Die Pause als eigenes Stueck, das sich mit nichts ueberschneidet.
+        val p = Kieselsport.pausenSegmente(pausen, anfang, ende, saetze)
+        assertEquals(1, p.size)
+        assertEquals(anfang.plusSeconds(60) to anfang.plusSeconds(660), p[0].startTime to p[0].endTime)
+    }
+
+    @Test
+    fun einePauseWeichtDemSatz() {
+        // Die Meldung kam fuenf Sekunden spaet: die Pause ueberschneidet den Satz davor.
+        val anfang = Instant.ofEpochSecond(1_000_000)
+        val satz = Kieselsport.alsSegmente(Kieselsport.abschnitteAus("10:12:40"), anfang, anfang.plusSeconds(600))
+        val p = Kieselsport.pausenSegmente(listOf(Trainingspausen.Pause(1_000_045, 1_000_300)), anfang, anfang.plusSeconds(600), satz)
+        assertEquals(anfang.plusSeconds(50), p.single().startTime)
+        // Ausserhalb der Sitzung bleibt nichts.
+        assertTrue(Kieselsport.pausenSegmente(listOf(Trainingspausen.Pause(999_000, 999_500)), anfang, anfang.plusSeconds(600), emptyList()).isEmpty())
+    }
+
+    @Test
+    fun bahnenNachDerPauseEbenso() {
+        val anfang = Instant.ofEpochSecond(1_000_000)
+        val b = Kieselsport.alsBahnen(
+            Kieselsport.abschnitteAus("10:1:25;40:1:27"), anfang, anfang.plusSeconds(600), 25.0,
+            listOf(Trainingspausen.Pause(1_000_035, 1_000_335)),
+        )
+        // Die zweite Bahn begann fuenf aktive Sekunden nach der Pause.
+        assertEquals(anfang.plusSeconds(340), b[1].startTime)
+    }
+
+    @Test
+    fun ruheSchnittWieInDerNotiz() {
+        // 90, 90 und 40 min Geraetewechsel: der Wechsel ist keine Satzpause.
+        assertEquals(90, Kieselsport.ruheSchnitt(listOf(90, 90, 2400)))
+        assertEquals(0, Kieselsport.ruheSchnitt(listOf(0, 2400)))
+        val a = Kieselsport.abschnitteAus("0:10:30;120:10:30;240:10:30;2670:10:30")
+        assertEquals(Kieselsport.ruheSchnitt(listOf(90, 90, 2400)), Kieselsport.pausenSchnitt(a))
+    }
 }

@@ -3,6 +3,11 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseRoute
+import androidx.health.connect.client.records.ExerciseRouteResult
+import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
@@ -21,12 +26,13 @@ import java.time.ZoneId
 /**
  * Die Sportarten, wie die Ansicht sie zeigt. Die Toene sind die aus
  * Kiesel-Helper, KRAEFTIGER: auf Boulders Grau wirkten die gedeckten
- * Erdfarben ausgewaschen.
+ * Erdfarben ausgewaschen. MTB EIN DUNKLERES OCKER als Bike: beide zaehlen als
+ * eigene Art, und im Wochenstapel lagen zwei gleiche Schichten ohne Grenze.
  */
 internal enum class Sport(val farbe: Long) {
     Laufen(0xFFE8622E),
     Bike(0xFFE2A422),
-    Mtb(0xFFE2A422),
+    Mtb(0xFFB8792A),
     Wandern(0xFF8DB53C),
     Kraft(0xFFD9453A),
     Yoga(0xFFA85CB4),
@@ -82,11 +88,22 @@ internal data class TrainingEintrag(
     val sport: Sport,
     /** Aus Kieselsport (Boulder oder frueher Kiesel-Helper)? */
     val eigen: Boolean,
-    /** Die Strecke aus der Spurdatei, nur in der Sitzung; 0 ohne Spur. */
+    /** Die Strecke: aus Spur oder Route, sonst der Distanz der Akte, sonst den Bahnen; 0 ohne. */
     val meter: Double,
 ) {
     val id: String get() = sitzung.metadata.id
-    val minuten: Long get() = Duration.between(sitzung.startTime, sitzung.endTime).toMinutes()
+
+    /** Die Pausen der Sitzung, Sekunden ab ihrem Beginn - so, wie sie in der Akte stehen. */
+    val pausen: List<Pair<Long, Long>> by lazy { TrainingsDaten.pausen(sitzung) }
+
+    /**
+     * DIE AKTIVE ZEIT: die Sitzung ohne ihre Pausen. Dieselbe Bezugszeit fuer
+     * Dauer, Tempo und Wochensummen - und dieselbe wie auf der Uhr. Frueher
+     * war es mit Spur die Wandzeit, ohne die aktive, und die Woche mischte beides.
+     */
+    val sekunden: Long
+        get() = (Duration.between(sitzung.startTime, sitzung.endTime).seconds - pausen.sumOf { it.second - it.first }).coerceAtLeast(0)
+    val minuten: Long get() = sekunden / 60
     val einheit: Einheit get() = Einheit(sitzung.startTime.atZone(ZoneId.systemDefault()).toLocalDate(), sport, minuten)
 }
 
@@ -108,6 +125,8 @@ internal data class TrainingDetail(
     /** Die HRV, die die Uhr zu diesem Training eintrug (Yoga) - in ms RMSSD. */
     val hrv: Double?,
     val quelle: String,
+    /** Die aktiven kcal aus dem Puls, wie Boulder sie in die Akte schrieb; null bei fremden. */
+    val kcal: Double? = null,
 )
 
 /**
@@ -121,6 +140,7 @@ internal object TrainingsDaten {
     private const val TAG = "Kieselsport"
     private const val TAGE = 90L
     private const val AUSGEBLENDET = "kiesel-spuren"
+    private const val STRECKEN = "kiesel-strecken"
 
     /**
      * WER ALS EIGEN ZAEHLT: Boulder, und Kiesel-Helper, das bis 0.7.0 die
@@ -134,13 +154,17 @@ internal object TrainingsDaten {
     const val KIESEL_HELPER = "ch.dysseus.kieselhelper"
 
     /**
-     * Erkannte Gehstrecken, die Boulders Sync bis 0.21.3 als Training eintrug
-     * (PlatformHealthSync, "pebble-exercise-"). Sie sind Bewegung, kein
-     * Training, und fehlen deshalb in der Liste.
+     * Erkannte Gehstrecken: die, die Boulders Sync bis 0.21.3 als Training
+     * eintrug (PlatformHealthSync, "pebble-exercise-"), und die, die eine
+     * fremde App von selbst aufzeichnete (Samsung, Fitbit, siehe
+     * [Sportrechnung.erkannterGang]). Sie sind Bewegung, kein Training, und
+     * fehlen deshalb in Liste, Woche und Widget - sonst stand ein Gang zum
+     * Bahnhof als "Hiking" da.
      */
     fun erkannt(context: Context, s: ExerciseSessionRecord): Boolean =
-        s.metadata.dataOrigin.packageName == context.packageName &&
-            s.metadata.clientRecordId?.startsWith("pebble-exercise-") == true
+        (s.metadata.dataOrigin.packageName == context.packageName &&
+            s.metadata.clientRecordId?.startsWith("pebble-exercise-") == true) ||
+            (!eigen(context, s) && Sportrechnung.erkannterGang(s.exerciseType, s.metadata.recordingMethod))
 
     suspend fun uebersicht(context: Context): TrainingsUebersicht = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit()
@@ -159,19 +183,80 @@ internal object TrainingsDaten {
         }
         val eigene = sitzungen.filter { eigen(context, it) }
         val gewaehlt = gewaehlt(context, sitzungen)
-        val trainings = gewaehlt.map { s ->
-            TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte(context, s)))
-        }
+        val distanzen = eigeneDistanzen(klient, context, jetzt.minus(Duration.ofDays(TAGE)), jetzt)
+        val trainings = gewaehlt.map { s -> eintrag(context, s, distanzen) }
         TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
     }
 
+    /** Siehe [Sportrechnung.waehle]: ein Training, das zwei Apps schrieben, steht einmal da. */
+    private fun gewaehlt(context: Context, sitzungen: List<ExerciseSessionRecord>): List<ExerciseSessionRecord> =
+        Sportrechnung.waehle(sitzungen, { eigen(context, it) }, { it.startTime }, { it.endTime }, { Sport.von(it) })
+
+    private fun eintrag(context: Context, s: ExerciseSessionRecord, distanzen: Map<String, Double>): TrainingEintrag =
+        TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte(context, s), distanzen))
+
     /**
-     * ZWEI APPS, EIN TRAINING: eine fremde Sitzung, die sich mit einer
-     * eigenen ueberschneidet, faellt heraus. In der Akte bleibt sie.
+     * Die Strecke eines Trainings, in dieser Reihenfolge: aus der Spur (oder
+     * der Route der Akte, auch einer im Detail freigegebenen), aus der
+     * Distanz, die Boulder zur Sitzung schrieb (Lauf ohne Ortung, Laufband),
+     * aus den Bahnen. Ohne Spur zaehlte die Woche 1500 m Schwimmen frueher
+     * als 0 km.
      */
-    private fun gewaehlt(context: Context, sitzungen: List<ExerciseSessionRecord>): List<ExerciseSessionRecord> {
-        val eigene = sitzungen.filter { eigen(context, it) }
-        return sitzungen.filter { s -> eigen(context, s) || eigene.none { e -> s.startTime < e.endTime && e.startTime < s.endTime } }
+    private fun strecke(context: Context, s: ExerciseSessionRecord, punkte: List<Spur.Punkt>, distanzen: Map<String, Double>): Double =
+        Spur.laenge(punkte).takeIf { punkte.size >= 2 && it > 0 }
+            ?: gemerkteStrecke(context, s.metadata.id)
+            ?: distanzen[distanzKennung(s)]?.takeIf { it > 0 }
+            ?: s.laps.sumOf { it.length?.inMeters ?: 0.0 }
+
+    /**
+     * Die Strecke einer fremden Route merken, die der Nutzer im Detail
+     * freigab. DIE AKTE GIBT SIE NUR DIESES EINE MAL HERAUS (Zustimmung je
+     * Training) - zurueck in der Liste stand der Lauf sonst wieder mit 0 km.
+     */
+    fun merkeStrecke(context: Context, s: ExerciseSessionRecord, meter: Double) {
+        if (meter <= 0) return
+        val p = context.getSharedPreferences(STRECKEN, Context.MODE_PRIVATE)
+        val grenze = Instant.now().minus(Duration.ofDays(TAGE)).epochSecond
+        val e = p.edit()
+        // Was aus der Liste gefallen ist (oder nicht lesbar), braucht niemand mehr.
+        p.all.forEach { (k, v) -> if ((v as? String)?.substringBefore(';')?.toLongOrNull()?.let { it >= grenze } != true) e.remove(k) }
+        e.putString(s.metadata.id, "${s.startTime.epochSecond};$meter").apply()
+    }
+
+    private fun gemerkteStrecke(context: Context, id: String): Double? =
+        context.getSharedPreferences(STRECKEN, Context.MODE_PRIVATE).getString(id, null)
+            ?.substringAfter(';')?.toDoubleOrNull()?.takeIf { it > 0 }
+
+    /** Die Kennung der Distanz, die Boulder zu einer eigenen Sitzung schrieb (Trainingswerte). */
+    private fun distanzKennung(s: ExerciseSessionRecord): String? = s.startTime.epochSecond.let { beginn ->
+        if (s.metadata.clientRecordId == Kieselsport.kennung(beginn)) "kieselsport-distanz-$beginn" else null
+    }
+
+    /**
+     * Boulders eigene Distanzen, nach Kennung. EINE ABFRAGE fuer alle: Boulder
+     * schreibt je Training eine. Fremde gibt die Akte ohne Leserecht nicht heraus.
+     */
+    private suspend fun eigeneDistanzen(klient: HealthConnectClient, context: Context, von: Instant, bis: Instant): Map<String, Double> = try {
+        klient.readRecords(
+            ReadRecordsRequest(DistanceRecord::class, TimeRangeFilter.between(von, bis), dataOriginFilter = setOf(DataOrigin(context.packageName)))
+        ).records.mapNotNull { r -> r.metadata.clientRecordId?.let { it to r.distance.inMeters } }.toMap()
+    } catch (e: Exception) {
+        Log.w(TAG, "Distanzen lesen: " + e.message)
+        emptyMap()
+    }
+
+    /** Die Pausen einer Sitzung (ExerciseSegment PAUSE), Sekunden ab ihrem Beginn, auf sie beschnitten. */
+    fun pausen(s: ExerciseSessionRecord): List<Pair<Long, Long>> = s.segments
+        .filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }
+        .map { maxOf(it.startTime, s.startTime) to minOf(it.endTime, s.endTime) }
+        .filter { (a, b) -> b.isAfter(a) }
+        .map { (a, b) -> Duration.between(s.startTime, a).seconds to Duration.between(s.startTime, b).seconds }
+
+    /** Der Name eines Trainings: sein Titel, aber ein deutscher aus Kiesel-Helper auf Englisch. */
+    fun name(context: Context, s: ExerciseSessionRecord): String {
+        val titel = s.title
+        return Sportrechnung.artAusTitel(titel)?.let { Kieselsport.artAlsSatzart(context, it).second }
+            ?: titel ?: context.getString(Sport.von(s).nameId)
     }
 
     /**
@@ -191,15 +276,32 @@ internal object TrainingsDaten {
             return@withContext null
         }
         val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
-        TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte(context, s)))
+        // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
+        eintrag(context, s, eigeneDistanzen(klient, context, s.startTime, s.endTime))
     }
 
     /**
      * Die Spur eines Trainings, beschnitten auf seine Sitzung - wie die Route in
-     * der Akte. So zeigen Liste, Karte und Detail dieselbe Strecke, die dort steht.
+     * der Akte. So zeigen Liste, Karte und Detail dieselbe Strecke, die dort
+     * steht. Ohne Spurdatei die Route der Akte, wenn sie sie herausgibt
+     * (eine fremde nur nach Zustimmung, siehe [routeGesperrt]).
      */
-    fun punkte(context: Context, s: ExerciseSessionRecord): List<Spur.Punkt> =
-        Spur.inSitzung(Spur.lies(context, s.startTime.epochSecond), s.startTime, s.endTime)
+    fun punkte(context: Context, s: ExerciseSessionRecord): List<Spur.Punkt> {
+        val spur = Spur.inSitzung(Spur.lies(context, s.startTime.epochSecond), s.startTime, s.endTime)
+        if (spur.size >= 2) return spur
+        return (s.exerciseRouteResult as? ExerciseRouteResult.Data)?.exerciseRoute?.let(::ausRoute).orEmpty()
+    }
+
+    /** Eine Route der Akte als Spurpunkte - mit Genauigkeit und Hoehe, soweit sie sie kennt. */
+    fun ausRoute(route: ExerciseRoute): List<Spur.Punkt> = route.route.map { l ->
+        Spur.Punkt(
+            l.time.epochSecond, l.latitude, l.longitude, l.altitude?.inMeters,
+            l.horizontalAccuracy?.inMeters?.toFloat() ?: Float.NaN,
+        )
+    }
+
+    /** Braucht die Route dieser Sitzung erst eine Zustimmung (fremde App)? */
+    fun routeGesperrt(s: ExerciseSessionRecord): Boolean = s.exerciseRouteResult is ExerciseRouteResult.ConsentRequired
 
     /**
      * Spuren, zu denen kein eigenes Training in der Akte steht. NICHT DIE
@@ -238,14 +340,38 @@ internal object TrainingsDaten {
         }
         val punkte = punkte(context, s)
         val quelle = s.metadata.dataOrigin.packageName
+        val distanzen = eigeneDistanzen(klient, context, s.startTime, s.endTime)
         TrainingDetail(
-            eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte)),
+            eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte, distanzen)),
             punkte = punkte,
             puls = puls(klient, context, s),
             spo2 = spo2(klient, s),
             hrv = hrv(klient, s),
             quelle = quelle,
+            kcal = kcal(klient, context, s),
         )
+    }
+
+    /**
+     * Die aktiven Kalorien, die Boulder aus dem Puls in die Akte schrieb
+     * (Trainingswerte) - das Detail zeigt dieselbe Zahl wie die Akte. Die der
+     * Uhr (aus Schritten) zaehlen hier nicht; dann rechnet das Detail selbst.
+     */
+    private suspend fun kcal(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): Double? {
+        val beginn = s.startTime.epochSecond
+        if (s.metadata.clientRecordId != Kieselsport.kennung(beginn)) return null
+        return try {
+            klient.readRecords(
+                ReadRecordsRequest(
+                    ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(s.startTime, s.endTime),
+                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
+                )
+            ).records.firstOrNull {
+                it.metadata.clientRecordId == "kieselsport-kcal-$beginn" && it.metadata.clientRecordVersion > Trainingswerte.FASSUNG_UHR
+            }?.energy?.inKilocalories
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**
@@ -255,6 +381,26 @@ internal object TrainingsDaten {
     suspend fun mittelpuls(context: Context, s: ExerciseSessionRecord): Int? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
         puls(klient, context, s).takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()?.toInt()
+    }
+
+    /**
+     * Das juengste Training seit [seit] fuer das Widget - gewaehlt wie oben auf
+     * der Sportseite (eines unter zwei Apps), mit derselben Strecke. IM
+     * HINTERGRUND gibt die Akte ohne Sonderrecht nur Eigenes heraus.
+     */
+    suspend fun juengstes(context: Context, seit: Duration): TrainingEintrag? = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext null
+        val jetzt = Instant.now()
+        val von = jetzt.minus(seit)
+        val sitzungen = try {
+            klient.liesOderEigene(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt))
+                .filterNot { erkannt(context, it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Juengstes Training lesen: " + e.message)
+            return@withContext null
+        }
+        val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
+        eintrag(context, s, eigeneDistanzen(klient, context, von, jetzt))
     }
 
     /**
@@ -282,7 +428,12 @@ internal object TrainingsDaten {
      * Kalorien rechnet Boulder fuer diese Trainings nicht in die Akte.
      */
     suspend fun rohpuls(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pulspunkt> =
-        rohpuls(klient, s.metadata.dataOrigin.packageName.takeIf { it == context.packageName }, s.startTime, s.endTime)
+        // OHNE DIE PAUSEN: die Uhr zaehlt sie nicht, und die Zonen, der Schnitt
+        // und die Kalorien eines Trainings sollen es auch nicht.
+        Trainingsanalyse.ohnePausen(
+            rohpuls(klient, s.metadata.dataOrigin.packageName.takeIf { it == context.packageName }, s.startTime, s.endTime),
+            pausen(s),
+        )
 
     /** Der Puls in [von, bis) - von [quelle], ohne sie von allen. Wirft, wenn die Akte nicht liest. */
     suspend fun rohpuls(klient: HealthConnectClient, quelle: String?, von: Instant, bis: Instant): List<Pulspunkt> {

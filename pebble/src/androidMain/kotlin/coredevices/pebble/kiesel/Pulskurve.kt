@@ -87,16 +87,23 @@ internal object Pulskurve {
     suspend fun eintragen(context: Context, beginn: Long): Boolean {
         val punkte = lies(context, beginn)
         if (punkte.size < 2) return false
+        // DIE SEKUNDEN DER UHR SIND AKTIVE ZEIT. Gab es Pausen, wartet die
+        // Kurve auf die Zusammenfassung: erst sie sagt, ob die Pausen stimmen
+        // (Trainingspausen). Ohne Pausen geht sie gleich.
+        val plan = Trainingspausen.geprueft(context, beginn)
+        if (plan == null && Trainingspausen.wartet(context, beginn, Instant.now().epochSecond)) return false
+        val pausen = plan?.pausen.orEmpty()
+        fun zeit(s: Int): Instant = Instant.ofEpochSecond(Trainingspausen.wand(pausen, beginn, s.toLong()))
         val klient = Akte(context).bereit() ?: return false
         val anfang = Instant.ofEpochSecond(beginn)
         val saetze = punkte.chunked(JE_EINTRAG).map { stueck ->
             HeartRateRecord(
-                startTime = anfang.plusSeconds(stueck.first().first.toLong()),
+                startTime = zeit(stueck.first().first),
                 startZoneOffset = versatz(anfang),
-                endTime = anfang.plusSeconds(stueck.last().first.toLong() + 1),
+                endTime = zeit(stueck.last().first).plusSeconds(1),
                 endZoneOffset = versatz(anfang),
                 samples = stueck.map { (s, p) ->
-                    HeartRateRecord.Sample(anfang.plusSeconds(s.toLong()), p.toLong())
+                    HeartRateRecord.Sample(zeit(s), p.toLong())
                 },
                 metadata = Metadata.autoRecorded(
                     Device(type = Device.TYPE_WATCH), "kieselsport-puls-$beginn-${stueck.first().first}"

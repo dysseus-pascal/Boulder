@@ -116,4 +116,67 @@ class SportrechnungTest {
     fun leere_liste_ohne_wochen() {
         assertEquals(emptyList(), Sportrechnung.nachWoche(emptyList<Einheit>()) { it.tag })
     }
+
+    /** Eine Sitzung fuer [Sportrechnung.waehle]: Name, eigen, Minuten ab 10:00, Art. */
+    private data class S(val name: String, val eigen: Boolean, val von: Long, val bis: Long, val art: Sport = Sport.Laufen)
+    private val zehn = java.time.Instant.parse("2026-09-30T10:00:00Z")
+    private fun waehle(vararg s: S) = Sportrechnung.waehle(
+        s.toList(), { it.eigen }, { zehn.plusSeconds(it.von * 60) }, { zehn.plusSeconds(it.bis * 60) }, { it.art },
+    ).map { it.name }
+
+    @Test
+    fun eigene_gewinnt_gegen_fremde_zur_selben_zeit() {
+        assertEquals(listOf("kiesel"), waehle(S("kiesel", true, 0, 60), S("strava", false, 1, 61)))
+    }
+
+    @Test
+    fun zwei_fremde_mit_demselben_lauf_zaehlen_einmal() {
+        // Hersteller-App und Strava: derselbe Lauf, die laengere Fassung bleibt.
+        assertEquals(listOf("strava"), waehle(S("samsung", false, 2, 58), S("strava", false, 0, 60)))
+        // Zwei Trainings hintereinander, die sich kaum beruehren, bleiben beide.
+        assertEquals(listOf("lauf", "rad"), waehle(S("lauf", false, 0, 60), S("rad", false, 55, 180)))
+    }
+
+    @Test
+    fun ein_anderes_training_in_derselben_zeit_bleibt() {
+        // Eine Stunde Kraft aus der Fitness-App, darin 20 min Laufband aus Strava.
+        assertEquals(
+            listOf("kraft", "band"),
+            waehle(S("kraft", false, 0, 60, Sport.Kraft), S("band", false, 5, 25, Sport.Laufen)),
+        )
+    }
+
+    @Test
+    fun ein_erkannter_gang_ist_kein_training() {
+        val gehen = androidx.health.connect.client.records.ExerciseSessionRecord.EXERCISE_TYPE_WALKING
+        val wandern = androidx.health.connect.client.records.ExerciseSessionRecord.EXERCISE_TYPE_HIKING
+        val auto = androidx.health.connect.client.records.metadata.Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED
+        val selbst = androidx.health.connect.client.records.metadata.Metadata.RECORDING_METHOD_ACTIVELY_RECORDED
+        assertEquals(true, Sportrechnung.erkannterGang(gehen, auto))
+        assertEquals(false, Sportrechnung.erkannterGang(gehen, selbst))
+        assertEquals(false, Sportrechnung.erkannterGang(wandern, auto))
+    }
+
+    @Test
+    fun dauer_ist_die_aktive_zeit_ohne_pausen() {
+        // 80 min Sitzung mit 20 min Pause: in Liste und Woche zaehlen 60 min, wie auf der Uhr.
+        val von = java.time.Instant.ofEpochSecond(1_000_000)
+        val sitzung = androidx.health.connect.client.records.ExerciseSessionRecord(
+            startTime = von, startZoneOffset = null, endTime = von.plusSeconds(4800), endZoneOffset = null,
+            metadata = Kieselsport.vonDerUhr("probe"),
+            exerciseType = androidx.health.connect.client.records.ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
+            segments = listOf(
+                androidx.health.connect.client.records.ExerciseSegment(
+                    von.plusSeconds(1800), von.plusSeconds(3000),
+                    androidx.health.connect.client.records.ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE,
+                ),
+            ),
+        )
+        val t = TrainingEintrag(sitzung, Sport.Bike, true, 20_000.0)
+        assertEquals(listOf(1800L to 3000L), t.pausen)
+        assertEquals(3600L, t.sekunden)
+        assertEquals(60L, t.minuten)
+        // Das Tempo aus derselben Zeit: 20 km in 60 min.
+        assertEquals(20.0, Sportrechnung.kmh(t.meter, t.sekunden)!!, 0.001)
+    }
 }

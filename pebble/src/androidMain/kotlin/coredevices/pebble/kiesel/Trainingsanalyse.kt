@@ -185,6 +185,14 @@ internal object Trainingsanalyse {
             .sortedBy { it.first }
             .map { (t, bpm) -> Pulspunkt(Duration.between(von, t).seconds, bpm) }
 
+    /**
+     * Der Puls ohne die Pausen [von, bis) der Sitzung. Die Uhr zaehlt in der
+     * Pause nicht, und die zwanzig Minuten im Cafe sind kein Training - sie
+     * zoegen Schnitt und Zonen nach unten.
+     */
+    fun ohnePausen(puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>>): List<Pulspunkt> =
+        if (pausen.isEmpty()) puls else puls.filter { p -> pausen.none { (a, b) -> p.sekunde >= a && p.sekunde < b } }
+
     // --- Aussetzer des Sensors ---
 
     /** Ein Einbruch um mehr als so viel unter den letzten guten Wert ... */
@@ -262,6 +270,23 @@ internal object Trainingsanalyse {
         return aus
     }
 
+    /**
+     * Minuten und Prozent je Zone AUS DENSELBEN SEKUNDEN: beide gerundet statt
+     * abgeschnitten, und die Prozente nach dem groessten Rest, damit sie 100
+     * ergeben. Abgeschnitten stand dort "0 min · 2 %" und zusammen 98 %.
+     */
+    fun zonenAnteile(sekunden: LongArray): List<Pair<Long, Int>> {
+        val summe = sekunden.sum()
+        if (summe <= 0) return sekunden.map { 0L to 0 }
+        val genau = sekunden.map { it * 100.0 / summe }
+        val prozent = genau.map { it.toInt() }.toMutableList()
+        // Die fehlenden Prozente an die Zonen mit dem groessten abgeschnittenen Rest.
+        genau.indices.sortedByDescending { genau[it] - prozent[it] }
+            .take(100 - prozent.sum())
+            .forEach { prozent[it]++ }
+        return sekunden.indices.map { Math.round(sekunden[it] / 60.0) to prozent[it] }
+    }
+
     // --- Puls ueber die Strecke ---
 
     /** Ein Wert ueber der Strecke: bei so vielen Metern dieser Wert. */
@@ -294,17 +319,91 @@ internal object Trainingsanalyse {
     fun tempoUeberStrecke(strecke: List<Streckenpunkt>): List<Verlaufspunkt> =
         strecke.map { Verlaufspunkt(it.meter, it.tempo * 3.6) }
 
+    // --- Hoehe ---
+
+    /** Halbe Breite der Hoehenglaettung, in Metern Strecke. */
+    const val HOEHE_FENSTER_M = 50.0
+
+    /**
+     * Die geglaettete Hoehe je Streckenpunkt, null wo das GPS keine lieferte.
+     *
+     * EINE REIHE FUER ALLES: Aufstieg oben, Profil, Kilometertabelle und
+     * Steigung rechnen mit ihr. Frueher hatte jede ihre eigene - auf einer
+     * Seite standen 188 m Aufstieg, ein Profil von 89 m und Kilometer, die
+     * zusammen 406 m ergaben.
+     *
+     * UEBER DIE STRECKE, NICHT UEBER PUNKTE: die GPS-Hoehe wandert ueber
+     * Minuten um Meter. Hundert Meter Weg mitteln das weg, ohne einen echten
+     * Anstieg zu verschlucken; im Stehen (kein Weg) mitteln sie die ganze Rast.
+     * Nicht ueber einen Sprung hinweg: dort liegt Zeit ohne Weg dazwischen.
+     */
+    fun hoehen(strecke: List<Streckenpunkt>): List<Double?> {
+        val aus = arrayOfNulls<Double>(strecke.size)
+        var a = 0
+        while (a < strecke.size) {
+            var b = a + 1
+            while (b < strecke.size && !strecke[b].nachSprung) b++
+            for (i in a until b) {
+                if (strecke[i].hoehe == null) continue
+                var summe = 0.0
+                var n = 0
+                var j = i
+                while (j >= a && strecke[i].meter - strecke[j].meter <= HOEHE_FENSTER_M) {
+                    strecke[j].hoehe?.let { summe += it; n++ }
+                    j--
+                }
+                j = i + 1
+                while (j < b && strecke[j].meter - strecke[i].meter <= HOEHE_FENSTER_M) {
+                    strecke[j].hoehe?.let { summe += it; n++ }
+                    j++
+                }
+                aus[i] = summe / n
+            }
+            a = b
+        }
+        return aus.toList()
+    }
+
+    /**
+     * Der Aufstieg bis zu jedem Punkt, aus [hoehen]. MIT EINER SCHWELLE
+     * ([Spur.STEIGUNG_MIN]): was geglaettet noch zittert, zaehlt nicht. Nach
+     * einem Sprung beginnt die Hoehe neu - ein wiedergefundener Empfang ist
+     * kein Anstieg. Weil jeder Kilometer die Differenz dieser Reihe nimmt,
+     * ergeben die Kilometer zusammen genau den Aufstieg oben.
+     */
+    fun aufstiegBis(strecke: List<Streckenpunkt>): DoubleArray {
+        val h = hoehen(strecke)
+        val aus = DoubleArray(strecke.size)
+        var summe = 0.0
+        var bezug: Double? = null
+        // Bis zur ersten Hoehe hinter einem Sprung: kam der erste Fix nach dem
+        // Tunnel ohne Hoehe, verglich der zweite sonst mit der Hoehe davor.
+        var neu = true
+        for (i in strecke.indices) {
+            if (strecke[i].nachSprung) neu = true
+            val hi = h[i]
+            if (hi != null) {
+                val b = bezug
+                when {
+                    b == null || neu -> { bezug = hi; neu = false }
+                    hi - b >= Spur.STEIGUNG_MIN -> { summe += hi - b; bezug = hi }
+                    b - hi >= Spur.STEIGUNG_MIN -> bezug = hi
+                }
+            }
+            aus[i] = summe
+        }
+        return aus
+    }
+
+    /** Der Aufstieg eines Trainings - fuer Sportseite, Detail und Akte dieselbe Zahl. */
+    fun aufstieg(punkte: List<Spur.Punkt>): Double = aufstiegBis(strecke(punkte)).lastOrNull() ?: 0.0
+
     /** Die Hoehe ueber die Strecke - leer, wenn das GPS keine lieferte. */
     fun hoeheUeberStrecke(strecke: List<Streckenpunkt>): List<Verlaufspunkt> {
-        val mit = strecke.filter { it.hoehe != null }
+        val h = hoehen(strecke)
+        val mit = strecke.indices.filter { h[it] != null }
         if (mit.size < strecke.size / 2) return emptyList()
-        // Geglaettet ueber fuenf Punkte: die Hoehe aus dem GPS zittert um
-        // Meter, und ein Profil, das zittert, liest sich als Huegel.
-        return mit.indices.map { i ->
-            val a = (i - 2).coerceAtLeast(0)
-            val b = (i + 2).coerceAtMost(mit.size - 1)
-            Verlaufspunkt(mit[i].meter, (a..b).map { mit[it].hoehe!! }.average())
-        }
+        return mit.map { Verlaufspunkt(strecke[it].meter, h[it]!!) }
     }
 
     // --- Kilometer ---
@@ -321,10 +420,15 @@ internal object Trainingsanalyse {
      * Die Strecke in Kilometern, mit Zeit, Puls und Aufstieg je Stueck.
      *
      * Der letzte Rest zaehlt, wenn er wenigstens hundert Meter lang ist;
-     * dreissig Meter Auslaufen sind kein Kilometer.
+     * dreissig Meter Auslaufen sind kein Kilometer. [puls] und [pausen]
+     * (von, bis) zaehlen ihre Sekunden wie die Strecke ab dem ersten Punkt.
+     * DIE PAUSEN DER UHR ZAEHLEN NICHT ALS ZEIT: sonst stand der Kilometer mit
+     * dem Cafe bei 16 Minuten.
      */
-    fun kilometer(strecke: List<Streckenpunkt>, puls: List<Pulspunkt>): List<Kilometer> {
+    fun kilometer(strecke: List<Streckenpunkt>, puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>> = emptyList()): List<Kilometer> {
         if (strecke.size < 2) return emptyList()
+        val auf = aufstiegBis(strecke)
+        fun pause(von: Long, bis: Long) = pausen.sumOf { (a, b) -> (minOf(b, bis) - maxOf(a, von)).coerceAtLeast(0) }
         val aus = mutableListOf<Kilometer>()
         var startIndex = 0
         var nummer = 1
@@ -338,16 +442,10 @@ internal object Trainingsanalyse {
                 val laenge = bis.meter - von.meter
                 if (laenge >= 100) {
                     val pulsHier = puls.filter { it.sekunde in von.sekunde..bis.sekunde }
-                    var auf = 0.0
-                    for (k in startIndex + 1..i) {
-                        val h0 = strecke[k - 1].hoehe
-                        val h1 = strecke[k].hoehe
-                        if (h0 != null && h1 != null && h1 > h0) auf += h1 - h0
-                    }
                     aus += Kilometer(
-                        nummer, laenge, bis.sekunde - von.sekunde,
+                        nummer, laenge, bis.sekunde - von.sekunde - pause(von.sekunde, bis.sekunde),
                         pulsHier.takeIf { it.isNotEmpty() }?.map { it.bpm }?.average(),
-                        auf,
+                        auf[i] - auf[startIndex],
                     )
                 }
                 startIndex = i
@@ -368,13 +466,16 @@ internal object Trainingsanalyse {
         if (strecke.size < 2 || strecke.count { it.hoehe != null } < strecke.size / 2) {
             return strecke.map { 0.0 }
         }
+        // Aus der geglaetteten Reihe wie das Profil - aus der rohen stand
+        // auf einer Steigung von 1,5 % ein "steilster Punkt" von 25 %.
+        val h = hoehen(strecke)
         return strecke.indices.map { i ->
             var a = i
             while (a > 0 && strecke[i].meter - strecke[a - 1].meter < 25) a--
             var b = i
             while (b < strecke.size - 1 && strecke[b + 1].meter - strecke[i].meter < 25) b++
-            val ha = strecke[a].hoehe
-            val hb = strecke[b].hoehe
+            val ha = h[a]
+            val hb = h[b]
             val dm = strecke[b].meter - strecke[a].meter
             if (ha == null || hb == null || dm < 5) 0.0 else ((hb - ha) / dm * 100).coerceIn(-40.0, 40.0)
         }

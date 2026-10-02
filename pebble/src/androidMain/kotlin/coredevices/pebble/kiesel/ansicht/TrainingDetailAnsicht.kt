@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,12 +36,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
 import androidx.health.connect.client.records.ExerciseSegment
 import coredevices.pebble.R
 import org.koin.compose.koinInject
 import io.rebble.libpebblecommon.connection.HealthDataApi
-import io.rebble.libpebblecommon.connection.LibPebble
+import coredevices.pebble.kiesel.Akte
+import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.Sport
+import coredevices.pebble.kiesel.Sportrechnung
 import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.kiesel.TrainingDetail
 import coredevices.pebble.kiesel.Trainingsanalyse
@@ -64,19 +68,44 @@ import kotlin.math.roundToInt
 @Composable
 internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
-    // Gewicht, Alter und Geschlecht der Uhr - fuer die Kalorien aus dem Puls.
-    val koerper by koinInject<LibPebble>().healthSettings.collectAsState(null)
     val api = koinInject<HealthDataApi>()
     var detail by remember { mutableStateOf<TrainingDetail?>(null) }
     var geladen by remember { mutableStateOf(false) }
     var grenzen by remember { mutableStateOf<Pair<Int?, Int>?>(null) }
+    var koerper by remember { mutableStateOf<Trainingswerte.Koerper?>(null) }
     LaunchedEffect(id) {
         val neu = TrainingsDaten.detail(context, id)
-        // Ruhe- und Maximalpuls wie in der Akte (Trainingswerte) - vor der
-        // Anzeige, sonst springen kcal und Zonen nach dem Oeffnen.
-        grenzen = neu?.eintrag?.sitzung?.startTime?.let { Trainingswerte.herzgrenzenVor(context, api, it) }
+        // Ruhe- und Maximalpuls und das Gewicht wie in der Akte (Trainingswerte)
+        // - vor der Anzeige, sonst springen kcal und Zonen nach dem Oeffnen.
+        neu?.eintrag?.sitzung?.startTime?.let { start ->
+            grenzen = Trainingswerte.herzgrenzenVor(context, api, start)
+            koerper = Trainingswerte.koerperVor(context, Akte(context).bereit(), start)
+        }
         detail = neu
         geladen = true
+        // HIER IM VORDERGRUND LIEST DIE AKTE DIE WAAGE: standen die kcal mit dem
+        // eingestellten Gewicht drin (Rechnung im Hintergrund), ersetzt diese
+        // Rechnung sie einmal - Akte und Detail bleiben dieselbe Zahl.
+        val s = neu?.eintrag?.sitzung ?: return@LaunchedEffect
+        if (s.metadata.clientRecordId == Kieselsport.kennung(s.startTime.epochSecond)) {
+            Trainingswerte.schreibeKalorienAusPuls(context, s.startTime.epochSecond)?.let { kcal ->
+                detail = detail?.copy(kcal = kcal)
+            }
+        }
+    }
+    // Die Route einer fremden App gibt die Akte nur nach einer Zustimmung je Training heraus.
+    val routeStarter = rememberLauncherForActivityResult(ExerciseRouteRequestContract()) { route ->
+        val d = detail
+        if (route != null && d != null) {
+            val s = d.eintrag.sitzung
+            val punkte = Spur.inSitzung(TrainingsDaten.ausRoute(route), s.startTime, s.endTime)
+            if (punkte.size >= 2) {
+                val meter = Spur.laenge(punkte)
+                detail = d.copy(punkte = punkte, eintrag = d.eintrag.copy(meter = meter))
+                // Fuer Liste, Woche und Widget: die Zustimmung gilt nur dieses eine Mal.
+                TrainingsDaten.merkeStrecke(context, s, meter)
+            }
+        }
     }
     val d = detail
     val g = grenzen
@@ -88,11 +117,14 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     }
     val t = d.eintrag
     val s = t.sitzung
-    val name = s.title ?: stringResource(t.sport.nameId)
+    // Derselbe Name wie in der Liste - auch ein deutscher Titel aus Kiesel-Helper auf Englisch.
+    val name = trainingsName(t)
     LaunchedEffect(name) { setzeTitel(name) }
     // Derselbe Maximalpuls fuer Zonen und kcal wie ueberall in Boulder (Herzgrenzen).
     val (ruhepuls, maxpuls) = g
-    val ton = Color(t.sport.farbe)
+    // Der Ton, nicht die Flaeche: er traegt Linien und Schrift auf der Karte (siehe Sport.ton).
+    val ton = t.sport.ton()
+    val routeHolen = if (d.punkte.size < 2 && TrainingsDaten.routeGesperrt(s)) ({ routeStarter.launch(s.metadata.id) }) else null
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -111,27 +143,28 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Dauer und Tempo aus derselben, aktiven Zeit - wie auf der Sportseite und der Uhr.
                 Wert(dauerText(t.minuten), stringResource(R.string.ks_t_dauer))
                 if (t.meter > 0) {
                     Wert(kmText(t.meter), stringResource(R.string.ks_t_strecke))
-                    val sekunden = Duration.between(s.startTime, s.endTime).seconds
                     if (t.sport.rad) {
-                        Wert(String.format(Locale.getDefault(), "%.1f km/h", t.meter / sekunden * 3.6), stringResource(R.string.ks_t_tempo_rad))
-                    } else {
-                        Wert(tempoText(t.meter / sekunden, false), stringResource(R.string.ks_t_tempo))
+                        Sportrechnung.kmh(t.meter, t.sekunden)?.let { Wert(kmhText(it), stringResource(R.string.ks_t_tempo_rad)) }
+                    } else if (t.sport != Sport.Schwimmen) {
+                        Sportrechnung.tempo(t.meter, t.sekunden)?.let { Wert(tempoText(it), stringResource(R.string.ks_t_tempo)) }
                     }
                     // Die Punkte sind schon auf die Sitzung beschnitten (TrainingsDaten.punkte).
-                    val auf = Spur.hoehenmeter(d.punkte)
+                    val auf = remember(d.punkte) { Trainingsanalyse.aufstieg(d.punkte) }
                     if (auf > 0) Wert(String.format(Locale.getDefault(), "%.0f m", auf), stringResource(R.string.ks_t_aufstieg))
                 }
                 if (d.puls.isNotEmpty()) {
                     Wert(d.puls.map { it.bpm }.average().toInt().toString(), stringResource(R.string.ks_t_puls_schnitt))
                     Wert(d.puls.maxOf { it.bpm }.toString(), stringResource(R.string.ks_t_puls_max))
-                    koerper?.let { k ->
-                        val geschlecht = Trainingswerte.geschlecht(k.gender)
-                        Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht, ruhepuls, maxpuls)?.let {
-                            Wert("≈ " + it.roundToInt(), stringResource(R.string.ks_t_kcal))
-                        }
+                    // DIE AKTIVEN KCAL, DIESELBEN WIE IN DER AKTE: dort steht, was
+                    // Boulder aus dem Puls schrieb; sonst dieselbe Rechnung hier.
+                    (d.kcal ?: koerper?.let { k ->
+                        Trainingsanalyse.aktiveKalorien(d.puls, k.kg, k.alter, k.geschlecht, ruhepuls, maxpuls)
+                    })?.takeIf { it > 0 }?.let {
+                        Wert("≈ " + it.roundToInt(), stringResource(R.string.ks_t_kcal))
                     }
                 }
             }
@@ -144,11 +177,14 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
             Sport.Kraft -> Kraft(d, ton, maxpuls)
             Sport.Yoga -> Yoga(d, ton, maxpuls)
             Sport.Schwimmen -> Schwimmen(d, ton, maxpuls)
-            else -> Strecke(d, ton, maxpuls)
+            else -> Strecke(d, ton, maxpuls, routeHolen)
         }
         Sauerstoff(d, ton)
 
-        s.notes?.takeIf { it.isNotBlank() }?.let { notiz ->
+        // NUR BEI FREMDEN: die eigene Notiz traegt Saetze und Bahnen, und die
+        // stehen oben schon als Zahlen. Aeltere eigene Notizen hatten dazu
+        // Puls und kcal der Uhr, roh - sie widersprachen den Zahlen darueber.
+        s.notes?.takeIf { it.isNotBlank() && !t.eigen }?.let { notiz ->
             Karte {
                 Text(stringResource(R.string.ks_n_notiz), style = MaterialTheme.typography.labelMedium)
                 Text(notiz, style = MaterialTheme.typography.bodyMedium)
@@ -158,11 +194,16 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     }
 }
 
-/** Tempo als Text: auf dem Rad km/h, sonst min/km; unter 0,2 m/s gibt es keins. */
+/** Tempo als min/km aus Sekunden je Kilometer. */
+private fun tempoText(sekundenJeKm: Long): String =
+    String.format(Locale.getDefault(), "%d:%02d /km", sekundenJeKm / 60, sekundenJeKm % 60)
+
+private fun kmhText(kmh: Double): String = String.format(Locale.getDefault(), "%.1f km/h", kmh)
+
+/** Tempo als Text aus m/s - auf dem Rad km/h, sonst min/km; unter 0,2 m/s gibt es keins. */
 private fun tempoText(ms: Double, rad: Boolean): String = when {
-    rad -> String.format(Locale.getDefault(), "%.1f km/h", ms * 3.6)
-    ms > 0.2 -> (1000 / ms).roundToInt().let { String.format(Locale.getDefault(), "%d:%02d /km", it / 60, it % 60) }
-    else -> "–"
+    rad -> kmhText(ms * 3.6)
+    else -> Sportrechnung.tempo(ms, 1)?.let { tempoText(it) } ?: "–"
 }
 
 @Composable
@@ -203,17 +244,24 @@ private fun PulsUeberZeit(d: TrainingDetail, ton: Color, maxpuls: Int, xBaender:
 // --- Laufen, Bike, MTB, Wandern --------------------------------------------------
 
 @Composable
-private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
+private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int, routeHolen: (() -> Unit)?) {
     val sport = d.eintrag.sport
     val strecke = remember(d) { Trainingsanalyse.strecke(d.punkte) }
     if (strecke.size < 2) {
-        if (sport in setOf(Sport.Laufen, Sport.Bike, Sport.Mtb, Sport.Wandern)) {
+        if (routeHolen != null) {
+            TextButton(onClick = routeHolen) { Text(stringResource(R.string.ks_t_route_zeigen)) }
+        } else if (sport in setOf(Sport.Laufen, Sport.Bike, Sport.Mtb, Sport.Wandern)) {
             Hinweis(stringResource(R.string.ks_t_keine_strecke))
         }
         PulsUeberZeit(d, ton, maxpuls)
-        if (d.puls.size < 2) Karte { Hinweis(stringResource(R.string.ks_v_nichts_weiter)) }
+        if (d.puls.size < 2) Hinweis(stringResource(R.string.ks_v_nichts_weiter))
         return
     }
+    // Puls und Pausen zaehlen ab dem Beginn der Sitzung, die Strecke ab ihrem
+    // ersten Punkt - der kommt einige Sekunden spaeter, wenn das GPS fand.
+    val versatz = d.punkte.first().zeit - d.eintrag.sitzung.startTime.epochSecond
+    val puls = remember(d) { d.puls.map { it.copy(sekunde = it.sekunde - versatz) } }
+    val pausen = remember(d) { d.eintrag.pausen.map { (a, b) -> a - versatz to b - versatz } }
     val rad = sport.rad
     val wandern = sport == Sport.Wandern
     val hoehe = remember(strecke) { Trainingsanalyse.hoeheUeberStrecke(strecke) }
@@ -223,7 +271,7 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
     // BEIM WANDERN ZUERST DIE HOEHE: dort ist sie die Geschichte der Tour.
     if (wandern && mitHoehe) Hoehenkarte(d, hoehe, strecke)
 
-    val pulsStrecke = remember(d, strecke) { Trainingsanalyse.pulsUeberStrecke(d.puls, strecke) }
+    val pulsStrecke = remember(d, strecke) { Trainingsanalyse.pulsUeberStrecke(puls, strecke) }
     if (pulsStrecke.size >= 2) {
         Ueberschrift(stringResource(R.string.ks_v_puls_strecke))
         Karte {
@@ -231,16 +279,16 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
         }
     }
 
-    Ueberschrift(stringResource(R.string.ks_v_tempo))
+    // Auf dem Rad heisst es Geschwindigkeit, wie oben im Kopf.
+    Ueberschrift(stringResource(if (rad) R.string.ks_v_tempo_rad else R.string.ks_v_tempo))
     Karte {
         val bewegt = Trainingsanalyse.bewegt(strecke)
         Werte {
-            // DER SCHNITT IN BEWEGUNG: die Zeit an der Ampel steht oben in
-            // der Dauer, hier geht es darum, wie schnell es lief.
-            Wert(tempoText(strecke.last().meter / bewegt.coerceAtLeast(1), rad), stringResource(R.string.ks_v_schnitt))
+            // KEIN ZWEITER SCHNITT: der steht oben, aus der aktiven Zeit wie
+            // auf der Uhr. Hier die Spitze und die Zeit in Bewegung.
             Wert(tempoText(strecke.maxOf { it.tempo }, rad), stringResource(R.string.ks_v_spitze))
             if (wandern && mitHoehe) {
-                val mh = Spur.hoehenmeter(d.punkte) / (bewegt.coerceAtLeast(60) / 3600.0)
+                val mh = Trainingsanalyse.aufstieg(d.punkte) / (bewegt.coerceAtLeast(60) / 3600.0)
                 Wert(String.format(Locale.getDefault(), "%.0f m/h", mh), stringResource(R.string.ks_t_aufstieg))
             } else {
                 Wert(dauerText(bewegt / 60), stringResource(R.string.ks_v_bewegt))
@@ -262,7 +310,7 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
             Farblegende(stringResource(R.string.ks_v_bergab, "−15"), stringResource(R.string.ks_v_bergauf, "+15"))
         }
     } else {
-        Ueberschrift(stringResource(R.string.ks_v_tempo_karte))
+        Ueberschrift(stringResource(if (rad) R.string.ks_v_tempo_karte_rad else R.string.ks_v_tempo_karte))
         Karte {
             Farbkarte(strecke, strecke.map { it.tempo }, langsam, schnell, kartenform)
             Farblegende(tempoText(langsam, rad), tempoText(schnell, rad))
@@ -271,7 +319,7 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int) {
 
     if (!wandern && mitHoehe) Hoehenkarte(d, hoehe, strecke)
 
-    val km = remember(d, strecke) { Trainingsanalyse.kilometer(strecke, d.puls) }
+    val km = remember(d, strecke) { Trainingsanalyse.kilometer(strecke, puls, pausen) }
     if (km.size >= 2) Kilometerkarte(km, rad, ton)
 }
 
@@ -281,13 +329,13 @@ private fun Hoehenkarte(d: TrainingDetail, hoehe: List<Verlaufspunkt>, strecke: 
     Ueberschrift(stringResource(R.string.ks_v_hoehenprofil))
     Karte {
         Werte {
-            Wert(String.format(Locale.getDefault(), "%.0f m", Spur.hoehenmeter(d.punkte)), stringResource(R.string.ks_t_aufstieg))
+            Wert(String.format(Locale.getDefault(), "%.0f m", Trainingsanalyse.aufstieg(d.punkte)), stringResource(R.string.ks_t_aufstieg))
             Wert(String.format(Locale.getDefault(), "%.0f %s", hoehe.minOf { it.wert }, m), stringResource(R.string.ks_v_tiefster))
             Wert(String.format(Locale.getDefault(), "%.0f %s", hoehe.maxOf { it.wert }, m), stringResource(R.string.ks_v_hoechster))
         }
         val steil = remember(strecke) { Trainingsanalyse.steigung(strecke).maxOrNull() ?: 0.0 }
         if (steil >= 5) Hinweis(stringResource(R.string.ks_v_steilste, steil.roundToInt().toString()))
-        Verlauf(hoehe, Color(Sport.Wandern.farbe), "m", hoehe = 130.dp)
+        Verlauf(hoehe, Sport.Wandern.ton(), "m", hoehe = 130.dp)
     }
 }
 
@@ -306,7 +354,8 @@ private fun Kilometerkarte(km: List<Trainingsanalyse.Kilometer>, rad: Boolean, t
             val ms = k.meter / k.sekunden.coerceAtLeast(1)
             Tabellenzeile(
                 listOf(
-                    k.nummer.toString() + if (k.meter < 900) "*" else "",
+                    // Der angefangene Kilometer mit seiner Laenge statt einer Fussnote.
+                    if (k.meter < 900) String.format(Locale.getDefault(), "%.1f", k.meter / 1000) else k.nummer.toString(),
                     zeitText(k.sekunden),
                     tempoText(ms, rad).substringBefore(" "),
                     k.pulsMittel?.roundToInt()?.toString() ?: "–",
@@ -315,7 +364,6 @@ private fun Kilometerkarte(km: List<Trainingsanalyse.Kilometer>, rad: Boolean, t
                 KM_SPALTEN, hervor = if (k == schnellste) 2 to ton else null,
             )
         }
-        if (km.any { it.meter < 900 }) Hinweis(stringResource(R.string.ks_v_angefangen))
     }
 }
 
@@ -325,7 +373,7 @@ private fun zeitText(sekunden: Long): String =
     else String.format(Locale.getDefault(), "%d:%02d", sekunden / 60, sekunden % 60)
 
 /** Breite je Spalte; null heisst: nimmt den Rest. */
-private val KM_SPALTEN = listOf<Dp?>(40.dp, null, 64.dp, 48.dp, 48.dp)
+private val KM_SPALTEN = listOf<Dp?>(44.dp, null, 64.dp, 48.dp, 48.dp)
 private val SATZ_SPALTEN = listOf<Dp?>(40.dp, 48.dp, null, 56.dp, 56.dp)
 
 /**
@@ -362,25 +410,32 @@ private fun Tabellenzeile(zellen: List<String>, spalten: List<Dp?>, kopf: Boolea
 private fun Kraft(d: TrainingDetail, ton: Color, maxpuls: Int) {
     val s = d.eintrag.sitzung
     fun sek(i: java.time.Instant) = Duration.between(s.startTime, i).seconds
-    val saetze = s.segments.filter { it.segmentType != ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST }
-        .map { Triple(sek(it.startTime), sek(it.endTime), it.repetitions) }
+    // Die Pausen der Uhr (PAUSE) sind weder Satz noch Ruhe zwischen Saetzen.
+    val saetze = s.segments.filter {
+        it.segmentType != ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST && it.segmentType != ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE
+    }.sortedBy { it.startTime }.map { Triple(sek(it.startTime), sek(it.endTime), it.repetitions) }
     val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST }
         .map { sek(it.startTime) to sek(it.endTime) }
+    // Die Ruhe nach jedem Satz bis zum naechsten: was an Ruhe dazwischen liegt.
+    val ruhe = saetze.zipWithNext { a, b ->
+        pausen.filter { (von, bis) -> von >= a.second && bis <= b.first }.sumOf { (von, bis) -> bis - von }
+    }
 
     PulsUeberZeit(d, ton, maxpuls,
         saetze.map { it.first.toDouble() to it.second.toDouble() })
 
     if (saetze.isEmpty()) {
-        if (d.puls.size < 2) Karte { Hinweis(stringResource(R.string.ks_v_keine_saetze)) }
+        if (d.puls.size < 2) Hinweis(stringResource(R.string.ks_v_keine_saetze))
         return
     }
     Ueberschrift(stringResource(R.string.ks_v_saetze_titel))
     Karte {
-        val pausenSek = pausen.map { (a, b) -> b - a }
+        // Dieselbe Rechnung wie die Notiz in der Akte (Kieselsport.ruheSchnitt).
+        val schnitt = Kieselsport.ruheSchnitt(ruhe)
         Werte {
             Wert(saetze.size.toString(), stringResource(R.string.ks_v_saetze))
             Wert(saetze.sumOf { it.third }.toString(), stringResource(R.string.ks_v_wdh) + " " + stringResource(R.string.ks_v_gesamt))
-            if (pausenSek.isNotEmpty()) Wert("${pausenSek.average().roundToInt()} s", stringResource(R.string.ks_v_pause_schnitt))
+            if (schnitt > 0) Wert("$schnitt s", stringResource(R.string.ks_v_pause_schnitt))
         }
         Trainingsanalyse.erholung(d.puls, pausen)?.let { e ->
             Text(
@@ -404,8 +459,7 @@ private fun Kraft(d: TrainingDetail, ton: Color, maxpuls: Int) {
         val meiste = saetze.maxOf { it.third }
         saetze.forEachIndexed { i, (von, bis, wdh) ->
             HorizontalDivider()
-            // Die Pause nach dem Satz: die erste, die an seinem Ende beginnt.
-            val pause = pausen.firstOrNull { it.first >= bis - 2 }?.let { it.second - it.first }
+            val pause = ruhe.getOrNull(i)?.takeIf { it > 0 }
             Tabellenzeile(
                 listOf(
                     (i + 1).toString(),
@@ -485,7 +539,7 @@ private fun Schwimmen(d: TrainingDetail, ton: Color, maxpuls: Int) {
         bahnen.filterIndexed { i, _ -> i % 2 == 0 }.map { it.first.toDouble() to it.second.toDouble() })
 
     if (bahnen.isEmpty()) {
-        if (d.puls.size < 2) Karte { Hinweis(stringResource(R.string.ks_v_keine_bahnen)) }
+        if (d.puls.size < 2) Hinweis(stringResource(R.string.ks_v_keine_bahnen))
         return
     }
     val zeiten = bahnen.map { (it.second - it.first).toDouble() }

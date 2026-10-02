@@ -18,8 +18,6 @@
     <string name="ks_a_begonnen">%1$s started</string>
     <string name="ks_a_pausiert">%1$s paused</string>
     <string name="ks_a_fortgesetzt">%1$s resumed</string>
-    <string name="ks_a_puls_schnitt">HR ⌀ %1$d</string>
-    <string name="ks_a_max">max %1$d</string>
     <string name="ks_a_eingetragen">%1$s, %2$d min%3$s logged</string>
     <string name="ks_a_ohne_abschnitte">%1$s (without the individual segments)</string>
     <string name="ks_a_hrv_eingetragen">HRV %1$d ms logged</string>

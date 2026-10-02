@@ -208,10 +208,11 @@ internal fun Zonenbalken(sekunden: LongArray) {
     }
 }
 
-/** Eine Zeile je Zone: Farbe, Name, Grenzen, Zeit, Anteil. */
+/** Eine Zeile je Zone: Farbe, Name, Grenzen, Zeit, Anteil - Zeit und Anteil aus denselben Sekunden gerundet. */
 @Composable
 internal fun Zonenliste(sekunden: LongArray, maxpuls: Int) {
-    val summe = sekunden.sum().coerceAtLeast(1)
+    val anteile = Trainingsanalyse.zonenAnteile(sekunden)
+    val unterMinute = stringResource(R.string.ks_v_unter_minute)
     val namen = listOf(
         stringResource(R.string.ks_zone_unter), stringResource(R.string.ks_zone_1), stringResource(R.string.ks_zone_2),
         stringResource(R.string.ks_zone_3), stringResource(R.string.ks_zone_4), stringResource(R.string.ks_zone_5),
@@ -234,9 +235,11 @@ internal fun Zonenliste(sekunden: LongArray, maxpuls: Int) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text("$von–$bis", Modifier.width(72.dp), style = MaterialTheme.typography.bodySmall, color = zart)
-                Text(dauerText(sekunden[z] / 60), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                val (minuten, prozent) = anteile[z]
+                // Unter einer halben Minute stand "0 min" neben einem Anteil.
+                Text(if (minuten == 0L) unterMinute else dauerText(minuten), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    "${sekunden[z] * 100 / summe} %", Modifier.width(48.dp),
+                    "$prozent %", Modifier.width(48.dp),
                     style = MaterialTheme.typography.bodySmall, color = zart,
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )

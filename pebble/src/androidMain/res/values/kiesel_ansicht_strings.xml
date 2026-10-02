@@ -5,11 +5,12 @@
     <string name="ks_t_dauer">Duration</string>
     <string name="ks_t_puls_schnitt">Avg HR</string>
     <string name="ks_t_puls_max">Max HR</string>
-    <string name="ks_t_keine_strecke">No route — either the phone was not with you, or the location permission was missing.</string>
+    <string name="ks_t_keine_strecke">No route</string>
+    <string name="ks_t_route_zeigen">Show route</string>
     <string name="ks_t_tempo">Pace</string>
     <string name="ks_t_tempo_rad">Speed</string>
     <string name="ks_t_aufstieg">Ascent</string>
-    <string name="ks_t_kcal">kcal (from HR)</string>
+    <string name="ks_t_kcal">Active kcal</string>
     <string name="ks_t_strecke">Distance</string>
     <string name="ks_t_zeit">Time</string>
     <string name="ks_t_ausblenden">Hide</string>

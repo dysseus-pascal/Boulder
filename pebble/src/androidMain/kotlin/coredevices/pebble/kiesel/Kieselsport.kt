@@ -113,25 +113,52 @@ internal object Kieselsport {
         }
     }
 
+    /** Die aktive Sekunde der Uhr als Uhrzeit - hinter jeder Pause um ihre Laenge spaeter. */
+    private fun inWandzeit(anfang: Instant, aktiv: Long, pausen: List<Trainingspausen.Pause>): Instant =
+        Instant.ofEpochSecond(Trainingspausen.wand(pausen, anfang.epochSecond, aktiv))
+
+    /** [von, bis) ohne die Spannen [weg] - was uebrig bleibt, in Stuecken. */
+    private fun abzueglich(von: Instant, bis: Instant, weg: List<Pair<Instant, Instant>>): List<Pair<Instant, Instant>> {
+        var stuecke = listOf(von to bis)
+        for ((pv, pb) in weg) {
+            stuecke = stuecke.flatMap { (a, b) ->
+                if (!pb.isAfter(a) || !pv.isBefore(b)) listOf(a to b)
+                else listOfNotNull((a to pv).takeIf { pv.isAfter(a) }, (pb to b).takeIf { b.isAfter(pb) })
+            }
+        }
+        return stuecke.filter { (a, b) -> b.isAfter(a) }
+    }
+
+    private fun alsZeiten(pausen: List<Trainingspausen.Pause>) =
+        pausen.map { Instant.ofEpochSecond(it.von) to Instant.ofEpochSecond(it.bis) }
+
     /**
-     * Aus den Abschnitten Saetze fuer die Akte machen - samt Pausen.
+     * Aus den Abschnitten Saetze fuer die Akte machen - samt Ruhe dazwischen.
      *
      * ALLES ODER NICHTS: die Akte weist einen Satz ausserhalb der Sitzung oder
      * eine Ueberschneidung ab, und zwar den GANZEN Eintrag. Im Zweifel leer.
+     *
+     * DIE UHR ZAEHLT AKTIVE SEKUNDEN: hinter jeder [pausen] beginnt ein Satz
+     * um ihre Laenge spaeter. Die Pause selbst ist keine Ruhe zwischen zwei
+     * Saetzen - sie steht als eigenes Stueck in der Sitzung ([pausenSegmente]).
      */
-    fun alsSegmente(abschnitte: List<Abschnitt>, anfang: Instant, ende: Instant): List<ExerciseSegment> {
+    fun alsSegmente(
+        abschnitte: List<Abschnitt>, anfang: Instant, ende: Instant,
+        pausen: List<Trainingspausen.Pause> = emptyList(),
+    ): List<ExerciseSegment> {
         val aus = mutableListOf<ExerciseSegment>()
         var vorheriges: Instant? = null
+        val pausenzeiten = alsZeiten(pausen)
         abschnitte.forEach { a ->
-            val von = anfang.plusSeconds(a.ab)
+            val von = inWandzeit(anfang, a.ab, pausen)
             val bis = von.plusSeconds(a.dauer)
             if (von.isBefore(anfang) || bis.isAfter(ende) || !bis.isAfter(von)) return emptyList()
             vorheriges?.let { letztes ->
                 if (von.isBefore(letztes)) return emptyList()
-                if (von.isAfter(letztes)) {
+                abzueglich(letztes, von, pausenzeiten).forEach { (rv, rb) ->
                     aus += ExerciseSegment(
-                        startTime = letztes,
-                        endTime = von,
+                        startTime = rv,
+                        endTime = rb,
                         segmentType = ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST,
                     )
                 }
@@ -149,12 +176,15 @@ internal object Kieselsport {
         return aus
     }
 
-    /** Aus den Abschnitten Bahnen machen - jede mit ihrer Laenge. */
-    fun alsBahnen(abschnitte: List<Abschnitt>, anfang: Instant, ende: Instant, beckenMeter: Double): List<ExerciseLap> {
+    /** Aus den Abschnitten Bahnen machen - jede mit ihrer Laenge, hinter Pausen verschoben wie die Saetze. */
+    fun alsBahnen(
+        abschnitte: List<Abschnitt>, anfang: Instant, ende: Instant, beckenMeter: Double,
+        pausen: List<Trainingspausen.Pause> = emptyList(),
+    ): List<ExerciseLap> {
         val aus = mutableListOf<ExerciseLap>()
         var vorheriges: Instant? = null
         abschnitte.forEach { a ->
-            val von = anfang.plusSeconds(a.ab)
+            val von = inWandzeit(anfang, a.ab, pausen)
             val bis = von.plusSeconds(a.dauer)
             if (von.isBefore(anfang) || bis.isAfter(ende) || !bis.isAfter(von)) return emptyList()
             vorheriges?.let { if (von.isBefore(it)) return emptyList() }
@@ -168,20 +198,34 @@ internal object Kieselsport {
         return aus
     }
 
+    /**
+     * Die Pausen der Uhr als eigene Stuecke der Sitzung, damit die Akte (und
+     * jede App, die sie liest) sie nicht als Trainingszeit zaehlt. Was sich mit
+     * einem Satz ueberschneidet (die Meldung kam ein paar Sekunden spaet),
+     * gehoert dem Satz.
+     */
+    fun pausenSegmente(
+        pausen: List<Trainingspausen.Pause>, anfang: Instant, ende: Instant, saetze: List<ExerciseSegment>,
+    ): List<ExerciseSegment> {
+        val belegt = saetze.map { it.startTime to it.endTime }
+        return alsZeiten(pausen).flatMap { (von, bis) ->
+            val drin = maxOf(von, anfang) to minOf(bis, ende)
+            if (!drin.second.isAfter(drin.first)) emptyList() else abzueglich(drin.first, drin.second, belegt)
+        }.map { (von, bis) -> ExerciseSegment(von, bis, ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE) }
+    }
+
     /** Der Schnitt der Luecken zwischen den Saetzen, in Sekunden. */
-    fun pausenSchnitt(abschnitte: List<Abschnitt>): Long {
-        if (abschnitte.size < 2) return 0
-        var summe = 0L
-        var zahl = 0
-        for (i in 1 until abschnitte.size) {
-            val ende = abschnitte[i - 1].ab + abschnitte[i - 1].dauer
-            val luecke = abschnitte[i].ab - ende
-            if (luecke in 1..1800) {
-                summe += luecke
-                zahl++
-            }
-        }
-        return if (zahl > 0) summe / zahl else 0
+    fun pausenSchnitt(abschnitte: List<Abschnitt>): Long =
+        ruheSchnitt((1 until abschnitte.size).map { i -> abschnitte[i].ab - (abschnitte[i - 1].ab + abschnitte[i - 1].dauer) })
+
+    /**
+     * Der Schnitt der Ruhe zwischen Saetzen - fuer die Notiz und das Detail
+     * dieselbe Rechnung. NUR 1 S BIS 30 MIN: zwanzig Minuten Geraetewechsel
+     * sind keine Satzpause und zoegen den Schnitt auf das Zehnfache.
+     */
+    fun ruheSchnitt(luecken: List<Long>): Long {
+        val gute = luecken.filter { it in 1..1800 }
+        return if (gute.isEmpty()) 0 else gute.sum() / gute.size
     }
 
     /** "12/10/8/8" liest jeder - in der Akte stehen die Saetze einzeln, aber kein Schirm zeigt sie so. */
@@ -233,7 +277,8 @@ internal object Kieselsport {
             return if (ab + werte.size >= anzahl && Pulskurve.vorhanden(context, beginn)) {
                 // Eine Kurve ohne einen einzigen Pulswert ist kein Fehler, sondern
                 // ein Training ohne Sensorkontakt - dazu gibt es nichts zu sagen.
-                if (Pulskurve.eintragen(context, beginn)) null
+                // Wartet sie auf die Pausen, traegt die Zusammenfassung sie ein.
+                if (Pulskurve.eintragen(context, beginn) || Trainingspausen.wartet(context, beginn, Instant.now().epochSecond)) null
                 else context.getString(R.string.ks_a_pulskurve_nicht)
             } else {
                 null
@@ -252,17 +297,26 @@ internal object Kieselsport {
             // NUR WO ES EINE STRECKE GIBT, laeuft das GPS: Laufen, Bike,
             // Wandern, MTB. In der Halle zeichnete es nur Rauschen auf.
             val mitStrecke = artNummer in setOf(0L, 1L, 2L, 4L)
+            // Pause und Weiter mit der Zeit ihrer Ankunft: die Uhr zaehlt aktive
+            // Sekunden, die Akte braucht die Uhrzeit (Trainingspausen).
+            val jetzt = Instant.now().epochSecond
             return when (zustand) {
                 1L -> {
                     if (mitStrecke) SpurDienst.starte(context, beginn, name)
                     context.getString(R.string.ks_a_begonnen, name)
                 }
-                2L -> { SpurDienst.stoppe(context); context.getString(R.string.ks_a_pausiert, name) }
+                2L -> {
+                    Trainingspausen.merke(context, beginn, pause = true, zeit = jetzt)
+                    SpurDienst.stoppe(context)
+                    context.getString(R.string.ks_a_pausiert, name)
+                }
                 3L -> {
+                    Trainingspausen.merke(context, beginn, pause = false, zeit = jetzt)
                     if (mitStrecke) SpurDienst.starte(context, beginn, name)
                     context.getString(R.string.ks_a_fortgesetzt, name)
                 }
-                0L -> { SpurDienst.stoppe(context); null }
+                // Ohne Dauer heisst Stopp: verworfen - seine Pausen braucht niemand.
+                0L -> { SpurDienst.stoppe(context); Trainingspausen.vergiss(context, beginn); null }
                 else -> null
             }
         }
@@ -274,6 +328,10 @@ internal object Kieselsport {
     private suspend fun trageEin(context: Context, felder: Map<Int, Long>, texte: Map<Int, String>, dauer: Long): String? {
         val beginn = felder[SP_BEGINN] ?: return null
         if (beginn <= 0 || dauer < 60) return null
+        val jetzt = Instant.now()
+        // VOR DEM RIEGEL: auch eine wiederholte Zusammenfassung prueft die
+        // Pausen - die Kurve, die nach ihr kommt, rechnet mit dem Ergebnis.
+        val plan = Trainingspausen.pruefe(context, beginn, dauer, jetzt.epochSecond)
         if (!Riegel.neu(context, "kieselsport", beginn.toString())) return null
 
         if (Akte(context).bereit() == null) {
@@ -283,12 +341,11 @@ internal object Kieselsport {
         val anfang = Instant.ofEpochSecond(beginn)
         // DIE STRECKE KOMMT VOM TELEFON, nicht von der Uhr - als Route an der Sitzung.
         val alle = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
-        val ende = sitzungsEnde(anfang, dauer, alle, Instant.now())
+        val ende = sitzungsEnde(anfang, dauer, alle, jetzt, plan)
         // Strecke, Route, Hoehe und Tempo aus denselben Punkten - denen der Sitzung.
         val punkte = Spur.inSitzung(alle, anfang, ende)
 
         val (satzart, name) = artAlsSatzart(context, felder[SP_ART] ?: -1)
-        val puls = felder[SP_PULS_MITTEL] ?: 0
         val kcal = felder[SP_KCAL] ?: 0
 
         val strecke = if (punkte.size >= 2) Spur.laenge(punkte) else 0.0
@@ -297,50 +354,35 @@ internal object Kieselsport {
         val abschnitte = abschnitteAus(texte[SP_ABSCHNITTE])
         val bahnen = felder[SP_BAHNEN] ?: 0
         val becken = if (bahnen > 0) (felder[SP_METER] ?: 0).toDouble() / bahnen else 0.0
-        val segmente = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende)
-        val runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken) else emptyList()
+        val saetze = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende, plan.pausen)
+        val runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList()
+        val pausen = pausenSegmente(plan.pausen, anfang, ende, saetze)
 
-        // Als Liste, damit kein Komma vorn steht, wenn etwas fehlt - ohne
-        // Puls begann die Notiz in Kiesel-Helper mit ", 3.2 km".
-        val teile = buildList {
-            if (puls > 0) add(context.getString(R.string.ks_a_puls_schnitt, puls.toInt()))
-            felder[SP_PULS_MAX]?.takeIf { it > 0 }?.let { add(context.getString(R.string.ks_a_max, it.toInt())) }
-            if (strecke > 0) {
-                add(km(strecke) + " km (GPS)")
-            } else {
-                felder[SP_METER]?.takeIf { it > 0 }?.let { add(km(it.toDouble()) + " km") }
-            }
-            if (kcal > 0) add("$kcal kcal")
-        }
-        val notiz = listOfNotNull(
-            teile.joinToString(", ").ifBlank { null },
-            abschnittsnotiz(context, felder, abschnitte),
-        ).joinToString(" — ").ifBlank { null }
+        // NUR SAETZE UND BAHNEN IN DIE NOTIZ. Puls, Strecke und Kalorien der
+        // Uhr standen frueher auch darin - roh, nicht entstoert, die kcal aus
+        // Schritten - und widersprachen den Zahlen, die die Akte daneben fuehrt.
+        val notiz = abschnittsnotiz(context, felder, abschnitte)
 
-        // ERST MIT ALLEM, DANN OHNE DIE ABSCHNITTE: die Akte prueft Saetze und
+        // ERST MIT ALLEM, DANN NUR MIT DEN PAUSEN: die Akte prueft Saetze und
         // Bahnen streng und weist im Zweifel den GANZEN Eintrag ab.
-        val satz = try {
+        fun sitzung(segmente: List<ExerciseSegment>, laps: List<ExerciseLap>): ExerciseSessionRecord? = try {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
                 exerciseType = satzart, title = name, notes = notiz,
                 metadata = vonDerUhr(kennung(beginn)),
-                segments = segmente, laps = runden, exerciseRoute = route,
+                segments = segmente.sortedBy { it.startTime }, laps = laps, exerciseRoute = route,
             )
         } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Abschnitte abgewiesen, Training geht ohne sie: " + e.message)
+            Log.w(TAG, "Abschnitte abgewiesen: " + e.message)
             null
         }
-        val ohne = ExerciseSessionRecord(
-            startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
-            exerciseType = satzart, title = name, notes = notiz,
-            metadata = vonDerUhr(kennung(beginn)),
-            exerciseRoute = route,
-        )
-        val hatAbschnitte = satz != null && (segmente.isNotEmpty() || runden.isNotEmpty())
+        val satz = sitzung(saetze + pausen, runden)
+        val ohne = sitzung(pausen, emptyList()) ?: sitzung(emptyList(), emptyList()) ?: return context.getString(R.string.ks_a_nicht_eingetragen)
+        val hatAbschnitte = satz != null && (saetze.isNotEmpty() || runden.isNotEmpty())
         val dazu = buildString {
             if (strecke > 0) append(", " + km(strecke) + " km")
             if (bahnen > 0) append(", " + context.getString(R.string.ks_a_bahnen, bahnen.toInt()))
-            if (segmente.isNotEmpty()) append(", " + context.getString(R.string.ks_a_saetze, (felder[SP_SAETZE] ?: 0).toInt()))
+            if (saetze.isNotEmpty()) append(", " + context.getString(R.string.ks_a_saetze, (felder[SP_SAETZE] ?: 0).toInt()))
         }
         val kurz = context.getString(R.string.ks_a_eingetragen, name, (dauer / 60).toInt(), dazu)
         var meldung = schreibe(context, satz ?: ohne, kurz, riegel = "kieselsport")
@@ -386,44 +428,37 @@ internal object Kieselsport {
      * DIESELBE KENNUNG WIE BEIM NORMALEN WEG: kommt die Zusammenfassung doch
      * noch, ersetzt sie diesen Eintrag. Schritte fehlen - die zaehlte die Uhr.
      * Distanz, Hoehe und Tempo kommen aus der Spur, die Kalorien aus dem Puls,
-     * wenn seine Kurve schon in der Akte steht.
+     * wenn seine Kurve schon in der Akte steht. Die Pausen, die ankamen,
+     * gelten ohne Abgleich - ohne Zusammenfassung gibt es keine Dauer dafuer;
+     * nur eine sichtbar lueckenhafte Folge verwerfen sie.
      */
     suspend fun nachtragen(context: Context, beginn: Long, art: Long): String {
         val alle = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
         if (alle.size < 2) return context.getString(R.string.ks_a_nicht_eingetragen)
-        val klient = Akte(context).bereit() ?: return context.getString(R.string.ks_g_akte_fehlt)
+        if (Akte(context).bereit() == null) return context.getString(R.string.ks_g_akte_fehlt)
         val anfang = Instant.ofEpochSecond(beginn)
-        val ende = sitzungsEnde(anfang, 60, alle, Instant.now())
+        val plan = Trainingspausen.ohneBruch(Trainingspausen.ungeprueft(context, beginn))
+        // Ohne Dauer der Uhr keine Grenze ueber ihr - nur die letzte Pause, falls sie ankam.
+        val ende = sitzungsEnde(anfang, 60, alle, Instant.now(), plan, ohnePause = null)
         // Wie beim normalen Weg: Strecke, Route, Hoehe und Tempo nur aus der Sitzung.
         val punkte = Spur.inSitzung(alle, anfang, ende)
         val (satzart, name) = artAlsSatzart(context, art)
         val strecke = Spur.laenge(punkte)
-        // Der Puls aus der Akte - nur der eigene, so wie ihn die Trainingsansicht zeigt.
-        val pulse = try {
-            Trainingsanalyse.entstoert(TrainingsDaten.rohpuls(klient, context.packageName, anfang, ende)).map { it.bpm }
-        } catch (e: Exception) {
-            emptyList()
-        }
-        val notiz = buildString {
-            if (pulse.isNotEmpty()) {
-                append(context.getString(R.string.ks_a_puls_schnitt, pulse.average().toInt()))
-                append(", " + context.getString(R.string.ks_a_max, pulse.max().toInt()))
-                append(", ")
-            }
-            append(km(strecke) + " km (GPS)")
-        }
+        val pausen = pausenSegmente(plan.pausen, anfang, ende, emptyList())
         val satz = try {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
-                exerciseType = satzart, title = name, notes = notiz,
+                exerciseType = satzart, title = name,
                 metadata = vonDerUhr(kennung(beginn)),
+                segments = pausen,
                 exerciseRoute = routeAus(punkte, anfang, ende),
             )
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Nachtragen abgewiesen: " + e.message)
             return context.getString(R.string.ks_a_nicht_eingetragen)
         }
-        val minuten = Duration.between(anfang, ende).toMinutes().toInt()
+        val pausenSek = pausen.sumOf { Duration.between(it.startTime, it.endTime).seconds }
+        val minuten = ((Duration.between(anfang, ende).seconds - pausenSek) / 60).toInt()
         val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
         val meldung = schreibe(context, satz, kurz)
         Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte)
@@ -432,16 +467,33 @@ internal object Kieselsport {
         return meldung.also { KieselVerlauf.merke(context, it) }
     }
 
+    /** Nach der letzten Pause noch so viel Spur: das GPS haelt erst an, wenn ihre Meldung da ist. */
+    const val PUFFER_S = 60L
+
+    /**
+     * Ohne bekannte letzte Pause hoechstens so viel ueber die aktive Zeit
+     * hinaus. Verlor die Uhr eine Pausenmeldung, lief die Spur in der Pause
+     * weiter - zwanzig Minuten Kaffee bleiben drin. Eine Zusammenfassung, die
+     * erst nach der Heimfahrt ankommt, bringt aber keine Autobahn mehr mit.
+     */
+    const val PUFFER_OHNE_PAUSE_S = 20 * 60L
+
     /**
      * Das Ende der Sitzung. Die Uhr schickt die AKTIVE Dauer, ohne Pausen; die
-     * Akte verlangt aber, dass jeder Punkt der Route in der Sitzung liegt. Nach
-     * einer Pause lagen die letzten Punkte hinter Beginn + Dauer, und die Akte
-     * wies das ganze Training ab. Also bis zum letzten Punkt - hoechstens jetzt.
+     * Akte verlangt aber, dass jeder Punkt der Route in der Sitzung liegt.
+     * Also Beginn + Dauer + die bekannten Pausen, und die Spur bis zu ihrem
+     * letzten Punkt - hoechstens jetzt, und nie ueber die letzte Pause (an
+     * ihr wurde gespeichert) oder [ohnePause] hinaus.
      */
-    fun sitzungsEnde(anfang: Instant, dauer: Long, punkte: List<Spur.Punkt>, jetzt: Instant): Instant {
-        val aktiv = anfang.plusSeconds(dauer)
+    fun sitzungsEnde(
+        anfang: Instant, dauer: Long, punkte: List<Spur.Punkt>, jetzt: Instant,
+        plan: Trainingspausen.Plan = Trainingspausen.Plan.LEER, ohnePause: Long? = PUFFER_OHNE_PAUSE_S,
+    ): Instant {
+        val aktiv = Instant.ofEpochSecond(Trainingspausen.wand(plan.pausen, anfang.epochSecond, dauer))
+        val grenze = plan.offen?.let { Instant.ofEpochSecond(it + PUFFER_S) } ?: ohnePause?.let { aktiv.plusSeconds(it) }
         // Eine Sekunde hinter dem letzten Punkt: der Punkt selbst liegt dann sicher darin.
-        val letzter = punkte.lastOrNull()?.let { Instant.ofEpochSecond(it.zeit + 1) } ?: return aktiv
+        val letzter = punkte.lastOrNull { grenze == null || it.zeit < grenze.epochSecond }
+            ?.let { Instant.ofEpochSecond(it.zeit + 1) } ?: return aktiv
         return minOf(maxOf(aktiv, letzter), maxOf(aktiv, jetzt))
     }
 

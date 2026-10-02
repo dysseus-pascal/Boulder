@@ -106,44 +106,45 @@ class SpurTest {
         assertEquals(0.0, Spur.laenge(emptyList()), 0.001)
     }
 
+    /**
+     * Punkte gut hundert Meter auseinander: weiter als das Fenster der
+     * Hoehenglaettung (Trainingsanalyse.hoehen), so zaehlt jede Hoehe fuer sich.
+     */
+    private fun weit(i: Int, hoehe: Double?) = Spur.Punkt(i * 30L, i * 0.001, 0.0, hoehe, 5f)
+
     @Test
     fun `Hoehenmeter zaehlen nur aufwaerts`() {
-        val punkte = listOf(
-            p(0, 0.0, 0.0, 400.0),
-            p(3, 0.0, 0.0, 450.0),
-            p(6, 0.0, 0.0, 400.0),
-        )
-        assertEquals(50.0, Spur.hoehenmeter(punkte), 0.001)
+        val punkte = listOf(weit(0, 400.0), weit(1, 450.0), weit(2, 400.0))
+        assertEquals(50.0, Trainingsanalyse.aufstieg(punkte), 0.001)
     }
 
     @Test
     fun `Rauschen unter der Schwelle sammelt nichts`() {
         // Im Stehen schwankt die GPS-Hoehe um ein, zwei Meter. Ohne Schwelle
         // haette dieser Spaziergang im Sitzen sechs Hoehenmeter.
-        val punkte = listOf(
-            p(0, 0.0, 0.0, 400.0),
-            p(3, 0.0, 0.0, 402.0),
-            p(6, 0.0, 0.0, 400.0),
-            p(9, 0.0, 0.0, 402.0),
-            p(12, 0.0, 0.0, 400.0),
-        )
-        assertEquals(0.0, Spur.hoehenmeter(punkte), 0.001)
+        val punkte = listOf(400.0, 402.0, 400.0, 402.0, 400.0).mapIndexed { i, h -> weit(i, h) }
+        assertEquals(0.0, Trainingsanalyse.aufstieg(punkte), 0.001)
     }
 
     @Test
     fun `ein langer Anstieg zaehlt ganz`() {
-        val punkte = (0..10).map { p(it * 3L, 0.0, 0.0, 400.0 + it * 10.0) }
-        assertEquals(100.0, Spur.hoehenmeter(punkte), 0.001)
+        val punkte = (0..10).map { weit(it, 400.0 + it * 10.0) }
+        assertEquals(100.0, Trainingsanalyse.aufstieg(punkte), 0.001)
     }
 
     @Test
     fun `Punkte ohne Hoehe stoeren die Rechnung nicht`() {
-        val punkte = listOf(
-            p(0, 0.0, 0.0, 400.0),
-            p(3, 0.0, 0.0, null),
-            p(6, 0.0, 0.0, 410.0),
-        )
-        assertEquals(10.0, Spur.hoehenmeter(punkte), 0.001)
+        val punkte = listOf(weit(0, 400.0), weit(1, null), weit(2, 410.0))
+        assertEquals(10.0, Trainingsanalyse.aufstieg(punkte), 0.001)
+    }
+
+    @Test
+    fun `GPS-Hoehe, die im Stehen wandert, ist kein Anstieg`() {
+        // Zehn Minuten Rast, alle drei Sekunden eine Hoehe, die um vier Meter
+        // auf und ab wandert - ohne Weg. Roh mit Schwelle waeren das je
+        // Welle vier Meter, geglaettet ueber die Rast bleibt nichts.
+        val punkte = (0 until 200).map { i -> Spur.Punkt(i * 3L, 47.0, 8.0, 400.0 + 4 * Math.sin(i / 10.0), 5f) }
+        assertEquals(0.0, Trainingsanalyse.aufstieg(punkte), 0.001)
     }
 
     @Test
@@ -165,9 +166,23 @@ class SpurTest {
         val punkte = listOf(
             Spur.Punkt(1_000_000, 37.4, -122.0, 0.0, 5f),
             Spur.Punkt(1_000_010, 46.948, 7.4474, 540.0, 5f),
-            Spur.Punkt(1_000_020, 46.9481, 7.4476, 545.0, 5f),
+            // Gut hundert Meter weiter: ausserhalb des Glaettungsfensters.
+            Spur.Punkt(1_000_040, 46.949, 7.4474, 545.0, 5f),
         )
-        org.junit.Assert.assertEquals(5.0, Spur.hoehenmeter(punkte), 0.001)
+        org.junit.Assert.assertEquals(5.0, Trainingsanalyse.aufstieg(punkte), 0.001)
+    }
+
+    @Test
+    fun nachDemSprungZaehltDieErsteHoeheAuchSpaeter() {
+        // Tunnel: der erste Fix danach kommt ohne Hoehe, der zweite 40 m hoeher -
+        // ein anderer Ort, kein Anstieg. Erst die 10 m danach sind gestiegen.
+        val punkte = listOf(
+            weit(0, 400.0), weit(1, 400.0),
+            Spur.Punkt(90, 0.005, 0.0, null, 5f),       // gut 400 m weiter: ein Sprung
+            Spur.Punkt(120, 0.006, 0.0, 440.0, 5f),
+            Spur.Punkt(150, 0.007, 0.0, 450.0, 5f),
+        )
+        assertEquals(10.0, Trainingsanalyse.aufstieg(punkte), 0.001)
     }
 }
 
@@ -205,5 +220,34 @@ class SitzungsendeTest {
         val ende = Kieselsport.sitzungsEnde(a, 60, listOf(p(999_990), p(1_000_010), p(1_000_500)), a.plusSeconds(99_999))
         val route = Kieselsport.routeAus(listOf(p(999_990), p(1_000_010), p(1_000_500)), a, ende)!!
         org.junit.Assert.assertEquals(listOf(1_000_010L, 1_000_500L), route.route.map { it.time.epochSecond })
+    }
+
+    @Test
+    fun die_letzte_pause_beendet_die_spur() {
+        // 60 min aktiv, 20 min Pause, gespeichert bei 80 min. Die Zusammenfassung
+        // kam erst nach der Heimfahrt - die Punkte im Auto gehoeren nicht dazu.
+        val plan = Trainingspausen.Plan(listOf(Trainingspausen.Pause(1_001_800, 1_003_000)), 1_004_800)
+        val punkte = listOf(p(1_000_000), p(1_004_790), p(1_005_400), p(1_007_000))
+        val ende = Kieselsport.sitzungsEnde(a, 3600, punkte, a.plusSeconds(9_000), plan)
+        // Beginn + 60 min + 20 min Pause; der letzte Punkt davor liegt darin.
+        org.junit.Assert.assertEquals(1_004_800L, ende.epochSecond)
+    }
+
+    @Test
+    fun ohne_spur_reicht_die_sitzung_ueber_die_pausen() {
+        // Kraft ohne GPS: 50 min aktiv, 10 min Pause - die Sitzung dauert 60 min.
+        val plan = Trainingspausen.Plan(listOf(Trainingspausen.Pause(1_001_200, 1_001_800)), 1_003_600)
+        org.junit.Assert.assertEquals(1_003_600L, Kieselsport.sitzungsEnde(a, 3000, emptyList(), a.plusSeconds(9_000), plan).epochSecond)
+    }
+
+    @Test
+    fun ohne_bekannte_pause_hoechstens_zwanzig_minuten_mehr() {
+        // Weder Pause noch Ende kamen an: die Spur lief bis zur Zusammenfassung zwei Stunden spaeter.
+        val punkte = (0..120).map { p(1_000_000L + it * 60) }
+        val ende = Kieselsport.sitzungsEnde(a, 1200, punkte, a.plusSeconds(99_999))
+        org.junit.Assert.assertTrue(ende.epochSecond <= 1_001_200L + Kieselsport.PUFFER_OHNE_PAUSE_S)
+        org.junit.Assert.assertEquals(1_002_341L, ende.epochSecond)
+        // Beim Nachtragen gibt es keine Dauer der Uhr - dort zaehlt die ganze Spur.
+        org.junit.Assert.assertEquals(1_007_201L, Kieselsport.sitzungsEnde(a, 60, punkte, a.plusSeconds(99_999), ohnePause = null).epochSecond)
     }
 }

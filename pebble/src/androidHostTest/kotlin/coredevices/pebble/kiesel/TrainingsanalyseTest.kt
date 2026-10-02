@@ -259,4 +259,63 @@ class TrainingsanalyseTest {
         val ruhe = Trainingsanalyse.VO2_RUHE * 70.0 / 1000 * Trainingsanalyse.KCAL_JE_LITER * (600 + 10) / 60.0
         assertEquals(ansicht - ruhe, akte, 0.01)
     }
+
+    @Test
+    fun zonenMinutenUndProzentAusDenselbenSekunden() {
+        // 24 s in Zone 1 sind 2 % - und weniger als eine Minute, nicht "0 min".
+        val a = Trainingsanalyse.zonenAnteile(longArrayOf(0, 24, 600, 576, 0, 0))
+        assertEquals(listOf(0L to 0, 0L to 2, 10L to 50, 10L to 48, 0L to 0, 0L to 0), a)
+        // Abgeschnitten ergaeben drei Drittel 99 %; nach dem groessten Rest sind es 100.
+        val drittel = Trainingsanalyse.zonenAnteile(longArrayOf(0, 600, 600, 600, 0, 0))
+        assertEquals(100, drittel.sumOf { it.second })
+        assertEquals(listOf(10L, 10L, 10L), drittel.drop(1).take(3).map { it.first })
+        assertEquals(List(6) { 0L to 0 }, Trainingsanalyse.zonenAnteile(LongArray(6)))
+    }
+
+    @Test
+    fun pulsInDerPauseZaehltNicht() {
+        val puls = (0L..100L step 10).map { Pulspunkt(it, 140) }
+        val ohne = Trainingsanalyse.ohnePausen(puls, listOf(30L to 60L))
+        assertEquals(listOf(0L, 10L, 20L, 60L, 70L, 80L, 90L, 100L), ohne.map { it.sekunde })
+        assertEquals(puls, Trainingsanalyse.ohnePausen(puls, emptyList()))
+    }
+
+    @Test
+    fun kilometerOhneDiePause() {
+        // Rund 100 s je Kilometer; im ersten liegt eine Pause von 30 s.
+        val s = Trainingsanalyse.strecke(gerade(250))
+        val ohne = Trainingsanalyse.kilometer(s, emptyList())
+        val mit = Trainingsanalyse.kilometer(s, emptyList(), listOf(40L to 70L))
+        assertEquals(ohne[0].sekunden - 30, mit[0].sekunden)
+        assertEquals(ohne[1].sekunden, mit[1].sekunden)
+    }
+
+    /** Ein Gang bergauf mit wanderndem GPS: drei Meter je Punkt, die Hoehe zittert um zwei Meter. */
+    private fun huegel(): List<Spur.Punkt> = (0 until 1100).map { i ->
+        val rauschen = 2 * Math.sin(i * 1.7) + 1.5 * Math.cos(i * 0.31)
+        Spur.Punkt(1_000_000L + i * 3L, 47.0, 7.0 + i * 0.0000396, 500.0 + i * 0.08 + rauschen, 5f)
+    }
+
+    @Test
+    fun dieKilometerErgebenDenAufstiegOben() {
+        val punkte = huegel()
+        val s = Trainingsanalyse.strecke(punkte)
+        val km = Trainingsanalyse.kilometer(s, emptyList())
+        assertEquals(4, km.size)   // drei ganze und rund 300 m Rest
+        assertEquals(Trainingsanalyse.aufstieg(punkte), km.sumOf { it.aufstieg }, 0.001)
+    }
+
+    @Test
+    fun aufstiegLiegtNaheAmProfilNichtAmRauschen() {
+        // 88 m Hoehenunterschied. Jedes positive Delta roh summiert gab ein
+        // Vielfaches; geglaettet mit Schwelle bleibt es beim Hoehenunterschied.
+        val punkte = huegel()
+        val roh = punkte.zipWithNext { a, b -> (b.hoehe!! - a.hoehe!!).coerceAtLeast(0.0) }.sum()
+        val auf = Trainingsanalyse.aufstieg(punkte)
+        assertTrue("roh $roh", roh > 500)
+        assertTrue("aufstieg $auf", auf in 75.0..100.0)
+        // Das Profil steigt um dasselbe, das der Aufstieg sagt.
+        val profil = Trainingsanalyse.hoeheUeberStrecke(Trainingsanalyse.strecke(punkte))
+        assertEquals(auf, profil.maxOf { it.wert } - profil.minOf { it.wert }, 10.0)
+    }
 }

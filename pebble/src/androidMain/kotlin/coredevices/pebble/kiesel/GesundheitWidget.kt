@@ -9,9 +9,6 @@ import android.content.Intent
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
-import androidx.health.connect.client.records.ExerciseSessionRecord
-import androidx.health.connect.client.records.HeartRateRecord
-import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
 import coredevices.pebble.health.Einzellauf
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -80,18 +77,16 @@ class GesundheitWidget : AppWidgetProvider() {
             val zone = ZoneId.systemDefault()
             val heute = LocalDate.now()
             val n = s.nacht
-            // Das juengste Training der letzten drei Stunden, aus der Akte - auch ein fremdes.
-            var training: ExerciseSessionRecord? = null
+            // DASSELBE TRAINING WIE OBEN AUF DER SPORTSEITE, mit demselben Puls
+            // (entstoert, nur in der Sitzung, ohne Pausen) und demselben Namen.
+            // Frueher war es die Sitzung, die zuletzt endete - auch die einer
+            // fremden App neben der eigenen -, mit rohem Puls aller Quellen.
+            var training: TrainingEintrag? = null
             var puls: Double? = null
             try {
-                val klient = Akte(context).bereit()
-                val jetzt = Instant.now()
-                training = klient?.liesOderEigene(context, ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minusSeconds(3 * 3600), jetzt))
-                    ?.filterNot { TrainingsDaten.erkannt(context, it) }?.maxByOrNull { it.endTime }
-                training?.let { t ->
-                    puls = klient?.liesOderEigene(context, HeartRateRecord::class, TimeRangeFilter.between(t.startTime, t.endTime))
-                        ?.flatMap { it.samples }?.map { it.beatsPerMinute }?.takeIf { it.isNotEmpty() }?.average()
-                }
+                training = TrainingsDaten.juengstes(context, Duration.ofDays(1))
+                    ?.takeIf { Duration.between(it.sitzung.endTime, Instant.now()).toHours() < 3 }
+                puls = training?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }?.toDouble()
             } catch (e: Exception) {
                 Log.w("Widget", "Training: " + e.message)
             }
@@ -100,7 +95,6 @@ class GesundheitWidget : AppWidgetProvider() {
                 p.getString(WUNSCH, null)?.let { runCatching { Widgetlage.Art.valueOf(it) }.getOrNull() }
             } else null
             val woche = s.wocheSchlaf.filter { it.first != heute && it.second > 0 }.map { it.second.toDouble() }
-            val spur = training?.let { TrainingsDaten.punkte(context, it) }.orEmpty()
             val platz = context.getString(R.string.ks_s_platz_n)
             return Widgetlage.Blick(
                 jetzt = LocalDateTime.now(zone),
@@ -111,12 +105,12 @@ class GesundheitWidget : AppWidgetProvider() {
                 erholsamAnteil = n?.takeIf { it.mitPhasen }?.let { (it.phasen[2] + it.phasen[3]).toDouble() / it.phasen.sum().coerceAtLeast(1) },
                 ruhepuls = n?.ruhepuls?.toDouble(),
                 hrv = n?.hrv?.toDouble(),
-                trainingEnde = training?.endTime?.atZone(zone)?.toLocalDateTime(),
-                trainingName = training?.let { it.title ?: context.getString(Sport.von(it).nameId) },
-                trainingMin = training?.let { Duration.between(it.startTime, it.endTime).toMinutes() },
+                trainingEnde = training?.sitzung?.endTime?.atZone(zone)?.toLocalDateTime(),
+                trainingName = training?.let { TrainingsDaten.name(context, it.sitzung) },
+                trainingMin = training?.minuten,
                 trainingPuls = puls,
-                trainingKm = if (spur.size >= 2) Spur.laenge(spur) / 1000 else null,
-                trainingBeginn = training?.startTime?.epochSecond,
+                trainingKm = training?.meter?.takeIf { it > 0 }?.div(1000),
+                trainingBeginn = training?.sitzung?.startTime?.epochSecond,
                 schritte = s.schritte.toDouble(),
                 schritteZiel = 10_000.0,
                 aktivMin = s.aktivMinuten.toDouble(),

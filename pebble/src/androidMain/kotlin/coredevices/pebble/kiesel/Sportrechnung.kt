@@ -1,6 +1,9 @@
 package coredevices.pebble.kiesel
 
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.metadata.Metadata
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -73,6 +76,41 @@ internal object Sportrechnung {
         val ms = meter / sekunden
         return if (ms <= 0.2) null else Math.round(1000 / ms)
     }
+
+    /**
+     * Welche Sitzungen als Training zaehlen - ZWEI APPS, EIN TRAINING. Eigene
+     * bleiben immer; eine fremde faellt heraus, wenn sie sich mit einer
+     * eigenen ueberschneidet. Unter fremden bleibt bei mehr als halber
+     * Ueberschneidung (gemessen an der kuerzeren) nur die laengere: Hersteller-
+     * App und Strava schreiben denselben Lauf, und die Woche zaehlte ihn doppelt.
+     * NUR BEI GLEICHER [art]: ein Laufbandlauf mitten in der Stunde Kraft
+     * einer anderen App ist ein zweites Training, keine zweite Fassung.
+     * In der Akte bleiben alle. Die Reihenfolge der Liste bleibt.
+     */
+    fun <T> waehle(
+        sitzungen: List<T>, eigen: (T) -> Boolean, von: (T) -> Instant, bis: (T) -> Instant, art: (T) -> Any?,
+    ): List<T> {
+        fun ueberlapp(a: T, b: T): Long =
+            (minOf(bis(a), bis(b)).epochSecond - maxOf(von(a), von(b)).epochSecond).coerceAtLeast(0)
+        fun dauer(a: T): Long = (bis(a).epochSecond - von(a).epochSecond).coerceAtLeast(1)
+        val eigene = sitzungen.filter(eigen)
+        val fremde = sitzungen.filter { s -> !eigen(s) && eigene.none { e -> von(s) < bis(e) && von(e) < bis(s) } }
+        val behalten = mutableListOf<T>()
+        // Die laengste zuerst: sie gewinnt gegen jede kuerzere Fassung desselben Trainings.
+        fremde.sortedByDescending { dauer(it) }.forEach { s ->
+            if (behalten.none { b -> art(b) == art(s) && ueberlapp(s, b) * 2 > minOf(dauer(s), dauer(b)) }) behalten += s
+        }
+        return sitzungen.filter { eigen(it) || it in behalten }
+    }
+
+    /**
+     * Ein Gang, den eine fremde App selbst erkannte (Samsung, Fitbit), ist
+     * Bewegung und kein Training - wie die erkannten der Uhr, die Boulder
+     * auch nicht zaehlt. Gezielt gestartete Spaziergaenge bleiben.
+     */
+    fun erkannterGang(sportart: Int, aufzeichnung: Int): Boolean =
+        sportart == ExerciseSessionRecord.EXERCISE_TYPE_WALKING &&
+            aufzeichnung == Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED
 
     /**
      * Die Kieselsport-Art hinter einem deutschen Titel. Kiesel-Helper schrieb

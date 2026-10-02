@@ -13,7 +13,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,12 +84,12 @@ import kotlinx.coroutines.withContext
 import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.R
 import coredevices.pebble.health.frageAlleAkteRechte
-import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.Reihentag
 import coredevices.pebble.kiesel.Sport
 import coredevices.pebble.kiesel.Sportrechnung
 import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingEintrag
+import coredevices.pebble.kiesel.Trainingsanalyse
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.TrainingsUebersicht
 import kotlinx.coroutines.launch
@@ -174,14 +173,9 @@ internal fun trainingszeit(context: Context, t: Instant, relativ: Boolean): Stri
     }
 }
 
-/** Der Name eines Trainings: sein Titel, aber ein deutscher aus Kiesel-Helper auf Englisch. */
+/** Der Name eines Trainings - derselbe in Liste, Detail, Zeitstrahl und Widget (TrainingsDaten.name). */
 @Composable
-internal fun trainingsName(t: TrainingEintrag): String {
-    val context = LocalContext.current
-    val titel = t.sitzung.title
-    return Sportrechnung.artAusTitel(titel)?.let { Kieselsport.artAlsSatzart(context, it).second }
-        ?: titel ?: stringResource(t.sport.nameId)
-}
+internal fun trainingsName(t: TrainingEintrag): String = TrainingsDaten.name(LocalContext.current, t.sitzung)
 
 /** Eine Trainingszeile im Stil der Health-Seite: Sportkreis, Name, Zeit, die Dauer fett rechts. */
 @Composable
@@ -366,7 +360,11 @@ private fun Tagesfeld(r: Reihentag, heute: LocalDate, modifier: Modifier, onClic
         Row(Modifier.height(6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             r.weitere.forEach { Box(Modifier.size(6.dp).background(Color(it.farbe), CircleShape)) }
         }
-        Text(if (r.minuten > 0) "${r.minuten}" else "", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+        // Mit Einheit: "17" allein sagte erst die Summe darueber, dass es Minuten sind.
+        Text(
+            if (r.minuten > 0) dauerText(r.minuten) else "", fontSize = 12.sp, lineHeight = 16.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false,
+        )
     }
 }
 
@@ -388,7 +386,8 @@ private fun DavorKarte(trainings: List<TrainingEintrag>, wege: Sportwege) {
 private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, onClick: () -> Unit) {
     val context = LocalContext.current
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    val sekunden = Duration.between(t.sitzung.startTime, t.sitzung.endTime).seconds
+    // Dieselbe Bezugszeit wie die Dauer: die aktive, ohne die Pausen der Uhr.
+    val sekunden = t.sekunden
     val (dZahl, dEinheit) = dauerTeile(t.minuten)
     val dauerName = stringResource(R.string.ks_t_dauer)
     val streckeName = stringResource(R.string.ks_t_strecke)
@@ -399,14 +398,17 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
     val werte = buildList {
         add(Triple(dZahl, dEinheit, dauerName))
         if (t.meter > 0) add(Triple(String.format(Locale.getDefault(), "%.1f", t.meter / 1000), "km", streckeName))
-        if (t.sport.rad) Sportrechnung.kmh(t.meter, sekunden)?.let {
-            add(Triple(String.format(Locale.getDefault(), "%.1f", it), "km/h", tempoName))
-        } else Sportrechnung.tempo(t.meter, sekunden)?.let {
-            add(Triple(String.format(Locale.getDefault(), "%d:%02d", it / 60, it % 60), "/km", tempoName))
+        // Im Becken sagt das Tempo je Kilometer nichts - dort zaehlt die Bahn (Detail).
+        if (t.sport != Sport.Schwimmen) {
+            if (t.sport.rad) Sportrechnung.kmh(t.meter, sekunden)?.let {
+                add(Triple(String.format(Locale.getDefault(), "%.1f", it), "km/h", tempoName))
+            } else Sportrechnung.tempo(t.meter, sekunden)?.let {
+                add(Triple(String.format(Locale.getDefault(), "%d:%02d", it / 60, it % 60), "/km", tempoName))
+            }
         }
         puls?.let { add(Triple("$it", "bpm", pulsName)) }
         // Der Aufstieg statt des Tempos, wenn es bergauf ging: er sagt mehr ueber die Tour.
-        val auf = if (punkte.size >= 2) Spur.hoehenmeter(punkte) else 0.0
+        val auf = Trainingsanalyse.aufstieg(punkte)
         if (auf >= 10) {
             val i = indexOfFirst { it.third == tempoName }
             val wert = Triple(String.format(Locale.getDefault(), "%.0f", auf), "m", aufName)
@@ -414,7 +416,7 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
         }
     }.take(4)
     Column(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, end = 12.dp, top = 2.dp, bottom = 14.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -425,8 +427,10 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
             }
             Icon(Zeichen.weiter, null, Modifier.size(16.dp), tint = grau)
         }
+        // DIE FLAECHENFARBE, NICHT DER TON: die Kacheln sind in beiden Schemata
+        // hell, der abgedunkelte Ton sah im hellen aus wie eine Bahnlinie.
         if (punkte.size >= 2) Kartenvorschau(
-            punkte.map { it.lat to it.lon }, t.sport.ton(),
+            punkte.map { it.lat to it.lon }, Color(t.sport.farbe),
             Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(10.dp)), onClick,
         )
         Row(Modifier.fillMaxWidth().padding(start = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -531,10 +535,14 @@ internal fun Karte(onClick: (() -> Unit)? = null, inhalt: @Composable () -> Unit
  * Kaesten mit blassen Farben darin, alles sah ausgewaschen aus. Eine dunkle
  * Karte mit feinem Rand laesst Zahlen und Farben stehen; im hellen Schema
  * bleibt sie hell, und der Rand trennt sie vom Weiss.
+ *
+ * DAS SCHEMA DER APP, NICHT DAS DES TELEFONS - wie [toene]: steht die App auf
+ * "Dark" und das Telefon auf hell, war die Karte sonst heller als die Seite.
  */
 @Composable
 internal fun kartenFarben(): CardColors = CardDefaults.cardColors(
-    containerColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh,
+    containerColor = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) MaterialTheme.colorScheme.surfaceContainerLow
+    else MaterialTheme.colorScheme.surfaceContainerHigh,
 )
 
 @Composable

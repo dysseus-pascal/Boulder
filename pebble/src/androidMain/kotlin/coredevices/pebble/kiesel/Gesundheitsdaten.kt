@@ -54,6 +54,9 @@ internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val 
 /** So weit zurueck zaehlt der Blutdruck: wer selten misst, misst kaum einmal die Woche. */
 internal const val BLUTDRUCK_TAGE = 30L
 
+/** Messungen mit weniger Abstand gehoeren zu einer Sitzung an der Manschette. */
+internal const val BLUTDRUCK_SITZUNG_S = 15 * 60L
+
 /** Eine Blutdruckmessung aus der Akte, in mmHg. */
 internal data class Blutdruck(val zeit: Instant, val oben: Int, val unten: Int)
 
@@ -74,7 +77,10 @@ internal data class GesundheitsStand(
      * wird, und zoege ihn sonst zu sich.
      */
     val ruhepulsWoche: List<Int>,
-    /** Die HRV derselben frueheren Naechte, wie [ruhepulsWoche]. */
+    /**
+     * Die HRV derselben frueheren Naechte, wie [ruhepulsWoche]. Nur fuer den
+     * Schnitt, den "Your usual" nennt - geurteilt wird an ihrem Band in [hrvTage].
+     */
     val hrvWoche: List<Int>,
     /** Schlafminuten der letzten sieben Naechte, aelteste zuerst; 0 = keine Nacht. */
     val wocheSchlaf: List<Pair<LocalDate, Int>>,
@@ -116,8 +122,8 @@ internal object Gesundheitsrechnung {
     /**
      * Der Puls eines Tages, nur wach und bis zur selben Uhrzeit wie jetzt.
      * [wachpuls]: der Schnitt der wachen Messungen. [belastung]: Minuten mit
-     * erhoehtem Puls, gewichtet wie Zone-Minuten - ab 40 % der Pulsreserve
-     * einfach, ab 60 % doppelt. Jede Messung steht fuer die Minuten bis zur
+     * erhoehtem Puls, gewichtet wie Zone-Minuten - Zone moderat einfach,
+     * kraeftig und Spitze doppelt. Jede Messung steht fuer die Minuten bis zur
      * naechsten, hoechstens zehn: die Uhr misst je nach Messstufe nicht jede
      * Minute.
      */
@@ -155,15 +161,19 @@ internal object Gesundheitsrechnung {
         return Tagesurteil(jetzt, schnitt, abstand, haerte)
     }
 
+    /**
+     * [grenzen]: die Zonengrenzen aus [pulsZonen]. Dieselben gerundeten
+     * Grenzen wie das Pulsband - mit dem exakten Anteil der Reserve zaehlte
+     * ein Puls auf der Grenze hier einfach, waehrend die Kurve ihn schon in
+     * der naechsten Zone faerbte.
+     */
     fun tagesherz(
         puls: List<Pair<Long, Int>>,
         schlaf: List<Pair<Long, Long>>,
-        ruhepuls: Int,
-        maxpuls: Int,
+        grenzen: List<Int>,
         bisUhrzeit: java.time.LocalTime,
         zone: ZoneId,
     ): List<Tagesherz> {
-        val reserve = (maxpuls - ruhepuls).coerceAtLeast(20)
         val sortiert = puls.filter { it.second > 0 }.sortedBy { it.first }
         val jeTag = linkedMapOf<LocalDate, Triple<Long, Int, Double>>()   // Summe, Anzahl, Belastung
         sortiert.forEachIndexed { i, (sek, bpm) ->
@@ -171,11 +181,10 @@ internal object Gesundheitsrechnung {
             val zeit = java.time.Instant.ofEpochSecond(sek).atZone(zone)
             if (zeit.toLocalTime().isAfter(bisUhrzeit)) return@forEachIndexed
             val minuten = if (i + 1 < sortiert.size) ((sortiert[i + 1].first - sek) / 60.0).coerceIn(1.0, 10.0) else 1.0
-            val anteil = (bpm - ruhepuls).toDouble() / reserve
-            val gewicht = when {
-                anteil >= 0.6 -> 2.0
-                anteil >= 0.4 -> 1.0
-                else -> 0.0
+            val gewicht = when (pulsZone(bpm, grenzen)) {
+                0 -> 0.0
+                1 -> 1.0
+                else -> 2.0
             }
             val alt = jeTag[zeit.toLocalDate()] ?: Triple(0L, 0, 0.0)
             jeTag[zeit.toLocalDate()] = Triple(alt.first + bpm, alt.second + 1, alt.third + gewicht * minuten)
@@ -209,16 +218,37 @@ internal object Gesundheitsrechnung {
         )
     }
 
-    /** Die letzte Messung und, ab drei Messungen, der Schnitt der Zeitspanne. */
+    /** Die letzte Sitzung, gemittelt, und ab drei Sitzungen der Schnitt der Zeitspanne. */
     data class Blutdruckzeile(val letzte: Blutdruck, val schnitt: Pair<Int, Int>?)
 
-    fun blutdruckzeile(messungen: List<Blutdruck>): Blutdruckzeile? {
-        val letzte = messungen.maxByOrNull { it.zeit } ?: return null
-        // Unter drei Messungen ist ein Schnitt nur die letzte Messung mit anderem Namen.
-        val schnitt = messungen.takeIf { it.size >= 3 }?.let { m ->
-            m.map { it.oben }.average().roundToInt() to m.map { it.unten }.average().roundToInt()
+    /**
+     * Die Messungen in Sitzungen, aelteste zuerst: weniger als
+     * [BLUTDRUCK_SITZUNG_S] nach der vorigen Messung gehoert eine Messung zur
+     * selben. Manschetten-Apps speichern oft drei Messungen hintereinander -
+     * einzeln gezaehlt wog ein Morgen dreifach und machte aus einem Mal
+     * Messen schon "drei Messungen" fuer den Schnitt.
+     */
+    fun blutdrucksitzungen(messungen: List<Blutdruck>): List<List<Blutdruck>> {
+        val aus = mutableListOf<MutableList<Blutdruck>>()
+        messungen.sortedBy { it.zeit }.forEach { m ->
+            val letzte = aus.lastOrNull()
+            if (letzte == null || Duration.between(letzte.last().zeit, m.zeit).seconds >= BLUTDRUCK_SITZUNG_S) aus += mutableListOf(m) else letzte += m
         }
-        return Blutdruckzeile(letzte, schnitt)
+        return aus
+    }
+
+    fun blutdruckzeile(messungen: List<Blutdruck>): Blutdruckzeile? {
+        val sitzungen = blutdrucksitzungen(messungen)
+        val letzte = sitzungen.lastOrNull() ?: return null
+        // Der Schnitt ueber die Sitzungsmittel, nicht ueber gerundete Werte - sonst rundete er zweimal.
+        fun oben(s: List<Blutdruck>) = s.map { it.oben }.average()
+        fun unten(s: List<Blutdruck>) = s.map { it.unten }.average()
+        // Unter drei Sitzungen ist ein Schnitt nur die letzte mit anderem Namen.
+        val schnitt = sitzungen.takeIf { it.size >= 3 }?.let { l ->
+            l.map(::oben).average().roundToInt() to l.map(::unten).average().roundToInt()
+        }
+        // Die Sitzung traegt die Zeit ihrer ersten Messung: da begann das Messen.
+        return Blutdruckzeile(Blutdruck(letzte.first().zeit, oben(letzte).roundToInt(), unten(letzte).roundToInt()), schnitt)
     }
 
     /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */
@@ -258,6 +288,17 @@ internal object Gesundheitsrechnung {
             val werte = l.map { it.second }.sorted()
             Pulsbin(sekunde, werte[werte.size / 2], werte.first(), werte.last())
         }
+
+    /**
+     * Tiefster und hoechster Puls, wie die Linie des Pulsbands sie zeigt: aus
+     * den Medianen der [fuenfMinuten], vor dem Glaetten. Aus den Rohwerten
+     * bestimmte ein einzelner Ausreisser des Sensors Spanne und Zone im Satz,
+     * und die Kurve darunter erreichte ihn nie.
+     */
+    fun pulsSpanne(punkte: List<Pair<Long, Int>>): Pair<Int, Int>? {
+        val mediane = fuenfMinuten(punkte).map { it.median }
+        return if (mediane.isEmpty()) null else mediane.min() to mediane.max()
+    }
 
     /**
      * Rasterlinien in runden Schritten, hoechstens fuenf Striche: der kleinste
@@ -316,10 +357,11 @@ internal object Gesundheitsrechnung {
 
     /**
      * Die Pulszonen des Tages als Anteile der Pulsreserve (Karvonen): ab 40 %
-     * moderat, ab 60 % kraeftig, ab 80 % Spitze. Dieselben Schwellen wie die
-     * Belastung in [tagesherz] - was die Kurve gruen faerbt, zaehlt dort
-     * einfach, was gelb ist, doppelt. Mit Ruhepuls 53 und Maximalpuls 187
-     * gibt das 107, 133 und 160, nahe an dem, was Google Health zeigt.
+     * moderat, ab 60 % kraeftig, ab 80 % Spitze. Die Belastung in [tagesherz]
+     * rechnet mit genau diesen Grenzen - was die Kurve gruen faerbt, zaehlt
+     * dort einfach, was gelb oder rot ist, doppelt. Mit Ruhepuls 53 und
+     * Maximalpuls 187 gibt das 107, 133 und 160, nahe an dem, was Google
+     * Health zeigt.
      */
     fun pulsZonen(ruhepuls: Int, maxpuls: Int): List<Int> {
         val reserve = (maxpuls - ruhepuls).coerceAtLeast(20)
@@ -386,10 +428,6 @@ internal object Gesundheitsrechnung {
         }
         return aus
     }
-
-    /** Die Rasterlinien ohne die, die dem Ruhepuls naeher als [abstand] kaemen - seine Linie ersetzt sie. */
-    fun rasterOhne(raster: List<Int>, ruhepuls: Int?, abstand: Float): List<Int> =
-        if (ruhepuls == null) raster else raster.filter { abs(it - ruhepuls) >= abstand }
 }
 
 /**
@@ -474,13 +512,15 @@ internal object Gesundheitsdaten {
         // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
         val ruhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls)) ?: Trainingsanalyse.RUHEPULS_ERSATZ
         val maxpuls = Herzgrenzen.maxpuls(context, ruhe)
+        // Eine Rechnung der Zonen fuer Kurve und Belastung, damit beide dieselbe Grenze ziehen
+        val zonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls)
         val tagesherz = runCatching {
             val von = anfang(heute.minusDays(14))
             val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
             val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
-            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, ruhe, maxpuls, LocalTime.now(), zone)
+            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, zonen, LocalTime.now(), zone)
         }.getOrDefault(emptyList())
         // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal
         // HRV_FENSTER Naechte davor - die Naechte oben reichen nur eine Woche zurueck.
@@ -515,7 +555,7 @@ internal object Gesundheitsdaten {
             glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
-            pulsZonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls),
+            pulsZonen = zonen,
             hrvTage = hrvTage,
         )
     }

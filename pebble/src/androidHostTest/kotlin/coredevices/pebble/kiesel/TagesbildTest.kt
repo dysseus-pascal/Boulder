@@ -109,13 +109,35 @@ class TagesbildTest {
         assertEquals(Vergleich.TIEFER, g.ruhepulsUrteil(52, listOf(55, 55, 55)).urteil)
     }
 
+    private fun hrvTag(wert: Int?, band: Pair<Int, Int>?) = Gesundheitsrechnung.HrvTag(LocalDate.of(2026, 10, 2), wert, band)
+
     @Test
-    fun hrv_wie_immer_innerhalb_von_zehn_prozent() {
-        assertEquals(Vergleich.WIE_IMMER, g.hrvUrteil(55, listOf(50, 50, 50)).urteil)
-        val tiefer = g.hrvUrteil(40, listOf(50, 50, 50))
-        assertEquals(Vergleich.TIEFER, tiefer.urteil)
-        assertEquals(20, tiefer.abstand)
-        assertEquals(Vergleich.HOEHER, g.hrvUrteil(56, listOf(50, 50, 50)).urteil)
+    fun hrv_wie_immer_im_band() {
+        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.hrvUrteil(hrvTag(51, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.hrvUrteil(hrvTag(63, 51 to 63)))
+        // Der Abstand zum Bandrand, nicht zur Mitte: knapp daneben heisst 1 ms daneben.
+        assertEquals(Bandurteil(Vergleich.HOEHER, 1), g.hrvUrteil(hrvTag(64, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.TIEFER, 3), g.hrvUrteil(hrvTag(48, 51 to 63)))
+    }
+
+    @Test
+    fun hrv_ohne_band_oder_wert_kein_urteil() {
+        assertNull(g.hrvUrteil(hrvTag(55, null)))
+        assertNull(g.hrvUrteil(hrvTag(null, 51 to 63)))
+        assertNull(g.hrvUrteil(null))
+    }
+
+    @Test
+    fun hrv_urteil_sagt_dasselbe_wie_die_hrv_karte() {
+        // 30 Naechte abwechselnd 40 und 56 ms: Band 40-56. 55 ms liegen darin, obwohl
+        // sie gut zehn Prozent ueber dem Schnitt der letzten sieben Naechte liegen -
+        // nach der alten Regel hiess das im Satz "above your usual", in der Karte "in range".
+        val heute = LocalDate.of(2026, 10, 2)
+        val werte = (1..30).associate { heute.minusDays(it.toLong()) to if (it % 2 == 0) 40 else 56 } + (heute to 55)
+        val letzte = g.hrvWoche(werte, heute).last()
+        assertEquals(40 to 56, letzte.band)
+        assertEquals(true, letzte.imBand)
+        assertEquals(Vergleich.WIE_IMMER, g.hrvUrteil(letzte)!!.urteil)
     }
 
     @Test
@@ -128,9 +150,16 @@ class TagesbildTest {
 
     @Test
     fun ohne_letzten_wert_kein_urteil_aber_der_lernstand() {
-        val u = g.hrvUrteil(null, listOf(50, 52, 54))
+        val u = g.ruhepulsUrteil(null, listOf(50, 52, 54))
         assertEquals(3, u.frueher)
         assertNull(u.urteil)
+    }
+
+    @Test
+    fun naechteschnitt_nur_gemessene_und_hoechstens_sieben() {
+        // Die 90 faellt aus den letzten sieben gemessenen, die ungemessene Nacht zaehlt nicht mit.
+        assertEquals(7 to 50.0, g.naechteSchnitt(listOf(90, 50, 0, 52, 48, 51, 49, 50, 50)))
+        assertEquals(0 to null, g.naechteSchnitt(listOf(0, 0)))
     }
 
     @Test
@@ -208,8 +237,6 @@ class TagesbildTest {
     fun urteil_folgt_dem_gerundeten_abstand() {
         // Schnitt 54.67, letzte 57: 2.33 bpm - angezeigt "2", also wie immer.
         assertEquals(Vergleich.WIE_IMMER, g.ruhepulsUrteil(57, listOf(55, 55, 54)).urteil)
-        // 54 gegen 49: 10.2 % - angezeigt "10 %", also wie immer.
-        assertEquals(Vergleich.WIE_IMMER, g.hrvUrteil(54, listOf(49, 49, 49)).urteil)
         val hoeher = g.ruhepulsUrteil(58, listOf(55, 55, 54))
         assertEquals(Vergleich.HOEHER, hoeher.urteil)
         assertEquals(3, hoeher.abstand)

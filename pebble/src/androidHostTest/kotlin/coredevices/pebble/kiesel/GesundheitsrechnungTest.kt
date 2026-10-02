@@ -139,11 +139,12 @@ class GesundheitsbildRechnungTest {
     }
 
     @Test
-    fun ruhepuls_ersetzt_nahe_rasterlinien() {
-        assertEquals(listOf(70), Gesundheitsrechnung.rasterOhne(listOf(50, 60, 70), 55, 5.5f))
-        assertEquals(listOf(50, 60, 70), Gesundheitsrechnung.rasterOhne(listOf(50, 60, 70), 55, 5f))
-        assertEquals(listOf(50, 60), Gesundheitsrechnung.rasterOhne(listOf(50, 60), null, 20f))
-        assertTrue(Gesundheitsrechnung.rasterOhne(emptyList(), 55, 5f).isEmpty())
+    fun pulsspanne_aus_den_medianen_der_linie() {
+        // Ein einzelner Ausreisser von 150 bpm zwischen Werten um 80 setzt weder Spitze noch Zone:
+        // die Linie zeigt den Median 82, und der hoechste Wert im Satz ist derselbe.
+        val punkte = listOf(t0 to 80, t0 + 60 to 150, t0 + 120 to 82, t0 + 600 to 60, t0 + 660 to 62, t0 + 720 to 61)
+        assertEquals(61 to 82, Gesundheitsrechnung.pulsSpanne(punkte))
+        assertNull(Gesundheitsrechnung.pulsSpanne(emptyList()))
     }
 
     private val zoneUtc = ZoneOffset.UTC
@@ -155,7 +156,7 @@ class GesundheitsbildRechnungTest {
         // Jede fuenfte Minute von 00:00 bis 23:55: die Nacht bis 06:00 schlaeft
         val puls = (0 until 288).map { sek(tag, 0, 0) + it * 300L to (if (it < 72) 50 else 70) }
         val schlaf = listOf(sek(tag, 0, 0) to sek(tag, 6, 0))
-        val r = Gesundheitsrechnung.tagesherz(puls, schlaf, 55, 185, java.time.LocalTime.of(12, 0), zoneUtc).single()
+        val r = Gesundheitsrechnung.tagesherz(puls, schlaf, Gesundheitsrechnung.pulsZonen(55, 185), java.time.LocalTime.of(12, 0), zoneUtc).single()
         assertEquals(70, r.wachpuls)
         assertEquals(73, r.messungen)   // 06:00 bis 12:00
         assertEquals(0, r.belastung)
@@ -168,7 +169,9 @@ class GesundheitsbildRechnungTest {
         val ruhig = (0 until 30).map { sek(tag, 8, it) to 70 }
         val mittel = (0 until 20).map { sek(tag, 9, it) to 115 }
         val hart = (0 until 10).map { sek(tag, 10, it) to 150 }
-        val r = Gesundheitsrechnung.tagesherz(ruhig + mittel + hart, emptyList(), 55, 185, java.time.LocalTime.of(23, 0), zoneUtc).single()
+        val grenzen = Gesundheitsrechnung.pulsZonen(55, 185)
+        assertEquals(listOf(107, 133, 159), grenzen)
+        val r = Gesundheitsrechnung.tagesherz(ruhig + mittel + hart, emptyList(), grenzen, java.time.LocalTime.of(23, 0), zoneUtc).single()
         // Die letzte Minute vor einer Luecke zaehlt hoechstens zehn
         assertEquals(10 + 19 + 2 * 10, r.belastung)
     }
@@ -177,7 +180,22 @@ class GesundheitsbildRechnungTest {
     fun tagesherz_braucht_genug_messungen() {
         val tag = LocalDate.of(2026, 9, 30)
         val puls = (0 until 10).map { sek(tag, 9, it) to 80 }
-        assertNull(Gesundheitsrechnung.tagesherz(puls, emptyList(), 55, 185, java.time.LocalTime.MAX, zoneUtc).single().wachpuls)
+        assertNull(Gesundheitsrechnung.tagesherz(puls, emptyList(), Gesundheitsrechnung.pulsZonen(55, 185), java.time.LocalTime.MAX, zoneUtc).single().wachpuls)
+    }
+
+    @Test
+    fun belastung_folgt_den_gerundeten_zonengrenzen() {
+        val tag = LocalDate.of(2026, 9, 30)
+        val grenzen = Gesundheitsrechnung.pulsZonen(53, 187)
+        fun belastung(bpm: Int) = Gesundheitsrechnung.tagesherz(
+            (0 until 5).map { sek(tag, 10, it) to bpm }, emptyList(), grenzen, java.time.LocalTime.MAX, zoneUtc,
+        ).single().belastung
+        // 133 bpm sind 59.7 % der Reserve, aber die Kurve faerbt sie schon kraeftig - also doppelt.
+        assertEquals(2 * 5, belastung(133))
+        assertEquals(5, belastung(132))
+        // Spitze zaehlt wie kraeftig, unter der ersten Grenze zaehlt nichts.
+        assertEquals(2 * 5, belastung(170))
+        assertEquals(0, belastung(106))
     }
 
     @Test
@@ -200,17 +218,43 @@ class GesundheitsbildRechnungTest {
         assertNull(Gesundheitsrechnung.tagesurteil(wenig, heute)!!.haerte)
     }
 
+    // Ein beliebiger fester Zeitpunkt - es zaehlen nur die Abstaende der Messungen.
+    private val bdBeginn = 1_790_000_000L
+    private fun messung(sekunde: Long, oben: Int, unten: Int) = Blutdruck(Instant.ofEpochSecond(bdBeginn + sekunde), oben, unten)
+
     @Test
     fun blutdruck_zeigt_die_letzte_messung_und_ab_drei_den_schnitt() {
         assertNull(Gesundheitsrechnung.blutdruckzeile(emptyList()))
-        // Ein beliebiger fester Zeitpunkt - es zaehlt nur die Reihenfolge der Messungen.
-        val beginn = 1_790_000_000L
-        val zwei = listOf(Blutdruck(Instant.ofEpochSecond(beginn + 100), 130, 85), Blutdruck(Instant.ofEpochSecond(beginn), 120, 80))
+        val zwei = listOf(messung(86_400, 130, 85), messung(0, 120, 80))
         val z = Gesundheitsrechnung.blutdruckzeile(zwei)!!
         assertEquals(130, z.letzte.oben)
         assertNull(z.schnitt)
-        val drei = zwei + Blutdruck(Instant.ofEpochSecond(beginn + 50), 125, 81)
+        val drei = zwei + messung(43_200, 125, 81)
         assertEquals(125 to 82, Gesundheitsrechnung.blutdruckzeile(drei)!!.schnitt)
+    }
+
+    @Test
+    fun blutdruck_mittelt_eine_sitzung() {
+        // Drei Messungen hintereinander an der Manschette: eine Sitzung, noch kein Schnitt.
+        val sitzung = listOf(messung(120, 128, 80), messung(0, 130, 84), messung(60, 126, 82))
+        val z = Gesundheitsrechnung.blutdruckzeile(sitzung)!!
+        assertEquals(messung(0, 128, 82), z.letzte)
+        assertNull(z.schnitt)
+        // Zwei Sitzungen mehr: der Schnitt ueber die Sitzungen 128/82, 120/80 und 112/72.
+        val mehr = sitzung + messung(86_400, 120, 80) + messung(172_800, 110, 70) + messung(173_100, 114, 74)
+        val m = Gesundheitsrechnung.blutdruckzeile(mehr)!!
+        assertEquals(120 to 78, m.schnitt)
+        assertEquals(messung(172_800, 112, 72), m.letzte)
+    }
+
+    @Test
+    fun blutdrucksitzung_endet_ab_einer_viertelstunde() {
+        // Gezaehlt wird der Abstand zur vorigen Messung: 14:59 haelt zusammen, 15:00 trennt.
+        fun groessen(vararg sekunden: Long) = Gesundheitsrechnung.blutdrucksitzungen(sekunden.map { messung(it, 120, 80) }).map { it.size }
+        assertEquals(listOf(2), groessen(0, 899))
+        assertEquals(listOf(1, 1), groessen(0, 900))
+        assertEquals(listOf(3), groessen(0, 600, 1200))
+        assertTrue(Gesundheitsrechnung.blutdrucksitzungen(emptyList()).isEmpty())
     }
 
     @Test

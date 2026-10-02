@@ -43,11 +43,14 @@ internal data class Tagessatz(
 internal enum class Vergleich { WIE_IMMER, HOEHER, TIEFER }
 
 /**
- * Ruhepuls oder HRV der letzten Nacht gegen die frueheren. [abstand] in bpm
- * beim Ruhepuls, in Prozent bei der HRV. Ohne [urteil], solange weniger als
- * drei fruehere Naechte da sind - der Schnitt aus einer Nacht ist nur sie.
+ * Der Ruhepuls der letzten Nacht gegen die frueheren. [abstand] in bpm. Ohne
+ * [urteil], solange weniger als drei fruehere Naechte da sind - der Schnitt
+ * aus einer Nacht ist nur sie.
  */
 internal data class Herzurteil(val frueher: Int, val schnitt: Double?, val urteil: Vergleich?, val abstand: Int)
+
+/** Die HRV der letzten Nacht gegen ihr persoenliches Band. [abstand] in ms bis zum Bandrand, 0 im Band. */
+internal data class Bandurteil(val urteil: Vergleich, val abstand: Int)
 
 internal enum class Praeparatlage { ALLE, OFFEN, FAELLIG, KEINE }
 
@@ -61,12 +64,15 @@ internal data class Schrittwoche(val tage: List<Schritttag>, val seit: LocalDate
 
 internal const val SCHRITTZIEL = 10_000L
 internal const val SCHLAFZIEL_MIN = 8 * 60
-/** Ab so vielen frueheren Naechten gibt es ein Urteil ueber Ruhepuls und HRV. */
+/**
+ * Ab so vielen frueheren Naechten gibt es ein Urteil ueber den Ruhepuls und
+ * einen Schnitt auf "Your usual". Die HRV urteilt nicht hiernach, sondern an
+ * ihrem Band - und das braucht [Gesundheitsrechnung.HRV_MINDESTENS] Naechte.
+ */
 internal const val LERNNAECHTE = 3
 /** Hoechstens so viele fruehere Naechte bilden den Schnitt. */
 internal const val VERGLEICHSNAECHTE = 7
 internal const val RUHEPULS_SPANNE = 2
-internal const val HRV_SPANNE_PROZENT = 10
 /** Weniger Wachminuten gelten als durchgeschlafen. */
 internal const val DURCHGESCHLAFEN_MIN = 10
 /** Ein Puls, der juenger ist, heisst "jetzt". */
@@ -111,30 +117,53 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
 }
 
 /**
- * Entschieden wird am gerundeten Abstand, denn der steht auf der Seite:
- * 2.33 bpm ueber dem Schnitt hiesse sonst "2 bpm above your usual", obwohl
- * die Fussnote zwei Schlaege "as usual" nennt.
+ * Wie immer heisst: hoechstens zwei Schlaege neben dem Schnitt der frueheren
+ * Naechte. Entschieden wird am gerundeten Abstand, denn der steht auf der
+ * Seite: 2.33 bpm ueber dem Schnitt hiesse sonst "2 bpm above your usual",
+ * obwohl zwei Schlaege "as usual" sind.
  */
-private fun Gesundheitsrechnung.herzurteil(letzte: Int?, frueher: List<Int>, spanne: Int, abstandVon: (Int, Double) -> Double): Herzurteil {
-    val werte = frueher.filter { it > 0 }.takeLast(VERGLEICHSNAECHTE)
-    val schnitt = werte.takeIf { it.isNotEmpty() }?.average()
-    if (letzte == null || schnitt == null || werte.size < LERNNAECHTE) return Herzurteil(werte.size, schnitt, null, 0)
-    val abstand = abstandVon(letzte, schnitt).roundToInt()
+internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>): Herzurteil {
+    val (naechte, schnitt) = naechteSchnitt(frueher)
+    if (letzte == null || schnitt == null || naechte < LERNNAECHTE) return Herzurteil(naechte, schnitt, null, 0)
+    val abstand = abs(letzte - schnitt).roundToInt()
     val urteil = when {
-        abstand <= spanne -> Vergleich.WIE_IMMER
+        abstand <= RUHEPULS_SPANNE -> Vergleich.WIE_IMMER
         letzte > schnitt -> Vergleich.HOEHER
         else -> Vergleich.TIEFER
     }
-    return Herzurteil(werte.size, schnitt, urteil, abstand)
+    return Herzurteil(naechte, schnitt, urteil, abstand)
 }
 
-/** Wie immer heisst: hoechstens zwei Schlaege neben dem Schnitt der frueheren Naechte. */
-internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>): Herzurteil =
-    herzurteil(letzte, frueher, RUHEPULS_SPANNE) { w, s -> abs(w - s) }
+/**
+ * Wieviele der frueheren Naechte zaehlen und ihr Schnitt: hoechstens die
+ * letzten [VERGLEICHSNAECHTE], ohne die ungemessenen (0). Fuer die HRV nur
+ * die Zahl auf "Your usual" - ihr Urteil faellt am Band, siehe [hrvUrteil].
+ */
+internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, Double?> {
+    val werte = frueher.filter { it > 0 }.takeLast(VERGLEICHSNAECHTE)
+    return werte.size to werte.takeIf { it.isNotEmpty() }?.average()
+}
 
-/** Wie immer heisst: hoechstens zehn Prozent neben dem Schnitt der frueheren Naechte. */
-internal fun Gesundheitsrechnung.hrvUrteil(letzte: Int?, frueher: List<Int>): Herzurteil =
-    herzurteil(letzte, frueher, HRV_SPANNE_PROZENT) { w, s -> abs(w - s) / s * 100 }
+/**
+ * Wie immer heisst: im Band der letzten Nacht ([Gesundheitsrechnung.hrvWoche],
+ * der letzte Tag). Ein zweiter Massstab - zehn Prozent um den Schnitt von
+ * sieben Naechten - widersprach der HRV-Karte: "in your range" darueber,
+ * "below your usual" darunter. Ohne Wert oder Band kein Urteil.
+ *
+ * Der Abstand zaehlt bis zum Bandrand, nicht bis zur Mitte: der Satz sagt
+ * "below your range", und auf 63 ms "as usual" folgt bei 64 ms "1 ms above"
+ * statt eines Sprungs auf den Abstand zur Mitte. In ms, weil Band und Wert
+ * auf der Karte in ms stehen - so laesst sich die Zahl dort nachrechnen.
+ */
+internal fun Gesundheitsrechnung.hrvUrteil(tag: Gesundheitsrechnung.HrvTag?): Bandurteil? {
+    val wert = tag?.wert ?: return null
+    val (unten, oben) = tag.band ?: return null
+    return when {
+        wert < unten -> Bandurteil(Vergleich.TIEFER, unten - wert)
+        wert > oben -> Bandurteil(Vergleich.HOEHER, wert - oben)
+        else -> Bandurteil(Vergleich.WIE_IMMER, 0)
+    }
+}
 
 /** Der letzte Puls, und ob er juenger ist als eine Viertelstunde. */
 internal fun Gesundheitsrechnung.pulsFrisch(sekunde: Long, jetzt: Long): Boolean = jetzt - sekunde <= PULS_FRISCH_S

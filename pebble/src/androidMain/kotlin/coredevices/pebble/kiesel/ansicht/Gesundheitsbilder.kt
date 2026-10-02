@@ -244,7 +244,9 @@ internal fun Pulsband(
  * Die HRV der letzten sieben Naechte wie bei Google Health und Garmin: das
  * persoenliche Band als Flaeche, Tag fuer Tag so breit, wie es an dem Tag
  * galt, darueber die Naechte als verbundene Punkte - gruen im Band, in
- * [ausserhalb] daneben. Ohne Band (zu wenig fruehere Naechte) nur die Punkte.
+ * [ausserhalb] daneben. Eine Nacht ohne Band (zu wenig fruehere Naechte)
+ * steht neutral da, und die Linie zu ihr auch: gruen hiesse "in range", und
+ * ohne Band ist ueber sie nichts gesagt.
  */
 @Composable
 internal fun HrvWoche(
@@ -260,6 +262,7 @@ internal fun HrvWoche(
     val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val flaeche = farbe.copy(alpha = 0.16f)
     val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
+    val ohneUrteil = MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
         val rechts = size.width - 30.dp.toPx()
         val fuss = 18.dp.toPx()
@@ -285,11 +288,19 @@ internal fun HrvWoche(
             val breite = if (i == tage.lastIndex) rechts - links else spalte * (i + 1) - links
             drawRect(flaeche, Offset(links, y(o)), Size(breite + 0.5f, y(u) - y(o)))
         }
-        val punkte = tage.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) } }
-        for (i in 1 until punkte.size) drawLine(farbe, punkte[i - 1], punkte[i], 2.dp.toPx(), cap = StrokeCap.Round)
+        val punkte = tage.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) to t.imBand } }
+        for (i in 1 until punkte.size) {
+            val (von, vonImBand) = punkte[i - 1]
+            val (bis, bisImBand) = punkte[i]
+            drawLine(if (vonImBand == null || bisImBand == null) ohneUrteil else farbe, von, bis, 2.dp.toPx(), cap = StrokeCap.Round)
+        }
         tage.forEachIndexed { i, t ->
             val w = t.wert ?: return@forEachIndexed
-            val f = if (t.imBand == false) ausserhalb else farbe
+            val f = when (t.imBand) {
+                true -> farbe
+                false -> ausserhalb
+                null -> ohneUrteil
+            }
             val p = Offset(x(i), y(w))
             val letzte = i == tage.lastIndex
             drawCircle(f, 4.dp.toPx(), p)

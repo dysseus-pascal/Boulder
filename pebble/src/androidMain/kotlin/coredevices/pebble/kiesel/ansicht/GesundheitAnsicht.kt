@@ -55,6 +55,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
+import coredevices.pebble.kiesel.Bandurteil
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
@@ -183,15 +184,16 @@ internal fun heuteText(context: Context): String = tagText(context, LocalDate.no
 internal fun herzHinweis(s: GesundheitsStand): String? {
     val n = s.nacht ?: return null
     val ruhe = Gesundheitsrechnung.ruhepulsUrteil(n.ruhepuls, s.ruhepulsWoche)
-    val hrv = Gesundheitsrechnung.hrvUrteil(n.hrv, s.hrvWoche)
-    if (ruhe.urteil == null && hrv.urteil == null) return null
+    // Die HRV nach ihrem Band, wie die HRV-Karte der Herzseite
+    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull())
+    if (ruhe.urteil == null && hrv == null) return null
     return urteilSatz(ruhe, hrv)
 }
 
 /** Der Satz zu Ruhepuls und HRV, wenn wenigstens eins davon ein Urteil hat. */
 @Composable
-internal fun urteilSatz(ruhe: Herzurteil, hrv: Herzurteil): String {
-    if (ruhe.urteil == Vergleich.WIE_IMMER && hrv.urteil == Vergleich.WIE_IMMER) return stringResource(R.string.ks_h_beide_wie_immer)
+internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
+    if (ruhe.urteil == Vergleich.WIE_IMMER && hrv?.urteil == Vergleich.WIE_IMMER) return stringResource(R.string.ks_h_beide_wie_immer)
     val teile = listOfNotNull(
         when (ruhe.urteil) {
             Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_ruhe_wie_immer)
@@ -199,11 +201,12 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Herzurteil): String {
             Vergleich.TIEFER -> stringResource(R.string.ks_h_ruhe_tiefer, ruhe.abstand)
             null -> null
         },
-        when (hrv.urteil) {
-            Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_hrv_wie_immer)
-            Vergleich.HOEHER -> stringResource(R.string.ks_h_hrv_hoeher, hrv.abstand)
-            Vergleich.TIEFER -> stringResource(R.string.ks_h_hrv_tiefer, hrv.abstand)
-            null -> null
+        hrv?.let {
+            when (it.urteil) {
+                Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_hrv_wie_immer)
+                Vergleich.HOEHER -> stringResource(R.string.ks_h_hrv_hoeher, it.abstand)
+                Vergleich.TIEFER -> stringResource(R.string.ks_h_hrv_tiefer, it.abstand)
+            }
         },
     )
     return teile.joinToString(" ")

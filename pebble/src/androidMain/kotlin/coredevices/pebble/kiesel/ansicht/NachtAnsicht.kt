@@ -141,20 +141,24 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
             }
         }
 
-        if (n.abschnitte.isNotEmpty() || d.puls.isNotEmpty()) {
+        // Geladen wird eine halbe Stunde vor und nach dem Schlaf; gezeigt nur die
+        // Nacht selbst - Punkte davor zeichnete die Kurve sonst in die Achsenspalte.
+        val von = n.abschnitte.minOfOrNull { it.von.epochSecond } ?: n.einschlafen.epochSecond
+        val bis = n.abschnitte.maxOfOrNull { it.bis.epochSecond } ?: n.aufwachen.epochSecond
+        val puls = d.puls.filter { it.first in von..bis }
+        val spo2Punkte = d.spo2.filter { it.first in von..bis }
+        if (n.abschnitte.isNotEmpty() || puls.isNotEmpty()) {
             Kasten {
                 Kopf(stringResource(R.string.ks_n_durch_die_nacht))
                 Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
                     if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 150.dp)
-                    val von = n.abschnitte.minOfOrNull { it.von.epochSecond } ?: n.einschlafen.epochSecond
-                    val bis = n.abschnitte.maxOfOrNull { it.bis.epochSecond } ?: n.aufwachen.epochSecond
-                    if (d.puls.isNotEmpty()) {
+                    if (puls.isNotEmpty()) {
                         Text(stringResource(R.string.ks_n_puls), fontSize = 13.sp, color = grau, modifier = Modifier.padding(top = 10.dp))
-                        Tageskurve(d.puls.filter { it.first in von..bis }, von, bis, Color(0xFFC0392B), hoehe = 110.dp)
+                        Tageskurve(puls, von, bis, Color(0xFFC0392B), hoehe = 110.dp)
                     }
-                    if (d.spo2.isNotEmpty()) {
+                    if (spo2Punkte.isNotEmpty()) {
                         Text("SpO2", fontSize = 13.sp, color = grau, modifier = Modifier.padding(top = 10.dp))
-                        Tageskurve(d.spo2, von, bis, Color(0xFF2E7C8A), hoehe = 90.dp, trendFenster = 1800)
+                        Tageskurve(spo2Punkte, von, bis, Color(0xFF2E7C8A), hoehe = 90.dp, trendFenster = 1800)
                     }
                 }
             }
@@ -165,7 +169,8 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
         // Der Koerper im Schlaf, je gegen den Schnitt der Naechte davor.
         val ruheSchnitt = d.davor.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
         val hrvSchnitt = d.davor.map { it.hrv }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
-        val spo2 = d.spo2.map { it.second }
+        // Dieselben Punkte wie die Kurve, damit "lowest" einer ist, den man darin sieht.
+        val spo2 = spo2Punkte.map { it.second }
         if (n.ruhepuls != null || n.hrv != null || spo2.isNotEmpty()) {
             Kasten {
                 Kopf(stringResource(R.string.ks_n_koerper))

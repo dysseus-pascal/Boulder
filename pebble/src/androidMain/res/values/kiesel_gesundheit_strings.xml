@@ -70,8 +70,8 @@
     <string name="ks_h_ruhe_hoeher">Resting heart %1$d bpm above your usual.</string>
     <string name="ks_h_ruhe_tiefer">Resting heart %1$d bpm below your usual.</string>
     <string name="ks_h_hrv_wie_immer">HRV as usual.</string>
-    <string name="ks_h_hrv_hoeher">HRV %1$d %% above your usual.</string>
-    <string name="ks_h_hrv_tiefer">HRV %1$d %% below your usual.</string>
+    <string name="ks_h_hrv_hoeher">HRV %1$d ms above your range.</string>
+    <string name="ks_h_hrv_tiefer">HRV %1$d ms below your range.</string>
     <string name="ks_h_heute_bisher">TODAY SO FAR</string>
     <string name="ks_h_synchron">· synced %1$s</string>
     <string name="ks_h_km_kcal">%1$s · %2$d kcal</string>
@@ -146,7 +146,6 @@
     <string name="ks_h_hrv_im_band">Last night, in your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_unter_band">Last night, below your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_ueber_band">Last night, above your range of %1$d–%2$d ms</string>
-    <string name="ks_h_hrv_ohne_band">Last night · your range appears after %1$d nights with HRV</string>
     <string name="ks_h_hrv_keine">Not measured last night</string>
     <string name="ks_h_hrv_band">Personal range</string>
     <string name="ks_h_hrv_drin">In range</string>

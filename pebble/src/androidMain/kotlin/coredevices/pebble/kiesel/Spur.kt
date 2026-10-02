@@ -108,6 +108,16 @@ internal object Spur {
     fun vorhanden(context: Context, beginn: Long): Boolean = datei(context, beginn).exists()
 
     /**
+     * Die Punkte, die in die Sitzung fallen: [anfang, ende).
+     *
+     * EIN FENSTER FUER ALLES: die Akte nimmt nur Routenpunkte darin an. Rechneten
+     * Distanz, Hoehe und Tempo ueber die ganze Datei (der erste Fix kann aelter
+     * sein als der Start), stuende neben der Route eine laengere Strecke als ihre eigene.
+     */
+    fun inSitzung(punkte: List<Punkt>, anfang: java.time.Instant, ende: java.time.Instant): List<Punkt> =
+        punkte.filter { it.zeit >= anfang.epochSecond && it.zeit < ende.epochSecond }
+
+    /**
      * Die Datei, wie sie ist - fuer die Sicherung.
      *
      * UNVERAENDERT UND NICHT UMGERECHNET: was gesichert und zurueckgeholt

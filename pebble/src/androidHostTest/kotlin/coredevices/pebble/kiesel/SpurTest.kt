@@ -188,6 +188,19 @@ class SitzungsendeTest {
     }
 
     @Test
+    fun strecke_und_hoehe_nur_aus_der_sitzung() {
+        // Der erste Fix kam zehn Sekunden vor dem Start - er zaehlt weder zur
+        // Route noch zur Strecke; der Punkt genau am Ende auch nicht.
+        val punkte = listOf(p(999_990), p(1_000_010), p(1_000_500), p(1_000_600))
+        val drin = Spur.inSitzung(punkte, a, a.plusSeconds(600))
+        org.junit.Assert.assertEquals(listOf(1_000_010L, 1_000_500L), drin.map { it.zeit })
+        org.junit.Assert.assertEquals(
+            Kieselsport.routeAus(punkte, a, a.plusSeconds(600))!!.route.map { it.time.epochSecond },
+            drin.map { it.zeit },
+        )
+    }
+
+    @Test
     fun route_ohne_punkte_vor_dem_beginn() {
         val ende = Kieselsport.sitzungsEnde(a, 60, listOf(p(999_990), p(1_000_010), p(1_000_500)), a.plusSeconds(99_999))
         val route = Kieselsport.routeAus(listOf(p(999_990), p(1_000_010), p(1_000_500)), a, ende)!!

@@ -11,8 +11,6 @@ import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import androidx.health.connect.client.request.ReadRecordsRequest
-import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Length
 import coredevices.pebble.R
 import kotlinx.serialization.Serializable
@@ -284,8 +282,10 @@ internal object Kieselsport {
         }
         val anfang = Instant.ofEpochSecond(beginn)
         // DIE STRECKE KOMMT VOM TELEFON, nicht von der Uhr - als Route an der Sitzung.
-        val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
-        val ende = sitzungsEnde(anfang, dauer, punkte, Instant.now())
+        val alle = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
+        val ende = sitzungsEnde(anfang, dauer, alle, Instant.now())
+        // Strecke, Route, Hoehe und Tempo aus denselben Punkten - denen der Sitzung.
+        val punkte = Spur.inSitzung(alle, anfang, ende)
 
         val (satzart, name) = artAlsSatzart(context, felder[SP_ART] ?: -1)
         val puls = felder[SP_PULS_MITTEL] ?: 0
@@ -323,7 +323,7 @@ internal object Kieselsport {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
                 exerciseType = satzart, title = name, notes = notiz,
-                metadata = vonDerUhr("kieselsport-$beginn"),
+                metadata = vonDerUhr(kennung(beginn)),
                 segments = segmente, laps = runden, exerciseRoute = route,
             )
         } catch (e: IllegalArgumentException) {
@@ -333,7 +333,7 @@ internal object Kieselsport {
         val ohne = ExerciseSessionRecord(
             startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
             exerciseType = satzart, title = name, notes = notiz,
-            metadata = vonDerUhr("kieselsport-$beginn"),
+            metadata = vonDerUhr(kennung(beginn)),
             exerciseRoute = route,
         )
         val hatAbschnitte = satz != null && (segmente.isNotEmpty() || runden.isNotEmpty())
@@ -372,8 +372,10 @@ internal object Kieselsport {
             }
         }
 
-        // Die Pulskurve, falls die Uhr sie schon geliefert hat.
+        // Die Pulskurve, falls die Uhr sie schon geliefert hat - samt den Kalorien aus ihr.
         if (Pulskurve.eintragen(context, beginn)) meldung += ", " + context.getString(R.string.ks_a_pulskurve)
+        // Kam die Kurve vor der Sitzung, fehlte ihr das Fenster fuer die Kalorien.
+        else Trainingswerte.schreibeKalorienAusPuls(context, beginn)
         return meldung
     }
 
@@ -382,26 +384,23 @@ internal object Kieselsport {
      * wer dabei war, sie kommt deshalb vom Aufrufer.
      *
      * DIESELBE KENNUNG WIE BEIM NORMALEN WEG: kommt die Zusammenfassung doch
-     * noch, ersetzt sie diesen Eintrag. Kalorien und Schritte fehlen - die
-     * zaehlte die Uhr. Distanz, Hoehe und Tempo kommen aus der Spur.
+     * noch, ersetzt sie diesen Eintrag. Schritte fehlen - die zaehlte die Uhr.
+     * Distanz, Hoehe und Tempo kommen aus der Spur, die Kalorien aus dem Puls,
+     * wenn seine Kurve schon in der Akte steht.
      */
     suspend fun nachtragen(context: Context, beginn: Long, art: Long): String {
-        val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
-        if (punkte.size < 2) return context.getString(R.string.ks_a_nicht_eingetragen)
+        val alle = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
+        if (alle.size < 2) return context.getString(R.string.ks_a_nicht_eingetragen)
         val klient = Akte(context).bereit() ?: return context.getString(R.string.ks_g_akte_fehlt)
         val anfang = Instant.ofEpochSecond(beginn)
-        val ende = sitzungsEnde(anfang, 60, punkte, Instant.now())
+        val ende = sitzungsEnde(anfang, 60, alle, Instant.now())
+        // Wie beim normalen Weg: Strecke, Route, Hoehe und Tempo nur aus der Sitzung.
+        val punkte = Spur.inSitzung(alle, anfang, ende)
         val (satzart, name) = artAlsSatzart(context, art)
         val strecke = Spur.laenge(punkte)
-        // Der Puls aus der Akte - nur der eigene, den Kieselsport geschickt hat.
+        // Der Puls aus der Akte - nur der eigene, so wie ihn die Trainingsansicht zeigt.
         val pulse = try {
-            klient.readRecords(
-                ReadRecordsRequest(
-                    androidx.health.connect.client.records.HeartRateRecord::class,
-                    TimeRangeFilter.between(anfang, ende),
-                )
-            ).records.filter { it.metadata.dataOrigin.packageName == context.packageName }
-                .flatMap { it.samples }.map { it.beatsPerMinute }
+            Trainingsanalyse.entstoert(TrainingsDaten.rohpuls(klient, context.packageName, anfang, ende)).map { it.bpm }
         } catch (e: Exception) {
             emptyList()
         }
@@ -417,7 +416,7 @@ internal object Kieselsport {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
                 exerciseType = satzart, title = name, notes = notiz,
-                metadata = vonDerUhr("kieselsport-$beginn"),
+                metadata = vonDerUhr(kennung(beginn)),
                 exerciseRoute = routeAus(punkte, anfang, ende),
             )
         } catch (e: IllegalArgumentException) {
@@ -428,6 +427,8 @@ internal object Kieselsport {
         val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
         val meldung = schreibe(context, satz, kurz)
         Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte)
+        // Erst jetzt gibt es das Fenster, in dem die schon gelieferte Kurve zaehlt.
+        Trainingswerte.schreibeKalorienAusPuls(context, beginn)
         return meldung.also { KieselVerlauf.merke(context, it) }
     }
 
@@ -446,7 +447,7 @@ internal object Kieselsport {
 
     /** Die Route, beschnitten auf die Sitzung - nur Punkte darin nimmt die Akte an. Null unter zwei Punkten. */
     fun routeAus(punkte: List<Spur.Punkt>, von: Instant, bis: Instant): ExerciseRoute? =
-        punkte.filter { it.zeit >= von.epochSecond && it.zeit < bis.epochSecond }.takeIf { it.size >= 2 }?.let(::routeAus)
+        Spur.inSitzung(punkte, von, bis).takeIf { it.size >= 2 }?.let(::routeAus)
 
     fun routeAus(punkte: List<Spur.Punkt>): ExerciseRoute = ExerciseRoute(punkte.map { p ->
         ExerciseRoute.Location(
@@ -461,6 +462,9 @@ internal object Kieselsport {
     /** Sagt eine Meldung von verarbeite, dass die Akte den Eintrag nicht nahm? */
     fun gescheitert(context: Context, meldung: String?): Boolean =
         meldung == context.getString(R.string.ks_a_nicht_eingetragen) || meldung == context.getString(R.string.ks_g_akte_fehlt)
+
+    /** Die Kennung der Sitzung eines Trainings - an ihr finden sich Nachtrag und Kalorien wieder. */
+    fun kennung(beginn: Long): String = "kieselsport-$beginn"
 
     /**
      * Von der Uhr gemessen, mit fester Kennung: kommt derselbe Satz noch

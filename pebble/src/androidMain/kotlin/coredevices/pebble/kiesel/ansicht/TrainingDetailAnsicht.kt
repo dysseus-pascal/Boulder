@@ -37,11 +37,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.records.ExerciseSegment
 import coredevices.pebble.R
-import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
-import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Sport
 import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.kiesel.TrainingDetail
@@ -71,26 +69,18 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     val api = koinInject<HealthDataApi>()
     var detail by remember { mutableStateOf<TrainingDetail?>(null) }
     var geladen by remember { mutableStateOf(false) }
-    var ruhepuls by remember { mutableStateOf<Int?>(null) }
+    var grenzen by remember { mutableStateOf<Pair<Int?, Int>?>(null) }
     LaunchedEffect(id) {
         val neu = TrainingsDaten.detail(context, id)
-        // Der Ruhepuls der Naechte vor dem Training, nicht der von heute - vor
-        // der Anzeige, sonst springen die kcal nach dem Oeffnen.
-        ruhepuls = neu?.eintrag?.sitzung?.startTime?.let { start ->
-            val naechte = try {
-                api.getNaechte(start.minus(Duration.ofDays(14)).epochSecond, start.epochSecond)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                emptyList()
-            }
-            Trainingsanalyse.ruhepulsAusNaechten(naechte.sortedBy { it.beginnUtc }.map { it.ruhepuls })
-        }
+        // Ruhe- und Maximalpuls wie in der Akte (Trainingswerte) - vor der
+        // Anzeige, sonst springen kcal und Zonen nach dem Oeffnen.
+        grenzen = neu?.eintrag?.sitzung?.startTime?.let { Trainingswerte.herzgrenzenVor(context, api, it) }
         detail = neu
         geladen = true
     }
     val d = detail
-    if (d == null) {
+    val g = grenzen
+    if (d == null || g == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (!geladen) CircularProgressIndicator() else Text(stringResource(R.string.ks_t_noch_keins))
         }
@@ -100,7 +90,8 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
     val s = t.sitzung
     val name = s.title ?: stringResource(t.sport.nameId)
     LaunchedEffect(name) { setzeTitel(name) }
-    val maxpuls = remember { KieselEinstellungen.stand(context).maxpuls }
+    // Derselbe Maximalpuls fuer Zonen und kcal wie ueberall in Boulder (Herzgrenzen).
+    val (ruhepuls, maxpuls) = g
     val ton = Color(t.sport.farbe)
 
     Column(
@@ -129,6 +120,7 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                     } else {
                         Wert(tempoText(t.meter / sekunden, false), stringResource(R.string.ks_t_tempo))
                     }
+                    // Die Punkte sind schon auf die Sitzung beschnitten (TrainingsDaten.punkte).
                     val auf = Spur.hoehenmeter(d.punkte)
                     if (auf > 0) Wert(String.format(Locale.getDefault(), "%.0f m", auf), stringResource(R.string.ks_t_aufstieg))
                 }
@@ -137,9 +129,7 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                     Wert(d.puls.maxOf { it.bpm }.toString(), stringResource(R.string.ks_t_puls_max))
                     koerper?.let { k ->
                         val geschlecht = Trainingswerte.geschlecht(k.gender)
-                        // Die Vorgabe ist kein gemessenes Maximum - dann rechnet Tanaka nach dem Alter.
-                        val gemessen = maxpuls.takeIf { it != KieselEinstellungen.MAXPULS_VORGABE }
-                        Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht, ruhepuls, gemessen)?.let {
+                        Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht, ruhepuls, maxpuls)?.let {
                             Wert("≈ " + it.roundToInt(), stringResource(R.string.ks_t_kcal))
                         }
                     }

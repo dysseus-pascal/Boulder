@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.util.Log
 import coredevices.pebble.R
+import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -50,6 +51,12 @@ internal data class Nacht(
  */
 internal data class Tageseintrag(val zeit: Instant, val praeparat: Boolean, val name: String, val koffeinMg: Double?, val id: String = "", val eigen: Boolean = false)
 
+/** So weit zurueck zaehlt der Blutdruck: wer selten misst, misst kaum einmal die Woche. */
+internal const val BLUTDRUCK_TAGE = 30L
+
+/** Eine Blutdruckmessung aus der Akte, in mmHg. */
+internal data class Blutdruck(val zeit: Instant, val oben: Int, val unten: Int)
+
 /** Ein Glas Wasser von heute, mit seiner Kennung in der Akte. */
 internal data class Glaseintrag(val zeit: Instant, val id: String, val eigen: Boolean)
 
@@ -91,6 +98,8 @@ internal data class GesundheitsStand(
     val tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
     /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesstrahl. */
     val glasEintraege: List<Glaseintrag> = emptyList(),
+    /** Blutdruck der letzten [BLUTDRUCK_TAGE] Tage aus der Akte, aelteste zuerst. */
+    val blutdruck: List<Blutdruck> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
 )
@@ -197,6 +206,18 @@ internal object Gesundheitsrechnung {
     }
 
     /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */
+    /** Die letzte Messung und, ab drei Messungen, der Schnitt der Zeitspanne. */
+    data class Blutdruckzeile(val letzte: Blutdruck, val schnitt: Pair<Int, Int>?)
+
+    fun blutdruckzeile(messungen: List<Blutdruck>): Blutdruckzeile? {
+        val letzte = messungen.maxByOrNull { it.zeit } ?: return null
+        // Unter drei Messungen ist ein Schnitt nur die letzte Messung mit anderem Namen.
+        val schnitt = messungen.takeIf { it.size >= 3 }?.let { m ->
+            m.map { it.oben }.average().roundToInt() to m.map { it.unten }.average().roundToInt()
+        }
+        return Blutdruckzeile(letzte, schnitt)
+    }
+
     fun koffeinAktiv(dosen: List<Pair<Instant, Double>>, jetzt: Instant): Double = dosen
         .filter { !it.first.isAfter(jetzt) }
         .sumOf { (wann, mg) -> mg * 0.5.pow(Duration.between(wann, jetzt).toMinutes() / KOFFEIN_HALBWERT_MIN) }
@@ -361,6 +382,17 @@ internal object Gesundheitsdaten {
             Tageseintrag(r.startTime, praeparat, name, mg, r.metadata.id, r.metadata.dataOrigin.packageName == context.packageName)
         }
 
+        // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
+        // deren App ueber die Akte, deshalb auch fremde Eintraege.
+        val blutdruck = try {
+            klient?.liesOderEigene(context, BloodPressureRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt)).orEmpty()
+                .map { Blutdruck(it.time, it.systolic.inMillimetersOfMercury.roundToInt(), it.diastolic.inMillimetersOfMercury.roundToInt()) }
+                .sortedBy { it.zeit }
+        } catch (e: Exception) {
+            Log.w(TAG, "Blutdruck lesen: " + e.message)
+            emptyList()
+        }
+
         val apps = UhrApps.installiert()
         val tagesherz = runCatching {
             val von = anfang(heute.minusDays(14))
@@ -393,6 +425,7 @@ internal object Gesundheitsdaten {
             mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
             tagesherz = tagesherz,
             eintraege = eintraege.sortedByDescending { it.zeit },
+            blutdruck = blutdruck,
             glasEintraege = heuteWasser.map { Glaseintrag(it.startTime, it.metadata.id, it.metadata.dataOrigin.packageName == context.packageName) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
             letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },

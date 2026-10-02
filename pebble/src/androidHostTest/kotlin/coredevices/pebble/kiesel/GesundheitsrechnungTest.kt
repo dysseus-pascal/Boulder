@@ -199,4 +199,15 @@ class GesundheitsbildRechnungTest {
         val wenig = ruhig.take(4) + Gesundheitsrechnung.Tagesherz(heute, 76, 0, 100)
         assertNull(Gesundheitsrechnung.tagesurteil(wenig, heute)!!.haerte)
     }
+
+    @Test
+    fun blutdruck_zeigt_die_letzte_messung_und_ab_drei_den_schnitt() {
+        assertNull(Gesundheitsrechnung.blutdruckzeile(emptyList()))
+        val zwei = listOf(Blutdruck(Instant.ofEpochSecond(beginn + 100), 130, 85), Blutdruck(Instant.ofEpochSecond(beginn), 120, 80))
+        val z = Gesundheitsrechnung.blutdruckzeile(zwei)!!
+        assertEquals(130, z.letzte.oben)
+        assertNull(z.schnitt)
+        val drei = zwei + Blutdruck(Instant.ofEpochSecond(beginn + 50), 125, 81)
+        assertEquals(125 to 82, Gesundheitsrechnung.blutdruckzeile(drei)!!.schnitt)
+    }
 }

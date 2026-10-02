@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel
 
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -19,7 +20,7 @@ import androidx.health.connect.client.records.SpeedRecord
  *
  * SCHREIBEN: die HRV von Yoga und der Einzelmessung, das Wasser von
  * Drinktervall, die Praeparate von SupCycle, Kalorien, Distanz, Hoehe und
- * Tempo der Trainings. LESEN: das Wasser (ob schon
+ * Tempo der Trainings. LESEN: den Blutdruck einer Manschetten-App, das Wasser (ob schon
  * jemand dasselbe Glas eintrug), die Trainings,
  * ihre Pulskurve, SpO2 und HRV fuer die Trainingsansicht und die SpO2-Frage
  * der Uhr. Nur nach Moeglichkeit - fehlt eines, laeuft der Rest trotzdem.
@@ -40,4 +41,5 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getWritePermission(DistanceRecord::class),
     HealthPermission.getWritePermission(ElevationGainedRecord::class),
     HealthPermission.getWritePermission(SpeedRecord::class),
+    HealthPermission.getReadPermission(BloodPressureRecord::class),
 )

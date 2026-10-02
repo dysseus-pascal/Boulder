@@ -154,7 +154,7 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
                     }
                     if (d.spo2.isNotEmpty()) {
                         Text("SpO2", fontSize = 13.sp, color = grau, modifier = Modifier.padding(top = 10.dp))
-                        Tageskurve(d.spo2, von, bis, Color(0xFF2E7C8A), hoehe = 90.dp)
+                        Tageskurve(d.spo2, von, bis, Color(0xFF2E7C8A), hoehe = 90.dp, trendFenster = 1800)
                     }
                 }
             }

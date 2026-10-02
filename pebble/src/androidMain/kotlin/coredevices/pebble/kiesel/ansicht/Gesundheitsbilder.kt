@@ -91,8 +91,10 @@ private fun DrawScope.nachtschatten(
 
 /**
  * Werte ueber eine Zeitspanne als Punkte, mit den Stunden darunter - Puls
- * und SpO2 der Nachtansicht. Punkte statt Linie: zwischen zwei Messungen
- * weiss niemand, was war. Die Achse spannt sich um die Werte.
+ * und SpO2 der Nachtansicht. Die Punkte blass, darueber die Trendlinie
+ * ([Gesundheitsrechnung.trend] mit [trendFenster] Sekunden nach jeder Seite):
+ * die Punkte zeigen, was gemessen wurde, die Linie, wohin es ging. Die Achse
+ * spannt sich um die Werte.
  */
 @Composable
 internal fun Tageskurve(
@@ -101,6 +103,7 @@ internal fun Tageskurve(
     bis: Long,
     farbe: Color,
     hoehe: Dp = 120.dp,
+    trendFenster: Long = 900,
 ) {
     if (punkte.isEmpty()) return
     val messer = rememberTextMeasurer()
@@ -122,7 +125,16 @@ internal fun Tageskurve(
         }
         val r = if (punkte.size > 300) 1.5.dp.toPx() else 2.5.dp.toPx()
         punkte.forEach { (t, w) ->
-            drawCircle(farbe.copy(alpha = 0.7f), r, Offset(x(t), y(w)))
+            drawCircle(farbe.copy(alpha = 0.4f), r, Offset(x(t), y(w)))
+        }
+        fun yd(w: Double) = boden * (1f - ((w - tief) / (hoch - tief)).toFloat())
+        Gesundheitsrechnung.trend(punkte, trendFenster).forEach { stueck ->
+            val p = stueck.map { (t, w) -> Offset(x(t), yd(w)) }
+            if (p.size == 1) drawCircle(farbe, 2.dp.toPx(), p[0])
+            else drawPath(
+                Path().apply { moveTo(p.first().x, p.first().y); weich(p) }, farbe,
+                style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            )
         }
         stundenstriche(von, bis) { t, text ->
             val m = messer.measure(text, stil)

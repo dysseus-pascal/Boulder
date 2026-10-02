@@ -248,4 +248,14 @@ class GesundheitsbildRechnungTest {
         val gleich = (1..10).associate { heute.minusDays(it.toLong()) to 45 }
         assertEquals(42 to 48, Gesundheitsrechnung.hrvWoche(gleich, heute).last().band)
     }
+
+    @Test
+    fun trendlinieMedianUndLuecken() {
+        // Ein Ausreisser zieht den Median nicht; zwei Stunden ohne Messung brechen die Linie.
+        val punkte = listOf(0L to 50, 300L to 52, 600L to 90, 900L to 51, 1200L to 50, 9000L to 60, 9300L to 62)
+        val trend = Gesundheitsrechnung.trend(punkte, 900)
+        assertEquals(2, trend.size)
+        assertEquals(51.0, trend[0].first { it.first == 600L }.second)
+        assertEquals(9000L, trend[1].first().first)
+    }
 }

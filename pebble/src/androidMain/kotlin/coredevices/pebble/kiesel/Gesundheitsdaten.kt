@@ -358,6 +358,35 @@ internal object Gesundheitsrechnung {
         HrvTag(tag, werte[tag]?.takeIf { it > 0 }, band)
     }
 
+    /**
+     * Die Trendlinie durch eine Punktwolke: alle [schritt] Sekunden der Median
+     * der Punkte bis [fenster] Sekunden davor und danach. Der Median, weil ein
+     * einzelner Ausreisser der Uhr die Linie sonst zu sich zoege. Wo im
+     * Fenster nichts liegt, bricht die Linie - dort weiss niemand, was war.
+     */
+    fun trend(punkte: List<Pair<Long, Int>>, fenster: Long, schritt: Long = 300): List<List<Pair<Long, Double>>> {
+        if (punkte.isEmpty()) return emptyList()
+        val sortiert = punkte.sortedBy { it.first }
+        val aus = mutableListOf<MutableList<Pair<Long, Double>>>()
+        var offen = false
+        var t = sortiert.first().first
+        while (t <= sortiert.last().first) {
+            val nah = sortiert.filter { abs(it.first - t) <= fenster }
+            val werte = nah.map { it.second }.sorted()
+            // Nur zwischen Messungen: am Rand einer Luecke liefe die Linie sonst
+            // eine Viertelstunde ueber den letzten Punkt hinaus ins Leere.
+            if (nah.none { it.first <= t } || nah.none { it.first >= t }) offen = false
+            else {
+                val median = if (werte.size % 2 == 1) werte[werte.size / 2].toDouble()
+                else (werte[werte.size / 2 - 1] + werte[werte.size / 2]) / 2.0
+                if (!offen) { aus += mutableListOf<Pair<Long, Double>>(); offen = true }
+                aus.last() += t to median
+            }
+            t += schritt
+        }
+        return aus
+    }
+
     /** Die Rasterlinien ohne die, die dem Ruhepuls naeher als [abstand] kaemen - seine Linie ersetzt sie. */
     fun rasterOhne(raster: List<Int>, ruhepuls: Int?, abstand: Float): List<Int> =
         if (ruhepuls == null) raster else raster.filter { abs(it - ruhepuls) >= abstand }

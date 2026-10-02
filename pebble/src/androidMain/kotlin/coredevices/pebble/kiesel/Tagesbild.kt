@@ -190,21 +190,25 @@ internal fun Gesundheitsrechnung.naechteTeilen(naechte: List<NachtEntity>, heute
 }
 
 /**
- * Was bei den Praeparaten zu sagen ist. Erst nach dem ersten Haken heisst
- * der Rest "offen" (und bekommt die Warnfarbe); vorher ist er schlicht
- * faellig - morgens um sieben ist nichts versaeumt.
+ * Was bei den Praeparaten zu sagen ist. "Offen" (mit Warnfarbe) ist erst,
+ * was seine Planzeit hinter sich hat; davor ist es schlicht faellig - um
+ * acht ist das Abendpraeparat nicht versaeumt. Ohne Planzeit (aeltere
+ * SupCycle) gilt der Rest erst nach dem ersten Haken als offen. [namen]
+ * nennt die offenen, sonst die faelligen.
  */
-internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>): Praeparatzeile {
+internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, jetzt: LocalTime = LocalTime.now()): Praeparatzeile {
     val genommen = liste.count { it.genommen }
-    val offen = liste.filterNot { it.genommen }.map { it.name }
+    val rest = liste.filterNot { it.genommen }
+    val versaeumt = rest.filter { e -> e.zeit?.let { !jetzt.isBefore(it) } ?: (genommen > 0) }
     val lage = when {
         liste.isEmpty() -> Praeparatlage.KEINE
-        offen.isEmpty() -> Praeparatlage.ALLE
-        genommen == 0 -> Praeparatlage.FAELLIG
-        else -> Praeparatlage.OFFEN
+        rest.isEmpty() -> Praeparatlage.ALLE
+        versaeumt.isNotEmpty() -> Praeparatlage.OFFEN
+        else -> Praeparatlage.FAELLIG
     }
-    val namen = if (offen.size <= 2) offen else offen.take(2)
-    return Praeparatzeile(genommen, liste.size, lage, namen, offen.size - namen.size)
+    val gemeint = (if (lage == Praeparatlage.OFFEN) versaeumt else rest).map { it.name }
+    val namen = gemeint.take(2)
+    return Praeparatzeile(genommen, liste.size, lage, namen, gemeint.size - namen.size)
 }
 
 /**

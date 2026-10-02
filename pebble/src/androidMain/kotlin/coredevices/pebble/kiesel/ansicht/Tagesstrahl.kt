@@ -11,6 +11,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -88,6 +90,7 @@ import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Praeparatlage
 import coredevices.pebble.kiesel.SCHRITTZIEL
+import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.Tageszeit
 import coredevices.pebble.kiesel.TrainingEintrag
@@ -200,7 +203,8 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuTage: Int?, oef
     val platz = stringResource(R.string.ks_s_platz_n)
     val offen = s.supplemente?.takeIf { s.mitSupCycle }?.let { stand ->
         val z = Gesundheitsrechnung.praeparatzeile(stand.heute { String.format(platz, it) })
-        if (z.lage == Praeparatlage.OFFEN || z.lage == Praeparatlage.FAELLIG) z.namen.firstOrNull() else null
+        // Nur Versaeumtes gehoert in den Satz - was erst spaeter ansteht, steht in der Liste.
+        if (z.lage == Praeparatlage.OFFEN) z.namen.firstOrNull() else null
     }
     val vHaerte = when (Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now())?.haerte) {
         Vergleich.HOEHER -> stringResource(R.string.ks_f_tag_haerter)
@@ -239,12 +243,13 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuTage: Int?, oef
 }
 
 /** Was ein langer Druck mit einem Ereignis tun kann - nur bei Boulders eigenen Eintraegen. */
-private sealed class Bearbeitung {
+internal sealed class Bearbeitung {
     abstract val titel: String
     abstract val zeit: Instant
     data class Getraenk(override val titel: String, override val zeit: Instant, val id: String) : Bearbeitung()
     data class Glas(override val titel: String, override val zeit: Instant, val id: String) : Bearbeitung()
-    data class Praeparate(override val titel: String, override val zeit: Instant, val ids: List<String>) : Bearbeitung()
+    /** [kennungen]: an ihnen erfaehrt SupCycles Stand, welche Plaetze nicht mehr als genommen zaehlen. */
+    data class Praeparate(override val titel: String, override val zeit: Instant, val ids: List<String>, val kennungen: List<String?>) : Bearbeitung()
 }
 
 /** Ein Ereignis des Tages auf dem Strahl. */
@@ -263,6 +268,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
     val heute = LocalDate.now()
     val jetzt = Instant.now()
     val glas = stringResource(R.string.ks_d_glas)
+    val wasser = stringResource(R.string.ks_d_wasser)
     val heuteLiter = stringResource(R.string.ks_d_heute_liter, liter(s.wasserMl))
     val ereignisse = buildList {
         if (training != null && training.sitzung.startTime.atZone(zone).toLocalDate() == heute) {
@@ -271,20 +277,25 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
         }
         if (s.mitDrinktervall) {
             val letztes = s.glasEintraege.maxOfOrNull { it.zeit }
-            // Beim letzten Glas der Stand des Tages - sonst wiederholte er sich.
+            // Ein Glas ist nur, was Drinktervall eintrug; Wasser anderer Apps steht mit seiner Menge da.
             s.glasEintraege.forEach { g ->
-                add(Ereignis(g.zeit, FLAECHE_WASSER, glas, if (g.zeit == letztes) heuteLiter else null, if (g.eigen) Bearbeitung.Glas(glas, g.zeit, g.id) else null))
+                val titel = if (g.eigen) glas else wasser
+                // Beim letzten Eintrag der Stand des Tages - sonst wiederholte er sich.
+                val unter = listOfNotNull(if (g.eigen) null else "${g.ml} ml", if (g.zeit == letztes) heuteLiter else null).joinToString(" · ").ifEmpty { null }
+                add(Ereignis(g.zeit, FLAECHE_WASSER, titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null))
             }
             s.eintraege.filter { !it.praeparat }.forEach { e ->
                 add(Ereignis(e.zeit, FLAECHE_KOFFEIN, e.name, e.koffeinMg?.let { "${it.roundToInt()} mg" }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
             }
         }
         if (s.mitSupCycle) {
-            // Was SupCycle in einem Zug abhakte, steht als eine Zeile.
-            s.eintraege.filter { it.praeparat }.groupBy { it.zeit.epochSecond / 60 }.values.forEach { gruppe ->
+            // Was SupCycle in einem Zug abhakte, steht als eine Zeile. Fremde Eintraege
+            // derselben Minute stehen daneben - sonst loeschte die Zeile nur einen Teil ihres Titels.
+            s.eintraege.filter { it.praeparat }.groupBy { it.zeit.epochSecond / 60 to it.eigen }.values.forEach { gruppe ->
                 val titel = gruppe.joinToString(", ") { it.name }
-                val eigene = gruppe.filter { it.eigen }.map { it.id }
-                add(Ereignis(gruppe.first().zeit, FLAECHE_PRAEPARAT, titel, null, if (eigene.isNotEmpty()) Bearbeitung.Praeparate(titel, gruppe.first().zeit, eigene) else null))
+                val zeit = gruppe.first().zeit
+                val bearbeitung = if (gruppe.first().eigen) Bearbeitung.Praeparate(titel, zeit, gruppe.map { it.id }, gruppe.map { it.kennung }) else null
+                add(Ereignis(zeit, FLAECHE_PRAEPARAT, titel, null, bearbeitung))
             }
         }
     }.sortedBy { it.zeit }
@@ -317,7 +328,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, training: TrainingEintrag?, wege: 
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () -> Unit) {
+internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fehler = stringResource(R.string.ks_b_fehler)
@@ -331,13 +342,15 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
     // Gleich ganz offen: halb offen lagen Speichern und Loeschen unter dem Rand.
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            Kopf(b.titel.uppercase(), "· " + uhrzeit(context, b.zeit))
-            if (b is Bearbeitung.Getraenk) {
-                val start = remember(b) { Kaffeesorten.erkenne(context, b.titel) }
-                var sorte by remember(b) { mutableIntStateOf(start?.sorte ?: Kaffeesorten.KAFFEE) }
-                var milch by remember(b) { mutableStateOf(start?.milch ?: false) }
-                var zucker by remember(b) { mutableStateOf(start?.zucker ?: false) }
-                var koffeinfrei by remember(b) { mutableStateOf(start?.koffeinfrei ?: false) }
+            // Mit dem Tag, wenn es nicht heute war: auch ein Eintrag von gestern laesst sich hier aendern.
+            Kopf(b.titel.uppercase(), "· " + zeitpunkt(context, b.zeit))
+            val start = remember(b) { (b as? Bearbeitung.Getraenk)?.let { Kaffeesorten.erkenne(context, it.titel) } }
+            // Ein eigenes Getraenk der Uhr ("Mate") ist keine der Sorten - es laesst sich nur loeschen, nicht zu Kaffee machen.
+            if (b is Bearbeitung.Getraenk && start != null) {
+                var sorte by remember(b) { mutableIntStateOf(start.sorte) }
+                var milch by remember(b) { mutableStateOf(start.milch) }
+                var zucker by remember(b) { mutableStateOf(start.zucker) }
+                var koffeinfrei by remember(b) { mutableStateOf(start.koffeinfrei) }
                 val sorten = listOf(
                     Kaffeesorten.ESPRESSO to R.string.ks_h_espresso, Kaffeesorten.KAFFEE to R.string.ks_h_kaffee,
                     Kaffeesorten.TEE to R.string.ks_h_tee, Kaffeesorten.ENERGY to R.string.ks_h_energy_drink,
@@ -357,17 +370,20 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                 if (mitMilch) Haken(stringResource(R.string.ks_b_koffeinfrei), koffeinfrei) { koffeinfrei = it }
                 if (mitMilch) Haken(stringResource(R.string.ks_b_milch), milch) { milch = it }
                 Haken(stringResource(R.string.ks_b_zucker), zucker) { zucker = it }
-                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch))
+                val art = Kaffeesorten.art(sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch)
+                val p = Kaffeesorten.portion(art)
                 if (p != null) Text(
                     stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()),
                     Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Unveraendert gespeichert schriebe die Werte der Sorte ueber die eingetragenen.
+                val geaendert = art != Kaffeesorten.art(start.sorte, start.milch, start.zucker, start.koffeinfrei)
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { ausfuehren { Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id)) } }) {
                         Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch) } }) {
+                    Button(enabled = geaendert, onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, art) } }) {
                         Text(stringResource(R.string.ks_b_speichern))
                     }
                 }
@@ -379,8 +395,10 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                             ausfuehren {
                                 when (b) {
                                     is Bearbeitung.Glas -> Gesundheitsdaten.loesche(context, HydrationRecord::class, listOf(b.id))
+                                    // Die Liste und die Quote zaehlen es dann auch nicht mehr - die Uhr erfaehrt davon nichts.
                                     is Bearbeitung.Praeparate -> Gesundheitsdaten.loesche(context, NutritionRecord::class, b.ids)
-                                    is Bearbeitung.Getraenk -> false
+                                        .also { if (it) SupCycle.verwirf(context, b.kennungen) }
+                                    is Bearbeitung.Getraenk -> Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id))
                                 }
                             }
                         },
@@ -554,7 +572,10 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
     }
 }
 
-/** Herz samt Blutdruck, Koerper, Wasser, Praeparate, Koffein als Zeilen - jede fuehrt eine Ebene tiefer. */
+/**
+ * Herz samt Blutdruck, Koerper, Wasser, Praeparate, Koffein als Zeilen. Das
+ * Chevron fuehrt zu Detail oder Trend; Eintragen hat sein eigenes "+".
+ */
 @Composable
 internal fun Koerperliste(
     s: GesundheitsStand,
@@ -593,6 +614,7 @@ internal fun Koerperliste(
         // Nur wer sich wiegt, bekommt die Zeile - ohne Waage waere sie immer leer.
         koerperzeile(s, wege.koerper)?.let { add(it) }
         if (s.mitDrinktervall) add {
+            // Gezaehlt wie auf der Uhr: nur ihre Glaeser; die Liter umfassen alles Wasser des Tages.
             val letztes = s.glaeser.maxOrNull()
             val unter = if (letztes == null) stringResource(R.string.ks_h_kein_glas)
             else pluralStringResource(R.plurals.ks_f_glaeser, s.glaeser.size, s.glaeser.size, uhrzeit(context, letztes))
@@ -605,33 +627,45 @@ internal fun Koerperliste(
         if (stand != null) add {
             val platz = stringResource(R.string.ks_s_platz_n)
             val z = Gesundheitsrechnung.praeparatzeile(stand.heute { String.format(platz, it) })
-            val unter = when (z.lage) {
-                Praeparatlage.ALLE -> stringResource(R.string.ks_h_p_alle)
-                Praeparatlage.KEINE -> stringResource(R.string.ks_h_p_keine)
-                else -> z.namen.firstOrNull()?.let { stringResource(R.string.ks_d_noch_offen, it) }
+            val (eins, zwei, mehr) = if (z.lage == Praeparatlage.OFFEN) Triple(R.string.ks_h_p_offen_1, R.string.ks_h_p_offen_2, R.string.ks_h_p_offen_n)
+            else Triple(R.string.ks_h_p_faellig_1, R.string.ks_h_p_faellig_2, R.string.ks_h_p_faellig_n)
+            val unter = when {
+                z.lage == Praeparatlage.ALLE -> stringResource(R.string.ks_h_p_alle)
+                z.lage == Praeparatlage.KEINE -> stringResource(R.string.ks_h_p_keine)
+                z.weitere > 0 -> stringResource(mehr, z.namen[0], z.namen[1], z.weitere)
+                z.namen.size == 2 -> stringResource(zwei, z.namen[0], z.namen[1])
+                else -> z.namen.firstOrNull()?.let { stringResource(eins, it) }
             }
             Zeile(
                 stringResource(R.string.ks_h_praeparate_n), unter, "${z.genommen}", stringResource(R.string.ks_h_von_n, z.faellig),
                 zeichen = { Tonkreis(Zeichen.kapsel, FLAECHE_PRAEPARAT, t.bewegung, 0.18f) },
-                // Die Warnfarbe nur fuer das, was nach dem ersten Haken liegen blieb.
+                // Die Warnfarbe nur fuer Versaeumtes: was seine Planzeit hinter sich hat
+                // (ohne Plan: was nach dem ersten Haken liegen blieb).
                 unterFarbe = if (z.lage == Praeparatlage.OFFEN) t.warnung else null,
                 onClick = zeigePraeparate,
             )
         }
         if (s.mitDrinktervall) add {
-            val heute = LocalDate.now()
-            val heuteMg = s.koffein.filter { it.first.atZone(zone).toLocalDate() == heute }.sumOf { it.second }.roundToInt()
+            // Gross die Menge des Tages wie im Widget; was davon noch wirkt, steht benannt darunter.
+            val heuteMg = Gesundheitsrechnung.koffeinHeute(s.koffein, LocalDate.now(), zone).roundToInt()
             val aktiv = Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt()
             val bett = Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone)
             val dann = bett?.let { Gesundheitsrechnung.koffeinAktiv(s.koffein, it).roundToInt() }
-            val unter = if (heuteMg <= 0 && aktiv <= 0) stringResource(R.string.ks_h_koffein_keins)
+            val unter = if (aktiv <= 0) stringResource(R.string.ks_h_koffein_keins)
             else listOfNotNull(
-                stringResource(R.string.ks_f_koffein_heute, heuteMg),
+                stringResource(R.string.ks_f_koffein_aktiv, aktiv),
                 dann?.takeIf { it > 0 }?.let { stringResource(R.string.ks_f_koffein_bett, it) },
             ).joinToString(" · ")
+            val dazu = stringResource(R.string.ks_h_koffein_dazu)
             Zeile(
-                stringResource(R.string.ks_h_koffein_n), unter, "$aktiv", "mg",
-                zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) }, onClick = zeigeKoffein,
+                stringResource(R.string.ks_h_koffein_n), unter, "$heuteMg", "mg",
+                zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) },
+                rechts = {
+                    IconButton(onClick = zeigeKoffein, modifier = Modifier.size(48.dp)) {
+                        Icon(Zeichen.plus, dazu, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                },
+                onClick = { wege.trend("ernaehrung") },
             )
         }
     }

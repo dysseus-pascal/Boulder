@@ -124,6 +124,13 @@ internal class KieselsportBegleiter(
 }
 
 /**
+ * Was eine Meldung von Drinktervall oder SupCycle ergab: der Satz fuers
+ * Protokoll, und ob die Akte etwas nicht nahm. [rest]: was davon noch
+ * fehlt, wenn nur ein Teil scheiterte - null heisst die ganze Meldung.
+ */
+internal class Verarbeitet(val meldung: String?, val gescheitert: Boolean = false, val rest: KieselNachricht? = null)
+
+/**
  * Hoert neben dem PebbleKit JS einer Uhr-App mit - fuer Drinktervall und
  * SupCycle, deren Meldungen frueher Kiesel-Helper ueber PebbleKit Android
  * bekam.
@@ -134,6 +141,10 @@ internal class KieselsportBegleiter(
  * jede Nachricht, die niemand bestaetigt. Die Verarbeitung
  * laeuft wie bei Kieselsport in einer Warteschlange fuer die ganze App, damit
  * sie das Ende der Sitzung ueberlebt.
+ *
+ * ERST SICHERN, DANN BESTAETIGEN, wie bei Kieselsport (siehe Wartend): die
+ * Uhr nimmt Glas und Kaffee mit der Bestaetigung aus ihrer Schlange. Was die
+ * Akte nicht nahm, bleibt liegen und kommt beim naechsten Start dran.
  */
 internal class Mithoerer(
     private val context: Context,
@@ -145,10 +156,17 @@ internal class Mithoerer(
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
         arbeite()
+        val app = context.applicationContext
+        Wartend.alle(app, ablage(uuid), hoechstensTage = VERFALL_TAGE).forEach { auftraege.send(app to Gehoert(uuid, datei = it, nachgeholt = true)) }
         sitzung.launch {
             incomingAppMessages.collect {
+                val n = KieselsportBegleiter.zerlege(it.data)
+                // Ein SupCycle-Stand ersetzt den vorigen desselben Tages ganz; der eines
+                // frueheren Tages bleibt, bis er nachgetragen ist. Glaeser und Kaffees sind je ein eigener Eintrag.
+                val ersetzt: ((KieselNachricht) -> Boolean)? = if (uuid == SupCycle.UUID) { alt -> SupCycle.selberTag(alt, n) } else null
+                val datei = if (aufheben(uuid, n)) Wartend.lege(app, n, ablage(uuid), ersetzt) else null
                 if (bestaetigen) device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
-                auftraege.send(context.applicationContext to Gehoert(uuid, KieselsportBegleiter.zerlege(it.data)))
+                auftraege.send(app to if (datei != null) Gehoert(uuid, datei = datei) else Gehoert(uuid, nachricht = n))
             }
         }
     }
@@ -157,13 +175,25 @@ internal class Mithoerer(
         sitzung.cancel()
     }
 
-    private class Gehoert(val uuid: Uuid, val nachricht: KieselNachricht)
+    private class Gehoert(val uuid: Uuid, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null, val nachgeholt: Boolean = false)
 
     companion object {
         private val logger = Logger.withTag("Mithoerer")
         private val auftraege = Channel<Pair<Context, Gehoert>>(Channel.UNLIMITED)
 
         private var arbeitet = false
+
+        private fun ablage(uuid: Uuid) = "uhrapp-wartend-$uuid"
+
+        /** So lange wartet ein Glas oder Praeparat auf die Akte - die Seite zeigt ohnehin nur die letzten Wochen. */
+        private const val VERFALL_TAGE = 30L
+
+        /** Nur was einen Eintrag fuer die Akte traegt - eine blosse Zielmeldung kommt ohnehin wieder. */
+        private fun aufheben(uuid: Uuid, n: KieselNachricht): Boolean = when (uuid) {
+            Drinktervall.UUID -> Drinktervall.traegtEintrag(n)
+            SupCycle.UUID -> SupCycle.SC_TODAY in n.zahlen
+            else -> false
+        }
 
         // KEIN init-BLOCK (Regel in CLAUDE.md): der Arbeiter startet mit der
         // ersten Sitzung, nicht beim Laden der Klasse.
@@ -173,15 +203,24 @@ internal class Mithoerer(
             arbeitet = true
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for ((context, g) in auftraege) {
+                    // Ein juengerer SupCycle-Stand kann die Datei schon ersetzt haben.
+                    val n = g.nachricht ?: g.datei?.takeIf { it.exists() }?.let { Wartend.lies(it) } ?: continue
                     try {
-                        when (g.uuid) {
-                            Drinktervall.UUID -> Drinktervall.verarbeite(context, g.nachricht)
-                            SupCycle.UUID -> SupCycle.verarbeite(context, g.nachricht)
+                        val e = when (g.uuid) {
+                            Drinktervall.UUID -> Drinktervall.verarbeite(context, n, nachgeholt = g.nachgeholt)
+                            SupCycle.UUID -> SupCycle.verarbeite(context, n)
                             else -> null
-                        }?.let {
+                        }
+                        // Ein erneut gescheiterter Nachtrag stand schon einmal im Protokoll.
+                        e?.meldung?.takeUnless { g.nachgeholt && e.gescheitert }?.let {
                             KieselVerlauf.merke(context, it)
                             GesundheitWidget.stosseAn(context)
                         }
+                        val rest = e?.takeIf { it.gescheitert }?.rest
+                        // Nur was scheiterte, bleibt liegen: ein schon eingetragener Kaffee kaeme
+                        // sonst bei jedem Start wieder - auch nachdem er geloescht oder geaendert ist.
+                        if (e?.gescheitert != true) g.datei?.delete()
+                        else if (rest != null) g.datei?.let { Wartend.ersetze(it, rest) }
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht von ${g.uuid} nicht verarbeitet: ${e.message}" }
                     }

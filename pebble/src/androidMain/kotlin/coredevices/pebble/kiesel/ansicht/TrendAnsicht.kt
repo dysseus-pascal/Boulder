@@ -173,7 +173,7 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
         )
         "ernaehrung" -> listOf(
             Groesse(
-                "wasser", R.string.ks_h_wasser_n, FARBE_WASSER_T, ziel = Drinktervall.ziel(context)?.ml?.toDouble(),
+                "wasser", R.string.ks_h_wasser_n, FARBE_WASSER_T, ziel = Drinktervall.soll(context)?.ml?.toDouble(),
                 kurz = { String.format(l, "%.1f", it / 1000) }, lang = { String.format(l, "%.1f l", it / 1000) },
             ),
             Groesse("koffein_mg", R.string.ks_h_koffein_n, FARBE_KOFFEIN_T, kurz = zahl, lang = { "${it.roundToInt()} mg" }),

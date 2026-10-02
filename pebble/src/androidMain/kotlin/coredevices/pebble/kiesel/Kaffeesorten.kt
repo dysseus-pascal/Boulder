@@ -1,7 +1,13 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
+import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Mass
 import coredevices.pebble.R
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * Was ein Kaffee aus Drinktervall in die Akte bringt: Koffein, kcal, Zucker.
@@ -111,4 +117,26 @@ internal object Kaffeesorten {
     /** Das COFFEE_KIND der Uhr zu Sorte, Milch, Zucker und koffeinfrei. */
     fun art(sorte: Int, milch: Boolean, zucker: Boolean, koffeinfrei: Boolean = false): Int =
         sorte or (if (milch) MILCH else 0) or (if (zucker) ZUCKER else 0) or (if (koffeinfrei) KOFFEINFREI else 0)
+
+    /** Die Sorten, die sich in der App waehlen lassen - in der Reihenfolge der Uhr. */
+    val WAEHLBAR = listOf(ESPRESSO, KAFFEE, TEE, ENERGY)
+
+    /**
+     * Der Eintrag fuer die Akte. EIN WEG FUER UHR, HANDEINGABE UND BEARBEITEN:
+     * sonst hatte dieselbe Tasse je nach Herkunft andere Werte, und ein
+     * Speichern ohne Aenderung schrieb neue.
+     */
+    fun satz(
+        p: Portion, name: String, metadata: Metadata, beginn: Instant, ende: Instant = beginn.plusSeconds(60),
+        beginnVersatz: ZoneOffset = versatz(beginn), endeVersatz: ZoneOffset = versatz(ende),
+    ): NutritionRecord = NutritionRecord(
+        startTime = beginn, startZoneOffset = beginnVersatz,
+        endTime = ende, endZoneOffset = endeVersatz,
+        name = name,
+        // Ohne Koffein kein Koffeinfeld - sonst zaehlte ein Smoothie als 0-mg-Dosis.
+        caffeine = if (p.koffeinMg > 0) Mass.milligrams(p.koffeinMg) else null,
+        energy = Energy.kilocalories(p.kcal),
+        sugar = if (p.zuckerG > 0) Mass.grams(p.zuckerG) else null,
+        metadata = metadata,
+    )
 }

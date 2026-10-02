@@ -61,6 +61,7 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Herzurteil
+import coredevices.pebble.kiesel.Kaffeesorten
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Praeparatlage
 import coredevices.pebble.kiesel.SCHLAFZIEL_MIN
@@ -126,6 +127,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     var neu by remember { mutableIntStateOf(0) }
     var koffeinBlatt by remember { mutableStateOf(false) }
     var praeparatBlatt by remember { mutableStateOf(false) }
+    var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { neu++ }
     // Neue Minutendaten von der Uhr: dann stimmen Schritte und Puls nicht mehr.
@@ -156,18 +158,22 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     }
 
     if (koffeinBlatt) {
-        KoffeinBlatt(onDismiss = { koffeinBlatt = false }) { name, mg ->
+        KoffeinBlatt(
+            s, onDismiss = { koffeinBlatt = false },
+            bearbeite = { koffeinBlatt = false; bearbeite = it },
+        ) { art ->
             koffeinBlatt = false
             val fehler = context.getString(R.string.ks_h_koffein_fehler)
             scope.launch {
                 // Ohne Rueckmeldung glaubte man den Kaffee eingetragen, und die Zahl stuende still.
-                if (!Gesundheitsdaten.trinkeKoffein(context, name, mg)) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
+                if (!Gesundheitsdaten.trinkeKoffein(context, art)) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
                 GesundheitWidget.stosseAn(context)
                 neu++
             }
         }
     }
     if (praeparatBlatt) PraeparatBlatt(s) { praeparatBlatt = false }
+    bearbeite?.let { b -> Bearbeitungsblatt(b, onDismiss = { bearbeite = null }) { bearbeite = null; neu++ } }
 }
 
 private fun zahl(n: Long): String = String.format(Locale.getDefault(), "%,d", n)
@@ -215,24 +221,48 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
 
 
 
+/**
+ * Koffein von Hand eintragen - darunter, was gestern spaet eingetragen
+ * wurde: der Strahl zeigt nur heute, und ein Fehleintrag um 23:50 soll sich
+ * auch nach Mitternacht noch aendern lassen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun KoffeinBlatt(onDismiss: () -> Unit, trinke: (String, Int) -> Unit) {
+private fun KoffeinBlatt(s: GesundheitsStand, onDismiss: () -> Unit, bearbeite: (Bearbeitung) -> Unit, trinke: (Int) -> Unit) {
+    val context = LocalContext.current
     val t = toene()
-    val getraenke = listOf(
-        stringResource(R.string.ks_h_kaffee) to 80, stringResource(R.string.ks_h_espresso) to 60,
-        stringResource(R.string.ks_h_tee) to 40, stringResource(R.string.ks_h_energy) to 80,
-    )
+    // Dieselben Portionen wie von der Uhr: eine Tasse hat ueberall gleich viel.
+    val getraenke = Kaffeesorten.WAEHLBAR.mapNotNull { sorte -> Kaffeesorten.portion(sorte)?.let { sorte to it } }
+    val glas = stringResource(R.string.ks_d_glas)
+    val gestern = (
+        s.gestern.map { e -> Triple(Bearbeitung.Getraenk(e.name, e.zeit, e.id), e.koffeinMg?.roundToInt()?.toString(), "mg") } +
+            s.gesternGlaeser.map { g -> Triple(Bearbeitung.Glas(glas, g.zeit, g.id), "${g.ml}", "ml") }
+        ).sortedBy { it.first.zeit }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
             Kopf(stringResource(R.string.ks_h_koffein_dazu).uppercase())
-            getraenke.forEachIndexed { i, (name, mg) ->
+            getraenke.forEachIndexed { i, (sorte, p) ->
                 if (i > 0) Trenner()
-                val beschreibung = stringResource(R.string.ks_h_getraenk, name, mg)
+                val name = Kaffeesorten.name(context, p)
+                val mg = p.koffeinMg.roundToInt()
                 Zeile(
                     name, null, "$mg", "mg", zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) },
-                    beschreibung = beschreibung, onClick = { trinke(name, mg) }, chevron = false,
+                    beschreibung = stringResource(R.string.ks_h_getraenk, name, mg), onClick = { trinke(sorte) }, chevron = false,
                 )
+            }
+            if (gestern.isNotEmpty()) {
+                Kopf(stringResource(R.string.ks_h_gestern_klein).uppercase())
+                gestern.forEachIndexed { i, (b, zahl, einheit) ->
+                    if (i > 0) Trenner()
+                    Zeile(
+                        b.titel, uhrzeit(context, b.zeit), zahl, einheit.takeIf { zahl != null },
+                        zeichen = {
+                            if (b is Bearbeitung.Glas) Tonkreis(Zeichen.wasser, FLAECHE_WASSER, t.wasser)
+                            else Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f)
+                        },
+                        onClick = { bearbeite(b) }, chevron = false,
+                    )
+                }
             }
         }
     }
@@ -243,18 +273,24 @@ private fun KoffeinBlatt(onDismiss: () -> Unit, trinke: (String, Int) -> Unit) {
 @Composable
 private fun PraeparatBlatt(s: GesundheitsStand, onDismiss: () -> Unit) {
     val stand = s.supplemente ?: return
+    val context = LocalContext.current
     val t = toene()
     val rand = MaterialTheme.colorScheme.outline
     val platz = stringResource(R.string.ks_s_platz_n)
     val liste = stand.heute { String.format(platz, it) }
+    val jetzt = LocalTime.now()
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            Kopf(stringResource(R.string.ks_h_praeparate_heute).uppercase(), stringResource(R.string.ks_s_davon_von, liste.count { it.genommen }, liste.size))
+            Kopf(stringResource(R.string.ks_h_praeparate_heute).uppercase(), "· ${liste.count { it.genommen }} " + stringResource(R.string.ks_h_von_n, liste.size))
             if (liste.isEmpty()) Zeile(stringResource(R.string.ks_h_p_keine))
             liste.forEachIndexed { i, e ->
                 if (i > 0) Trenner()
+                // Die Planzeit darunter - in Warnfarbe erst, wenn sie ohne Haken verstrichen ist.
+                val versaeumt = !e.genommen && e.zeit?.let { !jetzt.isBefore(it) } == true
                 Zeile(
                     e.name,
+                    unter = e.zeit?.let { uhrzeit(context, it.atDate(LocalDate.now()).atZone(ZoneId.systemDefault()).toInstant()) },
+                    unterFarbe = if (versaeumt) t.warnung else null,
                     zeichen = {
                         if (e.genommen) Tonkreis(Zeichen.haken, FLAECHE_PRAEPARAT, t.bewegung, 0.18f)
                         else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))

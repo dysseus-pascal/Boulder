@@ -155,18 +155,28 @@ class AuswertungTest {
     fun `Tausender werden kurz`() {
         assertEquals("812", Auswertung.tausender(812.0, Locale.US))
         assertEquals("4.9k", Auswertung.tausender(4940.0, Locale.US))
-        assertEquals("5k", Auswertung.tausender(4986.0, Locale.US))
         assertEquals("10k", Auswertung.tausender(10000.0, Locale.US))
         assertEquals("12.3k", Auswertung.tausender(12345.0, Locale.US))
         assertEquals("4,9k", Auswertung.tausender(4940.0, Locale.GERMAN))
-        assertEquals("1k", Auswertung.tausender(999.6, Locale.US))
         assertEquals("999", Auswertung.tausender(999.4, Locale.US))
+        assertEquals("1k", Auswertung.tausender(1000.0, Locale.US))
+    }
+
+    @Test
+    fun `Tausender runden nie aufs Ziel`() {
+        // Unter dem Ziel darf die Zahl nicht "10k" sagen - abgerundet, nicht gerundet.
+        assertEquals("9.9k", Auswertung.tausender(9960.0, Locale.US))
+        assertEquals("4.9k", Auswertung.tausender(4986.0, Locale.US))
+        assertEquals("999", Auswertung.tausender(999.6, Locale.US))
     }
 
     @Test
     fun `wann die Bausteine tragen koennen`() {
         val erster = LocalDate.of(2026, 9, 30)   // ein Mittwoch
-        assertEquals(LocalDate.of(2026, 10, 14), Auswertung.typischeWocheAb(erster))
+        // Mi/Do/Fr je zweimal: 30.09./07.10., 01./08.10., 02./09.10. - Naechte zaehlen bis heute.
+        assertEquals(LocalDate.of(2026, 10, 9), Auswertung.typischeWocheAb(erster, LocalDate.of(2026, 10, 9).plusDays(1), LocalDate.of(2026, 10, 9)))
+        // Tageszaehler erst, wenn der 09.10. vorbei ist.
+        assertEquals(LocalDate.of(2026, 10, 10), Auswertung.typischeWocheAb(erster, LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 10)))
         val heute = LocalDate.of(2026, 10, 5)
         // Nachtreihen zaehlen bis heute: der Montag selbst traegt.
         assertEquals(LocalDate.of(2026, 10, 12), Auswertung.wochenAb(erster, heute.plusDays(1), heute))
@@ -209,6 +219,50 @@ class AuswertungTest {
         val werte = (1L..20L).map { tag(it, it.toDouble()) }
         val v = Auswertung.vergleich(werte, heute) { t -> if (t == heute.minusDays(3)) true else false }
         assertFalse(v.genug)
+    }
+
+    @Test
+    fun `typische Woche erscheint am angekuendigten Tag`() {
+        val erster = LocalDate.of(2026, 9, 30)
+        // Lueckenlose Tageszaehler ab dem ersten Tag: am angekuendigten Tag tragen drei Wochentage.
+        val ab = Auswertung.typischeWocheAb(erster, LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 10))
+        val reihe = (0L..20L).map { erster.plusDays(it) to 100.0 }
+        val amTag = Auswertung.bild(reihe, ab).profil.count { it.mittel != null }
+        val davor = Auswertung.bild(reihe, ab.minusDays(1)).profil.count { it.mittel != null }
+        assertEquals(3, amTag)
+        assertEquals(2, davor)
+    }
+
+    @Test
+    fun `Wochenprofil und Wochenende rechnen im festen Fenster`() {
+        // Vor dem Fenster jeder Tag 9000, darin jeder Tag 1000.
+        val alt = (Auswertung.FENSTER_TAGE + 1..Auswertung.FENSTER_TAGE + 60).map { tag(it, 9000.0) }
+        val jung = (1L..Auswertung.FENSTER_TAGE).map { tag(it, 1000.0) }
+        val bild = Auswertung.bild(alt + jung, heute)
+        assertEquals(Auswertung.FENSTER_TAGE.toInt(), bild.anzahl)
+        assertEquals(1000.0, bild.gesamt!!, 0.001)
+        assertEquals(0.0, Auswertung.wochenende(alt + jung, heute)!!.unterschied, 0.001)
+    }
+
+    @Test
+    fun `keine Richtung ueber einen Quellwechsel`() {
+        val lang = (1L..56L).map { i -> tag(i, if (i <= 28) 1100.0 else 1000.0) }
+        // Boulder misst erst seit drei Wochen: davor ist es Vorgeschichte, kein Trend.
+        assertNull(Auswertung.bild(lang, heute, eigenAb = heute.minusDays(21)).veraenderung)
+        // Liegt der Wechsel vor den acht Wochen, gilt die Richtung.
+        assertEquals(10.0, Auswertung.bild(lang, heute, eigenAb = heute.minusDays(60)).veraenderung!!, 0.001)
+    }
+
+    @Test
+    fun `gleiche Werte ohne Streuung sind ein klarer Unterschied`() {
+        // Fuenfmal 160 mg gegen sechsmal 80 mg: keine Streuung, aber 80 mg Abstand.
+        val tage = (1L..11L).map { tag(it, if (it <= 5) 160.0 else 80.0) }
+        val viel = (1L..5L).map { heute.minusDays(it) }.toSet()
+        val v = Auswertung.vergleich(tage, heute) { t -> t in viel }
+        assertEquals(0.0, v.streuung, 0.0001)
+        assertTrue(v.klar)
+        // Ohne Abstand bleibt es "no difference".
+        assertFalse(Auswertung.vergleich((1L..10L).map { tag(it, 80.0) }, heute) { t -> t.dayOfMonth % 2 == 0 }.klar)
     }
 
     @Test

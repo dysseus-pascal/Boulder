@@ -34,6 +34,8 @@ class PebbleAndroidDelegate(
         }
         // Boulder: alle Rechte der Akte in einem Dialog, einmal je Fassung.
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { Rechtefrage.beimStart(context) }
+        // Boulder: Schritte und Naechte taeglich festschreiben, bevor das Housekeeping sie nach 90 Tagen loescht.
+        coredevices.pebble.kiesel.Tagesarchiv.plane(context)
     }
 
     /**

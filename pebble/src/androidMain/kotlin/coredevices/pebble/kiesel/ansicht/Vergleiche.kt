@@ -38,84 +38,33 @@ import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Reihen
-import java.time.DayOfWeek
+import coredevices.pebble.kiesel.Vergleichsfragen
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /*
- * "What makes a difference": zwei Gruppen von Tagen gegeneinander, statt der
- * frueheren Korrelationen ("Links"). Jede Frage hat ihre Zeitrichtung - der
- * Ruhepuls einer Nacht kann nur vom Tag DAVOR beeinflusst sein - und keine
- * vergleicht eine Groesse mit sich selbst (Tiefschlaf und HRV entstehen aus
- * derselben Rechnung).
+ * "What makes a difference" auf dem Bildschirm. Welche Fragen es gibt, ihre
+ * Zeitrichtung und Schwellen stehen in [Vergleichsfragen] - hier nur, wie sie
+ * heissen und aussehen.
  */
 
-/** Eine Frage: was verglichen wird ([ziel]) und wie die Tage in zwei Gruppen fallen. */
-private class Frage(
-    val gruppen: Set<String>,
-    val frage: Int,
-    val nameA: Int,
-    val nameB: Int,
-    val ziel: String,
-    /** Ist mehr von [ziel] gut? Entscheidet die Farbe der Wirkung. */
-    val mehrIstGut: Boolean,
-    /** Naechte statt Tage im Text. */
-    val naechte: Boolean,
-    val mitKoffein: Boolean = false,
-    /** Fuer den Tag des Zielwerts: Gruppe A (true), B (false) oder keine (null). */
-    val zuordnung: (Reihen) -> (LocalDate) -> Boolean?,
-)
+/** Die Worte einer Frage: der Titel und die Namen ihrer Gruppen A und B. */
+private class Texte(val frage: Int, val nameA: Int, val nameB: Int)
 
-private fun wert(d: Reihen, spalte: String): Map<LocalDate, Double> = d[spalte].orEmpty().toMap()
-
-/** Kurz ist unter sieben Stunden; spaet ist nach 23 Uhr (300 min ab 18 Uhr). */
-private const val KURZ_MIN = 7 * 60
-private const val SPAET_AB = 300.0
-private const val AKTIV_MIN = 30.0
-private const val SCHRITTE_VIEL = 10_000.0
-private const val KOFFEIN_VIEL = 200.0
-
-private fun wochenende(t: LocalDate) = t.dayOfWeek == DayOfWeek.SATURDAY || t.dayOfWeek == DayOfWeek.SUNDAY
-
-private val FRAGEN = listOf(
-    // Dieselbe Nacht: kurz geschlafen, und die HRV dieser Nacht.
-    Frage(setOf("herz", "schlaf"), R.string.ks_v_hrv_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7, "hrv", true, true) { d ->
-        val s = wert(d, "schlaf"); { t -> s[t]?.let { it < KURZ_MIN } }
-    },
-    // Der Tag davor bewegt, und der Ruhepuls der Nacht danach.
-    Frage(setOf("herz", "bewegung"), R.string.ks_v_ruhe_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag, "ruhepuls", false, true) { d ->
-        val a = wert(d, "aktiv"); { t -> a[t.minusDays(1)]?.let { it >= AKTIV_MIN } }
-    },
-    Frage(setOf("herz", "schlaf"), R.string.ks_v_ruhe_spaet, R.string.ks_v_nach_23, R.string.ks_v_vor_23, "ruhepuls", false, true) { d ->
-        val e = wert(d, "einschlafen"); { t -> e[t]?.let { it > SPAET_AB } }
-    },
-    Frage(setOf("herz", "bewegung"), R.string.ks_v_hrv_schritte, R.string.ks_v_viele_schritte, R.string.ks_v_weniger_schritte, "hrv", true, true) { d ->
-        val s = wert(d, "schritte"); { t -> s[t.minusDays(1)]?.let { it >= SCHRITTE_VIEL } }
-    },
-    Frage(setOf("herz"), R.string.ks_v_ruhe_wochenende, R.string.ks_v_wochenende, R.string.ks_v_unter_woche, "ruhepuls", false, true) { _ ->
-        { t -> wochenende(t) }
-    },
-    Frage(setOf("schlaf", "ernaehrung"), R.string.ks_v_tief_koffein, R.string.ks_v_viel_koffein, R.string.ks_v_wenig_koffein, "tief", true, true, mitKoffein = true) { d ->
-        val k = wert(d, "koffein_mg"); { t -> k[t.minusDays(1)]?.let { it >= KOFFEIN_VIEL } }
-    },
-    Frage(setOf("schlaf", "bewegung"), R.string.ks_v_schlaf_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag, "schlaf", true, true) { d ->
-        val a = wert(d, "aktiv"); { t -> a[t.minusDays(1)]?.let { it >= AKTIV_MIN } }
-    },
-    // Ein Tag nach kurzer Nacht: wie viel man sich dann bewegt.
-    Frage(setOf("bewegung"), R.string.ks_v_schritte_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7, "schritte", true, false) { d ->
-        val s = wert(d, "schlaf"); { t -> s[t]?.let { it < KURZ_MIN } }
-    },
-    Frage(setOf("ernaehrung"), R.string.ks_v_koffein_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7, "koffein_mg", false, false, mitKoffein = true) { d ->
-        val s = wert(d, "schlaf"); { t -> s[t]?.let { it < KURZ_MIN } }
-    },
-)
-
-private val NACHTZIELE = setOf("schlaf", "tief", "ruhepuls", "hrv")
-
-/** Bis wohin gezaehlt wird: Nachtwerte bis heute, Tageswerte nur bis gestern. */
-private fun grenze(ziel: String, heute: LocalDate) = if (ziel in NACHTZIELE) heute.plusDays(1) else heute
+private fun texte(art: Vergleichsfragen.Art): Texte = when (art) {
+    Vergleichsfragen.Art.HRV_KURZ -> Texte(R.string.ks_trv_hrv_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
+    // "Quieter day" hiess auf Health die Pulsbelastung - hier zaehlen nur Schritt-Aktivminuten, also sagt die Gruppe das.
+    Vergleichsfragen.Art.RUHE_AKTIV -> Texte(R.string.ks_v_ruhe_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_trv_unter_30_aktiv)
+    Vergleichsfragen.Art.RUHE_SPAET -> Texte(R.string.ks_v_ruhe_spaet, R.string.ks_v_nach_23, R.string.ks_v_vor_23)
+    Vergleichsfragen.Art.HRV_SCHRITTE -> Texte(R.string.ks_v_hrv_schritte, R.string.ks_v_viele_schritte, R.string.ks_v_weniger_schritte)
+    Vergleichsfragen.Art.RUHE_WOCHENENDE -> Texte(R.string.ks_v_ruhe_wochenende, R.string.ks_v_wochenende, R.string.ks_v_unter_woche)
+    Vergleichsfragen.Art.TIEF_KOFFEIN -> Texte(R.string.ks_v_tief_koffein, R.string.ks_v_viel_koffein, R.string.ks_v_wenig_koffein)
+    Vergleichsfragen.Art.SCHLAF_AKTIV -> Texte(R.string.ks_v_schlaf_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_trv_unter_30_aktiv)
+    Vergleichsfragen.Art.SCHRITTE_KURZ -> Texte(R.string.ks_trv_schritte_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
+    Vergleichsfragen.Art.KOFFEIN_KURZ -> Texte(R.string.ks_trv_koffein_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
+}
 
 private fun einheit(ziel: String) = when (ziel) {
     "hrv" -> "ms"
@@ -153,15 +102,16 @@ private fun ton(ziel: String): Color = when (ziel) {
     else -> Color(0xFF7DBB8A)
 }
 
-private class Ergebnis(val frage: Frage, val v: Auswertung.Gruppenvergleich)
+private class Ergebnis(val frage: Vergleichsfragen.Frage, val v: Auswertung.Gruppenvergleich) {
+    val texte = texte(frage.art)
+}
 
 @Composable
 internal fun Vergleiche(d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean) {
-    val fragen = FRAGEN.filter { gruppe in it.gruppen && (mitKoffein || !it.mitKoffein) }
-    if (fragen.isEmpty()) return
     val ergebnisse = remember(d, gruppe, heute, mitKoffein) {
-        fragen.map { f -> Ergebnis(f, Auswertung.vergleich(d[f.ziel].orEmpty(), grenze(f.ziel, heute), f.zuordnung(d))) }
+        Vergleichsfragen.rechne(d, gruppe, heute, mitKoffein).map { (f, v) -> Ergebnis(f, v) }
     }
+    if (ergebnisse.isEmpty()) return
     val fertig = ergebnisse.filter { it.v.genug }
     // Wartend ist, was schon Tage in beiden Gruppen hat - ganz ohne Daten waere es nur Laerm.
     val wartend = ergebnisse.filter { !it.v.genug && (it.v.a.isNotEmpty() || it.v.b.isNotEmpty()) }
@@ -180,7 +130,7 @@ internal fun Vergleiche(d: Reihen, gruppe: String, heute: LocalDate, mitKoffein:
                 if (i > 0) Trenner(14.dp)
                 val n = minOf(e.v.a.size, e.v.b.size)
                 Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(e.frage.frage), Modifier.weight(1f), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(e.texte.frage), Modifier.weight(1f), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         stringResource(if (e.frage.naechte) R.string.ks_v_von_naechte else R.string.ks_v_von_tage, n, Auswertung.VERGLEICH_MINDESTENS),
                         fontSize = 14.sp, color = MaterialTheme.colorScheme.outline,
@@ -203,11 +153,12 @@ private fun wirkungFarbe(e: Ergebnis): Color {
 @Composable
 private fun Vergleichskarte(e: Ergebnis, oeffne: () -> Unit) {
     val f = e.frage
+    val w = e.texte
     val v = e.v
     Kasten {
         Column(Modifier.fillMaxWidth().clickable(onClick = oeffne).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Text(stringResource(f.frage), Modifier.weight(1f), fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(w.frage), Modifier.weight(1f), fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
                 Text(
                     if (v.klar) unterschied(f.ziel, v.unterschied) else stringResource(R.string.ks_v_kein_unterschied),
                     Modifier.padding(start = 12.dp), fontSize = if (v.klar) 20.sp else 15.sp, fontWeight = FontWeight.SemiBold, color = wirkungFarbe(e),
@@ -216,8 +167,8 @@ private fun Vergleichskarte(e: Ergebnis, oeffne: () -> Unit) {
             // Die Balken beginnen knapp unter dem kleineren Wert - sonst saehen 54 und 56 bpm gleich aus.
             val unten = minOf(v.medianA, v.medianB) * 0.8
             val oben = maxOf(v.medianA, v.medianB).coerceAtLeast(unten + 1)
-            Gruppenbalken(stringResource(f.nameA), v.a.size, f.naechte, zahl(f.ziel, v.medianA), einheit(f.ziel), ((v.medianA - unten) / (oben - unten)).toFloat(), ton(f.ziel))
-            Gruppenbalken(stringResource(f.nameB), v.b.size, f.naechte, zahl(f.ziel, v.medianB), einheit(f.ziel), ((v.medianB - unten) / (oben - unten)).toFloat(), ton(f.ziel).copy(alpha = 0.55f))
+            Gruppenbalken(stringResource(w.nameA), v.a.size, f.naechte, zahl(f.ziel, v.medianA), einheit(f.ziel), ((v.medianA - unten) / (oben - unten)).toFloat(), ton(f.ziel))
+            Gruppenbalken(stringResource(w.nameB), v.b.size, f.naechte, zahl(f.ziel, v.medianB), einheit(f.ziel), ((v.medianB - unten) / (oben - unten)).toFloat(), ton(f.ziel).copy(alpha = 0.55f))
         }
     }
 }
@@ -244,22 +195,23 @@ private fun Gruppenbalken(name: String, n: Int, naechte: Boolean, zahl: String, 
 @Composable
 private fun Vergleichsblatt(e: Ergebnis, onDismiss: () -> Unit) {
     val f = e.frage
+    val w = e.texte
     val v = e.v
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(f.frage), fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(w.frage), fontSize = 18.sp, fontWeight = FontWeight.Medium)
             Text(
                 if (v.klar) unterschied(f.ziel, v.unterschied) else stringResource(R.string.ks_v_kein_unterschied),
                 fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.SemiBold, color = wirkungFarbe(e),
             )
             Text(
-                stringResource(R.string.ks_v_beide, zahl(f.ziel, v.medianA) + " " + einheit(f.ziel), stringResource(f.nameA).lowercase(Locale.getDefault()),
-                    zahl(f.ziel, v.medianB) + " " + einheit(f.ziel), stringResource(f.nameB).lowercase(Locale.getDefault())),
+                stringResource(R.string.ks_v_beide, zahl(f.ziel, v.medianA) + " " + einheit(f.ziel), stringResource(w.nameA).lowercase(Locale.getDefault()),
+                    zahl(f.ziel, v.medianB) + " " + einheit(f.ziel), stringResource(w.nameB).lowercase(Locale.getDefault())),
                 fontSize = 14.sp, color = grau,
             )
             Spacer(Modifier.height(8.dp))
-            Punktbild(v, f, ton(f.ziel))
+            Punktbild(v, f, w, ton(f.ziel))
             Spacer(Modifier.height(4.dp))
             Kopf(stringResource(R.string.ks_v_wie_sicher))
             Zeile(stringResource(R.string.ks_v_streuung), null, "± " + zahl(f.ziel, v.streuung), einheit(f.ziel).ifEmpty { null }, minHoehe = 48.dp)
@@ -274,13 +226,13 @@ private fun Vergleichsblatt(e: Ergebnis, onDismiss: () -> Unit) {
 
 /** Zwei Reihen Punkte, A oben, B unten, der Median als Strich, darunter die Achse. */
 @Composable
-private fun Punktbild(v: Auswertung.Gruppenvergleich, f: Frage, farbe: Color) {
+private fun Punktbild(v: Auswertung.Gruppenvergleich, f: Vergleichsfragen.Frage, w: Texte, farbe: Color) {
     val messer = rememberTextMeasurer()
     val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val strich = MaterialTheme.colorScheme.onSurface
     val linie = MaterialTheme.colorScheme.outlineVariant
-    val nameA = stringResource(f.nameA)
-    val nameB = stringResource(f.nameB)
+    val nameA = stringResource(w.nameA)
+    val nameB = stringResource(w.nameB)
     Canvas(Modifier.fillMaxWidth().height(170.dp)) {
         val links = 0f
         val rechts = size.width

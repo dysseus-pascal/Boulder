@@ -33,33 +33,35 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Drinktervall
 import coredevices.pebble.kiesel.Reihen
+import coredevices.pebble.kiesel.SCHLAFZIEL_MIN
+import coredevices.pebble.kiesel.SCHRITTZIEL
 import coredevices.pebble.kiesel.SupCycle
-import coredevices.pebble.kiesel.UhrApps
 import coredevices.pebble.kiesel.Trenddaten
+import coredevices.pebble.kiesel.Trendstand
+import coredevices.pebble.kiesel.UhrApps
+import coredevices.pebble.kiesel.Vergleichsfragen
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import org.koin.compose.koinInject
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
  * Die Trends einer Gruppe. Je Messgroesse die Bausteine, die schon tragen:
- * die letzten vierzehn Tage vom ersten Tag an, die typische Woche ab drei
- * Wochentagen, die Wochen ab drei Kalenderwochen, die Vergleiche ab fuenf
- * Tagen je Gruppe. Was noch nicht traegt, kuendigt sich als leise
- * Zeile mit Datum an - eine Seite, die nur "zu wenig" sagt, schaut niemand
- * ein zweites Mal an.
+ * die letzten vierzehn Tage vom ersten Tag an, gleich danach die Vergleiche
+ * (ab fuenf Tagen je Gruppe - sie sind die eigentliche Aussage der Seite),
+ * die typische Woche ab drei Wochentagen, die Wochen ab drei Kalenderwochen.
+ * Was noch nicht traegt, nennt nur sein Datum ("from Oct 12") - ohne Satz
+ * darum herum.
  */
 @Composable
 internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
-    var reihen by remember { mutableStateOf<Reihen?>(null) }
-    LaunchedEffect(Unit) { reihen = Trenddaten.lies(context, api) }
+    var stand by remember { mutableStateOf<Trendstand?>(null) }
+    LaunchedEffect(Unit) { stand = Trenddaten.lies(context, api) }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
     var mitSupCycle by remember { mutableStateOf(true) }
     var mitDrinktervall by remember { mutableStateOf(true) }
@@ -72,16 +74,18 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
         when (gruppe) {
             "schlaf" -> R.string.ks_tr_schlaf
             "herz" -> R.string.ks_tr_herz
-            "ernaehrung" -> R.string.ks_tr_ernaehrung
+            // Der Einstieg heisst "Water" und "Caffeine" - die Seite nennt beides.
+            "ernaehrung" -> R.string.ks_trn_ernaehrung
             else -> R.string.ks_tr_bewegung
         }
     )
     LaunchedEffect(titel) { setzeTitel(titel) }
-    val d = reihen
-    if (d == null) {
+    val geladen = stand
+    if (geladen == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    val d = geladen.reihen
     val heute = LocalDate.now()
     val groessen = remember(gruppe) { groessen(gruppe, context) }
     val nacht = groessen.first().spalte in NACHTREIHEN
@@ -93,31 +97,25 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
             return@Column
         }
         getragen.forEach { LetzteTage(d, it, grenze) }
+        Vergleiche(d, gruppe, heute, mitDrinktervall)
         TagFuerTag(d, getragen, grenze)
 
-        val bilder = getragen.associate { it.spalte to Auswertung.bild(d[it.spalte].orEmpty(), grenze) }
+        val bilder = getragen.associate { it.spalte to Auswertung.bild(d[it.spalte].orEmpty(), grenze, geladen.eigenAb[it.spalte]) }
         val erster = getragen.mapNotNull { g -> d[g.spalte].orEmpty().firstOrNull { it.first < grenze }?.first }.min()
 
         val mitWoche = getragen.filter { bilder.getValue(it.spalte).profil.count { p -> p.mittel != null } >= 3 }
         mitWoche.forEach { TypischeWoche(it, bilder.getValue(it.spalte), d[it.spalte].orEmpty(), grenze, heute) }
-        if (mitWoche.isEmpty()) {
-            val ab = Auswertung.typischeWocheAb(erster)
-            Leise(if (ab > heute) stringResource(R.string.ks_trn_woche_ab, datum(ab)) else stringResource(R.string.ks_trn_woche_spaeter))
-        }
+        // Nur ein Datum ankuendigen, das noch kommt; verzoegern Luecken es, schweigt die Seite.
+        val wocheAb = Auswertung.typischeWocheAb(erster, grenze, heute)
+        if (mitWoche.isEmpty() && wocheAb > heute) Leise(stringResource(R.string.ks_trn_woche_ab, kurzDatum(wocheAb)))
         if (gruppe == "ernaehrung" && mitSupCycle) Praeparattrend(d, grenze, heute)
 
         val mitWochen = getragen.filter { bilder.getValue(it.spalte).wochen.size >= 3 }
         mitWochen.forEach { Wochen(it, bilder.getValue(it.spalte), heute) }
-        if (mitWochen.isEmpty()) {
-            val ab = Auswertung.wochenAb(erster, grenze, heute)
-            Leise(if (ab > heute) stringResource(R.string.ks_trn_wochen_ab, datum(ab)) else stringResource(R.string.ks_trn_wochen_spaeter))
-        }
+        val wochenAb = Auswertung.wochenAb(erster, grenze, heute)
+        if (mitWochen.isEmpty() && wochenAb > heute) Leise(stringResource(R.string.ks_trn_wochen_ab, kurzDatum(wochenAb)))
 
         if (gruppe == "schlaf") Schlafmitte(d, grenze)
-        Vergleiche(d, gruppe, heute, mitDrinktervall)
-
-        val tage = getragen.flatMap { g -> d[g.spalte].orEmpty().map { it.first } }.filter { it < grenze }.distinct()
-        Leise(pluralStringResource(if (nacht) R.plurals.ks_trn_fuss_naechte else R.plurals.ks_trn_fuss_tage, tage.size, tage.size, datum(tage.min())))
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -164,7 +162,7 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
     val dauer: (Double) -> String = { dauerText(it.roundToInt().toLong()) }
     return when (gruppe) {
         "schlaf" -> listOf(
-            Groesse("schlaf", R.string.ks_h_schlaf_n, FARBE_SCHLAF_T, ziel = 8 * 60.0, kurz = ::dauerKurz, lang = dauer),
+            Groesse("schlaf", R.string.ks_h_schlaf_n, FARBE_SCHLAF_T, ziel = SCHLAFZIEL_MIN.toDouble(), kurz = ::dauerKurz, lang = dauer),
             Groesse("tief", R.string.ks_tr_n_tief, FARBE_SCHLAF_T, praefix = R.string.ks_trn_tief_kurz, kurz = ::dauerKurz, lang = dauer),
         )
         "herz" -> listOf(
@@ -179,15 +177,17 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
             Groesse("koffein_mg", R.string.ks_h_koffein_n, FARBE_KOFFEIN_T, kurz = zahl, lang = { "${it.roundToInt()} mg" }),
         )
         else -> listOf(
-            Groesse("schritte", R.string.ks_h_schritte, FARBE_BEWEGUNG_T, ziel = 10_000.0, kurz = { Auswertung.tausender(it, l) }, lang = { String.format(l, "%,.0f", it) }),
+            Groesse("schritte", R.string.ks_h_schritte, FARBE_BEWEGUNG_T, ziel = SCHRITTZIEL.toDouble(), kurz = { Auswertung.tausender(it, l) }, lang = { String.format(l, "%,.0f", it) }),
             Groesse("aktiv", R.string.ks_h_aktiv, FARBE_BEWEGUNG_T, kurz = ::dauerKurz, lang = dauer),
         )
     }
 }
 
 private fun kurz(t: DayOfWeek) = t.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(2)
-private fun datum(t: LocalDate): String = t.format(DateTimeFormatter.ofPattern("MMM d", Locale.getDefault()))
-private fun montag(t: LocalDate): String = t.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+
+/** Der Kopf einer Karte mit festem Fenster: "TYPICAL WEEK · STEPS · LAST 90 DAYS". */
+@Composable
+private fun mitFenster(titel: String) = titel + " · " + stringResource(R.string.ks_trn_zeitraum, Auswertung.FENSTER_TAGE.toInt())
 
 @Composable
 private fun Satz(text: String) = Text(text, style = MaterialTheme.typography.bodyMedium)
@@ -224,7 +224,7 @@ private fun TagFuerTag(d: Reihen, groessen: List<Groesse>, grenze: LocalDate) {
         tage.forEach { tag ->
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(datum(tag), fontWeight = FontWeight.Bold)
+                    Text(kurzDatum(tag), fontWeight = FontWeight.Bold)
                     Text(tag.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val teile = groessen.map { g ->
@@ -239,37 +239,41 @@ private fun TagFuerTag(d: Reihen, groessen: List<Groesse>, grenze: LocalDate) {
 
 /** Durchschnitt, staerkster und schwaechster Wochentag, Wochenende - die Saetze unter dem Wochenbild. */
 @Composable
-private fun Wochensaetze(bild: Auswertung.Bild, reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, form: (Double) -> String) {
-    bild.gesamt?.let { Satz(stringResource(R.string.ks_tr_schnitt, form(it))) }
+private fun Wochensaetze(bild: Auswertung.Bild, reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, g: Groesse) {
+    val form = g.lang
+    bild.gesamt?.let { Satz(stringResource(R.string.ks_trn_schnitt, form(it))) }
     val s = bild.staerkster
     val w = bild.schwaechster
     if (s != null && w != null && s != w) {
-        Leise(stringResource(R.string.ks_tr_extreme, s.tag.getDisplayName(TextStyle.FULL, Locale.getDefault()), form(s.mittel!!),
+        Leise(stringResource(R.string.ks_trn_extreme, s.tag.getDisplayName(TextStyle.FULL, Locale.getDefault()), form(s.mittel!!),
             w.tag.getDisplayName(TextStyle.FULL, Locale.getDefault()), form(w.mittel!!)))
     }
-    Auswertung.wochenende(reihe, grenze)?.let { Leise(stringResource(R.string.ks_tr_wochenende, form(it.wochenende), form(it.werktag))) }
+    // Wo ein Vergleich Wochenende gegen Werktag schon prueft, sagt die Wochenkarte es nicht noch einmal anders.
+    if (!Vergleichsfragen.vergleichtWochenende(g.spalte)) {
+        Auswertung.wochenende(reihe, grenze)?.let { Leise(stringResource(R.string.ks_trn_wochenende, form(it.wochenende), form(it.werktag))) }
+    }
 }
 
 @Composable
 private fun TypischeWoche(g: Groesse, bild: Auswertung.Bild, reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, heute: LocalDate) {
-    Ueberschrift(stringResource(R.string.ks_tr_typische_woche, stringResource(g.name)))
+    Ueberschrift(mitFenster(stringResource(R.string.ks_trn_typische_woche, stringResource(g.name))))
     Karte {
         Trendsaeulen(
             bild.profil.map { TSaeule(kurz(it.tag), it.mittel, hervor = it.tag == heute.dayOfWeek, kleinster = it.kleinster, groesster = it.groesster) },
-            g.farbe, bild.gesamt, g.ziel, kurz = g.kurz,
+            g.farbe, bild.gesamt, g.ziel, kurz = g.kurz, pegel = g.pegel,
         )
         if (g.spalte == "schlaf") {
-            val naechte = reihe.filter { it.first < grenze }
-            Satz(stringResource(R.string.ks_tr_erreicht, naechte.count { it.second >= g.ziel!! }, naechte.size))
+            val naechte = Auswertung.imFenster(reihe, grenze)
+            Satz(stringResource(R.string.ks_trn_erreicht, naechte.count { it.second >= g.ziel!! }, naechte.size, g.lang(g.ziel!!)))
         }
-        Wochensaetze(bild, reihe, grenze, g.lang)
+        Wochensaetze(bild, reihe, grenze, g)
     }
 }
 
-/** Die Kalenderwochen, benannt nach ihrem Montag; die laufende blass und "so far". */
+/** Die Kalenderwochen, benannt nach ihrem Montag; die laufende und duenne blass, die laufende mit "so far". */
 @Composable
 private fun Wochen(g: Groesse, bild: Auswertung.Bild, heute: LocalDate) {
-    Ueberschrift(stringResource(R.string.ks_tr_verlauf, stringResource(g.name)))
+    Ueberschrift(stringResource(R.string.ks_trn_verlauf, stringResource(g.name)))
     val laufend = heute.with(DayOfWeek.MONDAY)
     val bisher = stringResource(R.string.ks_trn_so_far)
     Karte {
@@ -277,23 +281,23 @@ private fun Wochen(g: Groesse, bild: Auswertung.Bild, heute: LocalDate) {
             bild.wochen.map { w ->
                 // Die laufende Woche nicht zugleich blass und fett: blass und "so far" reichen als Kennzeichnung.
                 val jetzt = w.montag == laufend
-                TSaeule(montag(w.montag), w.mittel, blass = jetzt, hinweis = if (jetzt) bisher else null)
+                TSaeule(kurzDatum(w.montag), w.mittel, blass = jetzt || w.anzahl < Auswertung.WOCHE_VOLL_AB, hinweis = if (jetzt) bisher else null)
             },
-            g.farbe, bild.gesamt, g.ziel, kurz = g.kurz,
+            g.farbe, bild.gesamt, g.ziel, kurz = g.kurz, pegel = g.pegel,
         )
-        bild.veraenderung?.let { Leise(stringResource(R.string.ks_tr_richtung, String.format(Locale.getDefault(), "%+.0f", it))) }
+        bild.veraenderung?.let { Leise(stringResource(R.string.ks_trn_richtung, String.format(Locale.getDefault(), "%+.0f", it))) }
     }
 }
 
 @Composable
 private fun Schlafmitte(d: Reihen, grenze: LocalDate) {
-    val mitten = d["schlaf_mitte"].orEmpty().filter { it.first < grenze }.map { it.second }
+    val mitten = Auswertung.imFenster(d["schlaf_mitte"].orEmpty(), grenze).map { it.second }
     val streuung = Auswertung.streuung(mitten) ?: return
-    Ueberschrift(stringResource(R.string.ks_tr_mitte))
+    Ueberschrift(mitFenster(stringResource(R.string.ks_tr_mitte)))
     Karte {
         val min = ((18 * 60 + mitten.average()).roundToInt() % 1440 + 1440) % 1440
         Text(String.format(Locale.getDefault(), "%d:%02d ± %s", min / 60, min % 60, dauerText(streuung.roundToInt().toLong())), fontWeight = FontWeight.Bold)
-        Satz(stringResource(R.string.ks_tr_mitte_naechte, mitten.size) + " " + stringResource(
+        Satz(stringResource(
             when {
                 streuung < 30 -> R.string.ks_tr_sehr_regelmaessig
                 streuung < 60 -> R.string.ks_tr_regelmaessig
@@ -310,16 +314,15 @@ private fun Praeparattrend(d: Reihen, grenze: LocalDate, heute: LocalDate) {
     if (faellig.profil.count { it.mittel != null } < 3) return
     val genommen = Auswertung.bild(d["supp_genommen"].orEmpty(), grenze)
     val genommenTag = genommen.profil.associate { it.tag to it.mittel }
-    Ueberschrift(stringResource(R.string.ks_h_praeparate))
+    Ueberschrift(mitFenster(stringResource(R.string.ks_h_praeparate)))
     Karte {
         Trendsaeulen(
             faellig.profil.map { TSaeule(kurz(it.tag), it.mittel, genommenTag[it.tag], it.tag == heute.dayOfWeek) },
             FARBE_BEWEGUNG_T, kurz = { "${it.roundToInt()}" },
         )
-        Leise(stringResource(R.string.ks_tr_supp_legende))
         val f = faellig.gesamt
         val g = genommen.gesamt
-        if (f != null && g != null && f > 0) Satz(stringResource(R.string.ks_tr_supp_schnitt, (g / f * 100).roundToInt()))
+        if (f != null && g != null && f > 0) Satz(stringResource(R.string.ks_trn_supp_schnitt, (g / f * 100).roundToInt()))
     }
 }
 

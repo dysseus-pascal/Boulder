@@ -6,11 +6,14 @@ die Regeln von Gravel, mit diesen Abweichungen:
 - App-Kennung `ch.dysseus.boulder`, Name Boulder. Fassung in `BOULDER_VERSION`,
   versionCode = Zahl der Commits. Kein F-Droid, keine `version.properties`.
 - Direkt auf `main`; jede neue Fassung wird ein Release (`.github/release/<fassung>.md`,
-  deutsch, erste Zeile Titel ohne Nummer). Die CI auf GitHub ist wegen der
-  Abrechnung gesperrt: gebaut wird lokal, als Release-Build
+  deutsch, erste Zeile Titel ohne Nummer). Gebaut wird lokal, als Release-Build
   (`:androidApp:assembleRelease` mit `LOCAL_RELEASE_BUILD=true` in `local.properties`,
   signiert mit dem CI-Schluessel aus `ci/debug.keystore`, APK aus
-  `androidApp/build/outputs/apk/release/`); das Release legt `gh release create` an.
+  `androidApp/build/outputs/apk/release/`); das Release legt
+  `gh release create v<fassung>` an, Titel `<fassung> - <erste Zeile>`. Der Tag
+  traegt ein `v`: die CI (`.github/workflows/build.yml`) laeuft wieder und legt
+  selbst ein Release `v<fassung>` an, wenn dieser Tag nach ihren Tests noch fehlt
+  - ein Tag ohne `v` ergab deshalb doppelte Releases (0.26.0 bis 0.35.0).
   Der Debug-Build braucht auf dem Telefon rund die Haelfte mehr Speicher und ist
   nur zum Entwickeln da. Release-Builds sind nicht debuggable: `run-as` geht dort
   nicht, die Datenbank kommt nur ueber die Sicherung heraus.

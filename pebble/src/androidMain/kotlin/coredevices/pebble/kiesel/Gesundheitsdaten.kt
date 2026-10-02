@@ -471,8 +471,9 @@ internal object Gesundheitsdaten {
         }
 
         val apps = UhrApps.installiert()
-        val ruhe = nacht?.ruhepuls ?: frueher.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 60
-        val maxpuls = maxpulsFuer(context)
+        // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
+        val ruhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls)) ?: Trainingsanalyse.RUHEPULS_ERSATZ
+        val maxpuls = Herzgrenzen.maxpuls(context, ruhe)
         val tagesherz = runCatching {
             val von = anfang(heute.minusDays(14))
             val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
@@ -586,21 +587,6 @@ internal object Gesundheitsdaten {
             Log.w(TAG, "Getraenk aendern: " + e.message)
             false
         }
-    }
-
-    /**
-     * Der Maximalpuls fuer die Belastung: der eingestellte, wenn er nicht die
-     * Vorgabe ist, sonst Tanaka nach dem Alter aus den Gesundheitseinstellungen
-     * der Uhr - wie bei den Kalorien eines Trainings.
-     */
-    private suspend fun maxpulsFuer(context: Context): Int {
-        val eingestellt = KieselEinstellungen.stand(context).maxpuls
-        if (eingestellt != KieselEinstellungen.MAXPULS_VORGABE) return eingestellt
-        val alter = runCatching {
-            org.koin.mp.KoinPlatform.getKoin().getOrNull<io.rebble.libpebblecommon.connection.LibPebble>()
-                ?.healthSettings?.first()?.ageYears
-        }.getOrNull()
-        return alter?.takeIf { it in 10..100 }?.let { (208 - 0.7 * it).roundToInt() } ?: KieselEinstellungen.MAXPULS_VORGABE
     }
 
     /** Eine Tasse von Hand - als Ernaehrungseintrag mit Koffein, wie in Kiesel-Helper. */

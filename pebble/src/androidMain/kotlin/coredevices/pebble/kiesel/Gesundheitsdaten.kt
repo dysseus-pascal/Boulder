@@ -205,7 +205,6 @@ internal object Gesundheitsrechnung {
         )
     }
 
-    /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */
     /** Die letzte Messung und, ab drei Messungen, der Schnitt der Zeitspanne. */
     data class Blutdruckzeile(val letzte: Blutdruck, val schnitt: Pair<Int, Int>?)
 
@@ -218,6 +217,7 @@ internal object Gesundheitsrechnung {
         return Blutdruckzeile(letzte, schnitt)
     }
 
+    /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */
     fun koffeinAktiv(dosen: List<Pair<Instant, Double>>, jetzt: Instant): Double = dosen
         .filter { !it.first.isAfter(jetzt) }
         .sumOf { (wann, mg) -> mg * 0.5.pow(Duration.between(wann, jetzt).toMinutes() / KOFFEIN_HALBWERT_MIN) }

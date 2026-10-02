@@ -203,6 +203,8 @@ class GesundheitsbildRechnungTest {
     @Test
     fun blutdruck_zeigt_die_letzte_messung_und_ab_drei_den_schnitt() {
         assertNull(Gesundheitsrechnung.blutdruckzeile(emptyList()))
+        // Ein beliebiger fester Zeitpunkt - es zaehlt nur die Reihenfolge der Messungen.
+        val beginn = 1_790_000_000L
         val zwei = listOf(Blutdruck(Instant.ofEpochSecond(beginn + 100), 130, 85), Blutdruck(Instant.ofEpochSecond(beginn), 120, 80))
         val z = Gesundheitsrechnung.blutdruckzeile(zwei)!!
         assertEquals(130, z.letzte.oben)

@@ -77,6 +77,13 @@ internal const val RUHEPULS_SPANNE = 2
 internal const val DURCHGESCHLAFEN_MIN = 10
 /** Ein Puls, der juenger ist, heisst "jetzt". */
 internal const val PULS_FRISCH_S = 15 * 60L
+/**
+ * Erst Minutenwerte, die aelter sind, heissen "synced": die Uhr haelt die
+ * Minutendaten 20 bis 35 Minuten zurueck (15er-Saetze plus 19 Minuten
+ * unsicherer Schlaf), auch verbunden. Mit einer Viertelstunde stand der
+ * Hinweis fast immer da.
+ */
+internal const val SYNC_ALT_S = 60 * 60L
 
 internal fun Gesundheitsrechnung.tageszeit(uhrzeit: LocalTime): Tageszeit = when {
     uhrzeit < LocalTime.of(11, 0) -> Tageszeit.MORGEN
@@ -118,17 +125,18 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
 
 /**
  * Wie immer heisst: hoechstens zwei Schlaege neben dem Schnitt der frueheren
- * Naechte. Entschieden wird am gerundeten Abstand, denn der steht auf der
- * Seite: 2.33 bpm ueber dem Schnitt hiesse sonst "2 bpm above your usual",
- * obwohl zwei Schlaege "as usual" sind.
+ * Naechte. Entschieden wird am Abstand zum GERUNDETEN Schnitt, denn der steht
+ * auf der Seite: bei 52.5 zeigt "Your usual" 53, und 55 sind dann 2 bpm
+ * daneben, also "as usual" - nicht 2.5, gerundet 3, "above".
  */
 internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>): Herzurteil {
     val (naechte, schnitt) = naechteSchnitt(frueher)
     if (letzte == null || schnitt == null || naechte < LERNNAECHTE) return Herzurteil(naechte, schnitt, null, 0)
-    val abstand = abs(letzte - schnitt).roundToInt()
+    val gezeigt = schnitt.roundToInt()
+    val abstand = abs(letzte - gezeigt)
     val urteil = when {
         abstand <= RUHEPULS_SPANNE -> Vergleich.WIE_IMMER
-        letzte > schnitt -> Vergleich.HOEHER
+        letzte > gezeigt -> Vergleich.HOEHER
         else -> Vergleich.TIEFER
     }
     return Herzurteil(naechte, schnitt, urteil, abstand)
@@ -169,6 +177,14 @@ internal fun Gesundheitsrechnung.hrvUrteil(tag: Gesundheitsrechnung.HrvTag?): Ba
 internal fun Gesundheitsrechnung.pulsFrisch(sekunde: Long, jetzt: Long): Boolean = jetzt - sekunde <= PULS_FRISCH_S
 
 /**
+ * Ob der letzte Minutenwert der Uhr aelter ist als [SYNC_ALT_S]. Dann gilt
+ * das "Jetzt" des Zeitstrahls nur bis dahin - eine getrennte Uhr liess einen
+ * Stand von vor Stunden wie den jetzigen aussehen.
+ */
+internal fun Gesundheitsrechnung.syncAlt(letzteDaten: Instant?, jetzt: Instant): Boolean =
+    letzteDaten != null && jetzt.epochSecond - letzteDaten.epochSecond > SYNC_ALT_S
+
+/**
  * Wieviele Kalendertage [t] vor [jetzt] liegt: 0 heute, 1 gestern. Eine
  * Uhrzeit allein ("synced 9:14 PM") laese sich sonst als heute.
  */
@@ -181,11 +197,18 @@ internal fun Gesundheitsrechnung.tageZurueck(t: Instant, jetzt: Instant, zone: Z
  * ausgelassenen Nacht die vorletzte als "Last night" gelten. Die frueheren
  * sind hoechstens [VERGLEICHSNAECHTE] davor, ohne die letzte - sie wird mit
  * ihnen verglichen und zoege den Schnitt sonst zu sich.
+ *
+ * NUR AUS DER WOCHE DAVOR ([VERGLEICHSNAECHTE] + 1 Tage): auch fuer eine
+ * Nacht der Nachtansicht, die aus einem Monat Naechten blaettert. Nach zwei
+ * Wochen ohne Uhr lernt Health wieder, und die Nachtansicht soll nicht mit
+ * Naechten von damals einen Schnitt nennen.
  */
 internal fun Gesundheitsrechnung.naechteTeilen(naechte: List<NachtEntity>, heute: LocalDate, zone: ZoneId): Pair<NachtEntity?, List<NachtEntity>> {
     val sortiert = naechte.sortedBy { it.beginnUtc }
-    val letzte = sortiert.lastOrNull()?.takeIf { nachtTag(it.beginnUtc, it.aufwachen, zone) == heute }
-    val frueher = sortiert.filter { it !== letzte && nachtTag(it.beginnUtc, it.aufwachen, zone) < heute }.takeLast(VERGLEICHSNAECHTE)
+    fun tag(n: NachtEntity) = nachtTag(n.beginnUtc, n.aufwachen, zone)
+    val letzte = sortiert.lastOrNull { tag(it) <= heute }?.takeIf { tag(it) == heute }
+    val ab = heute.minusDays(VERGLEICHSNAECHTE + 1L)
+    val frueher = sortiert.filter { it !== letzte && tag(it) < heute && !tag(it).isBefore(ab) }.takeLast(VERGLEICHSNAECHTE)
     return letzte to frueher
 }
 

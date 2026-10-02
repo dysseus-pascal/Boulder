@@ -43,11 +43,12 @@ import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.LERNNAECHTE
+import coredevices.pebble.kiesel.naechteSchnitt
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.schlafurteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import org.koin.compose.koinInject
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -143,15 +144,16 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
 
         // Geladen wird eine halbe Stunde vor und nach dem Schlaf; gezeigt nur die
         // Nacht selbst - Punkte davor zeichnete die Kurve sonst in die Achsenspalte.
-        val von = n.abschnitte.minOfOrNull { it.von.epochSecond } ?: n.einschlafen.epochSecond
-        val bis = n.abschnitte.maxOfOrNull { it.bis.epochSecond } ?: n.aufwachen.epochSecond
+        val von = n.spanne.first
+        val bis = n.spanne.last
         val puls = d.puls.filter { it.first in von..bis }
         val spo2Punkte = d.spo2.filter { it.first in von..bis }
         if (n.abschnitte.isNotEmpty() || puls.isNotEmpty()) {
             Kasten {
                 Kopf(stringResource(R.string.ks_n_durch_die_nacht))
                 Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
-                    if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 150.dp)
+                    // Mit derselben Achsspalte wie die Kurven darunter: eine Uhrzeit steht in allen drei Bildern senkrecht uebereinander.
+                    if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 150.dp, links = ACHSE_LINKS)
                     if (puls.isNotEmpty()) {
                         Text(stringResource(R.string.ks_n_puls), fontSize = 13.sp, color = grau, modifier = Modifier.padding(top = 10.dp))
                         Tageskurve(puls, von, bis, Color(0xFFC0392B), hoehe = 110.dp)
@@ -166,9 +168,11 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
             Text(stringResource(R.string.ks_h_ohne_phasen), fontSize = 13.sp, color = grau)
         }
 
-        // Der Koerper im Schlaf, je gegen den Schnitt der Naechte davor.
-        val ruheSchnitt = d.davor.map { it.ruhepuls }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
-        val hrvSchnitt = d.davor.map { it.hrv }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
+        // Der Koerper im Schlaf, je gegen den Schnitt der Naechte davor - wie auf der
+        // Herzseite erst ab LERNNAECHTE: ein Wert aus einer Nacht ist kein "avg".
+        fun vergleich(werte: List<Int>) = Gesundheitsrechnung.naechteSchnitt(werte).let { (naechte, wert) -> wert?.takeIf { naechte >= LERNNAECHTE }?.roundToInt() }
+        val ruheSchnitt = vergleich(d.davor.map { it.ruhepuls })
+        val hrvSchnitt = vergleich(d.davor.map { it.hrv })
         // Dieselben Punkte wie die Kurve, damit "lowest" einer ist, den man darin sieht.
         val spo2 = spo2Punkte.map { it.second }
         if (n.ruhepuls != null || n.hrv != null || spo2.isNotEmpty()) {
@@ -185,18 +189,18 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
             }
         }
 
-        // Die Woche davor als Saeulen, diese Nacht hervorgehoben.
-        val reihe = d.davor.map { it.schlafMinuten to it.beginnUtc } + (n.schlafMinuten to n.beginnUtc)
+        // Die Woche davor als Saeulen, diese Nacht hervorgehoben. Jede Nacht gehoert zum
+        // Tag, an dem man aufwacht (nachtTag) - wie im Zeitstrahl und in den Trends.
+        val reihe = d.davor.map { it.schlafMinuten to Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) } +
+            (n.schlafMinuten to n.aufwachen.atZone(zone).toLocalDate())
         if (reihe.size >= 2) {
             val schnitt = reihe.map { it.first }.average().roundToInt()
             Kasten {
                 Kopf(stringResource(R.string.ks_n_sieben), "· " + stringResource(R.string.ks_n_schnitt_h, stundenMinuten(schnitt)))
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val spitze = maxOf(9 * 60, reihe.maxOf { it.first }).toFloat()
-                    reihe.forEachIndexed { i, (minuten, b) ->
+                    reihe.forEachIndexed { i, (minuten, tag) ->
                         val diese = i == reihe.lastIndex
-                        // Die Nacht gehoert zum Tag, an dem man aufwacht - wie im Zeitstrahl.
-                        val tag = Instant.ofEpochSecond(b).atZone(zone).plusHours(12).toLocalDate()
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(stundenMinuten(minuten), fontSize = 11.sp, color = grau, maxLines = 1)
                             val farbe = if (diese) PHASENFARBEN[1] else PHASENFARBEN[1].copy(alpha = 0.4f)

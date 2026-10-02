@@ -81,7 +81,8 @@ internal fun AkkuAnsicht() {
         Karte {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Wert(aktuell?.let { "$it %" } ?: "–", stringResource(R.string.ks_akku_jetzt))
-                Wert("≈ " + zahl(stand.tageUebrig, 1), stringResource(R.string.ks_akku_uebrig))
+                // Abgerundet wie die Restzeit im Satz auf Health: lieber zu wenig als zu viel.
+                Wert("≈ " + zahl(stand.tageUebrig?.let { kotlin.math.floor(it * 10) / 10 }, 1), stringResource(R.string.ks_akku_uebrig))
                 Wert("≈ " + zahl(stand.jeTag, 0), stringResource(R.string.ks_akku_je_tag))
                 Wert("≈ " + zahl(stand.tageJeLadung, 1), stringResource(R.string.ks_akku_je_ladung))
                 Wert(zahl(stand.nachtJeStunde, 1), stringResource(R.string.ks_akku_nacht))

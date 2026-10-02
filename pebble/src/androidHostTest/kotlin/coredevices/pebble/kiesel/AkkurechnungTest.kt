@@ -126,4 +126,16 @@ class AkkurechnungTest {
         assertEquals(6 / 21.0, Akkurechnung.rate(listOf(1 to 7.0, 3 to 7.0, 2 to 7.0))!!, 0.001)
         assertNull(Akkurechnung.rate(emptyList()))
     }
+
+    @Test
+    fun restzeitAbgerundetUnterEinemTagInStunden() {
+        // 1,5 Tage sind "1 day", nicht 2 - aufgerundet versprach der Satz zu viel.
+        assertEquals(Akkurechnung.Restzeit(1, stunden = false), Akkurechnung.restzeit(1.5))
+        assertEquals(Akkurechnung.Restzeit(3, stunden = false), Akkurechnung.restzeit(3.99))
+        // 0,4 Tage: 9 h statt "about 0 days left".
+        assertEquals(Akkurechnung.Restzeit(9, stunden = true), Akkurechnung.restzeit(0.4))
+        // Unter einer Stunde kein Nachsatz, ohne Schaetzung auch nicht.
+        assertNull(Akkurechnung.restzeit(0.03))
+        assertNull(Akkurechnung.restzeit(null))
+    }
 }

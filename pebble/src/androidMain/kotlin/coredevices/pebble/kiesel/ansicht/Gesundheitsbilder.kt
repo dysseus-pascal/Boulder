@@ -48,23 +48,28 @@ internal val PHASENFARBEN = listOf(
 )
 
 
+/** Die Spalte links fuer die Zahlen der Achse in [Tageskurve] - und so weit eingerueckt das [Hypnogramm] darueber. */
+internal val ACHSE_LINKS = 28.dp
+
 /**
  * Die Nacht in vier Bahnen - wach oben, tief unten - wie das Hypnogramm in
  * Kiesel-Helper. Schlaf ohne Phase (eine Nacht ohne Puls) liegt in der Bahn
- * des leichten Schlafs.
+ * des leichten Schlafs. [links]: so weit eingerueckt wie die Kurven darunter,
+ * damit dieselbe Uhrzeit in allen Bildern an derselben Stelle steht.
  */
 @Composable
-internal fun Hypnogramm(nacht: Nacht, hoehe: Dp = 90.dp) {
+internal fun Hypnogramm(nacht: Nacht, hoehe: Dp = 90.dp, links: Dp = 0.dp) {
     val messer = rememberTextMeasurer()
     val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val bahnen = mapOf(0 to 0, 3 to 1, 1 to 2, 4 to 2, 2 to 3)
     Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
         val fuss = 16.dp.toPx()
         val bahn = (size.height - fuss) / 4
+        val rand = links.toPx()
         val von = nacht.abschnitte.minOfOrNull { it.von.epochSecond } ?: return@Canvas
         val bis = nacht.abschnitte.maxOf { it.bis.epochSecond }
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
-        fun x(t: Instant) = size.width * (t.epochSecond - von) / spanne
+        fun x(t: Instant) = rand + (size.width - rand) * (t.epochSecond - von) / spanne
         nacht.abschnitte.forEach { a ->
             val b = bahnen[a.phase] ?: return@forEach
             drawRoundRect(
@@ -74,7 +79,7 @@ internal fun Hypnogramm(nacht: Nacht, hoehe: Dp = 90.dp) {
         }
         stundenstriche(von, bis) { t, text ->
             val m = messer.measure(text, stil)
-            drawText(m, topLeft = Offset((size.width * (t - von) / spanne - m.size.width / 2f).coerceIn(0f, size.width - m.size.width), size.height - m.size.height))
+            drawText(m, topLeft = Offset((x(Instant.ofEpochSecond(t)) - m.size.width / 2f).coerceIn(rand, size.width - m.size.width), size.height - m.size.height))
         }
     }
 }
@@ -114,7 +119,7 @@ internal fun Tageskurve(
     val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
     Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val links = 28.dp.toPx()
+        val links = ACHSE_LINKS.toPx()
         val fuss = 16.dp.toPx()
         val boden = size.height - fuss
         val tief = punkte.minOf { it.second } - 2

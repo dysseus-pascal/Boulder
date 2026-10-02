@@ -19,11 +19,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 internal object KieselEinstellungen {
     private const val DATEI = "kiesel-uhr"
-    /** Was Uhr und App annehmen, solange niemand einen Maximalpuls eingestellt hat. */
+    /** Was die Uhr annimmt, solange niemand einen Maximalpuls eingestellt hat. */
     const val MAXPULS_VORGABE = 190
 
     data class Stand(
+        /** Was die Uhr meldet - eine Zahl auch dann, wenn keiner eingestellt ist. */
         val maxpuls: Int = MAXPULS_VORGABE,
+        /** Ob [maxpuls] eingestellt ist; sonst gilt der nach dem Alter (siehe [Herzgrenzen.eingestellt]). */
+        val maxpulsGesetzt: Boolean = false,
         val pause: Int = 90,
         val empfind: Int = 2,
         val becken: Int = 25,
@@ -56,8 +59,15 @@ internal object KieselEinstellungen {
 
     fun stand(context: Context): Stand {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
+        val maxpuls = p.getInt("maxpuls", MAXPULS_VORGABE)
+        // Die Wahl am Telefon gilt fuer den Wert, der mit ihr zur Uhr ging.
+        val wahl = if (p.contains("maxpuls_wahl")) p.getBoolean("maxpuls_wahl", false) else null
+        val wahlWert = if (p.contains("maxpuls_wahl_wert")) p.getInt("maxpuls_wahl_wert", 0) else null
+        val wartend = if (p.contains("maxpuls_wartend")) p.getBoolean("maxpuls_wartend", false) else null
+        val wartendWert = if (p.contains("maxpuls_wartend_wert")) p.getInt("maxpuls_wartend_wert", 0) else null
         return Stand(
-            maxpuls = p.getInt("maxpuls", MAXPULS_VORGABE),
+            maxpuls = maxpuls,
+            maxpulsGesetzt = Herzgrenzen.eingestellt(maxpuls, wahl, wahlWert, wartend, wartendWert) != null,
             pause = p.getInt("pause", 90),
             empfind = p.getInt("empfind", 2),
             becken = p.getInt("becken", 25),
@@ -81,6 +91,14 @@ internal object KieselEinstellungen {
      * Stand beim Start (dann noch den alten) und kurz nach jeder Aenderung.
      * Kommt der neue Stand nicht, wird zweimal nachgeschickt - wie in
      * Kiesel-Helper, wo die erste Nachricht oft vor dem Start der App ankam.
+     *
+     * "NACH ALTER" KENNT DIE UHR NICHT: sie bekommt die Zahl, mit der das
+     * Telefon rechnet ([neu].maxpuls), damit ihre Zonen dieselben sind. Ob
+     * sie gewaehlt oder geschaetzt ist, merkt sich das Telefon zu dieser Zahl:
+     * vor dem Senden als wartend, nach der Bestaetigung als gueltig. Ersetzte
+     * sie gleich die gueltige, verloere der alte Wert seine Wahl, wenn die Uhr
+     * nichts uebernimmt; merkte es sie erst danach, ginge sie bei einer
+     * verspaeteten Meldung verloren (siehe [Herzgrenzen.eingestellt]).
      */
     suspend fun sende(context: Context, libPebble: LibPebble, neu: Stand): Ergebnis {
         val uhr = libPebble.watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
@@ -93,6 +111,10 @@ internal object KieselEinstellungen {
             Kieselsport.SP_PIN_ART to neu.pinArt,
             Kieselsport.SP_PIN_ZEIT to neu.pinZeit,
         )
+        context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit()
+            .putBoolean("maxpuls_wartend", neu.maxpulsGesetzt)
+            .putInt("maxpuls_wartend_wert", neu.maxpuls)
+            .apply()
         val ab = System.currentTimeMillis()
         val warOffen = uhr.runningApp.value == Kieselsport.UUID
         var ergebnis = Ergebnis.KeineAntwort
@@ -107,6 +129,12 @@ internal object KieselEinstellungen {
                 logger.w { "Einstellungen senden (Versuch $versuch): ${e.message}" }
             }
             if (bestaetigt(context, neu, ab)) {
+                context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit()
+                    .putBoolean("maxpuls_wahl", neu.maxpulsGesetzt)
+                    .putInt("maxpuls_wahl_wert", neu.maxpuls)
+                    .remove("maxpuls_wartend")
+                    .remove("maxpuls_wartend_wert")
+                    .apply()
                 ergebnis = Ergebnis.Uebernommen
                 break
             }
@@ -121,11 +149,11 @@ internal object KieselEinstellungen {
         return ergebnis
     }
 
-    /** Wartet bis drei Sekunden auf die Meldung des neuen Stands. */
+    /** Wartet bis drei Sekunden auf die Meldung des neuen Stands - die Uhr meldet nur Zahlen, nicht die Wahl. */
     private suspend fun bestaetigt(context: Context, neu: Stand, ab: Long): Boolean {
         val bis = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < bis) {
-            val s = stand(context)
+            val s = stand(context).copy(maxpulsGesetzt = neu.maxpulsGesetzt)
             if (s.gemeldetUm >= ab && s.gleich(neu)) return true
             delay(250)
         }

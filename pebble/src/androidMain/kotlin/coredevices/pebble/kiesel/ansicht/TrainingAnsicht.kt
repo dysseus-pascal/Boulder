@@ -85,7 +85,7 @@ import kotlinx.coroutines.withContext
 import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.R
 import coredevices.pebble.health.HealthConnectPermissionBridge
-import coredevices.pebble.kiesel.KIESEL_RECHTE
+import coredevices.pebble.health.alleAkteRechte
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.Reihentag
 import coredevices.pebble.kiesel.Sport
@@ -250,7 +250,7 @@ internal fun SportAnsicht(wege: Sportwege) {
             add {
                 AkteZeile(stringResource(if (trainingsFehlen) R.string.ks_sp_hc_trainings else R.string.ks_sp_hc_teils)) {
                     scope.launch {
-                        HealthConnectPermissionBridge.request(context, KIESEL_RECHTE)
+                        HealthConnectPermissionBridge.request(context, alleAkteRechte())
                         neu++
                     }
                 }

@@ -20,7 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.health.HealthConnectPermissionBridge
-import coredevices.pebble.kiesel.KIESEL_RECHTE
+import coredevices.pebble.health.alleAkteRechte
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Nachtexport
@@ -73,7 +73,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
             section = Section.Health,
             keywords = "health connect permissions water supplements sleep",
             badge = if (fehlend.isNotEmpty()) "!" else null,
-            action = { scope.launch { HealthConnectPermissionBridge.request(context, KIESEL_RECHTE); neu++ } },
+            action = { scope.launch { HealthConnectPermissionBridge.request(context, alleAkteRechte()); neu++ } },
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_b_titel),

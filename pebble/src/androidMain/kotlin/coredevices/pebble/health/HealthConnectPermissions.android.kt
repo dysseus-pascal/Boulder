@@ -33,9 +33,7 @@ internal actual suspend fun requestPlatformHealthPermissions(
 ): Boolean {
     if (!healthManager.isAvailable().getOrDefault(false)) return false
     val ctx = context()
-    val writePerms = writeTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectWritePermissions() }
-    val readPerms = readTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectReadPermissions() }
-    val standardPerms = writePerms + readPerms
+    val standardPerms = standardRechte(readTypes, writeTypes)
     // Boulder: was Kieselsport braucht, im selben Dialog - HRV eintragen, SpO2
     // fuer die Frage der Uhr lesen. Wie SpO2 nur nach Moeglichkeit: ohne sie
     // laeuft der Sync der anderen Daten trotzdem.
@@ -43,6 +41,15 @@ internal actual suspend fun requestPlatformHealthPermissions(
     val granted = HealthConnectPermissionBridge.request(ctx, allPerms)
     return standardPerms.all { it in granted }
 }
+
+private fun standardRechte(readTypes: List<HealthDataType>, writeTypes: List<HealthDataType>): Set<String> =
+    writeTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectWritePermissions() } +
+        readTypes.flatMapTo(mutableSetOf()) { it.toHealthConnectReadPermissions() }
+
+/** Boulder: jedes Recht, das die App in der Akte haben kann - der Inhalt des einen Dialogs. */
+internal fun alleAkteRechte(): Set<String> =
+    standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
+        WRITE_OXYGEN_SATURATION + coredevices.pebble.kiesel.KIESEL_RECHTE
 
 private const val KEY_PERMISSIONS = "KEY_PERMISSIONS"
 

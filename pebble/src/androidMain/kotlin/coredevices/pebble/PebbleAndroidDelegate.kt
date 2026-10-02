@@ -3,6 +3,7 @@ package coredevices.pebble
 import android.content.Context
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.Kieselstrasse
+import coredevices.pebble.kiesel.Rechtefrage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +32,8 @@ class PebbleAndroidDelegate(
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             libPebble.healthDataUpdated.collect { GesundheitWidget.stosseAn(context) }
         }
+        // Boulder: alle Rechte der Akte in einem Dialog, einmal je Fassung.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { Rechtefrage.beimStart(context) }
     }
 
     /**

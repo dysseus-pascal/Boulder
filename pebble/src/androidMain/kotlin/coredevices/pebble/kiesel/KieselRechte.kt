@@ -24,6 +24,8 @@ import androidx.health.connect.client.records.SpeedRecord
  * jemand dasselbe Glas eintrug), die Trainings,
  * ihre Pulskurve, SpO2 und HRV fuer die Trainingsansicht und die SpO2-Frage
  * der Uhr. Nur nach Moeglichkeit - fehlt eines, laeuft der Rest trotzdem.
+ * Dazu das Lesen im Hintergrund (das Widget sieht so auch fremde Eintraege,
+ * siehe [liesOderEigene]) und das Lesen ueber 30 Tage zurueck.
  */
 internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getWritePermission(HeartRateVariabilityRmssdRecord::class),
@@ -42,4 +44,6 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getWritePermission(ElevationGainedRecord::class),
     HealthPermission.getWritePermission(SpeedRecord::class),
     HealthPermission.getReadPermission(BloodPressureRecord::class),
+    HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+    HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
 )

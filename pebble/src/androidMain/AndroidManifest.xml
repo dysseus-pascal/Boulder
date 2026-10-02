@@ -27,6 +27,9 @@
     <uses-permission android:name="android.permission.health.WRITE_SPEED" />
     <!-- Health: Blutdruck einer Manschetten-App anzeigen. -->
     <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <!-- Widget und Trends: auch fremde Eintraege im Hintergrund und aelter als 30 Tage lesen. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Kieselstrasse: ohne diese Zeilen ist OsmAnd fuer Boulder unsichtbar, auch wenn es laeuft. -->
     <queries>

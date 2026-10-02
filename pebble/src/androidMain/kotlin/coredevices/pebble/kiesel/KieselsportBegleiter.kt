@@ -36,9 +36,13 @@ internal class KieselsportBegleiter(
         arbeite()
         val app = context.applicationContext
         // Was liegen blieb, zuerst: Nachrichten, deren Verarbeitung scheiterte,
-        // und Kurven, deren Eintrag scheiterte (etwa ohne Erlaubnis).
+        // Kurven, deren Eintrag scheiterte (etwa ohne Erlaubnis), und die
+        // Kalorien aus Kurven, die schon in der Akte stehen.
         Wartend.alle(app).forEach { auftraege.send(Auftrag(app, it)) }
-        sitzung.launch { Pulskurve.alleEintragen(app) }
+        sitzung.launch {
+            Pulskurve.alleEintragen(app)
+            Trainingswerte.holeKalorienNach(app)
+        }
         sitzung.launch {
             incomingAppMessages.collect { nachricht ->
                 // Die Zusammenfassung erst auf die Platte, dann bestaetigen

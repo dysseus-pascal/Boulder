@@ -226,9 +226,10 @@ internal fun SportAnsicht(wege: Sportwege) {
         daten = d
         // Erst die Seite, dann der Puls: die Abfrage haelt sonst jede Rueckkehr auf.
         puls = d.trainings.firstOrNull()?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }
-        // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein Akte-Zugriff.
+        // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein
+        // Akte-Zugriff, beschnitten wie die Strecke daneben.
         punkte = d.trainings.firstOrNull()?.let { t ->
-            withContext(Dispatchers.IO) { runCatching { Spur.lies(context, t.sitzung.startTime.epochSecond) }.getOrDefault(emptyList()) }
+            withContext(Dispatchers.IO) { runCatching { TrainingsDaten.punkte(context, t.sitzung) }.getOrDefault(emptyList()) }
         }.orEmpty()
     }
     val ortStarter = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { ortsstand++ }

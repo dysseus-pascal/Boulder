@@ -1,5 +1,7 @@
 package coredevices.pebble.kiesel
 
+import java.time.Duration
+import java.time.Instant
 import kotlin.math.abs
 
 /**
@@ -167,6 +169,21 @@ internal object Trainingsanalyse {
     }
 
     enum class Geschlecht { Mann, Frau, Andere }
+
+    // --- Puls der Sitzung ---
+
+    /**
+     * Die Pulspunkte einer Sitzung aus den Messungen der Akte: nur [von, bis),
+     * nach der Zeit, die Sekunde ab [von].
+     *
+     * DASSELBE FENSTER WIE DIE ROUTE: Ansicht und Kalorien in der Akte rechnen
+     * mit genau diesen Punkten. Ein Pulswert nach dem Ende gehoert nicht mehr
+     * zum Training, auch wenn sein Eintrag noch hineinreicht.
+     */
+    fun pulsInSitzung(messungen: List<Pair<Instant, Long>>, von: Instant, bis: Instant): List<Pulspunkt> =
+        messungen.filter { (t, _) -> !t.isBefore(von) && t.isBefore(bis) }
+            .sortedBy { it.first }
+            .map { (t, bpm) -> Pulspunkt(Duration.between(von, t).seconds, bpm) }
 
     // --- Aussetzer des Sensors ---
 

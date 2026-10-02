@@ -7,6 +7,7 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
@@ -80,7 +81,7 @@ internal data class TrainingEintrag(
     val sport: Sport,
     /** Aus Kieselsport (Boulder oder frueher Kiesel-Helper)? */
     val eigen: Boolean,
-    /** Die Strecke aus der Spurdatei, 0 ohne Spur. */
+    /** Die Strecke aus der Spurdatei, nur in der Sitzung; 0 ohne Spur. */
     val meter: Double,
 ) {
     val id: String get() = sitzung.metadata.id
@@ -158,8 +159,7 @@ internal object TrainingsDaten {
         val eigene = sitzungen.filter { eigen(context, it) }
         val gewaehlt = gewaehlt(context, sitzungen)
         val trainings = gewaehlt.map { s ->
-            val punkte = Spur.lies(context, s.startTime.epochSecond)
-            TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte))
+            TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte(context, s)))
         }
         TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
     }
@@ -190,8 +190,15 @@ internal object TrainingsDaten {
             return@withContext null
         }
         val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
-        TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(Spur.lies(context, s.startTime.epochSecond)))
+        TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte(context, s)))
     }
+
+    /**
+     * Die Spur eines Trainings, beschnitten auf seine Sitzung - wie die Route in
+     * der Akte. So zeigen Liste, Karte und Detail dieselbe Strecke, die dort steht.
+     */
+    fun punkte(context: Context, s: ExerciseSessionRecord): List<Spur.Punkt> =
+        Spur.inSitzung(Spur.lies(context, s.startTime.epochSecond), s.startTime, s.endTime)
 
     /**
      * Spuren, zu denen kein eigenes Training in der Akte steht. NICHT DIE
@@ -228,12 +235,12 @@ internal object TrainingsDaten {
             Log.w(TAG, "Training lesen: " + e.message)
             return@withContext null
         }
-        val punkte = Spur.lies(context, s.startTime.epochSecond)
+        val punkte = punkte(context, s)
         val quelle = s.metadata.dataOrigin.packageName
         TrainingDetail(
             eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), Spur.laenge(punkte)),
             punkte = punkte,
-            puls = puls(klient, s),
+            puls = puls(klient, context, s),
             spo2 = spo2(klient, s),
             hrv = hrv(klient, s),
             quelle = quelle,
@@ -246,7 +253,7 @@ internal object TrainingsDaten {
      */
     suspend fun mittelpuls(context: Context, s: ExerciseSessionRecord): Int? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
-        puls(klient, s).takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()?.toInt()
+        puls(klient, context, s).takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()?.toInt()
     }
 
     /**
@@ -254,17 +261,37 @@ internal object TrainingsDaten {
      * fremdes seine Kurve. Entstoert beim Lesen, nicht beim Schreiben: in
      * der Akte bleibt, was der Sensor mass.
      */
-    private suspend fun puls(klient: HealthConnectClient, s: ExerciseSessionRecord): List<Pulspunkt> = try {
-        klient.readRecords(
-            ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(s.startTime, s.endTime))
-        ).records
-            .flatMap { it.samples }
-            .filter { !it.time.isBefore(s.startTime) && !it.time.isAfter(s.endTime) }
-            .sortedBy { it.time }
-            .map { Pulspunkt(Duration.between(s.startTime, it.time).seconds, it.beatsPerMinute) }
-            .let(Trainingsanalyse::entstoert)
+    private suspend fun puls(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pulspunkt> = try {
+        Trainingsanalyse.entstoert(rohpuls(klient, context, s))
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /**
+     * Der Puls einer Sitzung, wie ihn die Ansicht zeigt und die Akte ihre
+     * Kalorien rechnet (Trainingswerte) - noch nicht entstoert.
+     *
+     * EIN TRAINING VON BOULDER NUR AUS BOULDERS PULS: im Hintergrund gibt die
+     * Akte ohne Sonderrecht nur Eigenes heraus, und die Kalorien dort sollen aus
+     * denselben Punkten kommen wie die Zahlen hier. Boulder schreibt zu jedem
+     * Training selbst Puls (Kurve und Minutenpuls).
+     *
+     * KIESEL-HELPER UND FREMDE NEHMEN JEDEN PULS: Kiesel-Helper schrieb erst ab
+     * 0.38.0 eine eigene Kurve, davor stand der Puls nur unter der Pebble-App.
+     * Kalorien rechnet Boulder fuer diese Trainings nicht in die Akte.
+     */
+    suspend fun rohpuls(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pulspunkt> =
+        rohpuls(klient, s.metadata.dataOrigin.packageName.takeIf { it == context.packageName }, s.startTime, s.endTime)
+
+    /** Der Puls in [von, bis) - von [quelle], ohne sie von allen. Wirft, wenn die Akte nicht liest. */
+    suspend fun rohpuls(klient: HealthConnectClient, quelle: String?, von: Instant, bis: Instant): List<Pulspunkt> {
+        val saetze = klient.readRecords(
+            ReadRecordsRequest(
+                HeartRateRecord::class, TimeRangeFilter.between(von, bis),
+                dataOriginFilter = quelle?.let { setOf(DataOrigin(it)) }.orEmpty(),
+            )
+        ).records
+        return Trainingsanalyse.pulsInSitzung(saetze.flatMap { r -> r.samples.map { it.time to it.beatsPerMinute } }, von, bis)
     }
 
     /**

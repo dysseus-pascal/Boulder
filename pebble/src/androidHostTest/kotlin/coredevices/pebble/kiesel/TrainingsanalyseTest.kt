@@ -229,4 +229,34 @@ class TrainingsanalyseTest {
         assertTrue(Trainingsanalyse.hoeheUeberStrecke(Trainingsanalyse.strecke(gerade(20, null))).isEmpty())
         assertEquals(21, Trainingsanalyse.hoeheUeberStrecke(Trainingsanalyse.strecke(gerade(20))).size)
     }
+
+    @Test
+    fun pulsNurAusDemFensterDerSitzung() {
+        val von = java.time.Instant.ofEpochSecond(1_000_000)
+        val bis = von.plusSeconds(600)
+        val messungen = listOf(
+            von.plusSeconds(20) to 120L,
+            von.minusSeconds(10) to 90L,      // vor dem Start
+            von to 100L,
+            bis to 110L,                      // genau am Ende: schon draussen
+            bis.minusSeconds(1) to 130L,
+        )
+        val puls = Trainingsanalyse.pulsInSitzung(messungen, von, bis)
+        assertEquals(listOf(Pulspunkt(0, 100), Pulspunkt(20, 120), Pulspunkt(599, 130)), puls)
+    }
+
+    @Test
+    fun kalorienDerAkteSindDieDerAnsichtOhneRuheumsatz() {
+        // Akte und Ansicht rechnen mit denselben entstoerten Punkten; die Akte
+        // laesst nur den Ruheumsatz weg, den sie selbst zaehlt.
+        val roh = (0L..600L step 10).map { Pulspunkt(it, if (it == 300L) 80 else 140) }
+        val puls = Trainingsanalyse.entstoert(roh)
+        val mann = Trainingsanalyse.Geschlecht.Mann
+        val ansicht = Trainingsanalyse.kalorien(puls, 70.0, 41, mann, 54, 179)!!
+        val akte = Trainingsanalyse.aktiveKalorien(puls, 70.0, 41, mann, 54, 179)!!
+        // Der Aussetzer bei 300 s faellt weg; 600 s Kurve plus 10 s fuer den letzten Punkt.
+        assertEquals(60, puls.size)
+        val ruhe = Trainingsanalyse.VO2_RUHE * 70.0 / 1000 * Trainingsanalyse.KCAL_JE_LITER * (600 + 10) / 60.0
+        assertEquals(ansicht - ruhe, akte, 0.01)
+    }
 }

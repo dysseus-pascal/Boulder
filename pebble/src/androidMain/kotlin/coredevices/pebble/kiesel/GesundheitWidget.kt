@@ -100,7 +100,7 @@ class GesundheitWidget : AppWidgetProvider() {
                 p.getString(WUNSCH, null)?.let { runCatching { Widgetlage.Art.valueOf(it) }.getOrNull() }
             } else null
             val woche = s.wocheSchlaf.filter { it.first != heute && it.second > 0 }.map { it.second.toDouble() }
-            val spur = training?.let { Spur.lies(context, it.startTime.epochSecond) }.orEmpty()
+            val spur = training?.let { TrainingsDaten.punkte(context, it) }.orEmpty()
             val platz = context.getString(R.string.ks_s_platz_n)
             return Widgetlage.Blick(
                 jetzt = LocalDateTime.now(zone),

@@ -608,6 +608,7 @@ class RingRecordingE2ETest {
                 override val loginEvents: Flow<PebbleUser> = emptyFlow()
 
                 override suspend fun updateTodoBlockId(todoBlockId: String) {}
+                override suspend fun signOut() {}
                 override suspend fun initUserDevToken(rebbleUserToken: String?) {}
                 override suspend fun updateLastConnectedWatch(serial: String) {}
                 override suspend fun updateRingLifetimeCollectionCount(

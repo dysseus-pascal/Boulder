@@ -39,7 +39,6 @@ import androidx.health.connect.client.records.ExerciseSegment
 import coredevices.pebble.R
 import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
-import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.kiesel.KieselEinstellungen
@@ -49,6 +48,7 @@ import coredevices.pebble.kiesel.TrainingDetail
 import coredevices.pebble.kiesel.Trainingsanalyse
 import coredevices.pebble.kiesel.Trainingsanalyse.Verlaufspunkt
 import coredevices.pebble.kiesel.TrainingsDaten
+import coredevices.pebble.kiesel.Trainingswerte
 import java.time.Duration
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -136,11 +136,7 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                     Wert(d.puls.map { it.bpm }.average().toInt().toString(), stringResource(R.string.ks_t_puls_schnitt))
                     Wert(d.puls.maxOf { it.bpm }.toString(), stringResource(R.string.ks_t_puls_max))
                     koerper?.let { k ->
-                        val geschlecht = when (k.gender) {
-                            HealthGender.Male -> Trainingsanalyse.Geschlecht.Mann
-                            HealthGender.Female -> Trainingsanalyse.Geschlecht.Frau
-                            HealthGender.Other -> Trainingsanalyse.Geschlecht.Andere
-                        }
+                        val geschlecht = Trainingswerte.geschlecht(k.gender)
                         // Die Vorgabe ist kein gemessenes Maximum - dann rechnet Tanaka nach dem Alter.
                         val gemessen = maxpuls.takeIf { it != KieselEinstellungen.MAXPULS_VORGABE }
                         Trainingsanalyse.kalorien(d.puls, k.weightDag / 100.0, k.ageYears, geschlecht, ruhepuls, gemessen)?.let {

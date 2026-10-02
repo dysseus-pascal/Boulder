@@ -105,6 +105,7 @@ internal object Pulskurve {
         }
         return try {
             klient.insertRecords(saetze)
+            Trainingswerte.schreibeKalorienAusPuls(context, beginn, punkte.map { (s, p) -> Pulspunkt(s.toLong(), p.toLong()) })
             datei(context, beginn).delete()
             KieselVerlauf.merke(
                 context,

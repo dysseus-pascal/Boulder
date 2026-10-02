@@ -85,6 +85,18 @@ class TrainingsanalyseTest {
     }
 
     @Test
+    fun aktiveKalorienOhneRuheumsatz() {
+        // Der Ruheumsatz bei 70 kg: 1,225 kcal je Minute, 23 min und der letzte Punkt 10 s.
+        val gesamt = Trainingsanalyse.kalorien(fahrt, 70.0, 41, mann, 54, 190)!!
+        val aktiv = Trainingsanalyse.aktiveKalorien(fahrt, 70.0, 41, mann, 54, 190)!!
+        assertEquals(gesamt - 1.225 * (23 + 10 / 60.0), aktiv, 0.01)
+        // Unter dem Ruhepuls ist nichts aktiv.
+        val ruhig = (0..60).map { Pulspunkt(it * 10L, 45) }
+        assertEquals(0.0, Trainingsanalyse.aktiveKalorien(ruhig, 70.0, 41, mann, 54, 190)!!, 0.001)
+        assertNull(Trainingsanalyse.aktiveKalorien(fahrt, 0.0, 41, mann, 54, 190))
+    }
+
+    @Test
     fun maximumWeitUeberTanakaWirdNichtGeglaubt() {
         // 65 Jahre: Tanaka 162,5, Grenze 187,5. 190 gilt nicht, 185 schon.
         assertEquals(

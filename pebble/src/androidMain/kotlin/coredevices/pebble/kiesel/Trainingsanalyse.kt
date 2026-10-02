@@ -103,14 +103,32 @@ internal object Trainingsanalyse {
         val vo2max = vo2maxMitte(alter, geschlecht)
         var kcal = 0.0
         for (i in puls.indices) {
-            val minuten = (if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L) / 60.0
             // Unter dem Ruhepuls bleibt der Ruheumsatz, ueber dem Maximum die VO2max.
             val anteil = ((puls[i].bpm - ruhe) / (max - ruhe)).coerceIn(0.0, 1.0)
             val vo2 = VO2_RUHE + anteil * (vo2max - VO2_RUHE)   // ml je kg und Minute
-            kcal += vo2 * gewichtKg / 1000 * KCAL_JE_LITER * minuten
+            kcal += vo2 * gewichtKg / 1000 * KCAL_JE_LITER * minuten(puls, i)
         }
         return kcal
     }
+
+    /**
+     * Die aktiven Kalorien fuer die Akte: [kalorien] ohne den Ruheumsatz.
+     *
+     * DIE AKTE ZAEHLT DEN RUHEUMSATZ SELBST (Grundumsatz). Stuende er auch
+     * hier drin, zaehlte die Tagessumme die Trainingsminuten doppelt.
+     */
+    fun aktiveKalorien(
+        puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht,
+        ruhepuls: Int?, maxpuls: Int?,
+    ): Double? {
+        val gesamt = kalorien(puls, gewichtKg, alter, geschlecht, ruhepuls, maxpuls) ?: return null
+        val ruhe = puls.indices.sumOf { VO2_RUHE * gewichtKg / 1000 * KCAL_JE_LITER * minuten(puls, it) }
+        return (gesamt - ruhe).coerceAtLeast(0.0)
+    }
+
+    /** Wie lange ein Pulspunkt gilt, in Minuten: bis zum naechsten, hoechstens eine. */
+    private fun minuten(puls: List<Pulspunkt>, i: Int): Double =
+        (if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L) / 60.0
 
     /** Sauerstoff in Ruhe (1 MET), ml je kg und Minute. */
     const val VO2_RUHE = 3.5

@@ -349,6 +349,12 @@ internal object Kieselsport {
             meldung = schreibe(context, ohne, context.getString(R.string.ks_a_ohne_abschnitte, kurz), riegel = "kieselsport")
         }
 
+        // Kalorien und Strecke als eigene Saetze - auch wenn die Sitzung
+        // abgewiesen wurde: der naechste Versuch der Uhr ersetzt sie nur.
+        val meter = if (strecke > 0) strecke else (felder[SP_METER] ?: 0).toDouble()
+        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, meter, punkte)
+        Trainingswerte.schreibeKalorienDerUhr(context, beginn, anfang, ende, kcal)
+
         // YOGA BRINGT EINE HRV MIT - als eigener Satz zum Ende des Trainings.
         felder[SP_HRV]?.takeIf { it in 5..300 }?.let { hrv ->
             if (Riegel.neu(context, "kieselsport-hrv", beginn.toString())) {
@@ -377,7 +383,7 @@ internal object Kieselsport {
      *
      * DIESELBE KENNUNG WIE BEIM NORMALEN WEG: kommt die Zusammenfassung doch
      * noch, ersetzt sie diesen Eintrag. Kalorien und Schritte fehlen - die
-     * zaehlte die Uhr.
+     * zaehlte die Uhr. Distanz, Hoehe und Tempo kommen aus der Spur.
      */
     suspend fun nachtragen(context: Context, beginn: Long, art: Long): String {
         val punkte = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
@@ -420,7 +426,9 @@ internal object Kieselsport {
         }
         val minuten = Duration.between(anfang, ende).toMinutes().toInt()
         val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
-        return schreibe(context, satz, kurz).also { KieselVerlauf.merke(context, it) }
+        val meldung = schreibe(context, satz, kurz)
+        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte)
+        return meldung.also { KieselVerlauf.merke(context, it) }
     }
 
     /**

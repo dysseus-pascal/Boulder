@@ -20,6 +20,11 @@
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
     <uses-permission android:name="android.permission.health.READ_NUTRITION" />
     <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE" />
+    <!-- Trainings: aktive Kalorien, Distanz, Hoehenmeter und Tempo als eigene Saetze. -->
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+    <uses-permission android:name="android.permission.health.WRITE_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.WRITE_SPEED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Kieselstrasse: ohne diese Zeilen ist OsmAnd fuer Boulder unsichtbar, auch wenn es laeuft. -->
     <queries>

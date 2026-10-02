@@ -430,14 +430,12 @@ internal object Gesundheitsrechnung {
         return emptyList()
     }
 
-    /** Schritte kurz: "4.9k", "10k", darunter die Zahl selbst. */
-    fun schritteKurz(schritte: Long, locale: Locale = Locale.getDefault()): String = when {
-        schritte < 1000 -> "$schritte"
-        schritte % 1000 == 0L -> "${schritte / 1000}k"
-        else -> String.format(locale, "%.1fk", schritte / 1000.0).replace(".0k", "k").replace(",0k", "k")
-    }
+    /** Schritte kurz - jetzt abgerundet wie ueberall (Formate). */
+    @Deprecated("Formate.schritteKurz", ReplaceWith("Formate.schritteKurz(schritte, locale)"))
+    fun schritteKurz(schritte: Long, locale: Locale = Locale.getDefault()): String = Formate.schritteKurz(schritte, locale)
 
-    /** Liter mit einer Nachkommastelle, ohne Einheit: "1.2". */
+    /** Liter mit einer Nachkommastelle, ohne Einheit: "1.2". Formate.liter schreibt "0" statt "0.0". */
+    @Deprecated("Formate.liter", ReplaceWith("Formate.liter(ml, locale)"))
     fun literKurz(ml: Int, locale: Locale = Locale.getDefault()): String = String.format(locale, "%.1f", ml / 1000.0)
 
     /** Der Schnitt der Tage mit Wert, oder null, wenn weniger als [mindestens] solche Tage da sind. */

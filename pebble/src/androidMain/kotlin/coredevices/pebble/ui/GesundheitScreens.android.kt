@@ -10,11 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.health
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.ansicht.AkkuAnsicht
 import coredevices.pebble.kiesel.ansicht.GesundheitAnsicht
 import coredevices.pebble.kiesel.ansicht.Gesundheitswege
@@ -25,16 +25,15 @@ import coredevices.pebble.kiesel.ansicht.NachtAnsicht
 import coredevices.pebble.kiesel.ansicht.ProtokollAnsicht
 import coredevices.pebble.kiesel.ansicht.SicherungAnsicht
 import coredevices.pebble.kiesel.ansicht.TrendAnsicht
-import coredevices.pebble.kiesel.ansicht.heuteText
 import org.jetbrains.compose.resources.stringResource
+import java.time.LocalDate
 import androidx.compose.ui.res.stringResource as androidString
 
 @Composable
 actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val titel = stringResource(Res.string.health)
-    val context = LocalContext.current
     // Neu mit jedem Stand der Seite: nach Mitternacht spraeche sie sonst von gestern.
-    var heute by remember { mutableStateOf(heuteText(context)) }
+    var heute by remember { mutableStateOf(Formate.datumMitWochentag(LocalDate.now())) }
     LaunchedEffect(Unit) {
         topBarParams.title(titel)
         topBarParams.searchAvailable(null)
@@ -55,7 +54,7 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
             koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
         ),
-        geladen = { heute = heuteText(context) },
+        geladen = { heute = Formate.datumMitWochentag(LocalDate.now()) },
     )
 }
 

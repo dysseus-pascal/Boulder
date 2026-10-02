@@ -1,6 +1,5 @@
 package coredevices.pebble.kiesel.ansicht
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
+import coredevices.pebble.kiesel.Formate
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -109,17 +109,6 @@ private fun DrawScope.linien(
     }
     gesetzt.forEach { (m, o) -> drawText(m, topLeft = o) }
 }
-
-/**
- * Ein Tag kurz, in der Reihenfolge der Sprache ("Sep 28" oder "28 Sep") -
- * auf der Trendseite in Liste, Achse und Ankuendigung dasselbe Format.
- */
-internal fun kurzDatumsformat(): DateTimeFormatter {
-    val l = Locale.getDefault()
-    return DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(l, "MMMd"), l)
-}
-
-internal fun kurzDatum(t: LocalDate): String = t.format(kurzDatumsformat())
 
 /**
  * Welche Saeulen ihre Zahl bekommen: alle, wenn die breiteste Zahl ins Fach
@@ -241,11 +230,15 @@ internal fun Trendsaeulen(
  * PEGELGROESSEN OHNE SAEULEN AB NULL. Ein Ruhepuls von 55 neben einem von 58
  * ist als Saeule nicht zu unterscheiden; als Punkt auf einer engen Achse
  * schon. Darum Punkte mit Verbindungslinie und die Achse von min-5 bis max+5.
+ *
+ * Das Beispiel fuer grosse Schrift und TalkBack im Baukasten: der Fuss ist
+ * gemessen, das Bild sagt [beschreibung] (ohne sie: Spanne, Schnitt, Ziel).
  */
 @Composable
 internal fun Tagesbild(
     tage: List<Pair<LocalDate, Double?>>, farbe: Color, kurz: (Double) -> String,
     mittel: Double? = null, marke: Double? = null, pegel: Boolean = false, hoehe: Dp = 150.dp,
+    beschreibung: String? = null,
 ) {
     val werte = tage.mapNotNull { it.second }
     if (werte.isEmpty()) return
@@ -259,10 +252,16 @@ internal fun Tagesbild(
     val raster = MaterialTheme.colorScheme.outlineVariant
     val mittelText = mittel?.let { stringResource(R.string.ks_trn_avg, kurz(it)) }.orEmpty()
     val zielText = marke?.let { stringResource(R.string.ks_trn_goal, kurz(it)) }.orEmpty()
-    val datum = remember(Locale.getDefault()) { kurzDatumsformat() }
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 4.dp)) {
+    val datum = remember(Locale.getDefault()) { Locale.getDefault().let { DateTimeFormatter.ofPattern(Formate.datumMuster(it), it) } }
+    // Fuer TalkBack die Spanne und die Linien in einem Satz - ohne ihn war das Bild stumm.
+    val satz = beschreibung ?: listOfNotNull(
+        tage.first().first.format(datum) + " – " + tage.last().first.format(datum), mittelText.ifEmpty { null }, zielText.ifEmpty { null },
+    ).joinToString(", ")
+    // Die Hoehe waechst mit der Schrift des Fusses, damit die Saeulen nicht schrumpfen.
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 4.dp).bildBeschreibung(satz)) {
         val kopf = 14.dp.toPx()
-        val boden = size.height - 16.dp.toPx()
+        // Der Fuss aus der Schrift gemessen wie bei den Trendsaeulen: fest 16 dp liefen die Daten ab 1,15 ins Bild.
+        val boden = size.height - fussraum(messer, stil)
         val links = if (pegel) 28.dp.toPx() else 0f
         // Die Striche koennen ueber min-5..max+5 hinausreichen (runde Grenzen); dann sind sie die Achse.
         val striche = if (pegel) Auswertung.achsenschritte(werte.min() - 5, werte.max() + 5) else emptyList()

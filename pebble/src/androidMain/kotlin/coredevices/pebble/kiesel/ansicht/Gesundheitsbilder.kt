@@ -15,14 +15,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -41,12 +38,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
-
-/** Die Farben der Schlafphasen: wach, leicht, tief, REM, Schlaf ohne Phase. */
-internal val PHASENFARBEN = listOf(
-    Color(0xFFE0A33A), Color(0xFF7FA7D9), Color(0xFF2F5597), Color(0xFF9B6BC9), Color(0xFF6C8EBF),
-)
-
 
 /** Die Spalte links fuer die Zahlen der Achse in [Tageskurve] - und so weit eingerueckt das [Hypnogramm] darueber. */
 internal val ACHSE_LINKS = 28.dp
@@ -487,41 +478,4 @@ internal fun Anteilsbalken(teile: List<Pair<Int, Color>>, modifier: Modifier = M
             x += breite + luecke
         }
     }
-}
-
-/**
- * Strichzeichen der Gesundheitsseite, aus den Pfaden des Entwurfs. Eigene
- * statt Materials: Materials Zeichen sind gefuellt oder anders gewichtet
- * und passten nicht zu den duennen Strichen der Vorlage.
- */
-internal object Zeichen {
-    private fun kreis(cx: Float, cy: Float, r: Float) = "M${cx - r} ${cy}a$r $r 0 1 0 ${2 * r} 0a$r $r 0 1 0 ${-2 * r} 0"
-
-    private fun bild(breite: Float = 2f, drehung: Float = 0f, vararg pfade: String): ImageVector =
-        ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
-            addGroup(rotate = drehung, pivotX = 12f, pivotY = 12f)
-            pfade.forEach {
-                addPath(
-                    PathParser().parsePathString(it).toNodes(), fill = null, stroke = SolidColor(Color.Black),
-                    strokeLineWidth = breite, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
-                )
-            }
-            clearGroup()
-        }.build()
-
-    val aktiv = bild(2f, 0f, kreis(12f, 13f, 7f), "M12 9v4l2.5 2 M10 3h4")
-    val herz = bild(2f, 0f, "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
-    val wasser = bild(2f, 0f, "M12 3.5s-6 6.6-6 10.5a6 6 0 0 0 12 0c0-3.9-6-10.5-6-10.5z")
-    val kapsel = bild(2f, -45f, "M7 8.5h10a3.5 3.5 0 0 1 0 7H7a3.5 3.5 0 0 1 0-7z", "M12 8.5v7")
-    val tasse = bild(2f, 0f, "M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z M16 11h1.5a2.5 2.5 0 0 1 0 5H16 M8.5 3.5v2.5 M12.5 3.5v2.5")
-    val trend = bild(2f, 0f, "M4 18l5-6 4 3 7-8 M15 7h5v5")
-    val uhr = bild(1.8f, 0f, "M10 6h4a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z", "M9 6l.5-3h5l.5 3 M9 18l.5 3h5l.5-3")
-    val mond = bild(1.8f, 0f, "M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z")
-    val info = bild(1.8f, 0f, kreis(12f, 12f, 9f), "M12 11v5 M12 7.5v.5")
-    val weiter = bild(2f, 0f, "M9 6l6 6-6 6")
-    val plus = bild(2f, 0f, "M12 5v14 M5 12h14")
-    val hoch = bild(2.6f, 0f, "M12 19V5M6 11l6-6 6 6")
-    val haken = bild(2f, 0f, "M5 12.5l4.5 4.5L19 7.5")
-    val zu = bild(2f, 0f, "M7 7l10 10M17 7L7 17")
-    val ort = bild(2f, 0f, "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z", kreis(12f, 9.8f, 2.3f))
 }

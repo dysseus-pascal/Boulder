@@ -75,7 +75,7 @@ internal object Koerperrechnung {
     const val MEDIAN_HALB = 3L
     /** Ab dieser Luecke bricht die Linie - zwischen zwei so fernen Wiegungen weiss niemand den Verlauf. */
     const val LUECKE_TAGE = 14L
-    const val PFUND_JE_KG = 2.2046226218
+    const val PFUND_JE_KG = Formate.PFUND_JE_KG
 
     /**
      * Ein Wert je Tag, aeltester zuerst. WAAGEN SCHREIBEN MEHRFACH, oft auch
@@ -180,16 +180,10 @@ internal object Koerperrechnung {
         return zoll / 12 to zoll % 12
     }
 
-    fun eineStelle(x: Double, locale: Locale = Locale.getDefault()): String = String.format(locale, "%.1f", x)
+    @Deprecated("Formate.zahl(x, 1)", ReplaceWith("Formate.zahl(x, 1, locale)"))
+    fun eineStelle(x: Double, locale: Locale = Locale.getDefault()): String = Formate.zahl(x, 1, locale)
 
     /** Minus typografisch (U+2212); was auf 0.0 rundet, bekommt "±" - es hat keine Richtung. */
-    fun mitVorzeichen(x: Double, locale: Locale = Locale.getDefault()): String {
-        val gerundet = Math.round(x * 10) / 10.0
-        val zahl = eineStelle(abs(gerundet), locale)
-        return when {
-            gerundet > 0 -> "+$zahl"
-            gerundet < 0 -> "−$zahl"
-            else -> "±$zahl"
-        }
-    }
+    @Deprecated("Formate.vorzeichen(x, 1)", ReplaceWith("Formate.vorzeichen(x, 1, locale)"))
+    fun mitVorzeichen(x: Double, locale: Locale = Locale.getDefault()): String = Formate.vorzeichen(x, 1, locale)
 }

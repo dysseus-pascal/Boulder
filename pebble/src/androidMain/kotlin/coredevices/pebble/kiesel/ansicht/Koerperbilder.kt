@@ -11,13 +11,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -27,29 +23,6 @@ import coredevices.pebble.kiesel.Koerpertag
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-
-/** Violett: unter den Farben der Gesundheitsseite ist es noch frei. */
-internal val FLAECHE_KOERPER = Color(0xFF7E57C2)
-private val KOERPER_DUNKEL = Color(0xFFB39DDB)
-private val KOERPER_HELL = Color(0xFF5E35B1)
-
-/** Der Ton fuer Striche und Punkte - aufgehellt auf dunklem Grund, wie in [toene]. */
-@Composable
-internal fun koerperTon(): Color = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) KOERPER_DUNKEL else KOERPER_HELL
-
-/** Eine Personenwaage mit Zeiger, im Strich der [Zeichen]. */
-internal val WAAGE: ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
-    listOf(
-        "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z",
-        "M8.5 11a3.5 3.5 0 0 1 7 0",
-        "M12 11l1.6-2.2",
-    ).forEach {
-        addPath(
-            PathParser().parsePathString(it).toNodes(), fill = null, stroke = SolidColor(Color.Black),
-            strokeLineWidth = 2f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
-        )
-    }
-}.build()
 
 /**
  * Ein Koerperwert als blasse Tagespunkte mit dem gleitenden Median darueber, im Stil von

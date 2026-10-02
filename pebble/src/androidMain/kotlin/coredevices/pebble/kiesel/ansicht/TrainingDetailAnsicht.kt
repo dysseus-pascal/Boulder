@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
@@ -375,30 +374,6 @@ private fun zeitText(sekunden: Long): String =
 /** Breite je Spalte; null heisst: nimmt den Rest. */
 private val KM_SPALTEN = listOf<Dp?>(44.dp, null, 64.dp, 48.dp, 48.dp)
 private val SATZ_SPALTEN = listOf<Dp?>(40.dp, 48.dp, null, 56.dp, 56.dp)
-
-/**
- * Eine Zeile einer kleinen Tabelle. Die letzte Spalte steht rechts, [hervor]
- * hebt eine Spalte fett und farbig hervor (der schnellste Kilometer, der
- * Satz mit den meisten Wiederholungen).
- */
-@Composable
-private fun Tabellenzeile(zellen: List<String>, spalten: List<Dp?>, kopf: Boolean = false, hervor: Pair<Int, Color>? = null) {
-    val stil = if (kopf) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodyMedium
-    val farbe = if (kopf) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-    Row(Modifier.fillMaxWidth().padding(vertical = if (kopf) 2.dp else 5.dp)) {
-        zellen.forEachIndexed { i, z ->
-            val breite = spalten[i]
-            val mod = if (breite == null) Modifier.weight(1f) else Modifier.width(breite)
-            val h = hervor?.takeIf { it.first == i }
-            Text(
-                z, mod, style = stil,
-                color = h?.second ?: farbe,
-                fontWeight = if (h != null) FontWeight.Bold else null,
-                textAlign = if (i == zellen.lastIndex) TextAlign.End else TextAlign.Start,
-            )
-        }
-    }
-}
 
 // --- Kraft ---------------------------------------------------------------------
 

@@ -64,8 +64,6 @@
     </plurals>
     <string name="ks_sp_spuren_titel">Tracks to add</string>
     <string name="ks_sp_spuren_leer">No tracks left to add</string>
-    <string name="ks_sp_heute_um">Today, %1$s</string>
-    <string name="ks_sp_gestern_um">Yesterday, %1$s</string>
     <string name="ks_sp_diese_woche">THIS WEEK</string>
     <string name="ks_sp_letzte_woche">LAST WEEK</string>
     <string name="ks_sp_woche_zusatz">· %1$d · %2$s</string>

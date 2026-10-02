@@ -16,6 +16,8 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
+import androidx.compose.ui.graphics.toArgb
+import coredevices.pebble.kiesel.ansicht.Farben
 import coredevices.pebble.health.fehlendeAkteRechte
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,20 +26,22 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * Die Sportarten, wie die Ansicht sie zeigt. Die Toene sind die aus
- * Kiesel-Helper, KRAEFTIGER: auf Boulders Grau wirkten die gedeckten
- * Erdfarben ausgewaschen. MTB EIN DUNKLERES OCKER als Bike: beide zaehlen als
- * eigene Art, und im Wochenstapel lagen zwei gleiche Schichten ohne Grenze.
+ * Die Sportarten, wie die Ansicht sie zeigt. Ihre Farben stehen bei allen
+ * anderen in Farben.kt ([Farben.sport]).
  */
-internal enum class Sport(val farbe: Long) {
-    Laufen(0xFFE8622E),
-    Bike(0xFFE2A422),
-    Mtb(0xFFB8792A),
-    Wandern(0xFF8DB53C),
-    Kraft(0xFFD9453A),
-    Yoga(0xFFA85CB4),
-    Schwimmen(0xFF2CB0C6),
-    Anderes(0xFF9C8B7C);
+internal enum class Sport {
+    Laufen,
+    Bike,
+    Mtb,
+    Wandern,
+    Kraft,
+    Yoga,
+    Schwimmen,
+    Anderes;
+
+    /** Die Flaechenfarbe als ARGB - nur noch, bis die Seiten [Farben.sport] nehmen. */
+    @Deprecated("Farben.sport(sport)", ReplaceWith("Farben.sport(this).flaecheDunkel"))
+    val farbe: Long get() = Farben.sport(this).flaecheDunkel.toArgb().toLong() and 0xFFFFFFFFL
 
     /**
      * Der Name als Ressource. ALS GETTER, nicht als Feld: sonst luede schon

@@ -5,10 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,12 +33,7 @@ import androidx.compose.material.icons.filled.Hiking
 import androidx.compose.material.icons.filled.Pool
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardColors
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -59,8 +52,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -84,6 +75,7 @@ import kotlinx.coroutines.withContext
 import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.R
 import coredevices.pebble.health.frageAlleAkteRechte
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Reihentag
 import coredevices.pebble.kiesel.Sport
 import coredevices.pebble.kiesel.Sportrechnung
@@ -123,53 +115,32 @@ internal fun SportZeichen(sport: Sport, groesse: Int = 40) {
     }
 }
 
-/**
- * Die Sportfarbe fuer Striche und Schrift. IM HELLEN SCHEMA ABGEDUNKELT: Gelb
- * und Gruen der Arten kaemen auf der hellen Karte unter 3:1 - wie bei [toene].
- */
-@Composable
-internal fun Sport.ton(): Color =
-    if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(farbe) else lerp(Color(farbe), Color.Black, 0.45f)
-
 /** Der Tonkreis der Health-Seite in der Farbe der Sportart. */
 @Composable
 internal fun SportKreis(sport: Sport, groesse: Dp = 36.dp, bild: Dp = 20.dp) =
     Tonkreis(sport.zeichen(), Color(sport.farbe), sport.ton(), 0.22f, groesse, bild)
 
-internal fun dauerText(minuten: Long): String =
-    if (minuten >= 60) String.format(Locale.getDefault(), "%d:%02d h", minuten / 60, minuten % 60) else "$minuten min"
-
-/** Eine Dauer als Zahl und Einheit getrennt - die Zahl steht fett, die Einheit klein daneben. */
-internal fun dauerTeile(minuten: Long): Pair<String, String> =
-    if (minuten >= 60) stundenMinuten(minuten.toInt()) to "h" else "$minuten" to "min"
-
-internal fun kmText(meter: Double): String = String.format(Locale.getDefault(), "%.1f km", meter / 1000)
-
-internal fun wannText(context: Context, zeit: Instant): String = DateUtils.formatDateTime(
-    context, zeit.toEpochMilli(),
-    DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_ABBREV_ALL or DateUtils.FORMAT_SHOW_TIME,
+/** Ein fester Zeitpunkt mit Wochentag und Datum: "Wed, Sep 30, 9:14 PM" - jetzt aus Formate. */
+@Deprecated(
+    "Formate.wochentagZeit(context, t, mitDatum = true); Listen ohne Tageskopf: Formate.zeitpunkt(context, t, mitWochentag = true)",
+    ReplaceWith("Formate.wochentagZeit(context, zeit, mitDatum = true)", "coredevices.pebble.kiesel.Formate"),
 )
+internal fun wannText(context: Context, zeit: Instant): String = Formate.wochentagZeit(context, zeit, mitDatum = true)
 
 /**
  * Wann ein Training begann: "Yesterday, 6:02 PM", "Mon, 7:53 AM", "Sun, Sep 27,
  * 8:16 AM". Ohne [relativ] nie "Today"/"Yesterday" - in der Liste steht die
  * Woche schon im Kopf. DORT OHNE DATUM NUR DIESE WOCHE: sonst stuende "Sun"
- * unter zwei Wochenkoepfen.
+ * unter zwei Wochenkoepfen. Die Regel bleibt hier, die Formen kommen aus Formate.
  */
 internal fun trainingszeit(context: Context, t: Instant, relativ: Boolean): String {
     val tag = t.atZone(ZoneId.systemDefault()).toLocalDate()
     val heute = LocalDate.now()
     val tage = Duration.between(tag.atStartOfDay(), heute.atStartOfDay()).toDays()
-    val ohneDatum = DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_ABBREV_WEEKDAY or DateUtils.FORMAT_SHOW_TIME
     return when {
-        relativ && tage == 0L -> context.getString(R.string.ks_sp_heute_um, uhrzeit(context, t))
-        relativ && tage == 1L -> context.getString(R.string.ks_sp_gestern_um, uhrzeit(context, t))
-        tage in 0..6 && (relativ || !tag.isBefore(heute.with(DayOfWeek.MONDAY))) ->
-            DateUtils.formatDateTime(context, t.toEpochMilli(), ohneDatum)
-        else -> DateUtils.formatDateTime(
-            context, t.toEpochMilli(),
-            ohneDatum or DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH or DateUtils.FORMAT_NO_YEAR,
-        )
+        relativ && tage in 0L..1L -> Formate.zeitpunkt(context, t)
+        tage in 0..6 && (relativ || !tag.isBefore(heute.with(DayOfWeek.MONDAY))) -> Formate.wochentagZeit(context, t, mitDatum = false)
+        else -> Formate.wochentagZeit(context, t, mitDatum = true)
     }
 }
 
@@ -320,15 +291,6 @@ private fun Wochenkarte(trainings: List<TrainingEintrag>, heute: LocalDate, wege
     }
 }
 
-/** Eine Zahl mit Einheit und Namen darunter - wie die Werte des grossen Trainings. */
-@Composable
-private fun Kennzahl(zahl: String, einheit: String?, name: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(zahlMitEinheit(zahl, einheit), lineHeight = 26.sp, maxLines = 1, softWrap = false)
-        Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-    }
-}
-
 /** Ein Tag der Reihe: Buchstabe, der Kreis der laengsten Art, Punkte fuer die anderen, die Minuten. */
 @Composable
 private fun Tagesfeld(r: Reihentag, heute: LocalDate, modifier: Modifier, onClick: (() -> Unit)?) {
@@ -459,28 +421,12 @@ private fun Zeilenkarte(titel: String, zeilen: List<@Composable () -> Unit>) {
     }
 }
 
-/** Eine Zeile mit Knopf rechts statt Chevron: hier fehlt etwas, das ein Tipp behebt. */
-@Composable
-private fun Knopfzeile(titel: String, unter: String, zeichen: @Composable () -> Unit, knopf: String, onClick: (() -> Unit)?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Zeile(titel, unter, zeichen = zeichen, unterFarbe = toene().warnung, modifier = Modifier.weight(1f))
-        if (onClick != null) {
-            FilledTonalButton(
-                onClick = onClick, modifier = Modifier.padding(end = 10.dp).height(36.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f), contentColor = toene().bewegung,
-                ),
-            ) { Text(knopf) }
-        }
-    }
-}
-
 @Composable
 private fun AkteZeile(unter: String, erlaube: (() -> Unit)?) {
     val t = toene()
     Knopfzeile(
         stringResource(R.string.ks_sp_hc), unter, { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) },
-        stringResource(R.string.ks_n_erlauben), erlaube,
+        stringResource(R.string.ks_n_erlauben), erlaube, unterFarbe = Farben.warnung.ton(),
     )
 }
 
@@ -491,7 +437,7 @@ private fun RoutenZeile(erlaubt: Boolean, erlaube: () -> Unit) {
         stringResource(R.string.ks_sp_routen),
         stringResource(if (erlaubt) R.string.ks_sp_nur_nutzung else R.string.ks_ei_standort_nicht),
         { Tonkreis(Zeichen.ort, warn, warn, 0.18f) },
-        stringResource(R.string.ks_n_erlauben), erlaube,
+        stringResource(R.string.ks_n_erlauben), erlaube, unterFarbe = warn,
     )
 }
 
@@ -514,56 +460,5 @@ private fun Minibalken(minuten: List<Long>) {
             }
             drawRoundRect(farbe, Offset(fach * i + (fach - breite) / 2, size.height - h), Size(breite, h), CornerRadius(1.5.dp.toPx()))
         }
-    }
-}
-
-// --- Aeltere Bausteine, die Detail, Nacht, Akku und Trends noch nutzen -----------
-
-@Composable
-internal fun Karte(onClick: (() -> Unit)? = null, inhalt: @Composable () -> Unit) {
-    val innen: @Composable () -> Unit = {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { inhalt() }
-    }
-    // Die klickbare Variante: eine gewoehnliche Card nimmt Beruehrungen selbst an.
-    if (onClick != null) Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), colors = kartenFarben(), border = kartenRand()) { innen() }
-    else Card(Modifier.fillMaxWidth(), colors = kartenFarben(), border = kartenRand()) { innen() }
-}
-
-/**
- * DUNKLER ALS DIE SEITE, NICHT HELLER. Materials Vorgabe legt die Karte auf
- * die hellste Flaeche des Schemas - auf Boulders Grau ergab das hellgraue
- * Kaesten mit blassen Farben darin, alles sah ausgewaschen aus. Eine dunkle
- * Karte mit feinem Rand laesst Zahlen und Farben stehen; im hellen Schema
- * bleibt sie hell, und der Rand trennt sie vom Weiss.
- *
- * DAS SCHEMA DER APP, NICHT DAS DES TELEFONS - wie [toene]: steht die App auf
- * "Dark" und das Telefon auf hell, war die Karte sonst heller als die Seite.
- */
-@Composable
-internal fun kartenFarben(): CardColors = CardDefaults.cardColors(
-    containerColor = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) MaterialTheme.colorScheme.surfaceContainerLow
-    else MaterialTheme.colorScheme.surfaceContainerHigh,
-)
-
-@Composable
-internal fun kartenRand(): BorderStroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-
-/** Eine Abschnittsueberschrift zwischen den Karten, wie in Kiesel-Helper. */
-@Composable
-internal fun Ueberschrift(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
-    )
-}
-
-@Composable
-internal fun Wert(zahl: String, name: String) {
-    Column {
-        Text(zahl, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -6,17 +6,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.ansicht.SportAnsicht
 import coredevices.pebble.kiesel.ansicht.SportListeAnsicht
 import coredevices.pebble.kiesel.ansicht.SportTrendAnsicht
 import coredevices.pebble.kiesel.ansicht.Sportwege
 import coredevices.pebble.kiesel.ansicht.SpurenAnsicht
 import coredevices.pebble.kiesel.ansicht.TrainingDetailAnsicht
-import coredevices.pebble.kiesel.ansicht.heuteText
 import java.time.LocalDate
 
 /** Der Titel und ein grauer Zusatz rechts daneben, wie das Datum neben "Health". */
@@ -36,7 +35,7 @@ private fun Seitenkopf(topBarParams: TopBarParams, titel: String, rechts: String
 
 @Composable
 actual fun TrainingScreen(topBarParams: TopBarParams, nav: NavBarNav) {
-    Seitenkopf(topBarParams, stringResource(R.string.ks_n_training), heuteText(LocalContext.current))
+    Seitenkopf(topBarParams, stringResource(R.string.ks_n_training), Formate.datumMitWochentag(LocalDate.now()))
     SportAnsicht(
         Sportwege(
             detail = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },

@@ -281,11 +281,16 @@ internal interface Texte {
     fun mehrzahl(id: Int, n: Int, vararg a: Any): String
 }
 
-/** Zahlen, wie das Widget sie zeigt - die kleinen Helfer aus Kiesel-Helper (Zahlen). */
+/**
+ * Zahlen, wie das Widget sie zeigt - die kleinen Helfer aus Kiesel-Helper,
+ * jetzt Weiterleitungen auf [Formate] mit denselben Texten (Werte des
+ * Widgets sind nie negativ). Ein fehlender Wert ist [Formate.FEHLT].
+ */
+@Deprecated("Formate: zahl, dauer, liter, distanz")
 internal object Zahlen {
-    fun ganz(d: Double?): String? = d?.let { String.format(java.util.Locale.getDefault(), "%,d", it.roundToInt()) }
-    fun eine(d: Double?): String? = d?.let { String.format(java.util.Locale.getDefault(), "%.1f", it) }
-    fun dauer(min: Double?): String? = min?.roundToInt()?.let { m -> if (m >= 60) String.format(java.util.Locale.getDefault(), "%d:%02d h", m / 60, m % 60) else "$m min" }
+    fun ganz(d: Double?): String? = d?.let { Formate.zahl(it.roundToInt().toLong()) }
+    fun eine(d: Double?): String? = d?.let { Formate.zahl(it, 1) }
+    fun dauer(min: Double?): String? = min?.roundToInt()?.let { Formate.dauer(it.toLong()) }
     /** Wasser in Litern wie auf der Gesundheitsseite ("1.2"), ohne Einheit. */
-    fun liter(ml: Double): String = if (ml <= 0) "0" else Gesundheitsrechnung.literKurz(ml.roundToInt())
+    fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
 }

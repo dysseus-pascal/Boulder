@@ -179,13 +179,8 @@ internal object Auswertung {
      * ABGERUNDET, NICHT GERUNDET: 9'960 Schritte als "10k" ueber einer Saeule,
      * die das Ziel nicht erreicht, behaupteten das Ziel. "9.9k" stimmt.
      */
-    fun tausender(wert: Double, locale: Locale = Locale.getDefault()): String {
-        val ganz = Math.floor(wert)
-        if (ganz < 1000) return "%.0f".format(locale, ganz)
-        // Auf Hunderter abrunden; das Format darf danach nicht mehr aufrunden.
-        val k = "%.1f".format(locale, Math.floor(wert / 100) / 10)
-        return k.removeSuffix(".0").removeSuffix(",0") + "k"
-    }
+    @Deprecated("Formate.schritteKurz", ReplaceWith("Formate.schritteKurz(wert, locale)"))
+    fun tausender(wert: Double, locale: Locale = Locale.getDefault()): String = Formate.schritteKurz(wert, locale)
 
     /**
      * Wann die typische Woche fruehestens tragen kann: drei Wochentage mit je

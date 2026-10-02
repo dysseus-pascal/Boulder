@@ -1,7 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
 import android.content.Context
-import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -56,6 +55,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
 import coredevices.pebble.kiesel.Bandurteil
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
@@ -177,13 +177,10 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
 
 private fun zahl(n: Long): String = String.format(Locale.getDefault(), "%,d", n)
 
-private fun tagText(context: Context, tag: LocalDate): String = DateUtils.formatDateTime(
-    context, tag.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-    DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_ALL or DateUtils.FORMAT_NO_YEAR,
-)
-
-/** Das Datum oben rechts neben "Health": "Wed, Sep 30". */
-internal fun heuteText(context: Context): String = tagText(context, LocalDate.now())
+/** Das Datum oben rechts neben "Health": "Wed, Sep 30" - jetzt aus Formate (die Seitenkoepfe nehmen es direkt). */
+@Deprecated("Formate.datumMitWochentag(LocalDate.now())", ReplaceWith("Formate.datumMitWochentag(LocalDate.now())", "coredevices.pebble.kiesel.Formate"))
+@Suppress("UNUSED_PARAMETER")
+internal fun heuteText(context: Context): String = Formate.datumMitWochentag(LocalDate.now())
 
 /**
  * Das Urteil zur HRV fuer den Nachtblock - nur, wenn es eins gibt; erklaert

@@ -41,20 +41,6 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
-/** Die Farben der Zonen - dieselben wie auf der Uhr (Kieselsport, thema.c). */
-internal val ZONENFARBEN = listOf(
-    Color(0xFFBDBDBD),   // unter Zone 1
-    Color(0xFF55AAFF),   // PictonBlue
-    Color(0xFF00AA55),   // JaegerGreen
-    Color(0xFFAAAA00),   // Limerick
-    Color(0xFFFFAA00),   // ChromeYellow
-    Color(0xFFFF0055),   // Folly
-)
-
-/** Langsam blau, schnell rot - ueber Cyan, Gruen und Gelb, damit man die Mitte sieht. */
-internal fun tempofarbe(anteil: Float): Color =
-    Color.hsv(220f - 220f * anteil.coerceIn(0f, 1f), 0.85f, 0.9f)
-
 /** Die Zonen als waagrechte Baender (von, bis, Farbe) fuer einen Pulsverlauf. */
 internal fun zonenbaender(maxpuls: Int): List<Triple<Double, Double, Color>> = (1..5).map { z ->
     val von = maxpuls * Trainingsanalyse.ZONEN_PROZENT[z - 1] / 100.0

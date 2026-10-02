@@ -1,8 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.selection.selectable
@@ -23,8 +21,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
@@ -440,9 +436,10 @@ private fun Strahl(
     modifier: Modifier = Modifier,
     inhalt: @Composable () -> Unit,
 ) {
+    // [modifier] aussen, vor der IntrinsicSize-Hoehe: nur dort kann eine Mindesthoehe (langDruck) die Zeile heben.
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).then(modifier),
+        modifier.fillMaxWidth().height(IntrinsicSize.Min)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
         Box(Modifier.width(LocalZeitBreite.current).fillMaxHeight()) { zeit() }
         Box(Modifier.width(SPALTE_STRAHL).fillMaxHeight()) { strahl() }
@@ -470,23 +467,19 @@ private fun Zeittext(text: String, farbe: Color, fett: Boolean = false, oben: Dp
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String?, lang: (() -> Unit)?) {
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val grund = MaterialTheme.colorScheme.surfaceContainer
-    val haptik = LocalHapticFeedback.current
     Strahl(
         zeit = { Zeittext(zeit, grau) },
         strahl = {
             Linie()
             Box(Modifier.offset(5.dp, 5.dp).size(12.dp).border(BorderStroke(3.dp, grund), CircleShape).background(farbe, CircleShape))
         },
-        // Nur ein langer Druck: der Strahl ist zum Ansehen, ein Tipp tut nichts.
-        modifier = if (lang != null) Modifier.combinedClickable(onClick = {}, onLongClick = {
-            haptik.performHapticFeedback(HapticFeedbackType.LongPress)
-            lang()
-        }) else Modifier,
+        // Nur ein langer Druck: der Strahl ist zum Ansehen, ein Tipp tut nichts. Mit
+        // 48 dp und "Edit" fuer TalkBack - das Beispiel fuer langDruck im Baukasten.
+        modifier = if (lang != null) Modifier.langDruck(stringResource(R.string.ks_bk_bearbeiten), aktion = lang) else Modifier,
     ) {
         Column(Modifier.padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(titel, fontSize = 15.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

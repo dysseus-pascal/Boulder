@@ -93,9 +93,10 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(enabled = d.vorige != null, onClick = { d.vorige?.let { beginn = it } }) { Text("‹ " + stringResource(R.string.ks_h_frueher)) }
+            // Die Pfeile aus Boulders Strichzeichen, nicht als Textglyphen "‹ ›" (Symbolregel im Baukasten).
+            Blaetterknopf(stringResource(R.string.ks_h_frueher), zurueck = true, onClick = d.vorige?.let { v -> { beginn = v } })
             TextButton(onClick = oeffneTrend) { Text(stringResource(R.string.ks_h_trends)) }
-            TextButton(enabled = d.naechste != null, onClick = { d.naechste?.let { beginn = it } }) { Text(stringResource(R.string.ks_h_spaeter) + " ›") }
+            Blaetterknopf(stringResource(R.string.ks_h_spaeter), zurueck = false, onClick = d.naechste?.let { n -> { beginn = n } })
         }
 
         // DIE DAUER GROSS: wer die Nacht oeffnet, will zuerst wissen, wie lang sie war.

@@ -179,4 +179,19 @@ class SportrechnungTest {
         // Das Tempo aus derselben Zeit: 20 km in 60 min.
         assertEquals(20.0, Sportrechnung.kmh(t.meter, t.sekunden)!!, 0.001)
     }
+
+    @Test
+    fun fremde_strecke_nur_von_derselben_app_und_im_zeitraum() {
+        val start = java.time.Instant.ofEpochSecond(1_790_000_000)
+        val ende = start.plusSeconds(1800)
+        val d = listOf(
+            Sportrechnung.FremdeDistanz("com.strava", start.plusSeconds(10), ende.plusSeconds(30), 5000.0),
+            // Der Schrittzaehler einer anderen App zaehlt nicht mit
+            Sportrechnung.FremdeDistanz("com.google.android.apps.fitness", start, ende, 4200.0),
+            // Eine Distanz, die weit ueber die Sitzung hinausreicht, gehoert nicht zu ihr
+            Sportrechnung.FremdeDistanz("com.strava", start.minusSeconds(3600), ende, 900.0),
+        )
+        kotlin.test.assertEquals(5000.0, Sportrechnung.fremdeStrecke("com.strava", start, ende, d))
+        kotlin.test.assertEquals(0.0, Sportrechnung.fremdeStrecke("com.other", start, ende, d))
+    }
 }

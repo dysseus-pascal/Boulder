@@ -22,7 +22,8 @@ import androidx.health.connect.client.records.SpeedRecord
  * SCHREIBEN: die HRV von Yoga und der Einzelmessung, das Wasser von
  * Drinktervall, die Praeparate von SupCycle, Kalorien, Distanz, Hoehe und
  * Tempo der Trainings. LESEN: den Blutdruck einer Manschetten-App, Gewicht und
- * Zusammensetzung einer Waagen-App ([KOERPER_RECHTE]), das Wasser (ob schon
+ * Zusammensetzung einer Waagen-App ([KOERPER_RECHTE]), die Distanz fremder
+ * Trainings ohne Route, das Wasser (ob schon
  * jemand dasselbe Glas eintrug), die Trainings,
  * ihre Pulskurve, SpO2 und HRV fuer die Trainingsansicht und die SpO2-Frage
  * der Uhr. Nur nach Moeglichkeit - fehlt eines, laeuft der Rest trotzdem.
@@ -44,6 +45,8 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
     HealthPermission.getWritePermission(RestingHeartRateRecord::class),
     HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
     HealthPermission.getWritePermission(DistanceRecord::class),
+    // Die Strecke fremder Trainings ohne Route (Strava-Lauf, Laufband).
+    HealthPermission.getReadPermission(DistanceRecord::class),
     HealthPermission.getWritePermission(ElevationGainedRecord::class),
     HealthPermission.getWritePermission(SpeedRecord::class),
     HealthPermission.getReadPermission(BloodPressureRecord::class),

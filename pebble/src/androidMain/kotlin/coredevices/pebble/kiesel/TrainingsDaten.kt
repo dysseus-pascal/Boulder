@@ -183,7 +183,7 @@ internal object TrainingsDaten {
         }
         val eigene = sitzungen.filter { eigen(context, it) }
         val gewaehlt = gewaehlt(context, sitzungen)
-        val distanzen = eigeneDistanzen(klient, context, jetzt.minus(Duration.ofDays(TAGE)), jetzt)
+        val distanzen = distanzen(klient, context, jetzt.minus(Duration.ofDays(TAGE)), jetzt)
         val trainings = gewaehlt.map { s -> eintrag(context, s, distanzen) }
         TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
     }
@@ -192,20 +192,22 @@ internal object TrainingsDaten {
     private fun gewaehlt(context: Context, sitzungen: List<ExerciseSessionRecord>): List<ExerciseSessionRecord> =
         Sportrechnung.waehle(sitzungen, { eigen(context, it) }, { it.startTime }, { it.endTime }, { Sport.von(it) })
 
-    private fun eintrag(context: Context, s: ExerciseSessionRecord, distanzen: Map<String, Double>): TrainingEintrag =
+    private fun eintrag(context: Context, s: ExerciseSessionRecord, distanzen: Distanzen): TrainingEintrag =
         TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte(context, s), distanzen))
 
     /**
      * Die Strecke eines Trainings, in dieser Reihenfolge: aus der Spur (oder
      * der Route der Akte, auch einer im Detail freigegebenen), aus der
      * Distanz, die Boulder zur Sitzung schrieb (Lauf ohne Ortung, Laufband),
-     * aus den Bahnen. Ohne Spur zaehlte die Woche 1500 m Schwimmen frueher
+     * aus der Distanz, die die fremde App selbst zur Sitzung schrieb, aus den
+     * Bahnen. Ohne Spur zaehlte die Woche 1500 m Schwimmen frueher
      * als 0 km.
      */
-    private fun strecke(context: Context, s: ExerciseSessionRecord, punkte: List<Spur.Punkt>, distanzen: Map<String, Double>): Double =
+    private fun strecke(context: Context, s: ExerciseSessionRecord, punkte: List<Spur.Punkt>, distanzen: Distanzen): Double =
         Spur.laenge(punkte).takeIf { punkte.size >= 2 && it > 0 }
             ?: gemerkteStrecke(context, s.metadata.id)
-            ?: distanzen[distanzKennung(s)]?.takeIf { it > 0 }
+            ?: distanzen.eigene[distanzKennung(s)]?.takeIf { it > 0 }
+            ?: distanzen.fremde(s).takeIf { it > 0 }
             ?: s.laps.sumOf { it.length?.inMeters ?: 0.0 }
 
     /**
@@ -233,16 +235,55 @@ internal object TrainingsDaten {
     }
 
     /**
-     * Boulders eigene Distanzen, nach Kennung. EINE ABFRAGE fuer alle: Boulder
-     * schreibt je Training eine. Fremde gibt die Akte ohne Leserecht nicht heraus.
+     * Die Distanzen eines Zeitraums: Boulders eigene nach Kennung, dazu die
+     * fremden mit ihrer App, damit eine fremde Sitzung ohne Route (Strava-Lauf
+     * mit verborgener Karte, Laufband) ihre Strecke bekommt.
      */
-    private suspend fun eigeneDistanzen(klient: HealthConnectClient, context: Context, von: Instant, bis: Instant): Map<String, Double> = try {
-        klient.readRecords(
-            ReadRecordsRequest(DistanceRecord::class, TimeRangeFilter.between(von, bis), dataOriginFilter = setOf(DataOrigin(context.packageName)))
-        ).records.mapNotNull { r -> r.metadata.clientRecordId?.let { it to r.distance.inMeters } }.toMap()
-    } catch (e: Exception) {
-        Log.w(TAG, "Distanzen lesen: " + e.message)
-        emptyMap()
+    internal class Distanzen(val eigene: Map<String, Double>, private val fremd: List<Sportrechnung.FremdeDistanz>) {
+        fun fremde(s: ExerciseSessionRecord): Double =
+            Sportrechnung.fremdeStrecke(s.metadata.dataOrigin.packageName, s.startTime, s.endTime, fremd)
+    }
+
+    /**
+     * Alle Distanzen des Zeitraums in EINER Abfrage. Ohne das Leserecht gibt
+     * die Akte fremde nicht heraus und lehnt die ganze Abfrage ab - dann
+     * wenigstens Boulders eigene, die sie immer herausgibt.
+     */
+    private suspend fun distanzen(klient: HealthConnectClient, context: Context, von: Instant, bis: Instant): Distanzen {
+        val alle = try {
+            liesAlleSeiten(klient, TimeRangeFilter.between(von, bis))
+        } catch (e: SecurityException) {
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Distanzen lesen: " + e.message)
+            null
+        } ?: try {
+            klient.readRecords(
+                ReadRecordsRequest(DistanceRecord::class, TimeRangeFilter.between(von, bis), dataOriginFilter = setOf(DataOrigin(context.packageName)))
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Eigene Distanzen lesen: " + e.message)
+            emptyList()
+        }
+        val (eigen, fremd) = alle.partition { it.metadata.dataOrigin.packageName == context.packageName }
+        return Distanzen(
+            eigen.mapNotNull { r -> r.metadata.clientRecordId?.let { it to r.distance.inMeters } }.toMap(),
+            fremd.map { Sportrechnung.FremdeDistanz(it.metadata.dataOrigin.packageName, it.startTime, it.endTime, it.distance.inMeters) },
+        )
+    }
+
+    /** Alle Seiten einer Abfrage - ein Schrittzaehler schreibt in einem Vierteljahr leicht mehr als eine Seite. */
+    private suspend fun liesAlleSeiten(klient: HealthConnectClient, zeitraum: TimeRangeFilter): List<DistanceRecord> {
+        val alle = mutableListOf<DistanceRecord>()
+        var seite: String? = null
+        do {
+            val antwort = klient.readRecords(
+                ReadRecordsRequest(DistanceRecord::class, zeitraum, pageToken = seite)
+            )
+            alle += antwort.records
+            seite = antwort.pageToken?.takeIf { it.isNotEmpty() }
+        } while (seite != null)
+        return alle
     }
 
     /** Die Pausen einer Sitzung (ExerciseSegment PAUSE), Sekunden ab ihrem Beginn, auf sie beschnitten. */
@@ -278,7 +319,7 @@ internal object TrainingsDaten {
             return@withContext emptyList()
         }
         // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
-        val distanzen = eigeneDistanzen(klient, context, anfang, jetzt)
+        val distanzen = distanzen(klient, context, anfang, jetzt)
         gewaehlt(context, sitzungen).filter { !it.startTime.isBefore(anfang) }.sortedBy { it.startTime }
             .map { s -> eintrag(context, s, distanzen) }
     }
@@ -343,7 +384,7 @@ internal object TrainingsDaten {
         }
         val punkte = punkte(context, s)
         val quelle = s.metadata.dataOrigin.packageName
-        val distanzen = eigeneDistanzen(klient, context, s.startTime, s.endTime)
+        val distanzen = distanzen(klient, context, s.startTime, s.endTime)
         TrainingDetail(
             eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte, distanzen)),
             punkte = punkte,
@@ -403,7 +444,7 @@ internal object TrainingsDaten {
             return@withContext null
         }
         val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
-        eintrag(context, s, eigeneDistanzen(klient, context, von, jetzt))
+        eintrag(context, s, distanzen(klient, context, von, jetzt))
     }
 
     /**

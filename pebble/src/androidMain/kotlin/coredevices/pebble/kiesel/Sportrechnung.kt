@@ -126,4 +126,20 @@ internal object Sportrechnung {
         "Training" -> -1
         else -> null
     }
+
+    /** Eine Distanz einer fremden App: wer sie schrieb, wann, wie weit. */
+    data class FremdeDistanz(val app: String, val von: Instant, val bis: Instant, val meter: Double)
+
+    /**
+     * Die Strecke einer fremden Sitzung aus den Distanzen, die ihre App in
+     * ihrem Zeitraum schrieb. NUR DIESELBE APP: der Schrittzaehler einer
+     * anderen schreibt den ganzen Tag Distanzen und zaehlte sonst mit. Eine
+     * Minute Spielraum, weil manche Apps die Distanz ein paar Sekunden neben
+     * die Sitzung legen.
+     */
+    fun fremdeStrecke(app: String, start: Instant, ende: Instant, distanzen: List<FremdeDistanz>): Double {
+        val von = start.minusSeconds(60)
+        val bis = ende.plusSeconds(60)
+        return distanzen.filter { it.app == app && !it.von.isBefore(von) && !it.bis.isAfter(bis) }.sumOf { it.meter }
+    }
 }

@@ -23,6 +23,7 @@
     <!-- Trainings: aktive Kalorien, Distanz, Hoehenmeter und Tempo als eigene Saetze. -->
     <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.WRITE_ELEVATION_GAINED" />
     <uses-permission android:name="android.permission.health.WRITE_SPEED" />
     <!-- Health: Blutdruck einer Manschetten-App anzeigen. -->

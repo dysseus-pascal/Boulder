@@ -43,6 +43,24 @@ class KaffeesortenTest {
     }
 
     @Test
+    fun koffeinfreiOhneKoffeinMitKcal() {
+        // Seit Drinktervall 1.18: 0x40 - eingetragen wie die Sorte, aber 0 mg.
+        val p = Kaffeesorten.portion(Kaffeesorten.KAFFEE or 0x40 or 0x10)!!
+        assertEquals(0.0, p.koffeinMg)
+        assertEquals(true, p.koffeinfrei)
+        assertEquals(21.0, p.kcal)
+        assertEquals(0.0, Kaffeesorten.portion(Kaffeesorten.TEE or 0x40)!!.koffeinMg)
+        assertEquals(Kaffeesorten.ESPRESSO or 0x40, Kaffeesorten.art(Kaffeesorten.ESPRESSO, false, false, true))
+    }
+
+    @Test
+    fun keinKoffeinfreierEnergyDrink() {
+        val p = Kaffeesorten.portion(Kaffeesorten.ENERGY or 0x40)!!
+        assertEquals(80.0, p.koffeinMg)
+        assertEquals(false, p.koffeinfrei)
+    }
+
+    @Test
     fun unbekannteSorte() {
         assertNull(Kaffeesorten.portion(7))
     }

@@ -479,8 +479,8 @@ internal object Gesundheitsdaten {
      * gewaehlt war. Zeit und Kennung bleiben, Name, Koffein, kcal und Zucker
      * kommen neu aus der Sorte.
      */
-    suspend fun aendereGetraenk(context: Context, id: String, sorte: Int, milch: Boolean, zucker: Boolean): Boolean = withContext(Dispatchers.IO) {
-        val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch, zucker)) ?: return@withContext false
+    suspend fun aendereGetraenk(context: Context, id: String, sorte: Int, milch: Boolean, zucker: Boolean, koffeinfrei: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch, zucker, koffeinfrei)) ?: return@withContext false
         try {
             val klient = Akte(context).bereit() ?: return@withContext false
             val alt = klient.readRecord(NutritionRecord::class, id).record

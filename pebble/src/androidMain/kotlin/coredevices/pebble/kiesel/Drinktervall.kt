@@ -38,7 +38,8 @@ internal object Drinktervall {
     const val DT_GLASS_ML = 10008
     const val DT_DRANK_AT = 10009
     // Seit Drinktervall 1.14.0: ein getrunkener Kaffee, Zeitpunkt und Sorte
-    // (Sorte in den unteren vier Bits, Milch 0x10, Zucker 0x20).
+    // (Sorte in den unteren vier Bits, Milch 0x10, Zucker 0x20, seit 1.18
+    // koffeinfrei 0x40).
     const val DT_COFFEE_AT = 10012
     const val DT_COFFEE_KIND = 10013
     // Seit 1.16.0: ein eigenes Getraenk (Sorte 4) bringt Name, kcal und Koffein mit.

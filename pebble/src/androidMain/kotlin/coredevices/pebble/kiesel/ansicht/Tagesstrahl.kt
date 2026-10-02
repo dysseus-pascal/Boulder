@@ -334,9 +334,10 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
             Kopf(b.titel.uppercase(), "· " + uhrzeit(context, b.zeit))
             if (b is Bearbeitung.Getraenk) {
                 val start = remember(b) { Kaffeesorten.erkenne(context, b.titel) }
-                var sorte by remember(b) { mutableIntStateOf(start?.first ?: Kaffeesorten.KAFFEE) }
-                var milch by remember(b) { mutableStateOf(start?.second ?: false) }
-                var zucker by remember(b) { mutableStateOf(start?.third ?: false) }
+                var sorte by remember(b) { mutableIntStateOf(start?.sorte ?: Kaffeesorten.KAFFEE) }
+                var milch by remember(b) { mutableStateOf(start?.milch ?: false) }
+                var zucker by remember(b) { mutableStateOf(start?.zucker ?: false) }
+                var koffeinfrei by remember(b) { mutableStateOf(start?.koffeinfrei ?: false) }
                 val sorten = listOf(
                     Kaffeesorten.ESPRESSO to R.string.ks_h_espresso, Kaffeesorten.KAFFEE to R.string.ks_h_kaffee,
                     Kaffeesorten.TEE to R.string.ks_h_tee, Kaffeesorten.ENERGY to R.string.ks_h_energy_drink,
@@ -351,11 +352,12 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                     }
                 }
                 Trenner(14.dp)
-                // Milch zu allem ausser dem Energy-Drink - wie auf der Uhr.
+                // Milch und koffeinfrei zu allem ausser dem Energy-Drink - wie auf der Uhr.
                 val mitMilch = sorte != Kaffeesorten.ENERGY
+                if (mitMilch) Haken(stringResource(R.string.ks_b_koffeinfrei), koffeinfrei) { koffeinfrei = it }
                 if (mitMilch) Haken(stringResource(R.string.ks_b_milch), milch) { milch = it }
                 Haken(stringResource(R.string.ks_b_zucker), zucker) { zucker = it }
-                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && mitMilch, zucker))
+                val p = Kaffeesorten.portion(Kaffeesorten.art(sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch))
                 if (p != null) Text(
                     stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()),
                     Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -365,7 +367,7 @@ private fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: () 
                         Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && mitMilch, zucker) } }) {
+                    Button(onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch) } }) {
                         Text(stringResource(R.string.ks_b_speichern))
                     }
                 }

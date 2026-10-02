@@ -25,6 +25,7 @@
     <string name="ks_h_getraenk_eigen">Drink</string>
     <string name="ks_h_mit_milch">%1$s, milk</string>
     <string name="ks_h_mit_zucker">%1$s, sugar</string>
+    <string name="ks_h_koffeinfrei">%1$s, decaf</string>
     <string name="ks_h_wach">Awake</string>
     <string name="ks_h_frueher">Earlier</string>
     <string name="ks_h_spaeter">Later</string>
@@ -294,6 +295,7 @@
     <!-- Eintrag im Zeitstrahl bearbeiten (langer Druck) -->
     <string name="ks_b_loeschen">Delete</string>
     <string name="ks_b_speichern">Save</string>
+    <string name="ks_b_koffeinfrei">Decaf</string>
     <string name="ks_b_milch">Milk</string>
     <string name="ks_b_zucker">Sugar</string>
     <string name="ks_b_werte">%1$d mg caffeine · %2$d kcal</string>

@@ -251,14 +251,7 @@ internal object Auswertung {
      * Beide Seiten brauchen genug Tage; sonst vergleicht man vier Wochen
      * Arbeit mit einem einzigen Sonntag und nennt den Unterschied ein Muster.
      */
-    data class Wochenendbild(
-        val werktag: Double,
-        val wochenende: Double,
-        val tageWerk: Int,
-        val tageFrei: Int,
-    ) {
-        val unterschied: Double get() = wochenende - werktag
-    }
+    data class Wochenendbild(val werktag: Double, val wochenende: Double)
 
     /** Je Seite mindestens so viele Tage. */
     const val SEITE_MINDESTENS = 3
@@ -273,12 +266,7 @@ internal object Auswertung {
         }
         val werk = tage - frei.toSet()
         if (frei.size < SEITE_MINDESTENS || werk.size < SEITE_MINDESTENS) return null
-        return Wochenendbild(
-            werk.map { it.second }.average(),
-            frei.map { it.second }.average(),
-            werk.size,
-            frei.size,
-        )
+        return Wochenendbild(werk.map { it.second }.average(), frei.map { it.second }.average())
     }
 
     /**

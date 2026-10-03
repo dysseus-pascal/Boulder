@@ -297,10 +297,6 @@ internal object Farben {
      */
     @Composable
     fun spur(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
-
-    /** Das persoenliche Band als blasse Flaeche hinter den Punkten. */
-    @Composable
-    fun band(): Color = imBand.ton().copy(alpha = BAND_DECKUNG)
 }
 
 /** Die Farben einer Karte des [Kasten]s - siehe [Farben.karte]. */

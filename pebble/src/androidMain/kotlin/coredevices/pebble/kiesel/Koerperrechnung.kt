@@ -62,7 +62,6 @@ internal object Koerperrechnung {
     const val MEDIAN_HALB = 3L
     /** Ab dieser Luecke bricht die Linie - zwischen zwei so fernen Wiegungen weiss niemand den Verlauf. */
     const val LUECKE_TAGE = 14L
-    const val PFUND_JE_KG = Formate.PFUND_JE_KG
 
     /**
      * Ein Wert je Tag, aeltester zuerst. WAAGEN SCHREIBEN MEHRFACH, oft auch
@@ -151,8 +150,6 @@ internal object Koerperrechnung {
         // Nach aussen gerundet: jede Wiegung liegt innerhalb der Achse, auch die am Rand.
         return Statistik.rasterAussen(mitte - halb, mitte + halb, felder)
     }
-
-    fun masse(kg: Double, pfund: Boolean): Double = if (pfund) kg * PFUND_JE_KG else kg
 
     /** Die Groesse in Fuss und Zoll, auf ganze Zoll gerundet: 1.80 m -> 5' 11". */
     fun fussZoll(meter: Double): Pair<Int, Int> {

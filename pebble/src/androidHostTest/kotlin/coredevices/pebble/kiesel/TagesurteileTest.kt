@@ -28,8 +28,8 @@ class TagesurteileTest {
         ruhepulsWoche: List<Int> = emptyList(), tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
         supplemente: SupCycle.Stand? = null, mitSupCycle: Boolean = true,
     ) = GesundheitsStand(
-        schritte = schritte, aktivMinuten = 22, meter = 2700.0, kcal = 118, wocheSchritte = emptyList(), nacht = nacht,
-        ruhepulsWoche = ruhepulsWoche, hrvWoche = emptyList(), wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
+        schritte = schritte, aktivMinuten = 22, meter = 2700.0, wocheSchritte = emptyList(), nacht = nacht,
+        ruhepulsWoche = ruhepulsWoche, wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
         wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = supplemente,
         koffein = emptyList(), letzteDaten = null, tagesherz = tagesherz, mitSupCycle = mitSupCycle,
     )

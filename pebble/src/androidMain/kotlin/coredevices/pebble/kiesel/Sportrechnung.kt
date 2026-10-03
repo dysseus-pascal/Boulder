@@ -5,24 +5,21 @@ import androidx.health.connect.client.records.metadata.Metadata
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 /** Ein Tag der Wochenreihe: die laengste Art als Kreis, die anderen als Punkte darunter. */
 internal data class Reihentag(val tag: LocalDate, val haupt: Sport?, val weitere: List<Sport>, val minuten: Long)
 
-/** Was der Satz der Wochenkarte sagt: das letzte Training und die Woche gegen die Vorwoche. */
+/** Was die Kennzahlen der Wochenkarte zeigen: die Woche bis heute gegen die Vorwoche. */
 internal data class Wochenlage(
-    val letzte: Sport?,
-    /** Tage seit dem letzten Training, 0 = heute. */
-    val tageHer: Long?,
     val anzahl: Int,
     val minuten: Long,
     val vorwoche: Long,
 )
 
 /**
- * Die Rechnung hinter der Sportseite nach dem Entwurf "Empfehlung": Satz,
- * Wochenreihe, Liste nach Wochen. Ohne Android, damit sie sich pruefen laesst.
+ * Die Rechnung hinter der Sportseite nach dem Entwurf "Empfehlung": Kennzahlen
+ * der Woche, Wochenreihe, Liste nach Wochen. Ohne Android, damit sie sich
+ * pruefen laesst.
  */
 internal object Sportrechnung {
 
@@ -36,24 +33,15 @@ internal object Sportrechnung {
         }
     }
 
-    /**
-     * [letzte] kommt vom Aufrufer: am selben Tag entscheidet die Uhrzeit, und
-     * die kennt [Einheit] nicht.
-     */
-    fun lage(einheiten: List<Einheit>, letzte: Einheit?, heute: LocalDate): Wochenlage {
+    /** Die laufende Woche gegen die Vorwoche, fuer den Kopf und die Kennzahlen der Wochenkarte. */
+    fun lage(einheiten: List<Einheit>, heute: LocalDate): Wochenlage {
         val (vor, diese) = Wochenrechnung.wochen(einheiten, heute, 2)
         return Wochenlage(
-            letzte = letzte?.sport,
-            tageHer = letzte?.let { ChronoUnit.DAYS.between(it.tag, heute) },
             anzahl = einheiten.count { !it.tag.isBefore(diese.montag) && !it.tag.isAfter(heute) },
             minuten = diese.minuten,
             vorwoche = vor.minuten,
         )
     }
-
-    /** Die Minuten der letzten acht Wochen fuer das kleine Balkenbild, aelteste zuerst. */
-    fun achtWochen(einheiten: List<Einheit>, heute: LocalDate): List<Long> =
-        Wochenrechnung.wochen(einheiten, heute, 8).map { it.minuten }
 
     /** Nach Wochen, die juengste zuerst; innerhalb der Woche bleibt die Reihenfolge. */
     fun <T> nachWoche(liste: List<T>, tag: (T) -> LocalDate): List<Pair<LocalDate, List<T>>> =

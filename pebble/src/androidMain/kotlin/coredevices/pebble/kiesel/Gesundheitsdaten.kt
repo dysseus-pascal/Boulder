@@ -70,7 +70,6 @@ internal data class GesundheitsStand(
     val schritte: Long,
     val aktivMinuten: Long,
     val meter: Double,
-    val kcal: Long,
     /** Schritte der letzten sieben Tage bis heute, aeltester zuerst; heute bis jetzt. */
     val wocheSchritte: List<Pair<LocalDate, Long>>,
     val nacht: Nacht?,
@@ -80,11 +79,6 @@ internal data class GesundheitsStand(
      * wird, und zoege ihn sonst zu sich.
      */
     val ruhepulsWoche: List<Int>,
-    /**
-     * Die HRV derselben frueheren Naechte, wie [ruhepulsWoche]. Nur fuer den
-     * Schnitt, den "Your usual" nennt - geurteilt wird an ihrem Band in [hrvTage].
-     */
-    val hrvWoche: List<Int>,
     /** Schlafminuten der letzten sieben Naechte, aelteste zuerst; 0 = keine Nacht. */
     val wocheSchlaf: List<Pair<LocalDate, Int>>,
     /** Puls der letzten 24 Stunden: Sekunde seit 1970, Schlaege je Minute. */
@@ -256,11 +250,9 @@ internal object Gesundheitsdaten {
             schritte = summe?.steps ?: 0,
             aktivMinuten = summe?.activeMinutes ?: 0,
             meter = (summe?.distanceCm ?: 0) / 100.0,
-            kcal = (summe?.activeGramCalories ?: 0) / 1000,
             wocheSchritte = Gesundheitsrechnung.reihe(woche, tageswerte, 0L),
             nacht = nacht,
             ruhepulsWoche = frueher.map { it.ruhepuls }.filter { it > 0 },
-            hrvWoche = frueher.map { it.hrv }.filter { it > 0 },
             wocheSchlaf = Gesundheitsrechnung.reihe(woche, schlafJeTag, 0),
             puls = puls,
             spo2 = spo2,

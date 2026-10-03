@@ -50,7 +50,6 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             nacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
             trend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute(it)) },
             herz = { nav.navigateTo(PebbleNavBarRoutes.HerzRoute) },
-            training = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },
             akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
             koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
         ),

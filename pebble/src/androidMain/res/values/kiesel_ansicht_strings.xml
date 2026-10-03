@@ -35,9 +35,6 @@
     <string name="ks_zone_5">Maximum</string>
     <string name="ks_ei_standort_nicht">Location not allowed</string>
     <!-- Die Sportseite nach dem Entwurf "Empfehlung" (0.28): Wochenkarte, Latest, Liste nach Wochen. -->
-    <string name="ks_sp_satz">%1$s %2$s, %3$s this week.</string>
-    <string name="ks_sp_satz_nichts">%1$s %2$s, nothing yet this week.</string>
-    <string name="ks_sp_am">on %1$s</string>
     <plurals name="ks_sp_anzahl">
         <item quantity="one">%1$d workout</item>
         <item quantity="other">%1$d workouts</item>
@@ -45,13 +42,11 @@
     <string name="ks_sp_vorwoche">last week %1$s</string>
     <string name="ks_sp_vorwoche_keins">none last week</string>
     <string name="ks_sp_leer">No workouts yet</string>
-    <string name="ks_sp_zuletzt">LATEST</string>
     <string name="ks_sp_davor">RECENT</string>
     <string name="ks_sp_trainings">Workouts</string>
     <string name="ks_sp_zeit">Time</string>
     <string name="ks_sp_alle">All workouts</string>
     <string name="ks_sp_einrichten">SET UP</string>
-    <string name="ks_sp_trends_unter">Eight weeks · by sport</string>
     <string name="ks_sp_routen">Routes</string>
     <string name="ks_sp_nur_nutzung">Only while in use</string>
     <string name="ks_sp_hc">Health Connect</string>

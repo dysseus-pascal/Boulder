@@ -4,7 +4,6 @@ import android.content.Context
 import android.location.Location
 import android.util.Log
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
@@ -243,29 +242,4 @@ internal object Spur {
      * [Trainingsanalyse.aufstiegBis], auf der geglaetteten Hoehe.
      */
     const val STEIGUNG_MIN = 3.0
-
-    /** Die Spur als GPX - das Format, das jede Karten-App liest. */
-    fun alsGpx(punkte: List<Punkt>, name: String): String = buildString {
-        append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
-        append("""<gpx version="1.1" creator="Kiesel-Helper" """)
-        append("""xmlns="http://www.topografix.com/GPX/1/1">""").append('\n')
-        append("  <trk><name>").append(name).append("</name><trkseg>\n")
-        punkte.forEach { p ->
-            append("    <trkpt lat=\"").append(p.lat).append("\" lon=\"").append(p.lon).append("\">")
-            p.hoehe?.let { append("<ele>").append(it).append("</ele>") }
-            append("<time>").append(java.time.Instant.ofEpochSecond(p.zeit)).append("</time>")
-            append("</trkpt>\n")
-        }
-        append("  </trkseg></trk>\n</gpx>\n")
-    }
-
-    /** Für den Export als eine Datei. */
-    fun alsJson(punkte: List<Punkt>): String = buildJsonArray {
-        punkte.forEach { p ->
-            add(buildJsonObject {
-                put("t", p.zeit); put("lat", p.lat); put("lon", p.lon)
-                p.hoehe?.let { put("h", it) }
-            })
-        }
-    }.toString()
 }

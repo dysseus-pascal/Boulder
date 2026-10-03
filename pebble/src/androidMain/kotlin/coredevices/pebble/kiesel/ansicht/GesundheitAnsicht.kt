@@ -43,7 +43,6 @@ internal class Gesundheitswege(
     val nacht: (Long) -> Unit,
     val trend: (String) -> Unit,
     val herz: () -> Unit,
-    val training: (String) -> Unit,
     val akku: () -> Unit,
     val koerper: () -> Unit,
 )

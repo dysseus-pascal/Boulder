@@ -40,12 +40,12 @@ internal object Gesundheitsrechnung {
      * von einem "harder day", waehrend die Herzzeile "Day as usual" sagte.
      * Ohne Urteil, solange weniger als [Fenster.TAGESHERZ_LERNTAGE] Tage da sind.
      */
-    data class Tagesurteil(val heute: Tagesherz, val schnittPuls: Int?, val abstand: Int?, val haerte: Vergleich?)
+    data class Tagesurteil(val heute: Tagesherz, val abstand: Int?, val haerte: Vergleich?)
 
     fun tagesurteil(tage: List<Tagesherz>, heute: LocalDate): Tagesurteil? {
         val jetzt = tage.firstOrNull { it.tag == heute }?.takeIf { it.wachpuls != null } ?: return null
         val frueher = tage.filter { it.tag < heute && it.wachpuls != null }
-        if (frueher.size < Fenster.TAGESHERZ_LERNTAGE) return Tagesurteil(jetzt, null, null, null)
+        if (frueher.size < Fenster.TAGESHERZ_LERNTAGE) return Tagesurteil(jetzt, null, null)
         val schnitt = frueher.map { it.wachpuls!! }.average().roundToInt()
         val abstand = jetzt.wachpuls!! - schnitt
         // Der Median, weil ein einzelner Trainingstag den Schnitt der Belastung verzerrt.
@@ -59,7 +59,7 @@ internal object Gesundheitsrechnung {
             // Kaum Belastung als Mass: weniger als fast nichts gibt es nicht, mehr erst ab 20 Minuten.
             if (jetzt.belastung >= 20) Vergleich.HOEHER else Vergleich.WIE_IMMER
         }
-        return Tagesurteil(jetzt, schnitt, abstand, haerte)
+        return Tagesurteil(jetzt, abstand, haerte)
     }
 
     /**

@@ -292,7 +292,7 @@ internal fun HrvWoche(
     if (werte.isEmpty()) return
     val messer = rememberTextMeasurer()
     val stil = achsStil()
-    // Das Band darf durchscheinen (Farben.band): es liegt hinter Punkten und Linie.
+    // Das Band darf durchscheinen (Farben.BAND_DECKUNG): es liegt hinter Punkten und Linie.
     val flaeche = farbe.copy(alpha = Farben.BAND_DECKUNG)
     val raster = Farben.raster()
     val ohneUrteil = Farben.neutral()

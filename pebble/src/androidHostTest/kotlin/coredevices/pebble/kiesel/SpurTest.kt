@@ -1,7 +1,6 @@
 package coredevices.pebble.kiesel
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -145,18 +144,6 @@ class SpurTest {
         // Welle vier Meter, geglaettet ueber die Rast bleibt nichts.
         val punkte = (0 until 200).map { i -> Spur.Punkt(i * 3L, 47.0, 8.0, 400.0 + 4 * Math.sin(i / 10.0), 5f) }
         assertEquals(0.0, Trainingsanalyse.aufstieg(punkte), 0.001)
-    }
-
-    @Test
-    fun `GPX traegt Ort Hoehe und Zeit`() {
-        val gpx = Spur.alsGpx(listOf(p(1758400000L, 12.5, 34.25, 500.0)), "Laufen")
-        assertTrue(gpx.contains("<gpx"))
-        assertTrue(gpx.contains("<name>Laufen</name>"))
-        assertTrue(gpx.contains("lat=" + '"' + "12.5" + '"'))
-        assertTrue(gpx.contains("lon=" + '"' + "34.25" + '"'))
-        assertTrue(gpx.contains("<ele>500.0</ele>"))
-        assertTrue(gpx.contains("<time>2025-09-20T20:26:40Z</time>"))
-        assertTrue(gpx.trimEnd().endsWith("</gpx>"))
     }
 
     @Test

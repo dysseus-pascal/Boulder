@@ -29,8 +29,8 @@ class TagesstrahlrechnungTest {
         glaeser: List<Glaseintrag> = emptyList(), eintraege: List<Tageseintrag> = emptyList(),
         mitDrinktervall: Boolean = true, mitSupCycle: Boolean = true,
     ) = GesundheitsStand(
-        schritte = 0, aktivMinuten = 0, meter = 0.0, kcal = 0, wocheSchritte = emptyList(), nacht = null,
-        ruhepulsWoche = emptyList(), hrvWoche = emptyList(), wocheSchlaf = emptyList(), puls = emptyList(), spo2 = emptyList(),
+        schritte = 0, aktivMinuten = 0, meter = 0.0, wocheSchritte = emptyList(), nacht = null,
+        ruhepulsWoche = emptyList(), wocheSchlaf = emptyList(), puls = emptyList(), spo2 = emptyList(),
         wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = null, koffein = emptyList(), letzteDaten = null,
         mitDrinktervall = mitDrinktervall, mitSupCycle = mitSupCycle, eintraege = eintraege, glasEintraege = glaeser,
     )

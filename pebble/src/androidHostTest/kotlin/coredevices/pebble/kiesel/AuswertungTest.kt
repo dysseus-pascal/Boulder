@@ -106,7 +106,6 @@ class AuswertungTest {
         val w = Auswertung.wochenende(werte, heute)!!
         assertEquals(100.0, w.werktag, 0.001)
         assertEquals(500.0, w.wochenende, 0.001)
-        assertEquals(400.0, w.unterschied, 0.001)
     }
 
     @Test
@@ -205,7 +204,9 @@ class AuswertungTest {
         val bild = Auswertung.bild(alt + jung, heute)
         assertEquals(Fenster.TREND_TAGE.toInt(), bild.anzahl)
         assertEquals(1000.0, bild.gesamt!!, 0.001)
-        assertEquals(0.0, Auswertung.wochenende(alt + jung, heute)!!.unterschied, 0.001)
+        val w = Auswertung.wochenende(alt + jung, heute)!!
+        assertEquals(1000.0, w.werktag, 0.001)
+        assertEquals(1000.0, w.wochenende, 0.001)
     }
 
     @Test

@@ -286,7 +286,7 @@ internal object SupCycle {
      * dran, steht er auf der Planzeit seines Tages.
      */
     private suspend fun trageEin(
-        context: Context, klient: HealthConnectClient, tag: LocalDate, plaetze: List<Int>, name: (Int) -> String, plan: List<Platz>,
+        klient: HealthConnectClient, tag: LocalDate, plaetze: List<Int>, name: (Int) -> String, plan: List<Platz>,
     ): Long {
         val jetzt = Instant.now()
         var eingetragen = 0L
@@ -340,7 +340,7 @@ internal object SupCycle {
         val klient = Akte(context).bereit() ?: return Verarbeitet(context.getString(R.string.ks_g_akte_fehlt), gescheitert = true)
         val namen = n.texte[SC_NAMES]?.split("\n").orEmpty()
         val plan = n.bytes[SC_PLAN]?.let { plan(it) }.orEmpty()
-        val eingetragen = trageEin(context, klient, tag, plaetze, { namen.getOrNull(it)?.ifBlank { null } ?: context.getString(R.string.ks_s_praeparat_n, it + 1) }, plan)
+        val eingetragen = trageEin(klient, tag, plaetze, { namen.getOrNull(it)?.ifBlank { null } ?: context.getString(R.string.ks_s_praeparat_n, it + 1) }, plan)
         val rest = maske(plaetze) and eingetragen.inv()
         merkeNachtrag(context, tag, rest)
         return if (rest == 0L) Verarbeitet(null) else Verarbeitet(context.getString(R.string.ks_a_nicht_eingetragen), gescheitert = true)
@@ -388,7 +388,7 @@ internal object SupCycle {
 
         val klient = Akte(context).bereit()
         val neu = neuGenommen(faellig, genommen, eingetragen or verworfen)
-        val geschrieben = if (klient != null) trageEin(context, klient, tag, neu, { name(it) }, plan) else 0L
+        val geschrieben = if (klient != null) trageEin(klient, tag, neu, { name(it) }, plan) else 0L
         eingetragen = eingetragen or geschrieben
         val gescheitert = (maske(neu) and geschrieben.inv()) != 0L
 

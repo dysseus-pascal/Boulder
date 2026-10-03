@@ -37,9 +37,7 @@ class SportrechnungTest {
 
     @Test
     fun lage_vergleicht_mit_der_vorwoche() {
-        val l = Sportrechnung.lage(beispiel, beispiel.first(), heute)
-        assertEquals(Sport.Bike, l.letzte)
-        assertEquals(1L, l.tageHer)
+        val l = Sportrechnung.lage(beispiel, heute)
         assertEquals(4, l.anzahl)
         assertEquals(100, l.minuten)
         assertEquals(192, l.vorwoche)
@@ -47,15 +45,8 @@ class SportrechnungTest {
 
     @Test
     fun lage_ohne_training() {
-        val l = Sportrechnung.lage(emptyList(), null, heute)
-        assertNull(l.letzte)
-        assertNull(l.tageHer)
+        val l = Sportrechnung.lage(emptyList(), heute)
         assertEquals(0, l.anzahl)
-    }
-
-    @Test
-    fun acht_wochen_mit_den_leeren() {
-        assertEquals(listOf(0L, 0, 0, 0, 0, 0, 192, 100), Sportrechnung.achtWochen(beispiel, heute))
     }
 
     @Test
@@ -95,8 +86,7 @@ class SportrechnungTest {
     fun montag_ohne_training_nach_dem_sonntag() {
         val montag = LocalDate.of(2026, 10, 5)
         val sonntag = Einheit(LocalDate.of(2026, 10, 4), Sport.Bike, 50)
-        val l = Sportrechnung.lage(listOf(sonntag), sonntag, montag)
-        assertEquals(1L, l.tageHer)
+        val l = Sportrechnung.lage(listOf(sonntag), montag)
         assertEquals(0, l.anzahl)
         assertEquals(0, l.minuten)
         assertEquals(50, l.vorwoche)

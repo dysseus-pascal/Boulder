@@ -10,7 +10,7 @@ package coredevices.pebble.kiesel
  * [Drinktervall]).
  */
 internal object Gesundheitsziele {
-    /** Schritte am Tag: die uebliche Zehntausend - Ring, Saeulen, Trendlinie und "many steps" im Vergleich. */
+    /** Schritte am Tag: die uebliche Zehntausend - Saeulen, Trendlinie, Widgetbalken und "many steps" im Vergleich. */
     const val SCHRITTE = 10_000L
 
     /**

@@ -261,7 +261,7 @@ private fun Wochenkarte(trainings: List<TrainingEintrag>, heute: LocalDate, wege
             Leerzeile(stringResource(R.string.ks_sp_leer))
             return@Kasten
         }
-        val lage = Sportrechnung.lage(einheiten, trainings.first().einheit, heute)
+        val lage = Sportrechnung.lage(einheiten, heute)
         val montag = heute.with(DayOfWeek.MONDAY)
         val meter = trainings.filter { !it.einheit.tag.isBefore(montag) && !it.einheit.tag.isAfter(heute) }.sumOf { it.meter }
         Kopf(

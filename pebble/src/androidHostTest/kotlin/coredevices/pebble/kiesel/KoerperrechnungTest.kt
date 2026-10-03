@@ -178,9 +178,7 @@ class KoerperrechnungTest {
     }
 
     @Test
-    fun pfund_und_fuss() {
-        assertEquals(172.8, Math.round(k.masse(78.4, true) * 10) / 10.0)
-        assertEquals(78.4, k.masse(78.4, false))
+    fun fuss_und_zoll() {
         assertEquals(5 to 11, k.fussZoll(1.80))
         assertEquals(6 to 0, k.fussZoll(1.83))
     }

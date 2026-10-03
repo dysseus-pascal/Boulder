@@ -37,6 +37,7 @@ import org.koin.compose.koinInject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Wohin die Seite fuehrt - die Navigation selbst haengt in GesundheitScreens. */
 internal class Gesundheitswege(
@@ -60,6 +61,23 @@ private var zuletzt: Gesundheitsseite? = null
 private fun zuletztHeute() = zuletzt?.takeIf { it.gelesen.toLocalDate() == LocalDate.now() }
 
 /**
+ * Der Lader der Gesundheitsseiten (Health, Heart). NUR DER AUFBAU DARF DEN
+ * STAND VON EBEN NEHMEN ([Gesundheitsdaten.FRISCH_MS]): Health -> Heart ->
+ * Health las sonst dreimal in Sekunden dasselbe. Jeder weitere Anlass - ein
+ * Schub, ein eigener Eintrag, die Rueckkehr aus einer anderen App - liest neu,
+ * damit kein Glas und kein Eintrag veraltet dasteht.
+ */
+@Composable
+internal fun rememberGesundheitslader(): suspend () -> GesundheitsStand {
+    val context = LocalContext.current
+    val api = koinInject<HealthDataApi>()
+    val erster = remember { AtomicBoolean(true) }
+    return remember(context, api) {
+        { Gesundheitsdaten.lies(context, api, if (erster.getAndSet(false)) Gesundheitsdaten.FRISCH_MS else 0) }
+    }
+}
+
+/**
  * Die Gesundheitsseite nach Konzept F: oben ein Satz zum Tag mit dem
  * Uhrenakku, darunter der Tag als Zeitstrahl (nur zum Ansehen), dann Herz,
  * Wasser, Praeparate und Koffein als Zeilen und die Schritte der Woche. Das
@@ -68,7 +86,7 @@ private fun zuletztHeute() = zuletzt?.takeIf { it.gelesen.toLocalDate() == Local
 @Composable
 internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) {
     val context = LocalContext.current
-    val api = koinInject<HealthDataApi>()
+    val lies = rememberGesundheitslader()
     val libPebble = koinInject<LibPebble>()
     val scope = rememberCoroutineScope()
     val uhren by libPebble.watches.collectAsState()
@@ -78,11 +96,9 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     var praeparatBlatt by remember { mutableStateOf(false) }
     var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
-    // Einmal genommen: an ihm erkennt die Koerperliste, dass noch der letzte Stand dasteht.
-    val vorher = remember { zuletztHeute() }
     // Neue Minutendaten von der Uhr (rememberUhrschub): dann stimmen Schritte und Puls nicht mehr.
-    val seite = rememberStand(vorher, neu, rememberUhrschub()) { zeige ->
-        val stand = Gesundheitsdaten.lies(context, api)
+    val seite = rememberStand(remember { zuletztHeute() }, neu, rememberUhrschub()) { zeige ->
+        val stand = lies()
         val gelesen = LocalDateTime.now()
         geladen()
         // Erst der Tag, dann die Trainings aus der Akte - bis dahin die bisherigen.
@@ -105,7 +121,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         item { Spacer(Modifier.height(2.dp)) }
         item { Tagessatz(satz, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
         item { Tagesstrahl(s, satz.durchgeschlafen, trainings, wege) { neu++ } }
-        item { Koerperliste(s, frisch = seite !== vorher, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
+        item { Koerperliste(s, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }
     }

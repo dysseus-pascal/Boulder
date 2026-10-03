@@ -16,6 +16,7 @@ import java.time.format.TextStyle
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -267,14 +268,14 @@ internal object Formate {
      * DateFormat.getTimeFormat: so setzt die reine Variante dasselbe Zeichen
      * vor AM/PM und dieselbe fuehrende Null wie die mit [Context].
      */
-    fun uhrzeit(zeit: LocalTime, muster: String, locale: Locale = Locale.getDefault()): String {
-        val format = SimpleDateFormat(muster, locale).apply { timeZone = TimeZone.getTimeZone("UTC") }
-        return format.format(Date(zeit.toSecondOfDay() * 1000L))
-    }
+    fun uhrzeit(zeit: LocalTime, muster: String, locale: Locale = Locale.getDefault()): String =
+        uhrzeitFormate.get()!!.getOrPut(muster to locale) {
+            SimpleDateFormat(muster, locale).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        }.format(Date(zeit.toSecondOfDay() * 1000L))
 
     /** Eine volle Stunde fuer Zeitachsen: "21" oder "9 PM" - knapper als die Uhrzeit, aber in derselben Stundenwahl. */
     fun stunde(zeit: LocalTime, vierundzwanzig: Boolean, locale: Locale = Locale.getDefault()): String =
-        zeit.format(DateTimeFormatter.ofPattern(if (vierundzwanzig) "H" else "h a", locale))
+        zeit.format(formatierer(if (vierundzwanzig) "H" else "h a", locale))
 
     /**
      * Ein Tag kurz nach [muster] ("MMM d" oder "d MMM", vom Telefon:
@@ -286,7 +287,7 @@ internal object Formate {
         heute: LocalDate? = null, musterMitJahr: String? = null,
     ): String {
         val jahrMuster = musterMitJahr?.takeIf { heute != null && tag.year != heute.year }
-        return tag.format(DateTimeFormatter.ofPattern(jahrMuster ?: muster, locale))
+        return tag.format(formatierer(jahrMuster ?: muster, locale))
     }
 
     /** Der Wochentag in zwei Buchstaben: "Mo", "Tu" - EINE Regel fuer jede Reihe von sieben Tagen (Saeulen, Kalender). */
@@ -312,14 +313,14 @@ internal object Formate {
      * "d MMM", mit [mitJahr] "MMM d, y", mit [mitWochentag] "EEE, MMM d".
      */
     fun datumMuster(locale: Locale = Locale.getDefault(), mitJahr: Boolean = false, mitWochentag: Boolean = false): String =
-        DateFormat.getBestDateTimePattern(locale, (if (mitWochentag) "EEE" else "") + (if (mitJahr) "y" else "") + "MMMd")
+        bestesMuster(locale, (if (mitWochentag) "EEE" else "") + (if (mitJahr) "y" else "") + "MMMd")
 
     /**
      * Das Muster einer Uhrzeit, wie Android es fuer Sprache und Stundenwahl
      * bildet - dasselbe wie DateFormat.getTimeFormat: "h:mm a" oder "HH:mm".
      */
     fun zeitMuster(vierundzwanzig: Boolean, locale: Locale = Locale.getDefault()): String =
-        DateFormat.getBestDateTimePattern(locale, if (vierundzwanzig) "Hm" else "hm")
+        bestesMuster(locale, if (vierundzwanzig) "Hm" else "hm")
 
     /** Ein Tag kurz: "Sep 28" - in Listen, unter Saeulen, auf Achsen. */
     fun datumKurz(tag: LocalDate): String {
@@ -411,6 +412,26 @@ internal object Formate {
         else DateUtils.getRelativeTimeSpanString(millis, jetzt, DateUtils.MINUTE_IN_MILLIS).toString()
 
     // --- Intern -------------------------------------------------------------------------
+
+    // EINMAL GEBAUT JE MUSTER UND SPRACHE: eine Seite mit Kurven, Achsen und Listen
+    // formatiert 100-300 Mal, und jedes Mal ein neuer Formatierer kostete 5-50 us
+    // (das Muster wird jedes Mal geparst). Wechselt die Sprache oder die
+    // Stundenwahl, ist es ein anderer Schluessel - der Text bleibt richtig.
+
+    /** DateTimeFormatter ist unveraenderlich und threadsicher: einer fuer alle Threads. */
+    private val formatiererJeMuster = ConcurrentHashMap<Pair<String, Locale>, DateTimeFormatter>()
+
+    private fun formatierer(muster: String, locale: Locale): DateTimeFormatter =
+        formatiererJeMuster.getOrPut(muster to locale) { DateTimeFormatter.ofPattern(muster, locale) }
+
+    /** SimpleDateFormat ist nicht threadsicher (es rechnet in einem eigenen Kalender): je Thread einer. */
+    private val uhrzeitFormate = ThreadLocal.withInitial { HashMap<Pair<String, Locale>, SimpleDateFormat>() }
+
+    /** Die Muster aus ICU haengen nur an Sprache und Skelett. */
+    private val besteMuster = ConcurrentHashMap<Pair<Locale, String>, String>()
+
+    private fun bestesMuster(locale: Locale, skelett: String): String =
+        besteMuster.getOrPut(locale to skelett) { DateFormat.getBestDateTimePattern(locale, skelett) }
 
     /** Das ASCII-Minus vor der ersten Ziffer wird U+2212; manche Sprachen setzen ein Richtungszeichen davor. */
     private fun mitMinus(s: String): String {

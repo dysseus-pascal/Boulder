@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import io.rebble.libpebblecommon.connection.Pulsreihe
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.Duration
@@ -7,7 +8,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -89,31 +89,121 @@ internal object Gesundheitsrechnung {
         heute: LocalDate? = null,
     ): List<Tagesherz> {
         val sortiert = puls.filter { it.second > 0 }.sortedBy { it.first }
-        val jeTag = linkedMapOf<LocalDate, Triple<Long, Int, Double>>()   // Summe, Anzahl, Belastung
+        val zeiten = LongArray(sortiert.size) { sortiert[it].first }
+        val werte = IntArray(sortiert.size) { sortiert[it].second }
+        return tagesherzKern(zeiten, werte, 0, schlaf, grenzen, bisUhrzeit, zone, heute)
+    }
+
+    /**
+     * Dasselbe aus der [Pulsreihe] der Datenbank, ab der Sekunde [ab]: ohne
+     * Pair je Minute - 14 Tage sind bis zu 20'160 Minuten.
+     */
+    fun tagesherz(
+        reihe: Pulsreihe,
+        ab: Long,
+        schlaf: List<Pair<Long, Long>>,
+        grenzen: List<Int>,
+        bisUhrzeit: java.time.LocalTime,
+        zone: ZoneId,
+        heute: LocalDate? = null,
+    ): List<Tagesherz> {
+        val r = aufsteigend(reihe)
+        var start = 0
+        while (start < r.size && r.zeiten[start] < ab) start++
+        return tagesherzKern(r.zeiten, r.werte, start, schlaf, grenzen, bisUhrzeit, zone, heute)
+    }
+
+    /** Die Reihe nach Zeit, nur Minuten mit Puls - aus der Datenbank kommt sie schon so, dann ohne Kopie. */
+    private fun aufsteigend(r: Pulsreihe): Pulsreihe {
+        val geordnet = (1 until r.size).all { r.zeiten[it] >= r.zeiten[it - 1] }
+        if (geordnet && r.werte.all { it > 0 }) return r
+        // Stabil wie sortedBy: gleiche Zeiten behalten ihre Reihenfolge.
+        val i = (0 until r.size).filter { r.werte[it] > 0 }.sortedBy { r.zeiten[it] }
+        return Pulsreihe(LongArray(i.size) { r.zeiten[i[it]] }, IntArray(i.size) { r.werte[i[it]] })
+    }
+
+    /** Was ein Tag im Tagesherz sammelt; veraenderlich, damit nicht jede Minute ein Triple entsteht. */
+    private class Tagessumme(var summe: Long = 0, var anzahl: Int = 0, var belastung: Double = 0.0)
+
+    /**
+     * Der Kern von [tagesherz] ueber [zeiten] und [werte] ab [start], nach
+     * Zeit geordnet und nur mit Puls. SCHLAF UND TAG MIT ZEIGERN: frueher
+     * pruefte jede Minute alle Naechte (schlaf.any) und baute ein
+     * ZonedDateTime - 20'000 Objekte je Laden. Jetzt wandert ein Zeiger
+     * durch die vereinten Schlafspannen, und die Ortszeit kommt aus dem
+     * Versatz der Zone, der nur an ihren Wechseln neu geholt wird. Das
+     * Ergebnis ist dasselbe, auch ueber die Zeitumstellung (TagesherzTest).
+     */
+    private fun tagesherzKern(
+        zeiten: LongArray, werte: IntArray, start: Int,
+        schlaf: List<Pair<Long, Long>>, grenzen: List<Int>, bisUhrzeit: LocalTime, zone: ZoneId, heute: LocalDate?,
+    ): List<Tagesherz> {
+        val n = zeiten.size
+        val spannen = vereint(schlaf)
         val mitNacht = schlaf.map { Instant.ofEpochSecond(it.second).atZone(zone).toLocalDate() }.toSet()
+        // isAfter(bisUhrzeit) fuer volle Sekunden: erst die naechste ganze Sekunde liegt danach.
+        val bisSekunde = bisUhrzeit.toSecondOfDay()
+        val regeln = zone.rules
+        val jeTag = HashMap<LocalDate, Tagessumme>()
         val nachtsGemessen = mutableSetOf<LocalDate>()
-        sortiert.forEachIndexed { i, (sek, bpm) ->
-            if (schlaf.any { (von, bis) -> sek in von until bis }) return@forEachIndexed
-            val zeit = java.time.Instant.ofEpochSecond(sek).atZone(zone)
-            if (zeit.toLocalTime().isAfter(bisUhrzeit)) return@forEachIndexed
-            val tag = zeit.toLocalDate()
-            val vielleichtSchlaf = zeit.hour < TAGESBEGINN_H && tag !in mitNacht
+        var s = 0
+        var versatz = 0L
+        var versatzBis = Long.MIN_VALUE
+        var tagNr = Long.MIN_VALUE
+        var tag = LocalDate.MIN
+        for (i in start until n) {
+            val sek = zeiten[i]
+            // Die Spannen sind vereint und geordnet: was vor dieser Minute endet, kommt nie wieder.
+            while (s < spannen.size && spannen[s].second <= sek) s++
+            if (s < spannen.size && spannen[s].first <= sek) continue
+            if (sek >= versatzBis) {
+                val jetzt = Instant.ofEpochSecond(sek)
+                versatz = regeln.getOffset(jetzt).totalSeconds.toLong()
+                versatzBis = regeln.nextTransition(jetzt)?.toEpochSecond() ?: Long.MAX_VALUE
+            }
+            // Wie LocalDateTime.ofEpochSecond: Ortszeit = UTC + Versatz, Tag und Sekunde daraus.
+            val lokal = sek + versatz
+            val sekundeDesTages = Math.floorMod(lokal, 86_400L)
+            if (sekundeDesTages > bisSekunde) continue
+            val nr = Math.floorDiv(lokal, 86_400L)
+            if (nr != tagNr) {
+                tagNr = nr
+                tag = LocalDate.ofEpochDay(nr)
+            }
+            val vielleichtSchlaf = sekundeDesTages < TAGESBEGINN_H * 3600 && tag !in mitNacht
             if (vielleichtSchlaf) nachtsGemessen += tag
-            val minuten = if (i + 1 < sortiert.size) ((sortiert[i + 1].first - sek) / 60.0).coerceIn(1.0, 10.0) else 1.0
-            val gewicht = when (pulsZone(bpm, grenzen)) {
+            val minuten = if (i + 1 < n) ((zeiten[i + 1] - sek) / 60.0).coerceIn(1.0, 10.0) else 1.0
+            val gewicht = when (pulsZone(werte[i], grenzen)) {
                 0 -> 0.0
                 1 -> 1.0
                 else -> 2.0
             }
-            val alt = jeTag[tag] ?: Triple(0L, 0, 0.0)
-            jeTag[tag] = if (vielleichtSchlaf) alt.copy(third = alt.third + gewicht * minuten)
-            else Triple(alt.first + bpm, alt.second + 1, alt.third + gewicht * minuten)
+            val w = jeTag.getOrPut(tag) { Tagessumme() }
+            if (!vielleichtSchlaf) {
+                w.summe += werte[i]
+                w.anzahl++
+            }
+            w.belastung += gewicht * minuten
         }
         val wartet = heute != null && heute in nachtsGemessen && bisUhrzeit.hour < NACHT_SPAETESTENS_H
         return jeTag.map { (tag, w) ->
-            val wach = if (w.second >= TAGESHERZ_MINDESTENS && !(wartet && tag == heute)) (w.first.toDouble() / w.second).roundToInt() else null
-            Tagesherz(tag, wach, w.third.roundToInt(), w.second)
+            val wach = if (w.anzahl >= TAGESHERZ_MINDESTENS && !(wartet && tag == heute)) (w.summe.toDouble() / w.anzahl).roundToInt() else null
+            Tagesherz(tag, wach, w.belastung.roundToInt(), w.anzahl)
         }.sortedBy { it.tag }
+    }
+
+    /**
+     * Die Schlafspannen [von, bis) vereint und geordnet: eine Minute liegt
+     * genau dann in einer von ihnen, wenn sie in einem dieser Stuecke liegt.
+     */
+    private fun vereint(schlaf: List<Pair<Long, Long>>): List<Pair<Long, Long>> {
+        val aus = mutableListOf<Pair<Long, Long>>()
+        schlaf.filter { it.first < it.second }.sortedBy { it.first }.forEach { (von, bis) ->
+            val letzte = aus.lastOrNull()
+            if (letzte != null && von <= letzte.second) aus[aus.lastIndex] = letzte.first to maxOf(letzte.second, bis)
+            else aus += von to bis
+        }
+        return aus
     }
 
     /**
@@ -271,8 +361,11 @@ internal object Gesundheitsrechnung {
      * bestimmte ein einzelner Ausreisser des Sensors Spanne und Zone im Satz,
      * und die Kurve darunter erreichte ihn nie.
      */
-    fun pulsSpanne(punkte: List<Pair<Long, Int>>): Pair<Int, Int>? {
-        val mediane = fuenfMinuten(punkte).map { it.median }
+    fun pulsSpanne(punkte: List<Pair<Long, Int>>): Pair<Int, Int>? = spanneDerBins(fuenfMinuten(punkte))
+
+    /** [pulsSpanne] aus schon gebildeten Bins - die Herzseite bildet sie einmal fuer Satz und Band. */
+    fun spanneDerBins(bins: List<Pulsbin>): Pair<Int, Int>? {
+        val mediane = bins.map { it.median }
         return if (mediane.isEmpty()) null else mediane.min() to mediane.max()
     }
 
@@ -282,8 +375,10 @@ internal object Gesundheitsrechnung {
      * zeigt 24 Stunden: ohne Zeit las sich eine Spitze von gestern Abend als
      * heutige.
      */
-    fun pulsSpitze(punkte: List<Pair<Long, Int>>): Pair<Long, Int>? {
-        val bins = fuenfMinuten(punkte)
+    fun pulsSpitze(punkte: List<Pair<Long, Int>>): Pair<Long, Int>? = spitzeDerBins(fuenfMinuten(punkte))
+
+    /** [pulsSpitze] aus schon gebildeten Bins, wie [spanneDerBins]. */
+    fun spitzeDerBins(bins: List<Pulsbin>): Pair<Long, Int>? {
         val hoechster = bins.maxOfOrNull { it.median } ?: return null
         return bins.last { it.median == hoechster }.let { it.sekunde to it.median }
     }
@@ -366,14 +461,20 @@ internal object Gesundheitsrechnung {
         val aus = mutableListOf<MutableList<Pair<Long, Double>>>()
         var offen = false
         var t = sortiert.first().first
+        // EIN FENSTER AUS ZWEI ZEIGERN: [unten, oben) sind die Punkte bis [fenster]
+        // Sekunden um t. t waechst, also wandern beide nur vorwaerts - frueher
+        // filterte jeder Schritt die ganze Liste (9-h-Nacht: 540 Punkte x 108 Schritte).
+        var unten = 0
+        var oben = 0
         while (t <= sortiert.last().first) {
-            val nah = sortiert.filter { abs(it.first - t) <= fenster }
+            while (unten < sortiert.size && sortiert[unten].first < t - fenster) unten++
+            while (oben < sortiert.size && sortiert[oben].first <= t + fenster) oben++
             // Nur zwischen Messungen: am Rand einer Luecke liefe die Linie sonst
             // eine Viertelstunde ueber den letzten Punkt hinaus ins Leere.
-            if (nah.none { it.first <= t } || nah.none { it.first >= t }) offen = false
+            if (unten >= oben || sortiert[unten].first > t || sortiert[oben - 1].first < t) offen = false
             else {
                 // Der echte Median: bei gerader Anzahl das Mittel der beiden mittleren.
-                val median = Statistik.median(nah.map { it.second })
+                val median = Statistik.median(sortiert.subList(unten, oben).map { it.second })
                 if (!offen) { aus += mutableListOf<Pair<Long, Double>>(); offen = true }
                 aus.last() += t to median
             }

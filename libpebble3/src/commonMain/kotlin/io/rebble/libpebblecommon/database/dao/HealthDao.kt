@@ -89,6 +89,14 @@ interface HealthDao {
     @Query("SELECT * FROM health_data WHERE timestamp >= :start AND timestamp < :end ORDER BY timestamp ASC")
     suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
 
+    /**
+     * Boulder: nur Zeit und Puls der Minuten mit Puls. Kurven und Tagesherz
+     * brauchen 2 der 12 Spalten; ueber 14 Tage sind das bis zu 20'160 Zeilen,
+     * die SELECT * sonst ganz als HealthDataEntity baute.
+     */
+    @Query("SELECT timestamp, heartRate FROM health_data WHERE timestamp >= :start AND timestamp < :end AND heartRate > 0 ORDER BY timestamp ASC")
+    suspend fun getPulsMinuten(start: Long, end: Long): List<PulsMinute>
+
     @Query("SELECT * FROM health_data WHERE timestamp > :afterTimestamp ORDER BY timestamp ASC")
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
 
@@ -160,4 +168,10 @@ data class DailyMovementAggregate(
 data class HRZoneCount(
     val heartRateZone: Int,
     val minutes: Long,
+)
+
+/** Boulder: eine Minute mit Puls, siehe [HealthDao.getPulsMinuten]. */
+data class PulsMinute(
+    val timestamp: Long,
+    val heartRate: Int,
 )

@@ -1,9 +1,12 @@
 package coredevices.pebble.kiesel
 
 import coredevices.pebble.R
+import coredevices.pebble.health.Einzellauf
 import kotlin.math.roundToInt
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Welche Lage gerade gilt - und was das Widget deshalb gross zeigt.
@@ -80,8 +83,118 @@ internal object Widgetlage {
     private val TRAINING_FRIST: Duration = Duration.ofHours(2)
     private val MORGEN_FRIST: Duration = Duration.ofHours(3)
     private const val ABEND_AB = 20
+    /** Ab dieser Stunde zeigt ein erreichtes Schrittziel die Bilanz. */
+    private const val ZIEL_AB = 16
     /** Ohne Planzeit mahnt das Widget erst ab dieser Stunde - morgens ist nichts versaeumt. */
     private const val PRAEPARATE_OHNE_PLAN_AB = 11
+    /** Die Wassermahnung gilt von dieser Stunde bis vor [WASSER_BIS]. */
+    private const val WASSER_AB = 9
+    private const val WASSER_BIS = 22
+
+    /**
+     * Hoechstens so lange bis zum naechsten Zeichnen ohne neue Daten - so oft
+     * wie frueher Androids Takt (updatePeriodMillis 30 min). Die Wassermahnung
+     * waechst stetig mit der Uhrzeit und hat keine feste Wende.
+     */
+    val TAKT: Duration = Duration.ofMinutes(30)
+
+    /**
+     * Ein Durchgang des Widgets mit seinem Takt. ZUERST DAS NETZ, DANN DAS
+     * ZEICHNEN: stirbt der Prozess beim Lesen (Speicher knapp, 60-s-Frist des
+     * Broadcasts bei haengender Akte), steht trotzdem ein Alarm in [TAKT].
+     * Frueher holte Androids 30-min-Takt so ein Loch nach; ohne ihn bliebe
+     * das Widget ohne Uhr stehen, bis die App wieder aufgeht.
+     * [zeichne] gibt den Ausgang des Einzellaufs und die naechste Wende -
+     * null nach einem Fehler, dann bleibt das Netz stehen.
+     */
+    suspend fun mitTakt(
+        jetzt: Instant, plane: (Instant) -> Unit, zeichne: suspend () -> Pair<Einzellauf.Ausgang, Instant?>,
+    ): Einzellauf.Ausgang {
+        plane(jetzt.plus(TAKT))
+        val (ausgang, wende) = zeichne()
+        // Zeichnet gerade ein anderer Durchgang, plant der seine Wende - sicher nach diesem Netz.
+        if (ausgang != Einzellauf.Ausgang.UEBERGEBEN && wende != null) plane(wende)
+        return ausgang
+    }
+
+    /** Das juengste Training fuer den [Blick] - gelesen ausserhalb der Rechnung. */
+    data class Training(
+        val ende: LocalDateTime,
+        val name: String,
+        val minuten: Long,
+        val puls: Double?,
+        val km: Double?,
+        val beginn: Long,
+        val metrisch: Boolean,
+    )
+
+    /**
+     * Der [Blick] aus einem Gesundheitsstand. REIN, damit ein Test zeigen kann,
+     * dass der schlanke Stand des Widgets dieselbe Lage ergibt wie der volle
+     * der Seite (GesundheitsdatenTest). [platz]: der Name eines Praeparats
+     * ohne eigenen Namen ("Slot 3").
+     */
+    fun blick(
+        s: GesundheitsStand, jetzt: LocalDateTime, zone: ZoneId, training: Training?, wunsch: Art?, imperial: Boolean, platz: (Int) -> String,
+    ): Blick {
+        val heute = jetzt.toLocalDate()
+        val n = s.nacht
+        val woche = s.wocheSchlaf.filter { it.first != heute && it.second > 0 }.map { it.second.toDouble() }
+        return Blick(
+            jetzt = jetzt,
+            schlafEnde = n?.aufwachen?.atZone(zone)?.toLocalDateTime(),
+            schlafMin = n?.schlafMinuten?.toDouble(),
+            schlafZielMin = Gesundheitsziele.SCHLAF_MIN.toDouble(),
+            schlafWocheMin = Statistik.mittel(woche),
+            erholsamAnteil = n?.let { Gesundheitsrechnung.erholsamAnteil(it.phasen) },
+            ruhepuls = n?.ruhepuls?.toDouble(),
+            hrv = n?.hrv?.toDouble(),
+            trainingEnde = training?.ende,
+            trainingName = training?.name,
+            trainingMin = training?.minuten,
+            trainingPuls = training?.puls,
+            trainingKm = training?.km,
+            trainingBeginn = training?.beginn,
+            schritte = s.schritte.toDouble(),
+            schritteZiel = Gesundheitsziele.SCHRITTE.toDouble(),
+            aktivMin = s.aktivMinuten.toDouble(),
+            aktivZiel = Gesundheitsziele.AKTIV_MIN.toDouble(),
+            // Ohne Drinktervall keine Wasserkachel und keine Mahnung (UhrApps).
+            wasserMl = s.wasserMl.toDouble().takeIf { s.mitDrinktervall },
+            wasserZiel = s.wasserZiel?.ml?.toDouble()?.takeIf { s.mitDrinktervall },
+            glasMl = (s.wasserZiel?.glasMl ?: Gesundheitsziele.GLAS_ML).toDouble(),
+            praeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute(platz).orEmpty(),
+            koffeinMg = Gesundheitsrechnung.koffeinHeute(s.koffein, heute, zone).takeIf { s.mitDrinktervall },
+            wunsch = wunsch,
+            imperial = imperial,
+            // Ein Schwimmen in Metern wie in Sport und im Zeitstrahl - sonst "0.9 mi" hier, "1.5 km" dort.
+            trainingMetrisch = training?.metrisch == true,
+        )
+    }
+
+    /**
+     * Wann das Widget ohne neue Daten wieder zeichnen muss: an der naechsten
+     * Uhrzeit, zu der die Lage von selbst wechseln kann (Ende von Training,
+     * Morgen und Kachelwunsch, Planzeit eines Praeparats, 11, 16 und 20 Uhr,
+     * Beginn und Ende der Wassermahnung, Mitternacht), spaetestens nach
+     * [takt]. Mit Uhr zeichnet ohnehin jeder Schub (alle 15 min) und plant
+     * neu; dann kommt nur eine echte Wende zum Zug.
+     */
+    fun naechsteWende(b: Blick, wunschBis: LocalDateTime?, takt: Duration = TAKT): LocalDateTime {
+        val jetzt = b.jetzt
+        val tag = jetzt.toLocalDate()
+        val kandidaten = buildList {
+            add(jetzt.plus(takt))
+            // Beginn und Ende: ein Ende in der Zukunft (falsche Uhr der Quelle) zaehlt erst ab dann.
+            b.trainingEnde?.let { add(it); add(it.plus(TRAINING_FRIST)) }
+            b.schlafEnde?.let { add(it); add(it.plus(MORGEN_FRIST)) }
+            wunschBis?.let { add(it) }
+            listOf(PRAEPARATE_OHNE_PLAN_AB, ZIEL_AB, ABEND_AB, WASSER_AB, WASSER_BIS).forEach { add(tag.atTime(it, 0)) }
+            b.praeparate.mapNotNull { it.zeit }.forEach { add(tag.atTime(it)) }
+            add(tag.plusDays(1).atStartOfDay())
+        }
+        return kandidaten.filter { it.isAfter(jetzt) }.min()
+    }
 
     fun ermittle(b: Blick, t: Texte): Lage {
         val art = b.wunsch ?: when {
@@ -105,7 +218,7 @@ internal object Widgetlage {
     private fun zielErreicht(b: Blick): Boolean {
         val s = b.schritte ?: return false
         val z = b.schritteZiel ?: return false
-        return s >= z && b.jetzt.hour >= 16
+        return s >= z && b.jetzt.hour >= ZIEL_AB
     }
 
     // --- Die Kacheln, aus denen die Buehne waehlt ---
@@ -189,7 +302,7 @@ internal object Widgetlage {
         // dahinter ist eine Erinnerung wert. Das Soll folgt [wasserSoll].
         val ziel = b.wasserZiel
         val ml = b.wasserMl
-        if (ziel != null && ml != null && b.jetzt.hour in 9..21) {
+        if (ziel != null && ml != null && b.jetzt.hour in WASSER_AB until WASSER_BIS) {
             val soll = ziel * wasserSoll(b.jetzt.hour + b.jetzt.minute / 60.0)
             val fehltGlaeser = ((soll - ml) / b.glasMl).toInt()
             if (fehltGlaeser >= 2) return "wasser" to t.mehrzahl(R.plurals.ks_wl_glaeser_hinterher, fehltGlaeser, fehltGlaeser)

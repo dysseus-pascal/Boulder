@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -145,11 +146,14 @@ internal fun Tageskurve(
     // Deckend gemischt statt Alpha: 300 Punkte uebereinander ergaben sonst dunkle Flecken.
     val blass = farbe.aufKarte(0.4f)
     val stunde = stundenText()
+    // Vor dem Bild gerechnet, einmal je Punkte: im Zeichnen lief trend() bei
+    // jedem Neuzeichnen (Groesse, Thema, Rueckkehr) ueber die ganze Nacht.
+    val linien = remember(punkte, trendFenster) { Gesundheitsrechnung.trend(punkte, trendFenster) }
+    val tief = remember(punkte) { punkte.minOf { it.second } - 2 }
+    val hoch = remember(punkte) { maxOf(punkte.maxOf { it.second } + 2, tief + 1) }
     Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
         val rechts = size.width - achsSpalte(messer, stil)
         val boden = size.height - fussraum(messer, stil)
-        val tief = punkte.minOf { it.second } - 2
-        val hoch = maxOf(punkte.maxOf { it.second } + 2, tief + 1)
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
         fun x(t: Long) = rechts * (t - von) / spanne
         fun y(w: Int) = boden * (1f - (w - tief).toFloat() / (hoch - tief))
@@ -163,7 +167,7 @@ internal fun Tageskurve(
             drawCircle(blass, r, Offset(x(t), y(w)))
         }
         fun yd(w: Double) = boden * (1f - ((w - tief) / (hoch - tief)).toFloat())
-        Gesundheitsrechnung.trend(punkte, trendFenster).forEach { stueck ->
+        linien.forEach { stueck ->
             val p = stueck.map { (t, w) -> Offset(x(t), yd(w)) }
             if (p.size == 1) drawCircle(farbe, 2.dp.toPx(), p[0])
             else drawPath(
@@ -184,12 +188,13 @@ internal fun Tageskurve(
  * der soll zu sehen sein. Luecken ueber einer Viertelstunde brechen die Linie
  * - dort war die Uhr nicht am Arm.
  *
- * [zonen]: die Grenzen moderat, kraeftig, Spitze; [farben]: leicht, moderat,
- * kraeftig, Spitze.
+ * [bins]: die [Gesundheitsrechnung.fuenfMinuten] des Pulses - die Herzseite
+ * bildet sie einmal fuer Satz und Bild. [zonen]: die Grenzen moderat,
+ * kraeftig, Spitze; [farben]: leicht, moderat, kraeftig, Spitze.
  */
 @Composable
 internal fun Pulsband(
-    punkte: List<Pair<Long, Int>>,
+    bins: List<Pulsbin>,
     von: Long,
     bis: Long,
     zonen: List<Int>,
@@ -199,8 +204,14 @@ internal fun Pulsband(
     stundeText: (ZonedDateTime) -> String = stundenText(),
     beschreibung: String? = null,
 ) {
-    val bins = Gesundheitsrechnung.fuenfMinuten(punkte)
     if (bins.isEmpty() || zonen.size != 3 || farben.size != 4) return
+    // Saeulen und geglaettete Stuecke einmal je Bins, nicht in jedem Zeichnen:
+    // Sekunde der Mitte, hoechster und tiefster Wert je halbe Stunde.
+    val saeulen = remember(bins) {
+        bins.groupBy { it.sekunde / 1800 }.values.map { l -> Triple(l.first().sekunde / 1800 * 1800 + 900, l.maxOf { it.hoechster }, l.minOf { it.tiefster }) }
+    }
+    // Ein einzelner Bin bleibt roh (ein Punkt), laengere Stuecke werden leicht geglaettet.
+    val stuecke = remember(bins) { Gesundheitsrechnung.stuecke(bins).map { if (it.size == 1) it else glaetten(it, 1) } }
     val messer = rememberTextMeasurer()
     val stil = achsStil()
     // Durchscheinend, nicht deckend (aufKarte): die Saeulen liegen ueber den
@@ -234,10 +245,10 @@ internal fun Pulsband(
         zonen.forEachIndexed { i, w -> grenze(w, farben[i + 1]) }
 
         // Die Spanne je halbe Stunde als Saeule hinter der Linie.
-        bins.groupBy { it.sekunde / 1800 }.forEach { (_, l) ->
-            val mitte = x(l.first().sekunde / 1800 * 1800 + 900)
-            val oben = y(l.maxOf { it.hoechster })
-            val unten = y(l.minOf { it.tiefster })
+        saeulen.forEach { (sekunde, hoechster, tiefster) ->
+            val mitte = x(sekunde)
+            val oben = y(hoechster)
+            val unten = y(tiefster)
             val breite = 5.dp.toPx()
             drawRoundRect(saeule, Offset(mitte - breite / 2, oben), Size(breite, (unten - oben).coerceAtLeast(breite)), CornerRadius(breite / 2))
         }
@@ -246,13 +257,12 @@ internal fun Pulsband(
         // so wechselt die Farbe genau an der Grenze, mitten im Strich.
         val streifen = listOf(boden + 20f) + zonen.map { y(it) } + listOf(-20f)
         val dicke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        Gesundheitsrechnung.stuecke(bins).forEach { roh ->
-            if (roh.size == 1) {
-                val z = Gesundheitsrechnung.pulsZone(roh[0].median, zonen)
-                drawCircle(farben[z], 2.5.dp.toPx(), Offset(x(roh[0].sekunde), y(roh[0].median)))
+        stuecke.forEach { st ->
+            if (st.size == 1) {
+                val z = Gesundheitsrechnung.pulsZone(st[0].median, zonen)
+                drawCircle(farben[z], 2.5.dp.toPx(), Offset(x(st[0].sekunde), y(st[0].median)))
                 return@forEach
             }
-            val st = glaetten(roh, 1)
             val p = st.map { Offset(x(it.sekunde), y(it.median)) }
             val linie = Path().apply {
                 moveTo(p.first().x, p.first().y)

@@ -162,6 +162,19 @@ data class LatestSpo2(
     val timestampEpochSec: Long,
 )
 
+/**
+ * Boulder: Minutenpuls als zwei gleich lange Reihen, nur Minuten mit Puls,
+ * aelteste zuerst. 12 Byte je Minute statt einer HealthDataEntity mit zwoelf
+ * Feldern und einem Pair mit geboxtem Long - bei 14 Tagen bis zu 20'160 Minuten.
+ */
+class Pulsreihe(val zeiten: LongArray, val werte: IntArray) {
+    val size: Int get() = zeiten.size
+
+    companion object {
+        val LEER = Pulsreihe(LongArray(0), IntArray(0))
+    }
+}
+
 interface HealthDataApi {
     suspend fun getLatestTimestamp(): Long?
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
@@ -169,6 +182,16 @@ interface HealthDataApi {
 
     /** Returns minute-level health data for the given epoch-second range. */
     suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    /**
+     * Boulder: nur der Puls der Minuten in [start, end) mit Puls, aelteste
+     * zuerst. Der Rumpf hier gilt fuer Ersatz-Implementierungen ohne eigene
+     * Abfrage; [io.rebble.libpebblecommon.health.Health] liest nur die zwei Spalten.
+     */
+    suspend fun getPulsMinuten(start: Long, end: Long): Pulsreihe {
+        val zeilen = getHealthDataForRange(start, end).filter { it.heartRate > 0 }
+        return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
+    }
 
     /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
     suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>

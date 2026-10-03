@@ -32,8 +32,6 @@ import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
-import io.rebble.libpebblecommon.connection.HealthDataApi
-import org.koin.compose.koinInject
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.roundToInt
@@ -49,10 +47,9 @@ private const val SPO2_WARNUNG = 90
  */
 @Composable
 internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
-    val context = LocalContext.current
-    val api = koinInject<HealthDataApi>()
-    // Derselbe Lader wie auf Health: von dort kommend steht die Seite gleich da.
-    val s = rememberStand(Gesundheitsdaten.zuletzt, rememberUhrschub()) { Gesundheitsdaten.lies(context, api) }
+    // Derselbe Lader wie auf Health: von dort kommend steht die Seite gleich da und liest nicht noch einmal.
+    val lies = rememberGesundheitslader()
+    val s = rememberStand(Gesundheitsdaten.zuletzt, rememberUhrschub()) { lies() }
     if (s == null) {
         Ladekreis()
         return
@@ -86,7 +83,9 @@ private fun PulsKarte(s: GesundheitsStand) {
     val zonenFarben = Farben.pulszonen.map { it.ton() }
     // Wie bei Google Health: oben die Spanne des Tages, dann wo der hoechste Wert lag -
     // aus der Reihe, die das Pulsband zeichnet, damit Satz und Kurve dasselbe zeigen.
-    val (tiefster, hoechster) = Gesundheitsrechnung.pulsSpanne(s.puls) ?: (letzter.second to letzter.second)
+    // Die Bins einmal: Spanne, Spitze und Band bildeten sie sonst je fuer sich (3x groupBy ueber bis zu 1440 Minuten).
+    val bins = remember(s.puls) { Gesundheitsrechnung.fuenfMinuten(s.puls) }
+    val (tiefster, hoechster) = Gesundheitsrechnung.spanneDerBins(bins) ?: (letzter.second to letzter.second)
     val spanne = Formate.zahl(tiefster.toLong()) + "–" + Formate.zahl(hoechster.toLong())
     val tag = tagespuls(s)
     Kasten {
@@ -98,7 +97,7 @@ private fun PulsKarte(s: GesundheitsStand) {
                 if (s.pulsZonen.size == 3) {
                     val zone = zonenNamen[Gesundheitsrechnung.pulsZone(hoechster, s.pulsZonen)]
                     // Ohne die Zahl: sie steht schon gross oben. Mit Tag, denn im 24-Stunden-Fenster kann die Spitze von gestern sein.
-                    val wann = Gesundheitsrechnung.pulsSpitze(s.puls)?.let { Formate.zeitpunkt(context, Instant.ofEpochSecond(it.first), klein = true) }
+                    val wann = Gesundheitsrechnung.spitzeDerBins(bins)?.let { Formate.zeitpunkt(context, Instant.ofEpochSecond(it.first), klein = true) }
                     Fliesstext(stringResource(R.string.ks_h_puls_hoch, zone.lowercase()) + (wann?.let { " · $it" } ?: ""))
                 }
                 // "now" nur, solange der Wert frisch ist - eine Stunde alter Puls ist nicht der jetzige.
@@ -111,7 +110,7 @@ private fun PulsKarte(s: GesundheitsStand) {
             }
             val nacht = s.nacht?.let { it.einschlafen.epochSecond to it.aufwachen.epochSecond }
             Pulsband(
-                s.puls, jetzt - 24 * 3600, jetzt, s.pulsZonen, zonenFarben, nacht = nacht, hoehe = 200.dp,
+                bins, jetzt - 24 * 3600, jetzt, s.pulsZonen, zonenFarben, nacht = nacht, hoehe = 200.dp,
                 beschreibung = stringResource(R.string.ks_n_puls) + ", " + stringResource(R.string.ks_h_24h).lowercase() + ", " + Formate.Angabe(spanne, "bpm").text,
             )
             Punktlegende(zonenNamen.zip(zonenFarben).map { (name, farbe) -> Legendeneintrag(name, farbe) })

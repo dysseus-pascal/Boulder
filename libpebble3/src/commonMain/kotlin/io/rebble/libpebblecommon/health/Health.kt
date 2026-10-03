@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.HealthApi
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.connection.LatestSpo2
+import io.rebble.libpebblecommon.connection.Pulsreihe
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.NachtDao
@@ -207,6 +208,12 @@ class Health(
 
     override suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity> =
         healthDao.getHealthDataForRange(start, end)
+
+    // Boulder: zwei Spalten statt zwoelf, gleich in Reihen - siehe Pulsreihe.
+    override suspend fun getPulsMinuten(start: Long, end: Long): Pulsreihe {
+        val zeilen = healthDao.getPulsMinuten(start, end)
+        return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
+    }
 
     override suspend fun getDailyAggregates(start: Long, end: Long) =
         healthDao.getDailyMovementAggregates(start, end)

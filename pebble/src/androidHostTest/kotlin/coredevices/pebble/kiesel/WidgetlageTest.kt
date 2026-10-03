@@ -1,11 +1,19 @@
 package coredevices.pebble.kiesel
 
 import coredevices.pebble.R
+import coredevices.pebble.health.Einzellauf
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Was das Widget gross zeigt: Vorrang der Lagen, ihre Uhrzeiten, die
@@ -188,5 +196,130 @@ class WidgetlageTest {
         assertEquals(Widgetlage.Art.ABEND, l.art)
         assertEquals("ks_wl_schrittziel_erreicht · ks_wl_glaeser_fehlen(2)", l.satz)
         assertEquals("ks_wl_tag_eingetragen", lage(blick(um(22), schritte = null)).satz)
+    }
+
+    // --- Der Takt ohne Wecken: wann das Widget ohne neue Daten wieder zeichnet ---
+
+    /** Die naechste Wende ohne die halbe Stunde - so zeigt sich, welche Uhrzeit sie setzt. */
+    private fun wende(b: Widgetlage.Blick, wunschBis: LocalDateTime? = null) = Widgetlage.naechsteWende(b, wunschBis, java.time.Duration.ofDays(2))
+
+    @Test
+    fun spaetestens_nach_einer_halben_stunde() {
+        // Ohne Uhr kommt kein Schub: dann zeichnet der Takt so oft wie frueher Androids updatePeriodMillis.
+        assertEquals(um(14, 40), Widgetlage.naechsteWende(blick(um(14, 10)), null))
+        assertEquals(java.time.Duration.ofMinutes(30), Widgetlage.TAKT)
+    }
+
+    @Test
+    fun wende_an_den_festen_uhrzeiten_der_lage() {
+        assertEquals(um(9), wende(blick(um(7))))          // Beginn der Wassermahnung
+        assertEquals(um(11), wende(blick(um(9, 30))))     // Praeparate ohne Planzeit
+        assertEquals(um(16), wende(blick(um(12))))        // Schrittziel zaehlt als Bilanz
+        assertEquals(um(20), wende(blick(um(19, 59))))    // Abend
+        assertEquals(um(22), wende(blick(um(21))))        // Ende der Wassermahnung
+        assertEquals(tag.plusDays(1).atStartOfDay(), wende(blick(um(23, 50)))) // Mitternacht: neuer Tag, neue Schritte
+    }
+
+    @Test
+    fun wende_am_ende_von_training_morgen_und_wunsch() {
+        assertEquals(um(12), wende(blick(um(11, 30), trainingEnde = um(10))))
+        assertEquals(um(10, 15), wende(blick(um(9, 30), um(7, 15), 450.0)))
+        // Ein Ende in der Zukunft gilt ab dann.
+        assertEquals(um(13, 30), wende(blick(um(13, 20), trainingEnde = um(13, 30))))
+        // Der Kachelwunsch endet nach einer Stunde.
+        assertEquals(um(15, 5), wende(blick(um(14, 5), wunsch = Widgetlage.Art.MORGEN), um(15, 5)))
+    }
+
+    @Test
+    fun wende_an_der_planzeit_eines_praeparats() {
+        val abends = SupCycle.Eintrag("D3", false, LocalTime.of(18, 30))
+        assertEquals(um(18, 30), wende(blick(um(16, 1), praeparate = listOf(abends))))
+        // Ist die Zeit vorbei, ist sie keine Wende mehr.
+        assertEquals(um(20), wende(blick(um(18, 30), praeparate = listOf(abends))))
+    }
+
+    @Test
+    fun zwischen_zwei_wenden_bleibt_die_lage() {
+        // Ueber einen ganzen Tag: wechselt die Lage von selbst, liegt eine Wende davor - sonst verpasste der Takt sie.
+        val zink = SupCycle.Eintrag("Zinc", false, LocalTime.of(12, 10))
+        fun b(j: LocalDateTime) = blick(
+            j, um(6, 40), 430.0, trainingEnde = um(17, 20), schritte = 10_500.0, wasserMl = 1500.0, wasserZiel = 2000.0, praeparate = listOf(zink),
+        )
+        var j = um(0, 5)
+        var wenden = 0
+        while (j.isBefore(tag.plusDays(1).atStartOfDay())) {
+            val naechste = wende(b(j))
+            var m = j.plusMinutes(1)
+            while (m.isBefore(naechste)) {
+                assertEquals(art(b(j)), art(b(m)), "zwischen $j und $naechste, um $m")
+                m = m.plusMinutes(1)
+            }
+            j = naechste
+            wenden++
+        }
+        // Wenige Wenden am Tag statt 48 Weckungen.
+        assertTrue(wenden in 5..15, "$wenden Wenden")
+    }
+
+    // --- Das Netz vor dem Zeichnen: der Takt steht, auch wenn der Durchgang stirbt ---
+
+    private val jetzt: Instant = Instant.parse("2026-10-02T12:10:00Z")
+    private val netz: Instant = jetzt.plus(Widgetlage.TAKT)
+
+    @Test
+    fun erst_das_netz_dann_zeichnen_dann_die_wende() = runBlocking {
+        val folge = mutableListOf<String>()
+        val wende = jetzt.plusSeconds(20 * 60)
+        val ausgang = Widgetlage.mitTakt(jetzt, { folge += "plane $it" }) {
+            folge += "zeichne"
+            Einzellauf.Ausgang.GEMACHT to wende
+        }
+        assertEquals(Einzellauf.Ausgang.GEMACHT, ausgang)
+        // Setzt Android den Alarm mit derselben Absicht neu, gilt der letzte: die Wende.
+        assertEquals(listOf("plane $netz", "zeichne", "plane $wende"), folge)
+    }
+
+    @Test
+    fun stirbt_der_durchgang_bleibt_das_netz() = runBlocking {
+        // Der Prozess stirbt beim Lesen (LMK, Frist des Broadcasts): hier bricht der Durchgang ab.
+        val geplant = mutableListOf<Instant>()
+        val abbruch = runCatching {
+            Widgetlage.mitTakt(jetzt, { geplant += it }) { throw CancellationException("Prozess weg") }
+        }
+        assertTrue(abbruch.isFailure)
+        assertEquals(listOf(netz), geplant)
+        // Ein Fehler im Zeichnen (keine Wende): ebenso nur das Netz, nicht nichts.
+        geplant.clear()
+        Widgetlage.mitTakt(jetzt, { geplant += it }) { Einzellauf.Ausgang.GEMACHT to null }
+        assertEquals(listOf(netz), geplant)
+    }
+
+    @Test
+    fun uebergeben_die_wende_des_laufenden_kommt_nach_dem_netz() = runBlocking {
+        // Der Alarm, wie Android ihn haelt: was zuletzt geplant wurde, gilt.
+        var alarm: Instant? = null
+        val lauf = Einzellauf(hoechstens = 2)
+        val tor = CompletableDeferred<Unit>()
+        val wende = jetzt.plusSeconds(600)
+        var gezeichnet = 0
+        suspend fun durchgang() = Widgetlage.mitTakt(jetzt, { alarm = it }) {
+            var w: Instant? = null
+            val a = lauf.lauf {
+                gezeichnet++
+                if (gezeichnet == 1) tor.await()
+                w = wende
+            }
+            a to w
+        }
+        val erster = async { durchgang() }
+        while (gezeichnet == 0) yield()
+        // Ein Schub waehrend des Lesens: sein Netz ersetzt den Alarm, zeichnen tut der laufende ...
+        assertEquals(Einzellauf.Ausgang.UEBERGEBEN, durchgang())
+        assertEquals(netz, alarm)
+        tor.complete(Unit)
+        assertEquals(Einzellauf.Ausgang.GEMACHT, erster.await())
+        // ... der einmal nachzeichnet und danach die Wende setzt - das Netz des Schubs bleibt nicht stehen.
+        assertEquals(2, gezeichnet)
+        assertEquals(wende, alarm)
     }
 }

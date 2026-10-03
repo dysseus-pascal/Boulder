@@ -201,4 +201,39 @@ class FormateTest {
         assertEquals("Sep", f.monatKurz(java.time.Month.SEPTEMBER, us))
         assertEquals("Wed, Sep 30", f.datumKurz(LocalDate.of(2026, 9, 30), "EEE, MMM d", us))
     }
+
+    @Test
+    fun gemerkteFormatiererSchreibenWieFrischGebaute() {
+        // Je Muster und Sprache einmal gebaut: derselbe Text wie mit einem neuen Formatierer, auch beim Wechsel.
+        val muster = listOf("HH:mm", "h:mm a", "h:mm a", "H:mm")
+        val sprachen = listOf(us, de, Locale.FRANCE, Locale.forLanguageTag("hi-IN"), Locale.forLanguageTag("ar-EG"))
+        for (m in muster) for (l in sprachen) for (minute in 0 until 1440 step 37) {
+            val t = LocalTime.of(minute / 60, minute % 60)
+            val neu = java.text.SimpleDateFormat(m, l).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(t.toSecondOfDay() * 1000L))
+            assertEquals(neu, f.uhrzeit(t, m, l), "$m $l $t")
+            assertEquals(t.format(java.time.format.DateTimeFormatter.ofPattern("H", l)), f.stunde(t, true, l))
+            assertEquals(t.format(java.time.format.DateTimeFormatter.ofPattern("h a", l)), f.stunde(t, false, l))
+        }
+        val tag = LocalDate.of(2025, 12, 31)
+        for (l in sprachen) {
+            assertEquals(tag.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", l)), f.datumKurz(tag, "d MMM", l))
+            assertEquals(tag.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, y", l)), f.datumKurz(tag, "MMM d", l, LocalDate.of(2026, 1, 1), "MMM d, y"))
+        }
+    }
+
+    @Test
+    fun uhrzeitAusVielenThreadsZugleich() {
+        // SimpleDateFormat rechnet in einem eigenen Kalender: geteilt zwischen Threads vertauschte es Zeiten.
+        val fehler = java.util.concurrent.atomic.AtomicInteger()
+        val faeden = (0 until 8).map { n ->
+            Thread {
+                repeat(5_000) { i ->
+                    val t = LocalTime.of((n * 3 + i) % 24, i % 60)
+                    if (f.uhrzeit(t, "HH:mm", de) != String.format("%02d:%02d", t.hour, t.minute)) fehler.incrementAndGet()
+                }
+            }.also { it.start() }
+        }
+        faeden.forEach { it.join() }
+        assertEquals(0, fehler.get())
+    }
 }

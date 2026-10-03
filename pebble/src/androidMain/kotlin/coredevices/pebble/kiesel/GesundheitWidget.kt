@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -16,12 +17,13 @@ import io.rebble.libpebblecommon.connection.HealthDataApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Das Gesundheits-Widget - wie in Kiesel-Helper: eine Buehne mit dem, was
@@ -35,14 +37,22 @@ class GesundheitWidget : AppWidgetProvider() {
         val fertig = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                // Boulder: jedes Zeichnen liest Datenbank und Akte ganz. Kommen
-                // Anstoesse dicht nacheinander, zeichnet der laufende Durchgang
-                // einmal nach, statt dass mehrere parallel dasselbe lesen.
-                val ausgang = zeichner.lauf {
-                    val stand = Gesundheitsdaten.lies(context, KoinPlatform.getKoin().get<HealthDataApi>())
-                    val sicht = zeichne(context, stand, blick(context, stand))
-                    val alle = manager.getAppWidgetIds(ComponentName(context, GesundheitWidget::class.java)) ?: intArrayOf()
-                    (ids.toSet() + alle.toSet()).forEach { manager.updateAppWidget(it, sicht) }
+                // Erst das Netz in 30 min, dann lesen: stirbt der Prozess dabei, steht der Takt trotzdem.
+                val ausgang = Widgetlage.mitTakt(Instant.now(), { plane(context, it) }) {
+                    var wende: Instant? = null
+                    // Boulder: Kommen Anstoesse dicht nacheinander, zeichnet der laufende
+                    // Durchgang einmal nach, statt dass mehrere parallel dasselbe lesen.
+                    val ausgang = zeichner.lauf {
+                        // Nur was das Widget zeigt: vorher las jedes Zeichnen den ganzen
+                        // Stand der Seite samt 14 Tagen Minutenpuls (~100-150 Mal am Tag).
+                        val stand = Gesundheitsdaten.liesFuerWidget(context, KoinPlatform.getKoin().get<HealthDataApi>())
+                        val (blick, wunschBis) = blick(context, stand)
+                        val sicht = zeichne(context, stand, blick)
+                        val alle = manager.getAppWidgetIds(ComponentName(context, GesundheitWidget::class.java)) ?: intArrayOf()
+                        (ids.toSet() + alle.toSet()).forEach { manager.updateAppWidget(it, sicht) }
+                        wende = Widgetlage.naechsteWende(blick, wunschBis).atZone(ZoneId.systemDefault()).toInstant()
+                    }
+                    ausgang to wende
                 }
                 // Die Nachlaeufe sind begrenzt, damit dieses goAsync nicht ueber seine
                 // Frist waechst; was offen blieb, bekommt einen eigenen Broadcast.
@@ -55,16 +65,37 @@ class GesundheitWidget : AppWidgetProvider() {
         }
     }
 
+    // Das letzte Widget ist weg: kein Takt mehr, der nichts zu zeichnen hat.
+    override fun onDisabled(context: Context) {
+        taktAbsicht(context, anlegen = false)?.let { pi ->
+            context.getSystemService(AlarmManager::class.java)?.cancel(pi)
+            pi.cancel()
+        }
+    }
+
     companion object {
         private val zeichner = Einzellauf(hoechstens = 2, beiFehler = { Log.w("Widget", "Zeichnen: " + it.message) })
         private const val DATEI = "kiesel-widget"
         private const val WUNSCH = "wunsch"
         private const val WUNSCH_BIS = "wunsch_bis"
-        private const val GELESEN = "gelesen"
         private const val EXTRA_LAGE = "lage"
+
+        /**
+         * Wie weit Android den Takt schieben darf. Kuerzer als 10 min dehnt
+         * Android ein ungenaues Fenster ohnehin auf 10 min (ab Android 12);
+         * frueher kam der Systemtakt bis zu 30 min nach einer Wende.
+         */
+        private const val FENSTER_MS = 10 * 60 * 1000L
 
         /** Neu zeichnen - nach neuen Daten von der Uhr und nach eigenen Eintraegen. */
         fun stosseAn(context: Context) {
+            // Neue Daten oder ein eigener Eintrag: was die Seiten eben gelesen haben, ist nicht mehr frisch.
+            Gesundheitsdaten.veraltet()
+            zeichneNeu(context)
+        }
+
+        /** Der Broadcast an alle platzierten Widgets; ohne Widget keiner. */
+        private fun zeichneNeu(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, GesundheitWidget::class.java))
             if (ids == null || ids.isEmpty()) return
@@ -74,60 +105,90 @@ class GesundheitWidget : AppWidgetProvider() {
             })
         }
 
-        private suspend fun blick(context: Context, s: GesundheitsStand): Widgetlage.Blick {
+        private val taktGesichert = AtomicBoolean(false)
+
+        /**
+         * Einmal je Prozess beim Oeffnen der App (PebbleAndroidDelegate):
+         * zeichnen und damit den Takt neu planen. Nach "Beenden erzwingen"
+         * loescht Android Alarm und Absicht; ohne Uhr kaeme dann kein Anstoss
+         * mehr. OHNE ZU PRUEFEN, OB DER TAKT NOCH STEHT: eine bestehende
+         * Absicht sagt nichts ueber einen anstehenden Alarm - sie ueberlebt den
+         * ausgeloesten Alarm und den Prozesstod. Das kostet ein Zeichnen je
+         * neuem Prozess der App, also ein paar am Tag (der Dienst haelt ihn wach).
+         */
+        suspend fun sichereTakt(context: Context) {
+            if (!taktGesichert.compareAndSet(false, true)) return
+            // Zwei Anfragen an Android - nicht auf dem Hauptfaden. Keine neuen Daten: der Stand der Seiten bleibt frisch.
+            withContext(Dispatchers.IO) { zeichneNeu(context) }
+        }
+
+        /**
+         * Der Takt fuer das naechste Zeichnen ohne neue Daten. RTC, NICHT
+         * RTC_WAKEUP: er weckt das Telefon nicht - schlaeft es, kommt er beim
+         * naechsten Aufwachen, und erst dann sieht man das Widget ja auch.
+         * Frueher weckte Androids updatePeriodMillis das Telefon 48-mal am Tag.
+         * Jedes Zeichnen plant neu; mit Uhr schiebt so jeder Schub (alle 15 min)
+         * den Takt weiter, und es bleibt bei den Wenden der Lage.
+         */
+        private fun plane(context: Context, um: Instant) {
+            // Ein Fehler hier darf das Zeichnen nicht verhindern - es plant danach noch einmal.
+            try {
+                val manager = AppWidgetManager.getInstance(context) ?: return
+                val ids = manager.getAppWidgetIds(ComponentName(context, GesundheitWidget::class.java))
+                if (ids == null || ids.isEmpty()) return
+                val pi = taktAbsicht(context, anlegen = true, ids) ?: return
+                context.getSystemService(AlarmManager::class.java)?.setWindow(AlarmManager.RTC, um.toEpochMilli(), FENSTER_MS, pi)
+            } catch (e: RuntimeException) {
+                Log.w("Widget", "Takt: " + e.message)
+            }
+        }
+
+        /** Die Absicht des Takts; ohne [anlegen] nur, wenn sie schon besteht (sonst null). */
+        private fun taktAbsicht(context: Context, anlegen: Boolean, ids: IntArray? = null): PendingIntent? =
+            PendingIntent.getBroadcast(
+                context, 2,
+                Intent(context, GesundheitWidget::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    ids?.let { putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, it) }
+                },
+                PendingIntent.FLAG_IMMUTABLE or if (anlegen) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE,
+            )
+
+        /** Der Blick fuer die Lage, und bis wann ein Kachelwunsch gilt (fuer den Takt). */
+        private suspend fun blick(context: Context, s: GesundheitsStand): Pair<Widgetlage.Blick, LocalDateTime?> {
             val zone = ZoneId.systemDefault()
-            val heute = LocalDate.now()
-            val n = s.nacht
             // DASSELBE TRAINING WIE OBEN AUF DER SPORTSEITE, mit demselben Puls
             // (entstoert, nur in der Sitzung, ohne Pausen) und demselben Namen.
             // Frueher war es die Sitzung, die zuletzt endete - auch die einer
             // fremden App neben der eigenen -, mit rohem Puls aller Quellen.
-            var training: TrainingEintrag? = null
-            var puls: Double? = null
+            var training: Widgetlage.Training? = null
             try {
                 training = TrainingsDaten.juengstes(context, Duration.ofDays(1))
                     ?.takeIf { Duration.between(it.sitzung.endTime, Instant.now()).toHours() < 3 }
-                puls = training?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }?.toDouble()
+                    ?.let { t ->
+                        Widgetlage.Training(
+                            ende = t.sitzung.endTime.atZone(zone).toLocalDateTime(),
+                            name = TrainingsDaten.name(context, t.sitzung),
+                            minuten = t.minuten,
+                            puls = TrainingsDaten.mittelpuls(context, t.sitzung)?.toDouble(),
+                            km = t.meter.takeIf { it > 0 }?.div(1000),
+                            beginn = t.sitzung.startTime.epochSecond,
+                            metrisch = t.sport.immerMetrisch,
+                        )
+                    }
             } catch (e: Exception) {
                 Log.w("Widget", "Training: " + e.message)
             }
             val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
-            val wunsch = if (p.getLong(WUNSCH_BIS, 0) > System.currentTimeMillis()) {
+            val bis = p.getLong(WUNSCH_BIS, 0)
+            val wunsch = if (bis > System.currentTimeMillis()) {
                 p.getString(WUNSCH, null)?.let { runCatching { Widgetlage.Art.valueOf(it) }.getOrNull() }
             } else null
-            val woche = s.wocheSchlaf.filter { it.first != heute && it.second > 0 }.map { it.second.toDouble() }
             val platz = context.getString(R.string.ks_s_platz_n)
-            return Widgetlage.Blick(
-                jetzt = LocalDateTime.now(zone),
-                schlafEnde = n?.aufwachen?.atZone(zone)?.toLocalDateTime(),
-                schlafMin = n?.schlafMinuten?.toDouble(),
-                schlafZielMin = Gesundheitsziele.SCHLAF_MIN.toDouble(),
-                schlafWocheMin = Statistik.mittel(woche),
-                erholsamAnteil = n?.let { Gesundheitsrechnung.erholsamAnteil(it.phasen) },
-                ruhepuls = n?.ruhepuls?.toDouble(),
-                hrv = n?.hrv?.toDouble(),
-                trainingEnde = training?.sitzung?.endTime?.atZone(zone)?.toLocalDateTime(),
-                trainingName = training?.let { TrainingsDaten.name(context, it.sitzung) },
-                trainingMin = training?.minuten,
-                trainingPuls = puls,
-                trainingKm = training?.meter?.takeIf { it > 0 }?.div(1000),
-                trainingBeginn = training?.sitzung?.startTime?.epochSecond,
-                schritte = s.schritte.toDouble(),
-                schritteZiel = Gesundheitsziele.SCHRITTE.toDouble(),
-                aktivMin = s.aktivMinuten.toDouble(),
-                aktivZiel = Gesundheitsziele.AKTIV_MIN.toDouble(),
-                // Ohne Drinktervall keine Wasserkachel und keine Mahnung (UhrApps).
-                wasserMl = s.wasserMl.toDouble().takeIf { s.mitDrinktervall },
-                wasserZiel = s.wasserZiel?.ml?.toDouble()?.takeIf { s.mitDrinktervall },
-                glasMl = (s.wasserZiel?.glasMl ?: Gesundheitsziele.GLAS_ML).toDouble(),
-                praeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }.orEmpty(),
-                koffeinMg = Gesundheitsrechnung.koffeinHeute(s.koffein, heute, zone).takeIf { s.mitDrinktervall },
-                wunsch = wunsch,
-                // Gravels "Imperial Units" auch hier: das Widget zeigte sonst km neben einer App in mi.
-                imperial = einheitenImperialHolen(),
-                // Ein Schwimmen in Metern wie in Sport und im Zeitstrahl - sonst "0.9 mi" hier, "1.5 km" dort.
-                trainingMetrisch = training?.sport?.immerMetrisch == true,
-            )
+            // Gravels "Imperial Units" auch hier: das Widget zeigte sonst km neben einer App in mi.
+            val blick = Widgetlage.blick(s, LocalDateTime.now(zone), zone, training, wunsch, einheitenImperialHolen()) { String.format(platz, it) }
+            val wunschBis = if (wunsch != null) Instant.ofEpochMilli(bis).atZone(zone).toLocalDateTime() else null
+            return blick to wunschBis
         }
 
         private fun zeichne(context: Context, s: GesundheitsStand, blick: Widgetlage.Blick): RemoteViews {
@@ -135,7 +196,7 @@ class GesundheitWidget : AppWidgetProvider() {
             context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { start ->
                 v.setOnClickPendingIntent(R.id.w_wurzel, PendingIntent.getActivity(context, 0, start, PendingIntent.FLAG_IMMUTABLE))
             }
-            // Android laesst ein Widget nur alle halbe Stunde von selbst nachsehen; der Knopf holt es sofort.
+            // Ohne neue Daten zeichnet das Widget erst zur naechsten Wende oder nach einer halben Stunde; der Knopf holt es sofort.
             v.setOnClickPendingIntent(
                 R.id.w_auffrischen,
                 PendingIntent.getBroadcast(
@@ -147,7 +208,6 @@ class GesundheitWidget : AppWidgetProvider() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit().putLong(GELESEN, System.currentTimeMillis()).apply()
             v.setTextViewText(R.id.w_stand, context.getString(R.string.ks_w_gerade_eben))
 
             val texte = object : Texte {

@@ -1,6 +1,10 @@
 package coredevices.pebble.kiesel
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.os.Bundle
+import android.os.SystemClock
 import coredevices.pebble.R
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.HydrationRecord
@@ -8,16 +12,24 @@ import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.time.TimeRangeFilter
 import io.rebble.libpebblecommon.connection.HealthDataApi
+import io.rebble.libpebblecommon.connection.Pulsreihe
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.uuid.Uuid
 
 /** Eine Nacht der Firmware, in Zeitpunkten statt Minuten ab dem Fensterbeginn. */
 internal data class Nacht(
@@ -125,6 +137,164 @@ internal data class GesundheitsStand(
     val akkuNaechte: List<NachtEntity> = emptyList(),
 )
 
+/** Ein Wassereintrag der Akte, roh: die Menge ungerundet, die Summe des Tages rundet erst am Ende. */
+internal data class Wasserroh(val zeit: Instant, val id: String, val eigen: Boolean, val ml: Double)
+
+/** Ein Ernaehrungseintrag der Akte, roh: was die Einordnung, der Name und das Koffein brauchen. */
+internal data class Nahrungroh(
+    val zeit: Instant, val id: String, val eigen: Boolean, val kennung: String?,
+    val koffeinMg: Double?, val kcal: Double?, val mahlzeit: Boolean, val name: String?,
+)
+
+/**
+ * Woher [Gesundheitsdaten] liest: Boulders Datenbank, die Akte und was die
+ * App sich merkt. EINE SCHNITTSTELLE FUER SEITE UND WIDGET - beide laufen
+ * durch dieselbe Rechnung, und ein Test kann sie ohne Telefon vergleichen
+ * (GesundheitsdatenTest). Null bei der Akte heisst: keine Akte auf dem Telefon.
+ */
+internal interface Gesundheitsquelle {
+    suspend fun summe(von: Long, bis: Long): HealthAggregates?
+    suspend fun tageswerte(von: Long, bis: Long): List<DailyMovementAggregate>
+    suspend fun naechte(von: Long, bis: Long): List<NachtEntity>
+    suspend fun abschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
+    suspend fun puls(von: Long, bis: Long): Pulsreihe
+    suspend fun spo2(von: Long, bis: Long): List<Pair<Long, Int>>
+    suspend fun letzterZeitstempel(): Long?
+    suspend fun wasser(von: Instant, bis: Instant): List<Wasserroh>?
+    suspend fun nahrung(von: Instant, bis: Instant): List<Nahrungroh>?
+    suspend fun blutdruck(von: Instant, bis: Instant): List<Blutdruck>?
+    suspend fun apps(): Set<Uuid>?
+    suspend fun maxpuls(ruhe: Int): Int
+    fun wasserZiel(): Drinktervall.Ziel?
+    fun supplemente(): SupCycle.Stand?
+    /** Der Name eines Getraenks, das nur sein Koffein nennt. */
+    val koffeinName: String
+}
+
+/** Die Quelle auf dem Telefon: Boulders Datenbank ueber [api], dazu die Akte. */
+private class Telefonquelle(private val context: Context, private val api: HealthDataApi) : Gesundheitsquelle {
+    // Einmal je Lesen geholt, wie vorher: die Akte fragt sonst bei jedem Zugriff nach ihrem Stand.
+    private val klient by lazy { Akte(context).bereit() }
+    private fun eigen(paket: String) = paket == context.packageName
+
+    override suspend fun summe(von: Long, bis: Long) = api.getTotalHealthData(von, bis)
+    override suspend fun tageswerte(von: Long, bis: Long) = api.getDailyAggregates(von, bis)
+    override suspend fun naechte(von: Long, bis: Long) = api.getNaechte(von, bis)
+    override suspend fun abschnitte(beginnUtc: Long) = api.getNachtAbschnitte(beginnUtc)
+    override suspend fun puls(von: Long, bis: Long) = api.getPulsMinuten(von, bis)
+    override suspend fun spo2(von: Long, bis: Long) = api.getSpo2Readings(von, bis).map { it.timestamp to it.spo2Percent }
+    override suspend fun letzterZeitstempel() = api.getLatestTimestamp()
+
+    override suspend fun wasser(von: Instant, bis: Instant) =
+        klient?.lies(context, HydrationRecord::class, TimeRangeFilter.between(von, bis), Herkunft.ALLE_SONST_EIGENE)
+            ?.map { Wasserroh(it.startTime, it.metadata.id, eigen(it.metadata.dataOrigin.packageName), it.volume.inMilliliters) }
+
+    override suspend fun nahrung(von: Instant, bis: Instant) =
+        klient?.lies(context, NutritionRecord::class, TimeRangeFilter.between(von, bis), Herkunft.ALLE_SONST_EIGENE)?.map { r ->
+            Nahrungroh(
+                r.startTime, r.metadata.id, eigen(r.metadata.dataOrigin.packageName), r.metadata.clientRecordId,
+                r.caffeine?.inMilligrams, r.energy?.inKilocalories, r.mealType != MealType.MEAL_TYPE_UNKNOWN, r.name,
+            )
+        }
+
+    // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
+    // deren App ueber die Akte, deshalb auch fremde Eintraege.
+    override suspend fun blutdruck(von: Instant, bis: Instant) =
+        klient?.lies(context, BloodPressureRecord::class, TimeRangeFilter.between(von, bis), Herkunft.ALLE_SONST_EIGENE)
+            ?.map { Blutdruck(it.time, it.systolic.inMillimetersOfMercury.roundToInt(), it.diastolic.inMillimetersOfMercury.roundToInt()) }
+
+    override suspend fun apps() = UhrApps.installiert()
+    override suspend fun maxpuls(ruhe: Int) = Herzgrenzen.maxpuls(context, ruhe)
+    override fun wasserZiel() = Drinktervall.ziel(context)
+    override fun supplemente() = SupCycle.heute(context)
+    override val koffeinName: String get() = context.getString(R.string.ks_h_koffein_n)
+}
+
+/**
+ * Ein Lesen, das mehrere teilen - Seite, Herzseite und Widget lesen dasselbe.
+ *
+ * GETEILT: laeuft schon ein Lesen, das noch gilt, wartet ein zweiter Aufrufer
+ * darauf, statt dasselbe noch einmal zu lesen. FRISCH: ein Wert, juenger als
+ * das verlangte Alter und seither nicht [veraltet], kommt ganz ohne Lesen.
+ * [veraltet] zaehlt die Generation hoch: was davor begann, teilt niemand
+ * mehr, und kein frueherer Wert gilt mehr als frisch.
+ *
+ * DER ABBRUCH GEHT DURCH: steigen alle Wartenden aus (die Seite ist weg),
+ * endet das Lesen - wie vorher, als jeder fuer sich las. [gilt] prueft, ob
+ * ein gemerkter Wert noch taugt (etwa: vom selben Tag).
+ */
+internal class Ladestelle<T : Any>(
+    private val uhr: () -> Long,
+    private val bereich: CoroutineScope,
+    private val gilt: (T) -> Boolean = { true },
+) {
+    private class Lauf<T>(val generation: Long, val ergebnis: Deferred<T>) {
+        var wartende = 0
+    }
+
+    private class Merk<T>(val wert: T, val generation: Long, val um: Long)
+
+    private val schloss = Any()
+    private var generation = 0L
+    private var lauf: Lauf<T>? = null
+    @Volatile
+    private var merk: Merk<T>? = null
+
+    /** Der zuletzt gelesene Wert, gleich wie alt. */
+    val letzter: T? get() = merk?.wert
+
+    /** Neue Daten (ein Schub, ein eigener Eintrag) oder Zeit ausser Sicht: was vorher gelesen wurde, ist nicht mehr frisch. */
+    fun veraltet() {
+        synchronized(schloss) { generation++ }
+    }
+
+    /** Der gemerkte Wert, wenn er juenger als [maxAlterMs] ist und seither nichts veraltet ist. */
+    fun frisch(maxAlterMs: Long): T? {
+        val m = merk ?: return null
+        val gen = synchronized(schloss) { generation }
+        return m.wert.takeIf { m.generation == gen && uhr() - m.um < maxAlterMs && gilt(it) }
+    }
+
+    /** Ein laufendes Lesen, das noch gilt, abwarten - ohne selbst eines anzustossen. Null, wenn keines laeuft. */
+    suspend fun mitwarten(): T? {
+        val l = synchronized(schloss) { gueltigerLauf()?.also { it.wartende++ } } ?: return null
+        return warte(l)
+    }
+
+    suspend fun lies(maxAlterMs: Long, lade: suspend () -> T): T {
+        frisch(maxAlterMs)?.let { return it }
+        val l = synchronized(schloss) {
+            val l = gueltigerLauf() ?: run {
+                val gen = generation
+                // Das Alter zaehlt ab dem Beginn: was danach dazukam, kann fehlen.
+                val beginn = uhr()
+                Lauf(gen, bereich.async { lade().also { merke(it, gen, beginn) } }).also { lauf = it }
+            }
+            l.wartende++
+            l
+        }
+        return warte(l)
+    }
+
+    private fun gueltigerLauf(): Lauf<T>? = lauf?.takeIf { it.generation == generation && it.ergebnis.isActive }
+
+    private suspend fun warte(l: Lauf<T>): T = try {
+        l.ergebnis.await()
+    } finally {
+        synchronized(schloss) {
+            l.wartende--
+            if (l.wartende == 0 && l.ergebnis.isActive) l.ergebnis.cancel()
+        }
+    }
+
+    /** Ein spaet fertiges Lesen einer frueheren Generation ueberschreibt kein neueres. */
+    private fun merke(wert: T, gen: Long, um: Long) {
+        synchronized(schloss) {
+            if (merk.let { it == null || it.generation <= gen }) merk = Merk(wert, gen, um)
+        }
+    }
+}
+
 /**
  * Laedt, was die Gesundheitsseite zeigt.
  *
@@ -137,105 +307,192 @@ internal object Gesundheitsdaten {
     private const val TAG = "Gesundheit"
 
     /**
-     * Der zuletzt gelesene Stand - von der Seite, der Herzseite oder dem
-     * Widget -, solange der Prozess lebt. Die Seiten zeigen ihn bei der
-     * Rueckkehr gleich, statt erst einen Ladekreis. NUR VOM SELBEN TAG: nach
-     * Mitternacht gaebe er die Zahlen von gestern als die von heute aus.
+     * So lange gilt ein Stand beim Neuaufbau einer Seite als frisch: Health ->
+     * Heart -> Health las sonst dreimal in Sekunden dasselbe (je 100-350 ms).
+     * Ein Schub, ein eigener Eintrag oder das Verlassen der App machen ihn
+     * sofort alt ([veraltet]).
      */
-    val zuletzt: GesundheitsStand? get() = gemerkt?.takeIf { it.first == LocalDate.now() }?.second
+    const val FRISCH_MS = 30_000L
 
-    @Volatile
-    private var gemerkt: Pair<LocalDate, GesundheitsStand>? = null
+    private class Tagesstand(val tag: LocalDate, val stand: GesundheitsStand)
+
+    // Ein gemerkter Stand gilt nur am selben Tag: nach Mitternacht gaebe er die Zahlen von gestern als die von heute aus.
+    private val stelle = Ladestelle<Tagesstand>(
+        SystemClock::elapsedRealtime, CoroutineScope(SupervisorJob() + Dispatchers.IO), gilt = { it.tag == LocalDate.now() },
+    )
+
+    /**
+     * Der zuletzt gelesene Stand - von der Seite oder der Herzseite -, solange
+     * der Prozess lebt. Die Seiten zeigen ihn bei der Rueckkehr gleich, statt
+     * erst einen Ladekreis. NUR VOM SELBEN TAG, siehe [stelle]. Das Widget
+     * liest schlanker und legt seinen Stand hier nicht ab.
+     */
+    val zuletzt: GesundheitsStand? get() = stelle.letzter?.takeIf { it.tag == LocalDate.now() }?.stand
 
     /** Die zuletzt gelesene Nacht im Einzelnen, solange der Prozess lebt - wie [zuletzt]. */
     @Volatile
     var zuletztNacht: NachtDetail? = null
         private set
 
-    suspend fun lies(context: Context, api: HealthDataApi): GesundheitsStand = withContext(Dispatchers.IO) {
-        val zone = ZoneId.systemDefault()
-        val heute = LocalDate.now()
-        val jetzt = Instant.now()
+    /** Neue Daten von der Uhr oder ein eigener Eintrag: der gemerkte Stand ist nicht mehr frisch. */
+    fun veraltet() = stelle.veraltet()
+
+    private val beobachtet = AtomicBoolean(false)
+
+    /**
+     * WER DIE APP VERLAESST, KANN ANDERSWO EINTRAGEN - eine Waage, eine
+     * Wasser-App. Danach gilt kein gemerkter Stand mehr als frisch, auch wenn
+     * die Seite neu aufgebaut statt fortgesetzt wird. Einmal je Prozess.
+     */
+    fun beobachte(context: Context) {
+        val app = context.applicationContext as? Application ?: return
+        if (!beobachtet.compareAndSet(false, true)) return
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStopped(activity: Activity) {
+                veraltet()
+                Koerperdaten.veraltet()
+            }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+    }
+
+    /**
+     * Der Stand der Gesundheitsseite. [maxAlterMs] > 0: ein frischer Stand von
+     * eben darf es auch sein ([FRISCH_MS]). Liest schon jemand, wartet dieser
+     * Aufruf mit, statt dasselbe noch einmal zu lesen.
+     */
+    suspend fun lies(context: Context, api: HealthDataApi, maxAlterMs: Long = 0): GesundheitsStand {
+        beobachte(context)
+        // Das Lesen kann die Seite ueberleben (ein anderer wartet mit): ohne die Activity festzuhalten.
+        val app = context.applicationContext
+        return stelle.lies(maxAlterMs) {
+            val jetzt = Instant.now()
+            val zone = ZoneId.systemDefault()
+            Tagesstand(jetzt.atZone(zone).toLocalDate(), lade(Telefonquelle(app, api), voll = true, jetzt, zone))
+        }.stand
+    }
+
+    /**
+     * Was das Widget zeigt - OHNE DAS, WAS NUR DIE SEITEN ZEIGEN: 14 Tage
+     * Minutenpuls, Tagesherz, SpO2, Blutdruck, HRV-Band, Akkunaechte und die
+     * Schritte der Woche. Das Widget zeichnet ~100-150-mal am Tag; vorher las
+     * jedes Zeichnen alles. Liest die Seite gerade oder hat sie eben gelesen,
+     * nimmt es deren Stand - die Zahlen sind dieselben (GesundheitsdatenTest).
+     */
+    suspend fun liesFuerWidget(context: Context, api: HealthDataApi): GesundheitsStand {
+        stelle.frisch(FRISCH_MS)?.let { return it.stand }
+        stelle.mitwarten()?.let { return it.stand }
+        return withContext(Dispatchers.IO) { lade(Telefonquelle(context, api), voll = false, Instant.now(), ZoneId.systemDefault()) }
+    }
+
+    /**
+     * Das eine Lesen fuer Seite und Widget. [voll] = false laesst weg, was nur
+     * die Seiten zeigen (siehe [liesFuerWidget]). WAS BEIDE ZEIGEN, LAEUFT
+     * DURCH DIESELBEN ZEILEN - so koennen Seite und Widget nicht auseinanderlaufen.
+     */
+    internal suspend fun lade(q: Gesundheitsquelle, voll: Boolean, jetzt: Instant, zone: ZoneId): GesundheitsStand {
+        val heute = jetzt.atZone(zone).toLocalDate()
         fun anfang(tag: LocalDate) = tag.atStartOfDay(zone).toEpochSecond()
 
-        val summe = versuche(TAG, "Bewegung heute") { api.getTotalHealthData(anfang(heute), jetzt.epochSecond) }
+        val summe = versuche(TAG, "Bewegung heute") { q.summe(anfang(heute), jetzt.epochSecond) }
         val woche = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }
-        // Der heutige Tag steht nicht in den Tagesaggregaten - er kommt aus der Summe bis jetzt.
-        val tageswerte = versuche(TAG, "Bewegung der Woche") { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.orEmpty()
-            .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
 
         // ALLE NAECHTE IN EINER ABFRAGE: Vergleich, Tagesherz, HRV-Band und Akku
         // reichen verschieden weit zurueck. Gelesen wird einmal das weiteste
         // Fenster, und jeder nimmt sich seinen Teil - vorher waren es vier Abfragen.
         // Scheitert sie, fehlen alle diese Teile zugleich statt nur einer.
+        // Das Widget braucht nur den Vergleich (letzte Nacht, Schlaf der Woche): 9 statt 37 Tage.
         val vonVergleich = anfang(heute.minusDays(Fenster.VERGLEICHSNAECHTE + 2L))
         val vonTagesherz = anfang(heute.minusDays(Fenster.TAGESHERZ_TAGE))
         // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal Fenster.HRV_NAECHTE davor.
         val vonHrv = anfang(woche.first().minusDays(Fenster.HRV_NAECHTE + 1L))
         val vonAkku = jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond
         val alleNaechte = versuche(TAG, "Naechte") {
-            api.getNaechte(minOf(vonVergleich, vonTagesherz - 86_400, vonHrv, vonAkku), jetzt.epochSecond)
+            q.naechte(if (voll) minOf(vonVergleich, vonTagesherz - 86_400, vonHrv, vonAkku) else vonVergleich, jetzt.epochSecond)
         }.orEmpty()
         fun naechteAb(von: Long) = alleNaechte.filter { it.beginnUtc >= von }
 
         val naechte = Gesundheitsrechnung.jeTag(naechteAb(vonVergleich), zone)
         val (letzte, frueher) = Gesundheitsrechnung.naechteTeilen(naechte, heute, zone)
-        val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(it.beginnUtc) }.orEmpty()) }
+        val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, versuche(TAG, "Abschnitte der Nacht") { q.abschnitte(it.beginnUtc) }.orEmpty()) }
         val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
-        val vor24 = jetzt.epochSecond - 24 * 3600
-        // Der Minutenpuls einmal, so weit das Tagesherz zurueckblickt - die 24 Stunden der Kurve stecken darin.
-        val minutenpuls = versuche(TAG, "Puls") { api.getHealthDataForRange(minOf(vonTagesherz, vor24), jetzt.epochSecond) }.orEmpty()
-            .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
-        val puls = minutenpuls.filter { it.first >= vor24 }
-        // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
-        // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
-        val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
-        val spo2 = versuche(TAG, "SpO2") { api.getSpo2Readings(spo2Von, jetzt.epochSecond) }.orEmpty()
-            .map { it.timestamp to it.spo2Percent }
-
-        val klient = Akte(context).bereit()
         val vorEinemTag = jetzt.minus(Duration.ofHours(24))
         // Wasser nur von heute und den letzten 24 Stunden - weiter zurueck zeigt es keine Seite.
         val wasserVon = minOf(Instant.ofEpochSecond(anfang(heute)), vorEinemTag)
-        val wasser = versuche(TAG, "Wasser lesen") {
-            klient?.lies(context, HydrationRecord::class, TimeRangeFilter.between(wasserVon, jetzt), Herkunft.ALLE_SONST_EIGENE)
-        }.orEmpty()
-        val heuteWasser = wasser.filter { it.startTime.atZone(zone).toLocalDate() == heute }
-        val nahrung = versuche(TAG, "Ernaehrung lesen") {
-            klient?.lies(context, NutritionRecord::class, TimeRangeFilter.between(vorEinemTag, jetzt), Herkunft.ALLE_SONST_EIGENE)
-        }.orEmpty()
-        val koffein = nahrung.mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
+        val wasser = versuche(TAG, "Wasser lesen") { q.wasser(wasserVon, jetzt) }.orEmpty()
+        val heuteWasser = wasser.filter { it.zeit.atZone(zone).toLocalDate() == heute }
+        val nahrung = versuche(TAG, "Ernaehrung lesen") { q.nahrung(vorEinemTag, jetzt) }.orEmpty()
+        val koffein = nahrung.mapNotNull { r -> r.koffeinMg?.takeIf { it > 0 }?.let { r.zeit to it } }
         val alleEintraege = nahrung.mapNotNull { r ->
-            val eigen = r.metadata.dataOrigin.packageName == context.packageName
-            val mg = r.caffeine?.inMilligrams?.takeIf { it > 0 }
-            val mahlzeit = r.mealType != MealType.MEAL_TYPE_UNKNOWN
-            val art = Gesundheitsrechnung.einordnung(eigen, r.metadata.clientRecordId, mg, r.energy?.inKilocalories, mahlzeit) ?: return@mapNotNull null
-            val name = r.name?.ifBlank { null } ?: if (mg != null) context.getString(R.string.ks_h_koffein_n) else return@mapNotNull null
-            Tageseintrag(r.startTime, art == Eintragsart.PRAEPARAT, name, mg, r.metadata.id, eigen, r.metadata.clientRecordId)
+            val mg = r.koffeinMg?.takeIf { it > 0 }
+            val art = Gesundheitsrechnung.einordnung(r.eigen, r.kennung, mg, r.kcal, r.mahlzeit) ?: return@mapNotNull null
+            val name = r.name?.ifBlank { null } ?: if (mg != null) q.koffeinName else return@mapNotNull null
+            Tageseintrag(r.zeit, art == Eintragsart.PRAEPARAT, name, mg, r.id, r.eigen, r.kennung)
         }
         val eintraege = alleEintraege.filter { it.zeit.atZone(zone).toLocalDate() == heute }
-        val gesternWasser = wasser.filter { it.startTime.isAfter(vorEinemTag) && it.startTime.atZone(zone).toLocalDate() < heute }
+        val gesternWasser = wasser.filter { it.zeit.isAfter(vorEinemTag) && it.zeit.atZone(zone).toLocalDate() < heute }
+        val apps = q.apps()
 
-        // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
-        // deren App ueber die Akte, deshalb auch fremde Eintraege.
+        val gemeinsam = GesundheitsStand(
+            schritte = summe?.steps ?: 0,
+            aktivMinuten = summe?.activeMinutes ?: 0,
+            meter = (summe?.distanceCm ?: 0) / 100.0,
+            wocheSchritte = emptyList(),
+            nacht = nacht,
+            ruhepulsWoche = frueher.map { it.ruhepuls }.filter { it > 0 },
+            wocheSchlaf = Gesundheitsrechnung.reihe(woche, schlafJeTag, 0),
+            puls = emptyList(),
+            spo2 = emptyList(),
+            wasserMl = heuteWasser.sumOf { it.ml }.toInt(),
+            glaeser = heuteWasser.filter { it.eigen }.map { it.zeit }.sorted(),
+            wasserZiel = q.wasserZiel(),
+            supplemente = q.supplemente(),
+            koffein = koffein.sortedBy { it.first },
+            mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
+            mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
+            eintraege = eintraege.sortedByDescending { it.zeit },
+            glasEintraege = heuteWasser.map { glaseintrag(it) },
+            letzteDaten = null,
+            gestern = alleEintraege.filter { it.eigen && !it.praeparat && it.zeit.atZone(zone).toLocalDate() < heute }.sortedBy { it.zeit },
+            gesternGlaeser = gesternWasser.map { glaseintrag(it) }.filter { it.eigen }.sortedBy { it.zeit },
+        )
+        if (!voll) return gemeinsam
+
+        // --- Ab hier nur fuer die Seiten ---
+
+        // Der heutige Tag steht nicht in den Tagesaggregaten - er kommt aus der Summe bis jetzt.
+        val tageswerte = versuche(TAG, "Bewegung der Woche") { q.tageswerte(anfang(woche.first()), anfang(heute)) }.orEmpty()
+            .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
+        val vor24 = jetzt.epochSecond - 24 * 3600
+        // Der Minutenpuls einmal, so weit das Tagesherz zurueckblickt - die 24 Stunden der Kurve stecken darin.
+        // Nur Zeit und Puls (Pulsreihe): 14 Tage sind bis zu 20'160 Minuten.
+        val minutenpuls = versuche(TAG, "Puls") { q.puls(minOf(vonTagesherz, vor24), jetzt.epochSecond) } ?: Pulsreihe.LEER
+        val puls = buildList {
+            for (i in 0 until minutenpuls.size) if (minutenpuls.zeiten[i] >= vor24) add(minutenpuls.zeiten[i] to minutenpuls.werte[i])
+        }
+        // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
+        // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
+        val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
+        val spo2 = versuche(TAG, "SpO2") { q.spo2(spo2Von, jetzt.epochSecond) }.orEmpty()
         val blutdruck = versuche(TAG, "Blutdruck lesen") {
-            klient?.lies(context, BloodPressureRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt), Herkunft.ALLE_SONST_EIGENE).orEmpty()
-                .map { Blutdruck(it.time, it.systolic.inMillimetersOfMercury.roundToInt(), it.diastolic.inMillimetersOfMercury.roundToInt()) }
-                .sortedBy { it.zeit }
+            q.blutdruck(jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt).orEmpty().sortedBy { it.zeit }
         }.orEmpty()
 
-        val apps = UhrApps.installiert()
         // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
         val ruhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls)) ?: Trainingsanalyse.RUHEPULS_ERSATZ
-        val maxpuls = Herzgrenzen.maxpuls(context, ruhe)
         // Eine Rechnung der Zonen fuer Kurve und Belastung, damit beide dieselbe Grenze ziehen
-        val zonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls)
+        val zonen = Gesundheitsrechnung.pulsZonen(ruhe, q.maxpuls(ruhe))
         val tagesherz = versuche(TAG, "Tagesherz") {
             val schlafSpannen = naechteAb(vonTagesherz - 86_400).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
-            Gesundheitsrechnung.tagesherz(minutenpuls.filter { it.first >= vonTagesherz }, schlafSpannen, zonen, LocalTime.now(), zone, heute)
+            Gesundheitsrechnung.tagesherz(minutenpuls, vonTagesherz, schlafSpannen, zonen, jetzt.atZone(zone).toLocalTime(), zone, heute)
         }.orEmpty()
         val langeNaechte = Gesundheitsrechnung.jeTag(naechteAb(vonHrv), zone)
         val hrvTage = versuche(TAG, "HRV-Woche") {
@@ -245,41 +502,23 @@ internal object Gesundheitsdaten {
         // Ohne Nacht von heute fuehrt nur dieser Weg zu den frueheren Naechten und
         // zu Sleep trends; nach Wochen ohne Uhr reichen die 37 Tage oben nicht.
         val juengste = if (nacht != null) null else langeNaechte.lastOrNull()?.beginnUtc
-            ?: versuche(TAG, "Juengste Nacht") { api.getNaechte(0, jetzt.epochSecond) }.orEmpty().maxOfOrNull { it.beginnUtc }
-        GesundheitsStand(
-            schritte = summe?.steps ?: 0,
-            aktivMinuten = summe?.activeMinutes ?: 0,
-            meter = (summe?.distanceCm ?: 0) / 100.0,
+            ?: versuche(TAG, "Juengste Nacht") { q.naechte(0, jetzt.epochSecond) }.orEmpty().maxOfOrNull { it.beginnUtc }
+        return gemeinsam.copy(
             wocheSchritte = Gesundheitsrechnung.reihe(woche, tageswerte, 0L),
-            nacht = nacht,
-            ruhepulsWoche = frueher.map { it.ruhepuls }.filter { it > 0 },
-            wocheSchlaf = Gesundheitsrechnung.reihe(woche, schlafJeTag, 0),
             puls = puls,
             spo2 = spo2,
-            wasserMl = heuteWasser.sumOf { it.volume.inMilliliters }.toInt(),
-            glaeser = heuteWasser.filter { it.metadata.dataOrigin.packageName == context.packageName }.map { it.startTime }.sorted(),
-            wasserZiel = Drinktervall.ziel(context),
-            supplemente = SupCycle.heute(context),
-            koffein = koffein.sortedBy { it.first },
-            mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
-            mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
             tagesherz = tagesherz,
-            eintraege = eintraege.sortedByDescending { it.zeit },
             blutdruck = blutdruck,
-            glasEintraege = heuteWasser.map { glaseintrag(context, it) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
-            letzteDaten = versuche(TAG, "Letzte Daten") { api.getLatestTimestamp() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
+            letzteDaten = versuche(TAG, "Letzte Daten") { q.letzterZeitstempel() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,
             juengsteNacht = juengste,
-            gestern = alleEintraege.filter { it.eigen && !it.praeparat && it.zeit.atZone(zone).toLocalDate() < heute }.sortedBy { it.zeit },
-            gesternGlaeser = gesternWasser.map { glaseintrag(context, it) }.filter { it.eigen }.sortedBy { it.zeit },
             akkuNaechte = naechteAb(vonAkku),
-        ).also { gemerkt = heute to it }
+        )
     }
 
-    private fun glaseintrag(context: Context, r: HydrationRecord) =
-        Glaseintrag(r.startTime, r.metadata.id, r.metadata.dataOrigin.packageName == context.packageName, r.volume.inMilliliters.roundToInt())
+    private fun glaseintrag(r: Wasserroh) = Glaseintrag(r.zeit, r.id, r.eigen, r.ml.roundToInt())
 
     /** Eine Nacht mit dem Puls und SpO2 aus ihr, und den Nachbarnaechten zum Blaettern. */
     data class NachtDetail(
@@ -308,10 +547,11 @@ internal object Gesundheitsdaten {
         val n = Gesundheitsrechnung.nacht(e, versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(beginnUtc) }.orEmpty())
         val von = minOf(n.einschlafen.epochSecond, n.spanne.first) - 1800
         val bis = maxOf(n.aufwachen.epochSecond, n.spanne.last) + 1800
+        // Nur Zeit und Puls statt ganzer Minutenzeilen, wie im Tagesherz.
+        val puls = versuche(TAG, "Puls der Nacht") { api.getPulsMinuten(von, bis) } ?: Pulsreihe.LEER
         NachtDetail(
             nacht = n,
-            puls = versuche(TAG, "Puls der Nacht") { api.getHealthDataForRange(von, bis) }.orEmpty()
-                .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate },
+            puls = List(puls.size) { puls.zeiten[it] to puls.werte[it] },
             spo2 = versuche(TAG, "SpO2 der Nacht") { api.getSpo2Readings(von, bis) }.orEmpty().map { it.timestamp to it.spo2Percent },
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,

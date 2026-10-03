@@ -22,6 +22,7 @@ import coredevices.pebble.kiesel.Koerperzeile
 import coredevices.pebble.kiesel.Zusammensetzung
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToLong
 
 /** Ein Anteil in Prozent mit einer Stelle, getrennt fuer die fette Zahl: "22.4" und "%". */
@@ -37,20 +38,21 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
 /**
  * Die Zeile "Body" fuer die Liste der Gesundheitsseite, oder null: ohne
  * Gewicht und Fett der letzten 90 Tage gibt es keine.
- * Sie liest selbst, neu mit jedem [anlass] - der GesundheitsStand bleibt so,
- * wie das Widget ihn kennt.
+ * Sie liest selbst - der GesundheitsStand bleibt so, wie das Widget ihn kennt.
  *
- * [anlass] NULL: DIE SEITE ZEIGT NOCH IHREN LETZTEN STAND. Bis der frische
- * da ist, steht der letzte Koerperstand, ohne zu lesen - sonst laese die
- * Zeile bei jeder Rueckkehr zweimal, fuer den alten Stand und gleich wieder
- * fuer den neuen.
+ * NICHT AM UHRSCHUB: Gewicht kommt von der Waage, nie von der Uhr. Frueher
+ * las die Zeile mit jedem neuen Stand der Seite (jeder Schub, jeder Eintrag)
+ * 7 Arten ueber ein Jahr. Jetzt beim Aufbau nur, wenn ihr Stand aelter als
+ * [Koerperdaten.FRISCH_MS] ist; die Rueckkehr aus einer anderen App - etwa
+ * der Waage - liest immer.
  */
 @Composable
-internal fun koerperzeile(anlass: Any?, oeffne: () -> Unit): (@Composable () -> Unit)? {
+internal fun koerperzeile(oeffne: () -> Unit): (@Composable () -> Unit)? {
     val context = LocalContext.current
-    val stand = if (anlass == null) Koerperdaten.zuletzt
-    // Ohne eigene Rueckkehr: dann laedt die Gesundheitsseite ohnehin, und mit ihrem Stand kommt der Anlass.
-    else rememberStand(Koerperdaten.zuletzt, anlass, rueckkehr = false) { Koerperdaten.lies(context) }
+    val erster = remember { AtomicBoolean(true) }
+    val stand = rememberStand(Koerperdaten.zuletzt) {
+        Koerperdaten.lies(context, if (erster.getAndSet(false)) Koerperdaten.FRISCH_MS else 0)
+    }
     val imperial = einheitenImperial()
     val z = remember(stand) { stand?.let { Koerperrechnung.zeile(it, LocalDate.now(), ZoneId.systemDefault()) } } ?: return null
     return { KoerperZeile(z, imperial, oeffne) }

@@ -32,6 +32,9 @@ class PebbleAndroidDelegate(
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             libPebble.healthDataUpdated.collect { GesundheitWidget.stosseAn(context) }
         }
+        // Boulder: das Widget hat keinen Takt von Android mehr - einmal je Prozess zeichnen und neu planen,
+        // sonst stuende es nach "Beenden erzwingen" ohne Uhr still, gleich welcher Reiter offen ist.
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch { GesundheitWidget.sichereTakt(context) }
         // Boulder: alle Rechte der Akte in einem Dialog, einmal je Fassung.
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { Rechtefrage.beimStart(context) }
         // Boulder: Schritte und Naechte taeglich festschreiben, bevor das Housekeeping sie nach 90 Tagen loescht.

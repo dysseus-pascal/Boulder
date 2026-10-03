@@ -10,6 +10,8 @@ import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -49,6 +51,10 @@ internal object SupCycle {
     const val SC_DUE = 10040
     const val SC_TAKEN = 10041
     const val SC_NAMES = 10044
+
+    // Nach SupCycle 0.13.3. Eine aeltere Uhr-App schickt keine Zeiten und ueberhoert UNTAKE.
+    const val SC_TAKEN_AT = 10045 //< je Platz 4 Byte little endian, Sekunden seit 1970, 0 = offen
+    const val SC_UNTAKE = 10046 //< an die Uhr: Bitmaske, dazu TODAY und die gemeinten TAKEN_AT
 
     /** Ein Platz im Plan: 26 Byte, davon 16 fuer den Namen (plan.h in SupCycle). */
     private const val PLATZ_BYTES = 26
@@ -101,6 +107,103 @@ internal object SupCycle {
     /** Was an einem Tag abgehakt, aber nicht in der Akte ist - und nicht im Strahl verworfen. */
     fun fehlt(faellig: Long, genommen: Long, eingetragen: Long, verworfen: Long): Long =
         genommen and faellig and eingetragen.inv() and verworfen.inv()
+
+    /** Null von einer Uhr-App, die keine Hakenzeiten schickt. */
+    fun hakenzeiten(bytes: ByteArray?): List<Long>? {
+        if (bytes == null || bytes.isEmpty() || bytes.size % 4 != 0) return null
+        return (0 until bytes.size / 4).map { i -> (0 until 4).fold(0L) { z, b -> z or ((bytes[i * 4 + b].toLong() and 0xFF) shl (8 * b)) } }
+    }
+
+    fun hakenzeitenBytes(zeiten: List<Long>): ByteArray = ByteArray(zeiten.size * 4) { k -> (zeiten[k / 4] shr (8 * (k % 4))).toByte() }
+
+    private fun zeitenText(zeiten: List<Long>) = zeiten.joinToString(",")
+    private fun zeitenAus(text: String?): List<Long>? = text?.split(",")?.mapNotNull { it.toLongOrNull() }
+
+    /**
+     * Die Hakenzeit, wenn sie in den Tag faellt: offline Abgehaktes kommt erst
+     * beim Wiederverbinden an. Nie nach [jetzt], die Akte lehnt Zukunft ab.
+     */
+    fun eintragZeit(tag: LocalDate, haken: Long?, planZeit: LocalTime?, jetzt: Instant, zone: ZoneId): Instant {
+        val t = haken?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) }
+        if (t != null && t.atZone(zone).toLocalDate() == tag) return minOf(t, jetzt)
+        if (tag == jetzt.atZone(zone).toLocalDate()) return jetzt
+        return minOf(jetzt, tag.atTime(planZeit ?: LocalTime.of(23, 59)).atZone(zone).toInstant())
+    }
+
+    /**
+     * Ein Haken mit neuer Zeit ist eine neue Einnahme. Fehlen Zeiten auf einer
+     * Seite, gelten alle als gleich. Einen zweiten Eintrag gibt es dabei nicht:
+     * gleicher Name heisst gleiche [kennung], und die Akte ersetzt den alten
+     * Eintrag (siehe [fassung]).
+     */
+    fun gleicheZeiten(alte: List<Long>?, neue: List<Long>?): Long =
+        if (alte == null || neue == null) -1L
+        else (0 until 64).fold(0L) { m, i -> if (alte.getOrElse(i) { 0L } == neue.getOrElse(i) { 0L }) m or (1L shl i) else m }
+
+    /**
+     * Die Fassung eines Eintrags fuer die Akte: seine Hakenzeit. Die Akte
+     * ersetzt einen Eintrag gleicher Kennung nur bei hoeherer (laut Doku) oder
+     * gleicher Fassung (laut Quelltext) - ein neu gesetzter Haken ist spaeter,
+     * also hoeher, und verschiebt den Eintrag in beiden Lesarten auf seine Zeit.
+     * Ohne Zeit 0 wie bis Boulder 0.45.
+     */
+    fun fassung(haken: Long?): Long = haken?.takeIf { it > 0 } ?: 0L
+
+    /** Die Uhr nimmt einen Haken nur zurueck, solange er die Zeit aus [zeiten] traegt (plan_untake). */
+    data class Ruecknahme(val tag: LocalDate, val maske: Long, val zeiten: List<Long>) {
+        fun felder(): Map<Int, Any> = mapOf(
+            SC_TODAY to tag.year * 10000 + tag.monthValue * 100 + tag.dayOfMonth,
+            SC_UNTAKE to maske.toInt(),
+            SC_TAKEN_AT to hakenzeitenBytes(zeiten),
+        )
+    }
+
+    /** Jeder Platz behaelt die Zeit, mit der er verworfen wurde. */
+    fun vorgemerkt(offen: Ruecknahme?, tag: LocalDate, maske: Long, zeiten: List<Long>): Ruecknahme {
+        val alt = offen?.takeIf { it.tag == tag }
+        val n = maxOf(zeiten.size, alt?.zeiten?.size ?: 0)
+        val z = (0 until n).map { i -> if ((maske shr i) and 1L == 1L) zeiten.getOrElse(i) { 0L } else alt?.zeiten?.getOrElse(i) { 0L } ?: 0L }
+        return Ruecknahme(tag, (alt?.maske ?: 0L) or maske, z)
+    }
+
+    /**
+     * Ein Haken, der weg ist oder eine neue Zeit traegt, braucht keinen Befehl
+     * mehr. NUR DER STAND DER UHR ERLEDIGT IHN, nicht ihre Bestaetigung: die
+     * Uhr-App uebergeht einen Befehl fuer einen anderen Tag (Uhrzeit nach einem
+     * Neustart noch falsch) und bestaetigt ihn trotzdem.
+     */
+    fun nochOffen(offen: Ruecknahme?, tag: LocalDate, genommen: Long, zeiten: List<Long>?): Ruecknahme? {
+        if (offen == null || offen.tag != tag || zeiten == null) return null
+        val maske = (0 until 64).fold(0L) { m, i ->
+            val bit = 1L shl i
+            val bleibt = offen.maske and bit != 0L && genommen and bit != 0L && zeiten.getOrElse(i) { 0L } == offen.zeiten.getOrElse(i) { 0L }
+            if (bleibt) m or bit else m
+        }
+        return if (maske == 0L) null else offen.copy(maske = maske)
+    }
+
+    private fun liesRuecknahme(p: SharedPreferences): Ruecknahme? {
+        val tag = p.getString("zurueck_tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
+        val maske = p.getLong("zurueck", 0L).takeIf { it != 0L } ?: return null
+        return Ruecknahme(tag, maske, zeitenAus(p.getString("zurueck_zeiten", null)).orEmpty())
+    }
+
+    private fun SharedPreferences.Editor.schreibeRuecknahme(r: Ruecknahme?): SharedPreferences.Editor =
+        if (r == null) remove("zurueck_tag").remove("zurueck").remove("zurueck_zeiten")
+        else putString("zurueck_tag", r.tag.toString()).putLong("zurueck", r.maske).putString("zurueck_zeiten", zeitenText(r.zeiten))
+
+    /** Weckt den laufenden Mithoerer: ein Befehl fuer die Uhr liegt bereit. */
+    val anstoss = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    @Synchronized
+    fun ruecknahme(context: Context): Ruecknahme? {
+        val p = context.getSharedPreferences(HEUTE, Context.MODE_PRIVATE)
+        val r = liesRuecknahme(p) ?: return null
+        if (r.tag == LocalDate.now()) return r
+        // Nach Mitternacht hat die Uhr ihre Haken ohnehin geleert.
+        p.edit().schreibeRuecknahme(null).apply()
+        return null
+    }
 
     /** Ob zwei Meldungen denselben Tag betreffen - die juengere ersetzt dann die aeltere ganz. */
     fun selberTag(a: KieselNachricht, b: KieselNachricht): Boolean = a.zahlen[SC_TODAY] == b.zahlen[SC_TODAY]
@@ -237,8 +340,11 @@ internal object SupCycle {
 
     /**
      * Einnahmen, die im Tagesstrahl geloescht wurden: sie zaehlen in Liste,
-     * Satz und Quote nicht mehr als genommen, obwohl die Uhr den Haken behaelt.
-     * Nimmt die Uhr ihn zurueck und setzt ihn neu, gilt er wieder.
+     * Satz und Quote nicht mehr als genommen. Nimmt die Uhr den Haken zurueck
+     * und setzt ihn neu, gilt er wieder.
+     *
+     * Eine Uhr-App, die Hakenzeiten meldet, nimmt den Haken auch zurueck: der
+     * Befehl geht hinaus, sobald SupCycle laeuft (Mithoerer).
      *
      * Gesperrt wie das Schreiben in [verarbeite]: beide fuehren denselben Stand.
      */
@@ -250,11 +356,15 @@ internal object SupCycle {
         if (maske == 0L) return
         val genommen = p.getLong("genommen", 0)
         val verworfen = p.getLong("verworfen", 0) or maske
-        p.edit()
+        val zeiten = zeitenAus(p.getString("zeiten", null))
+        val zurueck = maske and genommen
+        val e = p.edit()
             .putLong("verworfen", verworfen)
             .putLong("eingetragen", p.getLong("eingetragen", genommen) and maske.inv())
-            .apply()
+        if (zeiten != null && zurueck != 0L) e.schreibeRuecknahme(vorgemerkt(liesRuecknahme(p), LocalDate.parse(tag), zurueck, zeiten))
+        e.apply()
         merkeQuote(context, tag, p.getLong("faellig", 0), genommen and verworfen.inv())
+        if (zeiten != null && zurueck != 0L) anstoss.tryEmit(Unit)
     }
 
     /**
@@ -279,21 +389,15 @@ internal object SupCycle {
         false
     }
 
-    /**
-     * [plaetze] des Tages [tag] in die Akte - die Maske der eingetragenen.
-     * DIE UHR SCHICKT KEINE HAKENZEIT: der Eintrag traegt die Ankunft der
-     * Meldung. Kommt ein liegengebliebener Stand erst an einem spaeteren Tag
-     * dran, steht er auf der Planzeit seines Tages.
-     */
+    /** [plaetze] des Tages [tag] in die Akte, je auf ihre [eintragZeit] - die Maske der eingetragenen. */
     private suspend fun trageEin(
-        klient: HealthConnectClient, tag: LocalDate, plaetze: List<Int>, name: (Int) -> String, plan: List<Platz>,
+        klient: HealthConnectClient, tag: LocalDate, plaetze: List<Int>, name: (Int) -> String, plan: List<Platz>, zeiten: List<Long>?,
     ): Long {
         val jetzt = Instant.now()
         var eingetragen = 0L
         for (platz in plaetze) {
             val n = name(platz)
-            val wann = if (tag == LocalDate.now()) jetzt
-            else minOf(jetzt, tag.atTime(plan.getOrNull(platz)?.zeit ?: LocalTime.of(23, 59)).atZone(ZoneId.systemDefault()).toInstant())
+            val wann = eintragZeit(tag, zeiten?.getOrNull(platz), plan.getOrNull(platz)?.zeit, jetzt, ZoneId.systemDefault())
             try {
                 klient.insertRecords(listOf(NutritionRecord(
                     startTime = wann,
@@ -304,7 +408,7 @@ internal object SupCycle {
                     // manualEntry, NICHT manualEntryWithId: das setzt die
                     // Kennung der Akte selbst (fuer Updates), und die
                     // eigene Kennung blieb leer - bis 0.33.0 so geschehen.
-                    metadata = Metadata.manualEntry(kennung(tag, platz, n), 0L, Device(type = Device.TYPE_PHONE)),
+                    metadata = Metadata.manualEntry(kennung(tag, platz, n), fassung(zeiten?.getOrNull(platz)), Device(type = Device.TYPE_PHONE)),
                 )))
                 eingetragen = eingetragen or (1L shl platz)
             } catch (e: Exception) {
@@ -340,7 +444,10 @@ internal object SupCycle {
         val klient = Akte(context).bereit() ?: return Verarbeitet(context.getString(R.string.ks_g_akte_fehlt), gescheitert = true)
         val namen = n.texte[SC_NAMES]?.split("\n").orEmpty()
         val plan = n.bytes[SC_PLAN]?.let { plan(it) }.orEmpty()
-        val eingetragen = trageEin(klient, tag, plaetze, { namen.getOrNull(it)?.ifBlank { null } ?: context.getString(R.string.ks_s_praeparat_n, it + 1) }, plan)
+        val eingetragen = trageEin(
+            klient, tag, plaetze, { namen.getOrNull(it)?.ifBlank { null } ?: context.getString(R.string.ks_s_praeparat_n, it + 1) }, plan,
+            hakenzeiten(n.bytes[SC_TAKEN_AT]),
+        )
         val rest = maske(plaetze) and eingetragen.inv()
         merkeNachtrag(context, tag, rest)
         return if (rest == 0L) Verarbeitet(null) else Verarbeitet(context.getString(R.string.ks_a_nicht_eingetragen), gescheitert = true)
@@ -350,9 +457,7 @@ internal object SupCycle {
         val ymd = n.zahlen[SC_TODAY] ?: return null
         val faellig = n.zahlen[SC_DUE] ?: return null
         val genommen = n.zahlen[SC_TAKEN] ?: 0L
-        val tag = try {
-            LocalDate.of((ymd / 10000).toInt(), ((ymd / 100) % 100).toInt(), (ymd % 100).toInt())
-        } catch (e: Exception) {
+        val tag = UhrApps.datum(ymd) ?: run {
             Log.w(TAG, "Unbrauchbares Datum $ymd")
             return null
         }
@@ -361,7 +466,10 @@ internal object SupCycle {
         // EIN AELTERER TAG UEBERSCHREIBT DEN STAND NICHT - ein liegengebliebener
         // Stand von gestern drehte sonst den von heute zurueck. Er traegt nur nach.
         if (gemerkt != null && tag.isBefore(gemerkt)) return nachtrag(context, n, tag, faellig, genommen)
-        if (!Riegel.neu(context, "supcycle", "$ymd:$faellig:$genommen")) return null
+        val zeiten = hakenzeiten(n.bytes[SC_TAKEN_AT])
+        // Ein offline zurueckgenommener und neu gesetzter Haken unterscheidet sich
+        // nur in der Zeit - ohne sie im Schluessel hielte der Riegel ihn auf.
+        if (!Riegel.neu(context, "supcycle", "$ymd:$faellig:$genommen" + (zeiten?.let { ":" + zeitenText(it) } ?: ""))) return null
 
         val gleicherTag = gemerkt == tag
         val bekannt = p.getString("namen", "")!!.split("\n")
@@ -375,7 +483,7 @@ internal object SupCycle {
         // gescheiterter Eintrag kommt so mit dem naechsten Bericht wieder
         // dran. Bis Boulder 0.42 gab es nur "genommen".
         val vorherGenommen = if (gleicherTag) p.getLong("genommen", 0) else 0L
-        val gleich = gleicheNamen(bekannt, namen)
+        val gleich = gleicheNamen(bekannt, namen) and gleicheZeiten(if (gleicherTag) zeitenAus(p.getString("zeiten", null)) else null, zeiten)
         var eingetragen = if (gleicherTag) p.getLong("eingetragen", vorherGenommen) and gleich else 0L
         val verworfenGelesen = if (gleicherTag) p.getLong("verworfen", 0) else 0L
         var verworfen = verworfenGelesen and genommen and gleich
@@ -388,7 +496,7 @@ internal object SupCycle {
 
         val klient = Akte(context).bereit()
         val neu = neuGenommen(faellig, genommen, eingetragen or verworfen)
-        val geschrieben = if (klient != null) trageEin(klient, tag, neu, { name(it) }, plan) else 0L
+        val geschrieben = if (klient != null) trageEin(klient, tag, neu, { name(it) }, plan, zeiten) else 0L
         eingetragen = eingetragen or geschrieben
         val gescheitert = (maske(neu) and geschrieben.inv()) != 0L
 
@@ -421,6 +529,8 @@ internal object SupCycle {
                 putLong("eingetragen", eingetragen)
                 putLong("verworfen", verworfen)
                 if (planBytes != null) putString("plan", Base64.encodeToString(planBytes, Base64.NO_WRAP))
+                if (zeiten != null) putString("zeiten", zeitenText(zeiten)) else remove("zeiten")
+                schreibeRuecknahme(nochOffen(liesRuecknahme(p), tag, genommen, zeiten))
                 apply()
             }
         }

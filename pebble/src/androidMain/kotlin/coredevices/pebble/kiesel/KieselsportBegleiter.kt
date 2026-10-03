@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.BestaetigtSelbst
 import io.rebble.libpebblecommon.connection.BuiltInCompanions
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.js.CompanionAppDevice
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
@@ -140,25 +142,19 @@ internal class Verarbeitet(val meldung: String?, val gescheitert: Boolean = fals
 /**
  * Hoert neben dem PebbleKit JS einer Uhr-App mit - fuer Drinktervall und
  * SupCycle, deren Meldungen frueher Kiesel-Helper ueber PebbleKit Android
- * bekam.
- *
- * ER BESTAETIGT NUR, WENN KEIN PEBBLEKIT JS LAEUFT: sonst tut das PebbleKit
- * JS der Uhr-App, und eine zweite Bestaetigung braucht niemand. Ohne
- * Netzwerk-Freigabe startet Gravel es aber nicht - dann wiederholte die Uhr
- * jede Nachricht, die niemand bestaetigt. Die Verarbeitung
- * laeuft wie bei Kieselsport in einer Warteschlange fuer die ganze App, damit
- * sie das Ende der Sitzung ueberlebt.
+ * bekam. Die Verarbeitung laeuft wie bei Kieselsport in einer Warteschlange
+ * fuer die ganze App, damit sie das Ende der Sitzung ueberlebt.
  *
  * ERST SICHERN, DANN BESTAETIGEN, wie bei Kieselsport (siehe Wartend): die
  * Uhr nimmt Glas und Kaffee mit der Bestaetigung aus ihrer Schlange. Was die
  * Akte nicht nahm, bleibt liegen und kommt beim naechsten Start dran.
+ * Darum bestaetigt er immer selbst, auch neben PebbleKit JS ([BestaetigtSelbst]).
  */
 internal class Mithoerer(
     private val context: Context,
     private val uuid: Uuid,
     private val device: CompanionAppDevice,
-    private val bestaetigen: Boolean,
-) : CompanionApp {
+) : CompanionApp, BestaetigtSelbst {
     private val sitzung = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
@@ -172,9 +168,38 @@ internal class Mithoerer(
                 // frueheren Tages bleibt, bis er nachgetragen ist. Glaeser und Kaffees sind je ein eigener Eintrag.
                 val ersetzt: ((KieselNachricht) -> Boolean)? = if (uuid == SupCycle.UUID) { alt -> SupCycle.selberTag(alt, n) } else null
                 val datei = if (aufheben(uuid, n)) Wartend.lege(app, n, ablage(uuid), ersetzt) else null
-                if (bestaetigen) device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
+                device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
                 auftraege.send(app to if (datei != null) Gehoert(uuid, datei = datei) else Gehoert(uuid, nachricht = n))
             }
+        }
+        if (uuid == SupCycle.UUID) sitzung.launch { ruecknahmen(app) }
+    }
+
+    /** Haken zuruecknehmen (SupCycle.verwirf) - eine AppMessage erreicht nur die laufende Uhr-App. */
+    private suspend fun ruecknahmen(app: Context) {
+        // Die Uhr-App oeffnet ihren Eingang erst beim Start - davor kaeme ein NACK.
+        delay(1_500)
+        sendeRuecknahme(app)
+        SupCycle.anstoss.collect { sendeRuecknahme(app) }
+    }
+
+    /**
+     * Die Bestaetigung heisst nur "angekommen". Erledigt ist der Befehl erst mit
+     * dem Stand, den die Uhr danach schickt (SupCycle.nochOffen) - bis dahin geht
+     * er bei jedem Start und Anstoss wieder hinaus. Die Uhr nimmt nur Haken mit
+     * der gemeinten Zeit zurueck, doppelt schadet also nicht.
+     */
+    private suspend fun sendeRuecknahme(app: Context) {
+        for (versuch in 1..3) {
+            val r = SupCycle.ruecknahme(app) ?: return
+            val ergebnis = try {
+                device.sendAppMessage(AppMessageData(device.transactionSequence.next(), uuid, r.felder()))
+            } catch (e: Exception) {
+                logger.w { "Ruecknahme an SupCycle: ${e.message}" }
+                return
+            }
+            if (ergebnis is AppMessageResult.ACK) return
+            delay(1_000)
         }
     }
 
@@ -249,7 +274,7 @@ class BoulderBegleiter(private val context: Context) : BuiltInCompanions {
     }
 
     override fun createBeside(uuid: Uuid, device: CompanionAppDevice, pkjsRunning: Boolean): CompanionApp? = when (uuid) {
-        Drinktervall.UUID, SupCycle.UUID -> Mithoerer(context, uuid, device, bestaetigen = !pkjsRunning)
+        Drinktervall.UUID, SupCycle.UUID -> Mithoerer(context, uuid, device)
         else -> null
     }
 }

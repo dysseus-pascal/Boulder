@@ -26,9 +26,9 @@ fun interface BuiltInCompanions {
      * tut das die einbettende App selbst - und die andere bekommt nichts mehr,
      * sonst stuende jedes Ereignis zweimal in der Gesundheitsakte. Das
      * PebbleKit JS der Uhr-App laeuft unveraendert weiter und bestaetigt die
-     * Nachrichten. Laeuft es nicht ([pkjsRunning] false, etwa ohne
-     * Netzwerk-Freigabe), muss der Begleiter selbst bestaetigen - sonst
-     * wiederholt die Uhr jede Nachricht.
+     * Nachrichten - ausser der Begleiter ist [BestaetigtSelbst]. Laeuft es
+     * nicht ([pkjsRunning] false, etwa ohne Netzwerk-Freigabe), muss der
+     * Begleiter selbst bestaetigen - sonst wiederholt die Uhr jede Nachricht.
      */
     fun createBeside(uuid: Uuid, device: CompanionAppDevice, pkjsRunning: Boolean): CompanionApp? = null
 }
@@ -36,3 +36,12 @@ fun interface BuiltInCompanions {
 object NoBuiltInCompanions : BuiltInCompanions {
     override fun create(uuid: Uuid, device: CompanionAppDevice): CompanionApp? = null
 }
+
+/**
+ * Boulder: ein Begleiter neben PebbleKit JS, der jede Nachricht erst nach dem
+ * Sichern bestaetigt. Die Uhr gibt mit der Bestaetigung ihre Kopie auf -
+ * PebbleKit JS bestaetigte beim Empfang, also schweigt es neben ihm.
+ */
+interface BestaetigtSelbst
+
+fun pkjsBestaetigt(daneben: CompanionApp?): Boolean = daneben !is BestaetigtSelbst

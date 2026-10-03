@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -171,5 +172,110 @@ class SupCycleTest {
         assertEquals(Praeparatlage.OFFEN, mittags.lage)
         assertEquals(listOf("Black Maca"), mittags.namen)
         assertEquals(0, mittags.weitere)
+    }
+
+    private val zuerich = ZoneId.of("Europe/Zurich")
+    private val dritter = LocalDate.of(2026, 10, 3)
+    private fun um(h: Int, m: Int, tag: LocalDate = dritter): Instant = tag.atTime(h, m).atZone(zuerich).toInstant()
+
+    @Test
+    fun hakenzeiten_wie_plan_taken_at_to_bytes() {
+        val zeiten = listOf(um(8, 0).epochSecond, 0L, um(20, 15).epochSecond, 0L, 0L, 0L)
+        val bytes = SupCycle.hakenzeitenBytes(zeiten)
+        assertEquals(24, bytes.size)
+        // Little endian, Platz fuer Platz - wie die Uhr sie schreibt.
+        assertEquals((um(8, 0).epochSecond and 0xFF).toByte(), bytes[0])
+        assertEquals(zeiten, SupCycle.hakenzeiten(bytes))
+        // Eine aeltere Uhr-App schickt keine Zeiten; eine kaputte Laenge zaehlt wie keine.
+        assertNull(SupCycle.hakenzeiten(null))
+        assertNull(SupCycle.hakenzeiten(ByteArray(0)))
+        assertNull(SupCycle.hakenzeiten(ByteArray(23)))
+    }
+
+    @Test
+    fun eingetragen_wird_zur_hakenzeit() {
+        val jetzt = um(21, 0)
+        // Um 08:00 offline abgehakt, um 21:00 verbunden: die Einnahme steht auf 08:00.
+        assertEquals(um(8, 0), SupCycle.eintragZeit(dritter, um(8, 0).epochSecond, LocalTime.of(8, 0), jetzt, zuerich))
+        // Ohne Zeit (aeltere Uhr-App) wie bisher: heute die Ankunft ...
+        assertEquals(jetzt, SupCycle.eintragZeit(dritter, null, LocalTime.of(8, 0), jetzt, zuerich))
+        assertEquals(jetzt, SupCycle.eintragZeit(dritter, 0L, LocalTime.of(8, 0), jetzt, zuerich))
+        // ... an einem frueheren Tag dessen Planzeit.
+        val morgen = um(7, 0, dritter.plusDays(1))
+        assertEquals(um(20, 0), SupCycle.eintragZeit(dritter, null, LocalTime.of(20, 0), morgen, zuerich))
+        // Ein liegengebliebener Stand von gestern behaelt seine Hakenzeit.
+        assertEquals(um(22, 30), SupCycle.eintragZeit(dritter, um(22, 30).epochSecond, LocalTime.of(20, 0), morgen, zuerich))
+        // Eine Zeit ausserhalb des Tages (Uhr ohne Zeit nach einem Neustart) zaehlt nicht.
+        assertEquals(jetzt, SupCycle.eintragZeit(dritter, 86_400L, LocalTime.of(8, 0), jetzt, zuerich))
+        // Geht die Uhr vor, nie spaeter als jetzt.
+        assertEquals(jetzt, SupCycle.eintragZeit(dritter, jetzt.epochSecond + 90, null, jetzt, zuerich))
+    }
+
+    @Test
+    fun ein_haken_mit_neuer_zeit_ist_eine_neue_einnahme() {
+        val alt = listOf(100L, 200L, 0L)
+        assertEquals(0b101L, SupCycle.gleicheZeiten(alt, listOf(100L, 250L, 0L)) and 0b111L)
+        // Ohne Zeiten auf einer Seite (aeltere Uhr-App, erster Bericht nach dem Update): alle gleich.
+        assertEquals(-1L, SupCycle.gleicheZeiten(null, alt))
+        assertEquals(-1L, SupCycle.gleicheZeiten(alt, null))
+    }
+
+    @Test
+    fun der_befehl_an_die_uhr() {
+        val r = SupCycle.Ruecknahme(dritter, 0b101, listOf(111L, 0L, 333L, 0L, 0L, 0L))
+        val f = r.felder()
+        assertEquals(20261003, f[SupCycle.SC_TODAY])
+        assertEquals(0b101, f[SupCycle.SC_UNTAKE])
+        assertEquals(r.zeiten, SupCycle.hakenzeiten(f[SupCycle.SC_TAKEN_AT] as ByteArray))
+    }
+
+    @Test
+    fun vorgemerkt_behaelt_die_zeit_jedes_platzes() {
+        val erst = SupCycle.vorgemerkt(null, dritter, 0b001, listOf(100L, 200L, 300L))
+        assertEquals(SupCycle.Ruecknahme(dritter, 0b001, listOf(100L, 0L, 0L)), erst)
+        // Platz 0 wurde inzwischen neu abgehakt (Zeit 150): sein Befehl meint weiter den alten Haken.
+        val dann = SupCycle.vorgemerkt(erst, dritter, 0b100, listOf(150L, 200L, 300L))
+        assertEquals(SupCycle.Ruecknahme(dritter, 0b101, listOf(100L, 0L, 300L)), dann)
+        // Ein neuer Tag faengt neu an.
+        assertEquals(SupCycle.Ruecknahme(dritter.plusDays(1), 0b010, listOf(0L, 200L, 0L)), SupCycle.vorgemerkt(dann, dritter.plusDays(1), 0b010, listOf(100L, 200L, 300L)))
+    }
+
+    @Test
+    fun der_bericht_der_uhr_erledigt_den_befehl() {
+        val offen = SupCycle.Ruecknahme(dritter, 0b011, listOf(100L, 200L))
+        // Platz 0 ist weg, Platz 1 noch mit derselben Zeit da: nur er bleibt offen.
+        assertEquals(SupCycle.Ruecknahme(dritter, 0b010, listOf(100L, 200L)), SupCycle.nochOffen(offen, dritter, 0b010, listOf(0L, 200L)))
+        // Platz 1 neu gesetzt: der Befehl ist ueberholt.
+        assertNull(SupCycle.nochOffen(offen, dritter, 0b010, listOf(0L, 250L)))
+        // Neuer Tag oder eine Uhr-App ohne Zeiten: nichts mehr zu tun.
+        assertNull(SupCycle.nochOffen(offen, dritter.plusDays(1), 0b011, listOf(100L, 200L)))
+        assertNull(SupCycle.nochOffen(offen, dritter, 0b011, null))
+        assertNull(SupCycle.nochOffen(null, dritter, 0b011, listOf(100L, 200L)))
+    }
+
+    @Test
+    fun ein_uebergangener_befehl_bleibt_offen() {
+        // Die Uhr bestaetigte, uebersprang den Befehl aber (anderer Tag) und meldet
+        // den Haken unveraendert: er geht beim naechsten Start wieder hinaus.
+        val offen = SupCycle.Ruecknahme(dritter, 0b001, listOf(100L, 0L))
+        assertEquals(offen, SupCycle.nochOffen(offen, dritter, 0b001, listOf(100L, 0L)))
+        // Erst ihr Stand ohne den Haken erledigt ihn.
+        assertNull(SupCycle.nochOffen(offen, dritter, 0b000, listOf(0L, 0L)))
+    }
+
+    @Test
+    fun ein_neu_gesetzter_haken_ersetzt_seinen_eintrag() {
+        // Um 08:00 eingetragen, offline zurueckgenommen und um 09:00 neu gesetzt.
+        val vorher = listOf(um(8, 0).epochSecond, 0L)
+        val nachher = listOf(um(9, 0).epochSecond, 0L)
+        // Der Haken gilt als neu und wird eingetragen ...
+        assertEquals(0L, SupCycle.gleicheZeiten(vorher, nachher) and 0b1L)
+        // ... unter derselben Kennung (Tag, Platz, Name - keine Zeit), mit hoeherer
+        // Fassung: die Akte verschiebt den Eintrag von 08:00 auf 09:00, statt einen
+        // zweiten anzulegen.
+        assertTrue(SupCycle.fassung(nachher[0]) > SupCycle.fassung(vorher[0]))
+        // Haken von vor dem Update und aeltere Uhr-Apps: Fassung 0 wie bisher.
+        assertEquals(0L, SupCycle.fassung(null))
+        assertEquals(0L, SupCycle.fassung(0L))
     }
 }

@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.flow.first
 import org.koin.mp.KoinPlatform
+import java.time.LocalDate
 import kotlin.uuid.Uuid
 
 /**
@@ -24,4 +25,11 @@ internal object UhrApps {
      * soll keine Daten verstecken, die es gibt.
      */
     fun hat(apps: Set<Uuid>?, app: Uuid): Boolean = apps?.contains(app) ?: true
+
+    /** Ein Kalendertag JJJJMMTT, wie SupCycle und Drinktervall ihn schicken - null, wenn er keiner ist. */
+    fun datum(ymd: Long): LocalDate? = try {
+        LocalDate.of((ymd / 10000).toInt(), ((ymd / 100) % 100).toInt(), (ymd % 100).toInt())
+    } catch (e: Exception) {
+        null
+    }
 }

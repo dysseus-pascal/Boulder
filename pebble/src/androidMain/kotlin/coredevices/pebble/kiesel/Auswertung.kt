@@ -175,11 +175,11 @@ internal object Auswertung {
         grenze: LocalDate,
         eigenAb: LocalDate?,
     ): Double? {
-        val jung = tage.filter { it.first >= grenze.minusDays(28) }
+        val jung = tage.filter { it.first >= grenze.minusDays(Fenster.RICHTUNG_TAGE) }
         val alt = tage.filter {
-            it.first >= grenze.minusDays(56) && it.first < grenze.minusDays(28)
+            it.first >= grenze.minusDays(2 * Fenster.RICHTUNG_TAGE) && it.first < grenze.minusDays(Fenster.RICHTUNG_TAGE)
         }
-        if (jung.size < 7 || alt.size < 7) return null
+        if (jung.size < Fenster.RICHTUNG_MINDESTTAGE || alt.size < Fenster.RICHTUNG_MINDESTTAGE) return null
         if (eigenAb != null && (alt + jung).any { it.first < eigenAb } && (alt + jung).any { it.first >= eigenAb }) return null
         val a = alt.map { it.second }.average()
         if (a == 0.0) return null

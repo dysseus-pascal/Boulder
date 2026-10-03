@@ -389,7 +389,7 @@ internal object TrainingsDaten {
      */
     suspend fun mittelpuls(context: Context, s: ExerciseSessionRecord): Int? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
-        puls(klient, context, s).takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()?.toInt()
+        Statistik.mittel(puls(klient, context, s).map { it.bpm.toDouble() })?.toInt()
     }
 
     /**

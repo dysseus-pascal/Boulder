@@ -58,6 +58,8 @@ private const val SEITE = 1000
 /** Schutz vor einer Akte, die immer weiterblaettert: 100'000 Saetze sind weit ueber jedem Fenster. */
 private const val HOECHSTENS_SEITEN = 100
 
+private const val TAG = "Akte"
+
 /**
  * Alle Eintraege von [klasse] in [zeitraum], aelteste zuerst - DAS EINE LESEN
  * FUER ALLE SEITEN der App.
@@ -66,6 +68,11 @@ private const val HOECHSTENS_SEITEN = 100
  * AELTESTEN und verloere die neuesten - ein Schrittzaehler schreibt in einem
  * Vierteljahr leicht mehr Distanzen, eine Waage in einem Jahr leicht mehr
  * Wiegungen.
+ *
+ * SCHEITERT EINE SPAETERE SEITE (etwa am Rate-Limit), bleibt es bei den
+ * gelesenen, mit einer Warnung im Log - nie weniger als frueher die eine
+ * Seite. Nur die erste wirft; erst dann greift [Herkunft.ALLE_SONST_EIGENE]
+ * auf das Eigene zurueck.
  */
 internal suspend fun <T : Record> HealthConnectClient.lies(
     context: Context,
@@ -77,7 +84,10 @@ internal suspend fun <T : Record> HealthConnectClient.lies(
     var marke: String? = null
     var seiten = 0
     do {
-        val antwort = readRecords(ReadRecordsRequest(klasse, zeitraum, dataOriginFilter = quellen, pageSize = SEITE, pageToken = marke))
+        val anfrage = ReadRecordsRequest(klasse, zeitraum, dataOriginFilter = quellen, pageSize = SEITE, pageToken = marke)
+        // Warf eine spaetere Seite, verloere der Rueckgriff auf das Eigene die fremden Seiten davor.
+        val antwort = if (marke == null) readRecords(anfrage)
+        else versuche(TAG, "${klasse.simpleName}, Seite ${seiten + 1}") { readRecords(anfrage) } ?: break
         alle += antwort.records
         // Leer oder fehlend heisst: das war die letzte Seite.
         marke = antwort.pageToken?.ifEmpty { null }

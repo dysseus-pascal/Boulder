@@ -122,22 +122,6 @@ private fun DrawScope.nachtschatten(
 }
 
 /**
- * Runde Rasterwerte strikt zwischen [tief] und [hoch]: der kleinste Schritt
- * aus 1, 2, 5, 10 ..., bei dem zwei Zahlen der Achse mindestens gut eine
- * Zeile ([zeile], Pixel) auseinander stehen und hoechstens vier Linien
- * entstehen. [platz]: die Hoehe der Achse in Pixeln.
- */
-private fun achsenlinien(tief: Int, hoch: Int, platz: Float, zeile: Float): List<Int> {
-    val spanne = (hoch - tief).coerceAtLeast(1)
-    for (schritt in listOf(1, 2, 5, 10, 20, 50, 100)) {
-        if (platz * schritt / spanne < zeile * 1.2f) continue
-        val linien = generateSequence(Math.floorDiv(tief, schritt) * schritt + schritt) { it + schritt }.takeWhile { it < hoch }.toList()
-        if (linien.size <= 4) return linien
-    }
-    return emptyList()
-}
-
-/**
  * Werte ueber eine Zeitspanne als Punkte, mit den Stunden darunter - Puls
  * und SpO2 der Nachtansicht. Die Punkte blass, darueber die Trendlinie
  * ([Gesundheitsrechnung.trend] mit [trendFenster] Sekunden nach jeder Seite):
@@ -169,7 +153,7 @@ internal fun Tageskurve(
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
         fun x(t: Long) = rechts * (t - von) / spanne
         fun y(w: Int) = boden * (1f - (w - tief).toFloat() / (hoch - tief))
-        achsenlinien(tief, hoch, boden, messer.measure("0", stil).size.height.toFloat()).forEach { w ->
+        Statistik.rasterNachPlatz(tief, hoch, boden, messer.measure("0", stil).size.height.toFloat()).forEach { w ->
             drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
             val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))

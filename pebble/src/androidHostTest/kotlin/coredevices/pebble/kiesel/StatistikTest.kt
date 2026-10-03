@@ -113,4 +113,37 @@ class StatistikTest {
         // Kein runder Schritt bis 100 passt: der Bereich als ein Feld.
         assertEquals(Achse(0.0, 1000.0, 1000.0), Statistik.rasterAussen(0.0, 1000.0, 3))
     }
+
+    @Test
+    fun raster_nach_platz_strikt_dazwischen_und_dicht_wie_die_zeile_erlaubt() {
+        // Puls 48..72 auf 200 px, Zeile 20 px: Schritt 5 passte, gaebe aber fuenf Linien - also Zehner.
+        assertEquals(listOf(50, 60, 70), Statistik.rasterNachPlatz(46, 74, 200f, 20f))
+        // Die Raender selbst nie, auch wenn sie rund sind.
+        assertEquals(listOf(55, 60, 65), Statistik.rasterNachPlatz(50, 70, 200f, 20f))
+        // Zu wenig Platz selbst fuer Schritt 100: keine Linien.
+        assertEquals(emptyList(), Statistik.rasterNachPlatz(40, 60, 4f, 20f))
+    }
+
+    @Test
+    fun raster_nach_platz_rechnet_wie_die_fruehere_tageskurve() {
+        // Die Rechnung, die bis 0.44.0 in Gesundheitsbilder stand - die Linien sollen gleich bleiben.
+        fun frueher(tief: Int, hoch: Int, platz: Float, zeile: Float): List<Int> {
+            val spanne = (hoch - tief).coerceAtLeast(1)
+            for (schritt in listOf(1, 2, 5, 10, 20, 50, 100)) {
+                if (platz * schritt / spanne < zeile * 1.2f) continue
+                val linien = generateSequence(Math.floorDiv(tief, schritt) * schritt + schritt) { it + schritt }.takeWhile { it < hoch }.toList()
+                if (linien.size <= 4) return linien
+            }
+            return emptyList()
+        }
+        for (tief in listOf(-3, 0, 28, 35, 48, 58, 86, 90, 93)) {
+            for (breite in listOf(1, 3, 4, 7, 12, 25, 40, 61, 99, 140, 210)) {
+                for (platz in listOf(90f, 157.5f, 240f, 333.3f, 480f)) {
+                    for (zeile in listOf(11f, 14.5f, 19f, 26f)) {
+                        assertEquals(frueher(tief, tief + breite, platz, zeile), Statistik.rasterNachPlatz(tief, tief + breite, platz, zeile), "$tief+$breite $platz/$zeile")
+                    }
+                }
+            }
+        }
+    }
 }

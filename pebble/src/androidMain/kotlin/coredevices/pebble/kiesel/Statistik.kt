@@ -144,6 +144,26 @@ internal object Statistik {
     }
 
     /**
+     * RASTER NACH PLATZ: runde Linien STRIKT zwischen [tief] und [hoch], der
+     * kleinste Schritt von 1 bis 100, bei dem zwei Zahlen der Achse
+     * mindestens gut eine Zeile ([zeile], Pixel) auseinander stehen und
+     * hoechstens vier Linien entstehen. [platz]: die Hoehe der Achse in
+     * Pixeln. Fuer Bilder, deren Hoehe die Dichte der Linien bestimmt
+     * (Tageskurve der Nacht); ohne passenden Schritt keine Linien.
+     */
+    fun rasterNachPlatz(tief: Int, hoch: Int, platz: Float, zeile: Float): List<Int> {
+        val spanne = (hoch - tief).coerceAtLeast(1)
+        // Ganzzahlig wie zuvor: mit Double statt Float kippte der Vergleich an der Grenze anders.
+        for (schritt in rundeSchritte(1.0, 100.0).map { it.toInt() }) {
+            if (platz * schritt / spanne < zeile * 1.2f) continue
+            // Strikt dazwischen heisst bei ganzen Zahlen: von tief + 1 bis hoch - 1.
+            val linien = vielfache((tief + 1).toDouble(), (hoch - 1).toDouble(), schritt.toDouble()).map { it.toInt() }
+            if (linien.size <= 4) return linien
+        }
+        return emptyList()
+    }
+
+    /**
      * RASTER AUSSEN: [unten] bis [oben] auf runde Schritte ab 0.1 nach aussen
      * gerundet, hoechstens [felder] Felder - die Achse umschliesst die Werte
      * immer (Koerper). Ab Schritt 100 ohne Treffer: der Bereich auf ganze

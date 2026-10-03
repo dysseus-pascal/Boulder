@@ -447,7 +447,7 @@ internal object Trainingsanalyse {
                     val pulsHier = puls.filter { it.sekunde in von.sekunde..bis.sekunde }
                     aus += Kilometer(
                         nummer, laenge, bis.sekunde - von.sekunde - pause(von.sekunde, bis.sekunde),
-                        pulsHier.takeIf { it.isNotEmpty() }?.map { it.bpm }?.average(),
+                        Statistik.mittel(pulsHier.map { it.bpm.toDouble() }),
                         auf[i] - auf[startIndex],
                     )
                 }
@@ -491,7 +491,7 @@ internal object Trainingsanalyse {
 
     /** Der mittlere Puls in einer Spanne, null wenn keiner drin liegt. */
     fun pulsMittel(puls: List<Pulspunkt>, von: Long, bis: Long): Double? =
-        puls.filter { it.sekunde in von..bis }.takeIf { it.isNotEmpty() }?.map { it.bpm }?.average()
+        Statistik.mittel(puls.filter { it.sekunde in von..bis }.map { it.bpm.toDouble() })
 
     /**
      * Wie schnell der Puls in den Pausen faellt, in Schlaegen je Minute.

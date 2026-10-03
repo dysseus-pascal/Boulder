@@ -64,9 +64,15 @@ internal object Fenster {
      * Schlafmitte - fest und auf der Karte genannt. Ueber die ganze Geschichte
      * gerechnet mischten sich Jahreszeiten und Quellwechsel ins Urteil, und die
      * Karten widersprachen den Vergleichen, die [VERGLEICH_TAGE] nehmen. Die
-     * acht Wochen des Verlaufs und die Richtung (56 Tage) liegen darin.
+     * acht Wochen des Verlaufs und die Richtung (zweimal [RICHTUNG_TAGE]) liegen darin.
      */
     const val TREND_TAGE = 90L
+
+    /** Die Richtung ("4 weeks vs 4 before"): so viele juengste Tage gegen ebenso viele davor. */
+    const val RICHTUNG_TAGE = 28L
+
+    /** Mit weniger Tagen in einer der beiden Haelften gibt es keine Richtung - eine Woche gegen drei Tage ist kein Trend. */
+    const val RICHTUNG_MINDESTTAGE = 7
 
     /** Wie viele Wochen der Verlauf zeigt. */
     const val TREND_WOCHEN = 8

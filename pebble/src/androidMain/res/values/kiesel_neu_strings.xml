@@ -9,7 +9,7 @@
     <string name="ks_n_notiz">Note</string>
     <string name="ks_n_quelle">from %1$s</string>
     <string name="ks_n_einstellungen">Kieselsport settings</string>
-    <string name="ks_n_stand_um">As reported by the watch %1$s.</string>
+    <string name="ks_n_stand_um">From the watch · %1$s</string>
     <string name="ks_n_stand_nie">Defaults · not yet reported by the watch</string>
     <string name="ks_n_maxpuls">Max heart rate</string>
     <string name="ks_n_maxpuls_alter">From age · %1$d</string>
@@ -25,10 +25,14 @@
     <string name="ks_n_kein_pin">no pin</string>
     <string name="ks_n_pin_zeit">Time</string>
     <string name="ks_n_senden">Send to watch</string>
+    <string name="ks_n_senden_knopf">Send</string>
+    <string name="ks_n_sendet">Sending…</string>
+    <!-- TalkBack: die Knoepfe Minus und Plus eines Werts. -->
+    <string name="ks_n_weniger">Decrease</string>
+    <string name="ks_n_mehr">Increase</string>
     <string name="ks_n_schliessen">Close</string>
     <string name="ks_n_uebernommen">Taken by the watch</string>
-    <string name="ks_n_keine_uhr">No watch connected.</string>
+    <string name="ks_n_keine_uhr">No watch connected</string>
     <string name="ks_n_keine_antwort">Not confirmed by the watch</string>
-    <string name="ks_n_stand_eben">Just reported by the watch.</string>
     <string name="ks_n_kw">Wk %1$s</string>
 </resources>

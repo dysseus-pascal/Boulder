@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -86,6 +88,9 @@ internal fun Farbkarte(
     val karte = rememberKarte()
     val start = stringResource(R.string.ks_t_start)
     val ende = stringResource(R.string.ks_t_ende)
+    // Zwoelf Stufen der Tempo-Skala als FLAECHE: die Kacheln sind in beiden Schemata hell.
+    val dunkel = Farben.dunkel()
+    val stufen = remember(dunkel) { (0..11).map { Farben.tempo(it / 11f).flaecheIm(dunkel).alsInt() } }
     AndroidView(
         factory = { karte },
         modifier = modifier,
@@ -117,7 +122,7 @@ internal fun Farbkarte(
                     while (b < idx.size - 1 && stufe(werte[idx[b]]) == s) b++
                     k.overlays += Polyline(k).apply {
                         setPoints(idx.subList(a, b + 1).map { geo[it] })
-                        outlinePaint.color = tempofarbe(s / 11f).alsInt()
+                        outlinePaint.color = stufen[s]
                         outlinePaint.strokeWidth = dick
                     }
                     a = b
@@ -137,6 +142,8 @@ internal fun Farbkarte(
                     }
                 }
             }
+            // Start gruen, Ziel rot wie eine Ampel - fest, weil die Kacheln in beiden
+            // Schemata hell sind; keine Groesse und kein Urteil aus Farben.kt passt dazu.
             marke(geo.first(), start, Color.rgb(0x2E, 0x7D, 0x32))
             marke(geo.last(), ende, Color.rgb(0xC6, 0x28, 0x28))
             val rahmen = stuecke.maxBy { it.size }.map { geo[it] }.takeIf { it.size >= 2 } ?: geo
@@ -179,8 +186,9 @@ internal fun Kartenvorschau(punkte: List<Pair<Double, Double>>, ton: androidx.co
             },
         )
         // Ueber der Karte: faengt den Tipp ab, laesst das Wischen der Liste durch.
+        // Fuer TalkBack unsichtbar - das Ziel ist die Karte darum, ein zweites ohne Namen stoerte.
         androidx.compose.foundation.layout.Box(
-            Modifier.matchParentSize().clickable(onClick = onClick),
+            Modifier.matchParentSize().clickable(onClick = onClick).semantics { hideFromAccessibility() },
         )
     }
 }

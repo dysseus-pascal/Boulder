@@ -23,7 +23,7 @@ internal enum class Tageszeit { MORGEN, TAG, ABEND }
 
 internal enum class Schrittlage { BEGONNEN, NOCH, ERREICHT, ANTEIL }
 
-internal data class Tagessatz(
+internal data class Tagessatzdaten(
     val tageszeit: Tageszeit,
     /** Null ohne Nacht - dann spricht der Satz nur von Schritten. */
     val urteil: Schlafurteil?,
@@ -60,7 +60,7 @@ internal enum class Tagesmerkmal { HEUTE, MEISTE, ERSTER, ZIEL, KEINS }
 
 internal data class Schritttag(val tag: LocalDate, val schritte: Long, val merkmal: Tagesmerkmal)
 
-internal data class Schrittwoche(val tage: List<Schritttag>, val seit: LocalDate?, val volleWocheAb: LocalDate?)
+internal data class Schrittwochendaten(val tage: List<Schritttag>, val seit: LocalDate?, val volleWocheAb: LocalDate?)
 
 /** So viele Schlaege neben dem Schnitt heisst der Ruhepuls noch "as usual". */
 internal const val RUHEPULS_SPANNE = 2
@@ -87,7 +87,7 @@ internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int = Gesundhe
 }
 
 /** Der Satz oben auf der Seite, als Bausteine - die Worte legt die Ansicht darum. */
-internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: LocalTime): Tagessatz {
+internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: LocalTime): Tagessatzdaten {
     val zeit = tageszeit(uhrzeit)
     val n = stand.nacht
     // Ohne Abschnitte ist phasen[0] eine Null aus Unwissen, kein "nie wach".
@@ -98,7 +98,7 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
         zeit == Tageszeit.TAG -> Schrittlage.NOCH
         else -> Schrittlage.ANTEIL
     }
-    return Tagessatz(
+    return Tagessatzdaten(
         tageszeit = zeit,
         urteil = n?.let { schlafurteil(it.schlafMinuten) },
         durchgeschlafen = wach != null && wach < Gesundheitsziele.DURCHGESCHLAFEN_MIN,
@@ -229,8 +229,8 @@ internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, j
  * waere eine Behauptung. Solange die Woche nicht voll ist, sagt die Seite,
  * ab wann sie es ist.
  */
-internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>, ziel: Long = Gesundheitsziele.SCHRITTE): Schrittwoche {
-    if (woche.isEmpty()) return Schrittwoche(emptyList(), null, null)
+internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>, ziel: Long = Gesundheitsziele.SCHRITTE): Schrittwochendaten {
+    if (woche.isEmpty()) return Schrittwochendaten(emptyList(), null, null)
     val heute = woche.last().first
     val ersterIndex = woche.indexOfFirst { it.second > 0 }.takeIf { it >= 0 } ?: woche.lastIndex
     val gezaehlt = woche.drop(ersterIndex)
@@ -249,7 +249,7 @@ internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>
         Schritttag(tag, schritte, merkmal)
     }.asReversed()
     val seit = gezaehlt.first().first.takeIf { !voll }
-    return Schrittwoche(tage, seit, seit?.plusDays(woche.size - 1L))
+    return Schrittwochendaten(tage, seit, seit?.plusDays(woche.size - 1L))
 }
 
 /**

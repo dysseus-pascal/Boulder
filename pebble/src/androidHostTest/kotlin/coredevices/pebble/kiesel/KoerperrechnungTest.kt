@@ -11,7 +11,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class KoerperdatenTest {
+class KoerperrechnungTest {
     private val k = Koerperrechnung
     private val zone: ZoneId = ZoneOffset.UTC
     private val heute: LocalDate = LocalDate.of(2026, 10, 2)

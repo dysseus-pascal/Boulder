@@ -219,12 +219,21 @@ internal object SupCycle {
      */
     fun kennung(tag: LocalDate, platz: Int, name: String) = "${kennungOhneName(tag, platz)}-${Integer.toHexString(name.hashCode())}"
 
+    /** Der Anfang jeder Kennung von SupCycle, ob mit Namen oder ohne. */
+    private const val KENNUNG_ANFANG = "supcycle-"
+
+    /**
+     * Ob ein Eintrag der Akte von SupCycle stammt. Die Gesundheitsseite
+     * erkennt Praeparate daran: aendert sich die Kennung hier, folgt sie mit.
+     */
+    fun istKennung(kennung: String?): Boolean = kennung?.startsWith(KENNUNG_ANFANG) == true
+
     /** Die Kennung bis Boulder 0.42.1, ohne Namen - zum Loeschen von Eintraegen dieser Fassungen. */
-    private fun kennungOhneName(tag: LocalDate, platz: Int) = "supcycle-$tag-$platz"
+    private fun kennungOhneName(tag: LocalDate, platz: Int) = "$KENNUNG_ANFANG$tag-$platz"
 
     /** Der Platz aus einer Kennung vom Tag [tag] - null fuer eine fremde oder eine alte ohne Kennung. */
     fun platzAus(kennung: String?, tag: String): Int? =
-        kennung?.removePrefix("supcycle-$tag-")?.takeIf { it != kennung }?.substringBefore('-')?.toIntOrNull()?.takeIf { it in 0..63 }
+        kennung?.removePrefix("$KENNUNG_ANFANG$tag-")?.takeIf { it != kennung }?.substringBefore('-')?.toIntOrNull()?.takeIf { it in 0..63 }
 
     /**
      * Einnahmen, die im Tagesstrahl geloescht wurden: sie zaehlen in Liste,

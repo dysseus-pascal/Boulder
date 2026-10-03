@@ -12,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class TagesbildTest {
+class TagesurteileTest {
     private val g = Gesundheitsrechnung
 
     private fun nacht(schlaf: Int, wach: Int = 0, ruhepuls: Int? = 55, hrv: Int? = 52, mitAbschnitten: Boolean = true) = Nacht(

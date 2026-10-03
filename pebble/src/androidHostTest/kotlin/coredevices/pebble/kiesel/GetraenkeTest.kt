@@ -23,6 +23,8 @@ class GetraenkeTest {
     @Test
     fun praeparat_ist_supcycle_oder_ein_eintrag_ohne_inhalt() {
         assertEquals(Eintragsart.PRAEPARAT, g.einordnung(true, "supcycle-2026-10-02-1", null, null))
+        // Die Kennung, die SupCycle heute schreibt, mit Namen: sie gilt auch mit kcal.
+        assertEquals(Eintragsart.PRAEPARAT, g.einordnung(true, SupCycle.kennung(LocalDate.of(2026, 10, 2), 1, "Vit D"), null, 5.0))
         assertEquals(Eintragsart.PRAEPARAT, g.einordnung(false, null, null, null))
         // Ein fremdes Praeparat mit 0 kcal statt ohne Angabe bleibt eines.
         assertEquals(Eintragsart.PRAEPARAT, g.einordnung(false, null, null, 0.0))

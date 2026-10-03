@@ -1,21 +1,12 @@
 package coredevices.pebble.kiesel.ansicht
 
 import android.widget.Toast
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,7 +25,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
 import coredevices.pebble.kiesel.Bandurteil
-import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
@@ -42,7 +32,6 @@ import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.Herzurteil
-import coredevices.pebble.kiesel.Kaffeesorten
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.Vergleich
@@ -52,7 +41,6 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.NachtEntity
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.time.Duration
@@ -173,87 +161,4 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
         },
     )
     return teile.joinToString(" ")
-}
-
-/**
- * Koffein von Hand eintragen - darunter, was gestern spaet eingetragen
- * wurde: der Strahl zeigt nur heute, und ein Fehleintrag um 23:50 soll sich
- * auch nach Mitternacht noch aendern lassen.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun KoffeinBlatt(s: GesundheitsStand, onDismiss: () -> Unit, bearbeite: (Bearbeitung) -> Unit, trinke: (Int) -> Unit) {
-    val context = LocalContext.current
-    // Dieselben Portionen wie von der Uhr: eine Tasse hat ueberall gleich viel.
-    val getraenke = Kaffeesorten.WAEHLBAR.mapNotNull { sorte -> Kaffeesorten.portion(sorte)?.let { sorte to it } }
-    val glas = stringResource(R.string.ks_d_glas)
-    val gestern = (
-        s.gestern.map { e -> Bearbeitung.Getraenk(e.name, e.zeit, e.id) to e.koffeinMg?.let { Formate.menge(it, "mg") } } +
-            s.gesternGlaeser.map { g -> Bearbeitung.Glas(glas, g.zeit, g.id) to Formate.menge(g.ml.toLong(), "ml") }
-        ).sortedBy { it.first.zeit }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            Kopf(stringResource(R.string.ks_h_koffein_dazu))
-            getraenke.forEachIndexed { i, (sorte, p) ->
-                if (i > 0) Trenner()
-                val name = Kaffeesorten.name(context, p)
-                val mg = p.koffeinMg.roundToInt()
-                Zeile(
-                    name, null, Formate.zahl(mg.toLong()), "mg", zeichen = { Tonkreis(Zeichen.tasse, Farben.koffein, 0.30f) },
-                    beschreibung = stringResource(R.string.ks_h_getraenk, name, mg), onClick = { trinke(sorte) }, chevron = false,
-                )
-            }
-            if (gestern.isNotEmpty()) {
-                // Dasselbe "Yesterday" wie jede Zeitangabe der App (Formate).
-                Kopf(stringResource(R.string.ks_fmt_gestern))
-                gestern.forEachIndexed { i, (b, wert) ->
-                    if (i > 0) Trenner()
-                    Zeile(
-                        b.titel, Formate.uhrzeit(context, b.zeit), wert?.zahl, wert?.einheit,
-                        zeichen = {
-                            if (b is Bearbeitung.Glas) Tonkreis(Zeichen.wasser, Farben.wasser)
-                            else Tonkreis(Zeichen.tasse, Farben.koffein, 0.30f)
-                        },
-                        onClick = { bearbeite(b) }, chevron = false,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Die Praeparate des Tages, abgehakt oder offen - die Liste, die frueher auf der Karte stand. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PraeparatBlatt(s: GesundheitsStand, onDismiss: () -> Unit) {
-    val stand = s.supplemente ?: return
-    val context = LocalContext.current
-    val rand = MaterialTheme.colorScheme.outline
-    val platz = stringResource(R.string.ks_s_platz_n)
-    val liste = stand.heute { String.format(platz, it) }
-    val jetzt = LocalTime.now()
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            // Der Zusatz ohne "·": den Trenner setzt der Kopf.
-            Kopf(
-                stringResource(R.string.ks_h_praeparate_heute),
-                Formate.zahl(liste.count { it.genommen }.toLong()) + " " + stringResource(R.string.ks_h_von_n, liste.size),
-            )
-            if (liste.isEmpty()) Leerzeile(stringResource(R.string.ks_h_p_keine))
-            liste.forEachIndexed { i, e ->
-                if (i > 0) Trenner()
-                // Die Planzeit darunter - in Warnfarbe erst, wenn sie ohne Haken verstrichen ist.
-                val versaeumt = !e.genommen && e.zeit?.let { !jetzt.isBefore(it) } == true
-                Zeile(
-                    e.name,
-                    unter = e.zeit?.let { Formate.uhrzeit(context, it) },
-                    unterFarbe = if (versaeumt) Farben.warnung.ton() else null,
-                    zeichen = {
-                        if (e.genommen) Tonkreis(Zeichen.haken, Farben.praeparat, 0.18f)
-                        else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))
-                    },
-                )
-            }
-        }
-    }
 }

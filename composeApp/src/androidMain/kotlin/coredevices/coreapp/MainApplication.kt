@@ -23,6 +23,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
+import coil3.memoryCacheMaxSizePercentWhileInBackground
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.anopticlabs.gravel.pkjs.recordUdpFilterInstall
@@ -37,6 +38,7 @@ import coredevices.coreapp.di.utilModule
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.FirebaseResidueCleanup
 import coredevices.coreapp.util.initLogging
+import coredevices.coreapp.util.logMindeststufe
 import coredevices.coreapp.util.registerBluetoothPairingDebugLogger
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.watchModule
@@ -45,6 +47,12 @@ import coredevices.util.CoreConfigHolder
 import coredevices.whisper.WhisperEngineClient
 import coredevices.whisper.runningInIsolatedProcess
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -61,6 +69,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+    private val libPebble: LibPebble by inject()
 
     // Gravel: set once in attachBaseContext; null in the speech engine's isolated process.
     private var udpFilterResult: InstallResult? = null
@@ -77,6 +86,8 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // Boulder: vor allem anderen, auch im Prozess der Spracherkennung - siehe logMindeststufe.
+        Logger.setMinSeverity(logMindeststufe(isDebuggableBuild, ausfuehrlich = false))
         // Fork: the speech engine's isolated process instantiates this class
         // too, and nothing below may run there; see runningInIsolatedProcess.
         if (runningInIsolatedProcess()) return
@@ -124,6 +135,13 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         setupExceptionHandler()
         experimentalDevices.appInit()
         pebbleAppDelegate.init()
+        // Boulder: nur gelesen - die Diagnoseschalter der Verbindung holen Verbose zurueck.
+        libPebble.config
+            .onEach {
+                val ausfuehrlich = it.watchConfig.verboseWatchManagerLogging || it.bleConfig.verbosePpogLogging
+                Logger.setMinSeverity(logMindeststufe(isDebuggableBuild, ausfuehrlich))
+            }
+            .launchIn(CoroutineScope(SupervisorJob() + Dispatchers.Default))
         configureStrictMode()
         scheduleBackgroundJob(AppContext(this), coreConfigHolder.config.value)
         commonAppDelegate.init()
@@ -232,10 +250,16 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         return ImageLoader.Builder(context)
             .crossfade(true)
             .memoryCache {
+                // Boulder: 15 statt 25 % des App-Heaps (Pixel 8: 38 statt 64 MB Obergrenze); die
+                // Bilder kommen nur aus Locker und Store, ein Neuladen aus dem Disk-Cache ist billig.
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
+                    .maxSizePercent(context, 0.15)
                     .build()
             }
+            // Boulder: verschwindet die Oberflaeche (TRIM_MEMORY_UI_HIDDEN), leert Coil den Cache
+            // bis zum naechsten Activity-Start - der Prozess lebt mit dem Vordergrunddienst
+            // tagelang, die Oberflaeche nur Minuten.
+            .memoryCacheMaxSizePercentWhileInBackground(0.0)
             .components {
                 add(SvgDecoder.Factory())
                 // Trying to see if not using AnimatedImageDecoder fixes memory leaks

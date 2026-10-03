@@ -29,18 +29,25 @@ internal object Tagesspeicher {
     private const val DATEI = "kiesel-tagesspeicher"
     private const val EIGENES = "kiesel-tagesarchiv"
 
+    /**
+     * Die gelesenen Faecher, solange eine Trendseite sichtbar ist ([Seitencache]): sonst parste
+     * jeder Uhrschub (~alle 15 min) beide Faecher ganz und [halte] jeden Tag der Uhr noch einmal
+     * (2 Jahre Vorgeschichte: ~1'100 JSON-Objekte, 20-60 ms). [ergaenze] macht ein Fach
+     * ungueltig, [halte] schreibt seine Aenderung mit hinein.
+     */
+    internal val gelesen = Seitencache<String, Map<LocalDate, Map<String, Double>>>()
+
     /** Traegt in die Vorgeschichte nur ein, was fuer den Tag noch fehlt - vorhandene Werte bleiben. */
-    fun ergaenze(context: Context, tag: LocalDate, werte: Map<String, Double>) = ergaenze(context, DATEI, tag, werte)
+    fun ergaenze(context: Context, tag: LocalDate, werte: Map<String, Double>) = ergaenze(Prefsfach(context, DATEI), tag, werte)
 
     /** Dasselbe fuer eigene Werte aus Boulders Sicherung: sie fuellen, was das Fach nicht kennt. */
-    fun ergaenzeEigene(context: Context, tag: LocalDate, werte: Map<String, Double>) = ergaenze(context, EIGENES, tag, werte)
+    fun ergaenzeEigene(context: Context, tag: LocalDate, werte: Map<String, Double>) = ergaenze(Prefsfach(context, EIGENES), tag, werte)
 
-    private fun ergaenze(context: Context, datei: String, tag: LocalDate, werte: Map<String, Double>) {
+    @Synchronized
+    internal fun ergaenze(fach: Fach, tag: LocalDate, werte: Map<String, Double>) {
         if (werte.isEmpty()) return
-        val p = context.getSharedPreferences(datei, Context.MODE_PRIVATE)
-        val alt = p.getString(tag.toString(), null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
-        werte.forEach { (k, v) -> if (!alt.has(k)) alt.put(k, v) }
-        p.edit().putString(tag.toString(), alt.toString()).apply()
+        fach.ergaenze(tag, werte)
+        gelesen.vergiss(fach.name)
     }
 
     /**
@@ -48,34 +55,136 @@ internal object Tagesspeicher {
      * einen Tag sicher ganz kennt, ist ihr Wert der richtige - etwa nach einem
      * spaeten Sync. Welche Tage das sind, entscheidet [Trenddaten.festzuschreiben].
      * Geschrieben wird nur, was sich geaendert hat; das laeuft bei jedem Lesen.
+     * Ohne [merken] (Hintergrund) bleibt ein noch nicht gelesenes Fach ungelesen.
      */
-    fun halte(context: Context, reihen: Reihen) {
-        val p = context.getSharedPreferences(EIGENES, Context.MODE_PRIVATE)
-        val e = p.edit()
-        var geaendert = false
-        reihen.flatMap { (k, l) -> l.map { (t, w) -> Triple(t, k, w) } }.groupBy { it.first }.forEach { (tag, l) ->
-            val alt = p.getString(tag.toString(), null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
-            val neu = l.filter { (_, k, w) -> !alt.has(k) || alt.optDouble(k) != w }
-            if (neu.isEmpty()) return@forEach
-            neu.forEach { (_, k, w) -> alt.put(k, w) }
-            e.putString(tag.toString(), alt.toString())
-            geaendert = true
-        }
-        if (geaendert) e.apply()
+    fun halte(context: Context, reihen: Reihen, merken: Boolean = true) = halte(Prefsfach(context, EIGENES), reihen, merken)
+
+    @Synchronized
+    internal fun halte(fach: Fach, reihen: Reihen, merken: Boolean) {
+        val bekannt = if (merken) tage(fach, merken = true) else gelesen[fach.name]
+        val neu = zuSchreiben(reihen) { tag -> if (bekannt != null) bekannt[tag] else fach.tag(tag) }
+        if (neu.isEmpty()) return
+        fach.schreibe(neu)
+        // Gleich im Cache nachgetragen: sonst laese das naechste eigene() ein Fach ohne diese Tage.
+        if (bekannt != null) gelesen[fach.name] = bekannt + neu
     }
 
-    fun alle(context: Context): Reihen = lies(context, DATEI)
+    fun alle(context: Context, merken: Boolean = true): Reihen = alsReihen(tage(Prefsfach(context, DATEI), merken))
 
-    fun eigene(context: Context): Reihen = lies(context, EIGENES)
+    fun eigene(context: Context, merken: Boolean = true): Reihen = alsReihen(tage(Prefsfach(context, EIGENES), merken))
 
-    private fun lies(context: Context, datei: String): Reihen {
-        val aus = mutableMapOf<String, MutableList<Pair<LocalDate, Double>>>()
-        context.getSharedPreferences(datei, Context.MODE_PRIVATE).all.forEach { (k, v) ->
-            val tag = runCatching { LocalDate.parse(k) }.getOrNull() ?: return@forEach
-            val o = runCatching { JSONObject(v as String) }.getOrNull() ?: return@forEach
-            o.keys().forEach { spalte -> aus.getOrPut(spalte) { mutableListOf() } += tag to o.getDouble(spalte) }
+    @Synchronized
+    internal fun tage(fach: Fach, merken: Boolean): Map<LocalDate, Map<String, Double>> =
+        gelesen[fach.name] ?: fach.alle().also { if (merken) gelesen[fach.name] = it }
+
+    /**
+     * Die Tage, die [halte] neu schreibt - je Tag ALLE Spalten, die alten mit den neuen
+     * Werten: ein Tag zaehlt, sobald eine Spalte fehlt oder einen anderen Wert hat.
+     * [alt] liefert, was fuer einen Tag schon steht.
+     */
+    internal fun zuSchreiben(reihen: Reihen, alt: (LocalDate) -> Map<String, Double>?): Map<LocalDate, Map<String, Double>> {
+        val aus = mutableMapOf<LocalDate, Map<String, Double>>()
+        reihen.flatMap { (k, l) -> l.map { (t, w) -> Triple(t, k, w) } }.groupBy { it.first }.forEach { (tag, l) ->
+            val vorher = alt(tag).orEmpty()
+            val neu = l.filter { (_, k, w) -> vorher[k] != w }
+            if (neu.isNotEmpty()) aus[tag] = vorher + neu.associate { it.second to it.third }
         }
+        return aus
+    }
+
+    /** Ein Fach als Reihen: je Spalte die Tage mit Wert, aufsteigend. */
+    internal fun alsReihen(tage: Map<LocalDate, Map<String, Double>>): Reihen {
+        val aus = mutableMapOf<String, MutableList<Pair<LocalDate, Double>>>()
+        tage.forEach { (tag, werte) -> werte.forEach { (spalte, w) -> aus.getOrPut(spalte) { mutableListOf() } += tag to w } }
         return aus.mapValues { (_, l) -> l.sortedBy { it.first } }
+    }
+}
+
+/**
+ * Ein Fach des [Tagesspeicher]s: Tage mit ihren Werten je Spalte. Eigens, damit die Regeln
+ * des Caches ohne Android pruefbar sind - in den Hosttests ist JSONObject nur ein Stummel.
+ */
+internal interface Fach {
+    val name: String
+
+    /** Alle Tage, ganz geparst - das Teure, das [Tagesspeicher.gelesen] spart. */
+    fun alle(): Map<LocalDate, Map<String, Double>>
+
+    fun tag(tag: LocalDate): Map<String, Double>?
+
+    /** Ersetzt je Tag alle Werte. */
+    fun schreibe(tage: Map<LocalDate, Map<String, Double>>)
+
+    /** Traegt fuer [tag] nur ein, was noch fehlt. */
+    fun ergaenze(tag: LocalDate, werte: Map<String, Double>)
+}
+
+/** Das Fach als SharedPreferences: je Tag ("2026-10-03") ein JSON-Objekt mit den Spalten. */
+private class Prefsfach(context: Context, override val name: String) : Fach {
+    private val p = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+
+    override fun alle(): Map<LocalDate, Map<String, Double>> = buildMap {
+        p.all.forEach { (k, v) ->
+            val tag = runCatching { LocalDate.parse(k) }.getOrNull() ?: return@forEach
+            ausJson(v as? String ?: return@forEach)?.let { put(tag, it) }
+        }
+    }
+
+    override fun tag(tag: LocalDate): Map<String, Double>? = p.getString(tag.toString(), null)?.let(::ausJson)
+
+    override fun schreibe(tage: Map<LocalDate, Map<String, Double>>) {
+        val e = p.edit()
+        tage.forEach { (tag, werte) -> e.putString(tag.toString(), JSONObject().apply { werte.forEach { (k, v) -> put(k, v) } }.toString()) }
+        e.apply()
+    }
+
+    override fun ergaenze(tag: LocalDate, werte: Map<String, Double>) {
+        val alt = p.getString(tag.toString(), null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
+        werte.forEach { (k, v) -> if (!alt.has(k)) alt.put(k, v) }
+        p.edit().putString(tag.toString(), alt.toString()).apply()
+    }
+
+    private fun ausJson(text: String): Map<String, Double>? = runCatching {
+        val o = JSONObject(text)
+        o.keys().asSequence().associateWith { o.getDouble(it) }
+    }.getOrNull()
+}
+
+/**
+ * Boulder: ein Zwischenspeicher, der nur haelt, solange eine Trendseite sichtbar ist - von
+ * [oeffne] (ON_START) bis [schliesse] (ON_STOP oder Abbau). Der Prozess lebt mit dem
+ * Vordergrunddienst tagelang, und ein Fach mit 2 Jahren Vorgeschichte haelt geboxt 0,5-1 MB;
+ * die Rueckkehr liest ohnehin alles neu (ON_RESUME). Ein Lesen, das erst nach dem Schliessen
+ * endet, bleibt deshalb nicht liegen. Gezaehlt, weil sich beim Seitenwechsel zwei ueberlappen.
+ */
+internal class Seitencache<K : Any, V : Any> {
+    private val werte = HashMap<K, V>()
+    private var offen = 0
+
+    @Synchronized
+    fun oeffne() {
+        offen++
+    }
+
+    /** Geht die letzte sichtbare Seite, ist alles vergessen. */
+    @Synchronized
+    fun schliesse() {
+        offen = maxOf(0, offen - 1)
+        if (offen == 0) werte.clear()
+    }
+
+    @Synchronized
+    operator fun get(k: K): V? = werte[k]
+
+    /** Haelt [v] nur bei sichtbarer Seite. */
+    @Synchronized
+    operator fun set(k: K, v: V) {
+        if (offen > 0) werte[k] = v
+    }
+
+    @Synchronized
+    fun vergiss(k: K) {
+        werte.remove(k)
     }
 }
 

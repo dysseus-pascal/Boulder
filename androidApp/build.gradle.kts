@@ -65,8 +65,10 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
+            // Boulder: nur 64 Bit (Nutzerentscheid 03.10.2026, -1,33 MB APK). Das Pixel 8 kennt nur
+            // arm64-v8a, und der x86_64-Emulator fuehrt arm64 schon heute ueber libndk_translation aus.
             //noinspection ChromeOsAbiSupport
-            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += setOf("arm64-v8a")
         }
     }
     packaging {
@@ -83,7 +85,10 @@ android {
         // property replaces the AGP default, so the default patterns are
         // restated ahead of the two additions.
         ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~" +
-            ":!wispr_flow_logo_black.png:!wispr_flow_logo_white.png"
+            ":!wispr_flow_logo_black.png:!wispr_flow_logo_white.png" +
+            // Boulder: vier weitere Compose-Ressourcen, die nichts anzeigt (0,92 MB im APK); siehe
+            // BoulderAssetausschlussTest. Das Muster gilt dem Dateinamen in jedem Modul.
+            ":!Inter-Italic.ttf:!index01_mic.png:!ring_wireframe.png:!core.xml"
     }
     buildTypes {
         getByName("release") {
@@ -131,6 +136,13 @@ configurations.matching {
 }.configureEach {
     exclude(group = "androidx.compose.ui", module = "ui-tooling")
     exclude(group = "org.jetbrains.compose.ui", module = "ui-tooling")
+}
+
+// Boulder: kotlin-reflect kommt nur ueber ktor-server-core (LAN-Entwicklerverbindung) und kostet
+// ~0,45 MB im APK. Der Server mit Lambda-Modul braucht es nicht; das belegt
+// DevConnectionOhneReflectTest in :libpebble3. Der Debug-Build behaelt es.
+configurations.matching { it.name == "releaseRuntimeClasspath" }.configureEach {
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
 }
 
 dependencies {
@@ -517,12 +529,16 @@ androidComponents {
                     """.*wispr_flow_logo_(black|white)\.png""",
                     """lib/[^/]+/libhaversinesatellitelibrary\.so""",
                     """lib/[^/]+/libppcommon\.so""",
+                    // Boulder: die Assets aus ignoreAssetsPattern und alles 32-Bit (abiFilters).
+                    """assets/.*/(Inter-Italic\.ttf|index01_mic\.png|ring_wireframe\.png|core\.xml)""",
+                    """lib/armeabi-v7a/.*""",
                     // The dictation test clip lives in src/debug/assets and must stay out of release.
                     """assets/debug-dictation-clip\.raw""".takeIf { variant.buildType == "release" },
                 ),
             )
+            // Boulder: nur noch arm64-v8a, siehe abiFilters.
             requiredEntries.set(
-                listOf("lib/arm64-v8a/libgravelsocketfilter.so", "lib/armeabi-v7a/libgravelsocketfilter.so"),
+                listOf("lib/arm64-v8a/libgravelsocketfilter.so"),
             )
             // Release only: unminified debug dex carries the unused UDP halves of androidx.core
             // and ktor-network, which R8 removes.

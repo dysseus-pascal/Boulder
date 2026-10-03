@@ -79,7 +79,8 @@ class UdpFilterInstallSentinelTest {
             Regex("""requiredEntries\.set\(\s*listOf\(([^)]*)\)""").find(build)?.groupValues?.get(1),
             "androidApp/build.gradle.kts no longer sets requiredEntries",
         )
-        for (abi in listOf("arm64-v8a", "armeabi-v7a")) {
+        // Boulder: nur arm64-v8a, Boulder packt kein 32 Bit (abiFilters).
+        for (abi in listOf("arm64-v8a")) {
             assertTrue("\"lib/$abi/libgravelsocketfilter.so\"" in required, "requiredEntries no longer names the $abi library: $required")
         }
         val releaseTypes = assertNotNull(

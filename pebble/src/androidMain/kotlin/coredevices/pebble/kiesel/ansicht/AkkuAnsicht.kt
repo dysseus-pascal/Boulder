@@ -15,7 +15,9 @@ import androidx.compose.ui.res.stringResource
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.Trainingsanalyse
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -38,7 +40,7 @@ internal fun AkkuAnsicht() {
     var naechte by remember { mutableStateOf<List<NachtEntity>?>(null) }
     suspend fun lade() {
         val jetzt = Instant.now()
-        naechte = runCatching { api.getNaechte(jetzt.minus(Duration.ofDays(14)).epochSecond, jetzt.epochSecond) }.getOrDefault(emptyList())
+        naechte = versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
     }
     // Einmal beim Oeffnen, und wieder, wenn die Uhr etwas schickt - etwa die
     // Nacht, die gerade ankommt.

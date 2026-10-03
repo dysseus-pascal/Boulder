@@ -9,7 +9,6 @@ import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
@@ -63,17 +62,8 @@ internal data class Tageseintrag(
 /** Was ein Ernaehrungseintrag der Akte auf der Gesundheitsseite ist. */
 internal enum class Eintragsart { GETRAENK, PRAEPARAT }
 
-/** So weit zurueck zaehlt der Blutdruck: wer selten misst, misst kaum einmal die Woche. */
-internal const val BLUTDRUCK_TAGE = 30L
-
 /** Messungen mit weniger Abstand gehoeren zu einer Sitzung an der Manschette. */
 internal const val BLUTDRUCK_SITZUNG_S = 15 * 60L
-
-/**
- * So viele Kalendertage zaehlt die letzte Sitzung fuer die Herzzeile. Neben
- * dem Puls von heute laese sich ein Wert von vor Wochen wie ein heutiger.
- */
-internal const val BLUTDRUCK_ZEILE_TAGE = 7L
 
 /** Eine Blutdruckmessung aus der Akte, in mmHg. */
 internal data class Blutdruck(val zeit: Instant, val oben: Int, val unten: Int)
@@ -128,7 +118,7 @@ internal data class GesundheitsStand(
     val tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
     /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesstrahl. */
     val glasEintraege: List<Glaseintrag> = emptyList(),
-    /** Blutdruck der letzten [BLUTDRUCK_TAGE] Tage aus der Akte, aelteste zuerst. */
+    /** Blutdruck der letzten [Fenster.BLUTDRUCK_TAGE] Tage aus der Akte, aelteste zuerst. */
     val blutdruck: List<Blutdruck> = emptyList(),
     /** Der juengste Minutenwert der Uhr - wann zuletzt synchronisiert wurde. */
     val letzteDaten: Instant?,
@@ -164,8 +154,6 @@ internal object Gesundheitsrechnung {
 
     /** Weniger wache Messungen tragen keinen Tagesschnitt. */
     const val TAGESHERZ_MINDESTENS = 24
-    /** Ab so vielen frueheren Tagen gibt es ein Urteil. */
-    const val TAGESHERZ_LERNTAGE = 5
 
     /**
      * Heute gegen die frueheren Tage bis zur selben Uhrzeit. [abstand]: der
@@ -173,18 +161,19 @@ internal object Gesundheitsrechnung {
      * Belastung gegen ihren Median - der Satz sagt "more load than usual".
      * Frueher entschied ohne Belastung der Wachpuls mit, und der Satz sprach
      * von einem "harder day", waehrend die Herzzeile "Day as usual" sagte.
-     * Ohne Urteil, solange weniger als [TAGESHERZ_LERNTAGE] Tage da sind.
+     * Ohne Urteil, solange weniger als [Fenster.TAGESHERZ_LERNTAGE] Tage da sind.
      */
     data class Tagesurteil(val heute: Tagesherz, val schnittPuls: Int?, val abstand: Int?, val haerte: Vergleich?)
 
     fun tagesurteil(tage: List<Tagesherz>, heute: LocalDate): Tagesurteil? {
         val jetzt = tage.firstOrNull { it.tag == heute }?.takeIf { it.wachpuls != null } ?: return null
         val frueher = tage.filter { it.tag < heute && it.wachpuls != null }
-        if (frueher.size < TAGESHERZ_LERNTAGE) return Tagesurteil(jetzt, null, null, null)
+        if (frueher.size < Fenster.TAGESHERZ_LERNTAGE) return Tagesurteil(jetzt, null, null, null)
         val schnitt = frueher.map { it.wachpuls!! }.average().roundToInt()
         val abstand = jetzt.wachpuls!! - schnitt
-        // Der Median, weil ein einzelner Trainingstag den Schnitt der Belastung verzerrt
-        val last = frueher.map { it.belastung }.sorted().let { it[it.size / 2] }
+        // Der Median, weil ein einzelner Trainingstag den Schnitt der Belastung verzerrt.
+        // Der obere, wie immer schon: bei [10, 20, 30, 40] gilt 30, nicht 25.
+        val last = Statistik.obererMedian(frueher.map { it.belastung })
         val haerte = if (last >= 10) when {
             jetzt.belastung >= maxOf(last * 3 / 2, last + 15) -> Vergleich.HOEHER
             jetzt.belastung <= last / 2 -> Vergleich.TIEFER
@@ -316,9 +305,9 @@ internal object Gesundheitsrechnung {
         return Blutdruckstand(sitzungen.map { Blutdruck(it.first().zeit, oben(it).roundToInt(), unten(it).roundToInt()) }, schnitt)
     }
 
-    /** Die letzte Sitzung fuer die Herzzeile, wenn sie in den letzten [BLUTDRUCK_ZEILE_TAGE] Kalendertagen liegt. */
+    /** Die letzte Sitzung fuer die Herzzeile, wenn sie in den letzten [Fenster.BLUTDRUCK_ZEILE_TAGE] Kalendertagen liegt. */
     fun blutdruckFuerHerzzeile(messungen: List<Blutdruck>, jetzt: Instant, zone: ZoneId): Blutdruck? =
-        blutdruckstand(messungen)?.letzte?.takeIf { tageZurueck(it.zeit, jetzt, zone) < BLUTDRUCK_ZEILE_TAGE }
+        blutdruckstand(messungen)?.letzte?.takeIf { tageZurueck(it.zeit, jetzt, zone) < Fenster.BLUTDRUCK_ZEILE_TAGE }
 
     /**
      * Die y-Achse des Blutdruckbilds in mmHg: fuenf mmHg Luft unter dem
@@ -387,8 +376,9 @@ internal object Gesundheitsrechnung {
      */
     fun fuenfMinuten(punkte: List<Pair<Long, Int>>): List<Pulsbin> =
         punkte.groupBy { it.first / 300 * 300 }.toSortedMap().map { (sekunde, l) ->
-            val werte = l.map { it.second }.sorted()
-            Pulsbin(sekunde, werte[werte.size / 2], werte.first(), werte.last())
+            val werte = l.map { it.second }
+            // Der obere Median: er ist ein gemessener Puls, kein Mittel zweier.
+            Pulsbin(sekunde, Statistik.obererMedian(werte), werte.min(), werte.max())
         }
 
     /**
@@ -412,21 +402,6 @@ internal object Gesundheitsrechnung {
         val bins = fuenfMinuten(punkte)
         val hoechster = bins.maxOfOrNull { it.median } ?: return null
         return bins.last { it.median == hoechster }.let { it.sekunde to it.median }
-    }
-
-    /**
-     * Rasterlinien in runden Schritten, hoechstens fuenf Striche: der kleinste
-     * Schritt ab [mindestSchritt], mit dem hoechstens fuenf Vielfache in
-     * [tief, hoch] liegen. Ein Puls will Zehner, eine SpO2-Achse Fuenfer.
-     */
-    fun raster(tief: Int, hoch: Int, mindestSchritt: Int = 1): List<Int> {
-        if (hoch < tief) return emptyList()
-        for (schritt in listOf(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000).filter { it >= mindestSchritt }) {
-            val erste = Math.floorDiv(tief + schritt - 1, schritt) * schritt
-            val linien = generateSequence(erste) { it + schritt }.takeWhile { it <= hoch }.toList()
-            if (linien.size <= 5) return linien
-        }
-        return emptyList()
     }
 
     /** Der Schnitt der Tage mit Wert, oder null, wenn weniger als [mindestens] solche Tage da sind. */
@@ -480,25 +455,20 @@ internal object Gesundheitsrechnung {
         val imBand: Boolean? get() = if (wert == null || band == null) null else wert in band.first..band.second
     }
 
-    /** So viele Naechte vor einem Tag bilden sein Band. */
-    const val HRV_FENSTER = 30
-    /** Mit weniger Naechten gibt es kein Band - es waere Zufall. */
-    const val HRV_MINDESTENS = 7
-
     /**
      * Die sieben Naechte bis [heute], jede mit ihrem persoenlichen Band: Schnitt
-     * plus/minus eine Standardabweichung der [HRV_FENSTER] Naechte davor. Das
+     * plus/minus eine Standardabweichung der [Fenster.HRV_NAECHTE] Naechte davor. Das
      * Band jedes Tages aus SEINEN Vortagen, nicht eines fuer die ganze Woche:
      * so wandert es mit, wie bei Google Health und Garmin, und die Nacht selbst
      * zieht ihr Band nicht zu sich. Mindestens 3 ms breit nach jeder Seite,
      * sonst laege bei sehr gleichmaessigen Naechten jede neue daneben.
      */
-    fun hrvWoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<HrvTag> = (6 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
-        val vorher = werte.filter { (t, w) -> w > 0 && t < tag && !t.isBefore(tag.minusDays(HRV_FENSTER.toLong())) }.values.map { it.toDouble() }
-        val band = vorher.takeIf { it.size >= HRV_MINDESTENS }?.let { v ->
+    fun hrvWoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<HrvTag> = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
+        val vorher = werte.filter { (t, w) -> w > 0 && t < tag && !t.isBefore(tag.minusDays(Fenster.HRV_NAECHTE.toLong())) }.values.map { it.toDouble() }
+        val band = vorher.takeIf { it.size >= Fenster.HRV_LERNNAECHTE }?.let { v ->
             val mittel = v.average()
-            val sd = kotlin.math.sqrt(v.sumOf { (it - mittel) * (it - mittel) } / (v.size - 1))
-            val halb = maxOf(sd, 3.0)
+            // Die Streuung der Stichprobe: die Naechte stehen fuer alle, nicht nur fuer sich.
+            val halb = maxOf(Statistik.streuung(v)!!, 3.0)
             (mittel - halb).roundToInt().coerceAtLeast(1) to (mittel + halb).roundToInt()
         }
         HrvTag(tag, werte[tag]?.takeIf { it > 0 }, band)
@@ -518,13 +488,12 @@ internal object Gesundheitsrechnung {
         var t = sortiert.first().first
         while (t <= sortiert.last().first) {
             val nah = sortiert.filter { abs(it.first - t) <= fenster }
-            val werte = nah.map { it.second }.sorted()
             // Nur zwischen Messungen: am Rand einer Luecke liefe die Linie sonst
             // eine Viertelstunde ueber den letzten Punkt hinaus ins Leere.
             if (nah.none { it.first <= t } || nah.none { it.first >= t }) offen = false
             else {
-                val median = if (werte.size % 2 == 1) werte[werte.size / 2].toDouble()
-                else (werte[werte.size / 2 - 1] + werte[werte.size / 2]) / 2.0
+                // Der echte Median: bei gerader Anzahl das Mittel der beiden mittleren.
+                val median = Statistik.median(nah.map { it.second })
                 if (!offen) { aus += mutableListOf<Pair<Long, Double>>(); offen = true }
                 aus.last() += t to median
             }
@@ -551,45 +520,39 @@ internal object Gesundheitsdaten {
         val jetzt = Instant.now()
         fun anfang(tag: LocalDate) = tag.atStartOfDay(zone).toEpochSecond()
 
-        val summe = runCatching { api.getTotalHealthData(anfang(heute), jetzt.epochSecond) }.getOrNull()
-        val woche = (6 downTo 0).map { heute.minusDays(it.toLong()) }
+        val summe = versuche(TAG, "Bewegung heute") { api.getTotalHealthData(anfang(heute), jetzt.epochSecond) }
+        val woche = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }
         // Der heutige Tag steht nicht in den Tagesaggregaten - er kommt aus der Summe bis jetzt.
-        val tageswerte = runCatching { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.getOrDefault(emptyList())
+        val tageswerte = versuche(TAG, "Bewegung der Woche") { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.orEmpty()
             .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
 
         val naechte = Gesundheitsrechnung.jeTag(
-            runCatching { api.getNaechte(anfang(heute.minusDays(VERGLEICHSNAECHTE + 2L)), jetzt.epochSecond) }.getOrDefault(emptyList()), zone,
+            versuche(TAG, "Naechte") { api.getNaechte(anfang(heute.minusDays(Fenster.VERGLEICHSNAECHTE + 2L)), jetzt.epochSecond) }.orEmpty(), zone,
         )
         val (letzte, frueher) = Gesundheitsrechnung.naechteTeilen(naechte, heute, zone)
-        val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, runCatching { api.getNachtAbschnitte(it.beginnUtc) }.getOrDefault(emptyList())) }
+        val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(it.beginnUtc) }.orEmpty()) }
         val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
         val vor24 = jetzt.epochSecond - 24 * 3600
-        val puls = runCatching { api.getHealthDataForRange(vor24, jetzt.epochSecond) }.getOrDefault(emptyList())
+        val puls = versuche(TAG, "Puls") { api.getHealthDataForRange(vor24, jetzt.epochSecond) }.orEmpty()
             .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
         // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
         // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
         val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
-        val spo2 = runCatching { api.getSpo2Readings(spo2Von, jetzt.epochSecond) }.getOrDefault(emptyList())
+        val spo2 = versuche(TAG, "SpO2") { api.getSpo2Readings(spo2Von, jetzt.epochSecond) }.orEmpty()
             .map { it.timestamp to it.spo2Percent }
 
         val klient = Akte(context).bereit()
-        val wochenAnfang = heute.minusDays(6).atStartOfDay(zone).toInstant()
-        val wasser = try {
-            klient?.liesOderEigene(context, HydrationRecord::class, TimeRangeFilter.between(wochenAnfang, jetzt)).orEmpty()
-        } catch (e: Exception) {
-            Log.w(TAG, "Wasser lesen: " + e.message)
-            emptyList()
-        }
+        val wochenAnfang = woche.first().atStartOfDay(zone).toInstant()
+        val wasser = versuche(TAG, "Wasser lesen") {
+            klient?.lies(context, HydrationRecord::class, TimeRangeFilter.between(wochenAnfang, jetzt), Herkunft.ALLE_SONST_EIGENE)
+        }.orEmpty()
         val wasserJeTag = wasser.groupBy { it.startTime.atZone(zone).toLocalDate() }
             .mapValues { (_, r) -> r.sumOf { it.volume.inMilliliters }.toInt() }
         val heuteWasser = wasser.filter { it.startTime.atZone(zone).toLocalDate() == heute }
-        val nahrung = try {
-            klient?.liesOderEigene(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt)).orEmpty()
-        } catch (e: Exception) {
-            Log.w(TAG, "Ernaehrung lesen: " + e.message)
-            emptyList()
-        }
+        val nahrung = versuche(TAG, "Ernaehrung lesen") {
+            klient?.lies(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt), Herkunft.ALLE_SONST_EIGENE)
+        }.orEmpty()
         val koffein = nahrung.mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
         val alleEintraege = nahrung.mapNotNull { r ->
             val eigen = r.metadata.dataOrigin.packageName == context.packageName
@@ -605,14 +568,11 @@ internal object Gesundheitsdaten {
 
         // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
         // deren App ueber die Akte, deshalb auch fremde Eintraege.
-        val blutdruck = try {
-            klient?.liesOderEigene(context, BloodPressureRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt)).orEmpty()
+        val blutdruck = versuche(TAG, "Blutdruck lesen") {
+            klient?.lies(context, BloodPressureRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt), Herkunft.ALLE_SONST_EIGENE).orEmpty()
                 .map { Blutdruck(it.time, it.systolic.inMillimetersOfMercury.roundToInt(), it.diastolic.inMillimetersOfMercury.roundToInt()) }
                 .sortedBy { it.zeit }
-        } catch (e: Exception) {
-            Log.w(TAG, "Blutdruck lesen: " + e.message)
-            emptyList()
-        }
+        }.orEmpty()
 
         val apps = UhrApps.installiert()
         // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
@@ -620,27 +580,27 @@ internal object Gesundheitsdaten {
         val maxpuls = Herzgrenzen.maxpuls(context, ruhe)
         // Eine Rechnung der Zonen fuer Kurve und Belastung, damit beide dieselbe Grenze ziehen
         val zonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls)
-        val tagesherz = runCatching {
-            val von = anfang(heute.minusDays(14))
+        val tagesherz = versuche(TAG, "Tagesherz") {
+            val von = anfang(heute.minusDays(Fenster.TAGESHERZ_TAGE))
             val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
             val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
             Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, zonen, LocalTime.now(), zone, heute)
-        }.getOrDefault(emptyList())
+        }.orEmpty()
         // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal
-        // HRV_FENSTER Naechte davor - die Naechte oben reichen nur eine Woche zurueck.
-        val langeNaechte = runCatching {
-            Gesundheitsrechnung.jeTag(api.getNaechte(anfang(heute.minusDays(6L + Gesundheitsrechnung.HRV_FENSTER + 1)), jetzt.epochSecond), zone)
-        }.getOrDefault(emptyList())
-        val hrvTage = runCatching {
+        // Fenster.HRV_NAECHTE davor - die Naechte oben reichen nur eine Woche zurueck.
+        val langeNaechte = versuche(TAG, "Naechte der HRV") {
+            Gesundheitsrechnung.jeTag(api.getNaechte(anfang(woche.first().minusDays(Fenster.HRV_NAECHTE + 1L)), jetzt.epochSecond), zone)
+        }.orEmpty()
+        val hrvTage = versuche(TAG, "HRV-Woche") {
             val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
             Gesundheitsrechnung.hrvWoche(jeTag, heute)
-        }.getOrDefault(emptyList())
+        }.orEmpty()
         // Ohne Nacht von heute fuehrt nur dieser Weg zu den frueheren Naechten und
         // zu Sleep trends; nach Wochen ohne Uhr reichen die 37 Tage oben nicht.
         val juengste = if (nacht != null) null else langeNaechte.lastOrNull()?.beginnUtc
-            ?: runCatching { api.getNaechte(0, jetzt.epochSecond) }.getOrDefault(emptyList()).maxOfOrNull { it.beginnUtc }
+            ?: versuche(TAG, "Juengste Nacht") { api.getNaechte(0, jetzt.epochSecond) }.orEmpty().maxOfOrNull { it.beginnUtc }
         GesundheitsStand(
             schritte = summe?.steps ?: 0,
             aktivMinuten = summe?.activeMinutes ?: 0,
@@ -666,7 +626,7 @@ internal object Gesundheitsdaten {
             blutdruck = blutdruck,
             glasEintraege = heuteWasser.map { glaseintrag(context, it) },
             // Die Fake-Bibliothek meldet 0 statt nichts.
-            letzteDaten = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
+            letzteDaten = versuche(TAG, "Letzte Daten") { api.getLatestTimestamp() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,
             juengsteNacht = juengste,
@@ -698,18 +658,18 @@ internal object Gesundheitsdaten {
      */
     suspend fun nacht(api: HealthDataApi, beginnUtc: Long): NachtDetail? = withContext(Dispatchers.IO) {
         val zone = ZoneId.systemDefault()
-        val roh = runCatching { api.getNaechte(beginnUtc - 30L * 86_400, beginnUtc + 30L * 86_400) }.getOrDefault(emptyList())
+        val roh = versuche(TAG, "Naechte um die Nacht") { api.getNaechte(beginnUtc - 30L * 86_400, beginnUtc + 30L * 86_400) }.orEmpty()
         val e = roh.firstOrNull { it.beginnUtc == beginnUtc } ?: return@withContext null
         val umgebung = Gesundheitsrechnung.jeTag(roh, zone)
         val (_, frueher) = Gesundheitsrechnung.naechteTeilen(umgebung, Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone), zone)
-        val n = Gesundheitsrechnung.nacht(e, runCatching { api.getNachtAbschnitte(beginnUtc) }.getOrDefault(emptyList()))
+        val n = Gesundheitsrechnung.nacht(e, versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(beginnUtc) }.orEmpty())
         val von = minOf(n.einschlafen.epochSecond, n.spanne.first) - 1800
         val bis = maxOf(n.aufwachen.epochSecond, n.spanne.last) + 1800
         NachtDetail(
             nacht = n,
-            puls = runCatching { api.getHealthDataForRange(von, bis) }.getOrDefault(emptyList())
+            puls = versuche(TAG, "Puls der Nacht") { api.getHealthDataForRange(von, bis) }.orEmpty()
                 .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate },
-            spo2 = runCatching { api.getSpo2Readings(von, bis) }.getOrDefault(emptyList()).map { it.timestamp to it.spo2Percent },
+            spo2 = versuche(TAG, "SpO2 der Nacht") { api.getSpo2Readings(von, bis) }.orEmpty().map { it.timestamp to it.spo2Percent },
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
             davor = frueher,

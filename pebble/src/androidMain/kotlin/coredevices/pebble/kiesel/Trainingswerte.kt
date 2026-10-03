@@ -10,10 +10,8 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.WeightRecord
-import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
@@ -138,7 +136,7 @@ internal object Trainingswerte {
     suspend fun schreibeKalorienAusPuls(context: Context, beginn: Long): Double? {
         val klient = Akte(context).bereit() ?: return null
         val sitzung = try {
-            eigene(klient, context, ExerciseSessionRecord::class, Instant.ofEpochSecond(beginn), Instant.ofEpochSecond(beginn + 1))
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(Instant.ofEpochSecond(beginn), Instant.ofEpochSecond(beginn + 1)), Herkunft.EIGENE)
                 .firstOrNull { it.metadata.clientRecordId == Kieselsport.kennung(beginn) }
         } catch (e: CancellationException) {
             throw e
@@ -163,7 +161,7 @@ internal object Trainingswerte {
         val klient = Akte(context).bereit() ?: return
         val jetzt = Instant.now()
         val sitzungen = try {
-            eigene(klient, context, ExerciseSessionRecord::class, jetzt.minus(Duration.ofDays(NACHHOLEN_TAGE)), jetzt)
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(NACHHOLEN_TAGE)), jetzt), Herkunft.EIGENE)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -201,7 +199,7 @@ internal object Trainingswerte {
             val koerper = koerperVor(context, klient, s.startTime) ?: return null
             val fassung = fassungAusPuls(roh.size, koerper.ausWaage)
             val vorhanden = try {
-                eigene(klient, context, ActiveCaloriesBurnedRecord::class, s.startTime, s.endTime)
+                klient.lies(context, ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(s.startTime, s.endTime), Herkunft.EIGENE)
                     .firstOrNull { it.metadata.clientRecordId == "kieselsport-kcal-$beginn" }?.metadata?.clientRecordVersion
             } catch (e: CancellationException) {
                 throw e
@@ -234,7 +232,7 @@ internal object Trainingswerte {
      */
     suspend fun herzgrenzenVor(context: Context, api: HealthDataApi, start: Instant): Pair<Int?, Int> {
         val naechte = try {
-            api.getNaechte(start.minus(Duration.ofDays(14)).epochSecond, start.epochSecond)
+            api.getNaechte(start.minus(Duration.ofDays(Fenster.HERZGRENZEN_TAGE)).epochSecond, start.epochSecond)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -262,25 +260,14 @@ internal object Trainingswerte {
 
     /** Die juengste Wiegung im Jahr vor [start]; im Hintergrund ohne Sonderrecht nur eigene, also keine. */
     private suspend fun waageVor(klient: HealthConnectClient, context: Context, start: Instant): Double? = try {
-        klient.readRecords(
-            ReadRecordsRequest(
-                WeightRecord::class, TimeRangeFilter.between(start.minus(Duration.ofDays(365)), start),
-                ascendingOrder = false, pageSize = 1,
-            )
-        ).records.firstOrNull()?.weight?.inKilograms?.takeIf { it in 20.0..400.0 }
+        klient.liesEinen(context, WeightRecord::class, TimeRangeFilter.between(start.minus(Duration.ofDays(365)), start), neuester = true)
+            ?.weight?.inKilograms?.takeIf { it in 20.0..400.0 }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         Log.w(TAG, "Gewicht lesen: " + e.message)
         null
     }
-
-    /** Boulders eigene Saetze - die gibt die Akte auch im Hintergrund heraus. */
-    private suspend fun <T : Record> eigene(
-        klient: HealthConnectClient, context: Context, art: kotlin.reflect.KClass<T>, von: Instant, bis: Instant,
-    ): List<T> = klient.readRecords(
-        ReadRecordsRequest(art, TimeRangeFilter.between(von, bis), dataOriginFilter = setOf(DataOrigin(context.packageName)))
-    ).records
 
     fun geschlecht(g: HealthGender): Trainingsanalyse.Geschlecht = when (g) {
         HealthGender.Male -> Trainingsanalyse.Geschlecht.Mann

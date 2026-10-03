@@ -40,8 +40,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Statistik
 import coredevices.pebble.kiesel.Trainingsanalyse
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -67,7 +67,7 @@ private class Werteachse(val tief: Double, val hoch: Double, val striche: List<D
  */
 private fun werteachse(punkte: List<Trainingsanalyse.Verlaufspunkt>, bereich: ClosedRange<Double>?): Werteachse {
     if (bereich != null) {
-        val striche = Auswertung.achsenschritte(bereich.start, bereich.endInclusive).filter { it in bereich }
+        val striche = Statistik.rasterMitRand(bereich.start, bereich.endInclusive).filter { it in bereich }
         return Werteachse(bereich.start, bereich.endInclusive, striche)
     }
     var tief = punkte.minOf { it.wert }
@@ -77,7 +77,7 @@ private fun werteachse(punkte: List<Trainingsanalyse.Verlaufspunkt>, bereich: Cl
     // "-4 km/h" gibt es nicht. Die Steigung darf, sie ist auch negativ.
     tief = if (tief >= 0) (tief - luft).coerceAtLeast(0.0) else tief - luft
     hoch += luft
-    val striche = Auswertung.achsenschritte(tief, hoch)
+    val striche = Statistik.rasterMitRand(tief, hoch)
     return Werteachse(minOf(tief, striche.min()), maxOf(hoch, striche.max()), striche)
 }
 

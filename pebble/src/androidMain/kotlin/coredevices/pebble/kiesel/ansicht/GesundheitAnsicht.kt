@@ -38,7 +38,9 @@ import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
+import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.Kaffeesorten
 import coredevices.pebble.kiesel.TrainingEintrag
@@ -99,7 +101,8 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         geladen()
         trainings = TrainingsDaten.heute(context)
         val jetzt = Instant.now()
-        akkuNaechte = runCatching { api.getNaechte(jetzt.minus(Duration.ofDays(14)).epochSecond, jetzt.epochSecond) }.getOrDefault(emptyList())
+        // Dieselben Naechte wie die Akkuseite, damit die Zeile hier dasselbe sagt.
+        akkuNaechte = versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
     }
 
     val s = stand

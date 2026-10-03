@@ -73,7 +73,7 @@ class AuswertungTest {
     @Test
     fun `der Verlauf zeigt hoechstens acht Wochen`() {
         val lang = (1L..200L).map { tag(it, 1000.0) }
-        assertEquals(Auswertung.WOCHEN, Auswertung.bild(lang, heute).wochen.size)
+        assertEquals(Fenster.TREND_WOCHEN, Auswertung.bild(lang, heute).wochen.size)
     }
 
     @Test
@@ -132,22 +132,6 @@ class AuswertungTest {
         val fenster = Auswertung.letzteTage(emptyList(), heute, 3)
         assertEquals(3, fenster.size)
         assertEquals(listOf(null, null, null), fenster.map { it.second })
-    }
-
-    @Test
-    fun `Achsenschritte sind rund und hoechstens fuenf`() {
-        assertEquals(listOf(50.0, 60.0, 70.0), Auswertung.achsenschritte(45.0, 70.0))
-        assertEquals(listOf(46.0, 48.0, 50.0, 52.0), Auswertung.achsenschritte(45.0, 52.0))
-        assertEquals(listOf(50.0, 55.0, 60.0), Auswertung.achsenschritte(50.0, 60.0))
-        assertEquals(listOf(55.0), Auswertung.achsenschritte(55.0, 55.0))
-        assertEquals(listOf(4000.0, 6000.0, 8000.0, 10000.0), Auswertung.achsenschritte(3500.0, 11000.0))
-    }
-
-    @Test
-    fun `Achsenschritte sind nie weniger als drei`() {
-        assertEquals(listOf(50.0, 55.0, 60.0, 65.0), Auswertung.achsenschritte(52.0, 62.0))
-        assertEquals(listOf(45.0, 50.0, 55.0, 60.0), Auswertung.achsenschritte(46.0, 58.0))
-        assertEquals(listOf(45.0, 50.0, 55.0, 60.0), Auswertung.achsenschritte(46.0, 59.0))
     }
 
     @Test
@@ -216,10 +200,10 @@ class AuswertungTest {
     @Test
     fun `Wochenprofil und Wochenende rechnen im festen Fenster`() {
         // Vor dem Fenster jeder Tag 9000, darin jeder Tag 1000.
-        val alt = (Auswertung.FENSTER_TAGE + 1..Auswertung.FENSTER_TAGE + 60).map { tag(it, 9000.0) }
-        val jung = (1L..Auswertung.FENSTER_TAGE).map { tag(it, 1000.0) }
+        val alt = (Fenster.TREND_TAGE + 1..Fenster.TREND_TAGE + 60).map { tag(it, 9000.0) }
+        val jung = (1L..Fenster.TREND_TAGE).map { tag(it, 1000.0) }
         val bild = Auswertung.bild(alt + jung, heute)
-        assertEquals(Auswertung.FENSTER_TAGE.toInt(), bild.anzahl)
+        assertEquals(Fenster.TREND_TAGE.toInt(), bild.anzahl)
         assertEquals(1000.0, bild.gesamt!!, 0.001)
         assertEquals(0.0, Auswertung.wochenende(alt + jung, heute)!!.unterschied, 0.001)
     }

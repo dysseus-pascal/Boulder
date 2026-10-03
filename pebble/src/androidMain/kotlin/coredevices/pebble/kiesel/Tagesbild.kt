@@ -62,19 +62,8 @@ internal data class Schritttag(val tag: LocalDate, val schritte: Long, val merkm
 
 internal data class Schrittwoche(val tage: List<Schritttag>, val seit: LocalDate?, val volleWocheAb: LocalDate?)
 
-internal const val SCHRITTZIEL = 10_000L
-internal const val SCHLAFZIEL_MIN = 8 * 60
-/**
- * Ab so vielen frueheren Naechten gibt es ein Urteil ueber den Ruhepuls und
- * einen Schnitt auf "Your usual". Die HRV urteilt nicht hiernach, sondern an
- * ihrem Band - und das braucht [Gesundheitsrechnung.HRV_MINDESTENS] Naechte.
- */
-internal const val LERNNAECHTE = 3
-/** Hoechstens so viele fruehere Naechte bilden den Schnitt. */
-internal const val VERGLEICHSNAECHTE = 7
+/** So viele Schlaege neben dem Schnitt heisst der Ruhepuls noch "as usual". */
 internal const val RUHEPULS_SPANNE = 2
-/** Weniger Wachminuten gelten als durchgeschlafen. */
-internal const val DURCHGESCHLAFEN_MIN = 10
 /** Ein Puls, der juenger ist, heisst "jetzt". */
 internal const val PULS_FRISCH_S = 15 * 60L
 /**
@@ -91,7 +80,7 @@ internal fun Gesundheitsrechnung.tageszeit(uhrzeit: LocalTime): Tageszeit = when
     else -> Tageszeit.ABEND
 }
 
-internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int = SCHLAFZIEL_MIN): Schlafurteil = when {
+internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int = Gesundheitsziele.SCHLAF_MIN): Schlafurteil = when {
     minuten >= ziel -> Schlafurteil.AUSGERUHT
     minuten >= ziel - 60 -> Schlafurteil.KURZ
     else -> Schlafurteil.SEHR_KURZ
@@ -104,7 +93,7 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
     // Ohne Abschnitte ist phasen[0] eine Null aus Unwissen, kein "nie wach".
     val wach = n?.takeIf { it.abschnitte.isNotEmpty() }?.phasen?.get(0)
     val lage = when {
-        stand.schritte >= SCHRITTZIEL -> Schrittlage.ERREICHT
+        stand.schritte >= Gesundheitsziele.SCHRITTE -> Schrittlage.ERREICHT
         zeit == Tageszeit.MORGEN -> Schrittlage.BEGONNEN
         zeit == Tageszeit.TAG -> Schrittlage.NOCH
         else -> Schrittlage.ANTEIL
@@ -112,13 +101,13 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
     return Tagessatz(
         tageszeit = zeit,
         urteil = n?.let { schlafurteil(it.schlafMinuten) },
-        durchgeschlafen = wach != null && wach < DURCHGESCHLAFEN_MIN,
+        durchgeschlafen = wach != null && wach < Gesundheitsziele.DURCHGESCHLAFEN_MIN,
         wachMinuten = wach,
-        schlafAbstand = n?.let { it.schlafMinuten - SCHLAFZIEL_MIN },
+        schlafAbstand = n?.let { it.schlafMinuten - Gesundheitsziele.SCHLAF_MIN },
         schritte = stand.schritte,
         schrittlage = lage,
-        schritteFehlen = (SCHRITTZIEL - stand.schritte).coerceAtLeast(0),
-        zielProzent = (stand.schritte * 100 / SCHRITTZIEL).toInt(),
+        schritteFehlen = (Gesundheitsziele.SCHRITTE - stand.schritte).coerceAtLeast(0),
+        zielProzent = (stand.schritte * 100 / Gesundheitsziele.SCHRITTE).toInt(),
         ohneDaten = stand.schritte == 0L && n == null && stand.puls.isEmpty(),
     )
 }
@@ -131,7 +120,7 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: Loc
  */
 internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>): Herzurteil {
     val (naechte, schnitt) = naechteSchnitt(frueher)
-    if (letzte == null || schnitt == null || naechte < LERNNAECHTE) return Herzurteil(naechte, schnitt, null, 0)
+    if (letzte == null || schnitt == null || naechte < Fenster.LERNNAECHTE) return Herzurteil(naechte, schnitt, null, 0)
     val gezeigt = schnitt.roundToInt()
     val abstand = abs(letzte - gezeigt)
     val urteil = when {
@@ -144,12 +133,12 @@ internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>
 
 /**
  * Wieviele der frueheren Naechte zaehlen und ihr Schnitt: hoechstens die
- * letzten [VERGLEICHSNAECHTE], ohne die ungemessenen (0). Fuer die HRV nur
+ * letzten [Fenster.VERGLEICHSNAECHTE], ohne die ungemessenen (0). Fuer die HRV nur
  * die Zahl auf "Your usual" - ihr Urteil faellt am Band, siehe [hrvUrteil].
  */
 internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, Double?> {
-    val werte = frueher.filter { it > 0 }.takeLast(VERGLEICHSNAECHTE)
-    return werte.size to werte.takeIf { it.isNotEmpty() }?.average()
+    val werte = frueher.filter { it > 0 }.takeLast(Fenster.VERGLEICHSNAECHTE)
+    return werte.size to Statistik.mittel(werte)
 }
 
 /**
@@ -195,10 +184,10 @@ internal fun Gesundheitsrechnung.tageZurueck(t: Instant, jetzt: Instant, zone: Z
  * Die letzte Nacht und die frueheren. Letzte ist nur die, aus der heute
  * aufgewacht wurde: eine Stundenfrist ab dem Fensterbeginn liess nach einer
  * ausgelassenen Nacht die vorletzte als "Last night" gelten. Die frueheren
- * sind hoechstens [VERGLEICHSNAECHTE] davor, ohne die letzte - sie wird mit
+ * sind hoechstens [Fenster.VERGLEICHSNAECHTE] davor, ohne die letzte - sie wird mit
  * ihnen verglichen und zoege den Schnitt sonst zu sich.
  *
- * NUR AUS DER WOCHE DAVOR ([VERGLEICHSNAECHTE] + 1 Tage): auch fuer eine
+ * NUR AUS DER WOCHE DAVOR ([Fenster.VERGLEICHSNAECHTE] + 1 Tage): auch fuer eine
  * Nacht der Nachtansicht, die aus einem Monat Naechten blaettert. Nach zwei
  * Wochen ohne Uhr lernt Health wieder, und die Nachtansicht soll nicht mit
  * Naechten von damals einen Schnitt nennen.
@@ -207,8 +196,8 @@ internal fun Gesundheitsrechnung.naechteTeilen(naechte: List<NachtEntity>, heute
     val sortiert = naechte.sortedBy { it.beginnUtc }
     fun tag(n: NachtEntity) = nachtTag(n.beginnUtc, n.aufwachen, zone)
     val letzte = sortiert.lastOrNull { tag(it) <= heute }?.takeIf { tag(it) == heute }
-    val ab = heute.minusDays(VERGLEICHSNAECHTE + 1L)
-    val frueher = sortiert.filter { it !== letzte && tag(it) < heute && !tag(it).isBefore(ab) }.takeLast(VERGLEICHSNAECHTE)
+    val ab = heute.minusDays(Fenster.VERGLEICHSNAECHTE + 1L)
+    val frueher = sortiert.filter { it !== letzte && tag(it) < heute && !tag(it).isBefore(ab) }.takeLast(Fenster.VERGLEICHSNAECHTE)
     return letzte to frueher
 }
 
@@ -240,7 +229,7 @@ internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, j
  * waere eine Behauptung. Solange die Woche nicht voll ist, sagt die Seite,
  * ab wann sie es ist.
  */
-internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>, ziel: Long = SCHRITTZIEL): Schrittwoche {
+internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>, ziel: Long = Gesundheitsziele.SCHRITTE): Schrittwoche {
     if (woche.isEmpty()) return Schrittwoche(emptyList(), null, null)
     val heute = woche.last().first
     val ersterIndex = woche.indexOfFirst { it.second > 0 }.takeIf { it >= 0 } ?: woche.lastIndex

@@ -32,6 +32,7 @@ import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Pulsbin
+import coredevices.pebble.kiesel.Statistik
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -323,7 +324,7 @@ internal fun HrvWoche(
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
 
         // Durchgezogen und blass: gestrichelt hiesse bei Boulder "Schnitt".
-        Gesundheitsrechnung.raster(tief, hoch, 5).takeLast(4).forEach { w ->
+        Statistik.rasterInnen(tief, hoch, 5).takeLast(4).forEach { w ->
             drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
             val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
@@ -397,7 +398,7 @@ internal fun Blutdruckbild(
         fun x(t: Instant) = rand + (rechts - 2 * rand) * (t.epochSecond - von.epochSecond).coerceIn(0, spanne) / spanne.toFloat()
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
 
-        Gesundheitsrechnung.raster(tief, hoch, 10).forEach { w ->
+        Statistik.rasterInnen(tief, hoch, 10).forEach { w ->
             drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
             val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))

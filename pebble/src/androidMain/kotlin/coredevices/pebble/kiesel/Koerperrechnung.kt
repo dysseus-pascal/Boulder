@@ -5,8 +5,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /** Ein Wert aus der Akte zu seinem Zeitpunkt - kg, %, kcal am Tag oder m, je nach Art. */
@@ -56,18 +54,8 @@ internal data class Zusammensetzung(
         get() = listOf(fett, magermasse, knochen, wasser, grundumsatz, bmi).all { it == null } && groesse == null
 }
 
-/** Eine runde y-Achse: Linien von [von] bis [bis] im Abstand [schritt]. */
-internal data class Achse(val von: Double, val bis: Double, val schritt: Double) {
-    // Gerundet auf Zehntel: 3 * 0.1 ist in Double 0.30000000000000004.
-    val linien: List<Double>
-        get() = (0..((bis - von) / schritt).roundToInt()).map { Math.round((von + it * schritt) * 10) / 10.0 }
-}
-
 /** Die Rechnungen der Koerperseite, ohne Android. */
 internal object Koerperrechnung {
-    /** So weit zurueck zeigt die Seite den Verlauf, und so alt darf die Zeile hoechstens sein. */
-    const val FENSTER_TAGE = 90L
-    const val VERAENDERUNG_TAGE = 30L
     /** Wie weit der Vergleichstag vom Ziel abweichen darf - wer sich wiegt, tut es selten taeglich. */
     const val SPIELRAUM_TAGE = 7L
     /** Der gleitende Median nimmt so viele Tage nach jeder Seite: eine Woche in Summe. */
@@ -92,7 +80,7 @@ internal object Koerperrechnung {
     fun veraenderung(tage: List<Koerpertag>, heute: LocalDate): Double? {
         val letzter = tage.lastOrNull() ?: return null
         if (letzter.tag < heute.minusDays(SPIELRAUM_TAGE)) return null
-        val ziel = heute.minusDays(VERAENDERUNG_TAGE)
+        val ziel = heute.minusDays(Fenster.KOERPER_VERAENDERUNG_TAGE)
         val bezug = tage.lastOrNull { it.tag <= ziel && it.tag >= ziel.minusDays(SPIELRAUM_TAGE) }
             ?: tage.firstOrNull { it.tag > ziel && it.tag <= ziel.plusDays(SPIELRAUM_TAGE) }
             ?: return null
@@ -101,7 +89,7 @@ internal object Koerperrechnung {
     }
 
     fun zeile(stand: Koerperstand, heute: LocalDate, zone: ZoneId): Koerperzeile? {
-        val grenze = heute.minusDays(FENSTER_TAGE)
+        val grenze = heute.minusDays(Fenster.KOERPER_TAGE)
         val gewicht = tage(stand.gewicht, zone)
         val fett = tage(stand.fett, zone)
         val g = gewicht.lastOrNull()?.takeIf { it.tag >= grenze }
@@ -147,8 +135,8 @@ internal object Koerperrechnung {
         val aus = mutableListOf<MutableList<Pair<LocalDate, Double>>>()
         var vorher: LocalDate? = null
         tage.forEach { t ->
-            val w = tage.filter { it.tag >= t.tag.minusDays(halb) && it.tag <= t.tag.plusDays(halb) }.map { it.wert }.sorted()
-            val median = if (w.size % 2 == 1) w[w.size / 2] else (w[w.size / 2 - 1] + w[w.size / 2]) / 2
+            // Das Fenster enthaelt immer den Tag selbst, ist also nie leer.
+            val median = Statistik.median(tage.filter { it.tag >= t.tag.minusDays(halb) && it.tag <= t.tag.plusDays(halb) }.map { it.wert })
             if (vorher == null || ChronoUnit.DAYS.between(vorher, t.tag) > luecke) aus += mutableListOf<Pair<LocalDate, Double>>()
             aus.last() += t.tag to median
             vorher = t.tag
@@ -160,15 +148,8 @@ internal object Koerperrechnung {
     fun achse(tief: Double, hoch: Double, mindestSpanne: Double = 1.0, felder: Int = 3): Achse {
         val mitte = (tief + hoch) / 2
         val halb = maxOf(hoch - tief, mindestSpanne) / 2
-        val unten = mitte - halb
-        val oben = mitte + halb
-        for (schritt in listOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)) {
-            // Der kleine Zuschlag faengt Rundungsfehler: 77.5 / 0.5 ist nicht immer genau 155.
-            val von = floor(unten / schritt + 1e-9) * schritt
-            val bis = ceil(oben / schritt - 1e-9) * schritt
-            if ((bis - von) / schritt <= felder + 1e-9) return Achse(von, bis, schritt)
-        }
-        return Achse(floor(unten), ceil(oben), ceil(oben) - floor(unten))
+        // Nach aussen gerundet: jede Wiegung liegt innerhalb der Achse, auch die am Rand.
+        return Statistik.rasterAussen(mitte - halb, mitte + halb, felder)
     }
 
     fun masse(kg: Double, pfund: Boolean): Double = if (pfund) kg * PFUND_JE_KG else kg

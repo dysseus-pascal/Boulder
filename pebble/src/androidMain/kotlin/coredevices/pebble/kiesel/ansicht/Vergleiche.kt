@@ -38,6 +38,7 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Reihen
+import coredevices.pebble.kiesel.Spalte
 import coredevices.pebble.kiesel.Vergleichsfragen
 import java.time.LocalDate
 import java.time.LocalTime
@@ -81,26 +82,26 @@ private fun texte(art: Vergleichsfragen.Art): Texte = when (art) {
 private fun Texte.name(id: Int): String = uhrzeit?.let { stringResource(id, Formate.uhrzeit(LocalContext.current, it)) } ?: stringResource(id)
 
 /** Die Einheit der Zielgroesse neben der Zahl; Schritte haben keine, Dauern bringt [Formate.dauerTeile] mit. */
-private fun einheit(ziel: String): String? = when (ziel) {
-    "hrv" -> "ms"
-    "ruhepuls" -> "bpm"
-    "aktiv" -> "min"
-    "koffein_mg" -> "mg"
+private fun einheit(ziel: Spalte): String? = when (ziel) {
+    Spalte.HRV -> "ms"
+    Spalte.RUHEPULS -> "bpm"
+    Spalte.AKTIV -> "min"
+    Spalte.KOFFEIN -> "mg"
     else -> null
 }
 
-private fun dauer(ziel: String) = ziel == "schlaf" || ziel == "tief"
+private fun dauer(ziel: Spalte) = ziel == Spalte.SCHLAF || ziel == Spalte.TIEF
 
 /** Der Wert, wie er auf der Karte steht: "46 ms", "7:12 h", "45 min", "8,200". */
-private fun angabe(ziel: String, w: Double): Formate.Angabe =
+private fun angabe(ziel: Spalte, w: Double): Formate.Angabe =
     if (dauer(ziel)) Formate.dauerTeile(w.roundToLong()) else Formate.Angabe(Formate.zahl(w, 0), einheit(ziel))
 
 /** Die Zahl an der Achse des Punktbilds, ohne Einheit - Dauern durchgehend als "0:45", sonst wechselte die Achse die Form. */
-private fun achsZahl(ziel: String, w: Double): String =
+private fun achsZahl(ziel: Spalte, w: Double): String =
     if (dauer(ziel)) Formate.stundenMinuten(w.roundToInt()) else Formate.zahl(w, 0)
 
 /** Der Unterschied mit Vorzeichen: "−9 ms", "+2 bpm", "−23 min", "+1,200". */
-private fun unterschied(ziel: String, u: Double): Formate.Angabe =
+private fun unterschied(ziel: Spalte, u: Double): Formate.Angabe =
     if (dauer(ziel)) Formate.dauerUnterschied(u) else Formate.Angabe(Formate.vorzeichen(u), einheit(ziel))
 
 private class Ergebnis(val frage: Vergleichsfragen.Frage, val v: Auswertung.Gruppenvergleich) {

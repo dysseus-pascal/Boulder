@@ -15,9 +15,9 @@ import kotlin.uuid.Uuid
  */
 internal object UhrApps {
     /** Die Apps im Locker - null, wenn das gerade niemand sagen kann. */
-    suspend fun installiert(): Set<Uuid>? = runCatching {
+    suspend fun installiert(): Set<Uuid>? = versuche("UhrApps", "Apps der Uhr") {
         KoinPlatform.getKoin().getOrNull<LibPebble>()?.getAllLockerBasicInfo()?.first()?.map { it.id }?.toSet()
-    }.getOrNull()
+    }
 
     /**
      * Ob [app] dazugehoert. UNBEKANNT ZAEHLT ALS JA: ein Fehler beim Fragen

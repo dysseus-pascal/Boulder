@@ -58,15 +58,16 @@ internal object Drinktervall {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         if (!p.contains("glaeser")) return null
         val tag = p.getString("tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-        val soll = if (p.contains("soll")) p.getInt("soll", 8) else null
-        return zielFuer(LocalDate.now(), tag, p.getInt("glaeser", 8), soll, p.getInt("glas_ml", 300))
+        val soll = if (p.contains("soll")) p.getInt("soll", Gesundheitsziele.WASSER_GLAESER) else null
+        return zielFuer(LocalDate.now(), tag, p.getInt("glaeser", Gesundheitsziele.WASSER_GLAESER), soll, p.getInt("glas_ml", Gesundheitsziele.GLAS_ML))
     }
 
     /** Das Soll ohne die Erhoehung eines einzelnen Tages - fuer Verlaeufe ueber viele Tage. */
     fun soll(context: Context): Ziel? {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         if (!p.contains("glaeser")) return null
-        return Ziel(if (p.contains("soll")) p.getInt("soll", 8) else p.getInt("glaeser", 8), p.getInt("glas_ml", 300))
+        val glaeser = if (p.contains("soll")) p.getInt("soll", Gesundheitsziele.WASSER_GLAESER) else p.getInt("glaeser", Gesundheitsziele.WASSER_GLAESER)
+        return Ziel(glaeser, p.getInt("glas_ml", Gesundheitsziele.GLAS_ML))
     }
 
     /** Ob eine Meldung ein Glas oder einen Kaffee traegt - nur solche muessen das Bestaetigen ueberleben. */

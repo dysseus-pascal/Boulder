@@ -6,10 +6,8 @@ import android.util.Base64
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.NutritionRecord
-import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
 import java.time.Duration
@@ -258,13 +256,7 @@ internal object SupCycle {
      */
     private suspend fun entferne(context: Context, klient: HealthConnectClient, tag: LocalDate, plaetze: Map<Int, String>): Boolean = try {
         val von = tag.atStartOfDay(ZoneId.systemDefault()).toInstant()
-        val heute = klient.readRecords(
-            ReadRecordsRequest(
-                NutritionRecord::class,
-                TimeRangeFilter.between(von, von.plus(Duration.ofDays(1))),
-                dataOriginFilter = setOf(DataOrigin(context.packageName)),
-            )
-        ).records
+        val heute = klient.lies(context, NutritionRecord::class, TimeRangeFilter.between(von, von.plus(Duration.ofDays(1))), Herkunft.EIGENE)
         val kennungen = plaetze.flatMap { (platz, name) -> listOf(kennung(tag, platz, name), kennungOhneName(tag, platz)) }.toSet()
         val namen = plaetze.values.filter { it.isNotBlank() }.toSet()
         val weg = heute.filter { r ->

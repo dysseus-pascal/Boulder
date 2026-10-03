@@ -28,7 +28,7 @@ import androidx.health.connect.client.records.SpeedRecord
  * ihre Pulskurve, SpO2 und HRV fuer die Trainingsansicht und die SpO2-Frage
  * der Uhr. Nur nach Moeglichkeit - fehlt eines, laeuft der Rest trotzdem.
  * Dazu das Lesen im Hintergrund (das Widget sieht so auch fremde Eintraege,
- * siehe [liesOderEigene]) und das Lesen ueber 30 Tage zurueck - beide nur, wo
+ * siehe [Herkunft.ALLE_SONST_EIGENE]) und das Lesen ueber 30 Tage zurueck - beide nur, wo
  * die Akte sie kennt (siehe [nurVerfuegbare]).
  */
 internal val KIESEL_RECHTE: Set<String> = setOf(

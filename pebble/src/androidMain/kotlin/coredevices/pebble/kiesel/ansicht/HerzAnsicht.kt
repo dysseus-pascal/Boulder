@@ -30,12 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.BLUTDRUCK_TAGE
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.LERNNAECHTE
+import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -177,7 +176,7 @@ private fun HrvKarte(s: GesundheitsStand) {
 
 /**
  * Der Blutdruck der Manschette: die letzte Sitzung gross, ab drei Sitzungen
- * der Schnitt daneben, darunter jede Sitzung der letzten [BLUTDRUCK_TAGE]
+ * der Schnitt daneben, darunter jede Sitzung der letzten [Fenster.BLUTDRUCK_TAGE]
  * Tage. Ohne Messung fehlt die Karte - die Uhr misst keinen Blutdruck.
  */
 @Composable
@@ -185,14 +184,14 @@ private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand) {
     val context = LocalContext.current
     val jetzt = Instant.now()
     val titel = stringResource(R.string.ks_h_blutdruck_k)
-    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, BLUTDRUCK_TAGE.toInt())
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.BLUTDRUCK_TAGE.toInt())
     val wert = Formate.zahl(b.letzte.oben.toLong()) + "/" + Formate.zahl(b.letzte.unten.toLong())
     val schnitt = b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
     Abschnitt(titel, zusatz) {
         // Am Zeilenanfang gross: "Today, 8:14 AM", "Yesterday, 8:14 AM", sonst das Datum - die eine Form aus Formate.
         Hauptwert(wert, "mmHg", listOfNotNull(Formate.zeitpunkt(context, b.letzte.zeit), schnitt).joinToString(" · "))
         Blutdruckbild(
-            b.sitzungen, jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt, Farben.blutdruck.ton(),
+            b.sitzungen, jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt, Farben.blutdruck.ton(),
             beschreibung = listOfNotNull("$titel, $zusatz", Formate.Angabe(wert, "mmHg").text, schnitt).joinToString(", "),
             tagText = { Formate.datumKurz(it) },
         )
@@ -255,9 +254,9 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
         Kopf(stringResource(R.string.ks_h_gewohnt), link = stringResource(R.string.ks_h_herztrend), onLink = oeffneTrend)
         Column(Modifier.padding(start = INNEN, end = INNEN, bottom = INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val schnitt = ruhe.schnitt
-            if (ruhe.frueher < LERNNAECHTE || schnitt == null) {
+            if (ruhe.frueher < Fenster.LERNNAECHTE || schnitt == null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Fliesstext(stringResource(R.string.ks_h_lernt, ruhe.frueher, LERNNAECHTE), Modifier.weight(1f))
+                    Fliesstext(stringResource(R.string.ks_h_lernt, ruhe.frueher, Fenster.LERNNAECHTE), Modifier.weight(1f))
                     Lernpunkte(ruhe.frueher)
                 }
             } else {
@@ -274,7 +273,7 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
 private fun Lernpunkte(da: Int) {
     val farben = MaterialTheme.colorScheme
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        repeat(LERNNAECHTE) { i ->
+        repeat(Fenster.LERNNAECHTE) { i ->
             if (i < da) Box(Modifier.size(12.dp).background(farben.primary, CircleShape))
             else Box(Modifier.size(12.dp).padding(1.dp).border(1.6.dp, farben.outline, CircleShape))
         }

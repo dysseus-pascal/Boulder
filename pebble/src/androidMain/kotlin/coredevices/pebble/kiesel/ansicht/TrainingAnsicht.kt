@@ -76,6 +76,7 @@ import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.Trainingsanalyse
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.TrainingsUebersicht
+import coredevices.pebble.kiesel.versuche
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Duration
@@ -179,7 +180,7 @@ internal fun SportAnsicht(wege: Sportwege) {
         // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein
         // Akte-Zugriff, beschnitten wie die Strecke daneben.
         punkte = d.trainings.firstOrNull()?.let { t ->
-            withContext(Dispatchers.IO) { runCatching { TrainingsDaten.punkte(context, t.sitzung) }.getOrDefault(emptyList()) }
+            withContext(Dispatchers.IO) { versuche("Kieselsport", "Spur fuer die Karte") { TrainingsDaten.punkte(context, t.sitzung) }.orEmpty() }
         }.orEmpty()
     }
     val ortStarter = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { ortsstand++ }

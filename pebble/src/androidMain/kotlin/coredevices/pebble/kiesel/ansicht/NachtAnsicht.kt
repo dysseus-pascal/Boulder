@@ -42,7 +42,7 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.LERNNAECHTE
+import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.naechteSchnitt
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.schlafurteil
@@ -150,8 +150,8 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
         }
 
         // Der Koerper im Schlaf, je gegen den Schnitt der Naechte davor - wie auf der
-        // Herzseite erst ab LERNNAECHTE: ein Wert aus einer Nacht ist kein "avg".
-        fun vergleich(werte: List<Int>) = Gesundheitsrechnung.naechteSchnitt(werte).let { (naechte, wert) -> wert?.takeIf { naechte >= LERNNAECHTE }?.roundToInt() }
+        // Herzseite erst ab Fenster.LERNNAECHTE: ein Wert aus einer Nacht ist kein "avg".
+        fun vergleich(werte: List<Int>) = Gesundheitsrechnung.naechteSchnitt(werte).let { (naechte, wert) -> wert?.takeIf { naechte >= Fenster.LERNNAECHTE }?.roundToInt() }
         val ruheSchnitt = vergleich(d.davor.map { it.ruhepuls })
         val hrvSchnitt = vergleich(d.davor.map { it.hrv })
         // Dieselben Punkte wie die Kurve, damit "lowest" einer ist, den man darin sieht.

@@ -62,9 +62,6 @@ internal object Auswertung {
      */
     const val MINDESTENS = 2
 
-    /** Wie viele Wochen der Verlauf zeigt. */
-    const val WOCHEN = 8
-
     /**
      * Ab so vielen Tagen zaehlt eine Woche als voll. Eine Urlaubswoche, in der
      * nur der Wandertag erfasst ist, waere sonst eine aussergewoehnlich starke
@@ -72,18 +69,9 @@ internal object Auswertung {
      */
     const val WOCHE_VOLL_AB = 4
 
-    /**
-     * UEBER SO VIELE TAGE rechnen Wochenprofil, Wochenende, Zielquote und
-     * Schlafmitte - fest und auf der Karte genannt. Ueber die ganze Geschichte
-     * gerechnet mischten sich Jahreszeiten und Quellwechsel ins Urteil, und die
-     * Karten widersprachen den Vergleichen, die 30 Tage nehmen. Die acht Wochen
-     * des Verlaufs und die Richtung (56 Tage) liegen darin.
-     */
-    const val FENSTER_TAGE = 90L
-
     /** Die Tage im festen Fenster vor der Grenze. */
     fun imFenster(reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate): List<Pair<LocalDate, Double>> {
-        val von = grenze.minusDays(FENSTER_TAGE)
+        val von = grenze.minusDays(Fenster.TREND_TAGE)
         return reihe.filter { it.first < grenze && it.first >= von }
     }
 
@@ -121,11 +109,11 @@ internal object Auswertung {
                 Wochenwert(montag, werte.map { it.second }.average(), werte.size)
             }
             .sortedBy { it.montag }
-            .takeLast(WOCHEN)
+            .takeLast(Fenster.TREND_WOCHEN)
 
         return Bild(
             profil = profil,
-            gesamt = if (tage.isEmpty()) null else tage.map { it.second }.average(),
+            gesamt = Statistik.mittel(tage.map { it.second }),
             anzahl = tage.size,
             staerkster = gezaehlt.maxByOrNull { it.mittel!! },
             schwaechster = gezaehlt.minByOrNull { it.mittel!! },
@@ -141,35 +129,9 @@ internal object Auswertung {
      * Luecken einfach zusammenschiebt, macht aus einer Woche ohne Uhr einen
      * scheinbar dichten Verlauf.
      */
-    fun letzteTage(reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, anzahl: Int = 14): List<Pair<LocalDate, Double?>> {
+    fun letzteTage(reihe: List<Pair<LocalDate, Double>>, grenze: LocalDate, anzahl: Int = Fenster.LETZTE_TAGE): List<Pair<LocalDate, Double?>> {
         val werte = reihe.toMap()
         return (anzahl downTo 1).map { i -> grenze.minusDays(i.toLong()).let { it to werte[it] } }
-    }
-
-    /**
-     * Runde Achsenstriche zwischen zwei Werten: der kleinste Schritt aus
-     * 1, 2, 5 mal Zehnerpotenz, der hoechstens fuenf Striche ergibt. Bleiben
-     * dabei weniger als drei, wird der Bereich auf den Schritt gerundet und
-     * die Randstriche kommen dazu - die Achse darf dann ueber den Bereich
-     * hinausreichen, das Bild nimmt die aeusseren Striche als Grenzen.
-     *
-     * Striche bei min, Mitte und max sind Zahlen wie 53, 61 und 69 - niemand
-     * kann daran ablesen, wo 60 liegt. Runde Schritte kann man lesen; zwei
-     * Striche allein (55 und 60 bei 52..62) zeigen aber keinen Massstab.
-     */
-    fun achsenschritte(von: Double, bis: Double): List<Double> {
-        if (bis <= von) return listOf(von)
-        val schritte = (0..6).flatMap { k -> listOf(1.0, 2.0, 5.0).map { it * Math.pow(10.0, k.toDouble()) } }
-        val schritt = schritte.firstOrNull { striche(von, bis, it).size <= 5 } ?: schritte.last()
-        val innen = striche(von, bis, schritt)
-        if (innen.size >= 3) return innen
-        return striche(Math.floor(von / schritt) * schritt, Math.ceil(bis / schritt) * schritt, schritt)
-    }
-
-    private fun striche(von: Double, bis: Double, schritt: Double): List<Double> {
-        val erster = Math.ceil(von / schritt).toLong()
-        val letzter = Math.floor(bis / schritt).toLong()
-        return (erster..letzter).map { it * schritt }
     }
 
     /**
@@ -251,16 +213,14 @@ internal object Auswertung {
 
     /** So viele Tage braucht jede Gruppe, damit ein Vergleich erscheint. */
     const val VERGLEICH_MINDESTENS = 5
-    /** Ueber so viele Tage wird verglichen. */
-    const val VERGLEICH_TAGE = 30L
 
     /**
-     * Die Werte von [ziel] in den [VERGLEICH_TAGE] Tagen vor [grenze], nach
+     * Die Werte von [ziel] in den [Fenster.VERGLEICH_TAGE] Tagen vor [grenze], nach
      * [gruppe] aufgeteilt: true Gruppe A, false Gruppe B, null gehoert zu keiner
      * (etwa wenn die Bedingung an dem Tag unbekannt ist).
      */
     fun vergleich(ziel: List<Pair<LocalDate, Double>>, grenze: LocalDate, gruppe: (LocalDate) -> Boolean?): Gruppenvergleich {
-        val von = grenze.minusDays(VERGLEICH_TAGE)
+        val von = grenze.minusDays(Fenster.VERGLEICH_TAGE)
         val a = mutableListOf<Double>()
         val b = mutableListOf<Double>()
         ziel.filter { !it.first.isBefore(von) && it.first.isBefore(grenze) }.forEach { (tag, w) ->
@@ -270,16 +230,9 @@ internal object Auswertung {
                 null -> Unit
             }
         }
-        fun median(l: List<Double>): Double {
-            if (l.isEmpty()) return 0.0
-            val s = l.sorted()
-            return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
-        }
-        fun varianz(l: List<Double>): Double {
-            if (l.size < 2) return 0.0
-            val m = l.average()
-            return l.sumOf { (it - m) * (it - m) } / (l.size - 1)
-        }
+        // Der echte Median; eine leere Gruppe steht mit 0 da, ihre Karte wartet ohnehin.
+        fun median(l: List<Double>): Double = if (l.isEmpty()) 0.0 else Statistik.median(l)
+        fun varianz(l: List<Double>): Double = Statistik.varianz(l) ?: 0.0
         val ma = median(a)
         val mb = median(b)
         val streuung = if (a.size + b.size > 2) {
@@ -339,10 +292,5 @@ internal object Auswertung {
      * Gerechnet wird ueber die Stichprobe (n-1): die Tage sind eine Auswahl
      * aus allen, nicht alle.
      */
-    fun streuung(werte: List<Double>): Double? {
-        if (werte.size < 3) return null
-        val mittel = werte.average()
-        val summe = werte.sumOf { (it - mittel) * (it - mittel) }
-        return kotlin.math.sqrt(summe / (werte.size - 1))
-    }
+    fun streuung(werte: List<Double>): Double? = if (werte.size < 3) null else Statistik.streuung(werte)
 }

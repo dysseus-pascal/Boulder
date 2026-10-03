@@ -71,7 +71,7 @@ internal object Trainingsanalyse {
             val vor = geglaettet.getOrNull(i - 1)?.takeIf { !p.nachSprung }
             val nach = geglaettet.getOrNull(i + 1)?.takeIf { !it.nachSprung }
             if (vor == null || nach == null) p
-            else p.copy(tempo = listOf(vor.tempo, p.tempo, nach.tempo).sorted()[1])
+            else p.copy(tempo = Statistik.median(listOf(vor.tempo, p.tempo, nach.tempo)))
         }
     }
 
@@ -161,11 +161,11 @@ internal object Trainingsanalyse {
      * DER MEDIAN, weil eine Nacht nach Alkohol oder mit Fieber fuenf Schlaege
      * hoeher liegt und sonst jedes Training dieser Woche billiger machte.
      */
-    fun ruhepulsAusNaechten(werte: List<Int>, naechte: Int = 7): Int? {
-        val gute = werte.filter { it > 0 }.takeLast(naechte).sorted()
+    fun ruhepulsAusNaechten(werte: List<Int>, naechte: Int = Fenster.HERZGRENZEN_NAECHTE): Int? {
+        val gute = werte.filter { it > 0 }.takeLast(naechte)
         if (gute.isEmpty()) return null
-        val m = gute.size / 2
-        return if (gute.size % 2 == 1) gute[m] else (gute[m - 1] + gute[m]) / 2
+        // Der echte Median, abgeschnitten wie immer schon: 52.5 bpm zaehlen als 52.
+        return Statistik.median(gute).toInt()
     }
 
     enum class Geschlecht { Mann, Frau, Andere }
@@ -507,15 +507,11 @@ internal object Trainingsanalyse {
             val b = pulsBei(puls, bis) ?: return@mapNotNull null
             (a - b).toDouble() / ((bis - von) / 60.0)
         }
-        return werte.takeIf { it.isNotEmpty() }?.average()
+        return Statistik.mittel(werte)
     }
 
-    /** Wie gleichmaessig Werte sind: die Standardabweichung. */
-    fun schwankung(werte: List<Double>): Double {
-        if (werte.size < 2) return 0.0
-        val m = werte.average()
-        return Math.sqrt(werte.sumOf { (it - m) * (it - m) } / werte.size)
-    }
+    /** Wie gleichmaessig Werte sind: die Standardabweichung aller Werte (durch n) - die Runden stehen fuer sich. */
+    fun schwankung(werte: List<Double>): Double = if (werte.size < 2) 0.0 else Statistik.streuungAllerWerte(werte)!!
 
     /**
      * Die Sekunden in Bewegung: Stuecke mit mehr als 0,5 m/s. HALT AN DER

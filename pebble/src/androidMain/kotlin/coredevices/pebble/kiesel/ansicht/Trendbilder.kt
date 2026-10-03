@@ -32,8 +32,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Statistik
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.Locale
@@ -238,7 +238,7 @@ internal fun Trendsaeulen(
         val boden = size.height - fussraum(messer, fett, if (zweizeilig) 2 else 1, 4.dp)
         val alle = saeulen.flatMap { listOfNotNull(it.wert, it.kleinster, it.groesster) } + listOfNotNull(mittel, marke)
         // Die Striche koennen ueber min-5..max+5 hinausreichen (runde Grenzen); dann sind sie die Achse.
-        val striche = if (pegel) Auswertung.achsenschritte(alle.min() - 5, alle.max() + 5) else emptyList()
+        val striche = if (pegel) Statistik.rasterMitRand(alle.min() - 5, alle.max() + 5) else emptyList()
         val achse = striche.map { messer.measure(kurz?.invoke(it) ?: Formate.zahl(it, 0), stil) }
         val unten = if (pegel) minOf(alle.min() - 5, striche.min()) else 0.0
         val spitze = if (pegel) maxOf(alle.max() + 5, striche.max()) else maxOf(saeulen.maxOf { maxOf(it.wert ?: 0.0, it.groesster ?: 0.0) }, marke ?: 0.0, 1.0) * 1.2
@@ -374,7 +374,7 @@ internal fun Tagesbild(
         // Der Fuss aus der Schrift gemessen wie bei den Trendsaeulen: fest 16 dp liefen die Daten ab 1,15 ins Bild.
         val boden = size.height - fussraum(messer, stil)
         // Die Striche koennen ueber min-5..max+5 hinausreichen (runde Grenzen); dann sind sie die Achse.
-        val striche = if (pegel) Auswertung.achsenschritte(werte.min() - 5, werte.max() + 5) else emptyList()
+        val striche = if (pegel) Statistik.rasterMitRand(werte.min() - 5, werte.max() + 5) else emptyList()
         val achse = striche.map { messer.measure(kurz(it), stil) }
         val unten = if (pegel) minOf(werte.min() - 5, striche.min()) else 0.0
         val oben = if (pegel) maxOf(werte.max() + 5, striche.max()) else maxOf(werte.max(), marke ?: 0.0, 1.0) * 1.2

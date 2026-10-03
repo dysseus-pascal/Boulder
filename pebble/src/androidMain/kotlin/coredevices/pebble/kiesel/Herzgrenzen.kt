@@ -70,9 +70,9 @@ internal object Herzgrenzen {
     }
 
     /** Das Alter aus Gravels Einstellungen (Health). */
-    suspend fun alter(): Int? = runCatching {
+    suspend fun alter(): Int? = versuche("Herzgrenzen", "Alter lesen") {
         KoinPlatform.getKoin().getOrNull<LibPebble>()?.healthSettings?.first()?.ageYears
-    }.getOrNull()
+    }
 
     /** Wie [maximum], mit Einstellung und Alter aus Boulder und der Uhr. */
     suspend fun maximum(context: Context, ruhe: Int?): Maximum {

@@ -255,7 +255,7 @@ class TagesbildTest {
         val (letzte, frueher) = g.naechteTeilen(naechte, heute, zone)
         assertEquals(naechte.last(), letzte)
         assertFalse(letzte in frueher)
-        assertEquals(VERGLEICHSNAECHTE, frueher.size)
+        assertEquals(Fenster.VERGLEICHSNAECHTE, frueher.size)
         assertEquals(naechte[8], frueher.last())
     }
 

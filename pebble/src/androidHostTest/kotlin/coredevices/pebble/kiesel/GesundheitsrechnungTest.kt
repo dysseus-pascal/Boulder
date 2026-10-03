@@ -79,15 +79,6 @@ class GesundheitsbildRechnungTest {
     }
 
     @Test
-    fun raster_in_runden_schritten() {
-        assertEquals(listOf(60, 80, 100, 120, 140), Gesundheitsrechnung.raster(47, 147, 10))
-        assertEquals(listOf(50, 60, 70, 80, 90), Gesundheitsrechnung.raster(50, 90, 10))
-        assertEquals(listOf(90, 95, 100), Gesundheitsrechnung.raster(88, 100, 5))
-        assertEquals(listOf(55), Gesundheitsrechnung.raster(55, 55))
-        assertTrue(Gesundheitsrechnung.raster(5, 4).isEmpty())
-    }
-
-    @Test
     fun schnitt_nur_ueber_tage_mit_wert() {
         assertEquals(2000.0, Gesundheitsrechnung.schnittDerVortage(listOf(0.0, 1000.0, 3000.0), 2)!!, 0.001)
         assertNull(Gesundheitsrechnung.schnittDerVortage(listOf(0.0, 1000.0), 2))
@@ -303,7 +294,7 @@ class GesundheitsbildRechnungTest {
         assertEquals(70 to 140, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 135, 88))))
         assertEquals(70 to 150, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 136, 88))))
         // Mit Zehnerschritten waeren das acht Linien; das Raster nimmt Zwanziger.
-        assertEquals(listOf(80, 100, 120, 140), Gesundheitsrechnung.raster(70, 140, 10))
+        assertEquals(listOf(80, 100, 120, 140), Statistik.rasterInnen(70, 140, 10))
     }
 
     @Test

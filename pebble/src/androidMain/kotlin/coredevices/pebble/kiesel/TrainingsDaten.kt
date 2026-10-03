@@ -12,8 +12,6 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
-import androidx.health.connect.client.records.metadata.DataOrigin
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.ansicht.Farben
@@ -149,7 +147,6 @@ internal data class TrainingDetail(
  */
 internal object TrainingsDaten {
     private const val TAG = "Kieselsport"
-    private const val TAGE = 90L
     private const val AUSGEBLENDET = "kiesel-spuren"
     private const val STRECKEN = "kiesel-strecken"
 
@@ -181,20 +178,13 @@ internal object TrainingsDaten {
         val klient = Akte(context).bereit()
             ?: return@withContext TrainingsUebersicht(false, emptyList(), emptyList())
         val jetzt = Instant.now()
-        val sitzungen = try {
-            klient.readRecords(
-                ReadRecordsRequest(
-                    ExerciseSessionRecord::class,
-                    TimeRangeFilter.between(jetzt.minus(Duration.ofDays(TAGE)), jetzt),
-                )
-            ).records.filterNot { erkannt(context, it) }.sortedByDescending { it.startTime }
-        } catch (e: Exception) {
-            Log.w(TAG, "Trainings lesen: " + e.message)
-            emptyList()
-        }
+        val sitzungen = versuche(TAG, "Trainings lesen") {
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE)), jetzt))
+                .filterNot { erkannt(context, it) }.sortedByDescending { it.startTime }
+        }.orEmpty()
         val eigene = sitzungen.filter { eigen(context, it) }
         val gewaehlt = gewaehlt(context, sitzungen)
-        val distanzen = distanzen(klient, context, jetzt.minus(Duration.ofDays(TAGE)), jetzt)
+        val distanzen = distanzen(klient, context, jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE)), jetzt)
         val trainings = gewaehlt.map { s -> eintrag(context, s, distanzen) }
         TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
     }
@@ -229,7 +219,7 @@ internal object TrainingsDaten {
     fun merkeStrecke(context: Context, s: ExerciseSessionRecord, meter: Double) {
         if (meter <= 0) return
         val p = context.getSharedPreferences(STRECKEN, Context.MODE_PRIVATE)
-        val grenze = Instant.now().minus(Duration.ofDays(TAGE)).epochSecond
+        val grenze = Instant.now().minus(Duration.ofDays(Fenster.SPORT_TAGE)).epochSecond
         val e = p.edit()
         // Was aus der Liste gefallen ist (oder nicht lesbar), braucht niemand mehr.
         p.all.forEach { (k, v) -> if ((v as? String)?.substringBefore(';')?.toLongOrNull()?.let { it >= grenze } != true) e.remove(k) }
@@ -256,45 +246,21 @@ internal object TrainingsDaten {
     }
 
     /**
-     * Alle Distanzen des Zeitraums in EINER Abfrage. Ohne das Leserecht gibt
-     * die Akte fremde nicht heraus und lehnt die ganze Abfrage ab - dann
-     * wenigstens Boulders eigene, die sie immer herausgibt.
+     * Alle Distanzen des Zeitraums in EINER Abfrage (mit allen Seiten - ein
+     * Schrittzaehler schreibt in einem Vierteljahr leicht mehr als eine).
+     * Ohne das Leserecht gibt die Akte fremde nicht heraus und lehnt die
+     * ganze Abfrage ab - dann wenigstens Boulders eigene, die sie immer
+     * herausgibt.
      */
     private suspend fun distanzen(klient: HealthConnectClient, context: Context, von: Instant, bis: Instant): Distanzen {
-        val alle = try {
-            liesAlleSeiten(klient, TimeRangeFilter.between(von, bis))
-        } catch (e: SecurityException) {
-            null
-        } catch (e: Exception) {
-            Log.w(TAG, "Distanzen lesen: " + e.message)
-            null
-        } ?: try {
-            klient.readRecords(
-                ReadRecordsRequest(DistanceRecord::class, TimeRangeFilter.between(von, bis), dataOriginFilter = setOf(DataOrigin(context.packageName)))
-            ).records
-        } catch (e: Exception) {
-            Log.w(TAG, "Eigene Distanzen lesen: " + e.message)
-            emptyList()
-        }
+        val alle = versuche(TAG, "Distanzen lesen") {
+            klient.lies(context, DistanceRecord::class, TimeRangeFilter.between(von, bis), Herkunft.ALLE_SONST_EIGENE)
+        }.orEmpty()
         val (eigen, fremd) = alle.partition { it.metadata.dataOrigin.packageName == context.packageName }
         return Distanzen(
             eigen.mapNotNull { r -> r.metadata.clientRecordId?.let { it to r.distance.inMeters } }.toMap(),
             fremd.map { Sportrechnung.FremdeDistanz(it.metadata.dataOrigin.packageName, it.startTime, it.endTime, it.distance.inMeters) },
         )
-    }
-
-    /** Alle Seiten einer Abfrage - ein Schrittzaehler schreibt in einem Vierteljahr leicht mehr als eine Seite. */
-    private suspend fun liesAlleSeiten(klient: HealthConnectClient, zeitraum: TimeRangeFilter): List<DistanceRecord> {
-        val alle = mutableListOf<DistanceRecord>()
-        var seite: String? = null
-        do {
-            val antwort = klient.readRecords(
-                ReadRecordsRequest(DistanceRecord::class, zeitraum, pageToken = seite)
-            )
-            alle += antwort.records
-            seite = antwort.pageToken?.takeIf { it.isNotEmpty() }
-        } while (seite != null)
-        return alle
     }
 
     /** Die Pausen einer Sitzung (ExerciseSegment PAUSE), Sekunden ab ihrem Beginn, auf sie beschnitten. */
@@ -321,14 +287,9 @@ internal object TrainingsDaten {
         val klient = Akte(context).bereit() ?: return@withContext emptyList()
         val jetzt = Instant.now()
         val anfang = jetzt.atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-        val sitzungen = try {
-            klient.readRecords(
-                ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(anfang, jetzt))
-            ).records.filterNot { erkannt(context, it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Trainings von heute lesen: " + e.message)
-            return@withContext emptyList()
-        }
+        val sitzungen = versuche(TAG, "Trainings von heute lesen") {
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(anfang, jetzt)).filterNot { erkannt(context, it) }
+        } ?: return@withContext emptyList()
         // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
         val distanzen = distanzen(klient, context, anfang, jetzt)
         gewaehlt(context, sitzungen).filter { !it.startTime.isBefore(anfang) }.sortedBy { it.startTime }
@@ -364,7 +325,7 @@ internal object TrainingsDaten {
      * laufenden Training.
      */
     private fun offeneSpuren(context: Context, eigene: List<ExerciseSessionRecord>): List<OffeneSpur> {
-        val grenze = Instant.now().minus(Duration.ofDays(TAGE)).epochSecond
+        val grenze = Instant.now().minus(Duration.ofDays(Fenster.SPORT_TAGE)).epochSecond
         val belegt = eigene.map { it.startTime.epochSecond }.toSet()
         val aus = ausgeblendet(context)
         val jetzt = Instant.now().epochSecond
@@ -400,8 +361,8 @@ internal object TrainingsDaten {
             eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte, distanzen)),
             punkte = punkte,
             puls = puls(klient, context, s),
-            spo2 = spo2(klient, s),
-            hrv = hrv(klient, s),
+            spo2 = spo2(klient, context, s),
+            hrv = hrv(klient, context, s),
             quelle = quelle,
             kcal = kcal(klient, context, s),
         )
@@ -415,17 +376,10 @@ internal object TrainingsDaten {
     private suspend fun kcal(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): Double? {
         val beginn = s.startTime.epochSecond
         if (s.metadata.clientRecordId != Kieselsport.kennung(beginn)) return null
-        return try {
-            klient.readRecords(
-                ReadRecordsRequest(
-                    ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(s.startTime, s.endTime),
-                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
-                )
-            ).records.firstOrNull {
+        return versuche(TAG, "Kalorien der Sitzung") {
+            klient.lies(context, ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(s.startTime, s.endTime), Herkunft.EIGENE).firstOrNull {
                 it.metadata.clientRecordId == "kieselsport-kcal-$beginn" && it.metadata.clientRecordVersion > Trainingswerte.FASSUNG_UHR
             }?.energy?.inKilocalories
-        } catch (e: Exception) {
-            null
         }
     }
 
@@ -447,13 +401,10 @@ internal object TrainingsDaten {
         val klient = Akte(context).bereit() ?: return@withContext null
         val jetzt = Instant.now()
         val von = jetzt.minus(seit)
-        val sitzungen = try {
-            klient.liesOderEigene(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt))
+        val sitzungen = versuche(TAG, "Juengstes Training lesen") {
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE)
                 .filterNot { erkannt(context, it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Juengstes Training lesen: " + e.message)
-            return@withContext null
-        }
+        } ?: return@withContext null
         val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
         eintrag(context, s, distanzen(klient, context, von, jetzt))
     }
@@ -463,11 +414,8 @@ internal object TrainingsDaten {
      * fremdes seine Kurve. Entstoert beim Lesen, nicht beim Schreiben: in
      * der Akte bleibt, was der Sensor mass.
      */
-    private suspend fun puls(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pulspunkt> = try {
-        Trainingsanalyse.entstoert(rohpuls(klient, context, s))
-    } catch (e: Exception) {
-        emptyList()
-    }
+    private suspend fun puls(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pulspunkt> =
+        versuche(TAG, "Puls der Sitzung") { Trainingsanalyse.entstoert(rohpuls(klient, context, s)) }.orEmpty()
 
     /**
      * Der Puls einer Sitzung, wie ihn die Ansicht zeigt und die Akte ihre
@@ -486,18 +434,13 @@ internal object TrainingsDaten {
         // OHNE DIE PAUSEN: die Uhr zaehlt sie nicht, und die Zonen, der Schnitt
         // und die Kalorien eines Trainings sollen es auch nicht.
         Trainingsanalyse.ohnePausen(
-            rohpuls(klient, s.metadata.dataOrigin.packageName.takeIf { it == context.packageName }, s.startTime, s.endTime),
+            rohpuls(klient, context, if (s.metadata.dataOrigin.packageName == context.packageName) Herkunft.EIGENE else Herkunft.ALLE, s.startTime, s.endTime),
             pausen(s),
         )
 
-    /** Der Puls in [von, bis) - von [quelle], ohne sie von allen. Wirft, wenn die Akte nicht liest. */
-    suspend fun rohpuls(klient: HealthConnectClient, quelle: String?, von: Instant, bis: Instant): List<Pulspunkt> {
-        val saetze = klient.readRecords(
-            ReadRecordsRequest(
-                HeartRateRecord::class, TimeRangeFilter.between(von, bis),
-                dataOriginFilter = quelle?.let { setOf(DataOrigin(it)) }.orEmpty(),
-            )
-        ).records
+    /** Der Puls in [von, bis) - nur Boulders eigener oder der aller Apps ([herkunft]). Wirft, wenn die Akte nicht liest. */
+    suspend fun rohpuls(klient: HealthConnectClient, context: Context, herkunft: Herkunft, von: Instant, bis: Instant): List<Pulspunkt> {
+        val saetze = klient.lies(context, HeartRateRecord::class, TimeRangeFilter.between(von, bis), herkunft)
         return Trainingsanalyse.pulsInSitzung(saetze.flatMap { r -> r.samples.map { it.time to it.beatsPerMinute } }, von, bis)
     }
 
@@ -505,28 +448,18 @@ internal object TrainingsDaten {
      * SpO2 waehrend des Trainings und zehn Minuten danach - die Messung am
      * Ende einer Yogastunde faellt oft kurz hinter den Schluss.
      */
-    private suspend fun spo2(klient: HealthConnectClient, s: ExerciseSessionRecord): List<Pair<Long, Double>> = try {
-        klient.readRecords(
-            ReadRecordsRequest(OxygenSaturationRecord::class, TimeRangeFilter.between(s.startTime, s.endTime.plusSeconds(600)))
-        ).records
+    private suspend fun spo2(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): List<Pair<Long, Double>> = versuche(TAG, "SpO2 der Sitzung") {
+        klient.lies(context, OxygenSaturationRecord::class, TimeRangeFilter.between(s.startTime, s.endTime.plusSeconds(600)))
             .filter { it.percentage.value in 50.0..100.0 }
             .distinctBy { it.time.epochSecond / 60 }
             .sortedBy { it.time }
             .map { Duration.between(s.startTime, it.time).seconds to it.percentage.value }
-    } catch (e: Exception) {
-        emptyList()
-    }
+    }.orEmpty()
 
     /** Die juengste HRV waehrend des Trainings und zehn Minuten danach - wie SpO2. */
-    private suspend fun hrv(klient: HealthConnectClient, s: ExerciseSessionRecord): Double? = try {
-        klient.readRecords(
-            ReadRecordsRequest(
-                HeartRateVariabilityRmssdRecord::class,
-                TimeRangeFilter.between(s.startTime, s.endTime.plusSeconds(600)),
-            )
-        ).records.maxByOrNull { it.time }?.heartRateVariabilityMillis
-    } catch (e: Exception) {
-        null
+    private suspend fun hrv(klient: HealthConnectClient, context: Context, s: ExerciseSessionRecord): Double? = versuche(TAG, "HRV der Sitzung") {
+        klient.lies(context, HeartRateVariabilityRmssdRecord::class, TimeRangeFilter.between(s.startTime, s.endTime.plusSeconds(600)))
+            .maxByOrNull { it.time }?.heartRateVariabilityMillis
     }
 
     /**

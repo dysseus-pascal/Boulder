@@ -22,7 +22,7 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Koerperdaten
 import coredevices.pebble.kiesel.Koerperrechnung
-import coredevices.pebble.kiesel.Koerperrechnung.FENSTER_TAGE
+import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Koerperstand
 import coredevices.pebble.kiesel.Koerpertag
 import coredevices.pebble.kiesel.Koerperzeile
@@ -49,7 +49,7 @@ private fun prozentEineStelle(p: Double) = Formate.Angabe(Formate.zahl(p, 1), "%
 @Composable
 private fun veraenderungText(betrag: Double, einheit: String): String =
     stringResource(
-        R.string.ks_kp_in_tagen, Formate.Angabe(Formate.vorzeichen(betrag, 1), einheit).text, Koerperrechnung.VERAENDERUNG_TAGE.toInt(),
+        R.string.ks_kp_in_tagen, Formate.Angabe(Formate.vorzeichen(betrag, 1), einheit).text, Fenster.KOERPER_VERAENDERUNG_TAGE.toInt(),
     )
 
 /**
@@ -113,7 +113,7 @@ internal fun KoerperAnsicht() {
         item { Spacer(Modifier.height(2.dp)) }
         if (gewicht.isNotEmpty()) item { GewichtKarte(gewicht, heute, imperial) }
         // Ein einzelner Punkt ist kein Verlauf; der Wert steht ohnehin in der Zusammensetzung.
-        if (fett.count { it.tag >= heute.minusDays(FENSTER_TAGE) } >= 2) item { FettKarte(fett, heute) }
+        if (fett.count { it.tag >= heute.minusDays(Fenster.KOERPER_TAGE) } >= 2) item { FettKarte(fett, heute) }
         if (!zusammen.leer) item { ZusammensetzungKarte(zusammen, heute, imperial) }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -135,10 +135,10 @@ private fun monat(tag: LocalDate): String = Formate.monatKurz(tag.month)
 private fun GewichtKarte(tage: List<Koerpertag>, heute: LocalDate, imperial: Boolean) {
     val context = LocalContext.current
     val letzter = tage.last()
-    val von = heute.minusDays(FENSTER_TAGE)
+    val von = heute.minusDays(Fenster.KOERPER_TAGE)
     val umrechnen = { kg: Double -> Formate.gewichtIn(kg, imperial) }
     val titel = stringResource(R.string.ks_kp_gewicht_k)
-    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, FENSTER_TAGE.toInt())
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.KOERPER_TAGE.toInt())
     val wert = Formate.gewicht(letzter.wert, imperial)
     Abschnitt(titel, zusatz) {
         val veraenderung = Koerperrechnung.veraenderung(tage, heute)?.let { veraenderungText(umrechnen(it), Formate.gewichtEinheit(imperial)) }
@@ -153,9 +153,9 @@ private fun GewichtKarte(tage: List<Koerpertag>, heute: LocalDate, imperial: Boo
 
 @Composable
 private fun FettKarte(tage: List<Koerpertag>, heute: LocalDate) {
-    val von = heute.minusDays(FENSTER_TAGE)
+    val von = heute.minusDays(Fenster.KOERPER_TAGE)
     val titel = stringResource(R.string.ks_kp_fett_k)
-    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, FENSTER_TAGE.toInt())
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.KOERPER_TAGE.toInt())
     Abschnitt(titel, zusatz) {
         Koerperverlauf(
             tage.filter { it.tag >= von }, linieImFenster(tage, von) { it }, von, heute, Farben.koerper.ton(), ::monat,

@@ -17,9 +17,11 @@ import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Drinktervall
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Reihen
-import coredevices.pebble.kiesel.SCHLAFZIEL_MIN
-import coredevices.pebble.kiesel.SCHRITTZIEL
+import coredevices.pebble.kiesel.Fenster
+import coredevices.pebble.kiesel.Gesundheitsziele
+import coredevices.pebble.kiesel.Spalte
 import coredevices.pebble.kiesel.SupCycle
+import coredevices.pebble.kiesel.get
 import coredevices.pebble.kiesel.Trenddaten
 import coredevices.pebble.kiesel.Trendstand
 import coredevices.pebble.kiesel.UhrApps
@@ -77,8 +79,8 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val d = geladen.reihen
     val heute = LocalDate.now()
     val groessen = remember(gruppe) { groessen(gruppe, context) }
-    val nacht = groessen.first().spalte in NACHTREIHEN
-    val grenze = grenzeVon(groessen.first().spalte, heute)
+    val nacht = groessen.first().spalte.nacht
+    val grenze = groessen.first().spalte.grenze(heute)
     val getragen = groessen.filter { g -> d[g.spalte].orEmpty().any { it.first < grenze } }
     if (getragen.isEmpty()) {
         // Noch kein Tag: die ganze Seite ist leer, nicht eine Karte auf ihr.
@@ -115,14 +117,14 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
  * Vorher hatten die Trends eigene Hexwerte und die Vergleiche andere: die
  * HRV war hier rot, dort violett.
  */
-internal fun farbeDerReihe(spalte: String): Farbe = when (spalte) {
-    "schlaf", "tief", "schlaf_mitte", "einschlafen" -> Farben.schlaf
-    "ruhepuls" -> Farben.puls
-    "hrv" -> Farben.hrv
-    "wasser" -> Farben.wasser
-    "koffein_mg" -> Farben.koffein
-    "supp_faellig", "supp_genommen" -> Farben.praeparat
-    else -> Farben.bewegung
+internal fun farbeDerReihe(spalte: Spalte): Farbe = when (spalte) {
+    Spalte.SCHLAF, Spalte.TIEF, Spalte.SCHLAF_MITTE, Spalte.EINSCHLAFEN -> Farben.schlaf
+    Spalte.RUHEPULS -> Farben.puls
+    Spalte.HRV -> Farben.hrv
+    Spalte.WASSER -> Farben.wasser
+    Spalte.KOFFEIN -> Farben.koffein
+    Spalte.PRAEPARATE_FAELLIG, Spalte.PRAEPARATE_GENOMMEN -> Farben.praeparat
+    Spalte.SCHRITTE, Spalte.AKTIV -> Farben.bewegung
 }
 
 /**
@@ -133,16 +135,6 @@ internal fun farbeDerReihe(spalte: String): Farbe = when (spalte) {
 internal fun plusMinus(text: String): String = "±$text"
 
 /**
- * Die Reihen, die eine Nacht beschreiben. Eine Nacht wird auf den Tag des
- * Aufwachens gebucht und ist am Morgen fertig - der Tag selbst erst um
- * Mitternacht. Darum zaehlen Nachtreihen bis einschliesslich heute, alle
- * anderen nur bis gestern.
- */
-private val NACHTREIHEN = setOf("schlaf", "tief", "schlaf_mitte", "ruhepuls", "hrv")
-
-private fun grenzeVon(spalte: String, heute: LocalDate) = if (spalte in NACHTREIHEN) heute.plusDays(1) else heute
-
-/**
  * Eine Messgroesse mit allem, was ihre Karten brauchen: [angabe] fuer Zahl
  * und Einheit getrennt ("4,986", "8:38 h", "52 bpm"), [kurz] nur die Zahl,
  * so eng, dass sie ueber eine Saeule passt ("4.9k", "8:38"), das Ziel als
@@ -150,7 +142,7 @@ private fun grenzeVon(spalte: String, heute: LocalDate) = if (spalte in NACHTREI
  * Beide Formen kommen aus [Formate].
  */
 private class Groesse(
-    val spalte: String,
+    val spalte: Spalte,
     val name: Int,
     val ziel: Double? = null,
     val pegel: Boolean = false,
@@ -170,30 +162,30 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
     fun mit(einheit: String?): (Double) -> Formate.Angabe = { Formate.menge(it, einheit) }
     return when (gruppe) {
         "schlaf" -> listOf(
-            Groesse("schlaf", R.string.ks_h_schlaf_n, ziel = SCHLAFZIEL_MIN.toDouble(), angabe = dauer, kurz = dauerKurz),
-            Groesse("tief", R.string.ks_tr_n_tief, angabe = dauer, kurz = dauerKurz),
+            Groesse(Spalte.SCHLAF, R.string.ks_h_schlaf_n, ziel = Gesundheitsziele.SCHLAF_MIN.toDouble(), angabe = dauer, kurz = dauerKurz),
+            Groesse(Spalte.TIEF, R.string.ks_tr_n_tief, angabe = dauer, kurz = dauerKurz),
         )
         "herz" -> listOf(
-            Groesse("ruhepuls", R.string.ks_h_ruhepuls, pegel = true, angabe = mit("bpm"), kurz = ganz),
-            Groesse("hrv", R.string.ks_tr_n_hrv, pegel = true, angabe = mit("ms"), kurz = ganz),
+            Groesse(Spalte.RUHEPULS, R.string.ks_h_ruhepuls, pegel = true, angabe = mit("bpm"), kurz = ganz),
+            Groesse(Spalte.HRV, R.string.ks_tr_n_hrv, pegel = true, angabe = mit("ms"), kurz = ganz),
         )
         "ernaehrung" -> listOf(
             Groesse(
-                "wasser", R.string.ks_h_wasser_n, ziel = Drinktervall.soll(context)?.ml?.toDouble(),
+                Spalte.WASSER, R.string.ks_h_wasser_n, ziel = Drinktervall.soll(context)?.ml?.toDouble(),
                 angabe = { Formate.Angabe(Formate.liter(it.roundToInt()), "l") }, kurz = { Formate.liter(it.roundToInt()) },
             ),
-            Groesse("koffein_mg", R.string.ks_h_koffein_n, angabe = mit("mg"), kurz = ganz),
+            Groesse(Spalte.KOFFEIN, R.string.ks_h_koffein_n, angabe = mit("mg"), kurz = ganz),
         )
         else -> listOf(
-            Groesse("schritte", R.string.ks_h_schritte, ziel = SCHRITTZIEL.toDouble(), angabe = mit(null), kurz = { Formate.schritteKurz(it) }),
-            Groesse("aktiv", R.string.ks_h_aktiv, angabe = dauer, kurz = dauerKurz),
+            Groesse(Spalte.SCHRITTE, R.string.ks_h_schritte, ziel = Gesundheitsziele.SCHRITTE.toDouble(), angabe = mit(null), kurz = { Formate.schritteKurz(it) }),
+            Groesse(Spalte.AKTIV, R.string.ks_h_aktiv, angabe = dauer, kurz = dauerKurz),
         )
     }
 }
 
 /** Der Zusatz einer Karte mit festem Fenster: "last 90 days" - der Kopf setzt das "·" davor. */
 @Composable
-private fun fenster() = stringResource(R.string.ks_trn_zeitraum, Auswertung.FENSTER_TAGE.toInt())
+private fun fenster() = stringResource(R.string.ks_trn_zeitraum, Fenster.TREND_TAGE.toInt())
 
 /** Die letzten vierzehn Tage: Mittel der Tage mit Wert, die letzte Woche daraus, und das Bild Tag fuer Tag. */
 @Composable
@@ -206,7 +198,7 @@ private fun LetzteTage(d: Reihen, g: Groesse, grenze: LocalDate) {
             val schnitt = g.angabe(werte.average())
             Kennzahl(schnitt.zahl, schnitt.einheit, pluralStringResource(R.plurals.ks_trn_schnitt_tage, werte.size, werte.size))
             // Die letzte Woche nur, wenn sie mehr ist als ein oder zwei Tage.
-            val sieben = fenster.takeLast(7).mapNotNull { it.second }
+            val sieben = fenster.takeLast(Fenster.WOCHE_TAGE).mapNotNull { it.second }
             if (sieben.size >= 3) {
                 val woche = g.angabe(sieben.average())
                 Kennzahl(woche.zahl, woche.einheit, stringResource(R.string.ks_trn_letzte7))
@@ -224,7 +216,8 @@ private fun LetzteTage(d: Reihen, g: Groesse, grenze: LocalDate) {
 @Composable
 private fun TagFuerTag(d: Reihen, groessen: List<Groesse>, grenze: LocalDate) {
     val tage = groessen.flatMap { g -> d[g.spalte].orEmpty().map { it.first } }.filter { it < grenze }.distinct().sortedDescending()
-    if (tage.isEmpty() || tage.size > 14) return
+    // Hoechstens so viele Zeilen wie die Karte der letzten Tage hat; danach ist das Bild lesbarer.
+    if (tage.isEmpty() || tage.size > Fenster.LETZTE_TAGE) return
     val werte = groessen.associate { g -> g.spalte to d[g.spalte].orEmpty().toMap() }
     val locale = Locale.getDefault()
     val kopf = listOf("") + groessen.map { g -> stringResource(g.name).replaceFirstChar { it.titlecase(locale) } }
@@ -266,7 +259,7 @@ private fun TypischeWoche(g: Groesse, bild: Auswertung.Bild, reihe: List<Pair<Lo
             },
             g.farbe, bild.gesamt, g.ziel, kurz = g.kurz, pegel = g.pegel, sprich = g::lang, name = stringResource(g.name),
         )
-        if (g.spalte == "schlaf") {
+        if (g.spalte == Spalte.SCHLAF) {
             val naechte = Auswertung.imFenster(reihe, grenze)
             Fliesstext(stringResource(R.string.ks_trn_erreicht, naechte.count { it.second >= g.ziel!! }, naechte.size, g.lang(g.ziel!!)))
         }
@@ -296,7 +289,7 @@ private fun Wochen(g: Groesse, bild: Auswertung.Bild, heute: LocalDate) {
 @Composable
 private fun Schlafmitte(d: Reihen, grenze: LocalDate) {
     val context = LocalContext.current
-    val mitten = Auswertung.imFenster(d["schlaf_mitte"].orEmpty(), grenze).map { it.second }
+    val mitten = Auswertung.imFenster(d[Spalte.SCHLAF_MITTE].orEmpty(), grenze).map { it.second }
     val streuung = Auswertung.streuung(mitten) ?: return
     // Die Reihe zaehlt Minuten ab 18 Uhr des Vortags. Die Mitte als Uhrzeit des Telefons - fest "3:12" galt auch bei 12 Stunden.
     val min = ((18 * 60 + mitten.average()).roundToInt() % 1440 + 1440) % 1440
@@ -317,14 +310,14 @@ private fun Schlafmitte(d: Reihen, grenze: LocalDate) {
 
 @Composable
 private fun Praeparattrend(d: Reihen, grenze: LocalDate, heute: LocalDate) {
-    val faellig = Auswertung.bild(d["supp_faellig"].orEmpty(), grenze)
+    val faellig = Auswertung.bild(d[Spalte.PRAEPARATE_FAELLIG].orEmpty(), grenze)
     if (faellig.profil.count { it.mittel != null } < 3) return
-    val genommen = Auswertung.bild(d["supp_genommen"].orEmpty(), grenze)
+    val genommen = Auswertung.bild(d[Spalte.PRAEPARATE_GENOMMEN].orEmpty(), grenze)
     val genommenTag = genommen.profil.associate { it.tag to it.mittel }
     Abschnitt(stringResource(R.string.ks_h_praeparate), zusatz = fenster()) {
         Trendsaeulen(
             faellig.profil.map { TSaeule(Formate.wochentagKurz(it.tag), it.mittel, genommenTag[it.tag], it.tag == heute.dayOfWeek, gesprochen = Formate.wochentagLang(it.tag)) },
-            farbeDerReihe("supp_faellig"), kurz = { Formate.zahl(it, 0) }, name = stringResource(R.string.ks_h_praeparate),
+            farbeDerReihe(Spalte.PRAEPARATE_FAELLIG), kurz = { Formate.zahl(it, 0) }, name = stringResource(R.string.ks_h_praeparate),
         )
         val f = faellig.gesamt
         val g = genommen.gesamt

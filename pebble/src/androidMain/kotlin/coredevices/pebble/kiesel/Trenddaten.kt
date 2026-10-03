@@ -5,9 +5,7 @@ import android.util.Log
 import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
-import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -118,19 +116,21 @@ internal object Trenddaten {
      * Wasser, Koffein und Praeparate bleiben in Akte und Einstellungen, und ein
      * dort geloeschter Eintrag soll nicht aus dem Speicher wiederkehren.
      */
-    val UHRREIHEN = setOf("schritte", "aktiv", "schlaf", "tief", "schlaf_mitte", "ruhepuls", "hrv", "einschlafen")
+    val UHRREIHEN = Spalte.schluessel(
+        Spalte.SCHRITTE, Spalte.AKTIV, Spalte.SCHLAF, Spalte.TIEF, Spalte.SCHLAF_MITTE, Spalte.RUHEPULS, Spalte.HRV, Spalte.EINSCHLAFEN,
+    )
 
     /**
      * Kiesel-Helper mass hier etwas anderes (die Trainingsdauer) - diese Reihen
      * zeigen die Trends nie aus der Vorgeschichte. Gespeichert bleiben sie.
      */
-    val OHNE_VORGESCHICHTE = setOf("aktiv")
+    val OHNE_VORGESCHICHTE = Spalte.schluessel(Spalte.AKTIV)
 
     /**
      * Die Reihen aus den Minutendaten (health_data). Nur sie loescht das
      * Housekeeping - die Naechte der Firmware (boulder_nacht) bleiben stehen.
      */
-    val MINUTENREIHEN = setOf("schritte", "aktiv")
+    val MINUTENREIHEN = Spalte.schluessel(Spalte.SCHRITTE, Spalte.AKTIV)
 
     /**
      * So alt darf ein Tag sein, dessen Minutendaten sicher noch ganz da sind.
@@ -171,11 +171,11 @@ internal object Trenddaten {
      */
     fun mitEinschlafen(vorgeschichte: Reihen): Reihen {
         val von = vorgeschichte["schlaf_von"] ?: return vorgeschichte
-        val da = vorgeschichte["einschlafen"].orEmpty()
+        val da = vorgeschichte[Spalte.EINSCHLAFEN].orEmpty()
         val tage = da.map { it.first }.toSet()
         val dazu = von.filter { it.first !in tage }
         if (dazu.isEmpty()) return vorgeschichte
-        return vorgeschichte + ("einschlafen" to (da + dazu).sortedBy { it.first })
+        return vorgeschichte + (Spalte.EINSCHLAFEN.schluessel to (da + dazu).sortedBy { it.first })
     }
 
     /** Neu gerechnet gewinnt; der Speicher fuellt nur Tage, die neu nichts wissen. */
@@ -248,16 +248,16 @@ internal object Trenddaten {
         fun anfang(t: LocalDate) = t.atStartOfDay(zone).toEpochSecond()
         val neu = mutableMapOf<String, List<Pair<LocalDate, Double>>>()
 
-        val letzte = runCatching { api.getLatestTimestamp() }.getOrNull()?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it).atZone(zone).toLocalDate() }
+        val letzte = versuche(TAG, "Letzte Daten") { api.getLatestTimestamp() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it).atZone(zone).toLocalDate() }
         val voll = uhrGrenze(heute, letzte)
-        val bewegung = runCatching { api.getDailyAggregates(anfang(von), anfang(heute.plusDays(1))) }.getOrDefault(emptyList())
+        val bewegung = versuche(TAG, "Bewegung je Tag") { api.getDailyAggregates(anfang(von), anfang(heute.plusDays(1))) }.orEmpty()
             .filter { LocalDate.parse(it.day) < voll }
-        neu["schritte"] = bewegung.mapNotNull { a -> a.steps?.takeIf { it > 0 }?.let { LocalDate.parse(a.day) to it.toDouble() } }
+        neu[Spalte.SCHRITTE] = bewegung.mapNotNull { a -> a.steps?.takeIf { it > 0 }?.let { LocalDate.parse(a.day) to it.toDouble() } }
         // Aktivminuten nur an Tagen mit Schritten: eine Uhr am Ladekabel meldet 0, und das ist kein ruhiger Tag.
-        neu["aktiv"] = bewegung.filter { (it.steps ?: 0) > 0 }.mapNotNull { a -> a.activeMinutes?.let { LocalDate.parse(a.day) to it.toDouble() } }
+        neu[Spalte.AKTIV] = bewegung.filter { (it.steps ?: 0) > 0 }.mapNotNull { a -> a.activeMinutes?.let { LocalDate.parse(a.day) to it.toDouble() } }
 
         val naechte = Gesundheitsrechnung.jeTag(
-            runCatching { api.getNaechte(anfang(von), anfang(heute.plusDays(1))) }.getOrDefault(emptyList()), zone,
+            versuche(TAG, "Naechte") { api.getNaechte(anfang(von), anfang(heute.plusDays(1))) }.orEmpty(), zone,
         )
         val schlaf = mutableListOf<Pair<LocalDate, Double>>()
         val tief = mutableListOf<Pair<LocalDate, Double>>()
@@ -268,7 +268,7 @@ internal object Trenddaten {
         naechte.forEach { e ->
             val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
             if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
-            val phasen = Gesundheitsrechnung.phasenMinuten(runCatching { api.getNachtAbschnitte(e.beginnUtc) }.getOrDefault(emptyList()))
+            val phasen = Gesundheitsrechnung.phasenMinuten(versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(e.beginnUtc) }.orEmpty())
             if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()
             if (e.aufwachen > e.einschlafen) {
                 // Das Einschlafen in Minuten ab 18 Uhr des Vortags, wie die Mitte - fuer "spaet ins Bett".
@@ -281,12 +281,12 @@ internal object Trenddaten {
             if (e.ruhepuls > 0) ruhe += tag to e.ruhepuls.toDouble()
             if (e.hrv > 0) hrv += tag to e.hrv.toDouble()
         }
-        neu["schlaf"] = schlaf
-        neu["tief"] = tief
-        neu["schlaf_mitte"] = mitte
-        neu["ruhepuls"] = ruhe
-        neu["hrv"] = hrv
-        neu["einschlafen"] = ein
+        neu[Spalte.SCHLAF] = schlaf
+        neu[Spalte.TIEF] = tief
+        neu[Spalte.SCHLAF_MITTE] = mitte
+        neu[Spalte.RUHEPULS] = ruhe
+        neu[Spalte.HRV] = hrv
+        neu[Spalte.EINSCHLAFEN] = ein
         return neu
     }
 
@@ -297,7 +297,7 @@ internal object Trenddaten {
         val neu = ausDerUhr(api, heute, zone).toMutableMap()
 
         val klient = Akte(context).bereit()
-        suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>> = try {
+        suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>> = versuche(TAG, "Akte je Tag") {
             klient?.aggregateGroupByPeriod(
                 AggregateGroupByPeriodRequest(
                     setOf(metrik),
@@ -305,34 +305,23 @@ internal object Trenddaten {
                     Period.ofDays(1),
                 )
             ).orEmpty().mapNotNull { g -> g.result[metrik]?.let { g.startTime.toLocalDate() to wert(it) } }.filter { it.second > 0 }
-        } catch (e: Exception) {
-            Log.w(TAG, "Akte je Tag: " + e.message)
-            emptyList()
-        }
+        }.orEmpty()
         val wasser = jeTag(HydrationRecord.VOLUME_TOTAL) { (it as androidx.health.connect.client.units.Volume).inMilliliters }
-        neu["wasser"] = wasser
+        neu[Spalte.WASSER] = wasser
         // Seit wann Boulder selbst Wasser eintraegt (Drinktervall): erst ab da ist ein Tag ohne Kaffee einer mit 0 mg.
-        val glasAb = try {
-            klient?.readRecords(
-                ReadRecordsRequest(
-                    HydrationRecord::class,
-                    TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
-                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
-                    ascendingOrder = true,
-                    pageSize = 1,
-                )
-            )?.records?.firstOrNull()?.startTime?.atZone(zone)?.toLocalDate()
-        } catch (e: Exception) {
-            Log.w(TAG, "Erstes Glas: " + e.message)
-            null
+        val glasAb = versuche(TAG, "Erstes Glas") {
+            klient?.liesEinen(
+                context, HydrationRecord::class, TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
+                neuester = false, herkunft = Herkunft.EIGENE,
+            )?.startTime?.atZone(zone)?.toLocalDate()
         }
-        neu["koffein_mg"] = koffeinMitNull(
+        neu[Spalte.KOFFEIN] = koffeinMitNull(
             jeTag(NutritionRecord.CAFFEINE_TOTAL) { (it as androidx.health.connect.client.units.Mass).inMilligrams }, wasser, glasAb, heute,
         )
 
         val quoten = SupCycle.quoten(context)
-        neu["supp_faellig"] = quoten.map { (t, q) -> t to q.first.toDouble() }.sortedBy { it.first }
-        neu["supp_genommen"] = quoten.map { (t, q) -> t to q.second.toDouble() }.sortedBy { it.first }
+        neu[Spalte.PRAEPARATE_FAELLIG] = quoten.map { (t, q) -> t to q.first.toDouble() }.sortedBy { it.first }
+        neu[Spalte.PRAEPARATE_GENOMMEN] = quoten.map { (t, q) -> t to q.second.toDouble() }.sortedBy { it.first }
 
         // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
         Tagesspeicher.halte(context, festzuschreiben(neu, heute))

@@ -21,7 +21,7 @@ class VergleichsfragenTest {
     @Test
     fun jede_frage_steht_auf_der_seite_ihrer_zielgroesse() {
         // Keine Frage mehr auf zwei Seiten: die Seite ist die ihrer Zielgroesse.
-        Vergleichsfragen.FRAGEN.forEach { f -> assertEquals(Vergleichsfragen.gruppeVon(f.ziel), f.gruppe) }
+        Vergleichsfragen.FRAGEN.forEach { f -> assertEquals(f.ziel.gruppe, f.gruppe) }
         assertEquals(Vergleichsfragen.Art.entries.toSet(), Vergleichsfragen.FRAGEN.map { it.art }.toSet())
         val alle = listOf("herz", "schlaf", "bewegung", "ernaehrung").flatMap { Vergleichsfragen.fuer(it, mitKoffein = true) }
         assertEquals(Vergleichsfragen.FRAGEN.size, alle.size)
@@ -85,9 +85,9 @@ class VergleichsfragenTest {
 
     @Test
     fun nachtziele_zaehlen_bis_heute_tagesziele_bis_gestern() {
-        assertEquals(heute.plusDays(1), Vergleichsfragen.grenze("hrv", heute))
-        assertEquals(heute, Vergleichsfragen.grenze("schritte", heute))
-        assertEquals(heute, Vergleichsfragen.grenze("koffein_mg", heute))
+        assertEquals(heute.plusDays(1), Spalte.HRV.grenze(heute))
+        assertEquals(heute, Spalte.SCHRITTE.grenze(heute))
+        assertEquals(heute, Spalte.KOFFEIN.grenze(heute))
     }
 
     @Test
@@ -99,7 +99,7 @@ class VergleichsfragenTest {
             "hrv" to tage.map { it to if (it.dayOfMonth % 2 == 0) 38.0 + it.dayOfMonth % 3 else 50.0 + it.dayOfMonth % 3 },
         )
         val (f, v) = Vergleichsfragen.rechne(d, "herz", heute, mitKoffein = false).first { it.first.art == Vergleichsfragen.Art.HRV_KURZ }
-        assertEquals("hrv", f.ziel)
+        assertEquals(Spalte.HRV, f.ziel)
         assertTrue(v.genug)
         assertTrue(v.klar)
         assertTrue(v.unterschied < -10)
@@ -107,8 +107,8 @@ class VergleichsfragenTest {
 
     @Test
     fun wochenende_vergleicht_nur_den_ruhepuls() {
-        assertTrue(Vergleichsfragen.vergleichtWochenende("ruhepuls"))
-        assertFalse(Vergleichsfragen.vergleichtWochenende("hrv"))
-        assertFalse(Vergleichsfragen.vergleichtWochenende("schritte"))
+        assertTrue(Vergleichsfragen.vergleichtWochenende(Spalte.RUHEPULS))
+        assertFalse(Vergleichsfragen.vergleichtWochenende(Spalte.HRV))
+        assertFalse(Vergleichsfragen.vergleichtWochenende(Spalte.SCHRITTE))
     }
 }

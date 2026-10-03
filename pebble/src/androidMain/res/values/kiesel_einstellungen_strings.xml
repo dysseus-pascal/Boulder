@@ -2,18 +2,24 @@
 <!-- Boulders Eintraege in Gravels Einstellungsliste. -->
 <resources>
     <string name="ks_e_rechte">Health Connect access</string>
-    <string name="ks_e_rechte_ok">Workouts, heart rate, SpO2, HRV, water and supplements: all allowed.</string>
-    <string name="ks_e_rechte_fehlen">%1$d permissions missing. Tap to allow.</string>
-    <string name="ks_e_sicherung_kein">Back up, and take over from Kiesel-Helper. No folder chosen yet.</string>
+    <string name="ks_e_rechte_ok">All allowed</string>
+    <plurals name="ks_e_rechte_fehlen">
+        <item quantity="one">%1$d permission missing</item>
+        <item quantity="other">%1$d permissions missing</item>
+    </plurals>
+    <string name="ks_e_sicherung_kein">No folder chosen</string>
     <string name="ks_e_kieselsport_text">Max HR %1$s · rest %2$d s · pool %3$d m</string>
     <string name="ks_e_maxpuls_alter">%1$d · age</string>
-    <string name="ks_e_standort">Location for GPS tracks</string>
-    <string name="ks_e_standort_immer">Allowed all the time.</string>
-    <string name="ks_e_standort_nutzung">Only while using the app: tracks stay empty while Boulder is in the background. Choose \"Allow all the time\".</string>
-    <string name="ks_e_standort_nicht">Not allowed: workouts get no route.</string>
-    <string name="ks_e_protokoll_text">What Kieselsport, Drinktervall and SupCycle reported, and what Boulder did with it.</string>
+    <!-- Titel und die beiden anderen Zustaende kommen vom Sport-Reiter (ks_sp_routen,
+         ks_sp_nur_nutzung, ks_ei_standort_nicht): ein Recht, ein Name. -->
+    <string name="ks_e_standort_immer">Allowed all the time</string>
+    <!-- Wortgleich mit Gravels Schalter, den er vertritt, solange Gravel ihn verbirgt. -->
+    <string name="ks_e_imperial">Imperial Units</string>
+    <string name="ks_e_imperial_text">Use miles/feet/inches/lb instead of metric units</string>
+    <string name="ks_e_protokoll_text">Kieselsport, Drinktervall, SupCycle</string>
     <string name="ks_e_osmand">OsmAnd turn-by-turn (Kieselstrasse)</string>
     <string name="ks_e_osmand_fehlt">OsmAnd is not installed.</string>
     <string name="ks_e_kartenlinks">Map links to OsmAnd</string>
-    <string name="ks_e_kartenlinks_text">Opens Google Maps and geo: links in OsmAnd. For Google Maps, add the addresses under \"Open by default\".</string>
+    <string name="ks_e_kartenlinks_text">Google Maps and geo: links open in OsmAnd</string>
+    <string name="ks_e_nachtexport_keine">No night in the last 3 days</string>
 </resources>

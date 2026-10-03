@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Das Gesundheits-Widget - aus Kiesel-Helper (GesundheitWidget, Widgetlage). -->
 <resources>
-    <string name="ks_wl_erholsam">%1$s %% restful</string>
+    <string name="ks_wl_erholsam">%1$s restful</string>
     <string name="ks_wl_laenger">longer than usual</string>
     <string name="ks_wl_kuerzer">shorter than usual</string>
     <string name="ks_wl_wie_sonst">as usual</string>

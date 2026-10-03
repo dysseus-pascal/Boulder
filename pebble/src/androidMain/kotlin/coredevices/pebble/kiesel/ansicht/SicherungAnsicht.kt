@@ -1,21 +1,9 @@
 package coredevices.pebble.kiesel.ansicht
 
 import android.content.Intent
-import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,13 +11,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Sichern
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import kotlinx.coroutines.launch
@@ -62,40 +48,49 @@ internal fun SicherungAnsicht() {
             stand++
         }
     }
+    // Die Fehlschlaege, die Sichern als Text meldet - sie stehen rot, der Erfolg nicht.
+    val fehler = listOf(R.string.ks_b_kein_ordner, R.string.ks_b_fehlgeschlagen, R.string.ks_b_keine_sicherung).map { stringResource(it) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Seite {
         // stand zwingt nach jeder Aenderung zum Neulesen der gemerkten Werte.
-        stand.let { }
         val ordner = remember(stand) { Sichern.ordner(context) }
-        Karte {
-            Text(stringResource(R.string.ks_b_ordner), style = MaterialTheme.typography.labelMedium)
-            Text(ordner?.name ?: stringResource(R.string.ks_b_keiner), fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = { waehle.launch(Sichern.ordnerUri(context)) }) { Text(stringResource(R.string.ks_b_waehlen)) }
-        }
-        Karte {
-            Text(stringResource(R.string.ks_b_sichern), style = MaterialTheme.typography.labelMedium)
-            Text(stringResource(R.string.ks_b_sichern_text), style = MaterialTheme.typography.bodySmall)
-            val zuletzt = Sichern.zuletzt(context)
-            Text(
-                when {
-                    zuletzt == 0L -> stringResource(R.string.ks_b_nie)
-                    // Unter einer Minute sagte DateUtils "vor 0 Minuten".
-                    System.currentTimeMillis() - zuletzt < DateUtils.MINUTE_IN_MILLIS -> stringResource(R.string.ks_b_eben)
-                    else -> stringResource(R.string.ks_b_zuletzt, DateUtils.getRelativeTimeSpanString(zuletzt).toString())
-                },
-                style = MaterialTheme.typography.bodySmall,
+        val zuletzt = remember(stand) { Sichern.zuletzt(context) }
+        val taeglich = remember(stand) { Sichern.taeglich(context) }
+        Kasten {
+            Kopf(stringResource(R.string.ks_b_ordner))
+            Knopfzeile(
+                titel = ordner?.name ?: stringResource(R.string.ks_b_keiner),
+                knopf = stringResource(R.string.ks_b_waehlen),
+                onClick = { waehle.launch(Sichern.ordnerUri(context)) },
             )
-            Button(enabled = ordner != null && !laeuft, onClick = { tue { Sichern.jetzt(context, api) } }) { Text(stringResource(R.string.ks_b_jetzt)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.ks_b_taeglich), Modifier.weight(1f))
-                Switch(checked = Sichern.taeglich(context), enabled = ordner != null, onCheckedChange = { Sichern.setzeTaeglich(context, it); stand++ })
+        }
+        Kasten {
+            Kopf(stringResource(R.string.ks_b_sichern))
+            Knopfzeile(
+                titel = stringResource(R.string.ks_b_sichern_text),
+                // Der Stand in der einen Form der App: "just now", "5 minutes ago".
+                unter = if (zuletzt == 0L) stringResource(R.string.ks_b_nie)
+                else stringResource(R.string.ks_b_zuletzt, Formate.relativ(context, zuletzt)),
+                knopf = stringResource(R.string.ks_b_jetzt),
+                onClick = { tue { Sichern.jetzt(context, api) } },
+                aktiv = ordner != null && !laeuft,
+            )
+            Trenner(INNEN)
+            Schaltzeile(stringResource(R.string.ks_b_taeglich), an = taeglich, aktiv = ordner != null) {
+                Sichern.setzeTaeglich(context, it)
+                stand++
             }
         }
-        Karte {
-            Text(stringResource(R.string.ks_b_uebernehmen), style = MaterialTheme.typography.labelMedium)
-            Text(stringResource(R.string.ks_b_uebernehmen_text), style = MaterialTheme.typography.bodySmall)
-            Button(enabled = ordner != null && !laeuft, onClick = { tue { Sichern.zurueck(context) } }) { Text(stringResource(R.string.ks_b_holen)) }
+        Kasten {
+            Kopf(stringResource(R.string.ks_b_uebernehmen))
+            Knopfzeile(
+                titel = stringResource(R.string.ks_b_uebernehmen_text),
+                unter = stringResource(R.string.ks_b_uebernehmen_unter),
+                knopf = stringResource(R.string.ks_b_holen),
+                onClick = { tue { Sichern.zurueck(context) } },
+                aktiv = ordner != null && !laeuft,
+            )
         }
-        meldung?.let { Text(it, fontWeight = FontWeight.Bold) }
+        meldung?.let { Meldung(it, if (it in fehler) Farben.schlecht.ton() else null, Modifier.padding(horizontal = INNEN)) }
     }
 }

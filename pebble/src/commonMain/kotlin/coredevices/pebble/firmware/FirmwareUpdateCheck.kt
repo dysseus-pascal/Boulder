@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 class FirmwareUpdateCheck(
@@ -139,7 +139,9 @@ class FirmwareUpdateCheck(
         CommonBuildKonfig.BUG_URL != null && coreConfig.value.useEngDashOta
 
     companion object {
-        private val CACHE_TTL: Duration = 15.minutes
+        // Boulder: Nutzerentscheid "Firmware-Pruefung seltener" (vorher 15 min). Unter
+        // 6 h, weil der 6-h-Lauf ab 5,4 h startet und sonst erst nach 12 h fragte.
+        private val CACHE_TTL: Duration = 5.hours
     }
 }
 

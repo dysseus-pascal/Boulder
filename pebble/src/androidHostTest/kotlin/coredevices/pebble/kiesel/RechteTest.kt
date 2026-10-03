@@ -56,6 +56,21 @@ class RechteTest {
     }
 
     @Test
+    fun gemerkte_fassung_zuerst_aendert_nichts() {
+        // beimStart fragt die Akte nur, wenn die Fassung noch nicht gefragt hat;
+        // das darf keinen Fall aendern, in dem sollFragen sonst ja gesagt haette.
+        for (fehlend in listOf(emptySet(), setOf(wasser))) {
+            for (gefragt in listOf(null, "0.40.0", "0.41.0")) {
+                if (Rechtefrage.schonGefragt(gefragt, "0.41.0")) {
+                    assertFalse(Rechtefrage.sollFragen(fehlend, gefragt, "0.41.0"))
+                }
+            }
+        }
+        assertTrue(Rechtefrage.schonGefragt("0.41.0", "0.41.0"))
+        assertFalse(Rechtefrage.schonGefragt(null, "0.41.0"))
+    }
+
+    @Test
     fun abgeloeste_anfrage_ist_keine_ablehnung() = runTest {
         val anfragen = Anfragen<Set<String>>()
         val (alteNummer, alte) = anfragen.neu()

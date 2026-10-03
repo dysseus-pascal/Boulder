@@ -7,6 +7,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.serialization.ContentConvertException
@@ -16,6 +17,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.io.IOException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.concurrent.Volatile
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -118,16 +120,28 @@ class GithubReleases(
         data class Failure(val message: String) : Fetched()
     }
 
+    // Boulder: mit ETag antwortet GitHub ohne Aenderung 304 ohne Inhalt statt einiger
+    // 10 KB. Ohne Anmeldung zaehlt auch die 304 gegen die 60 Abfragen je Stunde.
+    private class Gemerkt(val etag: String, val releases: List<GithubReleaseDto>)
+
+    @Volatile
+    private var gemerkt: Gemerkt? = null
+
     private suspend fun fetchReleases(): Fetched {
+        val vorher = gemerkt
         val response = try {
             httpClient.get(RELEASES_URL) {
                 parameter("per_page", PAGE_SIZE)
                 header("Accept", "application/vnd.github+json")
                 header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+                vorher?.let { header(HttpHeaders.IfNoneMatch, it.etag) }
             }
         } catch (e: IOException) {
             logger.w(e) { "Network error fetching PebbleOS releases" }
             return Fetched.Failure(GENERIC_FAILURE)
+        }
+        if (response.status == HttpStatusCode.NotModified && vorher != null) {
+            return Fetched.Success(vorher.releases)
         }
         if (response.status == HttpStatusCode.Forbidden || response.status == HttpStatusCode.TooManyRequests) {
             // Unauthenticated GitHub quota is per-IP and the in-app check
@@ -140,7 +154,9 @@ class GithubReleases(
             return Fetched.Failure(GENERIC_FAILURE)
         }
         return try {
-            Fetched.Success(response.body<List<GithubReleaseDto>>())
+            val releases = response.body<List<GithubReleaseDto>>()
+            gemerkt = response.headers[HttpHeaders.ETag]?.let { Gemerkt(it, releases) }
+            Fetched.Success(releases)
         } catch (e: NoTransformationFoundException) {
             logger.w(e) { "Unexpected content fetching PebbleOS releases" }
             Fetched.Failure(GENERIC_FAILURE)

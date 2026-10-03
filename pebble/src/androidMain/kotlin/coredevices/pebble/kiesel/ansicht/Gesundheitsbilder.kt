@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,10 +15,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -28,51 +27,92 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Pulsbin
-import kotlin.math.roundToInt
 import coredevices.pebble.kiesel.Blutdruck
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
+import coredevices.pebble.kiesel.Pulsbin
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlin.math.roundToInt
 
-/** Die Spalte links fuer die Zahlen der Achse in [Tageskurve] - und so weit eingerueckt das [Hypnogramm] darueber. */
-internal val ACHSE_LINKS = 28.dp
+/*
+ * Die Bilder der Gesundheitsseiten (Zeitstrahl, Herz, Nacht). Fuer alle gilt
+ * dieselbe Sprache: die Zahlen der Achse RECHTS ([achsSpalte]), das Raster
+ * durchgezogen und blass ([Farben.raster]), gestrichelt nur ein Schnitt,
+ * gepunktet nur Zonengrenzen. Der Fuss ist aus der Schrift gemessen
+ * ([fussraum], [hoeheMitSchrift]), und jedes Bild sagt TalkBack in einem
+ * Satz, was es zeigt ([bildBeschreibung]).
+ */
+
+/**
+ * Die Spalte rechts fuer die Zahlen der Achse, in Pixeln. In der Nacht stand
+ * sie links, auf der Herzseite rechts - jetzt ueberall rechts. Gemessen an
+ * "000" in der Schrift der Achse, mindestens die bisherigen 30 dp: bei
+ * Schrift 1,3 liefen dreistellige Zahlen sonst in die Kurve.
+ */
+private fun DrawScope.achsSpalte(messer: TextMeasurer, stil: TextStyle): Float =
+    maxOf(30.dp.toPx(), messer.measure("000", stil).size.width + 6.dp.toPx())
+
+/** Die Schrift der Achsen und Stunden aller Bilder: labelSmall in Grau. */
+@Composable
+private fun achsStil(): TextStyle = MaterialTheme.typography.labelSmall.copy(color = Farben.neutral())
 
 /**
  * Die Nacht in vier Bahnen - wach oben, tief unten - wie das Hypnogramm in
  * Kiesel-Helper. Schlaf ohne Phase (eine Nacht ohne Puls) liegt in der Bahn
- * des leichten Schlafs. [links]: so weit eingerueckt wie die Kurven darunter,
- * damit dieselbe Uhrzeit in allen Bildern an derselben Stelle steht.
+ * des leichten Schlafs. [mitAchse]: rechts so viel frei wie die Kurven
+ * darunter fuer ihre Zahlen brauchen, damit dieselbe Uhrzeit in allen
+ * Bildern einer Karte senkrecht uebereinander steht. [stumm]: ohne Satz
+ * fuer TalkBack, wo Text daneben dieselben Zahlen nennt.
  */
 @Composable
-internal fun Hypnogramm(nacht: Nacht, hoehe: Dp = 90.dp, links: Dp = 0.dp) {
+internal fun Hypnogramm(nacht: Nacht, hoehe: Dp = 90.dp, mitAchse: Boolean = false, stumm: Boolean = false) {
     val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val bahnen = mapOf(0 to 0, 3 to 1, 1 to 2, 4 to 2, 2 to 3)
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val fuss = 16.dp.toPx()
-        val bahn = (size.height - fuss) / 4
-        val rand = links.toPx()
+    val stil = achsStil()
+    val stunde = stundenText()
+    // Die Bahnen aus derselben Liste wie die Legenden, Schlaf ohne Phase zu "leicht".
+    val bahnen = PHASEN_VON_OBEN.mapIndexed { i, (p, _) -> p to i }.toMap().let { it + (Farben.OHNE_PHASE to it.getValue(Farben.LEICHT)) }
+    val satz = if (stumm) null else hypnogrammSatz(nacht)
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(satz)) {
+        val bahn = (size.height - fussraum(messer, stil)) / 4
+        val breite = size.width - if (mitAchse) achsSpalte(messer, stil) else 0f
         val von = nacht.abschnitte.minOfOrNull { it.von.epochSecond } ?: return@Canvas
         val bis = nacht.abschnitte.maxOf { it.bis.epochSecond }
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
-        fun x(t: Instant) = rand + (size.width - rand) * (t.epochSecond - von) / spanne
+        fun x(t: Instant) = breite * (t.epochSecond - von) / spanne
         nacht.abschnitte.forEach { a ->
             val b = bahnen[a.phase] ?: return@forEach
             drawRoundRect(
-                PHASENFARBEN[a.phase], Offset(x(a.von), bahn * b + 2), Size((x(a.bis) - x(a.von)).coerceAtLeast(1f), bahn - 4),
+                Farben.phasen[a.phase], Offset(x(a.von), bahn * b + 2), Size((x(a.bis) - x(a.von)).coerceAtLeast(1f), bahn - 4),
                 CornerRadius(2.dp.toPx()),
             )
         }
-        stundenstriche(von, bis) { t, text ->
-            val m = messer.measure(text, stil)
-            drawText(m, topLeft = Offset((x(Instant.ofEpochSecond(t)) - m.size.width / 2f).coerceIn(rand, size.width - m.size.width), size.height - m.size.height))
-        }
+        stundenachse(von, bis, stunde, messer, stil, breite) { x(Instant.ofEpochSecond(it)) }
     }
+}
+
+/**
+ * Die Phasen in der Reihenfolge der Bahnen des [Hypnogramm]s, von oben nach
+ * unten. Legenden und Phasenzeilen folgen ihr: standen sie anders als die
+ * Bahnen, musste man zwischen Punkt und Block hin- und herspringen.
+ */
+internal val PHASEN_VON_OBEN = listOf(
+    Farben.WACH to R.string.ks_h_wach, Farben.REM to R.string.ks_h_rem,
+    Farben.LEICHT to R.string.ks_h_leicht, Farben.TIEF to R.string.ks_h_tief,
+)
+
+/** Fuer TalkBack: die Zeit der Nacht und die Phasen mit ihrer Dauer - was das Bild zeigt, in Zahlen. */
+@Composable
+private fun hypnogrammSatz(nacht: Nacht): String {
+    val context = LocalContext.current
+    val zeit = stringResource(R.string.ks_h_zeitraum, Formate.uhrzeit(context, nacht.einschlafen), Formate.uhrzeit(context, nacht.aufwachen))
+    if (!nacht.mitPhasen) return zeit
+    val namen = PHASEN_VON_OBEN.map { (p, name) -> p to stringResource(name) }
+    return zeit + ": " + namen.joinToString(", ") { (p, name) -> name + " " + Formate.dauer(nacht.phasen[p].toLong()) }
 }
 
 /** Das Nachtfenster als leichte Schattierung ueber die volle Hoehe, "night" oben links darin. */
@@ -90,11 +130,27 @@ private fun DrawScope.nachtschatten(
 }
 
 /**
+ * Runde Rasterwerte strikt zwischen [tief] und [hoch]: der kleinste Schritt
+ * aus 1, 2, 5, 10 ..., bei dem zwei Zahlen der Achse mindestens gut eine
+ * Zeile ([zeile], Pixel) auseinander stehen und hoechstens vier Linien
+ * entstehen. [platz]: die Hoehe der Achse in Pixeln.
+ */
+private fun achsenlinien(tief: Int, hoch: Int, platz: Float, zeile: Float): List<Int> {
+    val spanne = (hoch - tief).coerceAtLeast(1)
+    for (schritt in listOf(1, 2, 5, 10, 20, 50, 100)) {
+        if (platz * schritt / spanne < zeile * 1.2f) continue
+        val linien = generateSequence(Math.floorDiv(tief, schritt) * schritt + schritt) { it + schritt }.takeWhile { it < hoch }.toList()
+        if (linien.size <= 4) return linien
+    }
+    return emptyList()
+}
+
+/**
  * Werte ueber eine Zeitspanne als Punkte, mit den Stunden darunter - Puls
  * und SpO2 der Nachtansicht. Die Punkte blass, darueber die Trendlinie
  * ([Gesundheitsrechnung.trend] mit [trendFenster] Sekunden nach jeder Seite):
  * die Punkte zeigen, was gemessen wurde, die Linie, wohin es ging. Die Achse
- * spannt sich um die Werte.
+ * spannt sich um die Werte, beschriftet mit runden Zahlen wie jedes Raster.
  */
 @Composable
 internal fun Tageskurve(
@@ -104,28 +160,31 @@ internal fun Tageskurve(
     farbe: Color,
     hoehe: Dp = 120.dp,
     trendFenster: Long = 900,
+    beschreibung: String? = null,
 ) {
     if (punkte.isEmpty()) return
     val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val links = ACHSE_LINKS.toPx()
-        val fuss = 16.dp.toPx()
-        val boden = size.height - fuss
+    val stil = achsStil()
+    val raster = Farben.raster()
+    // Deckend gemischt statt Alpha: 300 Punkte uebereinander ergaben sonst dunkle Flecken.
+    val blass = farbe.aufKarte(0.4f)
+    val stunde = stundenText()
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
+        val rechts = size.width - achsSpalte(messer, stil)
+        val boden = size.height - fussraum(messer, stil)
         val tief = punkte.minOf { it.second } - 2
         val hoch = maxOf(punkte.maxOf { it.second } + 2, tief + 1)
         val spanne = (bis - von).coerceAtLeast(1).toFloat()
-        fun x(t: Long) = links + (size.width - links) * (t - von) / spanne
+        fun x(t: Long) = rechts * (t - von) / spanne
         fun y(w: Int) = boden * (1f - (w - tief).toFloat() / (hoch - tief))
-        for (w in listOf(tief + 2, (tief + hoch) / 2, hoch - 2)) {
-            drawLine(rasterFarbe, Offset(links, y(w)), Offset(size.width, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
-            val m = messer.measure("$w", stil)
-            drawText(m, topLeft = Offset(links - 4.dp.toPx() - m.size.width, y(w) - m.size.height / 2f))
+        achsenlinien(tief, hoch, boden, messer.measure("0", stil).size.height.toFloat()).forEach { w ->
+            drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
+            val m = messer.measure(Formate.zahl(w.toLong()), stil)
+            drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
         val r = if (punkte.size > 300) 1.5.dp.toPx() else 2.5.dp.toPx()
         punkte.forEach { (t, w) ->
-            drawCircle(farbe.copy(alpha = 0.4f), r, Offset(x(t), y(w)))
+            drawCircle(blass, r, Offset(x(t), y(w)))
         }
         fun yd(w: Double) = boden * (1f - ((w - tief) / (hoch - tief)).toFloat())
         Gesundheitsrechnung.trend(punkte, trendFenster).forEach { stueck ->
@@ -136,10 +195,7 @@ internal fun Tageskurve(
                 style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
-        stundenstriche(von, bis) { t, text ->
-            val m = messer.measure(text, stil)
-            drawText(m, topLeft = Offset((x(t) - m.size.width / 2f).coerceIn(links, size.width - m.size.width), size.height - m.size.height))
-        }
+        stundenachse(von, bis, stunde, messer, stil, rechts, ::x)
     }
 }
 
@@ -164,22 +220,24 @@ internal fun Pulsband(
     farben: List<Color>,
     nacht: Pair<Long, Long>? = null,
     hoehe: Dp = 200.dp,
-    stundeText: (ZonedDateTime) -> String = { "${it.hour}" },
+    stundeText: (ZonedDateTime) -> String = stundenText(),
+    beschreibung: String? = null,
 ) {
     val bins = Gesundheitsrechnung.fuenfMinuten(punkte)
     if (bins.isEmpty() || zonen.size != 3 || farben.size != 4) return
     val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val stil = achsStil()
+    // Durchscheinend, nicht deckend (aufKarte): die Saeulen liegen ueber den
+    // gepunkteten Zonengrenzen und dem Nachtschatten, beide sollen durchscheinen.
     val saeule = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
     // Die Nacht als deutliche Flaeche: bei 6 % sah man sie auf dem Telefon nicht.
     val schatten = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
     val nachtText = stringResource(R.string.ks_h_nacht_kurz)
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
         // Die Zahlen rechts, wie bei Google: links beginnt die Kurve am Rand.
-        val rechts = size.width - 30.dp.toPx()
-        val fuss = 18.dp.toPx()
+        val rechts = size.width - achsSpalte(messer, stil)
         val kopf = 6.dp.toPx()
-        val boden = size.height - fuss
+        val boden = size.height - fussraum(messer, stil, luft = 2.dp)
         // Unten auf einer Zehnerlinie, hoechstens 40; oben ueber der Spitzengrenze,
         // damit alle drei Grenzen im Bild stehen - auch an einem ruhigen Tag.
         val tief = (minOf(bins.minOf { it.tiefster } - 5, 40) / 10) * 10
@@ -189,11 +247,11 @@ internal fun Pulsband(
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
         nachtschatten(nacht, von, bis, ::x, boden, schatten, nachtText, messer, stil)
 
-        // Gepunktet: runde Punkte statt Striche, wie die Vorlage.
+        // Gepunktet heisst bei Boulder Zonengrenze: runde Punkte statt Striche, wie die Vorlage.
         val punktiert = PathEffect.dashPathEffect(floatArrayOf(0.1f, 9.dp.toPx()))
         fun grenze(w: Int, farbe: Color) {
             drawLine(farbe, Offset(0f, y(w)), Offset(rechts, y(w)), 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = punktiert)
-            val m = messer.measure("$w", stil)
+            val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
         grenze(tief, farben[0])
@@ -233,10 +291,7 @@ internal fun Pulsband(
         val letzter = bins.last()
         drawCircle(farben[Gesundheitsrechnung.pulsZone(letzter.median, zonen)], 3.5.dp.toPx(), Offset(x(letzter.sekunde), y(letzter.median)))
 
-        stundenstriche(von, bis, stundeText) { t, text ->
-            val m = messer.measure(text, stil)
-            drawText(m, topLeft = Offset((x(t) - m.size.width / 2f).coerceIn(0f, rechts - m.size.width), size.height - m.size.height))
-        }
+        stundenachse(von, bis, stundeText, messer, stil, rechts, ::x)
     }
 }
 
@@ -254,20 +309,21 @@ internal fun HrvWoche(
     farbe: Color,
     ausserhalb: Color,
     hoehe: Dp = 170.dp,
-    tagText: (java.time.LocalDate) -> String,
+    beschreibung: String? = null,
+    tagText: (LocalDate) -> String,
 ) {
     val werte = tage.mapNotNull { it.wert }
     if (werte.isEmpty()) return
     val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val flaeche = farbe.copy(alpha = 0.16f)
-    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
-    val ohneUrteil = MaterialTheme.colorScheme.onSurfaceVariant
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val rechts = size.width - 30.dp.toPx()
-        val fuss = 18.dp.toPx()
+    val stil = achsStil()
+    // Das Band darf durchscheinen (Farben.band): es liegt hinter Punkten und Linie.
+    val flaeche = farbe.copy(alpha = Farben.BAND_DECKUNG)
+    val raster = Farben.raster()
+    val ohneUrteil = Farben.neutral()
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
+        val rechts = size.width - achsSpalte(messer, stil)
         val kopf = 6.dp.toPx()
-        val boden = size.height - fuss
+        val boden = size.height - fussraum(messer, stil, luft = 2.dp)
         val alle = werte + tage.mapNotNull { it.band }.flatMap { listOf(it.first, it.second) }
         val tief = ((alle.min() - 6).coerceAtLeast(0) / 5) * 5
         val hoch = maxOf(alle.max() + 6, tief + 20)
@@ -275,9 +331,10 @@ internal fun HrvWoche(
         fun x(i: Int) = spalte * (i + 0.5f)
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
 
+        // Durchgezogen und blass: gestrichelt hiesse bei Boulder "Schnitt".
         Gesundheitsrechnung.raster(tief, hoch, 5).takeLast(4).forEach { w ->
-            drawLine(rasterFarbe, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
-            val m = messer.measure("$w", stil)
+            drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
+            val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
         // Das Band als Treppe: jede Spalte so hoch wie das Band ihres Tages,
@@ -329,20 +386,20 @@ internal fun Blutdruckbild(
     bis: Instant,
     farbe: Color,
     hoehe: Dp = 150.dp,
+    beschreibung: String? = null,
     tagText: (LocalDate) -> String,
 ) {
     val (tief, hoch) = Gesundheitsrechnung.blutdruckachse(sitzungen) ?: return
     val messer = rememberTextMeasurer()
-    val stil = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val rasterFarbe = MaterialTheme.colorScheme.outlineVariant
+    val stil = achsStil()
+    val raster = Farben.raster()
     val zone = ZoneId.systemDefault()
     // Blass als deckende Mischung mit der Karte: mit Alpha laege der Strich im Punkt doppelt und dunkelte ihn fleckig.
-    val blass = farbe.copy(alpha = 0.5f).compositeOver(kartenFarben().containerColor)
-    Canvas(Modifier.fillMaxWidth().height(hoehe).padding(top = 8.dp)) {
-        val rechts = size.width - 30.dp.toPx()
-        val fuss = 18.dp.toPx()
+    val blass = farbe.aufKarte(0.5f)
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
+        val rechts = size.width - achsSpalte(messer, stil)
         val kopf = 6.dp.toPx()
-        val boden = size.height - fuss
+        val boden = size.height - fussraum(messer, stil, luft = 2.dp)
         // Ein Punkt Abstand zu beiden Seiten: eine Sitzung von eben laege sonst halb unter den Zahlen.
         val rand = 6.dp.toPx()
         val spanne = (bis.epochSecond - von.epochSecond).coerceAtLeast(1)
@@ -350,8 +407,8 @@ internal fun Blutdruckbild(
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
 
         Gesundheitsrechnung.raster(tief, hoch, 10).forEach { w ->
-            drawLine(rasterFarbe, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())))
-            val m = messer.measure("$w", stil)
+            drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
+            val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
         sitzungen.forEachIndexed { i, s ->
@@ -399,83 +456,49 @@ private fun Path.weich(p: List<Offset>) {
     lineTo(p.last().x, p.last().y)
 }
 
-/** Volle Stunden zwischen [von] und [bis] (Sekunden), hoechstens fuenf Beschriftungen. */
-private fun stundenstriche(von: Long, bis: Long, text: (ZonedDateTime) -> String = { "${it.hour}" }, zeichne: (Long, String) -> Unit) {
-    val zone = ZoneId.systemDefault()
+/**
+ * Die vollen Stunden zwischen [von] und [bis] (Sekunden) unten ins Bild,
+ * hoechstens fuenf. [text] kommt vom Aufrufer ([stundenText]): eine feste
+ * 24-Stunden-Achse neben "11:02 PM" las sich wie zwei Uhren. [x]: die Lage
+ * einer Sekunde, [rechts]: bis wohin eine Zahl reichen darf.
+ *
+ * Laeuft eine Zahl in die naechste, nimmt die Achse den naechsten Schritt:
+ * mit 12-h-Uhr ("11 PM", "12 AM") und Schrift 1,3 standen sie bei einer
+ * kurzen Nacht sonst ineinander. Ausgelassen wird nie einzeln - die Achse
+ * bleibt gleichmaessig.
+ */
+private fun DrawScope.stundenachse(
+    von: Long, bis: Long, text: (ZonedDateTime) -> String, messer: TextMeasurer, stil: TextStyle, rechts: Float, x: (Long) -> Float,
+) {
     val stunden = ((bis - von) / 3600).coerceAtLeast(1)
-    val schritt = when {
+    val erster = when {
         stunden > 16 -> 6
         stunden > 8 -> 3
         stunden > 4 -> 2
         else -> 1
     }
-    var t = Instant.ofEpochSecond(von).atZone(zone).withMinute(0).withSecond(0).plusHours(1)
-    while (t.toEpochSecond() < bis) {
-        if (t.hour % schritt == 0) zeichne(t.toEpochSecond(), text(t))
-        t = t.plusHours(1)
-    }
-}
-
-/**
- * Ein Zielring: die Spur blass, der Anteil kraeftig, oben beginnend. Was
- * ueber das Ziel hinausgeht, laeuft als hellere zweite Runde darueber,
- * abgesetzt durch eine Fuge in der Kartenfarbe - sonst verschmoelze das
- * Plus mit dem vollen Ring und waere nicht zu sehen.
- */
-@Composable
-internal fun Zielring(
-    anteil: Float,
-    ueberlauf: Float,
-    farbe: Color,
-    spur: Color,
-    ueberlaufFarbe: Color,
-    fuge: Color,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier.size(104.dp)) {
-        val dicke = 9.dp.toPx()
-        val r = 46.dp.toPx()
-        val ecke = Offset(center.x - r, center.y - r)
-        val feld = Size(2 * r, 2 * r)
-        drawCircle(spur, r, style = Stroke(dicke))
-        if (anteil >= 1f) drawCircle(farbe, r, style = Stroke(dicke))
-        else if (anteil > 0f) drawArc(farbe, -90f, 360f * anteil, false, ecke, feld, style = Stroke(dicke, cap = StrokeCap.Round))
-        if (ueberlauf > 0f) {
-            // Die Fuge beginnt knapp vor dem Plus und ist breiter als der Ring, damit sie ihn ganz durchtrennt.
-            val fugeGrad = 360f * 3.dp.toPx() / (2 * Math.PI.toFloat() * r)
-            drawArc(fuge, -90f - fugeGrad, 360f * ueberlauf + 2 * fugeGrad, false, ecke, feld, style = Stroke(dicke + 2.dp.toPx(), cap = StrokeCap.Round))
-            drawArc(ueberlaufFarbe, -90f, 360f * ueberlauf, false, ecke, feld, style = Stroke(dicke, cap = StrokeCap.Round))
+    val luft = 4.dp.toPx()
+    for (schritt in listOf(1, 2, 3, 6, 12).filter { it >= erster }) {
+        val marken = stundenstriche(von, bis, schritt).map { t ->
+            val m = messer.measure(text(t), stil)
+            (x(t.toEpochSecond()) - m.size.width / 2f).coerceIn(0f, maxOf(0f, rechts - m.size.width)) to m
+        }
+        val frei = marken.zipWithNext().all { (a, b) -> a.first + a.second.size.width + luft <= b.first }
+        // Zwoelf Stunden ist der groesste Schritt: dort stehen hoechstens drei Zahlen, die zeichnet sie in jedem Fall.
+        if (frei || schritt == 12) {
+            marken.forEach { (links, m) -> drawText(m, topLeft = Offset(links, size.height - m.size.height)) }
+            return
         }
     }
 }
 
-/** Der leere Ring einer Nacht, die nicht gemessen wurde: gestrichelt, ohne Anteil. */
-@Composable
-internal fun Leerring(farbe: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(104.dp)) {
-        drawCircle(
-            farbe, 46.dp.toPx(),
-            style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 6.dp.toPx()))),
-        )
-    }
-}
-
-/**
- * Die Phasen einer Nacht als schmaler Balken - Anteile statt Verlauf. Der
- * Verlauf steht im Hypnogramm der Nachtansicht; hier reicht, wieviel wovon.
- */
-@Composable
-internal fun Anteilsbalken(teile: List<Pair<Int, Color>>, modifier: Modifier = Modifier) {
-    val summe = teile.sumOf { it.first }.coerceAtLeast(1)
-    Canvas(modifier.fillMaxWidth().height(10.dp)) {
-        val luecke = 2.dp.toPx()
-        val sichtbar = teile.filter { it.first > 0 }
-        val platz = size.width - luecke * (sichtbar.size - 1).coerceAtLeast(0)
-        var x = 0f
-        sichtbar.forEach { (wert, farbe) ->
-            val breite = platz * wert / summe
-            drawRoundRect(farbe, Offset(x, 0f), Size(breite, size.height), CornerRadius(3.dp.toPx()))
-            x += breite + luecke
+/** Die vollen Stunden nach [von] und vor [bis], deren Stunde durch [schritt] teilbar ist. */
+private fun stundenstriche(von: Long, bis: Long, schritt: Int): List<ZonedDateTime> {
+    var t = Instant.ofEpochSecond(von).atZone(ZoneId.systemDefault()).withMinute(0).withSecond(0).plusHours(1)
+    return buildList {
+        while (t.toEpochSecond() < bis) {
+            if (t.hour % schritt == 0) add(t)
+            t = t.plusHours(1)
         }
     }
 }

@@ -1,7 +1,5 @@
 package coredevices.pebble.kiesel.ansicht
 
-import android.content.Context
-import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -10,16 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,32 +23,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.BLUTDRUCK_TAGE
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.LERNNAECHTE
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
-import coredevices.pebble.kiesel.tageZurueck
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.compose.koinInject
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val SPO2_WARNUNG = 90
@@ -78,12 +66,12 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     LaunchedEffect(neu) { stand = Gesundheitsdaten.lies(context, api) }
     val s = stand
     if (s == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        Ladekreis()
         return
     }
     // Vor der Liste gerechnet: ein leeres Item bekaeme seinen Abstand trotzdem, und ohne Manschette ist es meist leer.
     val blutdruck = remember(s.blutdruck) { Gesundheitsrechnung.blutdruckstand(s.blutdruck) }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { PulsKarte(s) }
         item { HrvKarte(s) }
@@ -95,55 +83,53 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     }
 }
 
+/** Eine Zahl mit "bpm" fuer einen Satz: "78 bpm". */
+private fun bpm(wert: Int): String = Formate.Angabe(Formate.zahl(wert.toLong()), "bpm").text
+
 @Composable
 private fun PulsKarte(s: GesundheitsStand) {
     val context = LocalContext.current
-    val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    val t = toene()
     val jetzt = Instant.now().epochSecond
     val letzter = s.puls.maxByOrNull { it.first }
+    if (letzter == null) {
+        Kasten { Leerzeile(stringResource(R.string.ks_h_kein_puls_kurz)) }
+        return
+    }
     val zonenNamen = listOf(R.string.ks_h_zone_leicht, R.string.ks_h_zone_moderat, R.string.ks_h_zone_kraeftig, R.string.ks_h_zone_spitze)
         .map { stringResource(it) }
+    // Linie und Legende in denselben Toenen - der Punkt der Legende soll die Linie wiederfinden.
+    val zonenFarben = Farben.pulszonen.map { it.ton() }
+    // Wie bei Google Health: oben die Spanne des Tages, dann wo der hoechste Wert lag -
+    // aus der Reihe, die das Pulsband zeichnet, damit Satz und Kurve dasselbe zeigen.
+    val (tiefster, hoechster) = Gesundheitsrechnung.pulsSpanne(s.puls) ?: (letzter.second to letzter.second)
+    val spanne = Formate.zahl(tiefster.toLong()) + "–" + Formate.zahl(hoechster.toLong())
+    val tag = tagespuls(s)
     Kasten {
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (letzter == null) {
-                Text(stringResource(R.string.ks_h_kein_puls_kurz), fontSize = 14.sp, color = grau)
-                return@Column
-            }
-            // Wie bei Google Health: oben die Spanne des Tages, dann wo der hoechste Wert lag -
-            // aus der Reihe, die das Pulsband zeichnet, damit Satz und Kurve dasselbe zeigen.
-            val (tiefster, hoechster) = Gesundheitsrechnung.pulsSpanne(s.puls) ?: (letzter.second to letzter.second)
-            val tag = tagespuls(s)
+        Column(Modifier.padding(start = INNEN, end = INNEN, top = INNEN, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(zahlMitEinheit("$tiefster–$hoechster", "bpm", 30, 16), lineHeight = 36.sp)
+                Hauptwert(spanne, "bpm")
                 // Was die Herzzeile auf Health zeigt, steht hier wieder: wer sie antippt, findet seine Zahl.
-                if (tag != null) Text((listOf("${tag.wachpuls} bpm") + tag.teile).joinToString(" · "), fontSize = 14.sp, lineHeight = 20.sp)
+                if (tag != null) Fliesstext((listOf(bpm(tag.wachpuls)) + tag.teile).joinToString(" · "))
                 if (s.pulsZonen.size == 3) {
                     val zone = zonenNamen[Gesundheitsrechnung.pulsZone(hoechster, s.pulsZonen)]
-                    // Mit Zeit: im 24-Stunden-Fenster kann die Spitze von gestern Abend sein.
-                    val wann = Gesundheitsrechnung.pulsSpitze(s.puls)?.let { zeitpunkt(context, Instant.ofEpochSecond(it.first)) }
-                    Text(
-                        stringResource(R.string.ks_h_puls_hoch, hoechster, zone.lowercase()) + (wann?.let { " · $it" } ?: ""),
-                        fontSize = 14.sp, lineHeight = 20.sp,
-                    )
+                    // Ohne die Zahl: sie steht schon gross oben. Mit Tag, denn im 24-Stunden-Fenster kann die Spitze von gestern sein.
+                    val wann = Gesundheitsrechnung.pulsSpitze(s.puls)?.let { Formate.zeitpunkt(context, Instant.ofEpochSecond(it.first), klein = true) }
+                    Fliesstext(stringResource(R.string.ks_h_puls_hoch, zone.lowercase()) + (wann?.let { " · $it" } ?: ""))
                 }
                 // "now" nur, solange der Wert frisch ist - eine Stunde alter Puls ist nicht der jetzige.
                 val frisch = Gesundheitsrechnung.pulsFrisch(letzter.first, jetzt)
                 val wann = Instant.ofEpochSecond(letzter.first)
-                Text(
-                    if (frisch) stringResource(R.string.ks_h_puls_neu, letzter.second, uhrzeit(context, wann))
-                    else stringResource(R.string.ks_h_puls_alt, letzter.second, zeitpunkt(context, wann)),
-                    fontSize = 13.sp, lineHeight = 19.sp, color = grau,
+                Unterzeile(
+                    if (frisch) stringResource(R.string.ks_h_puls_neu, letzter.second, Formate.uhrzeit(context, wann))
+                    else stringResource(R.string.ks_h_puls_alt, letzter.second, Formate.zeitpunkt(context, wann, klein = true)),
                 )
             }
             val nacht = s.nacht?.let { it.einschlafen.epochSecond to it.aufwachen.epochSecond }
-            // Die Stunden im Format des Systems, wie jede andere Uhrzeit der Seite.
-            val stunde = DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "H" else "h a", Locale.getDefault())
             Pulsband(
-                s.puls, jetzt - 24 * 3600, jetzt, s.pulsZonen, t.zonen, nacht = nacht, hoehe = 200.dp,
-                stundeText = { stunde.format(it) },
+                s.puls, jetzt - 24 * 3600, jetzt, s.pulsZonen, zonenFarben, nacht = nacht, hoehe = 200.dp,
+                beschreibung = stringResource(R.string.ks_n_puls) + ", " + stringResource(R.string.ks_h_24h).lowercase() + ", " + Formate.Angabe(spanne, "bpm").text,
             )
-            Legende(zonenNamen.zip(t.zonen).map { (name, farbe) -> Legendenpunkt(name, farbe) })
+            Punktlegende(zonenNamen.zip(zonenFarben).map { (name, farbe) -> Legendeneintrag(name, farbe) })
         }
     }
 }
@@ -157,46 +143,40 @@ private fun PulsKarte(s: GesundheitsStand) {
 private fun HrvKarte(s: GesundheitsStand) {
     val tage = s.hrvTage
     if (tage.none { it.wert != null }) return
-    val t = toene()
-    val grau = MaterialTheme.colorScheme.onSurfaceVariant
+    val imBand = Farben.imBand.ton()
+    val ausserBand = Farben.ausserBand.ton()
     val letzte = tage.last()
     val band = letzte.band
-    Kasten {
-        Kopf(stringResource(R.string.ks_h_hrv_woche), stringResource(R.string.ks_h_hrv_woche_zusatz))
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(zahlMitEinheit(letzte.wert?.toString() ?: "–", letzte.wert?.let { "ms" }, 30, 16), lineHeight = 36.sp)
-                val satz = when {
-                    letzte.wert == null -> stringResource(R.string.ks_h_hrv_keine)
-                    band == null -> stringResource(R.string.ks_h_letzte_nacht)
-                    letzte.wert < band.first -> stringResource(R.string.ks_h_hrv_unter_band, band.first, band.second)
-                    letzte.wert > band.second -> stringResource(R.string.ks_h_hrv_ueber_band, band.first, band.second)
-                    else -> stringResource(R.string.ks_h_hrv_im_band, band.first, band.second)
-                }
-                Text(satz, fontSize = 13.sp, lineHeight = 19.sp, color = grau)
-            }
-            HrvWoche(tage, t.imBand, t.ausserBand) { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
-            if (tage.any { it.band != null }) {
-                Legende(
-                    listOfNotNull(
-                        Legendenpunkt(stringResource(R.string.ks_h_hrv_band), t.imBand.copy(alpha = 0.3f), eckig = true),
-                        Legendenpunkt(stringResource(R.string.ks_h_hrv_drin), t.imBand),
-                        // Daneben nur, wenn es in der Woche vorkommt - sonst erklaerte die Legende eine Farbe, die fehlt.
-                        Legendenpunkt(stringResource(R.string.ks_h_hrv_draussen), t.ausserBand).takeIf { tage.any { it.imBand == false } },
-                    ),
-                )
-            }
+    val titel = stringResource(R.string.ks_h_hrv_woche)
+    val zusatz = stringResource(R.string.ks_h_hrv_woche_zusatz)
+    Abschnitt(titel, zusatz) {
+        val satz = when {
+            letzte.wert == null -> stringResource(R.string.ks_h_hrv_keine)
+            band == null -> stringResource(R.string.ks_h_letzte_nacht)
+            letzte.wert < band.first -> stringResource(R.string.ks_h_hrv_unter_band, band.first, band.second)
+            letzte.wert > band.second -> stringResource(R.string.ks_h_hrv_ueber_band, band.first, band.second)
+            else -> stringResource(R.string.ks_h_hrv_im_band, band.first, band.second)
+        }
+        Hauptwert(letzte.wert?.let { Formate.zahl(it.toLong()) } ?: Formate.FEHLT, letzte.wert?.let { "ms" }, satz)
+        // Fuer TalkBack jede Nacht mit ihrem Wert - das Bild selbst ist stumm.
+        val nachSatz = "$titel, $zusatz: " + tage.joinToString(", ") { t ->
+            Formate.wochentagLang(t.tag.dayOfWeek) + " " + (t.wert?.let { Formate.Angabe(Formate.zahl(it.toLong()), "ms").text } ?: Formate.FEHLT)
+        }
+        // Zwei Buchstaben wie jede Reihe von sieben Tagen (Schritte, Naechte), nicht "M T W".
+        HrvWoche(tage, imBand, ausserBand, beschreibung = nachSatz) { Formate.wochentagKurz(it.dayOfWeek) }
+        if (tage.any { it.band != null }) {
+            Punktlegende(
+                listOfNotNull(
+                    // Deckend gemischt statt Alpha: das Quadrat steht auf der Karte wie das Band im Bild.
+                    Legendeneintrag(stringResource(R.string.ks_h_hrv_band), imBand.aufKarte(0.3f), eckig = true),
+                    Legendeneintrag(stringResource(R.string.ks_h_hrv_drin), imBand),
+                    // Daneben nur, wenn es in der Woche vorkommt - sonst erklaerte die Legende eine Farbe, die fehlt.
+                    Legendeneintrag(stringResource(R.string.ks_h_hrv_draussen), ausserBand).takeIf { tage.any { it.imBand == false } },
+                ),
+            )
         }
     }
 }
-
-/** "Today 8:14 AM", "Yesterday 8:14 AM", sonst mit Datum - am Zeilenanfang, darum gross. */
-private fun messzeit(context: Context, t: Instant): String =
-    when (Gesundheitsrechnung.tageZurueck(t, Instant.now(), ZoneId.systemDefault())) {
-        0L -> context.getString(R.string.ks_kp_heute) + " " + uhrzeit(context, t)
-        1L -> context.getString(R.string.ks_kp_gestern) + " " + uhrzeit(context, t)
-        else -> zeitpunkt(context, t)
-    }
 
 /**
  * Der Blutdruck der Manschette: die letzte Sitzung gross, ab drei Sitzungen
@@ -206,40 +186,19 @@ private fun messzeit(context: Context, t: Instant): String =
 @Composable
 private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand) {
     val context = LocalContext.current
-    val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val jetzt = Instant.now()
-    // Das Datum wie unter den Saeulen der Trends.
-    val datum = remember { DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()) }
-    Kasten {
-        Kopf(stringResource(R.string.ks_h_blutdruck_k), stringResource(R.string.ks_kp_tage_zusatz, BLUTDRUCK_TAGE.toInt()))
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(zahlMitEinheit("${b.letzte.oben}/${b.letzte.unten}", "mmHg", 30, 16), lineHeight = 36.sp)
-                Text(
-                    listOfNotNull(
-                        messzeit(context, b.letzte.zeit),
-                        b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) },
-                    ).joinToString(" · "),
-                    fontSize = 13.sp, lineHeight = 19.sp, color = grau,
-                )
-            }
-            Blutdruckbild(b.sitzungen, jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt, toene().herz, tagText = datum::format)
-        }
-    }
-}
-
-private data class Legendenpunkt(val text: String, val farbe: Color, val eckig: Boolean = false)
-
-/** Farbpunkte mit ihrem Namen unter einem Bild, mittig. */
-@Composable
-private fun Legende(punkte: List<Legendenpunkt>) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        punkte.forEach { p ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).background(p.farbe, if (p.eckig) RoundedCornerShape(2.dp) else CircleShape))
-                Text(p.text, Modifier.padding(start = 6.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+    val titel = stringResource(R.string.ks_h_blutdruck_k)
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, BLUTDRUCK_TAGE.toInt())
+    val wert = Formate.zahl(b.letzte.oben.toLong()) + "/" + Formate.zahl(b.letzte.unten.toLong())
+    val schnitt = b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
+    Abschnitt(titel, zusatz) {
+        // Am Zeilenanfang gross: "Today, 8:14 AM", "Yesterday, 8:14 AM", sonst das Datum - die eine Form aus Formate.
+        Hauptwert(wert, "mmHg", listOfNotNull(Formate.zeitpunkt(context, b.letzte.zeit), schnitt).joinToString(" · "))
+        Blutdruckbild(
+            b.sitzungen, jetzt.minus(Duration.ofDays(BLUTDRUCK_TAGE)), jetzt, Farben.blutdruck.ton(),
+            beschreibung = listOfNotNull("$titel, $zusatz", Formate.Angabe(wert, "mmHg").text, schnitt).joinToString(", "),
+            tagText = { Formate.datumKurz(it) },
+        )
     }
 }
 
@@ -259,25 +218,27 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
         if (n != null) {
             Kopf(
                 stringResource(R.string.ks_h_letzte_nacht_k),
-                stringResource(R.string.ks_h_zeitraum, uhrzeit(context, n.einschlafen), uhrzeit(context, n.aufwachen)),
+                stringResource(R.string.ks_h_zeitraum, Formate.uhrzeit(context, n.einschlafen), Formate.uhrzeit(context, n.aufwachen)),
                 stringResource(R.string.ks_h_nachtansicht),
             ) { oeffneNacht(n.beginnUtc) }
             Zeile(
                 stringResource(R.string.ks_h_ruhepuls_n),
                 if (n.ruhepuls != null) null else stringResource(R.string.ks_h_nicht_gemessen),
-                n.ruhepuls?.toString() ?: "–", n.ruhepuls?.let { "bpm" }, minHoehe = 56.dp,
+                n.ruhepuls?.let { Formate.zahl(it.toLong()) } ?: Formate.FEHLT, n.ruhepuls?.let { "bpm" }, minHoehe = 56.dp,
             )
         } else {
             Kopf(stringResource(R.string.ks_h_24h))
         }
         if (spo2.isNotEmpty()) {
-            if (n != null) Trenner(14.dp)
+            if (n != null) Trenner(INNEN)
             val unter = spo2.count { it < SPO2_WARNUNG }
+            val tiefster = Formate.prozent(spo2.min())
+            val schnitt = Formate.prozentTeile(spo2.average().roundToInt())
             Zeile(
                 stringResource(R.string.ks_h_spo2_n),
-                if (unter == 0) stringResource(R.string.ks_h_spo2_keins, spo2.min())
-                else pluralStringResource(R.plurals.ks_h_spo2_unter, unter, spo2.min(), unter),
-                "${spo2.average().roundToInt()}", "%", minHoehe = 56.dp,
+                if (unter == 0) stringResource(R.string.ks_h_spo2_keins, tiefster)
+                else pluralStringResource(R.plurals.ks_h_spo2_unter, unter, tiefster, unter),
+                schnitt.zahl, schnitt.einheit, minHoehe = 56.dp,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -292,24 +253,20 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
  */
 @Composable
 private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
-    val farben = MaterialTheme.colorScheme
     val ruhe = Gesundheitsrechnung.ruhepulsUrteil(s.nacht?.ruhepuls, s.ruhepulsWoche)
     Kasten {
         Kopf(stringResource(R.string.ks_h_gewohnt), link = stringResource(R.string.ks_h_herztrend), onLink = oeffneTrend)
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(start = INNEN, end = INNEN, bottom = INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val schnitt = ruhe.schnitt
             if (ruhe.frueher < LERNNAECHTE || schnitt == null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.ks_h_lernt, ruhe.frueher, LERNNAECHTE), Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp)
+                    Fliesstext(stringResource(R.string.ks_h_lernt, ruhe.frueher, LERNNAECHTE), Modifier.weight(1f))
                     Lernpunkte(ruhe.frueher)
                 }
             } else {
                 // Ohne letzte Nacht kein Urteil - dann steht nur der Schnitt da.
-                if (ruhe.urteil != null) Text(urteilSatz(ruhe, null), fontSize = 14.sp, lineHeight = 20.sp)
-                Text(
-                    stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, "${schnitt.roundToInt()} bpm"),
-                    fontSize = 13.sp, lineHeight = 19.sp, color = farben.onSurfaceVariant,
-                )
+                if (ruhe.urteil != null) Fliesstext(urteilSatz(ruhe, null))
+                Unterzeile(stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, bpm(schnitt.roundToInt())))
             }
         }
     }

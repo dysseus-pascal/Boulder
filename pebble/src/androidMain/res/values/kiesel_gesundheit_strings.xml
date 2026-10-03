@@ -79,7 +79,6 @@
     <string name="ks_h_puls_jetzt">Now</string>
     <string name="ks_h_ruhe_letzte_nacht">resting %1$d last night</string>
     <string name="ks_h_ruhe_n">resting %1$d</string>
-    <string name="ks_h_gestern_um">yesterday %1$s</string>
     <string name="ks_h_keine_ruhe">no resting value today</string>
     <string name="ks_h_kein_puls_kurz">No heart rate in the last 24 hours</string>
     <string name="ks_h_kein_glas">No glass yet</string>
@@ -110,7 +109,7 @@
     <string name="ks_h_koffein_fehler">Couldn\'t save to Health Connect</string>
     <string name="ks_h_getraenk">%1$s · %2$d mg</string>
     <string name="ks_h_letzte_nacht_k">LAST NIGHT</string>
-    <string name="ks_h_zeitraum">· %1$s – %2$s</string>
+    <string name="ks_h_zeitraum">%1$s – %2$s</string>
     <string name="ks_h_nachtansicht">Night view</string>
     <string name="ks_h_h_geschlafen">h asleep</string>
     <string name="ks_h_schritte_tage">STEPS BY DAY</string>
@@ -124,8 +123,6 @@
     <string name="ks_h_genauer">LOOK CLOSER</string>
     <string name="ks_h_uhr">WATCH</string>
     <string name="ks_h_letztes_training">Last workout · %1$s</string>
-    <string name="ks_h_heute_klein">today</string>
-    <string name="ks_h_gestern_klein">yesterday</string>
     <string name="ks_h_akku">Watch battery</string>
     <plurals name="ks_h_akku_tage">
         <item quantity="one">About %1$d day left</item>
@@ -133,7 +130,7 @@
     </plurals>
     <string name="ks_h_akku_offen">An estimate follows after a day without charging</string>
     <string name="ks_h_nicht_verbunden">Not connected</string>
-    <string name="ks_h_puls_hoch">High of %1$d bpm in %2$s zone</string>
+    <string name="ks_h_puls_hoch">High in %1$s zone</string>
     <string name="ks_h_puls_neu">Now %1$d bpm, measured %2$s · last 24 hours</string>
     <string name="ks_h_puls_alt">Last %1$d bpm, measured %2$s · last 24 hours</string>
     <string name="ks_h_zone_leicht">Light</string>
@@ -141,7 +138,7 @@
     <string name="ks_h_zone_kraeftig">Vigorous</string>
     <string name="ks_h_zone_spitze">Peak</string>
     <string name="ks_h_hrv_woche">HRV</string>
-    <string name="ks_h_hrv_woche_zusatz">· last 7 nights</string>
+    <string name="ks_h_hrv_woche_zusatz">last 7 nights</string>
     <string name="ks_h_blutdruck_k">BLOOD PRESSURE</string>
     <string name="ks_h_hrv_im_band">Last night, in your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_unter_band">Last night, below your range of %1$d–%2$d ms</string>
@@ -152,10 +149,10 @@
     <string name="ks_h_hrv_draussen">Out of range</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
     <string name="ks_h_spo2_n">Blood oxygen</string>
-    <string name="ks_h_spo2_keins">Lowest %1$d %%</string>
+    <string name="ks_h_spo2_keins">Lowest %1$s</string>
     <plurals name="ks_h_spo2_unter">
-        <item quantity="one">Lowest %1$d %% · %2$d under 90 %%</item>
-        <item quantity="other">Lowest %1$d %% · %2$d under 90 %%</item>
+        <item quantity="one">Lowest %1$s · %2$d under 90%%</item>
+        <item quantity="other">Lowest %1$s · %2$d under 90%%</item>
     </plurals>
     <string name="ks_h_24h">LAST 24 HOURS</string>
     <string name="ks_h_nicht_gemessen">Not measured</string>
@@ -233,7 +230,6 @@
     <string name="ks_d_offen">· %1$s open</string>
     <string name="ks_d_koffein_dazu">+ Caffeine</string>
     <string name="ks_d_glas">Glass of water</string>
-    <string name="ks_d_heute_liter">%1$s l today</string>
     <string name="ks_d_aufgewacht">Woke up</string>
     <string name="ks_d_eingeschlafen">Fell asleep</string>
     <string name="ks_d_ruhe_hrv">Resting HR %1$d, HRV %2$d ms</string>
@@ -294,16 +290,14 @@
     </plurals>
     <string name="ks_f_koffein_aktiv">%1$d mg active</string>
     <!-- Schlafansicht nach Konzept F -->
-    <string name="ks_n_eingeschlafen">fell asleep</string>
-    <string name="ks_n_aufgewacht">woke up</string>
     <string name="ks_n_phasen">STAGES</string>
-    <string name="ks_n_im_bett">%1$s h in bed</string>
+    <string name="ks_n_im_bett">%1$s in bed</string>
     <string name="ks_n_durch_die_nacht">THROUGH THE NIGHT</string>
     <string name="ks_n_koerper">BODY DURING SLEEP</string>
     <string name="ks_n_schnitt">avg %1$s</string>
-    <string name="ks_n_tiefster">lowest %1$d %%</string>
+    <string name="ks_n_tiefster">lowest %1$s</string>
     <string name="ks_n_sieben">LAST NIGHTS</string>
-    <string name="ks_n_schnitt_h">avg %1$s h</string>
+    <string name="ks_n_schnitt_h">avg %1$s</string>
     <!-- Eintrag im Zeitstrahl bearbeiten (langer Druck) -->
     <string name="ks_b_loeschen">Delete</string>
     <string name="ks_b_speichern">Save</string>

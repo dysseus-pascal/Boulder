@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import coredevices.pebble.kiesel.GesundheitWidget
@@ -36,18 +38,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -87,15 +88,15 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Praeparatlage
-import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.SCHRITTZIEL
+import coredevices.pebble.kiesel.DURCHGESCHLAFEN_MIN
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.Tageszeit
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.praeparatzeile
-import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import coredevices.pebble.kiesel.schlafurteil
 import coredevices.pebble.kiesel.syncAlt
@@ -104,9 +105,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /*
  * Die Health-Seite nach Konzept F: oben ein Satz zum Tag (aus C), darunter
@@ -128,28 +128,14 @@ private fun zeitBreiteMessen(): Dp {
     val dichte = LocalDensity.current
     val stil = Textstil(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     // Zwei Kandidaten fuer die breiteste Zeit: zweistellige Stunde am Vor- und Nachmittag.
-    val proben = listOf(LocalTime.of(10, 58), LocalTime.of(22, 58)).map { t ->
-        uhrzeit(context, t.atDate(LocalDate.now()).atZone(ZoneId.systemDefault()).toInstant())
-    }
+    val proben = listOf(LocalTime.of(10, 58), LocalTime.of(22, 58)).map { t -> Formate.uhrzeit(context, t) }
     val breite = proben.maxOf { messer.measure(it, stil).size.width }
     return with(dichte) { breite.toDp() } + 6.dp
 }
 private val SPALTE_STRAHL = 22.dp
 
-private fun liter(ml: Int): String = if (ml == 0) "0" else Gesundheitsrechnung.literKurz(ml)
-
-private fun zahl(n: Long): String = String.format(Locale.getDefault(), "%,d", n)
-
-/** Akkufarbe nach Stand: gruen ab 50 %, gelb ab 20 %, darunter rot. */
-@Composable
-private fun akkuFarbe(prozent: Int): Color {
-    val t = toene()
-    return when {
-        prozent >= 50 -> t.bewegung
-        prozent >= 20 -> t.warnung
-        else -> Color(0xFFF2867A)
-    }
-}
+/** Eine ganze Menge mit kleiner Einheit fuer eine Zeile im Strahl: "250 ml", "95 mg". */
+private fun menge(wert: Double, einheit: String): String = Formate.Angabe(Formate.zahl(wert.roundToLong()), einheit).text
 
 /**
  * Eine Vorlage mit %1$s, %2$s ... einsetzen und die eingesetzten Werte
@@ -198,7 +184,7 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechn
         Vergleich.TIEFER -> stringResource(R.string.ks_f_ruhe_tief, ruhe.abstand)
         null -> null
     }
-    val schritteWert = pluralStringResource(R.plurals.ks_f_schritte_wert, s.schritte.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), zahl(s.schritte))
+    val schritteWert = pluralStringResource(R.plurals.ks_f_schritte_wert, s.schritte.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), Formate.zahl(s.schritte))
     val vSchritte = stringResource(if (n != null) R.string.ks_f_schritte else R.string.ks_f_schritte_allein)
     val platz = stringResource(R.string.ks_s_platz_n)
     val offen = s.supplemente?.takeIf { s.mitSupCycle }?.let { stand ->
@@ -218,11 +204,12 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechn
         akkuRest.stunden -> stringResource(R.string.ks_f_akku_stunden, akkuRest.wert)
         else -> pluralStringResource(R.plurals.ks_f_akku_tage, akkuRest.wert, akkuRest.wert)
     }
-    val akkuTon = akkuJetzt?.let { akkuFarbe(it) }
+    // Die Stufe des Akkus (gruen, gelb, rot) als Ton: das alte Rot ohne Hell-Variante kam auf Weiss auf 2,5:1.
+    val akkuTon = akkuJetzt?.let { Farben.akkuStufe(it).ton() }
 
     val text = buildAnnotatedString {
         if (n != null && urteilWort != null) {
-            hervor(vSchlaf, urteilWort, stundenMinuten(n.schlafMinuten) + " h", farbe = hell)
+            hervor(vSchlaf, urteilWort, Formate.dauer(n.schlafMinuten.toLong()), farbe = hell)
             if (vRuhe != null) append(vRuhe)
         }
         hervor(vSchritte, schritteWert, farbe = hell)
@@ -235,7 +222,7 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechn
             // Nur die Zahl, in der Farbe des Stands, als Link zur Akkuansicht -
             // ein Symbol davor stach im Satz zu sehr heraus.
             withLink(LinkAnnotation.Clickable("akku", TextLinkStyles(SpanStyle(color = akkuTon, fontWeight = FontWeight.Medium))) { oeffneAkku() }) {
-                append("$akkuJetzt%")
+                append(Formate.prozent(akkuJetzt))
             }
             append(vAkkuNach)
         }
@@ -273,23 +260,24 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
     val jetzt = Instant.now()
     val glas = stringResource(R.string.ks_d_glas)
     val wasser = stringResource(R.string.ks_d_wasser)
-    val heuteLiter = stringResource(R.string.ks_d_heute_liter, liter(s.wasserMl))
+    val imperial = einheitenImperial()
+    // Das Schema einmal gelesen: die Liste unten baut ausserhalb von Compose.
+    val dunkel = Farben.dunkel()
     val ereignisse = buildList {
         trainings.filter { it.sitzung.startTime.atZone(zone).toLocalDate() == heute }.forEach { training ->
-            val unter = listOfNotNull(if (training.meter > 0) kmText(training.meter) else null, dauerText(training.minuten)).joinToString(" · ")
-            add(Ereignis(training.sitzung.startTime, training.sport.ton(), trainingsName(training), unter))
+            val unter = listOfNotNull(if (training.meter > 0) Formate.distanz(training.meter, imperial).text else null, Formate.dauer(training.minuten)).joinToString(" · ")
+            add(Ereignis(training.sitzung.startTime, Farben.sport(training.sport).tonIm(dunkel), trainingsName(training), unter))
         }
         if (s.mitDrinktervall) {
-            val letztes = s.glasEintraege.maxOfOrNull { it.zeit }
             // Ein Glas ist nur, was Drinktervall eintrug; Wasser anderer Apps steht mit seiner Menge da.
+            // Die Liter des Tages stehen in der Zeile "Water" darunter - hier beim letzten Glas noch einmal waeren sie doppelt.
             s.glasEintraege.forEach { g ->
                 val titel = if (g.eigen) glas else wasser
-                // Beim letzten Eintrag der Stand des Tages - sonst wiederholte er sich.
-                val unter = listOfNotNull(if (g.eigen) null else "${g.ml} ml", if (g.zeit == letztes) heuteLiter else null).joinToString(" · ").ifEmpty { null }
-                add(Ereignis(g.zeit, FLAECHE_WASSER, titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null))
+                val unter = if (g.eigen) null else menge(g.ml.toDouble(), "ml")
+                add(Ereignis(g.zeit, Farben.wasser.flaecheIm(dunkel), titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null))
             }
             s.eintraege.filter { !it.praeparat }.forEach { e ->
-                add(Ereignis(e.zeit, FLAECHE_KOFFEIN, e.name, e.koffeinMg?.let { "${it.roundToInt()} mg" }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
+                add(Ereignis(e.zeit, Farben.koffein.flaecheIm(dunkel), e.name, e.koffeinMg?.let { menge(it, "mg") }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
             }
         }
         if (s.mitSupCycle) {
@@ -299,7 +287,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
                 val titel = gruppe.joinToString(", ") { it.name }
                 val zeit = gruppe.first().zeit
                 val bearbeitung = if (gruppe.first().eigen) Bearbeitung.Praeparate(titel, zeit, gruppe.map { it.id }, gruppe.map { it.kennung }) else null
-                add(Ereignis(zeit, FLAECHE_PRAEPARAT, titel, null, bearbeitung))
+                add(Ereignis(zeit, Farben.praeparat.flaecheIm(dunkel), titel, null, bearbeitung))
             }
         }
     }.sortedBy { it.zeit }
@@ -310,16 +298,16 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
     Kasten {
         Kopf(stringResource(R.string.ks_h_heute_bisher))
         CompositionLocalProvider(LocalZeitBreite provides zeitBreiteMessen()) {
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
+        Column(Modifier.padding(start = INNEN, end = INNEN, bottom = 10.dp)) {
             s.nacht?.let { n -> Nachtblock(n, hinweis) { wege.nacht(n.beginnUtc) } }
             // Ohne Nacht von heute der Weg zur juengsten - sonst waeren fruehere Naechte und Sleep trends unerreichbar.
             if (s.nacht == null) s.juengsteNacht?.let { b -> KeineNacht { wege.nacht(b) } }
             ereignisse.forEach { e ->
-                Strahlzeile(uhrzeit(context, e.zeit), e.farbe, e.titel, e.unter, e.bearbeitung?.let { b -> { offen = b } })
+                Strahlzeile(Formate.uhrzeit(context, e.zeit), e.farbe, e.titel, e.unter, e.bearbeitung?.let { b -> { offen = b } })
             }
-            Jetztblock(s, jetzt, weiter = bett != null)
+            Jetztblock(s, jetzt, weiter = bett != null, imperial = imperial)
             if (bett != null) {
-                Bettzeile(uhrzeit(context, bett), s.nacht != null, if (bettKoffein > 0) stringResource(R.string.ks_f_koffein_dann, bettKoffein) else null)
+                Bettzeile(Formate.uhrzeit(context, bett), s.nacht != null, if (bettKoffein > 0) stringResource(R.string.ks_f_koffein_dann, bettKoffein) else null)
             }
         }
         }
@@ -349,7 +337,8 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
             // Mit dem Tag, wenn es nicht heute war: auch ein Eintrag von gestern laesst sich hier aendern.
-            Kopf(b.titel.uppercase(), "· " + zeitpunkt(context, b.zeit))
+            // Das Blatt gehoert zum Strahl von heute, darum "9:14 PM" statt "today, 9:14 PM".
+            Kopf(b.titel, Formate.zeitpunkt(context, b.zeit, klein = true, heuteOhneTag = true))
             val start = remember(b) { (b as? Bearbeitung.Getraenk)?.let { Kaffeesorten.erkenne(context, it.titel) } }
             // Ein eigenes Getraenk der Uhr ("Mate") ist keine der Sorten - es laesst sich nur loeschen, nicht zu Kaffee machen.
             if (b is Bearbeitung.Getraenk && start != null) {
@@ -363,14 +352,14 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                 )
                 sorten.forEach { (k, name) ->
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 52.dp).selectable(sorte == k, role = Role.RadioButton) { sorte = k }.padding(horizontal = 14.dp),
+                        Modifier.fillMaxWidth().heightIn(min = 52.dp).selectable(sorte == k, role = Role.RadioButton) { sorte = k }.padding(horizontal = INNEN),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = sorte == k, onClick = null)
                         Text(stringResource(name), Modifier.padding(start = 12.dp), fontSize = 16.sp)
                     }
                 }
-                Trenner(14.dp)
+                Trenner(INNEN)
                 // Milch und koffeinfrei zu allem ausser dem Energy-Drink - wie auf der Uhr.
                 val mitMilch = sorte != Kaffeesorten.ENERGY
                 if (mitMilch) Haken(stringResource(R.string.ks_b_koffeinfrei), koffeinfrei) { koffeinfrei = it }
@@ -378,13 +367,12 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                 Haken(stringResource(R.string.ks_b_zucker), zucker) { zucker = it }
                 val art = Kaffeesorten.art(sorte, milch && mitMilch, zucker, koffeinfrei && mitMilch)
                 val p = Kaffeesorten.portion(art)
-                if (p != null) Text(
-                    stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()),
-                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (p != null) Box(Modifier.padding(horizontal = INNEN, vertical = 8.dp)) {
+                    Unterzeile(stringResource(R.string.ks_b_werte, p.koffeinMg.roundToInt(), p.kcal.roundToInt()))
+                }
                 // Unveraendert gespeichert schriebe die Werte der Sorte ueber die eingetragenen.
                 val geaendert = art != Kaffeesorten.art(start.sorte, start.milch, start.zucker, start.koffeinfrei)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = INNEN, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { ausfuehren { Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id)) } }) {
                         Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
                     }
@@ -394,7 +382,7 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                     }
                 }
             } else {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = INNEN, vertical = 8.dp)) {
                     Spacer(Modifier.weight(1f))
                     Button(
                         onClick = {
@@ -419,7 +407,7 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
 @Composable
 private fun Haken(text: String, an: Boolean, setze: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(an, role = Role.Checkbox, onValueChange = setze).padding(horizontal = 14.dp),
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(an, role = Role.Checkbox, onValueChange = setze).padding(horizontal = INNEN),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = an, onCheckedChange = null)
@@ -470,7 +458,8 @@ private fun Zeittext(text: String, farbe: Color, fett: Boolean = false, oben: Dp
 @Composable
 private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String?, lang: (() -> Unit)?) {
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    val grund = MaterialTheme.colorScheme.surfaceContainer
+    // Der Ring in der Kartenfarbe: mit surfaceContainer lag um jeden Punkt ein hellerer Hof.
+    val grund = Farben.karte()
     Strahl(
         zeit = { Zeittext(zeit, grau) },
         strahl = {
@@ -483,7 +472,7 @@ private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String
     ) {
         Column(Modifier.padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(titel, fontSize = 15.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (unter != null) Text(unter, fontSize = 13.sp, lineHeight = 18.sp, color = grau)
+            if (unter != null) Unterzeile(unter)
         }
     }
 }
@@ -495,13 +484,13 @@ private fun Strahlzeile(zeit: String, farbe: Color, titel: String, unter: String
  * die Zahlen reichen - sonst sah ein Stand von vor Stunden wie der jetzige aus.
  */
 @Composable
-private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean) {
+private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean, imperial: Boolean) {
     val context = LocalContext.current
     val gruen = MaterialTheme.colorScheme.primary
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    val grund = MaterialTheme.colorScheme.surfaceContainer
+    val grund = Farben.karte()
     Strahl(
-        zeit = { Zeittext(uhrzeit(context, jetzt), gruen, fett = true, oben = 3.dp) },
+        zeit = { Zeittext(Formate.uhrzeit(context, jetzt), gruen, fett = true, oben = 3.dp) },
         strahl = {
             // Bis zum Jetzt durchgezogen, danach gestrichelt: was kommt, ist noch nicht.
             Box(Modifier.height(5.dp)) { Linie() }
@@ -517,12 +506,13 @@ private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean) {
                     withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = gruen)) { append(stringResource(R.string.ks_d_jetzt)) }
                     val letzte = s.letzteDaten
                     if (letzte != null && Gesundheitsrechnung.syncAlt(letzte, jetzt)) {
-                        withStyle(SpanStyle(color = grau)) { append(" " + stringResource(R.string.ks_h_synchron, zeitpunkt(context, letzte))) }
+                        withStyle(SpanStyle(color = grau)) { append(" " + stringResource(R.string.ks_h_synchron, Formate.zeitpunkt(context, letzte, klein = true, heuteOhneTag = true))) }
                     }
                 },
                 fontSize = 12.sp, lineHeight = 22.sp,
             )
-            Text(stringResource(R.string.ks_d_bewegt, kmText(s.meter), s.aktivMinuten), fontSize = 14.sp, lineHeight = 19.sp)
+            // Die Strecke in der Einheit aus Gravels Schalter "Imperial Units", wie ueberall.
+            Text(stringResource(R.string.ks_d_bewegt, Formate.distanz(s.meter, imperial).text, s.aktivMinuten), fontSize = 14.sp, lineHeight = 19.sp)
         }
     }
 }
@@ -535,7 +525,7 @@ private fun Jetztblock(s: GesundheitsStand, jetzt: Instant, weiter: Boolean) {
 @Composable
 private fun Bettzeile(zeit: String, wieLetzteNacht: Boolean, unter: String?) {
     val blass = MaterialTheme.colorScheme.outline
-    val grund = MaterialTheme.colorScheme.surfaceContainer
+    val grund = Farben.karte()
     Strahl(
         zeit = { Zeittext(zeit, blass) },
         strahl = { Box(Modifier.offset(5.dp, 5.dp).size(12.dp).border(2.dp, blass, CircleShape).background(grund, CircleShape)) },
@@ -545,7 +535,7 @@ private fun Bettzeile(zeit: String, wieLetzteNacht: Boolean, unter: String?) {
                 stringResource(if (wieLetzteNacht) R.string.ks_f_bettzeit else R.string.ks_f_bettzeit_vorgabe),
                 fontSize = 15.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (unter != null) Text(unter, fontSize = 13.sp, lineHeight = 18.sp, color = blass)
+            if (unter != null) Unterzeile(unter, blass)
         }
     }
 }
@@ -558,7 +548,7 @@ private fun Bettzeile(zeit: String, wieLetzteNacht: Boolean, unter: String?) {
 @Composable
 private fun KeineNacht(oeffne: () -> Unit) {
     val blass = MaterialTheme.colorScheme.outline
-    val grund = MaterialTheme.colorScheme.surfaceContainer
+    val grund = Farben.karte()
     Strahl(
         zeit = {},
         strahl = {
@@ -566,6 +556,8 @@ private fun KeineNacht(oeffne: () -> Unit) {
             Box(Modifier.offset(5.dp, 5.dp).size(12.dp).border(2.dp, blass, CircleShape).background(grund, CircleShape))
         },
         onClick = oeffne,
+        // Ein Ziel mit 48 dp: die Zeile selbst war mit einer Textzeile nur 34 dp hoch.
+        modifier = Modifier.heightIn(min = 48.dp),
     ) {
         Row(Modifier.padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.ks_d_keine_nacht), fontSize = 15.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -582,12 +574,12 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
     Strahl(
         zeit = {
             Column(Modifier.fillMaxHeight().padding(top = 2.dp, bottom = 18.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Zeittext(uhrzeit(context, n.einschlafen), grau, oben = 0.dp)
-                Zeittext(uhrzeit(context, n.aufwachen), grau, oben = 0.dp)
+                Zeittext(Formate.uhrzeit(context, n.einschlafen), grau, oben = 0.dp)
+                Zeittext(Formate.uhrzeit(context, n.aufwachen), grau, oben = 0.dp)
             }
         },
         strahl = {
-            Box(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 18.dp).width(6.dp).fillMaxHeight().background(PHASENFARBEN[2], RoundedCornerShape(3.dp)))
+            Box(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 18.dp).width(6.dp).fillMaxHeight().background(Farben.phasen[Farben.TIEF], RoundedCornerShape(3.dp)))
         },
         onClick = oeffne,
     ) {
@@ -597,21 +589,17 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
                 Text(stringResource(R.string.ks_d_eingeschlafen), Modifier.weight(1f), fontSize = 15.sp, lineHeight = 20.sp)
                 Icon(Zeichen.weiter, null, Modifier.size(16.dp), tint = grau)
             }
-            // Das Hypnogramm wie in der Schlafansicht - der Verlauf sagt mehr als Anteile.
-            if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 96.dp)
+            // Das Hypnogramm wie in der Schlafansicht - der Verlauf sagt mehr als Anteile. Stumm: Zeiten
+            // und Legende nennen dieselben Zahlen, und als Teil der klickbaren Zeile verdeckte sein Satz sie.
+            if (n.abschnitte.isNotEmpty()) Hypnogramm(n, hoehe = 96.dp, stumm = true)
             if (n.mitPhasen) {
-                // Wach mit, wenn es vorkommt: das Bild zeigt den orangen Block, die Legende soll ihn nennen.
-                val phasen = listOf(2 to R.string.ks_h_tief, 3 to R.string.ks_h_rem, 1 to R.string.ks_h_leicht) +
-                    listOfNotNull((0 to R.string.ks_h_wach).takeIf { n.phasen[0] > 0 })
-                // Umbrechen nur zwischen den Eintraegen, nie mitten in einem.
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    phasen.forEach { (p, name) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Box(Modifier.size(8.dp).background(PHASENFARBEN[p], CircleShape))
-                            Text(stringResource(name) + " " + stundenMinuten(n.phasen[p]), fontSize = 12.sp, lineHeight = 16.sp, color = grau, maxLines = 1, softWrap = false)
-                        }
-                    }
-                }
+                // In der Reihenfolge der Bahnen darueber. Wach nur, wenn es vorkommt: dann zeigt das Bild den orangen Block.
+                val phasen = PHASEN_VON_OBEN.filter { (p, _) -> p != Farben.WACH || n.phasen[Farben.WACH] > 0 }
+                // Die Legende des Baukastens: sie bricht nur zwischen den Eintraegen um, nie mitten in einem.
+                Punktlegende(
+                    phasen.map { (p, name) -> Legendeneintrag(stringResource(name) + " " + Formate.stundenMinuten(n.phasen[p]), Farben.phasen[p]) },
+                    mittig = false,
+                )
             }
             // Jeder Wert fuer sich: der Ruhepuls fehlte, wenn die HRV fehlte. Das Urteil zum Ruhepuls steht im Satz oben.
             val werte = when {
@@ -620,9 +608,9 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
                 n.hrv != null -> stringResource(R.string.ks_d_nur_hrv, n.hrv)
                 else -> null
             }
-            if (werte != null) Text(werte + (hinweis?.takeIf { n.hrv != null }?.let { " · $it" } ?: ""), fontSize = 13.sp, lineHeight = 18.sp, color = grau)
-            // Ohne Abschnitte waere "durchgeschlafen" eine Behauptung aus Unwissen.
-            val durch = n.abschnitte.isNotEmpty() && n.phasen[0] < 10
+            if (werte != null) Unterzeile(werte + (hinweis?.takeIf { n.hrv != null }?.let { " · $it" } ?: ""))
+            // Ohne Abschnitte waere "durchgeschlafen" eine Behauptung aus Unwissen. Die Schwelle ist die getestete aus Tagesbild.
+            val durch = n.abschnitte.isNotEmpty() && n.phasen[Farben.WACH] < DURCHGESCHLAFEN_MIN
             Text(stringResource(if (durch) R.string.ks_f_aufgewacht_durch else R.string.ks_d_aufgewacht), fontSize = 15.sp, lineHeight = 20.sp)
         }
     }
@@ -663,7 +651,6 @@ internal fun Koerperliste(
     zeigePraeparate: () -> Unit,
 ) {
     val context = LocalContext.current
-    val t = toene()
     val jetzt = Instant.now()
     val zone = ZoneId.systemDefault()
     val zeilen = buildList<@Composable () -> Unit> {
@@ -672,11 +659,15 @@ internal fun Koerperliste(
             val tag = tagespuls(s)
             val letzter = s.puls.maxByOrNull { it.first }
             // Die Zahl rechts steht nur einmal da, links steht, was sie ist: "Resting
-            // 55 · 55 bpm" wiederholte sie. Der Ersatztext nur ohne jeden Puls.
+            // 55 · 55 bpm" wiederholte sie. Ohne Tagesschnitt der letzte Wert vor dem
+            // Ruhepuls - den nennt der Nachtblock im Strahl schon. Der Ersatztext nur ohne jeden Puls.
+            // Die Seite ist der Tag von heute: "Last 6:58 AM", erst ein anderer Tag nennt sich.
             val (wert, puls) = when {
                 tag != null -> tag.wachpuls to tag.teile
+                letzter != null -> letzter.second to listOf(
+                    stringResource(R.string.ks_d_zuletzt, Formate.zeitpunkt(context, Instant.ofEpochSecond(letzter.first), klein = true, heuteOhneTag = true)),
+                )
                 ruhe != null -> ruhe to listOf(stringResource(R.string.ks_d_ruhe))
-                letzter != null -> letzter.second to listOf(stringResource(R.string.ks_d_zuletzt, zeitpunkt(context, Instant.ofEpochSecond(letzter.first))))
                 else -> null to listOf(stringResource(R.string.ks_h_kein_puls_kurz))
             }
             // Der Blutdruck hinten an, auch neben zwei Pulsteilen - selbst dann bleibt die Zeile auf 412 dp zweizeilig.
@@ -684,8 +675,8 @@ internal fun Koerperliste(
                 ?.let { stringResource(R.string.ks_d_blutdruck_kurz, it.oben, it.unten) }
             val unter = (puls + listOfNotNull(druck)).joinToString(" · ")
             Zeile(
-                stringResource(R.string.ks_d_herz), unter, wert?.toString(), if (wert != null) "bpm" else null,
-                zeichen = { Tonkreis(Zeichen.herz, FLAECHE_HERZ, t.herz) }, onClick = wege.herz,
+                stringResource(R.string.ks_d_herz), unter, wert?.let { Formate.zahl(it.toLong()) }, if (wert != null) "bpm" else null,
+                zeichen = { Tonkreis(Zeichen.herz, Farben.puls) }, onClick = wege.herz,
             )
         }
         // Nur wer sich wiegt, bekommt die Zeile - ohne Waage waere sie immer leer.
@@ -694,10 +685,10 @@ internal fun Koerperliste(
             // Gezaehlt wie auf der Uhr: nur ihre Glaeser; die Liter umfassen alles Wasser des Tages.
             val letztes = s.glaeser.maxOrNull()
             val unter = if (letztes == null) stringResource(R.string.ks_h_kein_glas)
-            else pluralStringResource(R.plurals.ks_f_glaeser, s.glaeser.size, s.glaeser.size, uhrzeit(context, letztes))
+            else pluralStringResource(R.plurals.ks_f_glaeser, s.glaeser.size, s.glaeser.size, Formate.uhrzeit(context, letztes))
             Zeile(
-                stringResource(R.string.ks_d_wasser), unter, liter(s.wasserMl), "l",
-                zeichen = { Tonkreis(Zeichen.wasser, FLAECHE_WASSER, t.wasser) },
+                stringResource(R.string.ks_d_wasser), unter, Formate.liter(s.wasserMl), "l",
+                zeichen = { Tonkreis(Zeichen.wasser, Farben.wasser) },
             ) { wege.trend("ernaehrung") }
         }
         val stand = s.supplemente?.takeIf { s.mitSupCycle }
@@ -714,11 +705,11 @@ internal fun Koerperliste(
                 else -> z.namen.firstOrNull()?.let { stringResource(eins, it) }
             }
             Zeile(
-                stringResource(R.string.ks_h_praeparate_n), unter, "${z.genommen}", stringResource(R.string.ks_h_von_n, z.faellig),
-                zeichen = { Tonkreis(Zeichen.kapsel, FLAECHE_PRAEPARAT, t.bewegung, 0.18f) },
+                stringResource(R.string.ks_h_praeparate_n), unter, Formate.zahl(z.genommen.toLong()), stringResource(R.string.ks_h_von_n, z.faellig),
+                zeichen = { Tonkreis(Zeichen.kapsel, Farben.praeparat, 0.18f) },
                 // Die Warnfarbe nur fuer Versaeumtes: was seine Planzeit hinter sich hat
                 // (ohne Plan: was nach dem ersten Haken liegen blieb).
-                unterFarbe = if (z.lage == Praeparatlage.OFFEN) t.warnung else null,
+                unterFarbe = if (z.lage == Praeparatlage.OFFEN) Farben.warnung.ton() else null,
                 onClick = zeigePraeparate,
             )
         }
@@ -732,8 +723,8 @@ internal fun Koerperliste(
             else stringResource(R.string.ks_f_koffein_aktiv, aktiv)
             val dazu = stringResource(R.string.ks_h_koffein_dazu)
             Zeile(
-                stringResource(R.string.ks_h_koffein_n), unter, "$heuteMg", "mg",
-                zeichen = { Tonkreis(Zeichen.tasse, FLAECHE_KOFFEIN, t.koffein, 0.30f) },
+                stringResource(R.string.ks_h_koffein_n), unter, Formate.zahl(heuteMg.toLong()), "mg",
+                zeichen = { Tonkreis(Zeichen.tasse, Farben.koffein, 0.30f) },
                 rechts = {
                     IconButton(onClick = zeigeKoffein, modifier = Modifier.size(48.dp)) {
                         Icon(Zeichen.plus, dazu, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
@@ -759,23 +750,39 @@ internal fun Koerperliste(
  */
 @Composable
 internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
-    val grau = MaterialTheme.colorScheme.onSurfaceVariant
-    val leer = MaterialTheme.colorScheme.surfaceVariant
+    val grau = Farben.neutral()
+    // Die leere Spur neutral: surfaceVariant war im hellen Schema ein Lila, das sonst nirgends vorkommt.
+    val leer = Farben.spur()
+    val voll = Farben.bewegung.flaeche()
+    // Unter dem Ziel blasser - deckend mit der Karte gemischt statt Alpha ueber der Spur.
+    val blass = voll.aufKarte(0.75f)
     val heute = LocalDate.now()
     val messer = rememberTextMeasurer()
+    // Die Schrift der Bilder (labelSmall) auch fuer Zahlen und Tage um die Saeulen.
     val stil = MaterialTheme.typography.labelSmall.copy(color = grau)
-    val zielText = stringResource(R.string.ks_h_ziel_zahl, Auswertung.tausender(SCHRITTZIEL.toDouble()))
+    val titel = stringResource(R.string.ks_d_schritte_woche)
+    val zielText = stringResource(R.string.ks_h_ziel_zahl, Formate.schritteKurz(SCHRITTZIEL))
+    // Fuer TalkBack die Woche in einem Satz, mit den genauen Zahlen statt "9.9k".
+    val satz = "$titel, $zielText: " + s.wocheSchritte.joinToString(", ") { (tag, n) -> Formate.wochentagLang(tag.dayOfWeek) + " " + Formate.zahl(n) }
     Kasten {
-        Kopf(stringResource(R.string.ks_d_schritte_woche), link = stringResource(R.string.ks_h_trends), onLink = trend)
-        Row(Modifier.fillMaxWidth().clickable(onClick = trend).padding(start = 10.dp, end = 10.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Kopf(titel, link = stringResource(R.string.ks_h_trends), onLink = trend)
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = trend).semantics { contentDescription = satz }.padding(start = 10.dp, end = 10.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             val spitze = maxOf(SCHRITTZIEL, s.wocheSchritte.maxOfOrNull { it.second } ?: 0L).toFloat()
             s.wocheSchritte.forEachIndexed { i, (tag, schritte) ->
                 val letzte = i == s.wocheSchritte.lastIndex
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     // Abgerundet wie "goal 10k" daneben und die Trends: 9'960 gerundet als "10.0k" unter der Ziellinie widerspraeche ihr.
-                    Text(if (schritte > 0) Auswertung.tausender(schritte.toDouble()) else "", fontSize = 11.sp, lineHeight = 14.sp, color = grau, maxLines = 1)
-                    val gruen = if (schritte >= SCHRITTZIEL) FLAECHE_BEWEGUNG else FLAECHE_BEWEGUNG.copy(alpha = 0.75f)
-                    Canvas(Modifier.fillMaxWidth().height(64.dp)) {
+                    // Darf ueber die Saeule in die Luecke ragen: bei Schrift 1,3 ist "10.2k" so breit wie die Spalte.
+                    Text(
+                        if (schritte > 0) Formate.schritteKurz(schritte) else "", Modifier.wrapContentWidth(unbounded = true),
+                        style = stil, fontWeight = FontWeight.Normal, maxLines = 1, softWrap = false,
+                    )
+                    val gruen = if (schritte >= SCHRITTZIEL) voll else blass
+                    // Mit der Schrift hoeher: die Zielbeschriftung steht im Bild und soll die Saeule nicht verdraengen.
+                    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(64.dp))) {
                         drawRoundRect(leer, Offset.Zero, size, CornerRadius(4.dp.toPx()))
                         val h = size.height * (schritte / spitze)
                         if (h > 0) drawRoundRect(gruen, Offset(0f, size.height - h), Size(size.width, h), CornerRadius(4.dp.toPx()))
@@ -792,7 +799,8 @@ internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
                         }
                     }
                     Text(
-                        tag.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(2), fontSize = 12.sp, lineHeight = 16.sp,
+                        Formate.wochentagKurz(tag.dayOfWeek), style = stil,
+                        // Normal statt des Medium von labelSmall: sonst hebt sich heute kaum ab.
                         fontWeight = if (tag == heute) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (tag == heute) MaterialTheme.colorScheme.onSurface else grau,
                     )

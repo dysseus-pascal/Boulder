@@ -183,7 +183,8 @@ internal fun SportAnsicht(wege: Sportwege) {
         zeige(Sportseite(d, rechte, vorher?.puls, vorher?.punkte.orEmpty()))
         val puls = erstes?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }
         // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein
-        // Akte-Zugriff, beschnitten wie die Strecke daneben.
+        // Akte-Zugriff, beschnitten wie die Strecke daneben. Gelesen nur, wenn sie
+        // neu ist: TrainingsDaten merkt sich die zuletzt gelesene samt Groesse.
         val punkte = erstes?.let { t ->
             withContext(Dispatchers.IO) { versuche("Kieselsport", "Spur fuer die Karte") { TrainingsDaten.punkte(context, t.sitzung) }.orEmpty() }
         }.orEmpty()
@@ -390,8 +391,9 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
         Column(Modifier.padding(start = INNEN, end = 12.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // DIE FLAECHENFARBE, NICHT DER TON: die Kacheln sind in beiden Schemata
             // hell, der abgedunkelte Ton sah im hellen aus wie eine Bahnlinie.
+            val linie = remember(punkte) { punkte.map { it.lat to it.lon } }
             if (punkte.size >= 2) Kartenvorschau(
-                punkte.map { it.lat to it.lon }, Farben.sport(t.sport).flaeche(),
+                linie, Farben.sport(t.sport).flaeche(),
                 Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(10.dp)), onClick,
             )
             // Vier feste Faecher bis zur Schrift 1,15; darueber liefe "12.3 km" aus seinem

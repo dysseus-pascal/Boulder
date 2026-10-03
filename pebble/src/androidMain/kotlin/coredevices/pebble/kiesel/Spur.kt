@@ -3,11 +3,8 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.location.Location
 import android.util.Log
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.io.File
@@ -58,31 +55,87 @@ internal object Spur {
     }
 
     /** Einen Punkt anhängen. Eine Zeile je Punkt, damit nichts neu zu schreiben ist. */
-    fun haengeAn(context: Context, beginn: Long, ort: Location) {
-        if (ort.accuracy > GENAUIGKEIT_MAX) return
+    fun haengeAn(context: Context, beginn: Long, ort: Location) = haengeAn(context, beginn, listOf(ort))
+
+    /** Mehrere Punkte in EINEM Schreibvorgang: das gebuendelte GPS (SpurDienst) liefert bis zu 20 je Minute. */
+    fun haengeAn(context: Context, beginn: Long, orte: List<Location>) {
         try {
-            val zeile = buildJsonObject {
-                put("t", ort.time / 1000)
-                put("lat", ort.latitude)
-                put("lon", ort.longitude)
-                if (ort.hasAltitude()) put("h", ort.altitude)
-                put("g", ort.accuracy)
+            val text = buildString {
+                for (ort in orte) {
+                    if (ort.accuracy > GENAUIGKEIT_MAX) continue
+                    append(buildJsonObject {
+                        put("t", ort.time / 1000)
+                        put("lat", ort.latitude)
+                        put("lon", ort.longitude)
+                        if (ort.hasAltitude()) put("h", ort.altitude)
+                        put("g", ort.accuracy)
+                    }.toString()).append('\n')
+                }
             }
-            datei(context, beginn).appendText(zeile.toString() + "\n")
+            if (text.isNotEmpty()) datei(context, beginn).appendText(text)
         } catch (e: Exception) {
             Log.w(TAG, "Spurpunkt: " + e.message)
         }
     }
 
-    fun lies(context: Context, beginn: Long): List<Punkt> {
+    fun lies(context: Context, beginn: Long): List<Punkt> = liesOderNull(context, beginn).orEmpty()
+
+    /** Wie [lies], aber null, wenn die Datei nicht zu lesen war - so merkt sich der Laengenspeicher keinen Lesefehler als leere Spur. */
+    fun liesOderNull(context: Context, beginn: Long): List<Punkt>? {
         val d = datei(context, beginn)
         if (!d.exists()) return emptyList()
         return try {
-            ausZeilen(d.readLines())
+            // Eine Zeile je Lesen: so zaehlt logcat, wie oft eine Seite die Spuren noch liest.
+            d.bufferedReader().useLines { z -> z.mapNotNull(::zeile).toList() }.also { Log.i(TAG, "Spur gelesen: ${d.name}, ${it.size} Punkte") }
         } catch (e: Exception) {
             Log.w(TAG, "Spur lesen: " + e.message)
-            emptyList()
+            null
         }
+    }
+
+    /** Wie gross die Datei ist, -1 ohne - fuer den Laengenspeicher der Liste (TrainingsDaten). */
+    fun groesse(context: Context, beginn: Long): Long =
+        datei(context, beginn).let { if (it.exists()) it.length() else -1L }
+
+    /** Was eine Spur der Liste gibt - TrainingsDaten merkt es sich je Datei und Fenster. */
+    data class Mass(val anzahl: Int, val meter: Double, val letzte: Long)
+
+    /** DIESELBE RECHNUNG WIE VORHER IN DER LISTE: die Laenge erst ab zwei Punkten. */
+    fun mass(punkte: List<Punkt>): Mass =
+        Mass(punkte.size, if (punkte.size >= 2) laenge(punkte) else 0.0, punkte.lastOrNull()?.zeit ?: 0L)
+
+    /**
+     * Die Laenge wie TrainingsDaten.punkte waehlt: die Spur ab zwei Punkten, sonst die Route; null darunter.
+     * [route] ALS LAMBDA: sie umzurechnen kostet bei 40 GPS-Stunden ~48 000 Punkte je Oeffnen - nur ohne Spur.
+     */
+    fun laengeAus(spur: Mass?, route: () -> List<Punkt>): Double? =
+        if (spur != null && spur.anzahl >= 2) spur.meter else route().takeIf { it.size >= 2 }?.let(::laenge)
+
+    /**
+     * Die Fassung der Rechnung hinter einem gemerkten Mass. ERHOEHEN, wenn sich
+     * [zeile], [inSitzung], [weg] oder ihre Grenzen aendern: sonst zeigten Liste,
+     * Zeitstrahl und Widget bis zu 91 Tage die alten Meter, das Detail die neuen.
+     * SpurzeileTest haelt einen Fingerabdruck der Rechnung fest und erinnert daran.
+     */
+    const val RECHNUNG = 1
+
+    /**
+     * Wofuer ein gemerktes Mass gilt: Datei, Fenster (-1 = ganz), Groesse, [RECHNUNG].
+     * Eine Spur waechst nur durch Anhaengen - gleiche Groesse heisst gleicher Inhalt.
+     * Der Beginn bleibt vorn: TrainingsDaten raeumt danach ab.
+     */
+    fun stempel(beginn: Long, von: Long, bis: Long, groesse: Long, rechnung: Int = RECHNUNG): String =
+        "$beginn;$von;$bis;$groesse;r$rechnung"
+
+    /** Das Mass als Text hinter seinem Stempel. Double.toString ist verlustfrei: dieselben Meter kommen zurueck. */
+    fun massText(stempel: String, m: Mass): String = "$stempel;${m.anzahl};${m.letzte};${m.meter}"
+
+    /** Das gemerkte Mass, wenn es zu [stempel] gehoert, sonst null. */
+    fun massAus(text: String?, stempel: String): Mass? {
+        if (text == null || !text.startsWith("$stempel;")) return null
+        val t = text.substring(stempel.length + 1).split(';')
+        if (t.size != 3) return null
+        return Mass(t[0].toIntOrNull() ?: return null, t[2].toDoubleOrNull() ?: return null, t[1].toLongOrNull() ?: return null)
     }
 
     /**
@@ -90,19 +143,42 @@ internal object Spur {
      * beim Schreiben) kostet nur sie selbst, nicht die ganze Spur; eine Zeile
      * ohne Zeit oder Ort ergibt keinen Punkt bei (0, NaN).
      */
-    fun ausZeilen(zeilen: List<String>): List<Punkt> = zeilen.mapNotNull { zeile ->
-        if (zeile.isBlank()) return@mapNotNull null
-        // kotlinx statt org.json: das gibt es auch ohne Android, also im Host-Test.
-        val o = try { Json.parseToJsonElement(zeile).jsonObject } catch (e: Exception) { return@mapNotNull null }
-        Punkt(
-            o["t"]?.jsonPrimitive?.longOrNull ?: 0L,
-            o["lat"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
-            o["lon"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
-            o["h"]?.jsonPrimitive?.doubleOrNull,
-            o["g"]?.jsonPrimitive?.doubleOrNull?.toFloat() ?: Float.NaN,
-        )
-    }.filter { it.zeit > 0 && !it.lat.isNaN() && !it.lon.isNaN() }
+    fun ausZeilen(zeilen: List<String>): List<Punkt> = zeilen.mapNotNull(::zeile)
 
+    /**
+     * Eine Zeile als Punkt, oder null. OHNE JSON-BAUM: kotlinx legte je Zeile
+     * JsonObject, Map und fuenf Literale an (JVM: 2,5 KB Muell, hier 1,3 KB und
+     * ein Fuenftel schneller). Das Ergebnis muss dasselbe bleiben, auch bei
+     * kaputten Zeilen - SpurzeileTest vergleicht beide.
+     */
+    fun zeile(text: String): Punkt? {
+        val l = Zeilenleser(text)
+        l.leer()
+        // Leer oder kein Objekt: kotlinx warf beim .jsonObject, und die Zeile fiel weg.
+        if (l.i >= text.length || text[l.i] != '{') return null
+        val w = arrayOfNulls<Any>(FELDER.size)
+        if (!l.objekt { k, v -> if (k >= 0) w[k] = v }) return null
+        l.leer()
+        if (l.i != text.length) return null
+        // Ein Objekt statt einer Zahl in einem der Felder: kotlinx warf beim
+        // Lesen ausserhalb der Zeile, und die ganze Datei war leer. So bleibt es.
+        require(w.none { it === Zeilenleser.VERSCHACHTELT }) { "Spurzeile: Feld ist kein Wert" }
+        val p = Punkt(
+            (w[0] as String?)?.let(::alsLong) ?: 0L,
+            (w[1] as String?)?.toDoubleOrNull() ?: Double.NaN,
+            (w[2] as String?)?.toDoubleOrNull() ?: Double.NaN,
+            (w[3] as String?)?.toDoubleOrNull(),
+            (w[4] as String?)?.toDoubleOrNull()?.toFloat() ?: Float.NaN,
+        )
+        return p.takeIf { it.zeit > 0 && !it.lat.isNaN() && !it.lon.isNaN() }
+    }
+
+    /** Die Felder einer Zeile, in der Reihenfolge von Punkt. */
+    val FELDER = listOf("t", "lat", "lon", "h", "g")
+
+    /** Wie kotlinx' longOrNull; nur reine Ziffern (bis 18, ohne Ueberlauf) nehmen den kurzen Weg. */
+    private fun alsLong(text: String): Long? =
+        if (text.length in 1..18 && text.all { it in '0'..'9' }) text.toLong() else JsonPrimitive(text).longOrNull
 
     fun vorhanden(context: Context, beginn: Long): Boolean = datei(context, beginn).exists()
 
@@ -242,4 +318,150 @@ internal object Spur {
      * [Trainingsanalyse.aufstiegBis], auf der geglaetteten Hoehe.
      */
     const val STEIGUNG_MIN = 3.0
+}
+
+/**
+ * Liest eine JSON-Zeile so streng wie kotlinx (ohne isLenient) und gibt die
+ * Felder der obersten Ebene als Text, wie kotlinx' content. Was kotlinx
+ * ablehnt, lehnt er auch ab - sonst haette eine kaputte Zeile einen Punkt.
+ */
+private class Zeilenleser(private val s: String) {
+    var i = 0
+
+    /** Nur die vier Leerzeichen von JSON, wie kotlinx. */
+    fun leer() {
+        while (i < s.length && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) i++
+    }
+
+    /** Ein Objekt ab "{"; [nimm] bekommt jedes Feld (Nummer in Spur.FELDER, -1 fremd). false, wenn es kaputt ist. */
+    fun objekt(nimm: ((Int, Any) -> Unit)?): Boolean {
+        i++
+        leer()
+        if (i < s.length && s[i] == '}') { i++; return true }
+        while (true) {
+            leer()
+            val k = feld()
+            if (k == KAPUTT) return false
+            leer()
+            if (i >= s.length || s[i] != ':') return false
+            i++
+            leer()
+            val w = wert() ?: return false
+            nimm?.invoke(k, w)
+            leer()
+            if (i >= s.length) return false
+            when (s[i]) {
+                ',' -> i++
+                '}' -> { i++; return true }
+                else -> return false
+            }
+        }
+    }
+
+    private fun liste(): Boolean {
+        i++
+        leer()
+        if (i < s.length && s[i] == ']') { i++; return true }
+        while (true) {
+            leer()
+            wert() ?: return false
+            leer()
+            if (i >= s.length) return false
+            when (s[i]) {
+                ',' -> i++
+                ']' -> { i++; return true }
+                else -> return false
+            }
+        }
+    }
+
+    /** Text, Wort (Zahl, true, null) oder [VERSCHACHTELT]; null, wenn kaputt. */
+    private fun wert(): Any? = when {
+        i >= s.length -> null
+        s[i] == '"' -> text()
+        s[i] == '{' -> if (objekt(null)) VERSCHACHTELT else null
+        s[i] == '[' -> if (liste()) VERSCHACHTELT else null
+        else -> wort()
+    }
+
+    /** Ein Wort ohne Anfuehrungszeichen bis zum naechsten Zeichen mit Bedeutung - wie kotlinx' consumeStringLenient. */
+    private fun wort(): String? {
+        val start = i
+        while (i < s.length && !grenze(s[i])) i++
+        return if (i == start) null else s.substring(start, i)
+    }
+
+    /**
+     * Wo ein Wort endet. AUCH AN JEDEM STEUERZEICHEN bis 0x20: kotlinx bricht dort ab
+     * (TC_INVALID) und verwirft die Zeile. Sonst wurde aus "1.5" und einem Nullbyte nach
+     * einem Absturz ueber toDoubleOrNull (schneidet <= 0x20 ab) wieder ein Punkt.
+     */
+    private fun grenze(c: Char) = c <= ' ' || when (c) {
+        ',', ':', '{', '}', '[', ']', '"', '\\' -> true
+        else -> false
+    }
+
+    /** Ein Schluessel als Nummer in Spur.FELDER, ohne Text anzulegen; mit Escape ueber [text]. */
+    private fun feld(): Int {
+        if (i >= s.length || s[i] != '"') return KAPUTT
+        var e = i + 1
+        while (e < s.length && s[e] != '"' && s[e] != '\\') e++
+        if (e < s.length && s[e] == '"') {
+            var n = Spur.FELDER.size - 1
+            while (n >= 0 && !(FELDER[n].length == e - i - 1 && s.regionMatches(i + 1, FELDER[n], 0, FELDER[n].length))) n--
+            i = e + 1
+            return n
+        }
+        return text()?.let { Spur.FELDER.indexOf(it) } ?: KAPUTT
+    }
+
+    /** Ein Text in Anfuehrungszeichen, die Escapes aufgeloest. */
+    private fun text(): String? {
+        if (i >= s.length || s[i] != '"') return null
+        val start = ++i
+        // Der schnelle Weg: Boulders Zeilen haben keine Escapes.
+        while (i < s.length && s[i] != '"' && s[i] != '\\') i++
+        if (i >= s.length) return null
+        if (s[i] == '"') return s.substring(start, i++)
+        val b = StringBuilder().append(s, start, i)
+        while (i < s.length) {
+            val c = s[i++]
+            when {
+                c == '"' -> return b.toString()
+                c != '\\' -> b.append(c)
+                i >= s.length -> return null
+                else -> when (val e = s[i++]) {
+                    '"', '\\', '/' -> b.append(e)
+                    'b' -> b.append('\b')
+                    'f' -> b.append('\u000C')
+                    'n' -> b.append('\n')
+                    'r' -> b.append('\r')
+                    't' -> b.append('\t')
+                    'u' -> {
+                        if (i + 4 > s.length) return null
+                        var z = 0
+                        repeat(4) { z = z * 16 + (hex(s[i++]) ?: return null) }
+                        b.append(z.toChar())
+                    }
+                    else -> return null
+                }
+            }
+        }
+        return null
+    }
+
+    /** Nur ASCII-Hexziffern wie kotlinx - Character.digit naehme auch arabische. */
+    private fun hex(c: Char): Int? = when (c) {
+        in '0'..'9' -> c - '0'
+        in 'a'..'f' -> c - 'a' + 10
+        in 'A'..'F' -> c - 'A' + 10
+        else -> null
+    }
+
+    companion object {
+        /** Ein Objekt oder eine Liste als Wert - in einem der Felder kein Punkt. */
+        val VERSCHACHTELT = Any()
+        private const val KAPUTT = -2
+        private val FELDER = Spur.FELDER.toTypedArray()
+    }
 }

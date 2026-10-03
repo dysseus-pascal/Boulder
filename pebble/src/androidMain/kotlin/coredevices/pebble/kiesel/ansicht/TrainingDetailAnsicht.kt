@@ -285,7 +285,7 @@ private fun Strecke(d: TrainingDetail, ton: Color, maxpuls: Int, imperial: Boole
         }
     } else {
         Abschnitt(stringResource(if (rad) R.string.ks_v_tempo_karte_rad else R.string.ks_v_tempo_karte)) {
-            Farbkarte(strecke, strecke.map { it.tempo }, langsam, schnell, kartenform)
+            Farbkarte(strecke, remember(strecke) { strecke.map { it.tempo } }, langsam, schnell, kartenform)
             Farblegende(
                 tempoAngabe(langsam, rad, imperial)?.text ?: Formate.FEHLT,
                 tempoAngabe(schnell, rad, imperial)?.text ?: Formate.FEHLT,

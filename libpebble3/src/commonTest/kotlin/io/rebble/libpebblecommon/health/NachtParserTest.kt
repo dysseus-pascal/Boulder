@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.health
 
 import io.rebble.libpebblecommon.health.parsers.parseNachtData
+import io.rebble.libpebblecommon.health.parsers.parseNachtHrvData
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -88,5 +89,66 @@ class NachtParserTest {
     @Test
     fun unbekannteFassungWirdUebersprungen() {
         assertEquals(0, parseNachtData(satz(version = 2, abschnitte = emptyList()), 324u).size)
+    }
+}
+
+/**
+ * Saetze auf Tag 89 (NachtHrvDlsRecord der Boulder-Firmware): 11 Byte Kopf,
+ * dann 48 Fenster zu 5 Byte - 251 Byte je Satz.
+ */
+class NachtHrvParserTest {
+
+    private fun satz(
+        version: Int = 1,
+        beginn: Long = 1_790_445_600,
+        teil: Int = 0,
+        teile: Int = 1,
+        fenster: List<Triple<Int, Int, Int>>,
+    ): ByteArray {
+        val b = mutableListOf<Byte>()
+        fun u8(v: Int) { b += (v and 0xFF).toByte() }
+        fun u16(v: Int) { u8(v); u8(v shr 8) }
+        fun u32(v: Long) { for (i in 0 until 4) u8((v shr (8 * i)).toInt()) }
+        u16(version); u16(251)
+        u32(beginn)
+        u8(teil); u8(teile); u8(fenster.size)
+        fenster.forEach { (minute, rmssd, puls) -> u16(minute); u16(rmssd); u8(puls) }
+        repeat(48 - fenster.size) { repeat(5) { u8(0) } }
+        return b.toByteArray()
+    }
+
+    @Test
+    fun fensterMitMinuteRmssdUndPuls() {
+        val daten = satz(fenster = listOf(Triple(120, 57, 0), Triple(150, 312, 54)))
+        assertEquals(251, daten.size)
+        val t = parseNachtHrvData(daten, 251u).single()
+        assertEquals(1_790_445_600L, t.beginnUtc)
+        assertEquals(0, t.teil)
+        assertEquals(1, t.teile)
+        assertEquals(2, t.fenster.size)
+        assertEquals(150, t.fenster[1].minute)
+        assertEquals(312, t.fenster[1].rmssd)
+        assertEquals(54, t.fenster[1].puls)
+        assertTrue(t.fenster.all { it.beginnUtc == 1_790_445_600L })
+    }
+
+    @Test
+    fun zweiTeileNacheinander() {
+        val daten = satz(teil = 0, teile = 2, fenster = List(48) { Triple(it * 10, 40 + it, 55) }) +
+            satz(teil = 1, teile = 2, fenster = listOf(Triple(480, 61, 52)))
+        val teile = parseNachtHrvData(daten, 251u)
+        assertEquals(2, teile.size)
+        assertEquals(48, teile[0].fenster.size)
+        assertEquals(1, teile[1].teil)
+        assertEquals(480, teile[1].fenster.single().minute)
+    }
+
+    @Test
+    fun unbekannteFassungUndLeereFensterFallenWeg() {
+        // Bit 0 nicht gesetzt: eine Fassung, die dieses Boulder nicht kennt.
+        assertTrue(parseNachtHrvData(satz(version = 2, fenster = listOf(Triple(0, 50, 50))), 251u).isEmpty())
+        // RMSSD 0 ist keine Messung.
+        val t = parseNachtHrvData(satz(fenster = listOf(Triple(0, 0, 0), Triple(30, 45, 0))), 251u).single()
+        assertEquals(listOf(30), t.fenster.map { it.minute })
     }
 }

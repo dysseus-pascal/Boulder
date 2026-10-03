@@ -39,6 +39,7 @@ import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -213,6 +214,9 @@ interface HealthDataApi {
 
     /** Boulder: die Schlafphasen aller Naechte, deren Beginn in [von, bis) liegt, nach Nacht und Zeit geordnet. */
     suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity>
+
+    /** Boulder: die HRV-Fenster einer Nacht (Tag 89), in Minuten ab ihrem Beginn; leer bei aelterer Firmware. */
+    suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity>
 
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?

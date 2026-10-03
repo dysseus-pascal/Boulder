@@ -49,3 +49,21 @@ data class NachtAbschnittEntity(
     val bis: Int,
     val phase: Int,
 )
+
+/**
+ * Ein HRV-Fenster einer Nacht (Datalogging-Tag 89): fuenf Minuten ab [minute]
+ * (Minuten ab [beginnUtc], wie die Abschnitte), daraus der RMSSD und der Puls.
+ *
+ * EIGENE TABELLE STATT SPALTE: die Uhr schickt je nach Messstufe bis zu 96
+ * Fenster je Nacht, und eine aeltere Firmware gar keine - dann bleibt die
+ * Tabelle fuer diese Nacht leer.
+ */
+@Entity(tableName = "boulder_nacht_hrv", primaryKeys = ["beginnUtc", "minute"])
+data class NachtHrvEntity(
+    val beginnUtc: Long,
+    val minute: Int,
+    /** RMSSD in ms. */
+    val rmssd: Int,
+    /** Schlaege je Minute im Fenster; 0 = unbekannt. */
+    val puls: Int,
+)

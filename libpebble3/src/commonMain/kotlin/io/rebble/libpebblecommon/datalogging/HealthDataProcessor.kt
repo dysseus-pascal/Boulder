@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.health.parsers.parseOverlayData
 import io.rebble.libpebblecommon.health.parsers.parseNachtData
+import io.rebble.libpebblecommon.health.parsers.parseNachtHrvData
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
@@ -75,9 +76,13 @@ class HealthDataProcessor(
         private const val HEALTH_HR_TAG: UInt = 85u
         // Boulder-Firmware: die fertige Nacht mit allen Phasen (NachtDlsRecord)
         private const val BOULDER_NACHT_TAG: UInt = 88u
+        // Boulder-Firmware: die HRV-Fenster dieser Nacht (NachtHrvDlsRecord). Eine
+        // aeltere Firmware schickt ihn nicht; ein aelteres Boulder quittiert ihn
+        // als unbekannt und wirft ihn weg.
+        private const val BOULDER_NACHT_HRV_TAG: UInt = 89u
 
         val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG,
-            BOULDER_NACHT_TAG)
+            BOULDER_NACHT_TAG, BOULDER_NACHT_HRV_TAG)
     }
 
     fun handleSessionOpen(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
@@ -181,6 +186,7 @@ class HealthDataProcessor(
             HEALTH_OVERLAY_TAG -> "OVERLAY"
             HEALTH_HR_TAG -> "HEART_RATE"
             BOULDER_NACHT_TAG -> "NACHT"
+            BOULDER_NACHT_HRV_TAG -> "NACHT_HRV"
             else -> "UNKNOWN($tag)"
         }
 
@@ -200,6 +206,7 @@ class HealthDataProcessor(
                 processOverlayData(payload, session.itemSize)
             }
             BOULDER_NACHT_TAG -> processNachtData(payload, session.itemSize)
+            BOULDER_NACHT_HRV_TAG -> processNachtHrvData(payload, session.itemSize)
             HEALTH_HR_TAG -> {
                 // Heart rate data is embedded in steps data for newer firmware
                 logger.d { "Received standalone HR data (tag 85), currently handled in steps data" }
@@ -224,6 +231,19 @@ class HealthDataProcessor(
         schub.stossAn()
         val n = teile.first().nacht
         return "Nacht ab ${n.beginnUtc}: ${n.schlafMinuten} min Schlaf, Teil ${teile.first().teil + 1}/${teile.first().teile}"
+    }
+
+    private suspend fun processNachtHrvData(payload: ByteArray, itemSize: UShort): String? {
+        val teile = parseNachtHrvData(payload, itemSize)
+        if (teile.isEmpty()) return null
+        teile.forEach { t ->
+            // Der erste Teil raeumt die Fenster der vorigen Fassung dieser Nacht weg.
+            if (t.teil == 0) nachtDao.loescheHrv(t.beginnUtc)
+            nachtDao.speichereHrv(t.fenster)
+        }
+        schub.stossAn()
+        val t = teile.first()
+        return "HRV der Nacht ab ${t.beginnUtc}: ${t.fenster.size} Fenster, Teil ${t.teil + 1}/${t.teile}"
     }
 
     private suspend fun processStepsData(payload: ByteArray, itemSize: UShort): String? {

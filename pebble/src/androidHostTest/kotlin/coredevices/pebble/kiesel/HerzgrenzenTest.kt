@@ -2,7 +2,9 @@ package coredevices.pebble.kiesel
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class HerzgrenzenTest {
     @Test
@@ -59,5 +61,25 @@ class HerzgrenzenTest {
     fun ruhepuls_ist_der_median_der_letzten_naechte() {
         // Eine Fiebernacht mit 70 verschiebt den Median nicht
         assertEquals(53, Herzgrenzen.ruhepuls(listOf(52, 53, 54, 0, 53, 70)))
+    }
+
+    @Test
+    fun tanaka_wie_die_uhr() {
+        // Die Uhr rechnet in Zehnteln (puls.c prv_tanaka): dieselbe Zahl fuer jedes Alter.
+        for (alter in 10..100) assertEquals((2080 - 7 * alter + 5) / 10, Herzgrenzen.tanaka(alter), "Alter $alter")
+    }
+
+    @Test
+    fun meldet_die_uhr_nach_alter_zaehlt_ihre_zahl_nicht() {
+        // Die Uhr rechnet mit ihrem Alter (187), das Telefon mit seinem (179): beide "nicht gesetzt".
+        val uhr = KieselEinstellungen.Stand(maxpuls = 187, maxpulsGesetzt = false, uhrRechnetNachAlter = true)
+        val entwurf = uhr.copy(maxpuls = 179)
+        assertTrue(entwurf.gleich(uhr))
+        // Gesetzt zaehlt die Zahl, und gesetzt gegen nach Alter ist verschieden.
+        assertFalse(uhr.copy(maxpulsGesetzt = true).gleich(entwurf.copy(maxpulsGesetzt = true)))
+        assertFalse(uhr.gleich(uhr.copy(maxpulsGesetzt = true)))
+        // Aeltere Firmware rechnet mit der Zahl des Telefons: dort zaehlt sie auch ohne Einstellung.
+        val alt = uhr.copy(uhrRechnetNachAlter = false)
+        assertFalse(alt.copy(maxpuls = 179).gleich(alt))
     }
 }

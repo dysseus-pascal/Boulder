@@ -75,6 +75,9 @@ internal object Wartend {
         return frisch
     }
 
+    /** Wann die Datei [name] abgelegt wurde, in Epochensekunden - also wann die Nachricht ankam; null bei einer fremden. */
+    fun abgelegt(name: String): Long? = name.substringBefore('-').toLongOrNull()?.div(1000)
+
     /** Ob die Datei [name] (Ablagezeit in Millisekunden vorn) aelter als [tage] ist; eine fremde nie. */
     fun verfallen(name: String, jetztMs: Long, tage: Long): Boolean =
         name.substringBefore('-').toLongOrNull()?.let { jetztMs - it > tage * 86_400_000L } ?: false

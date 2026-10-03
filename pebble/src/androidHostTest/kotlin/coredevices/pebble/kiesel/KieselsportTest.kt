@@ -137,4 +137,23 @@ class KieselsportTest {
         val a = Kieselsport.abschnitteAus("0:10:30;120:10:30;240:10:30;2670:10:30")
         assertEquals(Kieselsport.ruheSchnitt(listOf(90, 90, 2400)), Kieselsport.pausenSchnitt(a))
     }
+
+    @Test
+    fun meldungenTragenIhreZeit() {
+        val beginn = 1_790_000_000L
+        // Die Zeit der Uhr gilt - die Meldung kam im dritten Anlauf, Sekunden spaeter.
+        assertEquals(beginn + 600, Kieselsport.zeitDerMeldung(beginn + 600, beginn, beginn + 609))
+        // Aeltere Firmware schickt keine: dann der Empfang.
+        assertEquals(beginn + 609, Kieselsport.zeitDerMeldung(null, beginn, beginn + 609))
+        // Vor dem Beginn oder weit nach dem Empfang ist eine falsch gestellte Uhr.
+        assertEquals(beginn + 609, Kieselsport.zeitDerMeldung(beginn - 5, beginn, beginn + 609))
+        assertEquals(beginn + 609, Kieselsport.zeitDerMeldung(beginn + 3600, beginn, beginn + 609))
+    }
+
+    @Test
+    fun dieNeuenSchluesselLiegenHinterDerStoreApp() {
+        // 10026-10036 vergab die Store-App fuer Nacht, HRV und SpO2.
+        val neu = listOf(Kieselsport.SP_ZEIT, Kieselsport.SP_PAUSEN, Kieselsport.SP_ENDE, Kieselsport.SP_MAXPULS_GESETZT)
+        assertEquals(listOf(10037, 10038, 10039, 10040), neu)
+    }
 }

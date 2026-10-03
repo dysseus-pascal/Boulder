@@ -119,4 +119,87 @@ class TrainingspausenTest {
         // Kaeme die Zusammenfassung vor dem Ende, das die Pausen ergeben, stimmt etwas nicht.
         assertEquals(emptyList(), Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4000).pausen)
     }
+
+    // --- Die Pausenliste der Uhr (Boulder-Firmware) ---
+
+    /** Die Liste, wie die Uhr sie schickt: Fassung, Zahl, je Pause aktive Sekunde und Dauer (uint16 LE). */
+    private fun liste(vararg pausen: Pair<Int, Int>, gesamt: Int = pausen.size): ByteArray {
+        val b = ByteArray(2 + 4 * pausen.size)
+        b[0] = Trainingspausen.UHR_FASSUNG.toByte()
+        b[1] = gesamt.toByte()
+        pausen.forEachIndexed { i, (aktiv, dauer) ->
+            b[2 + 4 * i] = (aktiv and 0xFF).toByte(); b[3 + 4 * i] = (aktiv shr 8).toByte()
+            b[4 + 4 * i] = (dauer and 0xFF).toByte(); b[5 + 4 * i] = (dauer shr 8).toByte()
+        }
+        return b
+    }
+
+    @Test
+    fun dieListeDerUhrIstSekundengenau() {
+        // Fahrt: 30 min, 20 min Kaffee, 30 min, 1 min Ampel, 20 min, dann die Pause zum Speichern.
+        val ende = anfang + 4800 + 1200 + 60
+        val plan = Trainingspausen.ausUhr(liste(1800 to 1200, 3600 to 60), anfang, 4800, ende)!!
+        assertEquals(
+            listOf(
+                Trainingspausen.Pause(anfang + 1800, anfang + 3000),
+                Trainingspausen.Pause(anfang + 4800, anfang + 4860),
+            ),
+            plan.pausen,
+        )
+        assertEquals(ende, plan.offen)
+        // Die aktive Sekunde 2400 liegt hinter dem Kaffee.
+        assertEquals(anfang + 3600, Trainingspausen.wand(plan.pausen, anfang, 2400))
+    }
+
+    @Test
+    fun ohnePausenNurDerKopf() {
+        // Die Uhr kennt Pausen, es gab nur die letzte: das Ende ist Beginn + Dauer.
+        val plan = Trainingspausen.ausUhr(liste(), anfang, 3600, anfang + 3600)!!
+        assertEquals(emptyList(), plan.pausen)
+        assertEquals(anfang + 3600, plan.offen)
+    }
+
+    @Test
+    fun eineUnvollstaendigeListeGiltNicht() {
+        // 33 Pausen, nur 32 stehen da: die Uhr hatte keinen Platz mehr - dann die Meldungen.
+        val voll = Array(32) { (it * 10) to 5 }
+        assertNull(Trainingspausen.ausUhr(liste(*voll, gesamt = 33), anfang, 3600, null))
+        // Aeltere Firmware schickt nichts, kaputte Laengen und fremde Fassungen taugen nicht.
+        assertNull(Trainingspausen.ausUhr(null, anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(10 to 5).copyOf(5), anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(10 to 5).also { it[0] = 2 }, anfang, 3600, null))
+        // Rueckwaerts oder hinter der aktiven Zeit ist keine Liste dieses Trainings.
+        assertNull(Trainingspausen.ausUhr(liste(600 to 5, 300 to 5), anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(4000 to 5), anfang, 3600, null))
+    }
+
+    @Test
+    fun einEndeDasNichtPasstWirdGerechnet() {
+        // Die Uhr wurde mitten im Training um eine Stunde gestellt: das Ende passt nicht.
+        val plan = Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, anfang + 3600 + 600 + 3600)!!
+        assertEquals(anfang + 4200, plan.offen)
+        // Fehlt es, ebenso.
+        assertEquals(anfang + 4200, Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, null)!!.offen)
+        // Ein paar Takte Abweichung nach Stunden sind keine gestellte Uhr.
+        assertEquals(anfang + 4230, Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, anfang + 4230)!!.offen)
+    }
+
+    @Test
+    fun eineLeerePauseZaehltNicht() {
+        // Pause und Weiter in derselben Sekunde: keine Pause, aber auch kein Fehler.
+        val plan = Trainingspausen.ausUhr(liste(100 to 0, 200 to 30), anfang, 600, anfang + 630)!!
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 200, anfang + 230)), plan.pausen)
+    }
+
+    @Test
+    fun mitDemEndeDerUhrBrauchtEsKeinenPuffer() {
+        // Die letzte Pause ging verloren, die Zusammenfassung kam nach der Heimfahrt:
+        // die Spur endet trotzdem eine Minute nach der Pause, nicht zwanzig.
+        val plan = Trainingspausen.ausUhr(liste(), anfang, 3600, anfang + 3600)!!
+        val punkte = (0..7200L step 60).map { Spur.Punkt(anfang + it, 47.0, 8.0, null, 5f) }
+        val ende = Kieselsport.sitzungsEnde(
+            java.time.Instant.ofEpochSecond(anfang), 3600, punkte, java.time.Instant.ofEpochSecond(anfang + 7200), plan,
+        )
+        assertTrue(ende.epochSecond <= anfang + 3600 + Kieselsport.PUFFER_S + 1)
+    }
 }

@@ -77,8 +77,9 @@ internal fun KieselsportAnsicht() {
             )
         }
         // "Nach Alter" ist ein eigener Zustand, nicht die Zahl 190: zur Uhr geht
-        // die Schaetzung selbst, damit ihre Zonen die der App sind. Erst nach dem
-        // Laden entscheiden - vorher saehe jedes Alter wie keines aus.
+        // er als Vermerk, dazu die Schaetzung fuer aeltere Firmware, die nicht
+        // selbst rechnet (KieselEinstellungen.sende). Erst nach dem Laden
+        // entscheiden - vorher saehe jedes Alter wie keines aus.
         val schaetzung by produceState<Herzgrenzen.Maximum?>(null) { value = Herzgrenzen.maximum(null, Herzgrenzen.alter(), null) }
         val nachAlter = schaetzung?.takeIf { it.nachAlter }?.wert
         // Der zuletzt eingestellte Wert: "From age" an und wieder aus soll ihn nicht verlieren.

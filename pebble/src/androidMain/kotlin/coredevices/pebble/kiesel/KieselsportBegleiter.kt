@@ -45,6 +45,9 @@ internal class KieselsportBegleiter(
         }
         sitzung.launch {
             incomingAppMessages.collect { nachricht ->
+                // DIE ZEIT DES EMPFANGS, nicht die des Abarbeitens: hinter einem
+                // langen Eintrag in die Akte kaeme ein Weiter Sekunden spaeter dran.
+                val empfangen = System.currentTimeMillis() / 1000
                 // Die Zusammenfassung erst auf die Platte, dann bestaetigen
                 // (siehe Wartend). NUR SIE: eine liegengebliebene Zustandsmeldung
                 // startete beim naechsten Start das GPS fuer ein laengst
@@ -53,7 +56,7 @@ internal class KieselsportBegleiter(
                 val n = zerlege(nachricht.data)
                 val datei = if (n.zahlen.containsKey(Kieselsport.SP_DAUER)) Wartend.lege(app, n) else null
                 device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))
-                auftraege.send(if (datei != null) Auftrag(app, datei) else Auftrag(app, nachricht = n))
+                auftraege.send(if (datei != null) Auftrag(app, datei, empfangen = empfangen) else Auftrag(app, nachricht = n, empfangen = empfangen))
             }
         }
     }
@@ -64,7 +67,10 @@ internal class KieselsportBegleiter(
         sitzung.cancel()
     }
 
-    private class Auftrag(val context: Context, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null)
+    /** [empfangen]: Epochensekunden; null bei einer Datei vom letzten Mal - dann zaehlt ihre Ablage. */
+    private class Auftrag(
+        val context: Context, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null, val empfangen: Long? = null,
+    )
 
     companion object {
         private val logger = Logger.withTag("Kieselsport")
@@ -90,8 +96,9 @@ internal class KieselsportBegleiter(
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 for (a in auftraege) {
                     val n = a.nachricht ?: a.datei?.let { Wartend.lies(it) } ?: continue
+                    val empfangen = a.empfangen ?: a.datei?.let { Wartend.abgelegt(it.name) } ?: (System.currentTimeMillis() / 1000)
                     try {
-                        val meldung = Kieselsport.verarbeite(a.context, n)
+                        val meldung = Kieselsport.verarbeite(a.context, n, empfangen)
                         meldung?.let { KieselVerlauf.merke(a.context, it) }
                         // Bleibt liegen, was die Akte nicht nahm - der naechste Start versucht es wieder.
                         if (!Kieselsport.gescheitert(a.context, meldung)) a.datei?.delete()

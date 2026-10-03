@@ -62,6 +62,10 @@ internal class SpurDienst : android.app.Service(), LocationListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == AUS) {
+            // EIN STOPP FUER EIN ANDERES TRAINING haelt dieses nicht an: die
+            // Zusammenfassung oder der Stopp eines frueheren kann spaet kommen.
+            val fuer = intent.getLongExtra(EXTRA_BEGINN, 0L)
+            if (fuer > 0L && laeuft && beginn > 0L && fuer != beginn) return START_NOT_STICKY
             halt()
             return START_NOT_STICKY
         }
@@ -228,8 +232,10 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             }
         }
 
-        fun stoppe(context: Context) {
+        /** Haelt die Spur an - mit [beginn] nur die dieses Trainings. */
+        fun stoppe(context: Context, beginn: Long? = null) {
             val i = Intent(context, SpurDienst::class.java).setAction(AUS)
+            beginn?.let { i.putExtra(EXTRA_BEGINN, it) }
             try {
                 context.startService(i)
             } catch (e: Exception) {

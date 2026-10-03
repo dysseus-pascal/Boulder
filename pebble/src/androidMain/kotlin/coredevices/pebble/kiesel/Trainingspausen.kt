@@ -5,8 +5,7 @@ import android.util.Log
 import java.io.File
 
 /**
- * Die Pausen eines Trainings, wie das Telefon sie aus den Zustandsmeldungen
- * der Uhr kennt (Pause = 2, Weiter = 3).
+ * Die Pausen eines Trainings (Pause = 2, Weiter = 3).
  *
  * DIE UHR ZAEHLT IN AKTIVER ZEIT: Pulskurve, Saetze und Bahnen stehen bei
  * "Sekunde 1800 des Trainings", ohne die Pausen. Die Akte braucht aber die
@@ -15,13 +14,15 @@ import java.io.File
  * Entstoeren als Aussetzer hinaus. Hier steht, wann angehalten wurde, und
  * [wand] rechnet die aktive Sekunde in die Uhrzeit um.
  *
- * DIE UHR SCHICKT KEINE ZEIT MIT: die Meldung kommt beim Druck auf die Taste,
- * also zaehlt die Ankunft. Verliert die Uhr eine Meldung (sie gibt nach sechs
- * Anlaeufen auf, eine neue ersetzt die offene), verwirft [stimmig] die Pausen,
- * statt mit falschen zu rechnen - wenn es auffaellt: an der Folge (zwei
- * Pausen ohne Weiter, ein Weiter ohne Pause) oder an der Summe gegen die
- * Dauer der Uhr. Fehlen Pause und Weiter derselben Pause beide und dazu die
- * letzte Pause, faellt es nicht auf; das kann erst die Uhr beheben.
+ * ZWEI QUELLEN. Die Boulder-Firmware schickt die Pausen mit der
+ * Zusammenfassung ([ausUhr]): sekundengenau und vollstaendig - die gelten.
+ * Aeltere Firmware schickt nur die Zustandsmeldungen; dann zaehlt deren
+ * Zeit (die der Uhr, sonst die Ankunft). Verlor die Uhr eine Meldung (sie
+ * gab nach sechs Anlaeufen auf, eine neue ersetzte die offene), verwirft
+ * [stimmig] die Pausen, statt mit falschen zu rechnen - wenn es auffaellt: an
+ * der Folge (zwei Pausen ohne Weiter, ein Weiter ohne Pause) oder an der
+ * Summe gegen die Dauer der Uhr. Fehlen Pause und Weiter derselben Pause
+ * beide und dazu die letzte Pause, faellt es nicht auf.
  */
 internal object Trainingspausen {
     private const val TAG = "Kieselsport"
@@ -110,6 +111,22 @@ internal object Trainingspausen {
         return plan
     }
 
+    /**
+     * Den Plan der Uhr ablegen ([ausUhr]) - die Kurve, die nach der
+     * Zusammenfassung kommt, rechnet mit ihm statt mit den Ankunftszeiten.
+     */
+    @Synchronized
+    fun uebernimm(context: Context, beginn: Long, plan: Plan) {
+        try {
+            val f = gepr(context, beginn)
+            // Wie beim ersten Eintrag eines Trainings: die alten wegraeumen.
+            if (!f.exists()) aufraeumen(context, beginn)
+            f.writeText(alsZeilen(plan))
+        } catch (e: Exception) {
+            Log.w(TAG, "Pausen ablegen: " + e.message)
+        }
+    }
+
     /** Der gepruefte Plan, oder null, solange die Zusammenfassung fehlt. */
     @Synchronized
     fun geprueft(context: Context, beginn: Long): Plan? = try {
@@ -131,6 +148,46 @@ internal object Trainingspausen {
     }
 
     // --- Rechnung ---------------------------------------------------------------
+
+    /** Die Fassung der Pausenliste, die die Uhr schickt (KS_PAUSEN_FASSUNG). */
+    const val UHR_FASSUNG = 1
+
+    /**
+     * Die Pausenliste der Uhr (SP_PAUSEN) als Plan in Uhrzeit, oder null,
+     * wenn sie fehlt oder nicht taugt - dann gelten die Zustandsmeldungen.
+     *
+     * AUFBAU: Fassung, Zahl aller Pausen, dann je Pause die aktive Sekunde,
+     * bei der sie begann, und ihre Dauer - beide uint16 little-endian. Steht
+     * die Zahl hoeher, als die Liste lang ist, fehlen Pausen: dann null.
+     *
+     * [ende] (SP_ENDE) ist der Beginn der letzten Pause, aus der gespeichert
+     * wurde - die offene. Passt es nicht zu Beginn + Dauer + Pausen (die Uhr
+     * wurde mitten im Training gestellt), gilt die Rechnung.
+     */
+    fun ausUhr(bytes: ByteArray?, anfang: Long, dauer: Long, ende: Long?): Plan? {
+        if (bytes == null || bytes.size < 2 || bytes[0].toInt() != UHR_FASSUNG || (bytes.size - 2) % 4 != 0) return null
+        val anzahl = (bytes.size - 2) / 4
+        if ((bytes[1].toInt() and 0xFF) != anzahl) return null
+        fun u16(i: Int): Long = ((bytes[i].toInt() and 0xFF) or ((bytes[i + 1].toInt() and 0xFF) shl 8)).toLong()
+        val pausen = mutableListOf<Pause>()
+        var verschoben = 0L
+        var vorher = 0L
+        for (k in 0 until anzahl) {
+            val aktiv = u16(2 + 4 * k)
+            val laenge = u16(4 + 4 * k)
+            // Rueckwaerts oder hinter dem Ende: das ist keine Liste dieses Trainings.
+            if (aktiv < vorher || aktiv > dauer) return null
+            vorher = aktiv
+            if (laenge == 0L) continue
+            val von = anfang + aktiv + verschoben
+            pausen += Pause(von, von + laenge)
+            verschoben += laenge
+        }
+        val gerechnet = anfang + dauer + verschoben
+        // Die Sekunden der Uhr sind Takte - ueber Stunden duerfen sie ein wenig abweichen.
+        val offen = ende?.takeIf { kotlin.math.abs(it - gerechnet) <= TOLERANZ_S + dauer / 100 } ?: gerechnet
+        return Plan(pausen, offen)
+    }
 
     /** Die Zeilen der Datei: "p,<zeit>" oder "w,<zeit>"; Kaputtes faellt weg. */
     fun meldungenAus(zeilen: List<String>): List<Pair<Boolean, Long>> = zeilen.mapNotNull { z ->

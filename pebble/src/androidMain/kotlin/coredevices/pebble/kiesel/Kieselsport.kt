@@ -50,6 +50,8 @@ internal object Kieselsport {
     const val SP_BEGINN = 10001
     const val SP_DAUER = 10002
     const val SP_METER = 10004
+    // Die Kalorien der Uhr zaehlen nur, bis die aus dem Puls da sind
+    // (Trainingswerte) - die Uhr rechnet sie aus Schritten, auf dem Rad fast null.
     const val SP_KCAL = 10005
     // Mittel- und Hoechstpuls liest Boulder bewusst nicht: roh von der Uhr,
     // nicht entstoert - der Puls kommt aus der Pulskurve. Die Schluessel
@@ -71,6 +73,16 @@ internal object Kieselsport {
     const val SP_KURVE_AB = 10020
     const val SP_KURVE_ANZAHL = 10021
     const val SP_KURVE = 10022
+    // Neu in der Boulder-Firmware, hinter den Schluesseln der Store-App (bis
+    // 10036). Fehlen sie, rechnet Boulder wie frueher.
+    /** Wann eine Zustandsmeldung geschah, UTC - nicht wann sie ankam. */
+    const val SP_ZEIT = 10037
+    /** Die Pausen in der Zusammenfassung (Trainingspausen.ausUhr). */
+    const val SP_PAUSEN = 10038
+    /** Wann die aktive Zeit endete, UTC: der Beginn der letzten Pause. */
+    const val SP_ENDE = 10039
+    /** Ob der Maximalpuls eingestellt ist (1) oder die Uhr nach Alter rechnet (0). */
+    const val SP_MAXPULS_GESETZT = 10040
 
     private const val KURVE_TAKT_S = 10
 
@@ -275,7 +287,7 @@ internal object Kieselsport {
      * Reihenfolge: Kurvenstueck, Einstellungen, Zustand (ohne Dauer), sonst
      * die Zusammenfassung.
      */
-    suspend fun verarbeite(context: Context, n: KieselNachricht): String? {
+    suspend fun verarbeite(context: Context, n: KieselNachricht, empfangen: Long = Instant.now().epochSecond): String? {
         val felder = n.zahlen
 
         n.bytes[SP_KURVE]?.let { werte ->
@@ -308,41 +320,58 @@ internal object Kieselsport {
             // NUR WO ES EINE STRECKE GIBT, laeuft das GPS: Laufen, Bike,
             // Wandern, MTB. In der Halle zeichnete es nur Rauschen auf.
             val mitStrecke = artNummer in setOf(0L, 1L, 2L, 4L)
-            // Pause und Weiter mit der Zeit ihrer Ankunft: die Uhr zaehlt aktive
-            // Sekunden, die Akte braucht die Uhrzeit (Trainingspausen).
-            val jetzt = Instant.now().epochSecond
+            // Pause und Weiter mit ihrer Uhrzeit: die Uhr zaehlt aktive Sekunden,
+            // die Akte braucht die Uhrzeit (Trainingspausen).
+            val zeit = zeitDerMeldung(felder[SP_ZEIT], beginn, empfangen)
             return when (zustand) {
                 1L -> {
                     if (mitStrecke) SpurDienst.starte(context, beginn, name)
                     context.getString(R.string.ks_a_begonnen, name)
                 }
                 2L -> {
-                    Trainingspausen.merke(context, beginn, pause = true, zeit = jetzt)
-                    SpurDienst.stoppe(context)
+                    Trainingspausen.merke(context, beginn, pause = true, zeit = zeit)
+                    SpurDienst.stoppe(context, beginn)
                     context.getString(R.string.ks_a_pausiert, name)
                 }
                 3L -> {
-                    Trainingspausen.merke(context, beginn, pause = false, zeit = jetzt)
+                    Trainingspausen.merke(context, beginn, pause = false, zeit = zeit)
                     if (mitStrecke) SpurDienst.starte(context, beginn, name)
                     context.getString(R.string.ks_a_fortgesetzt, name)
                 }
                 // Ohne Dauer heisst Stopp: verworfen - seine Pausen braucht niemand.
-                0L -> { SpurDienst.stoppe(context); Trainingspausen.vergiss(context, beginn); null }
+                0L -> { SpurDienst.stoppe(context, beginn); Trainingspausen.vergiss(context, beginn); null }
                 else -> null
             }
         }
 
-        SpurDienst.stoppe(context)
-        return trageEin(context, felder, n.texte, dauer)
+        // NUR DIE SPUR DIESES TRAININGS: kommt die Zusammenfassung eines
+        // frueheren erst, wenn das naechste schon laeuft, liefe dessen GPS weiter.
+        felder[SP_BEGINN]?.let { SpurDienst.stoppe(context, it) }
+        return trageEin(context, n, dauer, empfangen)
     }
 
-    private suspend fun trageEin(context: Context, felder: Map<Int, Long>, texte: Map<Int, String>, dauer: Long): String? {
+    /**
+     * Die Uhrzeit einer Zustandsmeldung: die der Uhr, wenn sie mitkam und
+     * passt, sonst der Empfang - nicht erst das Abarbeiten der Warteschlange,
+     * das hinter einem langen Eintrag Sekunden spaeter kommt. Eine Zeit vor
+     * dem Beginn oder nach dem Empfang ist eine falsch gestellte Uhr.
+     */
+    fun zeitDerMeldung(vonDerUhr: Long?, beginn: Long, empfangen: Long): Long =
+        vonDerUhr?.takeIf { it >= beginn && it <= empfangen + Trainingspausen.TOLERANZ_S } ?: empfangen
+
+    private suspend fun trageEin(context: Context, n: KieselNachricht, dauer: Long, empfangen: Long): String? {
+        val felder = n.zahlen
+        val texte = n.texte
         val beginn = felder[SP_BEGINN] ?: return null
         if (beginn <= 0 || dauer < 60) return null
-        val jetzt = Instant.now()
-        // VOR DEM RIEGEL: auch eine wiederholte Zusammenfassung prueft die
-        // Pausen - die Kurve, die nach ihr kommt, rechnet mit dem Ergebnis.
-        val plan = Trainingspausen.pruefe(context, beginn, dauer, jetzt.epochSecond)
+        val jetzt = Instant.ofEpochSecond(empfangen)
+        // VOR DEM RIEGEL: auch eine wiederholte Zusammenfassung legt die Pausen
+        // ab - die Kurve, die nach ihr kommt, rechnet mit dem Ergebnis. DIE
+        // PAUSEN DER UHR GEHEN VOR: sie sind sekundengenau und vollstaendig;
+        // nur eine aeltere Firmware schickt keine, dann die Ankunftszeiten.
+        val plan = Trainingspausen.ausUhr(n.bytes[SP_PAUSEN], beginn, dauer, felder[SP_ENDE])
+            ?.also { Trainingspausen.uebernimm(context, beginn, it) }
+            ?: Trainingspausen.pruefe(context, beginn, dauer, jetzt.epochSecond)
         if (!Riegel.neu(context, "kieselsport", beginn.toString())) return null
 
         if (Akte(context).bereit() == null) {

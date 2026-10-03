@@ -51,6 +51,9 @@ internal object Kieselsport {
     const val SP_DAUER = 10002
     const val SP_METER = 10004
     const val SP_KCAL = 10005
+    // Mittel- und Hoechstpuls liest Boulder bewusst nicht: roh von der Uhr,
+    // nicht entstoert - der Puls kommt aus der Pulskurve. Die Schluessel
+    // bleiben, weil die Uhr sie weiter schickt (telefon.c).
     const val SP_PULS_MITTEL = 10006
     const val SP_PULS_MAX = 10007
     const val SP_MAXPULS = 10008

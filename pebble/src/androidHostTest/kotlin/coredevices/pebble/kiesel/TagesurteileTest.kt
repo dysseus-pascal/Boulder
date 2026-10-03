@@ -228,6 +228,35 @@ class TagesurteileTest {
         assertEquals(listOf(3, 33, 32, 32, 0), g.phasenAnteile(intArrayOf(10, 100, 100, 100, 0)))
         assertEquals(listOf(100, 0, 0, 0, 0), g.phasenAnteile(intArrayOf(10, 0, 0, 0, 0)))
         assertEquals(listOf(0, 0, 0, 0, 0), g.phasenAnteile(IntArray(5)))
+        // Schlaf ohne Phase zaehlt zur Zeit im Bett, hat aber keine Zeile: die vier Zeilen ergeben 98, alle fuenf 100.
+        assertEquals(listOf(3, 32, 32, 31, 2), g.phasenAnteile(intArrayOf(10, 100, 100, 100, 7)))
+    }
+
+    @Test
+    fun erholsam_ist_tief_und_rem_an_der_zeit_im_bett() {
+        // Wach und Schlaf ohne Phase zaehlen zum Nenner wie in der Phasenkarte: 90 von 200 Minuten.
+        assertEquals(0.45, g.erholsamAnteil(intArrayOf(10, 100, 50, 40, 0))!!, 1e-9)
+        assertEquals(0.45, g.erholsamAnteil(intArrayOf(0, 100, 50, 40, 10))!!, 1e-9)
+        // Ohne erkannte Phase kein Anteil - auch nicht null.
+        assertNull(g.erholsamAnteil(intArrayOf(30, 0, 0, 0, 400)))
+        assertNull(g.erholsamAnteil(IntArray(5)))
+    }
+
+    @Test
+    fun mit_phasen_heisst_leicht_tief_oder_rem() {
+        assertFalse(g.mitPhasen(intArrayOf(30, 0, 0, 0, 400)))
+        assertTrue(g.mitPhasen(intArrayOf(0, 1, 0, 0, 0)))
+        assertTrue(g.mitPhasen(intArrayOf(0, 0, 1, 0, 0)))
+        assertTrue(g.mitPhasen(intArrayOf(0, 0, 0, 1, 0)))
+    }
+
+    @Test
+    fun tagespuls_ab_drei_schlaegen_daneben() {
+        assertEquals(Vergleich.HOEHER, g.tagespulsUrteil(3))
+        assertEquals(Vergleich.WIE_IMMER, g.tagespulsUrteil(2))
+        assertEquals(Vergleich.WIE_IMMER, g.tagespulsUrteil(0))
+        assertEquals(Vergleich.WIE_IMMER, g.tagespulsUrteil(-2))
+        assertEquals(Vergleich.TIEFER, g.tagespulsUrteil(-3))
     }
 
     @Test

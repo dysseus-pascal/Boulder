@@ -103,7 +103,7 @@ class GesundheitWidget : AppWidgetProvider() {
                 schlafMin = n?.schlafMinuten?.toDouble(),
                 schlafZielMin = Gesundheitsziele.SCHLAF_MIN.toDouble(),
                 schlafWocheMin = Statistik.mittel(woche),
-                erholsamAnteil = n?.takeIf { it.mitPhasen }?.let { (it.phasen[2] + it.phasen[3]).toDouble() / it.phasen.sum().coerceAtLeast(1) },
+                erholsamAnteil = n?.let { Gesundheitsrechnung.erholsamAnteil(it.phasen) },
                 ruhepuls = n?.ruhepuls?.toDouble(),
                 hrv = n?.hrv?.toDouble(),
                 trainingEnde = training?.sitzung?.endTime?.atZone(zone)?.toLocalDateTime(),

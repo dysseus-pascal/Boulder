@@ -130,7 +130,15 @@ class WidgetlageTest {
         assertEquals("ks_h_wasser_n", hinterher.name)
         assertEquals("ks_wl_glaeser_hinterher(2)", hinterher.satz)
         assertEquals(Widgetlage.Art.TAG, art(blick(um(12), wasserMl = 301.0, wasserZiel = 2000.0)))
-        // Nach 21 Uhr mahnt das Widget nicht mehr - der Abend zieht Bilanz.
+    }
+
+    @Test
+    fun wasser_mahnt_nur_von_neun_bis_einundzwanzig_uhr() {
+        // Zehn Liter, damit die Kurve schon vor neun drei Glaeser verlangt - mit 2 l schwiege das Widget dort auch ohne Grenze.
+        assertEquals(Widgetlage.Art.TAG, art(blick(um(8, 59), wasserMl = 0.0, wasserZiel = 10_000.0)))
+        assertEquals(Widgetlage.Art.ERINNERUNG, art(blick(um(9), wasserMl = 0.0, wasserZiel = 10_000.0)))
+        // Abends steht ohnehin der Abend an (ab 20 Uhr) - die Mahnung geht ihm bis 21:59 vor, ab 22 Uhr nicht mehr.
+        assertEquals(Widgetlage.Art.ERINNERUNG, art(blick(um(21, 59), wasserMl = 0.0, wasserZiel = 2000.0)))
         assertEquals(Widgetlage.Art.ABEND, art(blick(um(22), wasserMl = 0.0, wasserZiel = 2000.0)))
     }
 

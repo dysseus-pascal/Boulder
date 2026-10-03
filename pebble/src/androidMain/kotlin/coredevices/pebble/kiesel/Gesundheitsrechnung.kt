@@ -132,6 +132,13 @@ internal object Gesundheitsrechnung {
         return aus
     }
 
+    /**
+     * Ob die Uhr in dieser Nacht Phasen erkannt hat - leicht, tief oder REM,
+     * je Index wie [phasenMinuten]. Wach allein oder Schlaf ohne Phase ist
+     * keine: dann gibt es weder Phasenkarte noch Tiefschlaf im Trend.
+     */
+    fun mitPhasen(phasen: IntArray): Boolean = phasen[1] + phasen[2] + phasen[3] > 0
+
     fun nacht(e: NachtEntity, abschnitte: List<NachtAbschnittEntity>): Nacht {
         val beginn = Instant.ofEpochSecond(e.beginnUtc)
         fun zeit(min: Int) = beginn.plusSeconds(min * 60L)

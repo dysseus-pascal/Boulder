@@ -243,7 +243,8 @@ private fun Phasenkarte(phasen: IntArray) {
     // In der Reihenfolge der Bahnen des Hypnogramms darunter, wach oben - Zeilen und Bahnen liest man gleich herum.
     val reihe = PHASEN_VON_OBEN
     val namen = reihe.map { (_, name) -> stringResource(name) }
-    // Die getestete Rechnung: einzeln gerundet ergaben drei gleich lange Phasen 99 %.
+    // Die getestete Rechnung: alle fuenf Anteile ergeben 100, einzeln gerundet hatten drei gleich lange Phasen
+    // 99 %. Schlaf ohne Phase zaehlt zur Zeit im Bett, hat aber keine Zeile - mit ihm bleiben die Zeilen unter 100.
     val prozent = Gesundheitsrechnung.phasenAnteile(phasen)
     val anteile = reihe.map { (p, _) -> Formate.prozent(prozent[p]) }
     Kasten {

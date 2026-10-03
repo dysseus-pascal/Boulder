@@ -176,7 +176,7 @@ internal object Trenddaten {
             val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
             if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
             val phasen = Gesundheitsrechnung.phasenMinuten(jeNacht[e.beginnUtc].orEmpty())
-            if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()
+            if (Gesundheitsrechnung.mitPhasen(phasen)) tief += tag to phasen[2].toDouble()
             if (e.aufwachen > e.einschlafen) {
                 // Das Einschlafen in Minuten ab 18 Uhr des Vortags, wie die Mitte - fuer "spaet ins Bett".
                 ein += tag to (Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L).epochSecond -

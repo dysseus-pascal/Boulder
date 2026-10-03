@@ -9,6 +9,7 @@ import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.hrvUrteil
+import coredevices.pebble.kiesel.tagespulsUrteil
 import java.time.LocalDate
 
 /*
@@ -30,11 +31,12 @@ internal fun tagespuls(s: GesundheitsStand): Tagespuls? {
     val urteil = Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now()) ?: return null
     val wach = urteil.heute.wachpuls ?: return null
     // Der Tagesschnitt statt des letzten Werts: der sagt, wie der Tag war
-    val vergleich = when {
-        urteil.abstand == null -> stringResource(R.string.ks_d_tagespuls)
-        urteil.abstand >= 3 -> stringResource(R.string.ks_d_tagespuls_hoch, urteil.abstand)
-        urteil.abstand <= -3 -> stringResource(R.string.ks_d_tagespuls_tief, -urteil.abstand)
-        else -> stringResource(R.string.ks_d_tagespuls_gleich)
+    // Ohne Lerntage kein Abstand, dann nur der Schnitt; die Schwelle steht getestet in tagespulsUrteil.
+    val abstand = urteil.abstand
+    val vergleich = if (abstand == null) stringResource(R.string.ks_d_tagespuls) else when (Gesundheitsrechnung.tagespulsUrteil(abstand)) {
+        Vergleich.HOEHER -> stringResource(R.string.ks_d_tagespuls_hoch, abstand)
+        Vergleich.TIEFER -> stringResource(R.string.ks_d_tagespuls_tief, -abstand)
+        Vergleich.WIE_IMMER -> stringResource(R.string.ks_d_tagespuls_gleich)
     }
     val last = urteil.heute.belastung.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
     return Tagespuls(wach, listOfNotNull(vergleich, last))

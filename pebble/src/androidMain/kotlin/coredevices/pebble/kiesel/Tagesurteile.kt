@@ -59,6 +59,8 @@ internal data class Praeparatzeile(val genommen: Int, val faellig: Int, val lage
 
 /** So viele Schlaege neben dem Schnitt heisst der Ruhepuls noch "as usual". */
 internal const val RUHEPULS_SPANNE = 2
+/** So viele Schlaege neben dem Schnitt der frueheren Tage heisst der wache Tagespuls hoeher oder tiefer. */
+internal const val TAGESPULS_AB = 3
 /** Ein Puls, der juenger ist, heisst "jetzt". */
 internal const val PULS_FRISCH_S = 15 * 60L
 /**
@@ -222,8 +224,13 @@ internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, j
 
 /**
  * Der Anteil jeder Phase an der Zeit im Bett in ganzen Prozent, je Index
- * wie [Nacht.phasen]. Zusammen 100: die groessten Reste bekommen den Rest -
- * einzeln gerundet stuenden bei drei gleich langen Phasen 33 + 33 + 33 da.
+ * wie [Nacht.phasen]. Alle fuenf zusammen 100: die groessten Reste bekommen
+ * den Rest - einzeln gerundet stuenden bei drei gleich langen Phasen
+ * 33 + 33 + 33 da.
+ *
+ * SCHLAF OHNE PHASE (Index 4) zaehlt mit, denn er ist Zeit im Bett, und die
+ * steht ueber der Phasenkarte. Eine Zeile hat er dort nicht: liegt in einer
+ * Nacht mit Phasen ein Stueck ohne, ergeben die vier Zeilen weniger als 100.
  */
 internal fun Gesundheitsrechnung.phasenAnteile(phasen: IntArray): List<Int> {
     val summe = phasen.sum()
@@ -232,4 +239,27 @@ internal fun Gesundheitsrechnung.phasenAnteile(phasen: IntArray): List<Int> {
     val ganz = roh.map { floor(it).toInt() }.toMutableList()
     roh.withIndex().sortedByDescending { it.value - floor(it.value) }.take(100 - ganz.sum()).forEach { ganz[it.index]++ }
     return ganz
+}
+
+/**
+ * Tief und REM zusammen als Anteil der Zeit im Bett, 0..1 - das "restful"
+ * des Widgets. Null ohne Phasen: eine Nacht nur aus Schlaf ohne Phase hat
+ * keinen erholsamen Anteil, nicht einen von null.
+ */
+internal fun Gesundheitsrechnung.erholsamAnteil(phasen: IntArray): Double? {
+    if (!mitPhasen(phasen)) return null
+    // Index wie Nacht.phasen: 2 tief, 3 REM. Der Nenner wie in phasenAnteile, die Karte zeigt dieselbe Zeit im Bett.
+    return (phasen[2] + phasen[3]).toDouble() / phasen.sum().coerceAtLeast(1)
+}
+
+/**
+ * Der wache Tagespuls gegen den Schnitt der frueheren Tage
+ * ([Gesundheitsrechnung.Tagesurteil.abstand], in bpm). Erst ab drei
+ * Schlaegen daneben heisst er hoeher oder tiefer - eine Rechnung fuer die
+ * Herzzeile und den Kopf der Herzseite.
+ */
+internal fun Gesundheitsrechnung.tagespulsUrteil(abstand: Int): Vergleich = when {
+    abstand >= TAGESPULS_AB -> Vergleich.HOEHER
+    abstand <= -TAGESPULS_AB -> Vergleich.TIEFER
+    else -> Vergleich.WIE_IMMER
 }

@@ -32,7 +32,7 @@ internal data class Nacht(
     val hrv: Int?,
 ) {
     data class Abschnitt(val von: Instant, val bis: Instant, val phase: Int)
-    val mitPhasen: Boolean get() = phasen[1] + phasen[2] + phasen[3] > 0
+    val mitPhasen: Boolean get() = Gesundheitsrechnung.mitPhasen(phasen)
     /**
      * Die Nacht, wie die Nachtansicht sie zeigt: alle Abschnitte, ohne sie
      * Einschlafen bis Aufwachen. Auch die Herzseite nimmt ihr SpO2 daraus -

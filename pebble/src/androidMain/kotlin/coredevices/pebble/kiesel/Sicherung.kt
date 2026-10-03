@@ -201,7 +201,7 @@ internal object Sichern {
 
     suspend fun jetzt(context: Context, api: HealthDataApi): String = withContext(Dispatchers.IO) {
         val o = ordner(context)?.takeIf { it.erreichbar } ?: return@withContext context.getString(R.string.ks_b_kein_ordner)
-        val stand = Trenddaten.lies(context, api)
+        val stand = Trenddaten.lies(context, api, merken = false)
         fun jeTag(r: Reihen) = r.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
             .groupBy { it.first }.map { (tag, l) -> tag to l.associate { it.second to it.third } }
         val tage = jeTag(stand.eigen)
@@ -269,15 +269,58 @@ internal object Sichern {
         context.getString(R.string.ks_b_zurueck, tage.size, spuren)
     }
 
+    /**
+     * Wie oft ein fehlgeschlagener Tageslauf wiederholt wird (WorkManager-Backoff 30 s, 1, 2 min),
+     * bevor er bis zum naechsten Tag wartet. Ohne Grenze weckte ein dauerhafter Fehler bis zum
+     * naechsten Lauf ~5-10 Mal am Tag.
+     */
+    internal const val VERSUCHE = 3
+
+    /** Wiederholen, solange [VERSUCHE] nicht erreicht ist; danach versucht es erst der naechste Tageslauf. */
+    internal fun nochmal(bisher: Int): Boolean = bisher < VERSUCHE
+
+    /** Was der Tageslauf WorkManager meldet; [OHNE_ORDNER] ist ein Erfolg mit Zeile im Protokoll. */
+    internal enum class Ausgang { FERTIG, OHNE_ORDNER, NOCHMAL, AUFGEBEN }
+
+    /** Nach einem Schreibfehler oder einer Ausnahme im Versuch [versuch] (runAttemptCount, ab 0). */
+    internal fun nachFehler(versuch: Int): Ausgang = if (nochmal(versuch)) Ausgang.NOCHMAL else Ausgang.AUFGEBEN
+
+    /**
+     * Der Ausgang aus der [meldung] von [jetzt] - null, wenn kein Ordner gewaehlt ist.
+     * Ordner geloescht oder Freigabe entzogen ([keinOrdner]): ein Wiederholen aendert daran
+     * nichts, der naechste Tageslauf versucht es wieder. Ein Schreibfehler ([fehlgeschlagen])
+     * kann voruebergehend sein: noch einmal, aber nicht endlos.
+     */
+    internal fun ausgang(meldung: String?, keinOrdner: String, fehlgeschlagen: String, versuch: Int): Ausgang = when (meldung) {
+        keinOrdner -> Ausgang.OHNE_ORDNER
+        fehlgeschlagen -> nachFehler(versuch)
+        else -> Ausgang.FERTIG
+    }
+
+    /** Nie zweimal hintereinander: ein Ordner, der wochenlang fehlt, fuellte sonst die 100 Zeilen des Protokolls. */
+    internal fun neueZeile(letzte: String?, zeile: String): Boolean = letzte != zeile
+
     class Arbeit(context: Context, gaben: WorkerParameters) : CoroutineWorker(context, gaben) {
-        override suspend fun doWork(): Result = try {
-            val meldung = if (ordner(applicationContext) != null) jetzt(applicationContext, KoinPlatform.getKoin().get()) else null
-            // Ein Fehlschlag (Ordner weg, Schreiben verweigert) ist keiner Erfolg: spaeter noch einmal.
-            val fehl = setOf(R.string.ks_b_kein_ordner, R.string.ks_b_fehlgeschlagen).map { applicationContext.getString(it) }
-            if (meldung in fehl) Result.retry() else Result.success()
-        } catch (e: Exception) {
-            Log.w("Sicherung", "Taeglich: " + e.message)
-            Result.retry()
+        override suspend fun doWork(): Result {
+            val c = applicationContext
+            val kein = c.getString(R.string.ks_b_kein_ordner)
+            val aus = try {
+                val meldung = if (ordner(c) != null) jetzt(c, KoinPlatform.getKoin().get()) else null
+                ausgang(meldung, kein, c.getString(R.string.ks_b_fehlgeschlagen), runAttemptCount)
+            } catch (e: Exception) {
+                Log.w("Sicherung", "Taeglich: " + e.message)
+                nachFehler(runAttemptCount)
+            }
+            return when (aus) {
+                Ausgang.OHNE_ORDNER -> {
+                    val zeile = c.getString(R.string.ks_b_titel) + ": " + kein
+                    if (neueZeile(KieselVerlauf.alle(c).firstOrNull()?.second, zeile)) KieselVerlauf.merke(c, zeile)
+                    Result.success()
+                }
+                Ausgang.NOCHMAL -> Result.retry()
+                Ausgang.AUFGEBEN -> Result.failure()
+                Ausgang.FERTIG -> Result.success()
+            }
         }
     }
 }

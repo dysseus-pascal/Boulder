@@ -28,3 +28,11 @@
 # ihrem Klassennamen aus dem OsmAnd-Prozess; R8 darf sie weder umbenennen noch
 # kuerzen, sonst findet der Parcel-Leser die Klasse nicht.
 -keep class net.osmand.aidlapi.** { *; }
+
+# Boulder: kotlin-reflect fehlt im Release (build.gradle.kts, ~0,45 MB). Nur ktor-server
+# verweist darauf - beim Laden von Modulen nach Namen und im Auto-Reload, die die
+# LAN-Entwicklerverbindung nie durchlaeuft (DevConnectionOhneReflectTest). Die drei
+# Klassen einzeln, damit jeder andere fehlende Verweis den Release-Bau weiter stoppt.
+-dontwarn kotlin.reflect.full.KCallables
+-dontwarn kotlin.reflect.full.KClasses
+-dontwarn kotlin.reflect.jvm.ReflectJvmMapping

@@ -54,12 +54,15 @@ internal fun SicherungAnsicht() {
     Seite {
         // stand zwingt nach jeder Aenderung zum Neulesen der gemerkten Werte.
         val ordner = remember(stand) { Sichern.ordner(context) }
+        // Der Name ist eine Abfrage beim Dokumentanbieter (IPC, 2-20 ms im Hauptfaden): einmal je
+        // Stand statt bei jeder Rekomposition, die laeuft und meldung beim Sichern ausloesen.
+        val ordnerName = remember(stand) { ordner?.name }
         val zuletzt = remember(stand) { Sichern.zuletzt(context) }
         val taeglich = remember(stand) { Sichern.taeglich(context) }
         Kasten {
             Kopf(stringResource(R.string.ks_b_ordner))
             Knopfzeile(
-                titel = ordner?.name ?: stringResource(R.string.ks_b_keiner),
+                titel = ordnerName ?: stringResource(R.string.ks_b_keiner),
                 knopf = stringResource(R.string.ks_b_waehlen),
                 onClick = { waehle.launch(Sichern.ordnerUri(context)) },
             )

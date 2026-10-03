@@ -12,6 +12,9 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Drinktervall
@@ -23,6 +26,7 @@ import coredevices.pebble.kiesel.Spalte
 import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.get
 import coredevices.pebble.kiesel.Trenddaten
+import coredevices.pebble.kiesel.Trendladen
 import coredevices.pebble.kiesel.UhrApps
 import coredevices.pebble.kiesel.Vergleichsfragen
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -51,7 +55,18 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     // Neu auch nach jedem Schub der Uhr: eine Nacht, die gerade ankommt, gehoert gleich in die Reihen.
-    val stand = rememberStand(Trenddaten.zuletzt, rememberUhrschub()) { Trenddaten.lies(context, api) }
+    // Ein Schub liest nur die Uhr neu, die Akte (2-3 Abfragen, 50-150 ms) bleibt; Aufbau und
+    // Rueckkehr lesen alles - etwa ein Glas aus Drinktervall, das nur ueber die Akte kommt.
+    // Die Zwischenstaende dafuer halten nur, solange die Seite sichtbar ist (0,5-1 MB).
+    LifecycleStartEffect(Unit) {
+        Trenddaten.seiteSichtbar()
+        onStopOrDispose { Trenddaten.seiteWeg() }
+    }
+    val laden = remember { Trendladen() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { laden.rueckkehr() }
+    val stand = rememberStand(Trenddaten.zuletzt, rememberUhrschub()) {
+        laden.lade { nurUhr -> Trenddaten.lies(context, api, nurUhr = nurUhr) }
+    }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
     var mitSupCycle by remember { mutableStateOf(true) }
     var mitDrinktervall by remember { mutableStateOf(true) }
@@ -86,7 +101,10 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
         Leerseite(stringResource(if (nacht) R.string.ks_trn_start_nacht else R.string.ks_trn_start_tag))
         return
     }
-    val bilder = getragen.associate { it.spalte to Auswertung.bild(d[it.spalte].orEmpty(), grenze, geladen.eigenAb[it.spalte]) }
+    // Gemerkt: jede Rekomposition (Titel, Uhr-Apps) rechnete sonst alle Bilder neu, je 5-20 ms.
+    val bilder = remember(geladen, gruppe, grenze) {
+        getragen.associate { it.spalte to Auswertung.bild(d[it.spalte].orEmpty(), grenze, geladen.eigenAb[it.spalte]) }
+    }
     val erster = getragen.mapNotNull { g -> d[g.spalte].orEmpty().firstOrNull { it.first < grenze }?.first }.min()
     val mitWoche = getragen.filter { bilder.getValue(it.spalte).profil.count { p -> p.mittel != null } >= 3 }
     val mitWochen = getragen.filter { bilder.getValue(it.spalte).wochen.size >= 3 }
@@ -309,9 +327,9 @@ private fun Schlafmitte(d: Reihen, grenze: LocalDate) {
 
 @Composable
 private fun Praeparattrend(d: Reihen, grenze: LocalDate, heute: LocalDate) {
-    val faellig = Auswertung.bild(d[Spalte.PRAEPARATE_FAELLIG].orEmpty(), grenze)
+    val faellig = remember(d, grenze) { Auswertung.bild(d[Spalte.PRAEPARATE_FAELLIG].orEmpty(), grenze) }
     if (faellig.profil.count { it.mittel != null } < 3) return
-    val genommen = Auswertung.bild(d[Spalte.PRAEPARATE_GENOMMEN].orEmpty(), grenze)
+    val genommen = remember(d, grenze) { Auswertung.bild(d[Spalte.PRAEPARATE_GENOMMEN].orEmpty(), grenze) }
     val genommenTag = genommen.profil.associate { it.tag to it.mittel }
     Abschnitt(stringResource(R.string.ks_h_praeparate), zusatz = fenster()) {
         Trendsaeulen(

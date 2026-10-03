@@ -197,8 +197,15 @@ internal object Trenddaten {
     /** Schreibt die Uhrreihen fest, ohne die Trends zu rechnen - fuer den taeglichen Lauf ([Tagesarchiv]). */
     suspend fun halteFest(context: Context, api: HealthDataApi) = withContext(Dispatchers.IO) {
         val heute = LocalDate.now()
-        Tagesspeicher.halte(context, festzuschreiben(ausDerUhr(api, heute, ZoneId.systemDefault()), heute))
+        Tagesspeicher.halte(context, festzuschreiben(ausDerUhr(api, heute, ZoneId.systemDefault()), heute), merken = false)
     }
+
+    /**
+     * Ab wann [ausDerUhr] die Bewegung je Tag liest: [mitArchiv] und [festzuschreiben] werfen
+     * die Minutenreihen vor heute-[SICHER_TAGE] ohnehin weg. Weil das Housekeeping nur 90 Tage
+     * stehen laesst, spart das nur die 2 Randtage (~2'900 date()-Rechnungen, ~2 %).
+     */
+    fun bewegungAb(heute: LocalDate): LocalDate = heute.minusDays(SICHER_TAGE)
 
     /**
      * Die Reihen aus der Datenbank der Uhr: die Bewegung bis zur Sync-Grenze
@@ -211,7 +218,7 @@ internal object Trenddaten {
 
         val letzte = versuche(TAG, "Letzte Daten") { api.getLatestTimestamp() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it).atZone(zone).toLocalDate() }
         val voll = uhrGrenze(heute, letzte)
-        val bewegung = versuche(TAG, "Bewegung je Tag") { api.getDailyAggregates(anfang(von), anfang(heute.plusDays(1))) }.orEmpty()
+        val bewegung = versuche(TAG, "Bewegung je Tag") { api.getDailyAggregates(anfang(bewegungAb(heute)), anfang(heute.plusDays(1))) }.orEmpty()
             .filter { LocalDate.parse(it.day) < voll }
         neu[Spalte.SCHRITTE] = bewegung.mapNotNull { a -> a.steps?.takeIf { it > 0 }?.let { LocalDate.parse(a.day) to it.toDouble() } }
         // Aktivminuten nur an Tagen mit Schritten: eine Uhr am Ladekabel meldet 0, und das ist kein ruhiger Tag.
@@ -236,13 +243,75 @@ internal object Trenddaten {
     var zuletzt: Trendstand? = null
         private set
 
-    suspend fun lies(context: Context, api: HealthDataApi): Trendstand = withContext(Dispatchers.IO) {
+    /**
+     * Wasser und Koffein aus der Akte - ein Uhrschub aendert sie nicht. [heil]: keine der
+     * Abfragen schlug fehl; nur dann taugt das Ergebnis fuer die naechsten Schuebe.
+     */
+    private class Akteteil(val wasser: List<Pair<LocalDate, Double>>, val koffein: List<Pair<LocalDate, Double>>, val heil: Boolean)
+
+    /** Die Akte je Tag, solange eine Trendseite sichtbar ist ([seiteSichtbar]). */
+    private val akteteile = Seitencache<LocalDate, Akteteil>()
+
+    /**
+     * Boulder: eine Trendseite wird sichtbar (ON_START) bzw. geht (ON_STOP oder Abbau). Nur
+     * dazwischen halten Akte und [Tagesspeicher] Zwischenstaende - danach lagen sonst 0,5-1 MB
+     * bis zum Prozessende im Speicher, und die Rueckkehr liest ohnehin alles neu.
+     */
+    fun seiteSichtbar() {
+        Tagesspeicher.gelesen.oeffne()
+        akteteile.oeffne()
+    }
+
+    fun seiteWeg() {
+        Tagesspeicher.gelesen.schliesse()
+        akteteile.schliesse()
+    }
+
+    /**
+     * Die Akte fuer [lies]: nach einem Uhrschub ([nurUhr]) die gemerkte desselben Tages, sonst
+     * neu gelesen. Gemerkt wird nur ein Lesen ohne Fehler ([heil]): ein leeres Ergebnis nach
+     * einem Rate-Limit hielte Wasser und Koffein sonst bis zur Rueckkehr leer, statt beim
+     * naechsten Schub (~15 min) wieder zu fragen.
+     */
+    internal suspend fun <T : Any> akteFuer(
+        cache: Seitencache<LocalDate, T>, heute: LocalDate, nurUhr: Boolean, merken: Boolean, heil: (T) -> Boolean, lies: suspend () -> T,
+    ): T {
+        if (nurUhr) cache[heute]?.let { return it }
+        return lies().also {
+            if (!merken) return@also
+            if (heil(it)) cache[heute] = it else cache.vergiss(heute)
+        }
+    }
+
+    /**
+     * [merken] haelt das Ergebnis fuer die Trends fest; die Sicherung liest ohne, sonst blieben
+     * nach jeder naechtlichen Sicherung alle Reihen im Speicher, auch wenn niemand die Trends
+     * oeffnet. [nurUhr] liest nach einem Uhrschub nur die Datenbank der Uhr neu: Wasser und
+     * Koffein kommen aus dem letzten Lesen desselben Tages (2-3 Abfragen an die Akte weniger).
+     */
+    suspend fun lies(context: Context, api: HealthDataApi, merken: Boolean = true, nurUhr: Boolean = false): Trendstand = withContext(Dispatchers.IO) {
         val zone = ZoneId.systemDefault()
         val heute = LocalDate.now()
-        val von = heute.minusDays(TAGE)
         val neu = ausDerUhr(api, heute, zone).toMutableMap()
+        val akte = akteFuer(akteteile, heute, nurUhr, merken, { it.heil }) { ausDerAkte(context, heute, zone) }
+        neu[Spalte.WASSER] = akte.wasser
+        neu[Spalte.KOFFEIN] = akte.koffein
 
+        val quoten = SupCycle.quoten(context)
+        neu[Spalte.PRAEPARATE_FAELLIG] = quoten.map { (t, q) -> t to q.first.toDouble() }.sortedBy { it.first }
+        neu[Spalte.PRAEPARATE_GENOMMEN] = quoten.map { (t, q) -> t to q.second.toDouble() }.sortedBy { it.first }
+
+        // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
+        Tagesspeicher.halte(context, festzuschreiben(neu, heute), merken)
+        val eigen = mitArchiv(neu, Tagesspeicher.eigene(context, merken), heute)
+        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context, merken))).also { if (merken) zuletzt = it }
+    }
+
+    private suspend fun ausDerAkte(context: Context, heute: LocalDate, zone: ZoneId): Akteteil {
+        val von = heute.minusDays(TAGE)
         val klient = Akte(context).bereit()
+        // Scheitert eine Abfrage (versuche gibt null), steht sie leer da - das darf kein Schub uebernehmen.
+        var heil = true
         suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>> = versuche(TAG, "Akte je Tag") {
             klient?.aggregateGroupByPeriod(
                 AggregateGroupByPeriodRequest(
@@ -251,27 +320,41 @@ internal object Trenddaten {
                     Period.ofDays(1),
                 )
             ).orEmpty().mapNotNull { g -> g.result[metrik]?.let { g.startTime.toLocalDate() to wert(it) } }.filter { it.second > 0 }
-        }.orEmpty()
+        } ?: emptyList<Pair<LocalDate, Double>>().also { heil = false }
         val wasser = jeTag(HydrationRecord.VOLUME_TOTAL) { (it as androidx.health.connect.client.units.Volume).inMilliliters }
-        neu[Spalte.WASSER] = wasser
         // Seit wann Boulder selbst Wasser eintraegt (Drinktervall): erst ab da ist ein Tag ohne Kaffee einer mit 0 mg.
+        // Als Liste, weil null hier zweierlei hiesse: eine leere Liste ist "kein Glas", null ein Fehler.
         val glasAb = versuche(TAG, "Erstes Glas") {
-            klient?.liesEinen(
-                context, HydrationRecord::class, TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
-                neuester = false, herkunft = Herkunft.EIGENE,
-            )?.startTime?.atZone(zone)?.toLocalDate()
-        }
-        neu[Spalte.KOFFEIN] = koffeinMitNull(
+            listOfNotNull(
+                klient?.liesEinen(
+                    context, HydrationRecord::class, TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
+                    neuester = false, herkunft = Herkunft.EIGENE,
+                )?.startTime?.atZone(zone)?.toLocalDate()
+            )
+        }.also { if (it == null) heil = false }?.firstOrNull()
+        val koffein = koffeinMitNull(
             jeTag(NutritionRecord.CAFFEINE_TOTAL) { (it as androidx.health.connect.client.units.Mass).inMilligrams }, wasser, glasAb, heute,
         )
+        return Akteteil(wasser, koffein, heil)
+    }
+}
 
-        val quoten = SupCycle.quoten(context)
-        neu[Spalte.PRAEPARATE_FAELLIG] = quoten.map { (t, q) -> t to q.first.toDouble() }.sortedBy { it.first }
-        neu[Spalte.PRAEPARATE_GENOMMEN] = quoten.map { (t, q) -> t to q.second.toDouble() }.sortedBy { it.first }
+/**
+ * Boulder: ob das naechste Laden der Trendseite alles liest oder nach einem Uhrschub nur die Uhr.
+ * Der Aufbau und jede Rueckkehr ([rueckkehr], ON_RESUME) lesen alles - etwa ein Glas aus
+ * Drinktervall, das nur ueber die Akte kommt. Erst ein fertiges volles Laden gibt die Schuebe
+ * frei: bricht ein Schub es ab (neuer Schluessel im LaunchedEffect), liest der naechste wieder alles.
+ */
+internal class Trendladen {
+    @Volatile
+    private var allesFaellig = true
 
-        // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
-        Tagesspeicher.halte(context, festzuschreiben(neu, heute))
-        val eigen = mitArchiv(neu, Tagesspeicher.eigene(context), heute)
-        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context))).also { zuletzt = it }
+    fun rueckkehr() {
+        allesFaellig = true
+    }
+
+    suspend fun <T> lade(lies: suspend (nurUhr: Boolean) -> T): T {
+        val alles = allesFaellig
+        return lies(!alles).also { if (alles) allesFaellig = false }
     }
 }

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Trendseiten in Boulder: die Bausteine, die schon ab dem ersten Tag tragen. -->
 <resources>
-    <string name="ks_trn_start_tag">Trends start with the first full day.</string>
-    <string name="ks_trn_start_nacht">Trends start with the first night.</string>
+    <!-- Leere Seite: nur der Stand, kein Satz, wann es losgeht. -->
+    <string name="ks_trn_start_tag">No full day yet</string>
+    <string name="ks_trn_start_nacht">No night yet</string>
     <string name="ks_trn_letzte14">LAST 14 DAYS · %1$s</string>
     <plurals name="ks_trn_schnitt_tage">
         <item quantity="one">Avg, 1 day</item>
@@ -13,11 +14,10 @@
     <string name="ks_trn_goal">goal %1$s</string>
     <string name="ks_trn_so_far">so far</string>
     <string name="ks_trn_tag_fuer_tag">DAY BY DAY</string>
-    <string name="ks_trn_tief_kurz">deep %1$s</string>
-    <string name="ks_trn_woche_ab">Typical week from %1$s</string>
-    <string name="ks_trn_wochen_ab">Weeks from %1$s</string>
-    <string name="ks_trn_links_ab">Links from about %1$s.</string>
-    <string name="ks_trn_links_spaeter">Links once %1$d days have both values.</string>
+    <!-- Unter NEEDS MORE DAYS: die Karte und ab wann sie traegt. -->
+    <string name="ks_trn_typische_woche_name">Typical week</string>
+    <string name="ks_trn_wochen_name">Weeks</string>
+    <string name="ks_trn_ab">from %1$s</string>
     <string name="ks_trn_typische_woche">TYPICAL WEEK · %1$s</string>
     <string name="ks_trn_verlauf">WEEKS · %1$s</string>
     <string name="ks_trn_zeitraum">last %1$d days</string>
@@ -26,11 +26,14 @@
     <string name="ks_trn_schnitt">Avg %1$s</string>
     <string name="ks_trn_extreme">Highest %1$s %2$s · lowest %3$s %4$s</string>
     <string name="ks_trn_wochenende">Weekends %1$s · weekdays %2$s</string>
-    <string name="ks_trn_richtung">4 weeks vs 4 before: %1$s %%</string>
+    <string name="ks_trn_richtung">4 weeks vs 4 before: %1$s</string>
     <string name="ks_trn_erreicht">%1$d/%2$d nights ≥ %3$s</string>
-    <string name="ks_trn_supp_schnitt">%1$d %% taken</string>
+    <string name="ks_trn_supp_schnitt">%1$s taken</string>
     <!-- What makes a difference: "very short" wie das Urteil auf Health (unter 7 h). -->
     <string name="ks_trv_hrv_kurz">HRV after very short nights</string>
     <string name="ks_trv_schritte_kurz">Steps after very short nights</string>
     <string name="ks_trv_koffein_kurz">Caffeine after very short nights</string>
+    <!-- Die Uhrzeit im Format des Telefons statt fest 23:00. -->
+    <string name="ks_trv_nach">Asleep after %1$s</string>
+    <string name="ks_trv_vor">Asleep before %1$s</string>
 </resources>

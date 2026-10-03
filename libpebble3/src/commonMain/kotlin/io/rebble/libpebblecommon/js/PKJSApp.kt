@@ -59,6 +59,8 @@ class PKJSApp(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     private val connectionScope: ConnectionCoroutineScope,
+    // Boulder: false neben einem Begleiter, der selbst bestaetigt (BestaetigtSelbst).
+    private val bestaetigt: Boolean = true,
 ): LibPebbleKoinComponent, CompanionApp {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
@@ -76,12 +78,14 @@ class PKJSApp(
     val sessionIsReady get() = jsRunner?.readyState?.value ?: false
 
     private suspend fun replyNACK(id: UByte) {
+        if (!bestaetigt) return
         withTimeoutOrNull(1000) {
             device.sendAppMessageResult(AppMessageResult.ACK(id))
         }
     }
 
     private suspend fun replyACK(id: UByte) {
+        if (!bestaetigt) return
         withTimeoutOrNull(1000) {
             device.sendAppMessageResult(AppMessageResult.ACK(id))
         }

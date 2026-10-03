@@ -52,4 +52,15 @@ class DrinktervallTest {
         // Beides gescheitert: alles bleibt.
         assertEquals(beides.zahlen, Drinktervall.rest(beides, true, true).zahlen)
     }
+
+    @Test
+    fun das_ziel_gilt_fuer_den_tag_den_die_uhr_nennt() {
+        // Um 23:59 gemeldet, nach Mitternacht angekommen: das Ziel gehoert zu gestern.
+        assertEquals(heute.minusDays(1), Drinktervall.zielTag(20261001L, heute))
+        // Eine aeltere Drinktervall-Fassung nennt keinen Tag: dann der Tag der Ankunft.
+        assertEquals(heute, Drinktervall.zielTag(null, heute))
+        // Unsinn (Uhr ohne Zeit) ebenso.
+        assertEquals(heute, Drinktervall.zielTag(20261399L, heute))
+        assertEquals(heute, Drinktervall.zielTag(0L, heute))
+    }
 }

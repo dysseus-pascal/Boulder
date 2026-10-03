@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.BuiltInCompanions
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.pkjsBestaetigt
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -249,6 +250,10 @@ class CompanionAppLifecycleManager(
             if (pbw.hasPKJS && !runPkjs) {
                 logger.w { "Not running PebbleKit JS for ${lockerEntry.id}: Network is denied, the primary deny layer is absent and the switch is off or does not apply" }
             }
+            // Boulder: ein eingebauter Begleiter neben PebbleKit JS nimmt den
+            // Platz des Wegs zu Android-Apps ein (siehe BuiltInCompanions.createBeside).
+            // Er entsteht ZUERST: ob PebbleKit JS bestaetigt, haengt an ihm (BestaetigtSelbst).
+            val daneben = builtInCompanions.createBeside(lockerEntry.id, device, pkjsRunning = runPkjs)
             val pkjsApp = if (runPkjs) {
                 val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id, lockerEntry.version)
                 PKJSApp(
@@ -257,12 +262,10 @@ class CompanionAppLifecycleManager(
                     pbw.info,
                     lockerEntry,
                     connectionScope,
+                    bestaetigt = pkjsBestaetigt(daneben),
                 )
             } else null
             pkjsApp?.let { add(it) }
-            // Boulder: ein eingebauter Begleiter neben PebbleKit JS nimmt den
-            // Platz des Wegs zu Android-Apps ein (siehe BuiltInCompanions.createBeside).
-            val daneben = builtInCompanions.createBeside(lockerEntry.id, device, pkjsRunning = pkjsApp != null)
             if (daneben != null) {
                 add(daneben)
             } else if (watchConfig.allowsPlatformCompanionSession(pbw.info, pkjsRunning = pkjsApp != null)) {

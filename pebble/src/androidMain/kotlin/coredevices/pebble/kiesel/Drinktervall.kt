@@ -39,6 +39,8 @@ internal object Drinktervall {
     const val DT_DRINK_NAME = 10033
     const val DT_DRINK_KCAL = 10034
     const val DT_DRINK_MG = 10035
+    // Nach Drinktervall 1.18.1: der Tag (JJJJMMTT), zu dem DT_GLASSES gehoert.
+    const val DT_ZIEL_TAG = 10056
 
     data class Ziel(val glaeser: Int, val glasMl: Int) {
         val ml: Int get() = glaeser * glasMl
@@ -52,6 +54,9 @@ internal object Drinktervall {
      */
     fun zielFuer(heute: LocalDate, tag: LocalDate?, glaeser: Int, soll: Int?, glasMl: Int): Ziel =
         Ziel(if (tag == heute || soll == null) glaeser else soll, glasMl)
+
+    /** Eine Meldung von 23:59 kommt womoeglich erst am naechsten Tag an - ohne Tag der Uhr bleibt nur die [ankunft]. */
+    fun zielTag(ymd: Long?, ankunft: LocalDate): LocalDate = ymd?.let { UhrApps.datum(it) } ?: ankunft
 
     /** Das heutige Ziel - null, wenn Drinktervall noch nie eines meldete. */
     fun ziel(context: Context): Ziel? {
@@ -131,7 +136,7 @@ internal object Drinktervall {
         // GLASS_ML dessen Menge - und die kann eine andere sein.
         val mitGlas = felder[DT_DRANK_AT] != null
         if (merkeZiel) context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit().apply {
-            felder[DT_GLASSES]?.let { putInt("glaeser", it.toInt()); putString("tag", LocalDate.now().toString()) }
+            felder[DT_GLASSES]?.let { putInt("glaeser", it.toInt()); putString("tag", zielTag(felder[DT_ZIEL_TAG], LocalDate.now()).toString()) }
             felder[DT_TARGET]?.takeIf { it > 0 }?.let { putInt("soll", it.toInt()) }
             if (!mitGlas) felder[DT_GLASS_ML]?.let { putInt("glas_ml", it.toInt()) }
             apply()

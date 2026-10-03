@@ -137,7 +137,7 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                             ausfuehren {
                                 when (b) {
                                     is Bearbeitung.Glas -> Akteneintraege.loesche(context, HydrationRecord::class, listOf(b.id))
-                                    // Die Liste und die Quote zaehlen es dann auch nicht mehr - die Uhr erfaehrt davon nichts.
+                                    // Liste und Quote zaehlen es dann nicht mehr, die Uhr nimmt den Haken zurueck (verwirf).
                                     is Bearbeitung.Praeparate -> Akteneintraege.loesche(context, NutritionRecord::class, b.ids)
                                         .also { if (it) SupCycle.verwirf(context, b.kennungen) }
                                     is Bearbeitung.Getraenk -> Akteneintraege.loesche(context, NutritionRecord::class, listOf(b.id))

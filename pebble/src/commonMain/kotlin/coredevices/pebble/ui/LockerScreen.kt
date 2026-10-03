@@ -99,6 +99,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
+import coredevices.pebble.timestyle.tsFirmwareBuild
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CompletableDeferred
@@ -151,6 +152,9 @@ class SharedLockerViewModel : ViewModel() {
     val showScaled = mutableStateOf(true)
     val orderWatchfacesByLastUsed = mutableStateOf(true)
     val watchType = mutableStateOf(WatchType.EMERY)
+    // Boulder: der Build der Boulder-Firmware ("-bN") der zuletzt verbundenen Uhr; null = unbekannt.
+    // Er entscheidet, ob TimeStyle Bedrock kompatibel ist und Einstellungen hat.
+    val firmwareBuild = mutableStateOf<Int?>(null)
     val showWatchTypeDropdown = mutableStateOf(false)
     private val haveSetWatchType = mutableStateOf(false)
 
@@ -170,6 +174,7 @@ class SharedLockerViewModel : ViewModel() {
             }
             haveSetWatchType.value = true
         }
+        firmwareBuild.value = tsFirmwareBuild(lastConnectedWatch?.runningFwVersion)
         showWatchTypeDropdown.value = lastConnectedWatch !is ConnectedPebbleDevice
     }
 }
@@ -408,8 +413,9 @@ fun LockerScreen(
             showIncompatible = sharedViewModel.showIncompatible.value,
             showScaled = sharedViewModel.showScaled.value,
             limit = 25,
+            firmwareBuild = sharedViewModel.firmwareBuild.value,
         )
-        val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value)
+        val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value)
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
@@ -1288,6 +1294,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     SystemApps.Tictoc -> "drawable/tictoc.png"
                     SystemApps.Timeline -> "drawable/timeline.png"
                     SystemApps.Kickstart -> "drawable/kickstart.png"
+                    SystemApps.TimeStyleBedrock -> "drawable/timestyle_bedrock.png"
                 }
                 Res.getUri(resUri)
             }

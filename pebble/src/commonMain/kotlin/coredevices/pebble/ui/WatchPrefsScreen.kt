@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
+import io.rebble.libpebblecommon.database.entity.BytesWatchPref
 import io.rebble.libpebblecommon.database.entity.ColorWatchPref
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
@@ -57,6 +58,17 @@ private val PRESET_MANAGED_BACKLIGHT_PREFS = setOf<WatchPref<*>>(
     NumberWatchPref.BacklightTimeoutMs,
 )
 
+/**
+ * Boulder: Werte mit eigener Seite (BytesWatchPref, TimeStyle Bedrock) stehen nicht in den
+ * Uhreinstellungen - weder als Zeile noch beim Zuruecksetzen. Ihre Seite hat ein eigenes Reset.
+ */
+internal fun List<WatchPreference<*>>.ohneEigeneSeiten(): List<WatchPreference<*>> =
+    filterNot { it.pref is BytesWatchPref }
+
+/** Boulder: was "Reset To Defaults" zuruecksetzt - nur Abweichungen, ohne Werte mit eigener Seite. */
+internal fun List<WatchPreference<*>>.zumZuruecksetzen(): List<WatchPreference<*>> =
+    ohneEigeneSeiten().filter { it.value != it.pref.defaultValue }
+
 internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<WatchPreference<*>> {
     val preset = firstOrNull { it.pref == EnumWatchPref.BacklightPreset }?.valueOrDefault()
     return if (preset == BacklightPresetMode.Advanced) this
@@ -69,7 +81,7 @@ fun watchPrefs(): List<SettingsItem> {
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs().map { item ->
+        settings.ohneEigeneSeiten().hidePresetManagedBacklightPrefs().mapNotNull { item ->
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
@@ -77,6 +89,8 @@ fun watchPrefs(): List<SettingsItem> {
                 is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
                 is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
                 is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
+                // Schon oben herausgefiltert; der Zweig haelt das when erschoepfend.
+                is BytesWatchPref -> null
             }
         }
     }
@@ -86,12 +100,10 @@ fun watchPrefs(): List<SettingsItem> {
         title = "Reset To Defaults?",
         text = "Reset all settings to defaults",
         onConfirm = {
-            settings.forEach { setting ->
-                if (setting.value != setting.pref.defaultValue) {
-                    @Suppress("UNCHECKED_CAST")
-                    val pref = setting.pref as WatchPref<Any?>
-                    libPebble.setWatchPref(WatchPreference(pref, pref.defaultValue))
-                }
+            settings.zumZuruecksetzen().forEach { setting ->
+                @Suppress("UNCHECKED_CAST")
+                val pref = setting.pref as WatchPref<Any?>
+                libPebble.setWatchPref(WatchPreference(pref, pref.defaultValue))
             }
         },
         confirmText = "Reset",
@@ -159,6 +171,8 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
     BoolWatchPref.MusicShowAlbumArt -> Section.Music
+    // Boulder: erscheint nie in den Uhreinstellungen (ohneEigeneSeiten); nur fuer ein erschoepfendes when.
+    BytesWatchPref.TimeStyleBedrock -> Section.Other
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {

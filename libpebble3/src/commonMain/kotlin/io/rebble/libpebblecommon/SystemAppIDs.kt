@@ -21,6 +21,8 @@ object SystemAppIDs {
     val WATCHFACES_APP_UUID = Uuid.parse("18e443ce-38fd-47c8-84d5-6d0c775fbe55")
     val TICTOC_APP_UUID = Uuid.parse("8f3c8686-31a1-4f5f-91f5-01600c9bdc59")
     val KICKSTART_APP_UUID = Uuid.parse("3af858c3-16cb-4561-91e7-f1ad2df8725f")
+    // Boulder: TimeStyle als Zifferblatt der Boulder-Firmware (ab b22, Registry -104).
+    val TIMESTYLE_BEDROCK_APP_UUID = Uuid.parse("d8af11d3-1e92-4f6d-b494-c5572f7bb7df")
     val MISSED_CALLS_APP_UUID = Uuid.parse("af760190-bfc0-11e4-bb52-0800200c9a66")
     val ANDROID_NOTIFICATIONS_UUID = Uuid.parse("ed429c16-f674-4220-95da-454f303f15e2")
     val TIMELINE_FUTURE_UUID = Uuid.parse("79C76B48-6111-4E80-8DEB-3119EEBEF33E")

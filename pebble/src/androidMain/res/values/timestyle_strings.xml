@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulder: die Einstellungen von TimeStyle Bedrock (Apps > Faces > Settings). Nur Labels, keine Saetze. -->
+<resources>
+    <string name="ts_titel">TimeStyle Bedrock</string>
+    <string name="ts_reset">Reset</string>
+    <string name="ts_mehr">More options</string>
+    <string name="ts_vorschau">Watchface preview</string>
+    <string name="ts_sync">Watch settings sync</string>
+
+    <string name="ts_k_uhr">Clock</string>
+    <string name="ts_k_leiste">Sidebar</string>
+    <string name="ts_k_widgets">Widgets</string>
+    <string name="ts_k_farben">Colors</string>
+    <string name="ts_k_sprache">Language</string>
+
+    <string name="ts_null_vorn">Leading zero</string>
+    <string name="ts_stundenvibe">Hourly vibration</string>
+    <string name="ts_vibe_aus">Off</string>
+    <string name="ts_vibe_stunde">Every hour</string>
+    <string name="ts_vibe_halb">Every half hour</string>
+    <string name="ts_bt_vibe">Vibrate on disconnect</string>
+
+    <string name="ts_lage">Position</string>
+    <string name="ts_links">Left</string>
+    <string name="ts_rechts">Right</string>
+    <string name="ts_groesse">Size</string>
+    <string name="ts_normal">Normal</string>
+    <string name="ts_gross">Large</string>
+    <string name="ts_bt_symbol">Disconnect icon</string>
+
+    <string name="ts_oben">Top</string>
+    <string name="ts_mitte">Middle</string>
+    <string name="ts_unten">Bottom</string>
+
+    <string name="ts_w_keins">None</string>
+    <string name="ts_w_akku">Battery</string>
+    <string name="ts_w_zeitzone">Time zone</string>
+    <string name="ts_w_datum">Date</string>
+    <string name="ts_w_sekunden">Seconds</string>
+    <string name="ts_w_woche">Week number</string>
+    <string name="ts_w_wetter">Weather</string>
+    <string name="ts_w_vorhersage">Forecast</string>
+    <string name="ts_w_schlaf">Sleep</string>
+    <string name="ts_w_schritte">Steps</string>
+    <string name="ts_w_beats">Beats</string>
+    <string name="ts_w_puls">Heart rate</string>
+    <string name="ts_w_uv">UV index</string>
+
+    <string name="ts_akku_prozent">Battery percentage</string>
+    <string name="ts_akku_warnung">Low battery indicator</string>
+    <string name="ts_zz_name">Time zone label</string>
+    <string name="ts_zz_versatz">UTC offset</string>
+    <string name="ts_schritte_zeigen">Steps display</string>
+    <string name="ts_schritte">Steps</string>
+    <string name="ts_distanz">Distance</string>
+    <string name="ts_dezimal">Decimal separator</string>
+    <string name="ts_schlaf_zeigen">Sleep display</string>
+    <string name="ts_schlaf_gesamt">Total</string>
+    <string name="ts_schlaf_ruhig">Restful</string>
+
+    <string name="ts_f_zeit">Time</string>
+    <string name="ts_f_hintergrund">Background</string>
+    <string name="ts_f_leiste">Sidebar</string>
+    <string name="ts_f_leistentext">Sidebar text</string>
+</resources>

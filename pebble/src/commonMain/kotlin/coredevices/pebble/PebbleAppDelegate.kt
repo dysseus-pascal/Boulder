@@ -11,6 +11,7 @@ import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.health.UhrNachfrage
+import coredevices.pebble.timestyle.TsBedrockNeusetzen
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
@@ -29,11 +30,14 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.BytesWatchPref
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.joinAll
@@ -62,6 +66,12 @@ class PebbleAppDelegate(
     private val logger = Logger.withTag("PebbleAppDelegate")
     // Boulder: beim Oeffnen der App die Uhr nach frischen Gesundheitsdaten fragen.
     private val uhrNachfrage = UhrNachfrage({ libPebble.requestHealthData() }, clock)
+    // Boulder: nach einem Firmware-Update auf b23 den TimeStyle-Wert einmal neu zur Uhr schicken.
+    private val tsBedrockNeusetzen = TsBedrockNeusetzen(
+        settings = settings,
+        gespeicherterWert = { TsBedrockNeusetzen.ausListe(libPebble.watchPrefs.first()) },
+        setze = { libPebble.setWatchPref(WatchPreference(BytesWatchPref.TimeStyleBedrock, it)) },
+    )
 
     fun init() {
         logger.d { "init()" }
@@ -103,6 +113,9 @@ class PebbleAppDelegate(
             }
             GlobalScope.launch {
                 uhrNachfrage.beobachte(libPebble.watches)
+            }
+            GlobalScope.launch {
+                tsBedrockNeusetzen.beobachte(libPebble.watches)
             }
             GlobalScope.launch {
                 libPebble.analyticsEvents.collect {

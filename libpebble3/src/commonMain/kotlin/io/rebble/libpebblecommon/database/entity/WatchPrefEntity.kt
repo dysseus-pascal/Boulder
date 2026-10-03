@@ -115,6 +115,12 @@ data class WatchPrefItem(
                         SUByte(StructMapper(), color.toPebbleColor().toProtocolNumber()).toBytes()
                     }
                 }
+
+                // Boulder: ein Wert als Rohbytes (TimeStyle Bedrock). Kaputtes Hex geht
+                // gar nicht erst zur Uhr - lieber nichts als ein halber Satz.
+                WatchPrefType.TypeBytes -> value.hexAlsBytes()?.toUByteArray().also {
+                    if (it == null) logger.w { "Not valid hex for $id" }
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -141,7 +147,25 @@ enum class WatchPrefType {
     TypeUInt32,
     TypeQuickLaunch,
     TypeColor,
+    // Boulder: Rohbytes, in der Datenbank als Hex-Text (siehe BytesWatchPref).
+    TypeBytes,
 }
+
+/**
+ * Boulder: Hex-Text zu Bytes - gross oder klein, gerade Laenge, nicht leer.
+ * Alles andere ist null: ein halber oder leerer Wert darf nie zur Uhr.
+ */
+fun String.hexAlsBytes(): ByteArray? {
+    if (isEmpty() || length % 2 != 0) return null
+    return ByteArray(length / 2) { i ->
+        val hoch = this[2 * i].digitToIntOrNull(16) ?: return null
+        val tief = this[2 * i + 1].digitToIntOrNull(16) ?: return null
+        ((hoch shl 4) or tief).toByte()
+    }
+}
+
+/** Boulder: Bytes als Hex-Text, klein - so steht ein [TypeBytes]-Wert in der Datenbank. */
+fun ByteArray.alsHex(): String = joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
 
 private val json = Json { ignoreUnknownKeys = true }
 private val NULL_UUID = Uuid.parse("ffffffff-ffff-ffff-ffff-ffffffffffff")
@@ -184,6 +208,8 @@ sealed interface WatchPref<T> {
             .plus(ColorWatchPref.entries)
             .plus(RgbColorWatchPref.entries)
             .plus(NumberWatchPref.entries)
+            // Boulder: ohne diesen Eintrag kennt from() den Schluessel nicht und verwirft ihn.
+            .plus(BytesWatchPref.entries)
 
         fun from(id: String): WatchPref<*>? = enumeratePrefs().find { it.id == id }
     }
@@ -696,6 +722,40 @@ enum class ColorWatchPref(
 }
 
 /**
+ * Boulder: Einstellungen als ein Satz Rohbytes, im Wert als Hex-Text. EIN
+ * Schluessel statt vieler, weil die Datei shellpref der Uhr auf 2048 Byte
+ * begrenzt und fast voll ist - zwanzig Einzelschluessel liessen dort alle
+ * Einstellungen scheitern. Gravels Uhreinstellungen zeigen diese Werte nicht
+ * (WatchPrefsScreen filtert sie heraus); sie haben eine eigene Seite.
+ */
+enum class BytesWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: String,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<String> {
+    // Das Format steht in pebble (coredevices.pebble.timestyle.TsBedrockFormat) und in der
+    // Firmware (timestyle/ts_format.c). Die Vorgabe ist dort Fassung 1 nach dem Nutzerfoto.
+    // Der Name ist KEINE Verlaengerung eines anderen Schluessels: die Firmware vergleicht
+    // mit Praefix, und "boulderTimeStyle" ist schon vergeben.
+    TimeStyleBedrock(
+        id = "tsBedrock",
+        displayName = "TimeStyle Bedrock",
+        defaultValue = "01ffc0ffc0000100070a04002e500000414c5400000000000000000000000000",
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeBytes
+
+    // Kein gueltiges Hex in der Datenbank (von Hand, von einer Uhr) gilt als nicht gesetzt.
+    override fun decodeValue(value: String): String =
+        value.hexAlsBytes()?.alsHex() ?: defaultValue
+
+    override fun encodeValue(value: String): String = value.lowercase()
+}
+
+/**
  * Not syncing right now:
 - watchface (we already know what the default watchface is... or should)
 - automaticTimezoneID (we set this every time we send a time message)
@@ -768,6 +828,9 @@ fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
 
                 WatchPrefType.TypeColor -> value.asByteArray()[0].toUByte().toPebbleColor()
                     .asTimelineColor().identifier
+
+                // Boulder: so kommt der Wert an, wenn die Uhr ihn einem neuen Telefon meldet.
+                WatchPrefType.TypeBytes -> value.asByteArray().alsHex()
             }
         } catch (e: CancellationException) {
             throw e

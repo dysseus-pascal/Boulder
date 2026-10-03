@@ -93,6 +93,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.entity.LockerAppPermissionType
 import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
@@ -207,7 +208,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
-        val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
+        val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value)
         val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
             lockerEntry ?: viewModel.selectedStoreEntry
         }
@@ -1018,7 +1019,8 @@ fun SnackbarHostState.showSnackbar(scope: CoroutineScope, message: String) {
 
 fun CommonApp.hasSettings(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.configurable
-    is CommonAppType.System -> false
+    // Boulder: TimeStyle Bedrock hat eine Seite in Boulder statt einer Konfigseite der App.
+    is CommonAppType.System -> commonAppType.app == SystemApps.TimeStyleBedrock && commonAppType.einstellbar
     is CommonAppType.Store -> false
 }
 
@@ -1080,7 +1082,9 @@ suspend fun CommonApp.showSettings(
             }
         }
 
-        is CommonAppType.System -> Unit
+        is CommonAppType.System -> if (commonAppType.app == SystemApps.TimeStyleBedrock) {
+            navBarNav.navigateTo(PebbleNavBarRoutes.TimeStyleBedrockSettingsRoute)
+        }
 
         is CommonAppType.Store -> Unit
     }

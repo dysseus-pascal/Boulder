@@ -75,6 +75,7 @@ fun MyCollectionScreen(
         showIncompatible = sharedViewModel.showIncompatible.value,
         showScaled = sharedViewModel.showScaled.value,
         limit = 700,
+        firmwareBuild = sharedViewModel.firmwareBuild.value,
     )
     if (lockerEntries == null) {
         return

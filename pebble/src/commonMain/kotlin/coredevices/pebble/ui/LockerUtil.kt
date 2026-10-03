@@ -79,6 +79,7 @@ import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.locker.SystemApps
+import coredevices.pebble.timestyle.tsBedrockFaehigkeit
 import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
@@ -165,6 +166,8 @@ fun loadLockerEntries(
     showIncompatible: Boolean,
     showScaled: Boolean,
     limit: Int,
+    // Boulder: der Build der zuletzt verbundenen Uhr (SharedLockerViewModel) - fuer TimeStyle Bedrock.
+    firmwareBuild: Int? = null,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -191,10 +194,11 @@ fun loadLockerEntries(
         firestoreLockerContents,
         showIncompatible,
         showScaled,
+        firmwareBuild,
     ) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
-            val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+            val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild)
             if (!showIncompatible && !app.isCompatible) {
                 return@mapNotNull null
             }
@@ -218,21 +222,21 @@ fun CommonApp.isHearted(): Boolean? {
 }
 
 @Composable
-fun loadActiveWatchface(watchType: WatchType): CommonApp? {
+fun loadActiveWatchface(watchType: WatchType, firmwareBuild: Int? = null): CommonApp? {
     val libPebble = rememberLibPebble()
-    val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType)
+    val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType, firmwareBuild)
     val lockerEntry by libPebble.activeWatchface.collectAsState()
-    return lockerEntry?.load(watchType) ?: fallback
+    return lockerEntry?.load(watchType, firmwareBuild) ?: fallback
 }
 
 @Composable
-fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
+fun loadLockerEntry(uuid: Uuid?, watchType: WatchType, firmwareBuild: Int? = null): CommonApp? {
     if (uuid == null) {
         return null
     }
     val libPebble = rememberLibPebble()
     val lockerEntry by libPebble.getLockerApp(uuid).collectAsState(null)
-    return lockerEntry?.load(watchType)
+    return lockerEntry?.load(watchType, firmwareBuild)
 }
 
 @Composable
@@ -257,17 +261,17 @@ fun CommonApp.inMyCollection(): Boolean {
 }
 
 @Composable
-private fun LockerWrapper.load(watchType: WatchType): CommonApp? {
+private fun LockerWrapper.load(watchType: WatchType, firmwareBuild: Int?): CommonApp? {
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(properties.type, appstoreSources)
     if (appstoreSources == null || categories == null) {
         return null
     }
-    return remember(this, watchType, appstoreSources, firestoreLockerContents) {
+    return remember(this, watchType, appstoreSources, firestoreLockerContents, firmwareBuild) {
         val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources)
         logger.v { "appstoreSource = $appstoreSource" }
-        asCommonApp(watchType, appstoreSource, categories[appstoreSource])
+        asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild)
     }
 }
 
@@ -448,6 +452,8 @@ sealed class CommonAppType {
     data class System(
         val app: SystemApps,
         override val order: Int,
+        // Boulder: die Firmware nimmt Einstellungen fuer diese App an (TimeStyle Bedrock ab b23).
+        val einstellbar: Boolean = false,
     ) : CommonAppType(), CommonAppTypeLocal
 }
 
@@ -455,9 +461,13 @@ fun LockerWrapper.asCommonApp(
     watchType: WatchType?,
     appstoreSource: AppstoreSource?,
     categories: List<StoreCategory>?,
+    firmwareBuild: Int? = null,
 ): CommonApp {
     val compatiblePlatform = findCompatiblePlatform(watchType)
     val anyPlatform = properties.platforms.firstOrNull()
+    // Boulder: TimeStyle Bedrock haengt nicht nur an der Plattform, sondern am Build der Firmware.
+    val timeStyle = (this as? LockerWrapper.SystemApp)?.systemApp == SystemApps.TimeStyleBedrock
+    val faehigkeit = tsBedrockFaehigkeit(firmwareBuild)
     return CommonApp(
         title = properties.title,
         developerName = properties.developerName,
@@ -474,6 +484,7 @@ fun LockerWrapper.asCommonApp(
             is LockerWrapper.SystemApp -> CommonAppType.System(
                 app = systemApp,
                 order = properties.order,
+                einstellbar = timeStyle && faehigkeit.einstellungen,
             )
         },
         type = properties.type,
@@ -482,7 +493,7 @@ fun LockerWrapper.asCommonApp(
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
         screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
             ?: anyPlatform?.screenshotImageUrl,
-        isCompatible = compatiblePlatform.isCompatible(),
+        isCompatible = compatiblePlatform.isCompatible() && (!timeStyle || faehigkeit.kachel),
         hearts = when (this) {
             is LockerWrapper.NormalApp -> properties.hearts
             is LockerWrapper.SystemApp -> null

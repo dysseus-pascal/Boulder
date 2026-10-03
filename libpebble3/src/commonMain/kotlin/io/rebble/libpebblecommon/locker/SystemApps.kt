@@ -10,6 +10,8 @@ enum class SystemApps(
     val type: AppType,
     val compatiblePlatforms: List<WatchType>,
     val defaultOrder: Int,
+    // Boulder: der Untertitel der Kachel - die Zifferblaetter der Boulder-Firmware sind nicht von Pebble.
+    val developerName: String = "Pebble",
 ) {
     // Apps
     // Boulder: alle eins tiefer als bei Gravel, damit Kieselstrasse ohne Gleichstand Platz hat.
@@ -28,6 +30,12 @@ enum class SystemApps(
     // Faces
     Tictoc(SystemAppIDs.TICTOC_APP_UUID, "Tictoc", AppType.Watchface, WatchType.entries, defaultOrder = -2),
     Kickstart(SystemAppIDs.KICKSTART_APP_UUID, "Kickstart", AppType.Watchface, ALL_EXCEPT_APLITE, defaultOrder = -1),
+    // Boulder: gibt es nur in der Boulder-Firmware fuer emery. Steht hinter Kickstart, weil
+    // insertSystemApps ein spaeter hinzugekommenes Zifferblatt hinter seinen Vorgaenger setzt.
+    TimeStyleBedrock(
+        SystemAppIDs.TIMESTYLE_BEDROCK_APP_UUID, "TimeStyle Bedrock", AppType.Watchface, listOf(WatchType.EMERY),
+        defaultOrder = 0, developerName = "Boulder",
+    ),
 }
 
 private val ALL_EXCEPT_APLITE = WatchType.entries.filter {

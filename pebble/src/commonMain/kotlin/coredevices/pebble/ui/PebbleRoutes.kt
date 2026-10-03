@@ -67,6 +67,10 @@ object PebbleNavBarRoutes {
         val storeSource: Int?,
     ) : NavBarRoute
 
+    // Boulder: die Einstellungen von TimeStyle Bedrock - nur ueber den Settings-Knopf des Zifferblatts.
+    @Serializable
+    data object TimeStyleBedrockSettingsRoute : NavBarRoute
+
     @Serializable
     data object NotificationsRoute : NavBarRoute
 
@@ -233,6 +237,9 @@ fun NavGraphBuilder.addNavBarRoutes(
             route.storedId,
             route.storeSource,
         )
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TimeStyleBedrockSettingsRoute>(viewModel) {
+        TimeStyleBedrockSettingsScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)

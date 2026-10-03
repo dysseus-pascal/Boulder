@@ -416,7 +416,8 @@ fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemA
         id = uuid,
         type = type,
         title = displayName,
-        developerName = "Pebble",
+        // Boulder: je App statt fest "Pebble" (TimeStyle Bedrock kommt von Boulder).
+        developerName = developerName,
         platforms = compatiblePlatforms.map {
             AppPlatform(
                 watchType = it,

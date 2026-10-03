@@ -50,7 +50,7 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     // Derselbe Lader wie auf Health: von dort kommend steht die Seite gleich da.
-    val s = rememberStand(Gesundheitsdaten.zuletzt, rememberSync()) { Gesundheitsdaten.lies(context, api) }
+    val s = rememberStand(Gesundheitsdaten.zuletzt, rememberUhrschub()) { Gesundheitsdaten.lies(context, api) }
     if (s == null) {
         Ladekreis()
         return

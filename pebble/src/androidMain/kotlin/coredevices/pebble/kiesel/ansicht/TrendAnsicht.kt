@@ -51,7 +51,7 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     // Neu auch nach jedem Schub der Uhr: eine Nacht, die gerade ankommt, gehoert gleich in die Reihen.
-    val stand = rememberStand(Trenddaten.zuletzt, rememberSync()) { Trenddaten.lies(context, api) }
+    val stand = rememberStand(Trenddaten.zuletzt, rememberUhrschub()) { Trenddaten.lies(context, api) }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
     var mitSupCycle by remember { mutableStateOf(true) }
     var mitDrinktervall by remember { mutableStateOf(true) }

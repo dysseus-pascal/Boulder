@@ -48,7 +48,7 @@ internal fun <T> rememberStand(
  * [rememberStand]-Anlass fuer Seiten, die Uhrdaten zeigen.
  */
 @Composable
-internal fun rememberSync(): Int {
+internal fun rememberUhrschub(): Int {
     val libPebble = koinInject<LibPebble>()
     var schuebe by remember { mutableIntStateOf(0) }
     LaunchedEffect(libPebble) { libPebble.healthDataUpdated.collect { schuebe++ } }

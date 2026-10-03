@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -37,7 +36,10 @@ internal fun AkkuAnsicht() {
     val aktuell = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
     // Zuerst die Naechte, die Health fuer seine Akkuzeile las - dieselben. Neu
     // geladen, wenn die Uhr etwas schickt, etwa die Nacht, die gerade ankommt.
-    val geladen = rememberStand(Gesundheitsdaten.zuletzt?.akkuNaechte, rememberSync()) {
+    // Leer kann auch heissen, dass Health sie nicht lesen konnte: dann der
+    // Ladekreis wie frueher, statt kurz einer Rechnung ohne Naechte.
+    val zuletzt = Gesundheitsdaten.zuletzt?.akkuNaechte?.takeIf { it.isNotEmpty() }
+    val geladen = rememberStand(zuletzt, rememberUhrschub()) {
         val jetzt = Instant.now()
         versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
     }

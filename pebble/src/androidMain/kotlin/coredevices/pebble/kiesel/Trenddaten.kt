@@ -222,6 +222,7 @@ internal object Trenddaten {
         )
         // Die Phasen aller Naechte in einer Abfrage, ueber dasselbe Fenster wie die
         // Naechte - eine je Nacht waren bis zu 180 Abfragen bei jedem Oeffnen.
+        // Scheitert sie, fehlt die Tiefschlafreihe ganz statt nur einzelner Naechte.
         val abschnitte = versuche(TAG, "Abschnitte der Naechte") { api.getNachtAbschnitte(anfang(von), anfang(heute.plusDays(1))) }.orEmpty()
         neu.putAll(nachtreihen(naechte, abschnitte, zone))
         return neu

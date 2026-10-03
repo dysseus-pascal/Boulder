@@ -173,6 +173,7 @@ internal object Gesundheitsdaten {
         // ALLE NAECHTE IN EINER ABFRAGE: Vergleich, Tagesherz, HRV-Band und Akku
         // reichen verschieden weit zurueck. Gelesen wird einmal das weiteste
         // Fenster, und jeder nimmt sich seinen Teil - vorher waren es vier Abfragen.
+        // Scheitert sie, fehlen alle diese Teile zugleich statt nur einer.
         val vonVergleich = anfang(heute.minusDays(Fenster.VERGLEICHSNAECHTE + 2L))
         val vonTagesherz = anfang(heute.minusDays(Fenster.TAGESHERZ_TAGE))
         // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal Fenster.HRV_NAECHTE davor.

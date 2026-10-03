@@ -78,8 +78,8 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     var praeparatBlatt by remember { mutableStateOf(false) }
     var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
-    // Neue Minutendaten von der Uhr (rememberSync): dann stimmen Schritte und Puls nicht mehr.
-    val seite = rememberStand(zuletztHeute(), neu, rememberSync()) { zeige ->
+    // Neue Minutendaten von der Uhr (rememberUhrschub): dann stimmen Schritte und Puls nicht mehr.
+    val seite = rememberStand(zuletztHeute(), neu, rememberUhrschub()) { zeige ->
         val stand = Gesundheitsdaten.lies(context, api)
         val gelesen = LocalDateTime.now()
         geladen()

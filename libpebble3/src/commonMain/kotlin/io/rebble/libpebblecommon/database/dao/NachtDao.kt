@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 
 @Dao
 interface NachtDao {
@@ -35,4 +36,15 @@ interface NachtDao {
     // fuer alle statt einer je Nacht.
     @Query("SELECT * FROM boulder_nacht_abschnitt WHERE beginnUtc >= :von AND beginnUtc < :bis ORDER BY beginnUtc ASC, von ASC")
     suspend fun abschnitteZwischen(von: Long, bis: Long): List<NachtAbschnittEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun speichereHrv(fenster: List<NachtHrvEntity>)
+
+    // Wie bei den Abschnitten: schickt die Uhr die Nacht gewachsen noch einmal,
+    // kommen alle Fenster neu.
+    @Query("DELETE FROM boulder_nacht_hrv WHERE beginnUtc = :beginnUtc")
+    suspend fun loescheHrv(beginnUtc: Long)
+
+    @Query("SELECT * FROM boulder_nacht_hrv WHERE beginnUtc = :beginnUtc ORDER BY minute ASC")
+    suspend fun hrv(beginnUtc: Long): List<NachtHrvEntity>
 }

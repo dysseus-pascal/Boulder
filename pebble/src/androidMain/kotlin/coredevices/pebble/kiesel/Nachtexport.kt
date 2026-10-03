@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.content.Intent
 import io.rebble.libpebblecommon.connection.HealthDataApi
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -22,6 +23,7 @@ internal object Nachtexport {
         val bis = e.beginnUtc + (e.aufwachen + 60) * 60L
         val minuten = api.getHealthDataForRange(e.beginnUtc, bis).associateBy { it.timestamp }
         val abschnitte = api.getNachtAbschnitte(e.beginnUtc)
+        val hrv = api.getNachtHrv(e.beginnUtc)
         val zone = ZoneId.systemDefault()
         val uhr = DateTimeFormatter.ofPattern("HH:mm")
         val text = buildString {
@@ -34,9 +36,27 @@ internal object Nachtexport {
                 val phase = abschnitte.firstOrNull { m >= it.von && m < it.bis }?.phase ?: -1
                 append("$m,${uhr.format(Instant.ofEpochSecond(t).atZone(zone))},${d.steps},${d.intensity},${d.heartRate},${d.orientation},$phase\n")
             }
+            append(hrvTeil(e.beginnUtc, hrv, zone))
         }
         val name = "nacht-" + DateTimeFormatter.ofPattern("yyyy-MM-dd").format(Instant.ofEpochSecond(e.beginnUtc).atZone(zone))
         name to text
+    }
+
+    /**
+     * Die HRV-Fenster hinter den Minuten, im Format der Testnaechte der Firmware
+     * (nacht-2026-09-26.csv): eine Leerzeile, dann hrv_minute,uhrzeit,rmssd,puls.
+     * Ohne Fenster (aeltere Firmware, Messstufe 1) faellt der Teil weg.
+     */
+    internal fun hrvTeil(beginnUtc: Long, fenster: List<NachtHrvEntity>, zone: ZoneId): String {
+        if (fenster.isEmpty()) return ""
+        val uhr = DateTimeFormatter.ofPattern("HH:mm")
+        return buildString {
+            append("\nhrv_minute,uhrzeit,rmssd,puls\n")
+            for (f in fenster.sortedBy { it.minute }) {
+                val zeit = uhr.format(Instant.ofEpochSecond(beginnUtc + f.minute * 60L).atZone(zone))
+                append("${f.minute},$zeit,${f.rmssd},${f.puls}\n")
+            }
+        }
     }
 
     fun teile(context: Context, name: String, text: String) {

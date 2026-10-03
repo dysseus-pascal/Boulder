@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
@@ -103,8 +104,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationRuleEntity::class,
         NachtEntity::class,
         NachtAbschnittEntity::class,
+        NachtHrvEntity::class,
     ],
-    version = 49,
+    version = 50,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -149,6 +151,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 47, to = 48),
         // Boulder: Akku-Protokoll und Messstufe je Nacht
         AutoMigration(from = 48, to = 49),
+        // Boulder: boulder_nacht_hrv, die HRV-Fenster je Nacht (Tag 89)
+        AutoMigration(from = 49, to = 50),
     ],
     exportSchema = true,
 )

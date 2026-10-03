@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -257,6 +258,8 @@ class Health(
     override suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity> = nachtDao.abschnitte(beginnUtc)
 
     override suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity> = nachtDao.abschnitteZwischen(von, bis)
+
+    override suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity> = nachtDao.hrv(beginnUtc)
 
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)

@@ -1,0 +1,56 @@
+package io.rebble.libpebblecommon.health.parsers
+
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
+import io.rebble.libpebblecommon.util.DataBuffer
+import io.rebble.libpebblecommon.util.Endian
+
+/** Ein Satz auf Tag 89: ein Teil der HRV-Fenster einer Nacht. */
+data class NachtHrvTeil(
+    val beginnUtc: Long,
+    val teil: Int,
+    val teile: Int,
+    val fenster: List<NachtHrvEntity>,
+)
+
+/**
+ * Die HRV-Fenster der Boulder-Firmware auf Tag 89 (NachtHrvDlsRecord in
+ * boulder/nacht.h): version, size (u16), beginn_utc (u32), teil, teile,
+ * anzahl (u8), dann 48 Fenster zu je minute, rmssd (u16) und puls (u8).
+ * Little Endian, gepackt. [beginnUtc] ist derselbe wie im Satz der Nacht auf
+ * Tag 88; darueber gehoeren die beiden zusammen.
+ *
+ * EINE UNBEKANNTE FASSUNG wird uebersprungen statt geraten: Bit 0 der Version
+ * muss gesetzt sein, wie bei den Naechten.
+ */
+fun parseNachtHrvData(payload: ByteArray, itemSize: UShort): List<NachtHrvTeil> {
+    val groesse = itemSize.toInt()
+    if (payload.isEmpty() || groesse < HRV_KOPF_BYTES) return emptyList()
+    val aus = mutableListOf<NachtHrvTeil>()
+    for (satz in 0 until payload.size / groesse) {
+        val b = DataBuffer(payload.copyOfRange(satz * groesse, (satz + 1) * groesse).toUByteArray())
+        b.setEndian(Endian.Little)
+        val version = b.getUShort().toInt()
+        b.getUShort() // size
+        if (version and 1 == 0) continue
+        val beginn = b.getUInt().toLong()
+        val teil = b.getUByte().toInt()
+        val teile = b.getUByte().toInt()
+        val anzahl = b.getUByte().toInt()
+        // Nie ueber den Satz hinaus lesen, auch wenn die Anzahl mehr behauptet.
+        val passen = minOf(HRV_FENSTER_JE_SATZ, (groesse - HRV_KOPF_BYTES) / HRV_FENSTER_BYTES)
+        val fenster = (0 until minOf(anzahl, passen)).map {
+            NachtHrvEntity(
+                beginnUtc = beginn,
+                minute = b.getUShort().toInt(),
+                rmssd = b.getUShort().toInt(),
+                puls = b.getUByte().toInt(),
+            )
+        }
+        aus += NachtHrvTeil(beginn, teil, teile, fenster.filter { it.rmssd > 0 })
+    }
+    return aus
+}
+
+private const val HRV_KOPF_BYTES = 11
+private const val HRV_FENSTER_BYTES = 5
+private const val HRV_FENSTER_JE_SATZ = 48

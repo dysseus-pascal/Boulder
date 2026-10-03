@@ -116,6 +116,29 @@ internal data class TrainingEintrag(
     val einheit: Einheit get() = Einheit(sitzung.startTime.atZone(ZoneId.systemDefault()).toLocalDate(), sport, minuten)
 }
 
+/**
+ * Die letzten [plaetze] Werte nach Schluessel, der zuletzt benutzte vorn - ein
+ * Treffer rueckt nach vorn, der aelteste faellt heraus. Fuer [TrainingsDaten.punkte]:
+ * Liste und Detail lesen auf verschiedenen Faeden, deshalb gesperrt.
+ */
+internal class Zuletzt<K, V>(private val plaetze: Int) {
+    private val werte = ArrayDeque<Pair<K, V>>()
+
+    @Synchronized
+    fun hole(k: K): V? {
+        val i = werte.indexOfFirst { it.first == k }
+        if (i < 0) return null
+        return werte.removeAt(i).also { werte.addFirst(it) }.second
+    }
+
+    @Synchronized
+    fun lege(k: K, v: V) {
+        werte.removeAll { it.first == k }
+        werte.addFirst(k to v)
+        while (werte.size > plaetze) werte.removeAt(werte.lastIndex)
+    }
+}
+
 /** Eine Spur ohne Training in der Akte - zum Nachtragen. */
 internal data class OffeneSpur(val beginn: Long, val minuten: Long, val meter: Double)
 
@@ -149,6 +172,7 @@ internal object TrainingsDaten {
     private const val TAG = "Kieselsport"
     private const val AUSGEBLENDET = "kiesel-spuren"
     private const val STRECKEN = "kiesel-strecken"
+    private const val LAENGEN = "kiesel-spurlaengen"
 
     /**
      * WER ALS EIGEN ZAEHLT: Boulder, und Kiesel-Helper, das bis 0.7.0 die
@@ -195,16 +219,34 @@ internal object TrainingsDaten {
         val eigene = sitzungen.filter { eigen(context, it) }
         val gewaehlt = gewaehlt(context, sitzungen)
         val distanzen = distanzen(klient, context, jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE)), jetzt)
-        val trainings = gewaehlt.map { s -> eintrag(context, s, distanzen) }
-        TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene)).also { zuletzt = it }
+        val laengen = Laengen(context)
+        val trainings = gewaehlt.mapIndexed { i, s ->
+            // NUR DAS OBERSTE BEHAELT SEINE ROUTE: die Vorschau der Sportseite
+            // faellt ohne Spurdatei auf sie zurueck (punkte).
+            val e = eintrag(context, s, distanzen, laengen, vorschau = i == 0)
+            if (i == 0) e else e.copy(sitzung = ohneRoute(e.sitzung))
+        }
+        val offen = offeneSpuren(context, eigene, laengen)
+        laengen.sichere()
+        TrainingsUebersicht(true, trainings, offen).also { zuletzt = it }
     }
 
     /** Siehe [Sportrechnung.waehle]: ein Training, das zwei Apps schrieben, steht einmal da. */
     private fun gewaehlt(context: Context, sitzungen: List<ExerciseSessionRecord>): List<ExerciseSessionRecord> =
         Sportrechnung.waehle(sitzungen, { eigen(context, it) }, { it.startTime }, { it.endTime }, { Sport.von(it) })
 
-    private fun eintrag(context: Context, s: ExerciseSessionRecord, distanzen: Distanzen): TrainingEintrag =
-        TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte(context, s), distanzen))
+    /**
+     * Ein Eintrag der Liste, die Strecke aus [Laengen]. [vorschau]: muss er die
+     * Datei doch lesen, bleiben die Punkte fuer die Karte liegen ([gemerkt]).
+     */
+    private fun eintrag(context: Context, s: ExerciseSessionRecord, distanzen: Distanzen, laengen: Laengen, vorschau: Boolean = false): TrainingEintrag {
+        val beginn = s.startTime.epochSecond
+        val m = laengen.mass(context, "s:" + s.metadata.id, beginn, s.startTime, s.endTime) { stempel, p ->
+            if (vorschau && p.size >= 2) merke(stempel, p)
+        }
+        // Die Route nur ohne Spur umrechnen, wie vorher in punkte(): sonst je Oeffnen alle Routen des Vierteljahres.
+        return TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, Spur.laengeAus(m) { route(s) }, distanzen))
+    }
 
     /**
      * Die Strecke eines Trainings, in dieser Reihenfolge: aus der Spur (oder
@@ -212,10 +254,10 @@ internal object TrainingsDaten {
      * Distanz, die Boulder zur Sitzung schrieb (Lauf ohne Ortung, Laufband),
      * aus der Distanz, die die fremde App selbst zur Sitzung schrieb, aus den
      * Bahnen. Ohne Spur zaehlte die Woche 1500 m Schwimmen frueher
-     * als 0 km.
+     * als 0 km. [ausPunkten]: die Laenge der Punkte, null unter zwei Punkten.
      */
-    private fun strecke(context: Context, s: ExerciseSessionRecord, punkte: List<Spur.Punkt>, distanzen: Distanzen): Double =
-        Spur.laenge(punkte).takeIf { punkte.size >= 2 && it > 0 }
+    private fun strecke(context: Context, s: ExerciseSessionRecord, ausPunkten: Double?, distanzen: Distanzen): Double =
+        ausPunkten?.takeIf { it > 0 }
             ?: gemerkteStrecke(context, s.metadata.id)
             ?: distanzen.eigene[distanzKennung(s)]?.takeIf { it > 0 }
             ?: distanzen.fremde(s).takeIf { it > 0 }
@@ -302,8 +344,11 @@ internal object TrainingsDaten {
         } ?: return@withContext emptyList()
         // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
         val distanzen = distanzen(klient, context, anfang, jetzt)
+        val laengen = Laengen(context)
+        // Ohne Route: die Gesundheitsseite haelt die Eintraege, solange der Prozess lebt.
         gewaehlt(context, sitzungen).filter { !it.startTime.isBefore(anfang) }.sortedBy { it.startTime }
-            .map { s -> eintrag(context, s, distanzen) }
+            .map { s -> eintrag(context, s, distanzen, laengen).let { it.copy(sitzung = ohneRoute(it.sitzung)) } }
+            .also { laengen.sichere() }
     }
 
     /**
@@ -313,9 +358,81 @@ internal object TrainingsDaten {
      * (eine fremde nur nach Zustimmung, siehe [routeGesperrt]).
      */
     fun punkte(context: Context, s: ExerciseSessionRecord): List<Spur.Punkt> {
-        val spur = Spur.inSitzung(Spur.lies(context, s.startTime.epochSecond), s.startTime, s.endTime)
-        if (spur.size >= 2) return spur
-        return (s.exerciseRouteResult as? ExerciseRouteResult.Data)?.exerciseRoute?.let(::ausRoute).orEmpty()
+        val beginn = s.startTime.epochSecond
+        val stempel = Spur.stempel(beginn, beginn, s.endTime.epochSecond, Spur.groesse(context, beginn))
+        gemerkt.hole(stempel)?.let { return it }
+        val spur = Spur.inSitzung(Spur.lies(context, beginn), s.startTime, s.endTime)
+        if (spur.size >= 2) {
+            merke(stempel, spur)
+            return spur
+        }
+        return route(s)
+    }
+
+    /**
+     * Die zuletzt gelesenen Spuren mit Stempel: jede Rueckkehr auf die Sportseite
+     * und das Detail desselben Trainings lasen dieselbe Datei sonst neu. ZWEI
+     * PLAETZE, Vorschau und ein Detail: mit einem las die Rueckkehr aus einem
+     * aelteren Detail die oberste Spur wieder ganz (~1200 Zeilen je GPS-Stunde).
+     */
+    private val gemerkt = Zuletzt<String, List<Spur.Punkt>>(2)
+
+    private fun merke(stempel: String, punkte: List<Spur.Punkt>) = gemerkt.lege(stempel, punkte)
+
+    /** Die Route der Akte als Punkte, wenn sie sie herausgab - sonst leer. */
+    private fun route(s: ExerciseSessionRecord): List<Spur.Punkt> =
+        (s.exerciseRouteResult as? ExerciseRouteResult.Data)?.exerciseRoute?.let(::ausRoute).orEmpty()
+
+    /**
+     * Die Sitzung ohne Route. Die Akte gibt eigenen Sitzungen die ganze Route mit
+     * (~120 B je Punkt): bei 40 GPS-Stunden 3-6 MB in den Prozess-Caches, ungelesen.
+     */
+    private fun ohneRoute(s: ExerciseSessionRecord): ExerciseSessionRecord =
+        if (s.exerciseRouteResult !is ExerciseRouteResult.Data) s
+        else runCatching {
+            ExerciseSessionRecord(
+                startTime = s.startTime, startZoneOffset = s.startZoneOffset, endTime = s.endTime, endZoneOffset = s.endZoneOffset,
+                metadata = s.metadata, exerciseType = s.exerciseType, title = s.title, notes = s.notes,
+                segments = s.segments, laps = s.laps, exerciseRoute = null, plannedExerciseSessionId = s.plannedExerciseSessionId,
+            )
+        }.getOrDefault(s)
+
+    /**
+     * DER LAENGENSPEICHER DER LISTE. Jedes Oeffnen der Sportseite las alle Spuren
+     * des Vierteljahres nur fuer die Strecke: bei 40 GPS-Stunden ~48 000 Zeilen,
+     * 0,3-0,7 s CPU, 20-50 MB Muell. Ein Mass gilt, solange [Spur.stempel] gleich ist.
+     */
+    private class Laengen(context: Context) {
+        private val p = context.getSharedPreferences(LAENGEN, Context.MODE_PRIVATE)
+        private val neu = mutableMapOf<String, String>()
+
+        /** Das Mass der Spur in [von, bis) (ohne: ganz), null ohne Datei; [gelesen] nur nach dem Lesen. */
+        fun mass(
+            context: Context, schluessel: String, beginn: Long, von: Instant?, bis: Instant?,
+            gelesen: ((String, List<Spur.Punkt>) -> Unit)? = null,
+        ): Spur.Mass? {
+            val groesse = Spur.groesse(context, beginn)
+            if (groesse < 0) return null
+            val stempel = Spur.stempel(beginn, von?.epochSecond ?: -1, bis?.epochSecond ?: -1, groesse)
+            Spur.massAus(p.getString(schluessel, null), stempel)?.let { return it }
+            val alle = Spur.liesOderNull(context, beginn)
+            val punkte = if (von != null && bis != null) Spur.inSitzung(alle.orEmpty(), von, bis) else alle.orEmpty()
+            gelesen?.invoke(stempel, punkte)
+            // Ein Lesefehler ist keine leere Spur: nicht merken, das naechste Oeffnen liest neu.
+            return Spur.mass(punkte).also { if (alle != null) neu[schluessel] = Spur.massText(stempel, it) }
+        }
+
+        /** Die neuen Masse in einem Schreibvorgang; was aus dem Vierteljahr fiel, geht mit. */
+        fun sichere() {
+            if (neu.isEmpty()) return
+            val grenze = Instant.now().minus(Duration.ofDays(Fenster.SPORT_TAGE + 1)).epochSecond
+            val e = p.edit()
+            p.all.forEach { (k, v) ->
+                if (k !in neu && ((v as? String)?.substringBefore(';')?.toLongOrNull() ?: 0L) < grenze) e.remove(k)
+            }
+            neu.forEach { (k, v) -> e.putString(k, v) }
+            e.apply()
+        }
     }
 
     /** Eine Route der Akte als Spurpunkte - mit Genauigkeit und Hoehe, soweit sie sie kennt. */
@@ -334,7 +451,7 @@ internal object TrainingsDaten {
      * JUENGSTE HALBE STUNDE: eine Spur, die gerade waechst, gehoert zu einem
      * laufenden Training.
      */
-    private fun offeneSpuren(context: Context, eigene: List<ExerciseSessionRecord>): List<OffeneSpur> {
+    private fun offeneSpuren(context: Context, eigene: List<ExerciseSessionRecord>, laengen: Laengen): List<OffeneSpur> {
         val grenze = Instant.now().minus(Duration.ofDays(Fenster.SPORT_TAGE)).epochSecond
         val belegt = eigene.map { it.startTime.epochSecond }.toSet()
         val aus = ausgeblendet(context)
@@ -342,9 +459,10 @@ internal object TrainingsDaten {
         return Spur.alle(context)
             .filter { it >= grenze && it !in belegt && it.toString() !in aus }
             .mapNotNull { b ->
-                val punkte = Spur.lies(context, b)
-                if (punkte.size < 2 || jetzt - punkte.last().zeit <= 30 * 60) return@mapNotNull null
-                OffeneSpur(b, (punkte.last().zeit - b) / 60, Spur.laenge(punkte))
+                // Die ganze Datei, ohne Fenster - wie vorher, nur aus dem Laengenspeicher.
+                val m = laengen.mass(context, "o:$b", b, null, null) ?: return@mapNotNull null
+                if (m.anzahl < 2 || jetzt - m.letzte <= 30 * 60) return@mapNotNull null
+                OffeneSpur(b, (m.letzte - b) / 60, m.meter)
             }
     }
 
@@ -368,7 +486,7 @@ internal object TrainingsDaten {
         val quelle = s.metadata.dataOrigin.packageName
         val distanzen = distanzen(klient, context, s.startTime, s.endTime)
         TrainingDetail(
-            eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte, distanzen)),
+            eintrag = TrainingEintrag(s, Sport.von(s), eigen(context, s), strecke(context, s, punkte.takeIf { it.size >= 2 }?.let(Spur::laenge), distanzen)),
             punkte = punkte,
             puls = puls(klient, context, s),
             spo2 = spo2(klient, context, s),
@@ -406,8 +524,11 @@ internal object TrainingsDaten {
      * Das juengste Training seit [seit] fuer das Widget - gewaehlt wie oben auf
      * der Sportseite (eines unter zwei Apps), mit derselben Strecke. IM
      * HINTERGRUND gibt die Akte ohne Sonderrecht nur Eigenes heraus.
+     * [endeVorHoechstens]: endete es frueher, null - vor Distanzen und Strecke,
+     * die das Widget (~100 Mal am Tag) fuer ein aelteres umsonst las. Vorgabe
+     * [WIDGET_FRIST], damit das Widget selbst unveraendert bleibt.
      */
-    suspend fun juengstes(context: Context, seit: Duration): TrainingEintrag? = withContext(Dispatchers.IO) {
+    suspend fun juengstes(context: Context, seit: Duration, endeVorHoechstens: Duration? = WIDGET_FRIST): TrainingEintrag? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
         val jetzt = Instant.now()
         val von = jetzt.minus(seit)
@@ -416,8 +537,20 @@ internal object TrainingsDaten {
                 .filterNot { erkannt(context, it) }
         } ?: return@withContext null
         val s = gewaehlt(context, sitzungen).maxByOrNull { it.startTime } ?: return@withContext null
-        eintrag(context, s, distanzen(klient, context, von, jetzt))
+        if (zuAlt(s.endTime, jetzt, endeVorHoechstens)) return@withContext null
+        val laengen = Laengen(context)
+        eintrag(context, s, distanzen(klient, context, von, jetzt), laengen).also { laengen.sichere() }
     }
+
+    /**
+     * So lange nach seinem Ende zeigt das Widget ein Training - GesundheitWidget
+     * prueft danach selbst noch "toHours() < 3" (TrainingsDatenTest: dieselbe Grenze).
+     */
+    val WIDGET_FRIST: Duration = Duration.ofHours(3)
+
+    /** Endete es [grenze] oder laenger vor [jetzt]? Ohne Grenze (null) nie. */
+    fun zuAlt(ende: Instant, jetzt: Instant, grenze: Duration?): Boolean =
+        grenze != null && Duration.between(ende, jetzt) >= grenze
 
     /**
      * Der Puls waehrend des Trainings - aus der Akte, so bekommt auch ein

@@ -14,10 +14,17 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.location.LocationRequest
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Schreibt mit, wo man während eines Trainings war.
@@ -44,6 +51,19 @@ internal class SpurDienst : android.app.Service(), LocationListener {
 
     private var beginn: Long = 0
     private var laeuft = false
+
+    /** Ein Stopp wartet auf den Rest des GPS-Puffers (siehe [halt]). */
+    private var haelt = false
+
+    /**
+     * Beim Wechsel auf ein neues Training der Beginn des alten, bis dessen
+     * GPS-Puffer (bis 60 s) geholt ist; 0 sonst. Siehe [Spurwechsel].
+     */
+    private var frueher = 0L
+
+    private val hand = Handler(Looper.getMainLooper())
+    private val nachlaufVorbei = Runnable { if (haelt) beende() }
+    private val wechselVorbei = Runnable { wechselFertig() }
 
     /**
      * Wie dicht gemessen wird.
@@ -80,12 +100,21 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             return START_NOT_STICKY
         }
 
+        val vorher = beginn
         beginn = intent?.getLongExtra(EXTRA_BEGINN, 0L) ?: 0L
         if (beginn <= 0L) beginn = System.currentTimeMillis() / 1000
         if (!starteVordergrund(intent?.getStringExtra(EXTRA_ART) ?: getString(R.string.ks_training))) {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Weiter kam, waehrend ein Stopp noch den Puffer holt: weiter orten.
+        if (haelt) {
+            haelt = false
+            hand.removeCallbacks(nachlaufVorbei)
+        }
+        // Ein neues Training auf demselben Dienst (der Stopp des alten blieb aus):
+        // erst dessen Puffer in seine Datei.
+        if (laeuft && beginn != vorher && !holePufferFuer(vorher)) aufnahme.value = beginn
         horche()
 
         // NICHT STICKY. Startet Android den Dienst nach einem Abschuss neu,
@@ -135,17 +164,95 @@ internal class SpurDienst : android.app.Service(), LocationListener {
         if (laeuft) return
         val verwalter = getSystemService(LocationManager::class.java) ?: return
         try {
-            verwalter.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER, takt, abstand, this
-            )
+            if (Build.VERSION.SDK_INT >= 31) {
+                // GEBUENDELT: Takt, Abstand und Genauigkeit wie die alte Anfrage, aber das
+                // GPS sammelt bis zu einer Minute - ~60 Weckungen je Stunde, vorher ~1200.
+                val anfrage = LocationRequest.Builder(takt)
+                    .setMinUpdateIntervalMillis(takt)
+                    .setMinUpdateDistanceMeters(abstand)
+                    .setQuality(LocationRequest.QUALITY_HIGH_ACCURACY)
+                    .setMaxUpdateDelayMillis(BUENDEL_MS)
+                    .build()
+                verwalter.requestLocationUpdates(LocationManager.GPS_PROVIDER, anfrage, mainExecutor, this)
+            } else {
+                verwalter.requestLocationUpdates(LocationManager.GPS_PROVIDER, takt, abstand, this)
+            }
             laeuft = true
+            aufnahme.value = beginn
         } catch (e: Exception) {
             Log.w(TAG, "Ortung: " + e.message)
-            halt()
+            beende()
         }
     }
 
+    /**
+     * Anhalten - ERST DEN PUFFER HOLEN: removeUpdates verwuerfe bis zu einer
+     * Minute Punkte. Der Dienst endet in [onFlushComplete], spaetestens nach [NACHLAUF_MS].
+     */
     private fun halt() {
+        if (!laeuft) return beende()
+        if (haelt) return
+        haelt = true
+        if (Build.VERSION.SDK_INT >= 31) {
+            try {
+                getSystemService(LocationManager::class.java)?.requestFlush(LocationManager.GPS_PROVIDER, this, NACHLAUF_CODE)
+                hand.postDelayed(nachlaufVorbei, NACHLAUF_MS)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Puffer holen: " + e.message)
+            }
+        }
+        beende()
+    }
+
+    /**
+     * Den Puffer des Trainings [alt] holen, bevor die Punkte ins neue gehen.
+     * OHNE DAS landeten bis zu 60 s seiner Strecke (vor dem Buendeln ein Punkt)
+     * in der Datei des neuen. Bis [onFlushComplete], hoechstens [NACHLAUF_MS], gehen sie nach [alt].
+     * false, wenn nichts angefordert wurde (vor Android 12 gibt es keinen Puffer).
+     */
+    private fun holePufferFuer(alt: Long): Boolean {
+        if (Build.VERSION.SDK_INT < 31 || alt <= 0L) return false
+        val verwalter = getSystemService(LocationManager::class.java) ?: return false
+        return try {
+            // Vor dem Anfordern: der Puffer kommt ueber denselben Hauptfaden, also erst danach.
+            frueher = alt
+            hand.removeCallbacks(wechselVorbei)
+            verwalter.requestFlush(LocationManager.GPS_PROVIDER, this, WECHSEL_CODE)
+            hand.postDelayed(wechselVorbei, NACHLAUF_MS)
+            true
+        } catch (e: Exception) {
+            frueher = 0L
+            Log.w(TAG, "Puffer beim Wechsel: " + e.message)
+            false
+        }
+    }
+
+    /**
+     * Der Puffer des alten Trainings steht in seiner Datei (oder 3 s sind um). ERST
+     * JETZT gilt das neue als [aufnahme]: eine spaete Zusammenfassung des alten
+     * wartet in [stoppeUndWarte] sonst nicht auf seine letzte Minute.
+     */
+    private fun wechselFertig() {
+        hand.removeCallbacks(wechselVorbei)
+        if (frueher == 0L) return
+        frueher = 0L
+        if (laeuft) aufnahme.value = beginn
+    }
+
+    override fun onFlushComplete(requestCode: Int) {
+        when (requestCode) {
+            NACHLAUF_CODE -> if (haelt) beende()
+            WECHSEL_CODE -> wechselFertig()
+        }
+    }
+
+    /** Ortung ab, Meldung weg, Dienst aus - ohne auf den Puffer zu warten. */
+    private fun beende() {
+        hand.removeCallbacks(nachlaufVorbei)
+        hand.removeCallbacks(wechselVorbei)
+        frueher = 0L
+        haelt = false
         if (laeuft) {
             try {
                 getSystemService(LocationManager::class.java)?.removeUpdates(this)
@@ -154,16 +261,23 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             }
             laeuft = false
         }
+        aufnahme.value = 0L
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onLocationChanged(ort: Location) {
-        Spur.haengeAn(this, beginn, ort)
+        Spur.haengeAn(this, Spurwechsel.ziel(beginn, frueher), ort)
+    }
+
+    /** Ein Buendel des GPS: alle Punkte in einem Schreibvorgang (Spur.haengeAn). */
+    override fun onLocationChanged(orte: List<Location>) {
+        Spur.haengeAn(this, Spurwechsel.ziel(beginn, frueher), orte)
     }
 
     override fun onDestroy() {
-        halt()
+        // Hier gibt es kein Warten mehr: was noch im Puffer liegt, geht verloren.
+        beende()
         super.onDestroy()
     }
 
@@ -180,6 +294,17 @@ internal class SpurDienst : android.app.Service(), LocationListener {
     companion object {
         private const val KANAL = "kiesel-spur"
         private const val MELDUNG_ID = 4711
+
+        /** So lange darf das GPS seine Punkte sammeln: eine Minute, ~20 Punkte je Weckung. */
+        private const val BUENDEL_MS = 60_000L
+
+        /** So lange wartet ein Stopp hoechstens auf den Puffer; meist kommt er in Millisekunden. */
+        private const val NACHLAUF_MS = 3_000L
+        private const val NACHLAUF_CODE = 1
+        private const val WECHSEL_CODE = 2
+
+        /** Der Beginn des Trainings, das gerade aufgezeichnet wird, 0 ohne - fuer [stoppeUndWarte]. */
+        private val aufnahme = MutableStateFlow(0L)
         private const val TAG = "Kieselsport"
         private const val AUS = "coredevices.pebble.kiesel.SPUR_AUS"
         private const val EXTRA_BEGINN = "beginn"
@@ -232,6 +357,16 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             }
         }
 
+        /**
+         * Haelt die Spur an und wartet, bis ihr Puffer in der Datei steht. FUER
+         * DIE ZUSAMMENFASSUNG: sie liest die Spur gleich danach.
+         */
+        suspend fun stoppeUndWarte(context: Context, beginn: Long) {
+            stoppe(context, beginn)
+            // 2 s ueber dem Nachlauf: der Dienst braucht selbst einen Moment bis zum Stopp.
+            Spurwechsel.warteBisFrei(aufnahme, beginn, NACHLAUF_MS + 2_000)
+        }
+
         /** Haelt die Spur an - mit [beginn] nur die dieses Trainings. */
         fun stoppe(context: Context, beginn: Long? = null) {
             val i = Intent(context, SpurDienst::class.java).setAction(AUS)
@@ -244,4 +379,22 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             }
         }
     }
+}
+
+/**
+ * Die Regeln des [SpurDienst] ohne Android - so prueft SpurwechselTest sie auf dem Rechner.
+ */
+internal object Spurwechsel {
+    /**
+     * In welche Datei ein Punkt geht: waehrend eines Wechsels ([frueher] > 0) noch
+     * in die des alten Trainings - sein Puffer ist aelter als der Start des neuen.
+     */
+    fun ziel(beginn: Long, frueher: Long): Long = if (frueher > 0L) frueher else beginn
+
+    /**
+     * Wartet, bis [aufnahme] nicht mehr [beginn] ist (Puffer in der Datei, Dienst
+     * aus oder schon beim naechsten), hoechstens [ms]. true, wenn es so kam.
+     */
+    suspend fun warteBisFrei(aufnahme: StateFlow<Long>, beginn: Long, ms: Long): Boolean =
+        withTimeoutOrNull(ms) { aufnahme.first { it != beginn } } != null
 }

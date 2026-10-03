@@ -346,7 +346,8 @@ internal object Kieselsport {
 
         // NUR DIE SPUR DIESES TRAININGS: kommt die Zusammenfassung eines
         // frueheren erst, wenn das naechste schon laeuft, liefe dessen GPS weiter.
-        felder[SP_BEGINN]?.let { SpurDienst.stoppe(context, it) }
+        // Und warten, bis der GPS-Puffer (bis 60 s) in der Datei steht - gleich danach wird sie gelesen.
+        felder[SP_BEGINN]?.let { SpurDienst.stoppeUndWarte(context, it) }
         return trageEin(context, n, dauer, empfangen)
     }
 

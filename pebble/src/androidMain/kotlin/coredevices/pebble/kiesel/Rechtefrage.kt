@@ -26,6 +26,12 @@ internal object Rechtefrage {
     private const val GEFRAGT_ALT = "akte_rechte_gefragt"
 
     suspend fun beimStart(context: Context) {
+        // Der versionCode zaehlt Commits, also jeden Testbuild - gemeint ist die Fassung.
+        val fassung = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+        val prefs = context.getSharedPreferences("boulder_rechtefrage", Context.MODE_PRIVATE)
+        val gefragt = prefs.getString(GEFRAGT, null)
+        // Zuerst die gemerkte Fassung: spart bei jedem weiteren Start den Aufruf in die Akte.
+        if (schonGefragt(gefragt, fassung)) return
         val fehlend = try {
             // Ohne Akte gibt es nichts zu fragen - und nichts, woran der Start scheitern koennte.
             val klient = Akte(context).bereit() ?: return
@@ -34,10 +40,7 @@ internal object Rechtefrage {
             Log.w(TAG, "Rechte lesen: " + e.message)
             return
         }
-        // Der versionCode zaehlt Commits, also jeden Testbuild - gemeint ist die Fassung.
-        val fassung = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
-        val prefs = context.getSharedPreferences("boulder_rechtefrage", Context.MODE_PRIVATE)
-        if (!sollFragen(fehlend, prefs.getString(GEFRAGT, null), fassung)) return
+        if (!sollFragen(fehlend, gefragt, fassung)) return
         // Vor dem Dialog gemerkt, nicht danach: stirbt die App waehrend des
         // Dialogs, fragte sonst jeder Start wieder - eine Schleife ohne Ausweg.
         prefs.edit().putString(GEFRAGT, fassung).remove(GEFRAGT_ALT).apply()
@@ -47,5 +50,7 @@ internal object Rechtefrage {
 
     /** Fragen, wenn etwas fehlt und diese Fassung noch nicht gefragt hat. */
     internal fun sollFragen(fehlend: Set<String>, gefragt: String?, fassung: String): Boolean =
-        fehlend.isNotEmpty() && gefragt != fassung
+        fehlend.isNotEmpty() && !schonGefragt(gefragt, fassung)
+
+    internal fun schonGefragt(gefragt: String?, fassung: String): Boolean = gefragt == fassung
 }

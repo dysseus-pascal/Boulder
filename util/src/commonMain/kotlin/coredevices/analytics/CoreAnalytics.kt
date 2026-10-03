@@ -12,6 +12,8 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -43,6 +45,7 @@ class RealCoreAnalytics(
     // We can't see libpebble from util right now, so it has to be this way around
     private val lastConnectedSerial = MutableStateFlow<String?>(null)
     private val cache = createAnalyticsCache()
+    private val zustaende = Zustandsfilter()
 
     override fun logEvent(
         name: String,
@@ -52,6 +55,9 @@ class RealCoreAnalytics(
     }
 
     override suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: Instant) {
+        // Boulder: nur Wechsel - die Uhrenliste kommt bei jeder Akkuzahl neu, das
+        // waren einige hundert gleiche Inserts am Tag.
+        if (!zustaende.wechsel(name, value)) return
         heartbeatStateDao.updateState(HeartbeatStateEntity(name = name, state = value, timestamp = timestamp.toEpochMilliseconds()))
     }
 
@@ -156,6 +162,18 @@ private const val HEARTBEAT_STATE_WATCH_CONNECT_PERCENT = "watch_connect_percent
 fun heartbeatWatchConnectedName(type: WatchHardwarePlatform) = "${HEARTBEAT_STATE_WATCH_CONNECTED}${type.revision}"
 fun heartbeatWatchConnectGoalName(type: WatchHardwarePlatform) = "${HEARTBEAT_STATE_WATCH_CONNECT_GOAL}${type.revision}"
 fun heartbeatWatchConnectPercentName(type: WatchHardwarePlatform) = "${HEARTBEAT_STATE_WATCH_CONNECT_PERCENT}${type.revision}"
+
+/** Boulder: ein gleicher Wert aendert processHeartbeatState nicht - true zaehlt bis zum naechsten Eintrag. */
+internal class Zustandsfilter {
+    private val sperre = Mutex()
+    private val zuletzt = mutableMapOf<String, Boolean>()
+
+    suspend fun wechsel(name: String, wert: Boolean): Boolean = sperre.withLock {
+        if (zuletzt[name] == wert) return@withLock false
+        zuletzt[name] = wert
+        true
+    }
+}
 
 fun processHeartbeatState(values: List<HeartbeatStateEntity>, name: String): HeartbeatMetric? {
     if (values.isEmpty()) {

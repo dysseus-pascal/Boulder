@@ -110,6 +110,8 @@ class PebbleAppDelegate(
                 }
             }
             GlobalScope.launch {
+                // Boulder: die Liste kommt bei jeder Akkuzahl neu, die Seriennummer bleibt.
+                var letzteSerie: String? = null
                 libPebble.watches.collect { watches ->
                     watches.forEach { watch ->
                         if (watch is ConnectedPebble.Firmware) {
@@ -127,7 +129,10 @@ class PebbleAppDelegate(
                             firmwareUpdateUiTracker.firmwareUpdateIsInProgress(watch.identifier)
                         }
                         if (watch is CommonConnectedDevice) {
-                            usersDao.updateLastConnectedWatch(watch.serial)
+                            if (watch.serial != letzteSerie) {
+                                letzteSerie = watch.serial
+                                usersDao.updateLastConnectedWatch(watch.serial)
+                            }
                             batteryChargedNotifier.onBatteryLevel(
                                 watch.identifier,
                                 watch.name,

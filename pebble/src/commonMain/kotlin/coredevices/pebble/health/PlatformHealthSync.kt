@@ -16,6 +16,7 @@ import com.viktormykhailiv.kmp.health.records.metadata.Metadata
 import coredevices.util.AppResumed
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
@@ -57,6 +58,7 @@ class PlatformHealthSync(
     // (etwa die eine Meldung eines Schubs) holt der laufende nach.
     private val einzellauf = Einzellauf(beiFehler = { logger.e(it) { "Health platform sync failed" } })
     val syncing: StateFlow<Boolean> = einzellauf.laeuft
+    private val rechteanlass = Rechteanlass()
 
     /** Start observing health data updates and app foreground events, auto-syncing to the platform. */
     fun startAutoSync(scope: CoroutineScope) {
@@ -68,6 +70,8 @@ class PlatformHealthSync(
         scope.launch {
             sync()
             appResumed.appResumed.collect {
+                // Boulder: beim Zurueckkehren fragt der Sync die Akte auch ohne Neues.
+                rechteanlass.merke()
                 sync()
             }
         }
@@ -144,6 +148,9 @@ class PlatformHealthSync(
         einzellauf.lauf {
             // Ein Nachlauf nach entzogener Berechtigung soll nicht erneut fragen.
             if (!tracker.enabled.value) return@lauf
+            // Boulder: die Rechtefrage ist IPC (10-30 ms); ohne Neues nur nach Start und
+            // Rueckkehr in die App - so fallen die ~24 Stundenlaeufe am Tag ohne Neues weg.
+            if (!rechteanlass.fragen { gibtNeues() }) return@lauf
             // Boulder: nur ein klares Nein der Akte schaltet aus. Antwortet sie
             // gerade nicht (Update, Dienst startet), wartet der Sync auf den
             // naechsten Anstoss, statt sich ohne den Schalter abzuschalten.
@@ -161,14 +168,29 @@ class PlatformHealthSync(
         }
     }
 
+    /** Boulder: genau dann, wenn einer der vier Syncs unten etwas schreiben wuerde. */
+    private suspend fun gibtNeues(): Boolean =
+        (healthDataApi.getLatestTimestamp() ?: 0L) > tracker.lastSyncedStepsTimestamp ||
+            healthDataApi.getOverlayEntriesAfter(tracker.lastSyncedOverlayTimestamp, SYNC_OVERLAYS).isNotEmpty() ||
+            (supportsOxygenSaturationWriting() &&
+                (healthDataApi.getLatestSpo2Reading()?.timestampEpochSec ?: 0L) > tracker.lastSyncedSpo2Timestamp) ||
+            (supportsNaechteWriting() && neueNaechte().isNotEmpty())
+
     private suspend fun syncStepsAndHeartRate() {
         val lastTimestamp = tracker.lastSyncedStepsTimestamp
         val latestTimestamp = healthDataApi.getLatestTimestamp() ?: return
         if (latestTimestamp <= lastTimestamp) return
+        // Boulder: tageweise, Cursor je Block; im Alltag (~15 Minuten) ein Block wie bisher.
+        inTagesbloecken(
+            nach = lastTimestamp,
+            letzte = latestTimestamp,
+            hatZeilen = { von, bis -> healthDataApi.getTotalHealthData(von, bis)?.steps != null },
+            lies = { von, bis -> healthDataApi.getHealthDataForRange(von, bis) },
+            verarbeite = { schreibeMinuten(it) },
+        )
+    }
 
-        val records = healthDataApi.getHealthDataAfter(lastTimestamp)
-        if (records.isEmpty()) return
-
+    private suspend fun schreibeMinuten(records: List<HealthDataEntity>): Boolean {
         val healthRecords = mutableListOf<HealthRecord>()
 
         for (entity in records) {
@@ -208,10 +230,12 @@ class PlatformHealthSync(
                 logger.d { "Synced ${healthRecords.size} step/HR records" }
             } else {
                 logger.e { "Failed to write step/HR records: ${result.exceptionOrNull()}" }
+                return false
             }
         } else {
             tracker.lastSyncedStepsTimestamp = records.last().timestamp
         }
+        return true
     }
 
     private suspend fun syncNaechte() {
@@ -219,9 +243,7 @@ class PlatformHealthSync(
         // AUCH DIE ZULETZT GESCHRIEBENE NACHT NOCH EINMAL, wenn sie sich
         // geaendert hat: die Uhr schickt eine Nacht nach weiterem Schlaf mit
         // demselben Beginn erneut. Die Akte ersetzt sie (gleiche Kennung).
-        val letzter = tracker.lastSyncedNachtBeginn
-        val naechte = healthDataApi.getNaechte(letzter, Long.MAX_VALUE)
-            .filter { it.beginnUtc != letzter || nachtStand(it) != tracker.lastSyncedNachtStand }
+        val naechte = neueNaechte()
         if (naechte.isEmpty()) return
         val mitPhasen = naechte.map { it to healthDataApi.getNachtAbschnitte(it.beginnUtc) }
         if (writeNaechteToPlatform(mitPhasen)) {
@@ -232,43 +254,44 @@ class PlatformHealthSync(
         }
     }
 
+    private suspend fun neueNaechte(): List<NachtEntity> {
+        val letzter = tracker.lastSyncedNachtBeginn
+        return healthDataApi.getNaechte(letzter, Long.MAX_VALUE)
+            .filter { it.beginnUtc != letzter || nachtStand(it) != tracker.lastSyncedNachtStand }
+    }
+
     private fun nachtStand(n: NachtEntity): String = "${n.aufwachen}:${n.schlafMinuten}"
 
     private suspend fun syncOxygenSaturation() {
         if (!supportsOxygenSaturationWriting()) return
         val lastTimestamp = tracker.lastSyncedSpo2Timestamp
-        val readings = healthDataApi.getSpo2ReadingsAfter(lastTimestamp)
-        if (readings.isEmpty()) return
-
-        val result = writeOxygenSaturationToPlatform(readings)
-        if (result) {
-            tracker.lastSyncedSpo2Timestamp = readings.last().timestamp
-            logger.d { "Synced ${readings.size} SpO2 records" }
-        } else {
-            logger.e { "Failed to write SpO2 records: keeping last-synced cursor" }
+        val juengste = healthDataApi.getLatestSpo2Reading()?.timestampEpochSec ?: return
+        if (juengste <= lastTimestamp) return
+        inTagesbloecken(
+            nach = lastTimestamp,
+            letzte = juengste,
+            hatZeilen = { von, bis -> healthDataApi.getAverageSpo2(von, bis) != null },
+            lies = { von, bis -> healthDataApi.getSpo2Readings(von, bis) },
+        ) { readings ->
+            val result = writeOxygenSaturationToPlatform(readings)
+            if (result) {
+                tracker.lastSyncedSpo2Timestamp = readings.last().timestamp
+                logger.d { "Synced ${readings.size} SpO2 records" }
+            } else {
+                logger.e { "Failed to write SpO2 records: keeping last-synced cursor" }
+            }
+            result
         }
     }
 
+    // Boulder: ohne Bloecke - wenige je Tag, und eine Grenze zerschnitte die Schlafgruppen.
     private suspend fun syncOverlays() {
         val lastTimestamp = tracker.lastSyncedOverlayTimestamp
-        val sleepTypes = listOf(
-            OverlayType.Sleep.value,
-            OverlayType.DeepSleep.value,
-            OverlayType.Nap.value,
-            OverlayType.DeepNap.value,
-        )
-        // Boulder: kein Walk/Run. Erkannte Bewegung ist kein Training - aus
-        // jedem Weg zum Bus wurde sonst eines in der Akte (Firmware vor b1).
-        val exerciseTypes = listOf(
-            OverlayType.OpenWorkout.value,
-        )
-        val allTypes = sleepTypes + exerciseTypes
-
-        val overlays = healthDataApi.getOverlayEntriesAfter(lastTimestamp, allTypes)
+        val overlays = healthDataApi.getOverlayEntriesAfter(lastTimestamp, SYNC_OVERLAYS)
         if (overlays.isEmpty()) return
 
-        val sleepOverlays = overlays.filter { it.type in sleepTypes }
-        val exerciseOverlays = overlays.filter { it.type in exerciseTypes }
+        val sleepOverlays = overlays.filter { it.type in SCHLAF_OVERLAYS }
+        val exerciseOverlays = overlays.filter { it.type in TRAINING_OVERLAYS }
 
         var maxSyncedTimestamp = lastTimestamp
 
@@ -408,6 +431,22 @@ class PlatformHealthSync(
         )
     }
 }
+
+// Boulder: aus syncOverlays heraufgezogen, weil gibtNeues dieselben Arten braucht.
+private val SCHLAF_OVERLAYS = listOf(
+    OverlayType.Sleep.value,
+    OverlayType.DeepSleep.value,
+    OverlayType.Nap.value,
+    OverlayType.DeepNap.value,
+)
+
+// Boulder: kein Walk/Run. Erkannte Bewegung ist kein Training - aus
+// jedem Weg zum Bus wurde sonst eines in der Akte (Firmware vor b1).
+private val TRAINING_OVERLAYS = listOf(
+    OverlayType.OpenWorkout.value,
+)
+
+private val SYNC_OVERLAYS = SCHLAF_OVERLAYS + TRAINING_OVERLAYS
 
 /**
  * Boulder: der Stand des Syncs nach einer Rechtefrage, null fuer unveraendert.

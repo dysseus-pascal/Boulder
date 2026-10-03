@@ -40,7 +40,7 @@ jobs:
       - name: Fester Debug-Schlüssel
         run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
       - name: Tests
-        run: ./gradlew :libpebble3:testAndroidHostTest :pebble:testAndroidHostTest :util:testAndroidHostTest :androidApp:testDebugUnitTest
+        run: ./gradlew :libpebble3:testAndroidHostTest :pebble:testAndroidHostTest :composeApp:testAndroidHostTest :util:testAndroidHostTest :androidApp:testDebugUnitTest
       - name: Bauen
         # Release-Build (R8, nicht debuggable), signiert mit dem festen Debug-Schluessel:
         # so installiert er sich als Update ueber jede bisherige Boulder-Fassung.

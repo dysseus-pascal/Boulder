@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -206,8 +207,8 @@ private fun linie(farbe: Int, breite: Float) = Paint().apply {
 
 /**
  * Die Farbstrecke als EIN Overlay: ~216 Polylines bei 441 Punkten projizierte
- * osmdroid in jedem Bild einzeln (52 % Ruckler). Gezeichnet wird dasselbe, auch
- * in derselben Reihenfolge - auf Hin- und Rueckweg liegt der spaetere Lauf oben.
+ * osmdroid in jedem Bild einzeln. Gezeichnet wird dasselbe, auch in derselben
+ * Reihenfolge - auf Hin- und Rueckweg liegt der spaetere Lauf oben.
  */
 private class Farbspur(
     private val punkte: List<GeoPoint>,
@@ -259,8 +260,8 @@ private class Farbspur(
  * oeffnet [onClick], dort ist die Karte beweglich.
  *
  * SIE WIRD EIN STANDBILD, sobald alle Kacheln da sind: lebend zeichnete sie beim
- * Rollen in jedem Bild neu (30-33 % Ruckler) und hielt 5-6 MB Kacheln. Fehlen
- * Kacheln (ohne Netz), bleibt sie lebend.
+ * Rollen in jedem Bild neu und hielt 5-6 MB Kacheln. Fehlen Kacheln (ohne Netz),
+ * bleibt sie lebend.
  */
 @Composable
 internal fun Kartenvorschau(punkte: List<Pair<Double, Double>>, ton: androidx.compose.ui.graphics.Color, modifier: Modifier, onClick: () -> Unit) {
@@ -280,6 +281,9 @@ internal fun Kartenvorschau(punkte: List<Pair<Double, Double>>, ton: androidx.co
         val b = bild
         if (b != null) {
             Image(b, null, Modifier.matchParentSize(), contentScale = ContentScale.FillBounds)
+            // Verlaesst das Bild den Schirm, gibt recycle() seine ~1,5 MB Pixel sofort frei: ein GC kommt im
+            // stillen Prozess lange nicht, und mit Bedienungshilfen haelt Compose den alten Knoten noch fest.
+            DisposableEffect(b) { onDispose { Standbild.gibFrei(b.asAndroidBitmap()) } }
         } else if (lebend) {
             LebendeVorschau(punkte, ton, Modifier.matchParentSize(), breite, hoehe, fotografiere = fest) { foto ->
                 bild = foto.asImageBitmap()
@@ -363,7 +367,9 @@ private fun warteAufKacheln(k: MapView, breite: Int, hoehe: Int, fertig: (Bitmap
 /** Das Standbild der Vorschau im Cache - nur eines, die Vorschau zeigt immer das letzte Training. */
 private object Standbild {
     private const val ORDNER = "kartenvorschau"
-    private val schreiber = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Ein Faden der Reihe nach: [gibFrei] kommt erst dran, wenn ein [schreibe] desselben Bildes fertig ist. */
+    private val schreiber = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     /** Strecke, Farbe und Groesse in Pixeln als Name - aendert sich eines, passt das alte Bild nicht mehr. */
     fun schluessel(punkte: List<Pair<Double, Double>>, ton: Int, breite: Int, hoehe: Int): String {
@@ -396,5 +402,10 @@ private object Standbild {
                 Log.w("Kartenvorschau", "Standbild sichern: " + e.message)
             }
         }
+    }
+
+    /** Erst nach dem Schreiben: ein frueheres recycle() liesse compress() scheitern, das Bild fehlte im Cache. */
+    fun gibFrei(foto: Bitmap) {
+        schreiber.launch { foto.recycle() }
     }
 }

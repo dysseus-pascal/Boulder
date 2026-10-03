@@ -247,6 +247,7 @@ internal class Mithoerer(
                         e?.meldung?.takeUnless { g.nachgeholt && e.gescheitert }?.let {
                             KieselVerlauf.merke(context, it)
                             GesundheitWidget.stosseAn(context)
+                            Trenddaten.eintragGeschrieben()
                         }
                         val rest = e?.takeIf { it.gescheitert }?.rest
                         // Nur was scheiterte, bleibt liegen: ein schon eingetragener Kaffee kaeme

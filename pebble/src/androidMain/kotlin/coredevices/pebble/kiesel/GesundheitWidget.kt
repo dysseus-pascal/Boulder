@@ -55,8 +55,9 @@ class GesundheitWidget : AppWidgetProvider() {
                     ausgang to wende
                 }
                 // Die Nachlaeufe sind begrenzt, damit dieses goAsync nicht ueber seine
-                // Frist waechst; was offen blieb, bekommt einen eigenen Broadcast.
-                if (ausgang == Einzellauf.Ausgang.OFFEN) stosseAn(context)
+                // Frist waechst; was offen blieb, bekommt einen eigenen Broadcast. Nur
+                // zeichnen: wer den offenen Anstoss gab, hat die Seiten schon veraltet.
+                if (ausgang == Einzellauf.Ausgang.OFFEN) zeichneNeu(context)
             } catch (e: Exception) {
                 Log.w("Widget", "Zeichnen: " + e.message)
             } finally {

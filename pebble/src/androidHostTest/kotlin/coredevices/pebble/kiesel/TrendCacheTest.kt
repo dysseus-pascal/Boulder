@@ -200,4 +200,27 @@ class TrendCacheTest {
         l.lade { nurUhr = it }
         assertEquals(false, nurUhr)
     }
+
+    @Test
+    fun ein_eigener_eintrag_laesst_den_naechsten_schub_alles_lesen() = runTest {
+        var eintraege = 0
+        val l = Trendladen { eintraege }
+        val nurUhr = mutableListOf<Boolean>()
+        l.lade { nurUhr += it }
+        l.lade { nurUhr += it }
+        eintraege++
+        l.lade { nurUhr += it }
+        l.lade { nurUhr += it }
+        assertEquals(listOf(false, true, false, true), nurUhr)
+    }
+
+    @Test
+    fun ein_eintrag_waehrend_des_vollen_ladens_gilt_fuer_das_naechste() = runTest {
+        var eintraege = 0
+        val l = Trendladen { eintraege }
+        val nurUhr = mutableListOf<Boolean>()
+        l.lade { nurUhr += it; eintraege++ }
+        l.lade { nurUhr += it }
+        assertEquals(listOf(false, false), nurUhr)
+    }
 }

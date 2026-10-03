@@ -27,10 +27,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
@@ -132,8 +134,12 @@ internal fun Verlauf(
     val spanne = stringResource(R.string.ks_v_bild_spanne, Formate.zahl(punkte.minOf { it.wert }, nachkomma), Formate.zahl(punkte.maxOf { it.wert }, nachkomma))
     val satz = beschreibung ?: listOf(Formate.Angabe(spanne, einheit).text, gesamt).filter { it.isNotEmpty() }.joinToString(", ")
 
+    // Stueck fuer Stueck gefaerbt: ein paar hundert Linien, die die GPU ohne eigene Ebene beim Rollen
+    // in jedem Bild neu rastert (Trainingsdetail im Emulator 34 % statt 4 % Ruckler). Die Ebene endet
+    // am Bildrand, die runde Kappe des ersten Punkts verliert dort ~1 dp.
+    val ebene = if (farbeJeWert != null) Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen) else Modifier
     // Die Hoehe waechst mit der Schrift des Fusses, damit die Kurve nicht schrumpft.
-    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(satz)) {
+    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).then(ebene).bildBeschreibung(satz)) {
         // Der Fuss aus der Schrift gemessen: fest 16 dp liefen Kilometer und Minuten ab 1,15 ins Bild.
         val fuss = fussraum(messer, stil)
         val kopf = 8.dp.toPx()

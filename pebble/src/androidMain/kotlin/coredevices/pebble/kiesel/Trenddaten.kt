@@ -10,6 +10,9 @@ import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
@@ -252,6 +255,17 @@ internal object Trenddaten {
     /** Die Akte je Tag, solange eine Trendseite sichtbar ist ([seiteSichtbar]). */
     private val akteteile = Seitencache<LocalDate, Akteteil>()
 
+    private val eintraege = MutableStateFlow(0)
+
+    /**
+     * Zaehlt, was Boulder selbst in die Akte schrieb, waehrend eine Trendseite offen sein kann
+     * (ein Glas oder Praeparat von der Uhr). Die Seite liest darauf alles: ein Uhrschub nimmt
+     * Wasser und Koffein aus [akteteile] und zeigte das Glas sonst erst nach einer Rueckkehr.
+     */
+    val eigeneEintraege: StateFlow<Int> = eintraege
+
+    fun eintragGeschrieben() = eintraege.update { it + 1 }
+
     /**
      * Boulder: eine Trendseite wird sichtbar (ON_START) bzw. geht (ON_STOP oder Abbau). Nur
      * dazwischen halten Akte und [Tagesspeicher] Zwischenstaende - danach lagen sonst 0,5-1 MB
@@ -341,20 +355,31 @@ internal object Trenddaten {
 
 /**
  * Boulder: ob das naechste Laden der Trendseite alles liest oder nach einem Uhrschub nur die Uhr.
- * Der Aufbau und jede Rueckkehr ([rueckkehr], ON_RESUME) lesen alles - etwa ein Glas aus
- * Drinktervall, das nur ueber die Akte kommt. Erst ein fertiges volles Laden gibt die Schuebe
- * frei: bricht ein Schub es ab (neuer Schluessel im LaunchedEffect), liest der naechste wieder alles.
+ * Der Aufbau, jede Rueckkehr ([rueckkehr], ON_RESUME) und jeder eigene Eintrag ([eintraege], etwa
+ * ein Glas aus Drinktervall, das nur ueber die Akte kommt) lesen alles. Erst ein fertiges volles
+ * Laden gibt die Schuebe frei: bricht ein Schub es ab (neuer Schluessel im LaunchedEffect), liest
+ * der naechste wieder alles.
  */
-internal class Trendladen {
+internal class Trendladen(private val eintraege: () -> Int = { Trenddaten.eigeneEintraege.value }) {
     @Volatile
     private var allesFaellig = true
+
+    /** Der Zaehler der eigenen Eintraege beim Beginn des letzten vollen Ladens. */
+    @Volatile
+    private var gesehen = 0
 
     fun rueckkehr() {
         allesFaellig = true
     }
 
     suspend fun <T> lade(lies: suspend (nurUhr: Boolean) -> T): T {
-        val alles = allesFaellig
-        return lies(!alles).also { if (alles) allesFaellig = false }
+        val stand = eintraege()
+        val alles = allesFaellig || stand != gesehen
+        return lies(!alles).also {
+            if (alles) {
+                allesFaellig = false
+                gesehen = stand
+            }
+        }
     }
 }

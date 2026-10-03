@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel.ansicht
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,8 +56,8 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     // Neu auch nach jedem Schub der Uhr: eine Nacht, die gerade ankommt, gehoert gleich in die Reihen.
-    // Ein Schub liest nur die Uhr neu, die Akte (2-3 Abfragen, 50-150 ms) bleibt; Aufbau und
-    // Rueckkehr lesen alles - etwa ein Glas aus Drinktervall, das nur ueber die Akte kommt.
+    // Ein Schub liest nur die Uhr neu, die Akte (2-3 Abfragen, 50-150 ms) bleibt; Aufbau, Rueckkehr
+    // und ein eigener Eintrag lesen alles - etwa ein Glas aus Drinktervall, das nur ueber die Akte kommt.
     // Die Zwischenstaende dafuer halten nur, solange die Seite sichtbar ist (0,5-1 MB).
     LifecycleStartEffect(Unit) {
         Trenddaten.seiteSichtbar()
@@ -64,7 +65,8 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     }
     val laden = remember { Trendladen() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { laden.rueckkehr() }
-    val stand = rememberStand(Trenddaten.zuletzt, rememberUhrschub()) {
+    val eintraege by Trenddaten.eigeneEintraege.collectAsState()
+    val stand = rememberStand(Trenddaten.zuletzt, rememberUhrschub(), eintraege) {
         laden.lade { nurUhr -> Trenddaten.lies(context, api, nurUhr = nurUhr) }
     }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.

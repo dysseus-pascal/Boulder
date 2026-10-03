@@ -26,10 +26,13 @@ import kotlin.math.roundToInt
 /**
  * Herz samt Blutdruck, Koerper, Wasser, Praeparate, Koffein als Zeilen. Das
  * Chevron fuehrt zu Detail oder Trend; Eintragen hat sein eigenes "+".
+ * [frisch]: [s] ist neu gelesen, nicht der letzte Stand bei der Rueckkehr -
+ * erst dann liest die Koerperzeile (siehe [koerperzeile]).
  */
 @Composable
 internal fun Koerperliste(
     s: GesundheitsStand,
+    frisch: Boolean,
     wege: Gesundheitswege,
     zeigeKoffein: () -> Unit,
     zeigePraeparate: () -> Unit,
@@ -64,7 +67,7 @@ internal fun Koerperliste(
             )
         }
         // Nur wer sich wiegt, bekommt die Zeile - ohne Waage waere sie immer leer.
-        koerperzeile(s, wege.koerper)?.let { add(it) }
+        koerperzeile(s.takeIf { frisch }, wege.koerper)?.let { add(it) }
         if (s.mitDrinktervall) add {
             // Gezaehlt wie auf der Uhr: nur ihre Glaeser; die Liter umfassen alles Wasser des Tages.
             val letztes = s.glaeser.maxOrNull()

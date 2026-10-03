@@ -78,8 +78,10 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     var praeparatBlatt by remember { mutableStateOf(false) }
     var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
+    // Einmal genommen: an ihm erkennt die Koerperliste, dass noch der letzte Stand dasteht.
+    val vorher = remember { zuletztHeute() }
     // Neue Minutendaten von der Uhr (rememberUhrschub): dann stimmen Schritte und Puls nicht mehr.
-    val seite = rememberStand(zuletztHeute(), neu, rememberUhrschub()) { zeige ->
+    val seite = rememberStand(vorher, neu, rememberUhrschub()) { zeige ->
         val stand = Gesundheitsdaten.lies(context, api)
         val gelesen = LocalDateTime.now()
         geladen()
@@ -103,7 +105,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
         item { Spacer(Modifier.height(2.dp)) }
         item { Tagessatz(satz, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
         item { Tagesstrahl(s, satz.durchgeschlafen, trainings, wege) { neu++ } }
-        item { Koerperliste(s, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
+        item { Koerperliste(s, frisch = seite !== vorher, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }
     }

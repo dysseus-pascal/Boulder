@@ -39,12 +39,18 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
  * Gewicht und Fett der letzten 90 Tage gibt es keine.
  * Sie liest selbst, neu mit jedem [anlass] - der GesundheitsStand bleibt so,
  * wie das Widget ihn kennt.
+ *
+ * [anlass] NULL: DIE SEITE ZEIGT NOCH IHREN LETZTEN STAND. Bis der frische
+ * da ist, steht der letzte Koerperstand, ohne zu lesen - sonst laese die
+ * Zeile bei jeder Rueckkehr zweimal, fuer den alten Stand und gleich wieder
+ * fuer den neuen.
  */
 @Composable
 internal fun koerperzeile(anlass: Any?, oeffne: () -> Unit): (@Composable () -> Unit)? {
     val context = LocalContext.current
+    val stand = if (anlass == null) Koerperdaten.zuletzt
     // Ohne eigene Rueckkehr: dann laedt die Gesundheitsseite ohnehin, und mit ihrem Stand kommt der Anlass.
-    val stand = rememberStand(Koerperdaten.zuletzt, anlass, rueckkehr = false) { Koerperdaten.lies(context) }
+    else rememberStand(Koerperdaten.zuletzt, anlass, rueckkehr = false) { Koerperdaten.lies(context) }
     val imperial = einheitenImperial()
     val z = remember(stand) { stand?.let { Koerperrechnung.zeile(it, LocalDate.now(), ZoneId.systemDefault()) } } ?: return null
     return { KoerperZeile(z, imperial, oeffne) }

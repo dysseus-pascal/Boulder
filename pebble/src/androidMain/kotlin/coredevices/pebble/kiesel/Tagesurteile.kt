@@ -12,8 +12,8 @@ import kotlin.math.roundToInt
 
 /*
  * Die Worte der Gesundheitsseite - welches Urteil, welcher Satz, welche
- * Zeile. Hier und nicht in der Ansicht: die Schwellen stehen in der Fussnote
- * der Seite, und was dort versprochen wird, muss ein Test halten.
+ * Zeile. Hier und nicht in der Ansicht, damit ein Test die Schwellen ohne
+ * Oberflaeche pruefen kann.
  */
 
 internal enum class Schlafurteil { AUSGERUHT, KURZ, SEHR_KURZ }

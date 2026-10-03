@@ -38,7 +38,7 @@ class TagesurteileTest {
     }
 
     @Test
-    fun schlafurteil_nach_den_schwellen_der_fussnote() {
+    fun schlafurteil_nach_den_schwellen() {
         assertEquals(Schlafurteil.AUSGERUHT, g.schlafurteil(480))
         assertEquals(Schlafurteil.KURZ, g.schlafurteil(479))
         assertEquals(Schlafurteil.KURZ, g.schlafurteil(420))

@@ -23,29 +23,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-/** Der wache Tagesschnitt und was dazu zu sagen ist: Vergleich und Belastung. */
-internal class Tagespuls(val wachpuls: Int, val teile: List<String>)
-
-/**
- * Der Tagespuls fuer die Herzzeile und oben auf der Herzseite - eine Rechnung
- * fuer beide, damit die angetippte Zahl am Ziel wieder steht. Null ohne
- * wachen Tagesschnitt.
- */
-@Composable
-internal fun tagespuls(s: GesundheitsStand): Tagespuls? {
-    val urteil = Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now()) ?: return null
-    val wach = urteil.heute.wachpuls ?: return null
-    // Der Tagesschnitt statt des letzten Werts: der sagt, wie der Tag war
-    val vergleich = when {
-        urteil.abstand == null -> stringResource(R.string.ks_d_tagespuls)
-        urteil.abstand >= 3 -> stringResource(R.string.ks_d_tagespuls_hoch, urteil.abstand)
-        urteil.abstand <= -3 -> stringResource(R.string.ks_d_tagespuls_tief, -urteil.abstand)
-        else -> stringResource(R.string.ks_d_tagespuls_gleich)
-    }
-    val last = urteil.heute.belastung.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
-    return Tagespuls(wach, listOfNotNull(vergleich, last))
-}
-
 /**
  * Herz samt Blutdruck, Koerper, Wasser, Praeparate, Koffein als Zeilen. Das
  * Chevron fuehrt zu Detail oder Trend; Eintragen hat sein eigenes "+".

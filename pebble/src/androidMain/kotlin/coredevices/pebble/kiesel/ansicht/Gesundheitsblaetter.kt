@@ -23,7 +23,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import coredevices.pebble.kiesel.GesundheitWidget
-import coredevices.pebble.kiesel.Gesundheitsdaten
+import coredevices.pebble.kiesel.Akteneintraege
 import coredevices.pebble.kiesel.Kaffeesorten
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
@@ -121,11 +121,11 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                 // Unveraendert gespeichert schriebe die Werte der Sorte ueber die eingetragenen.
                 val geaendert = art != Kaffeesorten.art(start.sorte, start.milch, start.zucker, start.koffeinfrei)
                 Row(Modifier.fillMaxWidth().padding(horizontal = INNEN, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { ausfuehren { Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id)) } }) {
+                    TextButton(onClick = { ausfuehren { Akteneintraege.loesche(context, NutritionRecord::class, listOf(b.id)) } }) {
                         Text(stringResource(R.string.ks_b_loeschen), color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.weight(1f))
-                    Button(enabled = geaendert, onClick = { ausfuehren { Gesundheitsdaten.aendereGetraenk(context, b.id, art) } }) {
+                    Button(enabled = geaendert, onClick = { ausfuehren { Akteneintraege.aendereGetraenk(context, b.id, art) } }) {
                         Text(stringResource(R.string.ks_b_speichern))
                     }
                 }
@@ -136,11 +136,11 @@ internal fun Bearbeitungsblatt(b: Bearbeitung, onDismiss: () -> Unit, fertig: ()
                         onClick = {
                             ausfuehren {
                                 when (b) {
-                                    is Bearbeitung.Glas -> Gesundheitsdaten.loesche(context, HydrationRecord::class, listOf(b.id))
+                                    is Bearbeitung.Glas -> Akteneintraege.loesche(context, HydrationRecord::class, listOf(b.id))
                                     // Die Liste und die Quote zaehlen es dann auch nicht mehr - die Uhr erfaehrt davon nichts.
-                                    is Bearbeitung.Praeparate -> Gesundheitsdaten.loesche(context, NutritionRecord::class, b.ids)
+                                    is Bearbeitung.Praeparate -> Akteneintraege.loesche(context, NutritionRecord::class, b.ids)
                                         .also { if (it) SupCycle.verwirf(context, b.kennungen) }
-                                    is Bearbeitung.Getraenk -> Gesundheitsdaten.loesche(context, NutritionRecord::class, listOf(b.id))
+                                    is Bearbeitung.Getraenk -> Akteneintraege.loesche(context, NutritionRecord::class, listOf(b.id))
                                 }
                             }
                         },

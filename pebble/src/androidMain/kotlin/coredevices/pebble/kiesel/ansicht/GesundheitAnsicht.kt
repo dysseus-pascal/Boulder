@@ -18,24 +18,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
-import coredevices.pebble.kiesel.Bandurteil
+import coredevices.pebble.kiesel.Akteneintraege
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.versuche
-import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.TrainingsDaten
-import coredevices.pebble.kiesel.Vergleich
-import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.tagesSatz
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -118,7 +114,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
             val fehler = context.getString(R.string.ks_h_koffein_fehler)
             scope.launch {
                 // Ohne Rueckmeldung glaubte man den Kaffee eingetragen, und die Zahl stuende still.
-                if (!Gesundheitsdaten.trinkeKoffein(context, art)) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
+                if (!Akteneintraege.trinkeKoffein(context, art)) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
                 GesundheitWidget.stosseAn(context)
                 neu++
             }
@@ -126,39 +122,4 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     }
     if (praeparatBlatt) PraeparatBlatt(s) { praeparatBlatt = false }
     bearbeite?.let { b -> Bearbeitungsblatt(b, onDismiss = { bearbeite = null }) { bearbeite = null; neu++ } }
-}
-
-/**
- * Das Urteil zur HRV fuer den Nachtblock - nur, wenn es eins gibt; erklaert
- * wird nichts. Das zum Ruhepuls steht schon im Satz darueber und hier nicht
- * noch einmal.
- */
-@Composable
-internal fun herzHinweis(s: GesundheitsStand): String? {
-    if (s.nacht == null) return null
-    // Die HRV nach ihrem Band, wie die HRV-Karte der Herzseite
-    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull()) ?: return null
-    return urteilSatz(Herzurteil(0, null, null, 0), hrv)
-}
-
-/** Der Satz zu Ruhepuls und HRV, wenn wenigstens eins davon ein Urteil hat. */
-@Composable
-internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
-    if (ruhe.urteil == Vergleich.WIE_IMMER && hrv?.urteil == Vergleich.WIE_IMMER) return stringResource(R.string.ks_h_beide_wie_immer)
-    val teile = listOfNotNull(
-        when (ruhe.urteil) {
-            Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_ruhe_wie_immer)
-            Vergleich.HOEHER -> stringResource(R.string.ks_h_ruhe_hoeher, ruhe.abstand)
-            Vergleich.TIEFER -> stringResource(R.string.ks_h_ruhe_tiefer, ruhe.abstand)
-            null -> null
-        },
-        hrv?.let {
-            when (it.urteil) {
-                Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_hrv_wie_immer)
-                Vergleich.HOEHER -> stringResource(R.string.ks_h_hrv_hoeher, it.abstand)
-                Vergleich.TIEFER -> stringResource(R.string.ks_h_hrv_tiefer, it.abstand)
-            }
-        },
-    )
-    return teile.joinToString(" ")
 }

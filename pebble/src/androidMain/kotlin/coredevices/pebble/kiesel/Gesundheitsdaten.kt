@@ -94,8 +94,6 @@ internal data class GesundheitsStand(
     val wasserMl: Int,
     /** Die Glaeser von Drinktervall - Wasser anderer Apps zaehlt in [wasserMl], aber nicht als Glas. */
     val glaeser: List<Instant>,
-    /** Wasser je Tag, sieben Tage bis heute. */
-    val wocheWasser: List<Pair<LocalDate, Int>>,
     val wasserZiel: Drinktervall.Ziel?,
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
@@ -126,6 +124,11 @@ internal data class GesundheitsStand(
      */
     val gestern: List<Tageseintrag> = emptyList(),
     val gesternGlaeser: List<Glaseintrag> = emptyList(),
+    /**
+     * Die Naechte der letzten [Fenster.AKKU_TAGE] Tage, roh wie auf der
+     * Akkuseite - damit die Zeile auf Health dasselbe sagt wie sie.
+     */
+    val akkuNaechte: List<NachtEntity> = emptyList(),
 )
 
 /**
@@ -139,6 +142,22 @@ internal data class GesundheitsStand(
 internal object Gesundheitsdaten {
     private const val TAG = "Gesundheit"
 
+    /**
+     * Der zuletzt gelesene Stand - von der Seite, der Herzseite oder dem
+     * Widget -, solange der Prozess lebt. Die Seiten zeigen ihn bei der
+     * Rueckkehr gleich, statt erst einen Ladekreis. NUR VOM SELBEN TAG: nach
+     * Mitternacht gaebe er die Zahlen von gestern als die von heute aus.
+     */
+    val zuletzt: GesundheitsStand? get() = gemerkt?.takeIf { it.first == LocalDate.now() }?.second
+
+    @Volatile
+    private var gemerkt: Pair<LocalDate, GesundheitsStand>? = null
+
+    /** Die zuletzt gelesene Nacht im Einzelnen, solange der Prozess lebt - wie [zuletzt]. */
+    @Volatile
+    var zuletztNacht: NachtDetail? = null
+        private set
+
     suspend fun lies(context: Context, api: HealthDataApi): GesundheitsStand = withContext(Dispatchers.IO) {
         val zone = ZoneId.systemDefault()
         val heute = LocalDate.now()
@@ -151,16 +170,29 @@ internal object Gesundheitsdaten {
         val tageswerte = versuche(TAG, "Bewegung der Woche") { api.getDailyAggregates(anfang(woche.first()), anfang(heute)) }.orEmpty()
             .associate { LocalDate.parse(it.day) to (it.steps ?: 0L) } + (heute to (summe?.steps ?: 0L))
 
-        val naechte = Gesundheitsrechnung.jeTag(
-            versuche(TAG, "Naechte") { api.getNaechte(anfang(heute.minusDays(Fenster.VERGLEICHSNAECHTE + 2L)), jetzt.epochSecond) }.orEmpty(), zone,
-        )
+        // ALLE NAECHTE IN EINER ABFRAGE: Vergleich, Tagesherz, HRV-Band und Akku
+        // reichen verschieden weit zurueck. Gelesen wird einmal das weiteste
+        // Fenster, und jeder nimmt sich seinen Teil - vorher waren es vier Abfragen.
+        val vonVergleich = anfang(heute.minusDays(Fenster.VERGLEICHSNAECHTE + 2L))
+        val vonTagesherz = anfang(heute.minusDays(Fenster.TAGESHERZ_TAGE))
+        // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal Fenster.HRV_NAECHTE davor.
+        val vonHrv = anfang(woche.first().minusDays(Fenster.HRV_NAECHTE + 1L))
+        val vonAkku = jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond
+        val alleNaechte = versuche(TAG, "Naechte") {
+            api.getNaechte(minOf(vonVergleich, vonTagesherz - 86_400, vonHrv, vonAkku), jetzt.epochSecond)
+        }.orEmpty()
+        fun naechteAb(von: Long) = alleNaechte.filter { it.beginnUtc >= von }
+
+        val naechte = Gesundheitsrechnung.jeTag(naechteAb(vonVergleich), zone)
         val (letzte, frueher) = Gesundheitsrechnung.naechteTeilen(naechte, heute, zone)
         val nacht = letzte?.let { Gesundheitsrechnung.nacht(it, versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(it.beginnUtc) }.orEmpty()) }
         val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
         val vor24 = jetzt.epochSecond - 24 * 3600
-        val puls = versuche(TAG, "Puls") { api.getHealthDataForRange(vor24, jetzt.epochSecond) }.orEmpty()
+        // Der Minutenpuls einmal, so weit das Tagesherz zurueckblickt - die 24 Stunden der Kurve stecken darin.
+        val minutenpuls = versuche(TAG, "Puls") { api.getHealthDataForRange(minOf(vonTagesherz, vor24), jetzt.epochSecond) }.orEmpty()
             .filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
+        val puls = minutenpuls.filter { it.first >= vor24 }
         // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
         // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
         val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
@@ -168,15 +200,15 @@ internal object Gesundheitsdaten {
             .map { it.timestamp to it.spo2Percent }
 
         val klient = Akte(context).bereit()
-        val wochenAnfang = woche.first().atStartOfDay(zone).toInstant()
+        val vorEinemTag = jetzt.minus(Duration.ofHours(24))
+        // Wasser nur von heute und den letzten 24 Stunden - weiter zurueck zeigt es keine Seite.
+        val wasserVon = minOf(Instant.ofEpochSecond(anfang(heute)), vorEinemTag)
         val wasser = versuche(TAG, "Wasser lesen") {
-            klient?.lies(context, HydrationRecord::class, TimeRangeFilter.between(wochenAnfang, jetzt), Herkunft.ALLE_SONST_EIGENE)
+            klient?.lies(context, HydrationRecord::class, TimeRangeFilter.between(wasserVon, jetzt), Herkunft.ALLE_SONST_EIGENE)
         }.orEmpty()
-        val wasserJeTag = wasser.groupBy { it.startTime.atZone(zone).toLocalDate() }
-            .mapValues { (_, r) -> r.sumOf { it.volume.inMilliliters }.toInt() }
         val heuteWasser = wasser.filter { it.startTime.atZone(zone).toLocalDate() == heute }
         val nahrung = versuche(TAG, "Ernaehrung lesen") {
-            klient?.lies(context, NutritionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofHours(24)), jetzt), Herkunft.ALLE_SONST_EIGENE)
+            klient?.lies(context, NutritionRecord::class, TimeRangeFilter.between(vorEinemTag, jetzt), Herkunft.ALLE_SONST_EIGENE)
         }.orEmpty()
         val koffein = nahrung.mapNotNull { r -> r.caffeine?.inMilligrams?.takeIf { it > 0 }?.let { r.startTime to it } }
         val alleEintraege = nahrung.mapNotNull { r ->
@@ -188,7 +220,6 @@ internal object Gesundheitsdaten {
             Tageseintrag(r.startTime, art == Eintragsart.PRAEPARAT, name, mg, r.metadata.id, eigen, r.metadata.clientRecordId)
         }
         val eintraege = alleEintraege.filter { it.zeit.atZone(zone).toLocalDate() == heute }
-        val vorEinemTag = jetzt.minus(Duration.ofHours(24))
         val gesternWasser = wasser.filter { it.startTime.isAfter(vorEinemTag) && it.startTime.atZone(zone).toLocalDate() < heute }
 
         // DIE UHR MISST KEINEN BLUTDRUCK - er kommt von einer Manschette und
@@ -206,18 +237,12 @@ internal object Gesundheitsdaten {
         // Eine Rechnung der Zonen fuer Kurve und Belastung, damit beide dieselbe Grenze ziehen
         val zonen = Gesundheitsrechnung.pulsZonen(ruhe, maxpuls)
         val tagesherz = versuche(TAG, "Tagesherz") {
-            val von = anfang(heute.minusDays(Fenster.TAGESHERZ_TAGE))
-            val minutenpuls = api.getHealthDataForRange(von, jetzt.epochSecond).filter { it.heartRate > 0 }.map { it.timestamp to it.heartRate }
-            val schlafSpannen = api.getNaechte(von - 86_400, jetzt.epochSecond).map { e ->
+            val schlafSpannen = naechteAb(vonTagesherz - 86_400).map { e ->
                 (e.beginnUtc + e.einschlafen * 60L) to (e.beginnUtc + e.aufwachen * 60L)
             }
-            Gesundheitsrechnung.tagesherz(minutenpuls, schlafSpannen, zonen, LocalTime.now(), zone, heute)
+            Gesundheitsrechnung.tagesherz(minutenpuls.filter { it.first >= vonTagesherz }, schlafSpannen, zonen, LocalTime.now(), zone, heute)
         }.orEmpty()
-        // Das HRV-Band der aeltesten Nacht der Woche braucht noch einmal
-        // Fenster.HRV_NAECHTE davor - die Naechte oben reichen nur eine Woche zurueck.
-        val langeNaechte = versuche(TAG, "Naechte der HRV") {
-            Gesundheitsrechnung.jeTag(api.getNaechte(anfang(woche.first().minusDays(Fenster.HRV_NAECHTE + 1L)), jetzt.epochSecond), zone)
-        }.orEmpty()
+        val langeNaechte = Gesundheitsrechnung.jeTag(naechteAb(vonHrv), zone)
         val hrvTage = versuche(TAG, "HRV-Woche") {
             val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
             Gesundheitsrechnung.hrvWoche(jeTag, heute)
@@ -240,7 +265,6 @@ internal object Gesundheitsdaten {
             spo2 = spo2,
             wasserMl = heuteWasser.sumOf { it.volume.inMilliliters }.toInt(),
             glaeser = heuteWasser.filter { it.metadata.dataOrigin.packageName == context.packageName }.map { it.startTime }.sorted(),
-            wocheWasser = Gesundheitsrechnung.reihe(woche, wasserJeTag, 0),
             wasserZiel = Drinktervall.ziel(context),
             supplemente = SupCycle.heute(context),
             koffein = koffein.sortedBy { it.first },
@@ -257,7 +281,8 @@ internal object Gesundheitsdaten {
             juengsteNacht = juengste,
             gestern = alleEintraege.filter { it.eigen && !it.praeparat && it.zeit.atZone(zone).toLocalDate() < heute }.sortedBy { it.zeit },
             gesternGlaeser = gesternWasser.map { glaseintrag(context, it) }.filter { it.eigen }.sortedBy { it.zeit },
-        )
+            akkuNaechte = naechteAb(vonAkku),
+        ).also { gemerkt = heute to it }
     }
 
     private fun glaseintrag(context: Context, r: HydrationRecord) =
@@ -298,6 +323,6 @@ internal object Gesundheitsdaten {
             vorige = umgebung.lastOrNull { it.beginnUtc < beginnUtc }?.beginnUtc,
             naechste = umgebung.firstOrNull { it.beginnUtc > beginnUtc }?.beginnUtc,
             davor = frueher,
-        )
+        ).also { zuletztNacht = it }
     }
 }

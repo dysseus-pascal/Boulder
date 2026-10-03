@@ -211,6 +211,9 @@ interface HealthDataApi {
     /** Boulder: die Schlafphasen einer Nacht, in Minuten ab ihrem Beginn. */
     suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
 
+    /** Boulder: die Schlafphasen aller Naechte, deren Beginn in [von, bis) liegt, nach Nacht und Zeit geordnet. */
+    suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity>
+
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?
 

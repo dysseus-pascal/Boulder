@@ -21,8 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +51,9 @@ import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
+/** Eine geladene Nacht; [detail] null, wenn es sie nicht (mehr) gibt. */
+private class Nachtstand(val detail: Gesundheitsdaten.NachtDetail?)
+
 /**
  * Eine Nacht im Einzelnen, nach Konzept F: dieselben Daten wie im Zeitstrahl,
  * aber gross - die Dauer, die Phasen mit Anteil und Zeit, der Verlauf durch
@@ -63,17 +65,19 @@ import kotlin.math.roundToLong
 internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend: () -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
-    var beginn by remember { mutableLongStateOf(start) }
-    var detail by remember { mutableStateOf<Gesundheitsdaten.NachtDetail?>(null) }
-    var geladen by remember { mutableStateOf(false) }
-    LaunchedEffect(beginn) {
-        geladen = false
-        detail = Gesundheitsdaten.nacht(api, beginn)
-        geladen = true
+    // Saveable: zurueck aus den Trends stand sonst wieder die Nacht vom Einstieg da, nicht die geblaetterte.
+    var beginn by rememberSaveable { mutableLongStateOf(start) }
+    // Beim Blaettern bleibt die alte Nacht stehen, bis die neue da ist.
+    val geladen = rememberStand(Gesundheitsdaten.zuletztNacht?.takeIf { it.nacht.beginnUtc == beginn }?.let { Nachtstand(it) }, beginn) {
+        Nachtstand(Gesundheitsdaten.nacht(api, beginn))
     }
-    val d = detail
+    if (geladen == null) {
+        Ladekreis()
+        return
+    }
+    val d = geladen.detail
     if (d == null) {
-        if (!geladen) Ladekreis() else Leerseite(stringResource(R.string.ks_h_keine_nacht))
+        Leerseite(stringResource(R.string.ks_h_keine_nacht))
         return
     }
     val n = d.nacht

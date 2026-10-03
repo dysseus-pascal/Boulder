@@ -23,7 +23,6 @@ import coredevices.pebble.kiesel.Spalte
 import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.get
 import coredevices.pebble.kiesel.Trenddaten
-import coredevices.pebble.kiesel.Trendstand
 import coredevices.pebble.kiesel.UhrApps
 import coredevices.pebble.kiesel.Vergleichsfragen
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -51,8 +50,8 @@ import kotlin.math.roundToLong
 internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
-    var stand by remember { mutableStateOf<Trendstand?>(null) }
-    LaunchedEffect(Unit) { stand = Trenddaten.lies(context, api) }
+    // Neu auch nach jedem Schub der Uhr: eine Nacht, die gerade ankommt, gehoert gleich in die Reihen.
+    val stand = rememberStand(Trenddaten.zuletzt, rememberSync()) { Trenddaten.lies(context, api) }
     // Praeparate nur mit SupCycle auf der Uhr (UhrApps), wie auf der Startseite.
     var mitSupCycle by remember { mutableStateOf(true) }
     var mitDrinktervall by remember { mutableStateOf(true) }

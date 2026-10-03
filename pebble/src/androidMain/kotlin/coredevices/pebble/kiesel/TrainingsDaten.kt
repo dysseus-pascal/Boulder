@@ -174,9 +174,19 @@ internal object TrainingsDaten {
             s.metadata.clientRecordId?.startsWith("pebble-exercise-") == true) ||
             (!eigen(context, s) && Sportrechnung.erkannterGang(s.exerciseType, s.metadata.recordingMethod))
 
+    /**
+     * Die zuletzt geladene Uebersicht, solange der Prozess lebt. ZUERST DIE
+     * ALTE ZEIGEN: jede Rueckkehr aus einem Training baut die Seiten neu, und
+     * ohne sie stuende dort erst ein Ladekreis und die Liste landete nicht an
+     * ihrer alten Stelle.
+     */
+    @Volatile
+    var zuletzt: TrainingsUebersicht? = null
+        private set
+
     suspend fun uebersicht(context: Context): TrainingsUebersicht = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit()
-            ?: return@withContext TrainingsUebersicht(false, emptyList(), emptyList())
+            ?: return@withContext TrainingsUebersicht(false, emptyList(), emptyList()).also { zuletzt = it }
         val jetzt = Instant.now()
         val sitzungen = versuche(TAG, "Trainings lesen") {
             klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE)), jetzt))
@@ -186,7 +196,7 @@ internal object TrainingsDaten {
         val gewaehlt = gewaehlt(context, sitzungen)
         val distanzen = distanzen(klient, context, jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE)), jetzt)
         val trainings = gewaehlt.map { s -> eintrag(context, s, distanzen) }
-        TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene))
+        TrainingsUebersicht(true, trainings, offeneSpuren(context, eigene)).also { zuletzt = it }
     }
 
     /** Siehe [Sportrechnung.waehle]: ein Training, das zwei Apps schrieben, steht einmal da. */

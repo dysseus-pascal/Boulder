@@ -256,6 +256,8 @@ class Health(
 
     override suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity> = nachtDao.abschnitte(beginnUtc)
 
+    override suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity> = nachtDao.abschnitteZwischen(von, bis)
+
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)
 

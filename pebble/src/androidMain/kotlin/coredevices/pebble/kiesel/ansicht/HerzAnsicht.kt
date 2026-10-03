@@ -15,20 +15,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.GesundheitsStand
@@ -38,7 +31,6 @@ import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
-import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.compose.koinInject
 import java.time.Duration
 import java.time.Instant
@@ -57,13 +49,8 @@ private const val SPO2_WARNUNG = 90
 internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
-    val libPebble = koinInject<LibPebble>()
-    var stand by remember { mutableStateOf<GesundheitsStand?>(null) }
-    var neu by remember { mutableIntStateOf(0) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { neu++ }
-    LaunchedEffect(Unit) { libPebble.healthDataUpdated.collect { neu++ } }
-    LaunchedEffect(neu) { stand = Gesundheitsdaten.lies(context, api) }
-    val s = stand
+    // Derselbe Lader wie auf Health: von dort kommend steht die Seite gleich da.
+    val s = rememberStand(Gesundheitsdaten.zuletzt, rememberSync()) { Gesundheitsdaten.lies(context, api) }
     if (s == null) {
         Ladekreis()
         return

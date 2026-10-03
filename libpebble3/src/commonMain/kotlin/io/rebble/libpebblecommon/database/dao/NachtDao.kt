@@ -30,4 +30,9 @@ interface NachtDao {
 
     @Query("SELECT * FROM boulder_nacht_abschnitt WHERE beginnUtc = :beginnUtc ORDER BY von ASC")
     suspend fun abschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
+
+    // Die Trends brauchen die Phasen von bis zu 180 Naechten: eine Abfrage
+    // fuer alle statt einer je Nacht.
+    @Query("SELECT * FROM boulder_nacht_abschnitt WHERE beginnUtc >= :von AND beginnUtc < :bis ORDER BY beginnUtc ASC, von ASC")
+    suspend fun abschnitteZwischen(von: Long, bis: Long): List<NachtAbschnittEntity>
 }

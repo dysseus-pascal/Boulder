@@ -3,10 +3,8 @@ package coredevices.pebble.kiesel.ansicht
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -16,13 +14,13 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Fenster
+import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.Trainingsanalyse
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.database.entity.NachtEntity
 import org.koin.compose.koinInject
 import java.time.Duration
 import java.time.Instant
@@ -37,18 +35,12 @@ internal fun AkkuAnsicht() {
     val libPebble = koinInject<LibPebble>()
     val uhren by libPebble.watches.collectAsState()
     val aktuell = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
-    var naechte by remember { mutableStateOf<List<NachtEntity>?>(null) }
-    suspend fun lade() {
+    // Zuerst die Naechte, die Health fuer seine Akkuzeile las - dieselben. Neu
+    // geladen, wenn die Uhr etwas schickt, etwa die Nacht, die gerade ankommt.
+    val geladen = rememberStand(Gesundheitsdaten.zuletzt?.akkuNaechte, rememberSync()) {
         val jetzt = Instant.now()
-        naechte = versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
+        versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
     }
-    // Einmal beim Oeffnen, und wieder, wenn die Uhr etwas schickt - etwa die
-    // Nacht, die gerade ankommt.
-    LaunchedEffect(Unit) {
-        lade()
-        libPebble.healthDataUpdated.collect { lade() }
-    }
-    val geladen = naechte
     if (geladen == null) {
         Ladekreis()
         return

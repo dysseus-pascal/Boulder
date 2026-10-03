@@ -7,40 +7,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Koerperdaten
 import coredevices.pebble.kiesel.Koerperrechnung
 import coredevices.pebble.kiesel.Fenster
-import coredevices.pebble.kiesel.Koerperstand
 import coredevices.pebble.kiesel.Koerpertag
 import coredevices.pebble.kiesel.Koerperzeile
 import coredevices.pebble.kiesel.Zusammensetzung
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToLong
-
-/**
- * Die Koerperdaten aus der Akte, neu gelesen mit jedem [anlass]. Bis dahin
- * der zuletzt gelesene Stand, null nur beim allerersten Laden.
- */
-@Composable
-private fun koerperstand(anlass: Any?): Koerperstand? {
-    val context = LocalContext.current
-    val stand by produceState(Koerperdaten.zuletzt, anlass) { value = Koerperdaten.lies(context) }
-    return stand
-}
 
 /** Ein Anteil in Prozent mit einer Stelle, getrennt fuer die fette Zahl: "22.4" und "%". */
 private fun prozentEineStelle(p: Double) = Formate.Angabe(Formate.zahl(p, 1), "%")
@@ -60,7 +42,9 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
  */
 @Composable
 internal fun koerperzeile(anlass: Any?, oeffne: () -> Unit): (@Composable () -> Unit)? {
-    val stand = koerperstand(anlass)
+    val context = LocalContext.current
+    // Ohne eigene Rueckkehr: dann laedt die Gesundheitsseite ohnehin, und mit ihrem Stand kommt der Anlass.
+    val stand = rememberStand(Koerperdaten.zuletzt, anlass, rueckkehr = false) { Koerperdaten.lies(context) }
     val imperial = einheitenImperial()
     val z = remember(stand) { stand?.let { Koerperrechnung.zeile(it, LocalDate.now(), ZoneId.systemDefault()) } } ?: return null
     return { KoerperZeile(z, imperial, oeffne) }
@@ -91,9 +75,8 @@ private fun KoerperZeile(z: Koerperzeile, imperial: Boolean, oeffne: () -> Unit)
  */
 @Composable
 internal fun KoerperAnsicht() {
-    var neu by remember { mutableIntStateOf(0) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { neu++ }
-    val stand = koerperstand(neu)
+    val context = LocalContext.current
+    val stand = rememberStand(Koerperdaten.zuletzt) { Koerperdaten.lies(context) }
     val imperial = einheitenImperial()
     if (stand == null) {
         Ladekreis()

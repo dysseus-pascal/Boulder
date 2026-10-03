@@ -35,10 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -152,6 +150,13 @@ internal class Sportwege(
     val spuren: () -> Unit,
 )
 
+/** Was der Sport-Reiter zeigt: die Uebersicht, fehlende Rechte, Puls und Spur des letzten Trainings. */
+private class Sportseite(val daten: TrainingsUebersicht, val fehlendeRechte: Set<String>, val puls: Int?, val punkte: List<Spur.Punkt>)
+
+/** Der zuletzt gezeigte Reiter, solange der Prozess lebt (siehe [rememberStand]). */
+@Volatile
+private var zuletzt: Sportseite? = null
+
 /**
  * Der Sport-Reiter nach Konzept B "Das letzte Training zuerst": oben das
  * letzte Training gross mit seiner Strecke, darunter die Woche in drei Zahlen
@@ -163,33 +168,37 @@ internal class Sportwege(
 internal fun SportAnsicht(wege: Sportwege) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var daten by remember { mutableStateOf<TrainingsUebersicht?>(null) }
-    var fehlendeRechte by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var puls by remember { mutableStateOf<Int?>(null) }
-    var punkte by remember { mutableStateOf<List<Spur.Punkt>>(emptyList()) }
     var neu by remember { mutableIntStateOf(0) }
     var ortsstand by remember { mutableIntStateOf(0) }
     // Zurueck aus den Systemeinstellungen: dort kann sich die Erlaubnis geaendert haben.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { ortsstand++; neu++ }
-    LaunchedEffect(neu) {
+    // Die Daten laedt rememberStand bei der Rueckkehr selbst neu.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { ortsstand++ }
+    val seite = rememberStand(zuletzt, neu) { zeige ->
         val d = TrainingsDaten.uebersicht(context)
-        fehlendeRechte = TrainingsDaten.fehlendeRechte(context)
-        daten = d
+        val rechte = TrainingsDaten.fehlendeRechte(context)
+        val erstes = d.trainings.firstOrNull()
         // Erst die Seite, dann der Puls: die Abfrage haelt sonst jede Rueckkehr auf.
-        puls = d.trainings.firstOrNull()?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }
+        // Bis dahin Puls und Spur von vorher, wenn oben noch dasselbe Training steht.
+        val vorher = zuletzt?.takeIf { it.daten.trainings.firstOrNull()?.id == erstes?.id }
+        zeige(Sportseite(d, rechte, vorher?.puls, vorher?.punkte.orEmpty()))
+        val puls = erstes?.let { TrainingsDaten.mittelpuls(context, it.sitzung) }
         // Die Spur des letzten Trainings fuer die kleine Karte - eine Datei, kein
         // Akte-Zugriff, beschnitten wie die Strecke daneben.
-        punkte = d.trainings.firstOrNull()?.let { t ->
+        val punkte = erstes?.let { t ->
             withContext(Dispatchers.IO) { versuche("Kieselsport", "Spur fuer die Karte") { TrainingsDaten.punkte(context, t.sitzung) }.orEmpty() }
         }.orEmpty()
+        Sportseite(d, rechte, puls, punkte).also { zuletzt = it }
     }
     val ortStarter = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { ortsstand++ }
 
-    val d = daten
-    if (d == null) {
+    if (seite == null) {
         Ladekreis()
         return
     }
+    val d = seite.daten
+    val fehlendeRechte = seite.fehlendeRechte
+    val puls = seite.puls
+    val punkte = seite.punkte
     val heute = LocalDate.now()
     val (erlaubt, immer) = remember(ortsstand) { SpurDienst.darfOrten(context) to SpurDienst.darfImmerOrten(context) }
 

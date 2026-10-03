@@ -7,6 +7,8 @@ import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import io.rebble.libpebblecommon.connection.HealthDataApi
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -157,6 +159,41 @@ internal object Trenddaten {
         return ((einschlafen.epochSecond + aufwachen.epochSecond) / 2 - bezug.epochSecond) / 60.0
     }
 
+    /**
+     * Die Nachtreihen aus den Naechten der Firmware. [abschnitte] sind die
+     * Phasen ALLER dieser Naechte aus einer Abfrage; jede Nacht nimmt sich
+     * die mit ihrem Beginn.
+     */
+    fun nachtreihen(naechte: List<NachtEntity>, abschnitte: List<NachtAbschnittEntity>, zone: ZoneId): Reihen {
+        val jeNacht = abschnitte.groupBy { it.beginnUtc }
+        val schlaf = mutableListOf<Pair<LocalDate, Double>>()
+        val tief = mutableListOf<Pair<LocalDate, Double>>()
+        val mitte = mutableListOf<Pair<LocalDate, Double>>()
+        val ruhe = mutableListOf<Pair<LocalDate, Double>>()
+        val hrv = mutableListOf<Pair<LocalDate, Double>>()
+        val ein = mutableListOf<Pair<LocalDate, Double>>()
+        naechte.forEach { e ->
+            val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
+            if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
+            val phasen = Gesundheitsrechnung.phasenMinuten(jeNacht[e.beginnUtc].orEmpty())
+            if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()
+            if (e.aufwachen > e.einschlafen) {
+                // Das Einschlafen in Minuten ab 18 Uhr des Vortags, wie die Mitte - fuer "spaet ins Bett".
+                ein += tag to (Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L).epochSecond -
+                    tag.minusDays(1).atTime(18, 0).atZone(zone).toEpochSecond()) / 60.0
+                mitte += tag to schlafMitte(
+                    Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L), Instant.ofEpochSecond(e.beginnUtc + e.aufwachen * 60L), zone,
+                )
+            }
+            if (e.ruhepuls > 0) ruhe += tag to e.ruhepuls.toDouble()
+            if (e.hrv > 0) hrv += tag to e.hrv.toDouble()
+        }
+        return linkedMapOf(
+            Spalte.SCHLAF.schluessel to schlaf, Spalte.TIEF.schluessel to tief, Spalte.SCHLAF_MITTE.schluessel to mitte,
+            Spalte.RUHEPULS.schluessel to ruhe, Spalte.HRV.schluessel to hrv, Spalte.EINSCHLAFEN.schluessel to ein,
+        )
+    }
+
     /** Schreibt die Uhrreihen fest, ohne die Trends zu rechnen - fuer den taeglichen Lauf ([Tagesarchiv]). */
     suspend fun halteFest(context: Context, api: HealthDataApi) = withContext(Dispatchers.IO) {
         val heute = LocalDate.now()
@@ -183,36 +220,20 @@ internal object Trenddaten {
         val naechte = Gesundheitsrechnung.jeTag(
             versuche(TAG, "Naechte") { api.getNaechte(anfang(von), anfang(heute.plusDays(1))) }.orEmpty(), zone,
         )
-        val schlaf = mutableListOf<Pair<LocalDate, Double>>()
-        val tief = mutableListOf<Pair<LocalDate, Double>>()
-        val mitte = mutableListOf<Pair<LocalDate, Double>>()
-        val ruhe = mutableListOf<Pair<LocalDate, Double>>()
-        val hrv = mutableListOf<Pair<LocalDate, Double>>()
-        val ein = mutableListOf<Pair<LocalDate, Double>>()
-        naechte.forEach { e ->
-            val tag = Gesundheitsrechnung.nachtTag(e.beginnUtc, e.aufwachen, zone)
-            if (e.schlafMinuten > 0) schlaf += tag to e.schlafMinuten.toDouble()
-            val phasen = Gesundheitsrechnung.phasenMinuten(versuche(TAG, "Abschnitte der Nacht") { api.getNachtAbschnitte(e.beginnUtc) }.orEmpty())
-            if (phasen[1] + phasen[2] + phasen[3] > 0) tief += tag to phasen[2].toDouble()
-            if (e.aufwachen > e.einschlafen) {
-                // Das Einschlafen in Minuten ab 18 Uhr des Vortags, wie die Mitte - fuer "spaet ins Bett".
-                ein += tag to (Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L).epochSecond -
-                    tag.minusDays(1).atTime(18, 0).atZone(zone).toEpochSecond()) / 60.0
-                mitte += tag to schlafMitte(
-                    Instant.ofEpochSecond(e.beginnUtc + e.einschlafen * 60L), Instant.ofEpochSecond(e.beginnUtc + e.aufwachen * 60L), zone,
-                )
-            }
-            if (e.ruhepuls > 0) ruhe += tag to e.ruhepuls.toDouble()
-            if (e.hrv > 0) hrv += tag to e.hrv.toDouble()
-        }
-        neu[Spalte.SCHLAF] = schlaf
-        neu[Spalte.TIEF] = tief
-        neu[Spalte.SCHLAF_MITTE] = mitte
-        neu[Spalte.RUHEPULS] = ruhe
-        neu[Spalte.HRV] = hrv
-        neu[Spalte.EINSCHLAFEN] = ein
+        // Die Phasen aller Naechte in einer Abfrage, ueber dasselbe Fenster wie die
+        // Naechte - eine je Nacht waren bis zu 180 Abfragen bei jedem Oeffnen.
+        val abschnitte = versuche(TAG, "Abschnitte der Naechte") { api.getNachtAbschnitte(anfang(von), anfang(heute.plusDays(1))) }.orEmpty()
+        neu.putAll(nachtreihen(naechte, abschnitte, zone))
         return neu
     }
+
+    /**
+     * Der zuletzt gelesene Stand, solange der Prozess lebt: die Trends zeigen
+     * ihn bei der Rueckkehr gleich, statt erst einen Ladekreis.
+     */
+    @Volatile
+    var zuletzt: Trendstand? = null
+        private set
 
     suspend fun lies(context: Context, api: HealthDataApi): Trendstand = withContext(Dispatchers.IO) {
         val zone = ZoneId.systemDefault()
@@ -250,6 +271,6 @@ internal object Trenddaten {
         // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
         Tagesspeicher.halte(context, festzuschreiben(neu, heute))
         val eigen = mitArchiv(neu, Tagesspeicher.eigene(context), heute)
-        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context)))
+        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context))).also { zuletzt = it }
     }
 }

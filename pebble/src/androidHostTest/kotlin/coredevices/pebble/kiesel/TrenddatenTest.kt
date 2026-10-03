@@ -1,5 +1,7 @@
 package coredevices.pebble.kiesel
 
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
@@ -134,5 +136,27 @@ class TrenddatenTest {
         val ein = t1.atTime(23, 0).toInstant(ZoneOffset.UTC)
         val auf = t2.atTime(7, 0).toInstant(ZoneOffset.UTC)
         assertEquals(540.0, Trenddaten.schlafMitte(ein, auf, ZoneOffset.UTC))
+    }
+
+    @Test
+    fun nachtreihen_jede_nacht_nimmt_nur_ihre_abschnitte() {
+        // Drei Naechte, je ab 20 Uhr; die Abschnitte aller kommen aus einer Abfrage.
+        fun beginn(t: LocalDate) = t.atTime(20, 0).toEpochSecond(ZoneOffset.UTC)
+        val a = NachtEntity(beginn(t1), 0, 180, 660, 420, 52, 40)
+        val b = NachtEntity(beginn(t2), 0, 200, 640, 440, 0, 0)
+        val c = NachtEntity(beginn(t3), 0, 100, 400, 280, 55, 0)
+        val abschnitte = listOf(
+            NachtAbschnittEntity(a.beginnUtc, 180, 300, 1), NachtAbschnittEntity(a.beginnUtc, 300, 360, 2),
+            NachtAbschnittEntity(a.beginnUtc, 360, 420, 3),
+            // Eine Nacht ohne Puls kennt nur "Schlaf ohne Phase" - dann keine Tiefschlafzahl.
+            NachtAbschnittEntity(b.beginnUtc, 200, 640, 4),
+            NachtAbschnittEntity(c.beginnUtc, 100, 130, 2), NachtAbschnittEntity(c.beginnUtc, 130, 200, 1),
+        )
+        val r = Trenddaten.nachtreihen(listOf(a, b, c), abschnitte, ZoneOffset.UTC)
+        val t4 = LocalDate.of(2026, 9, 4)
+        assertEquals(listOf(t2 to 60.0, t4 to 30.0), r[Spalte.TIEF])
+        assertEquals(listOf(t2 to 420.0, t3 to 440.0, t4 to 280.0), r[Spalte.SCHLAF])
+        assertEquals(listOf(t2 to 52.0, t4 to 55.0), r[Spalte.RUHEPULS])
+        assertEquals(listOf(t2 to 40.0), r[Spalte.HRV])
     }
 }

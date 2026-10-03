@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -19,29 +18,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
 import coredevices.pebble.kiesel.Akteneintraege
 import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
-import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.tagesSatz
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.database.entity.NachtEntity
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import java.time.Duration
 import java.time.Instant
-import java.time.LocalTime
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /** Wohin die Seite fuehrt - die Navigation selbst haengt in GesundheitScreens. */
 internal class Gesundheitswege(
@@ -52,6 +46,18 @@ internal class Gesundheitswege(
     val akku: () -> Unit,
     val koerper: () -> Unit,
 )
+
+/** Was die Seite zeigt: der Stand, wann er gelesen wurde, und die Trainings des Tages. */
+private class Gesundheitsseite(val stand: GesundheitsStand, val gelesen: LocalDateTime, val trainings: List<TrainingEintrag>)
+
+/**
+ * Die zuletzt gezeigte Seite, solange der Prozess lebt (siehe [rememberStand]),
+ * nur vom selben Tag - nach Mitternacht spraeche sie sonst von gestern als heute.
+ */
+@Volatile
+private var zuletzt: Gesundheitsseite? = null
+
+private fun zuletztHeute() = zuletzt?.takeIf { it.gelesen.toLocalDate() == LocalDate.now() }
 
 /**
  * Die Gesundheitsseite nach Konzept F: oben ein Satz zum Tag mit dem
@@ -67,35 +73,30 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     val scope = rememberCoroutineScope()
     val uhren by libPebble.watches.collectAsState()
     val akkuJetzt = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
-    var stand by remember { mutableStateOf<GesundheitsStand?>(null) }
-    var trainings by remember { mutableStateOf<List<TrainingEintrag>>(emptyList()) }
-    var akkuNaechte by remember { mutableStateOf<List<NachtEntity>>(emptyList()) }
-    var uhrzeitDesStands by remember { mutableStateOf(LocalTime.now()) }
     var neu by remember { mutableIntStateOf(0) }
     var koffeinBlatt by remember { mutableStateOf(false) }
     var praeparatBlatt by remember { mutableStateOf(false) }
     var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { neu++ }
-    // Neue Minutendaten von der Uhr: dann stimmen Schritte und Puls nicht mehr.
-    LaunchedEffect(Unit) { libPebble.healthDataUpdated.collect { neu++ } }
-    LaunchedEffect(neu) {
-        stand = Gesundheitsdaten.lies(context, api)
-        uhrzeitDesStands = LocalTime.now()
+    // Neue Minutendaten von der Uhr (rememberSync): dann stimmen Schritte und Puls nicht mehr.
+    val seite = rememberStand(zuletztHeute(), neu, rememberSync()) { zeige ->
+        val stand = Gesundheitsdaten.lies(context, api)
+        val gelesen = LocalDateTime.now()
         geladen()
-        trainings = TrainingsDaten.heute(context)
-        val jetzt = Instant.now()
-        // Dieselben Naechte wie die Akkuseite, damit die Zeile hier dasselbe sagt.
-        akkuNaechte = versuche("Akku", "Naechte") { api.getNaechte(jetzt.minus(Duration.ofDays(Fenster.AKKU_TAGE)).epochSecond, jetzt.epochSecond) }.orEmpty()
+        // Erst der Tag, dann die Trainings aus der Akte - bis dahin die bisherigen.
+        zeige(Gesundheitsseite(stand, gelesen, zuletztHeute()?.trainings.orEmpty()))
+        Gesundheitsseite(stand, gelesen, TrainingsDaten.heute(context)).also { zuletzt = it }
     }
 
-    val s = stand
-    if (s == null) {
+    if (seite == null) {
         Ladekreis()
         return
     }
-    val satz = Gesundheitsrechnung.tagesSatz(s, uhrzeitDesStands)
-    val akku = remember(akkuNaechte, akkuJetzt) { Akkurechnung.rechne(akkuNaechte, akkuJetzt, Instant.now()) }
+    val s = seite.stand
+    val trainings = seite.trainings
+    val satz = Gesundheitsrechnung.tagesSatz(s, seite.gelesen.toLocalTime())
+    // Dieselben Naechte wie die Akkuseite, damit die Zeile hier dasselbe sagt.
+    val akku = remember(s.akkuNaechte, akkuJetzt) { Akkurechnung.rechne(s.akkuNaechte, akkuJetzt, Instant.now()) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { Tagessatz(s, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }

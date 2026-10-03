@@ -30,7 +30,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,19 +69,11 @@ import java.time.LocalDate
  * Reiter stand.
  */
 
-/**
- * Die zuletzt geladene Uebersicht. ZUERST DIE ALTE ZEIGEN: jede Rueckkehr aus
- * einem Training baut die Seite neu, und ohne sie stuende dort erst ein
- * Ladekreis und die Liste landete nicht an ihrer alten Stelle.
- */
-private var zuletzt: TrainingsUebersicht? = null
-
+/** Die Uebersicht, zuerst die zuletzt geladene (siehe [TrainingsDaten.zuletzt]). */
 @Composable
 private fun Laden(inhalt: @Composable (TrainingsUebersicht) -> Unit) {
     val context = LocalContext.current
-    var daten by remember { mutableStateOf(zuletzt) }
-    LaunchedEffect(Unit) { daten = TrainingsDaten.uebersicht(context).also { zuletzt = it } }
-    val d = daten
+    val d = rememberStand(TrainingsDaten.zuletzt) { TrainingsDaten.uebersicht(context) }
     if (d == null) Ladekreis() else inhalt(d)
 }
 
@@ -217,11 +208,9 @@ internal fun SportTrendAnsicht() = Laden { d ->
 internal fun SpurenAnsicht() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var daten by remember { mutableStateOf(zuletzt) }
     var neu by remember { mutableIntStateOf(0) }
     var artFuer by remember { mutableStateOf<OffeneSpur?>(null) }
-    LaunchedEffect(neu) { daten = TrainingsDaten.uebersicht(context).also { zuletzt = it } }
-    val d = daten
+    val d = rememberStand(TrainingsDaten.zuletzt, neu) { TrainingsDaten.uebersicht(context) }
     if (d == null) {
         Ladekreis()
         return

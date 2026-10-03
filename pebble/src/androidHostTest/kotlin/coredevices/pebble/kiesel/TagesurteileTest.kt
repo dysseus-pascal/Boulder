@@ -25,7 +25,7 @@ class TagesurteileTest {
     private fun stand(schritte: Long = 3860, nacht: Nacht? = nacht(500), puls: List<Pair<Long, Int>> = listOf(1L to 68)) = GesundheitsStand(
         schritte = schritte, aktivMinuten = 22, meter = 2700.0, kcal = 118, wocheSchritte = emptyList(), nacht = nacht,
         ruhepulsWoche = emptyList(), hrvWoche = emptyList(), wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
-        wasserMl = 0, glaeser = emptyList(), wocheWasser = emptyList(), wasserZiel = null, supplemente = null,
+        wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = null,
         koffein = emptyList(), letzteDaten = null,
     )
 

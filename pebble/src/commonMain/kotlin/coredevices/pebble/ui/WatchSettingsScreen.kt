@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
@@ -211,6 +212,8 @@ enum class Section(val title: String, val icon: ImageVector) {
     // Boulder: Kieselsport und Trainings, und Kieselstrasse mit den Kartenlinks.
     Sport("Sport", Icons.AutoMirrored.Filled.DirectionsRun),
     Navigation("Navigation", Icons.Default.Navigation),
+    // Boulder: Sicherung und Protokoll - sie betreffen die ganze App, nicht Health oder Sport.
+    Boulder("Boulder", Icons.Default.Terrain),
     Speech("Speech Recognition", Icons.Default.Mic),
     Display("Display", Icons.Default.DarkMode), // watch only
     Weather("Weather", Icons.Default.Cloud),
@@ -288,7 +291,8 @@ fun settingsBadgeTotal(): Int {
     // lastSeenWhatsNewVersion, like the About item badge and the popup itself, so
     // acknowledging the notice anywhere clears all three together.
     val whatsNewUnseen = if (coreConfig.lastSeenWhatsNewVersion < WHATS_NEW_VERSION) 1 else 0
-    return permissionBadgeCount + updatesAvailable + whatsNewUnseen
+    // Boulder: die "!" der eigenen Eintraege (Rechte, Routen, OsmAnd) zaehlen mit.
+    return permissionBadgeCount + updatesAvailable + whatsNewUnseen + boulderAbzeichen()
 }
 
 private val logger = Logger.withTag("WatchSettingsScreen")
@@ -2209,7 +2213,8 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         ) { section ->
                             val sectionBadgeCount = filteredItems
                                 .filter { it.section == section && it.badge != null && it.show() }
-                                .sumOf { it.badge?.toIntOrNull() ?: 0 }
+                                // Boulder: ein "!" zaehlt als eins - sonst fehlte es hier und in der Leiste.
+                                .sumOf { it.badge?.toIntOrNull() ?: 1 }
                             // Battery analytics is upstream's server-rendered page, fed by the
                             // watch-telemetry relay this fork strips; with no data source left,
                             // the entry stays visible but disabled.

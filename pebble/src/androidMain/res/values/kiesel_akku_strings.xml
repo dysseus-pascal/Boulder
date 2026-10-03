@@ -2,15 +2,16 @@
 <!-- Boulder: Akku der Uhr aus den Naechten der Firmware. -->
 <resources>
     <string name="ks_akku_titel">Battery</string>
-    <string name="ks_akku_menue">Battery</string>
     <string name="ks_akku_jetzt">now</string>
     <string name="ks_akku_uebrig">days left</string>
-    <string name="ks_akku_je_tag">%/day</string>
+    <string name="ks_akku_je_tag">per day</string>
     <string name="ks_akku_je_ladung">days per charge</string>
-    <string name="ks_akku_nacht">%/h at night</string>
-    <string name="ks_akku_tag">%/h by day</string>
+    <string name="ks_akku_nacht">at night</string>
+    <string name="ks_akku_tag">by day</string>
     <string name="ks_akku_verlauf">TWO WEEKS</string>
     <string name="ks_akku_naechte">NIGHT BY NIGHT</string>
     <string name="ks_akku_geladen">charging</string>
     <string name="ks_akku_keine">No nights reported yet.</string>
+    <!-- TalkBack-Satz des Verlaufs: erster und letzter Tag, erster und letzter Stand, Tiefpunkt. -->
+    <string name="ks_akku_bild">Battery, %1$s to %2$s: from %3$s to %4$s, lowest %5$s</string>
 </resources>

@@ -55,6 +55,8 @@ internal object Widgetlage {
         val koffeinMg: Double?,
         /** Von Hand gewaehlt, gilt bis dann. */
         val wunsch: Art?,
+        /** Gravels "Imperial Units" - die Strecke in mi. Die Rechnung bleibt ohne Android, der Schalter kommt von aussen. */
+        val imperial: Boolean = false,
     )
 
     /** Eine kleine Kachel: Beschriftung, Wert, Anteil am Ziel. */
@@ -105,11 +107,16 @@ internal object Widgetlage {
 
     // --- Die Kacheln, aus denen die Buehne waehlt ---
 
-    private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), Zahlen.ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
-    private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), Zahlen.ganz(b.aktivMin)?.plus(" min"), anteil(b.aktivMin, b.aktivZiel))
-    private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), Zahlen.dauer(b.schlafMin), anteil(b.schlafMin, b.schlafZielMin))
+    private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
+    private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), ganz(b.aktivMin)?.let { Formate.Angabe(it, "min").text }, anteil(b.aktivMin, b.aktivZiel))
+    private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), dauer(b.schlafMin)?.text, anteil(b.schlafMin, b.schlafZielMin))
     /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 l". In Litern wie die App. */
-    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Zahlen.liter(it) + " l", anteil(it, b.wasserZiel)) }
+    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Formate.Angabe(liter(it), "l").text, anteil(it, b.wasserZiel)) }
+
+    // Die Werte des Widgets sind Doubles aus der Akte; gerundet wird hier, geformt in Formate.
+    private fun ganz(d: Double?): String? = d?.let { Formate.zahl(it.roundToInt().toLong()) }
+    private fun dauer(min: Double?): Formate.Angabe? = min?.let { Formate.dauerTeile(it.roundToInt().toLong()) }
+    private fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
 
     private fun anteil(zahl: Double?, ziel: Double?): Float {
         if (zahl == null || ziel == null || ziel <= 0) return 0f
@@ -121,9 +128,9 @@ internal object Widgetlage {
     private fun morgen(b: Blick, t: Texte): Lage {
         val min = b.schlafMin ?: 0.0
         val teile = mutableListOf<String>()
-        b.erholsamAnteil?.let { teile += t.text(R.string.ks_wl_erholsam, Zahlen.ganz(it * 100) ?: "") }
-        b.ruhepuls?.let { teile += t.text(R.string.ks_w_ruhepuls_wert, Zahlen.ganz(it) ?: "") }
-        b.hrv?.let { teile += "HRV " + Zahlen.ganz(it) + " ms" }
+        b.erholsamAnteil?.let { teile += t.text(R.string.ks_wl_erholsam, Formate.prozent(it)) }
+        b.ruhepuls?.let { teile += t.text(R.string.ks_w_ruhepuls_wert, ganz(it).orEmpty()) }
+        b.hrv?.let { teile += "HRV " + Formate.Angabe(ganz(it).orEmpty(), "ms").text }
         val vergleich = b.schlafWocheMin?.let { woche ->
             when {
                 min >= woche + 30 -> t.text(R.string.ks_wl_laenger)
@@ -136,24 +143,27 @@ internal object Widgetlage {
             if (vergleich != null) { if (isNotEmpty()) append(" — "); append(vergleich) }
             if (isEmpty()) append(t.text(R.string.ks_wl_nacht_eingetragen))
         }
+        // Zahl und Einheit getrennt wie in der App: "7:42" gross, "h" klein daneben.
+        val dauer = Formate.dauerTeile(min.roundToInt().toLong())
         return Lage(
             Art.MORGEN, t.text(R.string.ks_wl_nacht), t.text(R.string.ks_wl_geschlafen),
-            Zahlen.dauer(min) ?: "—", "", satz, anteil(b.schlafMin, b.schlafZielMin),
+            dauer.zahl, dauer.einheit.orEmpty(), satz, anteil(b.schlafMin, b.schlafZielMin),
             listOfNotNull(kSchritte(b, t), kAktiv(b, t), kWasser(b, t)), null,
         )
     }
 
     private fun training(b: Blick, t: Texte): Lage {
         val teile = mutableListOf<String>()
-        b.trainingPuls?.let { teile += t.text(R.string.ks_wl_puls_schnitt, Zahlen.ganz(it) ?: "") }
-        b.trainingKm?.takeIf { it >= 0.1 }?.let { teile += Zahlen.eine(it) + " km" }
+        b.trainingPuls?.let { teile += t.text(R.string.ks_wl_puls_schnitt, ganz(it).orEmpty()) }
+        b.trainingKm?.takeIf { it >= 0.1 }?.let { teile += Formate.distanz(it * 1000, b.imperial).text }
         val vor = b.trainingEnde?.let { Duration.between(it, b.jetzt).toMinutes() } ?: 0
         val wann = if (vor < 60) t.text(R.string.ks_wl_beendet_min, vor)
                    else t.text(R.string.ks_wl_beendet_h, vor / 60)
         val satz = (teile + wann).joinToString(" · ")
+        val dauer = dauer(b.trainingMin?.toDouble())
         return Lage(
             Art.TRAINING, t.text(R.string.ks_training), b.trainingName ?: t.text(R.string.ks_training),
-            Zahlen.dauer(b.trainingMin?.toDouble()) ?: "—", "", satz, null,
+            dauer?.zahl ?: Formate.FEHLT, dauer?.einheit.orEmpty(), satz, null,
             listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), b.trainingBeginn,
         )
     }
@@ -222,13 +232,13 @@ internal object Widgetlage {
         return if (was != "praeparate") {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_h_wasser_n),
-                Zahlen.liter(b.wasserMl ?: 0.0), "l", satz, anteil(b.wasserMl, b.wasserZiel),
+                liter(b.wasserMl ?: 0.0), "l", satz, anteil(b.wasserMl, b.wasserZiel),
                 listOfNotNull(kSchritte(b, t), kAktiv(b, t), kSchlaf(b, t)), null,
             )
         } else {
             Lage(
                 Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_w_praeparate),
-                versaeumtePraeparate(b).size.toString(), t.text(R.string.ks_wl_offen), satz, null,
+                Formate.zahl(versaeumtePraeparate(b).size.toLong()), t.text(R.string.ks_wl_offen), satz, null,
                 listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), null,
             )
         }
@@ -240,7 +250,7 @@ internal object Widgetlage {
         val z = b.schritteZiel
         if (s != null && z != null) {
             teile += if (s >= z) t.text(R.string.ks_wl_schrittziel_erreicht)
-                     else t.text(R.string.ks_wl_schritte_zum_ziel, Zahlen.ganz(z - s) ?: "")
+                     else t.text(R.string.ks_wl_schritte_zum_ziel, ganz(z - s).orEmpty())
         }
         val ml = b.wasserMl
         val wz = b.wasserZiel
@@ -248,10 +258,10 @@ internal object Widgetlage {
             val fehlt = Math.ceil((wz - ml) / b.glasMl).toInt()
             teile += t.mehrzahl(R.plurals.ks_wl_glaeser_fehlen, fehlt, fehlt)
         }
-        b.koffeinMg?.takeIf { it > 0 }?.let { teile += t.text(R.string.ks_wl_koffein_mg, Zahlen.ganz(it) ?: "") }
+        b.koffeinMg?.takeIf { it > 0 }?.let { teile += t.text(R.string.ks_wl_koffein_mg, ganz(it).orEmpty()) }
         return Lage(
             Art.ABEND, t.text(R.string.ks_wl_bilanz), t.text(R.string.ks_h_schritte),
-            Zahlen.ganz(b.schritte) ?: "—", "",
+            ganz(b.schritte) ?: Formate.FEHLT, "",
             teile.ifEmpty { listOf(t.text(R.string.ks_wl_tag_eingetragen)) }.joinToString(" · "),
             anteil(b.schritte, b.schritteZiel),
             listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
@@ -263,13 +273,13 @@ internal object Widgetlage {
         val z = b.schritteZiel
         val satz = when {
             s == null -> t.text(R.string.ks_wl_keine_schritte)
-            z == null -> t.text(R.string.ks_wl_schritte_bis_jetzt, Zahlen.ganz(s) ?: "")
+            z == null -> t.text(R.string.ks_wl_schritte_bis_jetzt, ganz(s).orEmpty())
             s >= z -> t.text(R.string.ks_wl_ziel_erreicht)
-            else -> t.text(R.string.ks_wl_bis_zum_ziel, Zahlen.ganz(z - s) ?: "")
+            else -> t.text(R.string.ks_wl_bis_zum_ziel, ganz(z - s).orEmpty())
         }
         return Lage(
             Art.TAG, t.text(R.string.ks_h_heute), t.text(R.string.ks_h_schritte),
-            Zahlen.ganz(b.schritte) ?: "—", "", satz, anteil(b.schritte, b.schritteZiel),
+            ganz(b.schritte) ?: Formate.FEHLT, "", satz, anteil(b.schritte, b.schritteZiel),
             listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
         )
     }
@@ -282,9 +292,9 @@ internal interface Texte {
 }
 
 /**
- * Zahlen, wie das Widget sie zeigt - die kleinen Helfer aus Kiesel-Helper,
- * jetzt Weiterleitungen auf [Formate] mit denselben Texten (Werte des
- * Widgets sind nie negativ). Ein fehlender Wert ist [Formate.FEHLT].
+ * Die kleinen Zahlenhelfer aus Kiesel-Helper als Weiterleitungen auf
+ * [Formate]. Das Widget nimmt Formate inzwischen direkt; nur
+ * WidgetlageGetraenkeTest ruft sie noch - beide fallen beim Aufraeumen weg.
  */
 @Deprecated("Formate: zahl, dauer, liter, distanz")
 internal object Zahlen {

@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.RemoteViews
 import coredevices.pebble.R
 import coredevices.pebble.health.Einzellauf
+import coredevices.pebble.kiesel.ansicht.einheitenImperialHolen
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +123,8 @@ class GesundheitWidget : AppWidgetProvider() {
                 praeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }.orEmpty(),
                 koffeinMg = Gesundheitsrechnung.koffeinHeute(s.koffein, heute, zone).takeIf { s.mitDrinktervall },
                 wunsch = wunsch,
+                // Gravels "Imperial Units" auch hier: das Widget zeigte sonst km neben einer App in mi.
+                imperial = einheitenImperialHolen(),
             )
         }
 
@@ -171,7 +174,7 @@ class GesundheitWidget : AppWidgetProvider() {
             lage.kacheln.take(3).forEachIndexed { i, k ->
                 val (wurzel, name, wert, balken) = felder[i]
                 v.setTextViewText(name, k.name)
-                v.setTextViewText(wert, k.text ?: "—")
+                v.setTextViewText(wert, k.text ?: Formate.FEHLT)
                 v.setProgressBar(balken, 100, (k.anteil * 100).toInt(), false)
                 val wunsch = when (k.schluessel) {
                     "schlaf" -> Widgetlage.Art.MORGEN
@@ -188,9 +191,9 @@ class GesundheitWidget : AppWidgetProvider() {
                 )
             }
             val fuss = listOfNotNull(
-                s.nacht?.ruhepuls?.let { context.getString(R.string.ks_w_ruhepuls_wert, it.toString()) },
-                s.nacht?.hrv?.let { "HRV $it ms" },
-                s.meter.takeIf { it >= 100 }?.let { Zahlen.eine(it / 1000) + " km" },
+                s.nacht?.ruhepuls?.let { context.getString(R.string.ks_w_ruhepuls_wert, Formate.zahl(it.toLong())) },
+                s.nacht?.hrv?.let { "HRV " + Formate.Angabe(Formate.zahl(it.toLong()), "ms").text },
+                s.meter.takeIf { it >= 100 }?.let { Formate.distanz(it, blick.imperial).text },
             )
             v.setTextViewText(R.id.w_fuss, fuss.ifEmpty { listOf(context.getString(R.string.ks_w_nichts)) }.joinToString(" · "))
             return v

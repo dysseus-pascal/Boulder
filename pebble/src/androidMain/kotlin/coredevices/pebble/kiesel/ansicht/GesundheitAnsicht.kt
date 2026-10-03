@@ -51,7 +51,6 @@ import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.time.Duration
@@ -173,9 +172,6 @@ internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
     return teile.joinToString(" ")
 }
 
-/** Eine Zahl mit kleiner Einheit, wie sie eine Zeile rechts zeigt: "95" und "mg". */
-private fun mitEinheit(wert: Double?, einheit: String): Formate.Angabe? = wert?.let { Formate.Angabe(Formate.zahl(it.roundToLong()), einheit) }
-
 /**
  * Koffein von Hand eintragen - darunter, was gestern spaet eingetragen
  * wurde: der Strahl zeigt nur heute, und ein Fehleintrag um 23:50 soll sich
@@ -189,8 +185,8 @@ private fun KoffeinBlatt(s: GesundheitsStand, onDismiss: () -> Unit, bearbeite: 
     val getraenke = Kaffeesorten.WAEHLBAR.mapNotNull { sorte -> Kaffeesorten.portion(sorte)?.let { sorte to it } }
     val glas = stringResource(R.string.ks_d_glas)
     val gestern = (
-        s.gestern.map { e -> Bearbeitung.Getraenk(e.name, e.zeit, e.id) to mitEinheit(e.koffeinMg, "mg") } +
-            s.gesternGlaeser.map { g -> Bearbeitung.Glas(glas, g.zeit, g.id) to mitEinheit(g.ml.toDouble(), "ml") }
+        s.gestern.map { e -> Bearbeitung.Getraenk(e.name, e.zeit, e.id) to e.koffeinMg?.let { Formate.menge(it, "mg") } } +
+            s.gesternGlaeser.map { g -> Bearbeitung.Glas(glas, g.zeit, g.id) to Formate.menge(g.ml.toLong(), "ml") }
         ).sortedBy { it.first.zeit }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {

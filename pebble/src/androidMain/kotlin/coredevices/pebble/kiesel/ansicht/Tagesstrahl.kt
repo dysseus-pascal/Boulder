@@ -106,7 +106,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 
 /*
  * Die Health-Seite nach Konzept F: oben ein Satz zum Tag (aus C), darunter
@@ -133,9 +132,6 @@ private fun zeitBreiteMessen(): Dp {
     return with(dichte) { breite.toDp() } + 6.dp
 }
 private val SPALTE_STRAHL = 22.dp
-
-/** Eine ganze Menge mit kleiner Einheit fuer eine Zeile im Strahl: "250 ml", "95 mg". */
-private fun menge(wert: Double, einheit: String): String = Formate.Angabe(Formate.zahl(wert.roundToLong()), einheit).text
 
 /**
  * Eine Vorlage mit %1$s, %2$s ... einsetzen und die eingesetzten Werte
@@ -265,7 +261,8 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
     val dunkel = Farben.dunkel()
     val ereignisse = buildList {
         trainings.filter { it.sitzung.startTime.atZone(zone).toLocalDate() == heute }.forEach { training ->
-            val unter = listOfNotNull(if (training.meter > 0) Formate.distanz(training.meter, imperial).text else null, Formate.dauer(training.minuten)).joinToString(" · ")
+            // Die Strecke wie in Sport (streckeVon): ein Schwimmen bleibt auch mit "Imperial Units" in Metern.
+            val unter = listOfNotNull(if (training.meter > 0) streckeVon(training, imperial).text else null, Formate.dauer(training.minuten)).joinToString(" · ")
             add(Ereignis(training.sitzung.startTime, Farben.sport(training.sport).tonIm(dunkel), trainingsName(training), unter))
         }
         if (s.mitDrinktervall) {
@@ -273,11 +270,11 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
             // Die Liter des Tages stehen in der Zeile "Water" darunter - hier beim letzten Glas noch einmal waeren sie doppelt.
             s.glasEintraege.forEach { g ->
                 val titel = if (g.eigen) glas else wasser
-                val unter = if (g.eigen) null else menge(g.ml.toDouble(), "ml")
+                val unter = if (g.eigen) null else Formate.menge(g.ml.toLong(), "ml").text
                 add(Ereignis(g.zeit, Farben.wasser.flaecheIm(dunkel), titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null))
             }
             s.eintraege.filter { !it.praeparat }.forEach { e ->
-                add(Ereignis(e.zeit, Farben.koffein.flaecheIm(dunkel), e.name, e.koffeinMg?.let { menge(it, "mg") }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
+                add(Ereignis(e.zeit, Farben.koffein.flaecheIm(dunkel), e.name, e.koffeinMg?.let { Formate.menge(it, "mg").text }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
             }
         }
         if (s.mitSupCycle) {
@@ -596,8 +593,9 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
                 // In der Reihenfolge der Bahnen darueber. Wach nur, wenn es vorkommt: dann zeigt das Bild den orangen Block.
                 val phasen = PHASEN_VON_OBEN.filter { (p, _) -> p != Farben.WACH || n.phasen[Farben.WACH] > 0 }
                 // Die Legende des Baukastens: sie bricht nur zwischen den Eintraegen um, nie mitten in einem.
+                // Die Dauer mit Einheit wie in der Schlafansicht: "Deep 1:56" las sich neben Uhrzeiten wie eine.
                 Punktlegende(
-                    phasen.map { (p, name) -> Legendeneintrag(stringResource(name) + " " + Formate.stundenMinuten(n.phasen[p]), Farben.phasen[p]) },
+                    phasen.map { (p, name) -> Legendeneintrag(stringResource(name) + " " + Formate.dauer(n.phasen[p].toLong()), Farben.phasen[p]) },
                     mittig = false,
                 )
             }

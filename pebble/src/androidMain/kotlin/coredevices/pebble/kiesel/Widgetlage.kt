@@ -57,6 +57,8 @@ internal object Widgetlage {
         val wunsch: Art?,
         /** Gravels "Imperial Units" - die Strecke in mi. Die Rechnung bleibt ohne Android, der Schalter kommt von aussen. */
         val imperial: Boolean = false,
+        /** Das letzte Training bleibt trotz [imperial] in km/m (Schwimmen, Sport.immerMetrisch) - wie in der App. */
+        val trainingMetrisch: Boolean = false,
     )
 
     /** Eine kleine Kachel: Beschriftung, Wert, Anteil am Ziel. */
@@ -108,7 +110,7 @@ internal object Widgetlage {
     // --- Die Kacheln, aus denen die Buehne waehlt ---
 
     private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
-    private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), ganz(b.aktivMin)?.let { Formate.Angabe(it, "min").text }, anteil(b.aktivMin, b.aktivZiel))
+    private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), b.aktivMin?.let { Formate.menge(it, "min").text }, anteil(b.aktivMin, b.aktivZiel))
     private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), dauer(b.schlafMin)?.text, anteil(b.schlafMin, b.schlafZielMin))
     /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 l". In Litern wie die App. */
     private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Formate.Angabe(liter(it), "l").text, anteil(it, b.wasserZiel)) }
@@ -116,7 +118,8 @@ internal object Widgetlage {
     // Die Werte des Widgets sind Doubles aus der Akte; gerundet wird hier, geformt in Formate.
     private fun ganz(d: Double?): String? = d?.let { Formate.zahl(it.roundToInt().toLong()) }
     private fun dauer(min: Double?): Formate.Angabe? = min?.let { Formate.dauerTeile(it.roundToInt().toLong()) }
-    private fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
+    /** Wasser in Litern ohne Einheit, wie auf der Gesundheitsseite - INTERNAL nur fuer den Test, der das Runden prueft. */
+    internal fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
 
     private fun anteil(zahl: Double?, ziel: Double?): Float {
         if (zahl == null || ziel == null || ziel <= 0) return 0f
@@ -130,7 +133,7 @@ internal object Widgetlage {
         val teile = mutableListOf<String>()
         b.erholsamAnteil?.let { teile += t.text(R.string.ks_wl_erholsam, Formate.prozent(it)) }
         b.ruhepuls?.let { teile += t.text(R.string.ks_w_ruhepuls_wert, ganz(it).orEmpty()) }
-        b.hrv?.let { teile += "HRV " + Formate.Angabe(ganz(it).orEmpty(), "ms").text }
+        b.hrv?.let { teile += "HRV " + Formate.menge(it, "ms").text }
         val vergleich = b.schlafWocheMin?.let { woche ->
             when {
                 min >= woche + 30 -> t.text(R.string.ks_wl_laenger)
@@ -155,7 +158,7 @@ internal object Widgetlage {
     private fun training(b: Blick, t: Texte): Lage {
         val teile = mutableListOf<String>()
         b.trainingPuls?.let { teile += t.text(R.string.ks_wl_puls_schnitt, ganz(it).orEmpty()) }
-        b.trainingKm?.takeIf { it >= 0.1 }?.let { teile += Formate.distanz(it * 1000, b.imperial).text }
+        b.trainingKm?.takeIf { it >= 0.1 }?.let { teile += Formate.distanz(it * 1000, b.imperial && !b.trainingMetrisch).text }
         val vor = b.trainingEnde?.let { Duration.between(it, b.jetzt).toMinutes() } ?: 0
         val wann = if (vor < 60) t.text(R.string.ks_wl_beendet_min, vor)
                    else t.text(R.string.ks_wl_beendet_h, vor / 60)
@@ -289,18 +292,4 @@ internal object Widgetlage {
 internal interface Texte {
     fun text(id: Int, vararg a: Any): String
     fun mehrzahl(id: Int, n: Int, vararg a: Any): String
-}
-
-/**
- * Die kleinen Zahlenhelfer aus Kiesel-Helper als Weiterleitungen auf
- * [Formate]. Das Widget nimmt Formate inzwischen direkt; nur
- * WidgetlageGetraenkeTest ruft sie noch - beide fallen beim Aufraeumen weg.
- */
-@Deprecated("Formate: zahl, dauer, liter, distanz")
-internal object Zahlen {
-    fun ganz(d: Double?): String? = d?.let { Formate.zahl(it.roundToInt().toLong()) }
-    fun eine(d: Double?): String? = d?.let { Formate.zahl(it, 1) }
-    fun dauer(min: Double?): String? = min?.roundToInt()?.let { Formate.dauer(it.toLong()) }
-    /** Wasser in Litern wie auf der Gesundheitsseite ("1.2"), ohne Einheit. */
-    fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
 }

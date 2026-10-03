@@ -45,6 +45,8 @@ class FormateTest {
         assertEquals("±0", f.vorzeichen(-0.4, locale = us))
         assertEquals("−0.6", f.vorzeichen(-0.6, 1, us))
         assertEquals("−0,6", f.vorzeichen(-0.6, 1, de))
+        assertEquals("+1.2", f.vorzeichen(1.23, 1, us))
+        assertEquals("±0.0", f.vorzeichen(-0.04, 1, us))
         assertEquals("+1,250", f.vorzeichen(1250.0, locale = us))
     }
 
@@ -52,6 +54,7 @@ class FormateTest {
     fun schritteKurzWerdenAbgerundet() {
         assertEquals("400", f.schritteKurz(400L, us))
         assertEquals("999", f.schritteKurz(999.6, us))
+        assertEquals("4.9k", f.schritteKurz(4986.0, us))
         assertEquals("1k", f.schritteKurz(1000L, us))
         // 9'960 unter dem Ziel ist nicht "10k".
         assertEquals("9.9k", f.schritteKurz(9960L, us))
@@ -71,6 +74,15 @@ class FormateTest {
         assertEquals("", f.abstandVor("%"))
         assertEquals("1.2%/h", Formate.Angabe("1.2", "%/h").text)
         assertEquals(" ", f.abstandVor("bpm"))
+    }
+
+    @Test
+    fun mengenGanzMitEinheit() {
+        assertEquals("95 mg", f.menge(94.6, "mg", us).text)
+        assertEquals(Formate.Angabe("1,250", "ml"), f.menge(1249.5, "ml", us))
+        assertEquals("45 s", f.menge(45L, "s", us).text)
+        // Ohne Einheit nur die Zahl, und was auf null rundet, ohne Zeichen.
+        assertEquals("0", f.menge(-0.3, null, us).text)
     }
 
     @Test
@@ -188,14 +200,5 @@ class FormateTest {
         assertEquals("Mon", f.wochentag(DayOfWeek.MONDAY, us))
         assertEquals("Sep", f.monatKurz(java.time.Month.SEPTEMBER, us))
         assertEquals("Wed, Sep 30", f.datumKurz(LocalDate.of(2026, 9, 30), "EEE, MMM d", us))
-    }
-
-    @Test
-    @Suppress("DEPRECATION")
-    fun alteHelferLeitenWeiter() {
-        assertEquals(f.schritteKurz(9960L, us), Auswertung.tausender(9960.0, us))
-        assertEquals(f.schritteKurz(4912L, us), Gesundheitsrechnung.schritteKurz(4912, us))
-        assertEquals(f.vorzeichen(-0.6, 1, us), Koerperrechnung.mitVorzeichen(-0.6, us))
-        assertEquals(f.gewicht(78.4, true, us).zahl, Koerperrechnung.eineStelle(Koerperrechnung.masse(78.4, true), us))
     }
 }

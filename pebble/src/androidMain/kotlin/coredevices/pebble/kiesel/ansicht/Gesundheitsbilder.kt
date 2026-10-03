@@ -48,15 +48,6 @@ import kotlin.math.roundToInt
  * Satz, was es zeigt ([bildBeschreibung]).
  */
 
-/**
- * Die Spalte rechts fuer die Zahlen der Achse, in Pixeln. In der Nacht stand
- * sie links, auf der Herzseite rechts - jetzt ueberall rechts. Gemessen an
- * "000" in der Schrift der Achse, mindestens die bisherigen 30 dp: bei
- * Schrift 1,3 liefen dreistellige Zahlen sonst in die Kurve.
- */
-private fun DrawScope.achsSpalte(messer: TextMeasurer, stil: TextStyle): Float =
-    maxOf(30.dp.toPx(), messer.measure("000", stil).size.width + 6.dp.toPx())
-
 /** Die Schrift der Achsen und Stunden aller Bilder: labelSmall in Grau. */
 @Composable
 private fun achsStil(): TextStyle = MaterialTheme.typography.labelSmall.copy(color = Farben.neutral())

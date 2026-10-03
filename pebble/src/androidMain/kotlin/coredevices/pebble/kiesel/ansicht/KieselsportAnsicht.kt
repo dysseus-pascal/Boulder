@@ -92,7 +92,7 @@ internal fun KieselsportAnsicht() {
             }
             if (schaetzung != null && (entwurf.maxpulsGesetzt || nachAlter == null)) Stufer(
                 stringResource(R.string.ks_n_maxpuls), (120..220).toList(), entwurf.maxpuls, grob = 5,
-                wert = { Formate.Angabe(Formate.zahl(it.toLong()), "bpm") },
+                wert = { Formate.menge(it.toLong(), "bpm") },
             ) {
                 entwurf = entwurf.copy(maxpuls = it, maxpulsGesetzt = true)
                 eigener = it
@@ -105,7 +105,7 @@ internal fun KieselsportAnsicht() {
             val nie = stringResource(R.string.ks_n_nie)
             Stufer(
                 stringResource(R.string.ks_n_pause), (0..300 step 15).toList(), entwurf.pause,
-                wert = { if (it == 0) Formate.Angabe(nie, null) else Formate.Angabe(Formate.zahl(it.toLong()), "s") },
+                wert = { if (it == 0) Formate.Angabe(nie, null) else Formate.menge(it.toLong(), "s") },
             ) { entwurf = entwurf.copy(pause = it) }
             val stufen = listOf(
                 stringResource(R.string.ks_n_traege), stringResource(R.string.ks_n_normal), stringResource(R.string.ks_n_fein),

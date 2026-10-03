@@ -1,6 +1,5 @@
 package coredevices.pebble.kiesel.ansicht
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -12,10 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.res.stringResource
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
@@ -69,6 +64,7 @@ internal fun AkkuAnsicht() {
             Column(Modifier.padding(INNEN)) {
                 Kennzahlen {
                     val jetzt = aktuell?.let { Formate.prozentTeile(it) }
+                    // "now" bleibt auch ohne Wert stehen: sein Strich sagt, dass gerade keine Uhr verbunden ist.
                     Kennzahl(jetzt?.zahl ?: Formate.FEHLT, jetzt?.einheit, stringResource(R.string.ks_akku_jetzt))
                     // Abgerundet wie die Restzeit im Satz auf Health: lieber zu wenig als zu viel.
                     Akkuwert(stand.tageUebrig?.let { floor(it * 10) / 10 }, 1, null, stringResource(R.string.ks_akku_uebrig), geschaetzt = true)
@@ -95,15 +91,13 @@ internal fun AkkuAnsicht() {
                 Formate.prozent(stand.punkte.minOf { it.second }),
             )
             Abschnitt(stringResource(R.string.ks_akku_verlauf)) {
-                // Verlauf gehoert dem Sport; die Beschreibung haengt darum am Rahmen und
-                // ERSETZT die des Bildes: bekommt Verlauf einen eigenen Satz, hoerte TalkBack sonst zwei.
-                Box(Modifier.clearAndSetSemantics { contentDescription = satz; role = Role.Image }) {
-                    Verlauf(
-                        stand.punkte.map { (t, p) -> Trainingsanalyse.Verlaufspunkt((t - mitternacht) / 86400.0, p.toDouble()) },
-                        Farben.akku.ton(), "%", zaehlachse = true, bereich = 0.0..100.0,
-                        achsenText = { Formate.datumKurz(ersterTag.plusDays(it.toLong())) },
-                    )
-                }
+                // Der Satz ERSETZT den des Bildes (Bereich und Strecke): fuer den Akku sagen Datum und Prozent mehr.
+                Verlauf(
+                    stand.punkte.map { (t, p) -> Trainingsanalyse.Verlaufspunkt((t - mitternacht) / 86400.0, p.toDouble()) },
+                    Farben.akku.ton(), "%", zaehlachse = true, bereich = 0.0..100.0,
+                    achsenText = { Formate.datumKurz(ersterTag.plusDays(it.toLong())) },
+                    beschreibung = satz,
+                )
             }
         }
         if (liste.isNotEmpty()) {
@@ -118,7 +112,8 @@ internal fun AkkuAnsicht() {
                         Formate.datum(n.aufwachen.atZone(zone).toLocalDate()),
                         unter = listOfNotNull(
                             Formate.uhrzeit(context, n.einschlafen, zone) + " – " + Formate.uhrzeit(context, n.aufwachen, zone),
-                            Formate.prozent(n.prozentVon) + " → " + Formate.prozent(n.prozentBis),
+                            // Von-bis wie die Zeiten davor, mit demselben Strich: der Textpfeil war das einzige "→" der App.
+                            Formate.prozent(n.prozentVon) + " – " + Formate.prozent(n.prozentBis),
                             laden.takeIf { n.geladen },
                         ).joinToString(" · "),
                         zahl = if (n.geladen) null else rate ?: Formate.FEHLT,
@@ -131,16 +126,14 @@ internal fun AkkuAnsicht() {
 }
 
 /**
- * Ein Akkuwert als [Kennzahl]. Ohne Wert nur der Strich und keine Einheit:
- * "≈ –" oder "– %/h" las sich wie ein Darstellungsfehler. Mit [geschaetzt]
- * steht "≈" davor - Restzeit und Ladung sind Hochrechnungen, keine Messungen.
+ * Ein Akkuwert als [Kennzahl]. OHNE WERT FEHLT ER GANZ, wie jede fehlende
+ * Kennzahl in Sport und Detail: ohne verbundene Uhr standen sonst vier
+ * Striche gross nebeneinander. Mit [geschaetzt] steht "≈" davor - Restzeit
+ * und Ladung sind Hochrechnungen, keine Messungen.
  */
 @Composable
 private fun Akkuwert(w: Double?, nachkomma: Int, einheit: String?, name: String, geschaetzt: Boolean = false) {
-    val text = w?.let { Formate.zahl(it, nachkomma) }
-    Kennzahl(
-        if (geschaetzt) Formate.ungefaehr(text) else text ?: Formate.FEHLT,
-        einheit.takeIf { text != null },
-        name,
-    )
+    if (w == null) return
+    val text = Formate.zahl(w, nachkomma)
+    Kennzahl(if (geschaetzt) Formate.ungefaehr(text) else text, einheit, name)
 }

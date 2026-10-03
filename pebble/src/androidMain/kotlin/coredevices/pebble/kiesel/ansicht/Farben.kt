@@ -11,6 +11,9 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.kiesel.Sport
+import theme.lightScheme
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /*
  * Die Farben der App - EINE Stelle je Groesse. Vorher hatte die HRV drei
@@ -213,14 +216,39 @@ internal object Farben {
      * Die Tempo-Skala: langsam blau, schnell rot - ueber Cyan, Gruen und Gelb,
      * damit man die Mitte sieht. [anteil] 0 = langsam, 1 = schnell.
      * DIE FLAECHE fuer OSM-Kacheln und die Farblegende darunter; DER TON fuer
-     * Kurven und Bahnpunkte auf der Karte: hell um 45 % abgedunkelt (das Gelb
-     * kam auf F5F5F5 auf 1,2:1), dunkel um 15 % aufgehellt (das Blau kam auf
-     * dem Grau auf 2,9:1). In einer Zeichnung ohne Compose: [Farbe.tonIm] mit
-     * einem vorher gelesenen [dunkel].
+     * Kurven und Bahnpunkte: dunkel um 15 % aufgehellt (das Blau kam auf dem
+     * Grau auf 2,9:1), hell IM SELBEN FARBTON NUR SO DUNKEL WIE NOETIG fuer
+     * 3:1 (das Gelb kam auf F5F5F5 auf 1,2:1). Fest um 45 % zu Schwarz wurden
+     * Blau, Gelb, Orange und Rot zu Marine, Oliv, Braun und Dunkelrot: die
+     * Kurve passte nicht mehr zur Legende, Braun und Dunkelrot waren kaum zu
+     * trennen. Jetzt bleiben Blau und Rot, wie sie sind. In einer Zeichnung
+     * ohne Compose: [Farbe.tonIm] mit einem vorher gelesenen [dunkel].
      */
     fun tempo(anteil: Float): Farbe {
-        val f = Color.hsv(220f - 220f * anteil.coerceIn(0f, 1f), 0.85f, 0.9f)
-        return Farbe(f, hell = lerp(f, Color.Black, 0.45f), dunkel = lerp(f, Color.White, 0.15f))
+        val a = anteil.coerceIn(0f, 1f)
+        val farbton = 220f - 220f * a
+        val f = Color.hsv(farbton, 0.85f, 0.9f)
+        // Die dunklere der zwei naechsten Stufen: so haelt auch ein Ton zwischen zwei Stufen 3:1.
+        val stufe = a * TEMPO_STUFEN
+        val v = minOf(tempoHelligkeit[floor(stufe).toInt()], tempoHelligkeit[ceil(stufe).toInt()])
+        return Farbe(f, hell = Color.hsv(farbton, 0.85f, v), dunkel = lerp(f, Color.White, 0.15f))
+    }
+
+    private const val TEMPO_STUFEN = 100
+
+    /**
+     * Je Stufe der Skala die hoechste Helligkeit (HSV-Wert), mit der der Ton
+     * auf der hellen Karte noch 3,1:1 haelt - 0,1 Luft ueber der Regel.
+     * EINMAL GERECHNET: die Kurve fragt je Linienstueck, oft tausendfach je Bild.
+     */
+    private val tempoHelligkeit: FloatArray by lazy {
+        val grund = minOf(lightScheme.surface.luminance(), lightScheme.surfaceContainerHigh.luminance())
+        FloatArray(TEMPO_STUFEN + 1) { k ->
+            val farbton = 220f - 220f * k / TEMPO_STUFEN
+            var v = 0.9f
+            while (v > 0.3f && (grund + 0.05f) / (Color.hsv(farbton, 0.85f, v).luminance() + 0.05f) < 3.1f) v -= 0.01f
+            v
+        }
     }
 
     // --- Schlafphasen -----------------------------------------------------------------
@@ -282,74 +310,3 @@ internal fun kartenFarben(): CardColors = CardDefaults.cardColors(containerColor
 /** Der feine Rand, der die Karte von der Seite trennt. */
 @Composable
 internal fun kartenRand(): BorderStroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-
-// --- Weiterleitungen, bis die Seiten umgestellt sind (Etappe 2, Teil b) -------------
-
-/** Die alten Toene der Gesundheitsseite - jetzt aus [Farben]. */
-@Deprecated("Farben.kt: Farben.<groesse>.ton()")
-internal data class Toene(
-    val schlaf: Color,
-    val bewegung: Color,
-    val herz: Color,
-    val wasser: Color,
-    val koffein: Color,
-    val warnung: Color,
-    val zonen: List<Color>,
-    val imBand: Color,
-    val ausserBand: Color,
-)
-
-@Suppress("DEPRECATION")
-private fun toeneIm(d: Boolean) = Toene(
-    schlaf = Farben.schlaf.tonIm(d), bewegung = Farben.bewegung.tonIm(d), herz = Farben.puls.tonIm(d),
-    wasser = Farben.wasser.tonIm(d), koffein = Farben.koffein.tonIm(d), warnung = Farben.warnung.tonIm(d),
-    zonen = Farben.pulszonen.map { it.tonIm(d) }, imBand = Farben.imBand.tonIm(d), ausserBand = Farben.ausserBand.tonIm(d),
-)
-
-// Erst beim ersten Gebrauch: beim Laden der Datei waere Farben vielleicht noch halb fertig.
-@Suppress("DEPRECATION")
-private val TOENE_DUNKEL by lazy { toeneIm(true) }
-
-@Suppress("DEPRECATION")
-private val TOENE_HELL by lazy { toeneIm(false) }
-
-@Suppress("DEPRECATION")
-@Deprecated("Farben.kt: Farben.<groesse>.ton()")
-@Composable
-internal fun toene(): Toene = if (Farben.dunkel()) TOENE_DUNKEL else TOENE_HELL
-
-@Deprecated("Farben.bewegung.flaeche()", ReplaceWith("Farben.bewegung.flaecheDunkel"))
-internal val FLAECHE_BEWEGUNG get() = Farben.bewegung.flaecheDunkel
-
-@Deprecated("Farben.puls.flaeche()", ReplaceWith("Farben.puls.flaecheDunkel"))
-internal val FLAECHE_HERZ get() = Farben.puls.flaecheDunkel
-
-@Deprecated("Farben.wasser.flaeche()", ReplaceWith("Farben.wasser.flaecheDunkel"))
-internal val FLAECHE_WASSER get() = Farben.wasser.flaecheDunkel
-
-@Deprecated("Farben.koffein.flaeche()", ReplaceWith("Farben.koffein.flaecheDunkel"))
-internal val FLAECHE_KOFFEIN get() = Farben.koffein.flaecheDunkel
-
-@Deprecated("Farben.praeparat.flaeche()", ReplaceWith("Farben.praeparat.flaecheDunkel"))
-internal val FLAECHE_PRAEPARAT get() = Farben.praeparat.flaecheDunkel
-
-@Deprecated("Farben.koerper.flaeche()", ReplaceWith("Farben.koerper.flaecheDunkel"))
-internal val FLAECHE_KOERPER get() = Farben.koerper.flaecheDunkel
-
-@Deprecated("Farben.koerper.ton()", ReplaceWith("Farben.koerper.ton()"))
-@Composable
-internal fun koerperTon(): Color = Farben.koerper.ton()
-
-@Deprecated("Farben.phasen", ReplaceWith("Farben.phasen"))
-internal val PHASENFARBEN: List<Color> get() = Farben.phasen
-
-@Deprecated("Farben.trainingszonen[z].flaecheDunkel", ReplaceWith("Farben.trainingszonen.map { it.flaecheDunkel }"))
-internal val ZONENFARBEN: List<Color> get() = Farben.trainingszonen.map { it.flaecheDunkel }
-
-/** Die alte Skala war die Flaeche - Kurven und Punkte nehmen jetzt den Ton (siehe [Farben.tempo]). */
-@Deprecated("Farben.tempo(anteil): Kurve/Punkte .tonIm(dunkel), Kacheln/Legende .flaeche()", ReplaceWith("Farben.tempo(anteil).flaecheDunkel"))
-internal fun tempofarbe(anteil: Float): Color = Farben.tempo(anteil).flaecheDunkel
-
-@Deprecated("Farben.sport(sport).ton()", ReplaceWith("Farben.sport(this).ton()"))
-@Composable
-internal fun Sport.ton(): Color = Farben.sport(this).ton()

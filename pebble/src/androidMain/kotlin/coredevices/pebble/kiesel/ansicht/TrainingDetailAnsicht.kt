@@ -177,8 +177,6 @@ private fun tempoAngabe(ms: Double, rad: Boolean, imperial: Boolean): Formate.An
 /** Kilometer und Saetze dauern selten eine Stunde: "4:05", darueber die Dauer mit Einheit. */
 private fun zeit(sekunden: Long): String = if (sekunden >= 3600) Formate.dauer(sekunden / 60) else Formate.minutenSekunden(sekunden)
 
-/** Sekunden mit Einheit fuer eine Tabellenzelle: "45 s". */
-private fun sekunden(s: Long): String = Formate.Angabe(Formate.zahl(s), "s").text
 
 // --- Zonen ---------------------------------------------------------------------
 
@@ -413,9 +411,9 @@ private fun Kraft(d: TrainingDetail, ton: Color, maxpuls: Int) {
                 listOf(
                     Formate.zahl((i + 1).toLong()),
                     Formate.zahl(wdh.toLong()),
-                    sekunden(bis - von),
+                    Formate.menge(bis - von, "s").text,
                     Trainingsanalyse.pulsMittel(d.puls, von, bis)?.let { Formate.zahl(it) } ?: Formate.FEHLT,
-                    pause?.let { sekunden(it) } ?: Formate.FEHLT,
+                    pause?.let { Formate.menge(it, "s").text } ?: Formate.FEHLT,
                 )
             },
             spalten = SATZ_SPALTEN,

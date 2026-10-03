@@ -6,7 +6,10 @@
     <string name="ks_v_spo2_hoechster">Highest</string>
     <string name="ks_v_spo2_tiefster">Lowest</string>
     <string name="ks_v_spo2_schnitt">SpO2 average</string>
-    <string name="ks_v_zone_n">Zone %1$d · %2$s</string>
+    <!-- Geschuetzte Leerzeichen: "Zone" und die Nummer brechen nie auseinander. -->
+    <string name="ks_v_zone_n">Zone\u00A0%1$d · %2$s</string>
+    <!-- Die Zone ohne Namen, wenn der Name mit grosser Schrift in eine zweite Zeile muss. -->
+    <string name="ks_v_zone_nr">Zone\u00A0%1$d</string>
     <string name="ks_v_a_m">of %1$s m</string>
     <string name="ks_v_anfang">Start</string>
     <!-- Kopf der Spalte Aufstieg in der Km-/Meilen-Tabelle, mit der Einheit (m oder ft). -->

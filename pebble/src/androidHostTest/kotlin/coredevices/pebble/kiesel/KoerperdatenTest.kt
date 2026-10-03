@@ -4,7 +4,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -184,14 +183,6 @@ class KoerperdatenTest {
         assertEquals(78.4, k.masse(78.4, false))
         assertEquals(5 to 11, k.fussZoll(1.80))
         assertEquals(6 to 0, k.fussZoll(1.83))
-    }
-
-    @Test
-    fun vorzeichen_typografisch() {
-        assertEquals("−0.6", k.mitVorzeichen(-0.6, Locale.US))
-        assertEquals("+1.2", k.mitVorzeichen(1.23, Locale.US))
-        assertEquals("±0.0", k.mitVorzeichen(-0.04, Locale.US))
-        assertEquals("−0,6", k.mitVorzeichen(-0.6, Locale.GERMANY))
     }
 
     @Test

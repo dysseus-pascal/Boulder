@@ -125,6 +125,8 @@ class GesundheitWidget : AppWidgetProvider() {
                 wunsch = wunsch,
                 // Gravels "Imperial Units" auch hier: das Widget zeigte sonst km neben einer App in mi.
                 imperial = einheitenImperialHolen(),
+                // Ein Schwimmen in Metern wie in Sport und im Zeitstrahl - sonst "0.9 mi" hier, "1.5 km" dort.
+                trainingMetrisch = training?.sport?.immerMetrisch == true,
             )
         }
 
@@ -192,7 +194,7 @@ class GesundheitWidget : AppWidgetProvider() {
             }
             val fuss = listOfNotNull(
                 s.nacht?.ruhepuls?.let { context.getString(R.string.ks_w_ruhepuls_wert, Formate.zahl(it.toLong())) },
-                s.nacht?.hrv?.let { "HRV " + Formate.Angabe(Formate.zahl(it.toLong()), "ms").text },
+                s.nacht?.hrv?.let { "HRV " + Formate.menge(it.toLong(), "ms").text },
                 s.meter.takeIf { it >= 100 }?.let { Formate.distanz(it, blick.imperial).text },
             )
             v.setTextViewText(R.id.w_fuss, fuss.ifEmpty { listOf(context.getString(R.string.ks_w_nichts)) }.joinToString(" · "))

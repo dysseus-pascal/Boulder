@@ -23,7 +23,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
 
@@ -429,14 +428,6 @@ internal object Gesundheitsrechnung {
         }
         return emptyList()
     }
-
-    /** Schritte kurz - jetzt abgerundet wie ueberall (Formate). */
-    @Deprecated("Formate.schritteKurz", ReplaceWith("Formate.schritteKurz(schritte, locale)"))
-    fun schritteKurz(schritte: Long, locale: Locale = Locale.getDefault()): String = Formate.schritteKurz(schritte, locale)
-
-    /** Liter mit einer Nachkommastelle, ohne Einheit: "1.2". Formate.liter schreibt "0" statt "0.0". */
-    @Deprecated("Formate.liter", ReplaceWith("Formate.liter(ml, locale)"))
-    fun literKurz(ml: Int, locale: Locale = Locale.getDefault()): String = String.format(locale, "%.1f", ml / 1000.0)
 
     /** Der Schnitt der Tage mit Wert, oder null, wenn weniger als [mindestens] solche Tage da sind. */
     fun schnittDerVortage(werte: List<Double>, mindestens: Int = 1): Double? =

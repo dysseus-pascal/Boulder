@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -34,7 +36,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Formate
@@ -122,7 +126,7 @@ internal fun Verlauf(
     // Die Gesamtlaenge unter dem Ende der Kurve: Minuten oder Strecke, gezaehlt ohne.
     val gesamt = when {
         zaehlachse -> ""
-        zeitachse -> Formate.Angabe(Formate.zahl(ende / 60), "min").text
+        zeitachse -> Formate.menge(ende / 60, "min").text
         else -> Formate.distanz(ende, imperial).text
     }
     val spanne = stringResource(R.string.ks_v_bild_spanne, Formate.zahl(punkte.minOf { it.wert }, nachkomma), Formate.zahl(punkte.maxOf { it.wert }, nachkomma))
@@ -266,30 +270,45 @@ internal fun Zonenliste(sekunden: LongArray, maxpuls: Int) {
         stringResource(R.string.ks_zone_3), stringResource(R.string.ks_zone_4), stringResource(R.string.ks_zone_5),
     )
     val fett = MaterialTheme.colorScheme.onSurface
-    Column {
-        for (z in 5 downTo 0) {
-            if (sekunden[z] == 0L) continue
-            val von = if (z == 0) 0 else maxpuls * Trainingsanalyse.ZONEN_PROZENT[z - 1] / 100
-            val bis = when (z) {
-                0 -> maxpuls * 50 / 100 - 1
-                5 -> maxpuls
-                else -> maxpuls * Trainingsanalyse.ZONEN_PROZENT[z] / 100 - 1
-            }
-            val (minuten, prozent) = anteile[z]
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).background(Farben.trainingszonen[z].flaeche(), CircleShape))
-                Spacer(Modifier.width(10.dp))
-                Box(Modifier.weight(1f)) {
-                    Tabellenzeile(
-                        listOf(
-                            if (z == 0) namen[0] else stringResource(R.string.ks_v_zone_n, z, namen[z]),
-                            Formate.zahl(von.toLong()) + "–" + Formate.zahl(bis.toLong()),
-                            // Unter einer halben Minute stand "0 min" neben einem Anteil.
-                            if (minuten == 0L) unterMinute else Formate.dauer(minuten),
-                            Formate.prozent(prozent),
-                        ),
-                        ZONEN_SPALTEN, hervor = 2 to fett,
-                    )
+    val messer = rememberTextMeasurer()
+    val stil = LocalTextStyle.current.copy(fontSize = 14.sp)
+    val schrift = LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
+    BoxWithConstraints {
+        // Die freie Namensspalte wie in der Tabellenzeile: Breite minus Punkt, Luft und feste Spalten.
+        val frei = maxWidth - 22.dp - ZONEN_SPALTEN.filterNotNull().fold(0.dp) { a, b -> a + b } * schrift
+        val lang = (1..5).filter { sekunden[it] > 0 }.map { stringResource(R.string.ks_v_zone_n, it, namen[it]) }
+        // PASST "Zone 3 · Endurance" NICHT (grosse Schrift, schmales Telefon), steht der Name in
+        // einer zweiten Zeile - sonst brach er hinter dem Punkt um, und der hing am Zeilenende.
+        val einzeilig = with(LocalDensity.current) { lang.all { messer.measure(it, stil).size.width <= frei.toPx() } }
+        Column {
+            for (z in 5 downTo 0) {
+                if (sekunden[z] == 0L) continue
+                val von = if (z == 0) 0 else maxpuls * Trainingsanalyse.ZONEN_PROZENT[z - 1] / 100
+                val bis = when (z) {
+                    0 -> maxpuls * 50 / 100 - 1
+                    5 -> maxpuls
+                    else -> maxpuls * Trainingsanalyse.ZONEN_PROZENT[z] / 100 - 1
+                }
+                val (minuten, prozent) = anteile[z]
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(12.dp).background(Farben.trainingszonen[z].flaeche(), CircleShape))
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.weight(1f)) {
+                        Tabellenzeile(
+                            listOf(
+                                when {
+                                    z == 0 -> namen[0]
+                                    einzeilig -> stringResource(R.string.ks_v_zone_n, z, namen[z])
+                                    else -> stringResource(R.string.ks_v_zone_nr, z) + "\n" + namen[z]
+                                },
+                                Formate.zahl(von.toLong()) + "–" + Formate.zahl(bis.toLong()),
+                                // Unter einer halben Minute stand "0 min" neben einem Anteil.
+                                if (minuten == 0L) unterMinute else Formate.dauer(minuten),
+                                Formate.prozent(prozent),
+                            ),
+                            ZONEN_SPALTEN, hervor = 2 to fett,
+                        )
+                    }
                 }
             }
         }

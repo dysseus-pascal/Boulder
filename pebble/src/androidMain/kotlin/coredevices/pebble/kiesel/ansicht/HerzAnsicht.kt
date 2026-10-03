@@ -83,9 +83,6 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     }
 }
 
-/** Eine Zahl mit "bpm" fuer einen Satz: "78 bpm". */
-private fun bpm(wert: Int): String = Formate.Angabe(Formate.zahl(wert.toLong()), "bpm").text
-
 @Composable
 private fun PulsKarte(s: GesundheitsStand) {
     val context = LocalContext.current
@@ -109,7 +106,7 @@ private fun PulsKarte(s: GesundheitsStand) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Hauptwert(spanne, "bpm")
                 // Was die Herzzeile auf Health zeigt, steht hier wieder: wer sie antippt, findet seine Zahl.
-                if (tag != null) Fliesstext((listOf(bpm(tag.wachpuls)) + tag.teile).joinToString(" · "))
+                if (tag != null) Fliesstext((listOf(Formate.menge(tag.wachpuls.toLong(), "bpm").text) + tag.teile).joinToString(" · "))
                 if (s.pulsZonen.size == 3) {
                     val zone = zonenNamen[Gesundheitsrechnung.pulsZone(hoechster, s.pulsZonen)]
                     // Ohne die Zahl: sie steht schon gross oben. Mit Tag, denn im 24-Stunden-Fenster kann die Spitze von gestern sein.
@@ -266,7 +263,7 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
             } else {
                 // Ohne letzte Nacht kein Urteil - dann steht nur der Schnitt da.
                 if (ruhe.urteil != null) Fliesstext(urteilSatz(ruhe, null))
-                Unterzeile(stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, bpm(schnitt.roundToInt())))
+                Unterzeile(stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, Formate.menge(schnitt.roundToInt().toLong(), "bpm").text))
             }
         }
     }

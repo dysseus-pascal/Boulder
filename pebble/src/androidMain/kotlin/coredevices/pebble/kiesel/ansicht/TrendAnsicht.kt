@@ -97,8 +97,11 @@ internal fun TrendAnsicht(gruppe: String, setzeTitel: (String) -> Unit) {
             ?.let { stringResource(R.string.ks_trn_wochen_name) to stringResource(R.string.ks_trn_ab, Formate.datumKurz(it)) },
     )
     Seite {
-        getragen.forEach { LetzteTage(d, it, grenze) }
-        Vergleiche(d, gruppe, heute, mitDrinktervall, ausstehend = ab)
+        // ZUERST WAS EINEN UNTERSCHIED MACHT (festgehaltenes Design), dann die
+        // letzten 14 Tage; die wartenden Vergleiche erst nach ihnen.
+        Vergleiche(d, gruppe, heute, mitDrinktervall, ausstehend = ab) {
+            getragen.forEach { LetzteTage(d, it, grenze) }
+        }
         TagFuerTag(d, getragen, grenze)
         mitWoche.forEach { TypischeWoche(it, bilder.getValue(it.spalte), d[it.spalte].orEmpty(), grenze, heute) }
         if (gruppe == "ernaehrung" && mitSupCycle) Praeparattrend(d, grenze, heute)
@@ -164,7 +167,7 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
     val dauer: (Double) -> Formate.Angabe = { Formate.dauerTeile(it.roundToLong()) }
     val dauerKurz: (Double) -> String = { dauer(it).zahl }
     val ganz: (Double) -> String = { Formate.zahl(it, 0) }
-    fun mit(einheit: String?): (Double) -> Formate.Angabe = { Formate.Angabe(Formate.zahl(it, 0), einheit) }
+    fun mit(einheit: String?): (Double) -> Formate.Angabe = { Formate.menge(it, einheit) }
     return when (gruppe) {
         "schlaf" -> listOf(
             Groesse("schlaf", R.string.ks_h_schlaf_n, ziel = SCHLAFZIEL_MIN.toDouble(), angabe = dauer, kurz = dauerKurz),

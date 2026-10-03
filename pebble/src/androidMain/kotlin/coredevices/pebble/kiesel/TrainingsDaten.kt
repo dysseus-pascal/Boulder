@@ -16,7 +16,6 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import coredevices.pebble.R
-import androidx.compose.ui.graphics.toArgb
 import coredevices.pebble.kiesel.ansicht.Farben
 import coredevices.pebble.health.fehlendeAkteRechte
 import kotlinx.coroutines.Dispatchers
@@ -39,10 +38,6 @@ internal enum class Sport {
     Schwimmen,
     Anderes;
 
-    /** Die Flaechenfarbe als ARGB - nur noch, bis die Seiten [Farben.sport] nehmen. */
-    @Deprecated("Farben.sport(sport)", ReplaceWith("Farben.sport(this).flaecheDunkel"))
-    val farbe: Long get() = Farben.sport(this).flaecheDunkel.toArgb().toLong() and 0xFFFFFFFFL
-
     /**
      * Der Name als Ressource. ALS GETTER, nicht als Feld: sonst luede schon
      * die Aufzaehlung die Ressourcen, und die Rechnung (Wochenrechnung)
@@ -62,17 +57,29 @@ internal enum class Sport {
     /** Ist die Geschwindigkeit hier die Aussage (km/h) und nicht das Tempo (min/km)? */
     val rad: Boolean get() = this == Bike || this == Mtb
 
+    /**
+     * Bleibt die Strecke metrisch, auch mit "Imperial Units"? NUR BEIM
+     * SCHWIMMEN: das Becken ist an der Uhr in Metern eingestellt, und
+     * "0.9 mi" ueber "1,500 m" in den Bahnen waeren zwei Masse fuer dieselbe
+     * Strecke. Hier und nicht in einer Ansicht, damit Sport, der Health-
+     * Zeitstrahl und das Widget dieselbe Regel lesen.
+     */
+    val immerMetrisch: Boolean get() = this == Schwimmen
+
     companion object {
         /**
          * Die Art aus der Akte, nicht aus dem Titel. NUR MTB STEHT IM TITEL:
          * die Akte kennt kein Mountainbike.
          */
-        fun von(s: ExerciseSessionRecord): Sport = when (s.exerciseType) {
+        fun von(s: ExerciseSessionRecord): Sport = von(s.exerciseType, s.title)
+
+        /** Dasselbe aus Art und Titel - fuer den Eintrag, bevor er in der Akte steht (Kieselsport). */
+        fun von(art: Int, titel: String?): Sport = when (art) {
             ExerciseSessionRecord.EXERCISE_TYPE_RUNNING,
             ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL -> Laufen
             ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
             ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY ->
-                if (s.title?.contains("MTB") == true) Mtb else Bike
+                if (titel?.contains("MTB") == true) Mtb else Bike
             ExerciseSessionRecord.EXERCISE_TYPE_HIKING,
             ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> Wandern
             ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,

@@ -328,8 +328,6 @@
     <string name="ks_v_ab_7">7 h and more</string>
     <string name="ks_v_aktiver_tag">After 30+ active min</string>
     <string name="ks_v_ruhiger_tag">After &lt;30 active min</string>
-    <string name="ks_v_nach_23">Asleep after 23:00</string>
-    <string name="ks_v_vor_23">Asleep before 23:00</string>
     <string name="ks_v_viele_schritte">After 10,000+ steps</string>
     <string name="ks_v_weniger_schritte">After fewer steps</string>
     <string name="ks_v_wochenende">Weekend</string>

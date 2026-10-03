@@ -83,11 +83,12 @@
             android:gravity="bottom"
             android:orientation="horizontal">
 
+            <!-- Die Platzhalter "–" wie Formate.FEHLT: vor dem ersten Update stand sonst ein anderer Strich als danach. -->
             <TextView
                 android:id="@+id/w_gross"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="—"
+                android:text="–"
                 android:textColor="@color/ks_w_schrift"
                 android:textSize="30sp"
                 android:textStyle="bold" />
@@ -139,7 +140,7 @@
             <TextView android:id="@+id/w_k1_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
             <TextView android:id="@+id/w_k1_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+                android:text="–" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
             <ProgressBar android:id="@+id/w_k1_balken" style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
                 android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />
@@ -155,7 +156,7 @@
             <TextView android:id="@+id/w_k2_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
             <TextView android:id="@+id/w_k2_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+                android:text="–" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
             <ProgressBar android:id="@+id/w_k2_balken" style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
                 android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />
@@ -170,7 +171,7 @@
             <TextView android:id="@+id/w_k3_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textColor="@color/ks_w_schrift_zart" android:textSize="10sp" />
             <TextView android:id="@+id/w_k3_wert" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
+                android:text="–" android:textColor="@color/ks_w_schrift" android:textSize="16sp" android:textStyle="bold" />
             <ProgressBar android:id="@+id/w_k3_balken" style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="2dp"
                 android:max="100" android:progress="0" android:progressDrawable="@drawable/ks_w_widget_balken" />

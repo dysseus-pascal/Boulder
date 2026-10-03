@@ -52,8 +52,9 @@ internal fun Koerperverlauf(
     val zahlen = achse.linien.map { Formate.zahl(it, if (achse.schritt < 1.0) 1 else 0) }
     Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
         val beschriftet = zahlen.map { messer.measure(it, stil) }
-        // Rechts wie alle Gesundheitsbilder, so breit wie die breiteste Zahl - sie waechst mit der Schrift.
-        val rechts = size.width - (beschriftet.maxOf { it.size.width } + 6.dp.toPx())
+        // Rechts und so breit wie in allen Gesundheits- und Trendbildern (achsSpalte, mindestens 30 dp):
+        // mit eigener Breite war die Zeichenflaeche auf Body schmaler als auf der Herzseite.
+        val rechts = size.width - achsSpalte(beschriftet)
         val kopf = 6.dp.toPx()
         val boden = size.height - fussraum(messer, stil, luft = 2.dp)
         val spalten = (ChronoUnit.DAYS.between(von, bis) + 1).coerceAtLeast(1).toFloat()

@@ -121,6 +121,17 @@ internal object Formate {
     fun liter(ml: Int, locale: Locale = Locale.getDefault()): String =
         if (ml <= 0) String.format(locale, "%d", 0) else String.format(locale, "%.1f", ml / 1000.0)
 
+    /**
+     * Eine Menge auf ganze gerundet, mit Einheit getrennt: "95 mg", "300 ml",
+     * "52 bpm", "45 s". GANZE EINHEITEN: "94.6 mg" Koffein oder "51.8 bpm"
+     * behaupteten eine Genauigkeit, die keine Quelle hat. Vorher baute jede
+     * Seite das selbst (Health, Trends, Sport, Widget).
+     */
+    fun menge(wert: Double, einheit: String?, locale: Locale = Locale.getDefault()): Angabe = Angabe(zahl(wert, 0, locale), einheit)
+
+    /** Dieselbe Menge fuer gezaehlte Werte (Sekunden, Pulsschlaege). */
+    fun menge(wert: Long, einheit: String?, locale: Locale = Locale.getDefault()): Angabe = Angabe(zahl(wert, locale), einheit)
+
     /** Eine Schaetzung: "≈ 194" - ohne Wert nur der Strich, "≈ –" las sich wie ein Darstellungsfehler. */
     fun ungefaehr(text: String?): String = text?.let { "≈ $it" } ?: FEHLT
 
@@ -316,7 +327,10 @@ internal object Formate {
         return datumKurz(tag, datumMuster(l), l)
     }
 
-    /** Ein Tag als Titel oder Messtag: "Sep 28", mit Jahr nur, wenn es nicht dieses ist ("Sep 28, 2025"). */
+    /**
+     * Ein Tag als Messtag oder Listenzeile (Body, Akkunaechte): "Sep 28", mit Jahr nur, wenn es
+     * nicht dieses ist ("Sep 28, 2025"). Seitentitel nehmen [datumMitWochentag].
+     */
     fun datum(tag: LocalDate, heute: LocalDate = LocalDate.now()): String {
         val l = Locale.getDefault()
         return datumKurz(tag, datumMuster(l), l, heute, datumMuster(l, mitJahr = true))

@@ -105,13 +105,6 @@ internal fun Sport.zeichen(): ImageVector = when (this) {
 internal fun SportKreis(sport: Sport, groesse: Dp = 36.dp, bild: Dp = 20.dp) =
     Tonkreis(sport.zeichen(), Farben.sport(sport), groesse = groesse, bild = bild)
 
-/** Ein fester Zeitpunkt mit Wochentag und Datum: "Wed, Sep 30, 9:14 PM" - jetzt aus Formate. */
-@Deprecated(
-    "Formate.wochentagZeit(context, t, mitDatum = true); Listen ohne Tageskopf: Formate.zeitpunkt(context, t, mitWochentag = true)",
-    ReplaceWith("Formate.wochentagZeit(context, zeit, mitDatum = true)", "coredevices.pebble.kiesel.Formate"),
-)
-internal fun wannText(context: Context, zeit: Instant): String = Formate.wochentagZeit(context, zeit, mitDatum = true)
-
 /**
  * Wann ein Training begann: "Yesterday, 6:02 PM", "Mon, 7:53 AM", "Sun, Sep 27,
  * 8:16 AM". Ohne [relativ] nie "Today"/"Yesterday" - in der Liste steht die
@@ -134,13 +127,12 @@ internal fun trainingszeit(context: Context, t: Instant, relativ: Boolean): Stri
 internal fun trainingsName(t: TrainingEintrag): String = TrainingsDaten.name(LocalContext.current, t.sitzung)
 
 /**
- * Die Strecke eines Trainings in Liste, Grossem und Detail. SCHWIMMEN BLEIBT
- * METRISCH, auch mit "Imperial Units": das Becken ist an der Uhr in Metern
- * eingestellt, und "0.9 mi" im Kopf ueber "1,500 m" in den Bahnen waeren
- * zwei Masse fuer dieselbe Strecke.
+ * Die Strecke eines Trainings in Liste, Grossem, Detail und im Health-
+ * Zeitstrahl. SCHWIMMEN BLEIBT METRISCH, auch mit "Imperial Units"
+ * ([Sport.immerMetrisch], dieselbe Regel liest das Widget).
  */
 internal fun streckeVon(t: TrainingEintrag, imperial: Boolean): Formate.Angabe =
-    Formate.distanz(t.meter, imperial && t.sport != Sport.Schwimmen)
+    Formate.distanz(t.meter, imperial && !t.sport.immerMetrisch)
 
 /** Eine Trainingszeile im Stil der Health-Seite: Sportkreis, Name, Zeit, die Dauer fett rechts. */
 @Composable
@@ -369,7 +361,7 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
             val tempo = if (t.sport.rad) Formate.geschwindigkeit(t.meter, sekunden, imperial) else Formate.tempo(t.meter, sekunden, imperial)
             tempo?.let { add(it to tempoName) }
         }
-        puls?.let { add(Formate.Angabe(Formate.zahl(it.toLong()), "bpm") to pulsName) }
+        puls?.let { add(Formate.menge(it.toLong(), "bpm") to pulsName) }
         // Der Aufstieg statt des Tempos, wenn es bergauf ging: er sagt mehr ueber die Tour.
         val auf = Trainingsanalyse.aufstieg(punkte)
         if (auf >= 10) {

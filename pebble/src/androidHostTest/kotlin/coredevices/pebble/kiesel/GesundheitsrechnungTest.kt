@@ -6,7 +6,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -86,18 +85,6 @@ class GesundheitsbildRechnungTest {
         assertEquals(listOf(90, 95, 100), Gesundheitsrechnung.raster(88, 100, 5))
         assertEquals(listOf(55), Gesundheitsrechnung.raster(55, 55))
         assertTrue(Gesundheitsrechnung.raster(5, 4).isEmpty())
-    }
-
-    @Test
-    fun kurzformen() {
-        assertEquals("95", Gesundheitsrechnung.schritteKurz(95, Locale.ROOT))
-        assertEquals("4.9k", Gesundheitsrechnung.schritteKurz(4_912, Locale.ROOT))
-        assertEquals("10k", Gesundheitsrechnung.schritteKurz(10_000, Locale.ROOT))
-        assertEquals("10k", Gesundheitsrechnung.schritteKurz(10_040, Locale.ROOT))
-        assertEquals("4,9k", Gesundheitsrechnung.schritteKurz(4_912, Locale.GERMAN))
-        assertEquals("10k", Gesundheitsrechnung.schritteKurz(10_040, Locale.GERMAN))
-        assertEquals("1.2", Gesundheitsrechnung.literKurz(1_240, Locale.ROOT))
-        assertEquals("0.0", Gesundheitsrechnung.literKurz(0, Locale.ROOT))
     }
 
     @Test

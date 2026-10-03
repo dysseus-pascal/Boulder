@@ -3,7 +3,6 @@ package coredevices.pebble.kiesel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 
 /**
  * Aus Tagen ein Muster machen.
@@ -172,15 +171,6 @@ internal object Auswertung {
         val letzter = Math.floor(bis / schritt).toLong()
         return (erster..letzter).map { it * schritt }
     }
-
-    /**
-     * Schritte kurz: ab tausend als "4.9k", die ",0" faellt weg ("10k"), darunter die Zahl.
-     *
-     * ABGERUNDET, NICHT GERUNDET: 9'960 Schritte als "10k" ueber einer Saeule,
-     * die das Ziel nicht erreicht, behaupteten das Ziel. "9.9k" stimmt.
-     */
-    @Deprecated("Formate.schritteKurz", ReplaceWith("Formate.schritteKurz(wert, locale)"))
-    fun tausender(wert: Double, locale: Locale = Locale.getDefault()): String = Formate.schritteKurz(wert, locale)
 
     /**
      * Wann die typische Woche fruehestens tragen kann: drei Wochentage mit je

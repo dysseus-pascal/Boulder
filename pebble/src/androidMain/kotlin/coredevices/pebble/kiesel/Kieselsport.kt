@@ -13,13 +13,13 @@ import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Length
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.ansicht.einheitenImperialHolen
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.util.Locale
 import kotlin.uuid.Uuid
 
 /** Eine Nachricht von Kieselsport, nach Art der Werte getrennt. */
@@ -254,7 +254,17 @@ internal object Kieselsport {
         }
     }
 
-    private fun km(meter: Double): String = String.format(Locale.getDefault(), "%.1f", meter / 1000)
+    /**
+     * Die Strecke fuer Protokoll und Meldung in Gravels Einheiten, wie die
+     * Trainingsliste daneben: dort stand "5.0 mi", hier "8.1 km". Schwimmen
+     * bleibt metrisch ([Sport.immerMetrisch]). Ohne Koin metrisch - Gravels
+     * Vorgabe; der Eintrag steht dann schon in der Akte und darf nicht scheitern.
+     */
+    private suspend fun streckeText(meter: Double, satzart: Int, name: String): String {
+        val imperial = !Sport.von(satzart, name).immerMetrisch &&
+            try { einheitenImperialHolen() } catch (e: IllegalStateException) { false }
+        return Formate.distanz(meter, imperial).text
+    }
 
     /**
      * Eine Nachricht verarbeiten. Rueckgabe: ein Satz fuers Protokoll, oder
@@ -380,7 +390,7 @@ internal object Kieselsport {
         val ohne = sitzung(pausen, emptyList()) ?: sitzung(emptyList(), emptyList()) ?: return context.getString(R.string.ks_a_nicht_eingetragen)
         val hatAbschnitte = satz != null && (saetze.isNotEmpty() || runden.isNotEmpty())
         val dazu = buildString {
-            if (strecke > 0) append(", " + km(strecke) + " km")
+            if (strecke > 0) append(", " + streckeText(strecke, satzart, name))
             if (bahnen > 0) append(", " + context.getString(R.string.ks_a_bahnen, bahnen.toInt()))
             if (saetze.isNotEmpty()) append(", " + context.getString(R.string.ks_a_saetze, (felder[SP_SAETZE] ?: 0).toInt()))
         }
@@ -459,7 +469,7 @@ internal object Kieselsport {
         }
         val pausenSek = pausen.sumOf { Duration.between(it.startTime, it.endTime).seconds }
         val minuten = ((Duration.between(anfang, ende).seconds - pausenSek) / 60).toInt()
-        val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + km(strecke) + " km")
+        val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + streckeText(strecke, satzart, name))
         val meldung = schreibe(context, satz, kurz)
         Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte)
         // Erst jetzt gibt es das Fenster, in dem die schon gelieferte Kurve zaehlt.

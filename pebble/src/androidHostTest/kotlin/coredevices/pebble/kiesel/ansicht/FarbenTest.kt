@@ -7,6 +7,7 @@ import coredevices.pebble.kiesel.Sport
 import theme.blackScheme
 import theme.greyScheme
 import theme.lightScheme
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -96,11 +97,35 @@ class FarbenTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun alteTempofarbeIstDieFlaeche() {
-        // Die Karte (OSM) und ihre Legende zeigen weiter dieselbe Skala.
-        assertEquals(Color.hsv(110f, 0.85f, 0.9f), tempofarbe(0.5f))
+    fun tempoflaecheIstDieKartenskala() {
+        // Die Karte (OSM) und ihre Legende zeigen in beiden Schemata dieselbe Skala wie vor Etappe 2.
+        assertEquals(Color.hsv(110f, 0.85f, 0.9f), Farben.tempo(0.5f).flaecheDunkel)
         assertEquals(Farben.tempo(0.5f).flaecheHell, Farben.tempo(0.5f).flaecheDunkel)
+    }
+
+    /** Der Farbton in Grad (0..360) - fuer den Vergleich von Ton und Flaeche. */
+    private fun farbton(c: Color): Float {
+        val max = maxOf(c.red, c.green, c.blue)
+        val d = max - minOf(c.red, c.green, c.blue)
+        val h = when (max) {
+            c.red -> ((c.green - c.blue) / d).mod(6f)
+            c.green -> (c.blue - c.red) / d + 2
+            else -> (c.red - c.green) / d + 4
+        }
+        return h * 60f
+    }
+
+    @Test
+    fun tempotonHellBehaeltDenFarbtonDerLegende() {
+        // Nur dunkler, nicht verfaerbt: fest um 45 % zu Schwarz wurde die Kurve oliv, braun und
+        // dunkelrot und passte nicht mehr zur Legende darunter. 4 Grad Luft fuer die 8-Bit-Kanaele.
+        (0..20).forEach { k ->
+            val f = Farben.tempo(k / 20f)
+            assertTrue(abs(farbton(f.hell) - farbton(f.flaecheHell)) < 4f, "tempo${k * 5}%: Farbton ${farbton(f.hell)} statt ${farbton(f.flaecheHell)}")
+        }
+        // Wo die Flaeche schon 3:1 haelt, bleibt sie der Ton: Blau und Rot an den Enden.
+        assertEquals(Farben.tempo(0f).flaecheHell, Farben.tempo(0f).hell)
+        assertEquals(Farben.tempo(1f).flaecheHell, Farben.tempo(1f).hell)
     }
 
     @Test
@@ -119,12 +144,11 @@ class FarbenTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun alteSportfarbeBleibtGleich() {
-        // Die Weiterleitung darf bis zur Umstellung nichts sichtbar aendern.
-        assertEquals(0xFFE8622EL, Sport.Laufen.farbe)
-        assertEquals(0xFFB8792AL, Sport.Mtb.farbe)
-        assertEquals(0xFF9C8B7CL, Sport.Anderes.farbe)
-        assertEquals(Color(0xFFFF0055), ZONENFARBEN[5])
+    fun sportUndZonenflaechenSindDieUhrfarben() {
+        // Kreis, Stapel und Kartenlinie zeigen die Farben der Uhr - sie duerfen sich nicht leise verschieben.
+        assertEquals(Color(0xFFE8622E), Farben.sport(Sport.Laufen).flaecheDunkel)
+        assertEquals(Color(0xFFB8792A), Farben.sport(Sport.Mtb).flaecheDunkel)
+        assertEquals(Color(0xFF9C8B7C), Farben.sport(Sport.Anderes).flaecheDunkel)
+        assertEquals(Color(0xFFFF0055), Farben.trainingszonen[5].flaecheDunkel)
     }
 }

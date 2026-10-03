@@ -110,10 +110,16 @@ private class Ergebnis(val frage: Vergleichsfragen.Frage, val v: Auswertung.Grup
 /**
  * Die Vergleiche einer Trendseite. [ausstehend] sind weitere Karten, die
  * noch Tage brauchen (Name und ab wann) - sie stehen mit den wartenden
- * Vergleichen in einem Kasten.
+ * Vergleichen in einem Kasten. [zwischen] steht zwischen den fertigen und
+ * den wartenden: so fuehren die fertigen die Seite an ("What makes a
+ * difference" oben, festgehaltenes Design), und die Liste "Needs more days"
+ * schiebt die Bilder nicht vom ersten Bildschirm.
  */
 @Composable
-internal fun Vergleiche(d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean, ausstehend: List<Pair<String, String>> = emptyList()) {
+internal fun Vergleiche(
+    d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean,
+    ausstehend: List<Pair<String, String>> = emptyList(), zwischen: @Composable () -> Unit = {},
+) {
     val ergebnisse = remember(d, gruppe, heute, mitKoffein) {
         Vergleichsfragen.rechne(d, gruppe, heute, mitKoffein).map { (f, v) -> Ergebnis(f, v) }
     }
@@ -131,15 +137,16 @@ internal fun Vergleiche(d: Reihen, gruppe: String, heute: LocalDate, mitKoffein:
             }
         }
     }
+    zwischen()
     val zeilen = wartend.map { e ->
         val n = minOf(e.v.a.size, e.v.b.size)
         stringResource(e.texte.frage) to
             stringResource(if (e.frage.naechte) R.string.ks_v_von_naechte else R.string.ks_v_von_tage, n, Auswertung.VERGLEICH_MINDESTENS)
     } + ausstehend
     if (zeilen.isNotEmpty()) {
-        // Die Zaehler ("3 of 5 nights") gelten fuer 30 Tage. Steht kein fertiger Vergleich mit
-        // diesem Fenster darueber, nennt der Kopf es selbst - sonst fehlte es ganz.
-        val fenster = if (fertig.isEmpty() && wartend.isNotEmpty()) stringResource(R.string.ks_v_zeitraum) else null
+        // Die Zaehler ("3 of 5 nights") gelten fuer 30 Tage. Der Kopf nennt das Fenster selbst: der
+        // fertige Kasten mit demselben Fenster steht oben, direkt darueber stehen jetzt die 14 Tage.
+        val fenster = if (wartend.isNotEmpty()) stringResource(R.string.ks_v_zeitraum) else null
         Abschnitt(stringResource(R.string.ks_v_braucht_mehr), zusatz = fenster) {
             // Eine Spalte fuer den Stand, damit "3 of 5 nights" und "from Oct 12" untereinander stehen.
             Column {

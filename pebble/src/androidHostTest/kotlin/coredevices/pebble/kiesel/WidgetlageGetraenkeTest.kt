@@ -44,8 +44,9 @@ class WidgetlageGetraenkeTest {
 
     @Test
     fun wasser_in_litern_wie_die_app() {
-        assertEquals(Gesundheitsrechnung.literKurz(1200), Zahlen.liter(1200.0))
-        assertEquals(Gesundheitsrechnung.literKurz(1250), Zahlen.liter(1249.6))
-        assertEquals("0", Zahlen.liter(0.0))
+        // Die Akte liefert ml als Double: erst auf ganze ml runden, dann wie die App (Formate.liter) formen.
+        assertEquals(Formate.liter(1200), Widgetlage.liter(1200.0))
+        assertEquals(Formate.liter(1250), Widgetlage.liter(1249.6))
+        assertEquals("0", Widgetlage.liter(0.0))
     }
 }

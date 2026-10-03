@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -570,9 +571,6 @@ internal object Zeichen {
     )
 }
 
-@Deprecated("Zeichen.waage", ReplaceWith("Zeichen.waage"))
-internal val WAAGE: ImageVector get() = Zeichen.waage
-
 // --- Grosse Schrift und TalkBack (G5) -------------------------------------------------
 
 /**
@@ -583,6 +581,23 @@ internal val WAAGE: ImageVector get() = Zeichen.waage
  */
 internal fun DrawScope.fussraum(messer: TextMeasurer, stil: TextStyle, zeilen: Int = 1, luft: Dp = 0.dp): Float =
     messer.measure("0", stil).size.height.toFloat() * zeilen + luft.toPx()
+
+/**
+ * Die Spalte rechts fuer die Zahlen einer Achse, in Pixeln: so breit wie die
+ * breiteste Zahl plus Luft, NIE SCHMALER ALS 30 DP - so breit war sie auf der
+ * Herzseite, und mit grosser Schrift ragte "100" sonst in die Kurve. Health
+ * und Trends rechneten das je fuer sich.
+ */
+internal fun DrawScope.achsSpalte(zahlen: List<TextLayoutResult>): Float =
+    maxOf(30.dp.toPx(), (zahlen.maxOfOrNull { it.size.width } ?: 0) + 6.dp.toPx())
+
+/**
+ * Dieselbe Spalte, an einem Muster gemessen statt an den Zahlen selbst: alle
+ * Bilder einer Karte sind dann gleich breit, und dieselbe Uhrzeit steht in
+ * jedem senkrecht uebereinander (Nacht: Hypnogramm, Puls, SpO2).
+ */
+internal fun DrawScope.achsSpalte(messer: TextMeasurer, stil: TextStyle, muster: String = "000"): Float =
+    achsSpalte(listOf(messer.measure(muster, stil)))
 
 /**
  * Die Hoehe eines Bildes, um das gewachsen, was seine Beschriftung mit
@@ -634,36 +649,4 @@ internal fun Modifier.langDruck(label: String, mindesthoehe: Dp = 48.dp, aktion:
             )
         }
         .semantics(mergeDescendants = true) { onLongClick(label) { aktuell(); true } }
-}
-
-// --- Alte Bausteine, bis Trends, Trainingsdetail, Akku und Sicherung umgestellt sind ---
-
-@Deprecated("Baukasten: Abschnitt(titel) { … } oder Kasten { … }")
-@Composable
-internal fun Karte(onClick: (() -> Unit)? = null, inhalt: @Composable () -> Unit) {
-    Kasten(onClick) {
-        Column(Modifier.padding(INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) { inhalt() }
-    }
-}
-
-/** Eine Abschnittsueberschrift zwischen den Karten, wie in Kiesel-Helper. */
-@Deprecated("Baukasten: der Titel gehoert als Kopf in die Karte - Abschnitt(titel) { … }")
-@Composable
-internal fun Ueberschrift(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
-    )
-}
-
-@Deprecated("Baukasten: Kennzahl(zahl, einheit, name) - die Einheit klein daneben")
-@Composable
-internal fun Wert(zahl: String, name: String) {
-    Column {
-        Text(zahl, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
 }

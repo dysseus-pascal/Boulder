@@ -27,7 +27,7 @@
     <string name="ks_sport_kraft">Strength</string>
     <string name="ks_sport_yoga">Yoga</string>
     <string name="ks_sport_schwimmen">Swimming</string>
-    <string name="ks_zone_unter">below zone 1</string>
+    <string name="ks_zone_unter">below zone\u00A01</string>
     <string name="ks_zone_1">Recovery</string>
     <string name="ks_zone_2">Base</string>
     <string name="ks_zone_3">Endurance</string>

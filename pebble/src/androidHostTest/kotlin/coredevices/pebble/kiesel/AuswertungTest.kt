@@ -7,7 +7,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.util.Locale
 
 /**
  * Die Auswertung ohne Telefon pruefen.
@@ -149,25 +148,6 @@ class AuswertungTest {
         assertEquals(listOf(50.0, 55.0, 60.0, 65.0), Auswertung.achsenschritte(52.0, 62.0))
         assertEquals(listOf(45.0, 50.0, 55.0, 60.0), Auswertung.achsenschritte(46.0, 58.0))
         assertEquals(listOf(45.0, 50.0, 55.0, 60.0), Auswertung.achsenschritte(46.0, 59.0))
-    }
-
-    @Test
-    fun `Tausender werden kurz`() {
-        assertEquals("812", Auswertung.tausender(812.0, Locale.US))
-        assertEquals("4.9k", Auswertung.tausender(4940.0, Locale.US))
-        assertEquals("10k", Auswertung.tausender(10000.0, Locale.US))
-        assertEquals("12.3k", Auswertung.tausender(12345.0, Locale.US))
-        assertEquals("4,9k", Auswertung.tausender(4940.0, Locale.GERMAN))
-        assertEquals("999", Auswertung.tausender(999.4, Locale.US))
-        assertEquals("1k", Auswertung.tausender(1000.0, Locale.US))
-    }
-
-    @Test
-    fun `Tausender runden nie aufs Ziel`() {
-        // Unter dem Ziel darf die Zahl nicht "10k" sagen - abgerundet, nicht gerundet.
-        assertEquals("9.9k", Auswertung.tausender(9960.0, Locale.US))
-        assertEquals("4.9k", Auswertung.tausender(4986.0, Locale.US))
-        assertEquals("999", Auswertung.tausender(999.6, Locale.US))
     }
 
     @Test

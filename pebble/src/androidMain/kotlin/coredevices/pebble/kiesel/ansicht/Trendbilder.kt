@@ -146,6 +146,29 @@ private fun beschriftete(werte: List<Double?>, passt: Boolean): Set<Int> {
     return setOfNotNull(mit.maxByOrNull { it.value!! }?.index, mit.minByOrNull { it.value!! }?.index, mit.lastOrNull()?.index)
 }
 
+/**
+ * Die Oberkante einer Zahl ueber ihrer Saeule oder ihrem Punkt. Gewuenscht
+ * knapp darueber ([wunsch]). Laege sie dort auf einer Linie (Ziel, Schnitt),
+ * lief die Linie unterbrochen durch die Zahl - "6:46" stand zwischen goal und
+ * avg wie durchgestrichen. Dann unter die Linien, wenn bis zur [unterkante]
+ * (Saeule, Punkt) Platz bleibt, sonst ueber sie. [luft] haelt zu jeder Linie Abstand.
+ */
+private fun zahlOben(wunsch: Float, hoehe: Float, unterkante: Float, linien: List<Float>, luft: Float): Float {
+    fun getroffen(oben: Float) = linien.filter { it > oben - luft && it < oben + hoehe + luft }
+    val erste = getroffen(wunsch)
+    if (erste.isEmpty()) return wunsch
+    val darunter = erste.max() + luft
+    if (darunter + hoehe <= unterkante && getroffen(darunter).isEmpty()) return darunter
+    // Ueber die Linien, bis keine mehr trifft - zwei nahe (goal 8:00, avg 7:42) in einem Zug.
+    var oben = wunsch
+    while (oben > 0f) {
+        val g = getroffen(oben)
+        if (g.isEmpty()) break
+        oben = g.min() - luft - hoehe
+    }
+    return oben.coerceAtLeast(0f)
+}
+
 /** Das Kontrastverhaeltnis zweier Farben nach WCAG (1 bis 21). */
 private fun kontrast(a: Color, b: Color): Float {
     val la = a.luminance()
@@ -160,14 +183,6 @@ private fun kontrast(a: Color, b: Color): Float {
  * ein dunkler verschwand in den blassen. So bleibt der Kern ueberall ab 2,7:1.
  */
 private fun kernAuf(farbe: Farbe, grund: Color): Color = listOf(farbe.hell, farbe.dunkel).maxBy { kontrast(it, grund) }
-
-/**
- * Die Breite der Zahlenspalte rechts: so breit wie die breiteste Zahl, aber
- * nie schmaler als auf der Herzseite (30 dp) - mit grosser Schrift ragte
- * "100" sonst ins Bild.
- */
-private fun DrawScope.achsenspalte(texte: List<TextLayoutResult>): Float =
-    maxOf(30.dp.toPx(), (texte.maxOfOrNull { it.size.width } ?: 0) + 6.dp.toPx())
 
 /**
  * Saeulen je Wochentag oder Woche. Ueber jeder Saeule ihre Zahl, ein hohles
@@ -227,7 +242,7 @@ internal fun Trendsaeulen(
         val achse = striche.map { messer.measure(kurz?.invoke(it) ?: Formate.zahl(it, 0), stil) }
         val unten = if (pegel) minOf(alle.min() - 5, striche.min()) else 0.0
         val spitze = if (pegel) maxOf(alle.max() + 5, striche.max()) else maxOf(saeulen.maxOf { maxOf(it.wert ?: 0.0, it.groesster ?: 0.0) }, marke ?: 0.0, 1.0) * 1.2
-        val rechts = size.width - if (pegel) achsenspalte(achse) else 0f
+        val rechts = size.width - if (pegel) achsSpalte(achse) else 0f
         val fach = rechts / saeulen.size
         val breite = minOf(fach * 0.55f, 26.dp.toPx())
         val ecke = CornerRadius(4.dp.toPx())
@@ -238,6 +253,8 @@ internal fun Trendsaeulen(
         val mitZahl = beschriftete(saeulen.mapIndexed { i, s -> s.wert.takeIf { texte[i] != null } }, passt)
         val belegt = mutableListOf<Rect>()
         val zahlen = mutableListOf<Rect>()
+        // Ziel und Schnitt: die Zahlen ueber den Saeulen weichen ihnen aus (zahlOben).
+        val linienY = listOfNotNull(marke?.let { y(it) }, mittel?.let { y(it) })
         if (pegel) {
             striche.forEachIndexed { k, s ->
                 drawLine(raster, Offset(0f, y(s)), Offset(rechts, y(s)), 1.dp.toPx())
@@ -279,8 +296,10 @@ internal fun Trendsaeulen(
                 if (text != null && i in mitZahl) {
                     val m = messer.measure(text, if (s.hervor) fett else stil)
                     val ueber = (if (pegel) punkt + 3.dp.toPx() else 2.dp.toPx())
-                    val oben = minOf(y(w), y(hoch ?: w)) - ueber - m.size.height
-                    val ecke0 = Offset(mitte - m.size.width / 2f, oben.coerceAtLeast(0f))
+                    val spitzeOben = minOf(y(w), y(hoch ?: w))
+                    val unterkante = spitzeOben - if (pegel) punkt else 0f
+                    val oben = zahlOben(spitzeOben - ueber - m.size.height, m.size.height.toFloat(), unterkante, linienY, 3.dp.toPx())
+                    val ecke0 = Offset(mitte - m.size.width / 2f, oben)
                     drawText(m, topLeft = ecke0)
                     belegt += Rect(ecke0, Size(m.size.width.toFloat(), m.size.height.toFloat()))
                     zahlen += belegt.last()
@@ -360,7 +379,7 @@ internal fun Tagesbild(
         val unten = if (pegel) minOf(werte.min() - 5, striche.min()) else 0.0
         val oben = if (pegel) maxOf(werte.max() + 5, striche.max()) else maxOf(werte.max(), marke ?: 0.0, 1.0) * 1.2
         fun y(w: Double) = (kopf + (boden - kopf) * (1 - (w - unten) / (oben - unten))).toFloat()
-        val rechts = size.width - if (pegel) achsenspalte(achse) else 0f
+        val rechts = size.width - if (pegel) achsSpalte(achse) else 0f
         val fach = rechts / tage.size
         val breite = minOf(fach * 0.6f, 22.dp.toPx())
         val ecke = CornerRadius(3.dp.toPx())
@@ -384,12 +403,16 @@ internal fun Tagesbild(
         }
         // Die Zahlen ueber den Tagen zuerst setzen: die Verbindungslinien der Pegelpunkte
         // setzen unter ihnen aus, wie Ziel und Schnitt - sonst lief eine steigende Linie durch die Zahl.
+        // Ziel und Schnitt: die Zahlen weichen ihnen aus wie in den Trendsaeulen (zahlOben).
+        val linienY = listOfNotNull(marke?.let { y(it) }, mittel?.let { y(it) })
         val zahlTexte = tage.mapIndexed { i, (_, w) ->
             val text = texte[i]
             if (w == null || text == null || i !in mitZahl) return@mapIndexed null
             val m = messer.measure(text, if (i == letzter) fett else stil)
             val abstand = (if (pegel) 5.dp else 2.dp).toPx()
-            m to Offset(fach * i + fach / 2 - m.size.width / 2f, (y(w) - abstand - m.size.height).coerceAtLeast(0f))
+            val unterkante = y(w) - if (pegel) 3.dp.toPx() else 0f
+            val oben = zahlOben(y(w) - abstand - m.size.height, m.size.height.toFloat(), unterkante, linienY, 3.dp.toPx())
+            m to Offset(fach * i + fach / 2 - m.size.width / 2f, oben)
         }
         zahlTexte.filterNotNull().forEach { (m, o) -> zahlen += Rect(o, Size(m.size.width.toFloat(), m.size.height.toFloat())) }
         belegt += zahlen

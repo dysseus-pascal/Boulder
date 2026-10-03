@@ -78,8 +78,9 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
     }
     val n = d.nacht
     val zone = ZoneId.systemDefault()
-    // Der Tag des Aufwachens wie ueberall; das Jahr nur, wenn es ein anderes ist.
-    val titel = Formate.datum(n.aufwachen.atZone(zone).toLocalDate())
+    // Der Tag des Aufwachens wie ueberall, mit Wochentag wie jeder Seitenkopf ("Wed, Sep 30" auf
+    // Health, im Trainingskopf) - und wie die Saeulen der Naechte unten, die nach Wochentagen heissen.
+    val titel = Formate.datumMitWochentag(n.aufwachen.atZone(zone).toLocalDate())
     LaunchedEffect(titel) { setzeTitel(titel) }
 
     Seite {
@@ -252,7 +253,8 @@ private fun Phasenkarte(phasen: IntArray) {
                     Box(Modifier.size(12.dp).background(Farben.phasen[p], CircleShape))
                     Text(namen[i], Modifier.weight(1f).padding(start = 12.dp), fontSize = 16.sp)
                     Text(anteile[i], Modifier.widthIn(min = 48.dp), fontSize = 13.sp, color = Farben.neutral(), textAlign = TextAlign.End, maxLines = 1)
-                    Text(zahlMitEinheit(Formate.stundenMinuten(phasen[p]), "h", 22, 13), Modifier.widthIn(min = 84.dp), textAlign = TextAlign.End, maxLines = 1)
+                    // Die Dauer wie ueberall ("28 min", "3:22 h"): "0:28 h" gab es nur hier. Rechtsbuendig bleibt die Spalte ruhig.
+                    Text(zahlMitEinheit(Formate.dauerTeile(phasen[p].toLong()), 22, 13), Modifier.widthIn(min = 84.dp), textAlign = TextAlign.End, maxLines = 1)
                 }
             }
         }

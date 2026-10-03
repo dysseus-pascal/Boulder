@@ -4,7 +4,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -179,11 +178,4 @@ internal object Koerperrechnung {
         val zoll = (meter / 0.0254).roundToInt()
         return zoll / 12 to zoll % 12
     }
-
-    @Deprecated("Formate.zahl(x, 1)", ReplaceWith("Formate.zahl(x, 1, locale)"))
-    fun eineStelle(x: Double, locale: Locale = Locale.getDefault()): String = Formate.zahl(x, 1, locale)
-
-    /** Minus typografisch (U+2212); was auf 0.0 rundet, bekommt "±" - es hat keine Richtung. */
-    @Deprecated("Formate.vorzeichen(x, 1)", ReplaceWith("Formate.vorzeichen(x, 1, locale)"))
-    fun mitVorzeichen(x: Double, locale: Locale = Locale.getDefault()): String = Formate.vorzeichen(x, 1, locale)
 }

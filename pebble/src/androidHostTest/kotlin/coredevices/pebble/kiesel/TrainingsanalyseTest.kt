@@ -223,6 +223,16 @@ class TrainingsanalyseTest {
     }
 
     @Test
+    fun meilenStattKilometer() {
+        // Mit "Imperial Units" ist ein Abschnitt eine Meile: rund 2,5 km sind eine ganze und ein Rest.
+        val s = Trainingsanalyse.strecke(gerade(250))
+        val mi = Trainingsanalyse.kilometer(s, emptyList(), stueck = Formate.METER_JE_MEILE)
+        assertEquals(2, mi.size)
+        assertTrue(mi[0].meter >= Formate.METER_JE_MEILE && mi[0].meter < Formate.METER_JE_MEILE + 20)
+        assertEquals(s.last().meter, mi.sumOf { it.meter }, 0.001)
+    }
+
+    @Test
     fun hoeheNurWennVorhanden() {
         assertTrue(Trainingsanalyse.hoeheUeberStrecke(Trainingsanalyse.strecke(gerade(20, null))).isEmpty())
         assertEquals(21, Trainingsanalyse.hoeheUeberStrecke(Trainingsanalyse.strecke(gerade(20))).size)

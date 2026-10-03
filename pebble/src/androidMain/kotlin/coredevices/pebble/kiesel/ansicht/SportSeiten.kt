@@ -1,6 +1,5 @@
 package coredevices.pebble.kiesel.ansicht
 
-import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,17 +13,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -49,10 +47,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.OffeneSpur
 import coredevices.pebble.kiesel.Sport
@@ -65,7 +63,6 @@ import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
 /*
  * Die Unterseiten des Sport-Reiters: alle Trainings nach Wochen, die Trends
@@ -86,12 +83,8 @@ private fun Laden(inhalt: @Composable (TrainingsUebersicht) -> Unit) {
     var daten by remember { mutableStateOf(zuletzt) }
     LaunchedEffect(Unit) { daten = TrainingsDaten.uebersicht(context).also { zuletzt = it } }
     val d = daten
-    if (d == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-    else inhalt(d)
+    if (d == null) Ladekreis() else inhalt(d)
 }
-
-private fun datumText(context: android.content.Context, tag: LocalDate, flags: Int): String =
-    DateUtils.formatDateTime(context, tag.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(), flags)
 
 // --- All workouts -------------------------------------------------------------------
 
@@ -110,19 +103,16 @@ internal fun SportListeAnsicht(tagStart: LocalDate?, oeffne: (String) -> Unit) =
     val gruppen = Sportrechnung.nachWoche(gezeigt) { it.einheit.tag }
     val diese = LocalDate.now().with(DayOfWeek.MONDAY)
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Chip(stringResource(R.string.ks_sp_alle_chip), d.trainings.size, null, tag == null && sport == null) { tag = null; sport = null }
-                tag?.let { t ->
-                    val flags = DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_ALL or DateUtils.FORMAT_NO_YEAR
-                    Chip(datumText(context, t, flags), null, null, true, weg = true) { tag = null }
-                }
+                tag?.let { t -> Chip(Formate.datumMitWochentag(t), null, null, true, weg = true) { tag = null } }
                 Sportrechnung.zaehle(amTag.map { it.einheit }).forEach { (art, n) ->
-                    Chip(stringResource(art.nameId), n, Color(art.farbe), sport == art) { sport = if (sport == art) null else art }
+                    Chip(stringResource(art.nameId), n, Farben.sport(art).flaeche(), sport == art) { sport = if (sport == art) null else art }
                 }
             }
         }
@@ -130,24 +120,14 @@ internal fun SportListeAnsicht(tagStart: LocalDate?, oeffne: (String) -> Unit) =
             val titel = when (montag) {
                 diese -> stringResource(R.string.ks_sp_diese_woche)
                 diese.minusWeeks(1) -> stringResource(R.string.ks_sp_letzte_woche)
-                else -> DateUtils.formatDateRange(
-                    context, montag.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-                    montag.plusDays(7).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1,
-                    DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH or DateUtils.FORMAT_NO_YEAR,
-                ).uppercase()
+                // Der Kopf setzt Versalien selbst.
+                else -> Formate.zeitraum(context, montag, montag.plusDays(6))
             }
             Wochengruppe(titel, liste, oeffne)
         }
-        val fuss = when {
-            tag == null && sport == null -> R.string.ks_sp_nichts_davor
-            gezeigt.isEmpty() -> R.string.ks_sp_keine
-            else -> null
-        }
-        if (fuss != null) item {
-            Text(
-                stringResource(fuss), Modifier.fillMaxWidth().padding(top = 6.dp),
-                fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
-            )
+        // Kein Fusssatz am Ende: "90 days" steht schon im Seitenkopf. Nur ohne Treffer ein Leerzustand.
+        if (gezeigt.isEmpty()) item {
+            Kasten { Leerzeile(stringResource(R.string.ks_sp_keine)) }
         }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -156,34 +136,40 @@ internal fun SportListeAnsicht(tagStart: LocalDate?, oeffne: (String) -> Unit) =
 @Composable
 private fun Wochengruppe(titel: String, liste: List<TrainingEintrag>, oeffne: (String) -> Unit) {
     val context = LocalContext.current
+    val imperial = einheitenImperial()
     Kasten {
-        Kopf(titel, stringResource(R.string.ks_sp_woche_zusatz, liste.size, dauerText(liste.sumOf { it.minuten })))
+        Kopf(titel, stringResource(R.string.ks_sp_woche_zusatz, liste.size, Formate.dauer(liste.sumOf { it.minuten })))
         liste.forEachIndexed { i, t ->
             if (i > 0) Trenner()
-            val unter = trainingszeit(context, t.sitzung.startTime, false) + if (t.meter > 0) " · " + kmText(t.meter) else ""
+            val unter = trainingszeit(context, t.sitzung.startTime, false) + if (t.meter > 0) " · " + streckeVon(t, imperial).text else ""
             TrainingZeile(t, unter) { oeffne(t.id) }
         }
         Spacer(Modifier.height(4.dp))
     }
 }
 
-/** Ein Filterchip: gewaehlt gruen hinterlegt, sonst umrandet; der Punkt traegt die Farbe der Art. */
+/**
+ * Ein Filterchip: gewaehlt im App-Gruen der Knoepfe hinterlegt (eine Wahl,
+ * keine Groesse), sonst umrandet; der Punkt traegt die Farbe der Art. Er ist
+ * 32 dp hoch, waechst aber mit der Schrift, und sein Ziel hat 48 dp.
+ */
 @Composable
 private fun Chip(text: String, anzahl: Int?, punkt: Color?, gewaehlt: Boolean, weg: Boolean = false, onClick: () -> Unit) {
     val farben = MaterialTheme.colorScheme
+    val aktion = Farben.aktion
     val form = RoundedCornerShape(8.dp)
     Row(
-        Modifier.minimumInteractiveComponentSize().height(32.dp).clip(form)
-            .then(if (gewaehlt) Modifier.background(farben.primary.copy(alpha = 0.22f)) else Modifier.border(1.dp, farben.outline, form))
+        Modifier.minimumInteractiveComponentSize().heightIn(min = 32.dp).clip(form)
+            .then(if (gewaehlt) Modifier.background(aktion.flaeche().copy(alpha = 0.22f)) else Modifier.border(1.dp, farben.outline, form))
             .clickable(onClick = onClick).semantics { selected = gewaehlt }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (punkt != null) Box(Modifier.size(8.dp).background(punkt, CircleShape))
-        Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (gewaehlt) toene().bewegung else farben.onSurface)
-        if (anzahl != null) Text("$anzahl", fontSize = 14.sp, color = farben.onSurfaceVariant)
-        if (weg) Icon(Zeichen.zu, null, Modifier.size(16.dp), tint = toene().bewegung)
+        Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (gewaehlt) aktion.ton() else farben.onSurface)
+        if (anzahl != null) Text(Formate.zahl(anzahl.toLong()), fontSize = 14.sp, color = farben.onSurfaceVariant)
+        if (weg) Icon(Zeichen.zu, null, Modifier.size(16.dp), tint = aktion.ton())
     }
 }
 
@@ -195,24 +181,26 @@ internal fun SportTrendAnsicht() = Laden { d ->
     val heute = LocalDate.now()
     val einheiten = d.trainings.map { it.einheit }
     val verteilung = Wochenrechnung.verteilung(einheiten)
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
         item {
             Kasten {
                 Kopf(stringResource(R.string.ks_sp_acht_wochen))
-                Box(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) { Wochenstapel(Wochenrechnung.wochen(einheiten, heute), heute) }
+                Box(Modifier.padding(start = INNEN, end = INNEN, bottom = 12.dp)) { Wochenstapel(Wochenrechnung.wochen(einheiten, heute), heute) }
             }
         }
         if (verteilung.isNotEmpty()) item {
             Kasten {
-                Kopf(stringResource(R.string.ks_sp_nach_art), "· " + stringResource(R.string.ks_sp_90_tage))
-                Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) { Verteilung(verteilung) }
+                Kopf(stringResource(R.string.ks_sp_nach_art), stringResource(R.string.ks_sp_90_tage))
+                // Band und Zeilen bringen ihren Rand selbst mit, wie jede Zeile im Kasten.
+                Verteilung(verteilung)
+                Spacer(Modifier.height(4.dp))
             }
         }
         item {
             Kasten {
                 Kopf(stringResource(R.string.ks_sp_vier_wochen))
-                Box(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) { Kalender(Wochenrechnung.tage(einheiten), heute) }
+                Box(Modifier.padding(start = INNEN, end = INNEN, bottom = 12.dp)) { Kalender(Wochenrechnung.tage(einheiten), heute) }
             }
         }
         item { Spacer(Modifier.height(12.dp)) }
@@ -235,18 +223,19 @@ internal fun SpurenAnsicht() {
     LaunchedEffect(neu) { daten = TrainingsDaten.uebersicht(context).also { zuletzt = it } }
     val d = daten
     if (d == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        Ladekreis()
         return
     }
-    val warn = toene().warnung
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 12.dp)) {
+    val imperial = einheitenImperial()
+    Seite {
         Kasten {
-            if (d.offen.isEmpty()) Zeile(stringResource(R.string.ks_sp_spuren_leer))
+            if (d.offen.isEmpty()) Leerzeile(stringResource(R.string.ks_sp_spuren_leer))
             d.offen.forEachIndexed { i, o ->
                 if (i > 0) Trenner()
                 Zeile(
-                    trainingszeit(context, Instant.ofEpochSecond(o.beginn), true), dauerText(o.minuten) + " · " + kmText(o.meter),
-                    zeichen = { Tonkreis(Zeichen.ort, warn, warn, 0.18f) },
+                    trainingszeit(context, Instant.ofEpochSecond(o.beginn), true),
+                    Formate.dauer(o.minuten) + " · " + Formate.distanz(o.meter, imperial).text,
+                    zeichen = { Tonkreis(Zeichen.ort, Farben.warnung, alpha = 0.18f) },
                 )
                 Row(Modifier.padding(start = 64.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { TrainingsDaten.blendeAus(context, o.beginn); neu++ }) { Text(stringResource(R.string.ks_t_ausblenden)) }

@@ -423,9 +423,12 @@ internal object Trainingsanalyse {
      * dreissig Meter Auslaufen sind kein Kilometer. [puls] und [pausen]
      * (von, bis) zaehlen ihre Sekunden wie die Strecke ab dem ersten Punkt.
      * DIE PAUSEN DER UHR ZAEHLEN NICHT ALS ZEIT: sonst stand der Kilometer mit
-     * dem Cafe bei 16 Minuten.
+     * dem Cafe bei 16 Minuten. [stueck] ist die Laenge eines Abschnitts - mit
+     * "Imperial Units" eine Meile statt eines Kilometers.
      */
-    fun kilometer(strecke: List<Streckenpunkt>, puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>> = emptyList()): List<Kilometer> {
+    fun kilometer(
+        strecke: List<Streckenpunkt>, puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>> = emptyList(), stueck: Double = 1000.0,
+    ): List<Kilometer> {
         if (strecke.size < 2) return emptyList()
         val auf = aufstiegBis(strecke)
         fun pause(von: Long, bis: Long) = pausen.sumOf { (a, b) -> (minOf(b, bis) - maxOf(a, von)).coerceAtLeast(0) }
@@ -434,7 +437,7 @@ internal object Trainingsanalyse {
         var nummer = 1
         var i = 1
         while (i < strecke.size) {
-            val grenze = nummer * 1000.0
+            val grenze = nummer * stueck
             val letzter = i == strecke.size - 1
             if (strecke[i].meter >= grenze || letzter) {
                 val von = strecke[startIndex]

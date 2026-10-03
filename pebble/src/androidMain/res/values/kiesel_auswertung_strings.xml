@@ -2,18 +2,19 @@
 <!-- Auswertung je Sportart in der Trainingsdetailansicht - aus Kiesel-Helper (VergangeneActivity). -->
 <resources>
     <string name="ks_v_spo2_titel">BLOOD OXYGEN</string>
-    <string name="ks_v_hrv">HRV</string>
+    <string name="ks_v_hrv">HRV (RMSSD)</string>
     <string name="ks_v_spo2_hoechster">Highest</string>
     <string name="ks_v_spo2_tiefster">Lowest</string>
     <string name="ks_v_spo2_schnitt">SpO2 average</string>
     <string name="ks_v_zone_n">Zone %1$d · %2$s</string>
     <string name="ks_v_a_m">of %1$s m</string>
     <string name="ks_v_anfang">Start</string>
-    <string name="ks_v_auf">Up</string>
+    <!-- Kopf der Spalte Aufstieg in der Km-/Meilen-Tabelle, mit der Einheit (m oder ft). -->
+    <string name="ks_v_auf">Up (%1$s)</string>
     <string name="ks_v_bahnen">Lengths</string>
     <string name="ks_v_bahnen_titel">LENGTHS</string>
-    <string name="ks_v_bergab">%1$s %% downhill</string>
-    <string name="ks_v_bergauf">%1$s %% uphill</string>
+    <string name="ks_v_bergab">%1$s%% downhill</string>
+    <string name="ks_v_bergauf">%1$s%% uphill</string>
     <string name="ks_v_bewegt">Moving</string>
     <string name="ks_v_ende">End</string>
     <string name="ks_v_erholung_oben">−%1$s bpm/min · slow recovery</string>
@@ -21,7 +22,6 @@
     <string name="ks_v_erholung_solide">−%1$s bpm/min · solid recovery</string>
     <string name="ks_v_geblieben">Heart rate unchanged</string>
     <string name="ks_v_gefallen">−%1$s bpm · calmer</string>
-    <string name="ks_v_gesamt">total</string>
     <string name="ks_v_gestiegen">Heart rate rose</string>
     <string name="ks_v_gleich">±%1$s s · even</string>
     <string name="ks_v_hoechster">Highest</string>
@@ -32,8 +32,8 @@
     <string name="ks_v_keine_hrv">No HRV</string>
     <string name="ks_v_keine_saetze">No sets</string>
     <string name="ks_v_km_fuer_km">KILOMETRE BY KILOMETRE</string>
+    <string name="ks_v_meile_fuer_meile">MILE BY MILE</string>
     <string name="ks_v_leicht_gefallen">−%1$s bpm · slightly calmer</string>
-    <string name="ks_v_m_ue_m">m a.s.l.</string>
     <string name="ks_v_nichts_weiter">No heart rate</string>
     <string name="ks_v_pause">Rest</string>
     <string name="ks_v_pause_schnitt">Avg rest</string>
@@ -50,7 +50,7 @@
     <string name="ks_v_spitze">Peak</string>
     <string name="ks_v_spo2_keine">No readings</string>
     <string name="ks_v_steigung_karte">GRADIENT ON THE MAP</string>
-    <string name="ks_v_steilste">Steepest point %1$s %%</string>
+    <string name="ks_v_steilste">Steepest</string>
     <string name="ks_v_tempo">PACE</string>
     <string name="ks_v_tempo_karte">PACE ON THE MAP</string>
     <string name="ks_v_tempo_rad">SPEED</string>
@@ -59,4 +59,7 @@
     <string name="ks_v_ungleich">±%1$s s · uneven</string>
     <string name="ks_v_unter_minute">&lt;1 min</string>
     <string name="ks_v_wdh">Reps</string>
+    <string name="ks_v_wdh_gesamt">Total reps</string>
+    <!-- TalkBack: die Spanne eines Bildes, "92 to 168" - die Einheit setzt der Code dahinter. -->
+    <string name="ks_v_bild_spanne">%1$s to %2$s</string>
 </resources>

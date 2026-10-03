@@ -23,7 +23,11 @@ kotlin {
             enable = true
         }
 
-        withHostTestBuilder {}
+        // Boulder: die R-Klasse auch in den Hosttests - WidgetlageTest
+        // prueft die Texte des Widgets ueber ihre Ressourcennamen.
+        withHostTestBuilder {}.configure {
+            isIncludeAndroidResources = true
+        }
 
         optimization {
             consumerKeepRules.file("consumer-rules.pro")

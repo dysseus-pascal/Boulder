@@ -28,6 +28,8 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Fenster
+import coredevices.pebble.kiesel.Vergleich
+import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -133,12 +135,19 @@ private fun HrvKarte(s: GesundheitsStand) {
     val titel = stringResource(R.string.ks_h_hrv_woche)
     val zusatz = stringResource(R.string.ks_h_hrv_woche_zusatz)
     Abschnitt(titel, zusatz) {
+        // Das Urteil aus hrvUrteil - derselbe Massstab wie der Hinweis im Nachtblock der Gesundheitsseite.
+        val urteil = Gesundheitsrechnung.hrvUrteil(letzte)
         val satz = when {
             letzte.wert == null -> stringResource(R.string.ks_h_hrv_keine)
-            band == null -> stringResource(R.string.ks_h_letzte_nacht)
-            letzte.wert < band.first -> stringResource(R.string.ks_h_hrv_unter_band, band.first, band.second)
-            letzte.wert > band.second -> stringResource(R.string.ks_h_hrv_ueber_band, band.first, band.second)
-            else -> stringResource(R.string.ks_h_hrv_im_band, band.first, band.second)
+            urteil == null || band == null -> stringResource(R.string.ks_h_letzte_nacht)
+            else -> stringResource(
+                when (urteil.urteil) {
+                    Vergleich.TIEFER -> R.string.ks_h_hrv_unter_band
+                    Vergleich.HOEHER -> R.string.ks_h_hrv_ueber_band
+                    Vergleich.WIE_IMMER -> R.string.ks_h_hrv_im_band
+                },
+                band.first, band.second,
+            )
         }
         Hauptwert(letzte.wert?.let { Formate.zahl(it.toLong()) } ?: Formate.FEHLT, letzte.wert?.let { "ms" }, satz)
         // Fuer TalkBack jede Nacht mit ihrem Wert - das Bild selbst ist stumm.

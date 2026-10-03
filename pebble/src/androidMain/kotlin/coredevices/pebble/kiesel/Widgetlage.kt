@@ -19,7 +19,8 @@ import java.time.LocalDateTime
  *
  * REINE LOGIK OHNE SCHIRM, damit sie sich pruefen laesst: hinein geht ein
  * Blick auf den Stand, heraus kommt, was zu zeigen ist. Die Woerter kommen
- * ueber [Texte] - in der App aus den Ressourcen, im Test aus derselben Datei.
+ * ueber [Texte] - in der App aus den Ressourcen, im Test (WidgetlageTest)
+ * als ihre Schluessel, damit er prueft, welcher Text gewaehlt wurde.
  */
 internal object Widgetlage {
 

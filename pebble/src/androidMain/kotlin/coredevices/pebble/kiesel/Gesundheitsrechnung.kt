@@ -281,10 +281,6 @@ internal object Gesundheitsrechnung {
         return bins.last { it.median == hoechster }.let { it.sekunde to it.median }
     }
 
-    /** Der Schnitt der Tage mit Wert, oder null, wenn weniger als [mindestens] solche Tage da sind. */
-    fun schnittDerVortage(werte: List<Double>, mindestens: Int = 1): Double? =
-        werte.filter { it > 0 }.takeIf { it.size >= mindestens }?.average()
-
     /**
      * Die Bettzeit als Zeitpunkt: die Uhrzeit des letzten Einschlafens, sonst
      * 22 Uhr, auf den laufenden Tag gelegt. Der Tag beginnt um sechs, damit

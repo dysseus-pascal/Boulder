@@ -22,19 +22,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
-import coredevices.pebble.kiesel.GesundheitsStand
-import coredevices.pebble.kiesel.Gesundheitsrechnung
-import coredevices.pebble.kiesel.Praeparatlage
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Schlafurteil
+import coredevices.pebble.kiesel.Tagessatzdaten
 import coredevices.pebble.kiesel.Tageszeit
 import coredevices.pebble.kiesel.Vergleich
-import coredevices.pebble.kiesel.praeparatzeile
-import coredevices.pebble.kiesel.ruhepulsUrteil
-import coredevices.pebble.kiesel.schlafurteil
-import coredevices.pebble.kiesel.tageszeit
-import java.time.LocalDate
-import java.time.LocalTime
 
 /**
  * Eine Vorlage mit %1$s, %2$s ... einsetzen und die eingesetzten Werte
@@ -53,29 +46,32 @@ private fun AnnotatedString.Builder.hervor(vorlage: String, vararg werte: String
     append(vorlage.substring(i))
 }
 
-/** Oben: ein Gruss und ein Satz zum Tag - mit dem Uhrenakku, der zur Akkuansicht fuehrt. */
+/**
+ * Oben: ein Gruss und ein Satz zum Tag - mit dem Uhrenakku, der zur
+ * Akkuansicht fuehrt. Gerechnet ist alles in [Gesundheitsrechnung.tagesSatz];
+ * hier stehen nur die Worte darum.
+ */
 @Composable
-internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechnung.Restzeit?, oeffneAkku: () -> Unit) {
+internal fun Tagessatz(satz: Tagessatzdaten, akkuJetzt: Int?, akkuRest: Akkurechnung.Restzeit?, oeffneAkku: () -> Unit) {
     val hell = MaterialTheme.colorScheme.onSurface
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     val gruss = stringResource(
-        when (Gesundheitsrechnung.tageszeit(LocalTime.now())) {
+        when (satz.tageszeit) {
             Tageszeit.MORGEN -> R.string.ks_f_morgen
             Tageszeit.TAG -> R.string.ks_f_tag
             Tageszeit.ABEND -> R.string.ks_f_abend
         }
     )
-    val n = s.nacht
-    val urteilWort = n?.let {
+    val urteilWort = satz.urteil?.let {
         stringResource(
-            when (Gesundheitsrechnung.schlafurteil(it.schlafMinuten)) {
+            when (it) {
                 Schlafurteil.AUSGERUHT -> R.string.ks_h_urteil_ausgeruht
                 Schlafurteil.KURZ -> R.string.ks_h_urteil_kurz
                 Schlafurteil.SEHR_KURZ -> R.string.ks_h_urteil_sehr_kurz
             }
         )
     }
-    val ruhe = n?.let { Gesundheitsrechnung.ruhepulsUrteil(it.ruhepuls, s.ruhepulsWoche) }
+    val ruhe = satz.ruhe
     val vSchlaf = stringResource(R.string.ks_f_schlaf)
     val vRuhe = when (ruhe?.urteil) {
         Vergleich.WIE_IMMER -> stringResource(R.string.ks_f_ruhe_ok)
@@ -83,15 +79,11 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechn
         Vergleich.TIEFER -> stringResource(R.string.ks_f_ruhe_tief, ruhe.abstand)
         null -> null
     }
-    val schritteWert = pluralStringResource(R.plurals.ks_f_schritte_wert, s.schritte.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), Formate.zahl(s.schritte))
-    val vSchritte = stringResource(if (n != null) R.string.ks_f_schritte else R.string.ks_f_schritte_allein)
-    val platz = stringResource(R.string.ks_s_platz_n)
-    val offen = s.supplemente?.takeIf { s.mitSupCycle }?.let { stand ->
-        val z = Gesundheitsrechnung.praeparatzeile(stand.heute { String.format(platz, it) })
-        // Nur Versaeumtes gehoert in den Satz - was erst spaeter ansteht, steht in der Liste.
-        if (z.lage == Praeparatlage.OFFEN) z.namen.firstOrNull() else null
-    }
-    val vHaerte = when (Gesundheitsrechnung.tagesurteil(s.tagesherz, LocalDate.now())?.haerte) {
+    val schritteWert = pluralStringResource(R.plurals.ks_f_schritte_wert, satz.schritte.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), Formate.zahl(satz.schritte))
+    val schlafMinuten = satz.schlafMinuten
+    val vSchritte = stringResource(if (schlafMinuten != null) R.string.ks_f_schritte else R.string.ks_f_schritte_allein)
+    val offen = satz.offen
+    val vHaerte = when (satz.haerte) {
         Vergleich.HOEHER -> stringResource(R.string.ks_f_tag_haerter)
         Vergleich.TIEFER -> stringResource(R.string.ks_f_tag_leichter)
         else -> null
@@ -107,8 +99,8 @@ internal fun Tagessatz(s: GesundheitsStand, akkuJetzt: Int?, akkuRest: Akkurechn
     val akkuTon = akkuJetzt?.let { Farben.akkuStufe(it).ton() }
 
     val text = buildAnnotatedString {
-        if (n != null && urteilWort != null) {
-            hervor(vSchlaf, urteilWort, Formate.dauer(n.schlafMinuten.toLong()), farbe = hell)
+        if (schlafMinuten != null && urteilWort != null) {
+            hervor(vSchlaf, urteilWort, Formate.dauer(schlafMinuten.toLong()), farbe = hell)
             if (vRuhe != null) append(vRuhe)
         }
         hervor(vSchritte, schritteWert, farbe = hell)

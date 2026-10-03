@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -22,12 +23,20 @@ class TagesurteileTest {
         ruhepuls = ruhepuls, hrv = hrv,
     )
 
-    private fun stand(schritte: Long = 3860, nacht: Nacht? = nacht(500), puls: List<Pair<Long, Int>> = listOf(1L to 68)) = GesundheitsStand(
+    private fun stand(
+        schritte: Long = 3860, nacht: Nacht? = nacht(500), puls: List<Pair<Long, Int>> = listOf(1L to 68),
+        ruhepulsWoche: List<Int> = emptyList(), tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
+        supplemente: SupCycle.Stand? = null, mitSupCycle: Boolean = true,
+    ) = GesundheitsStand(
         schritte = schritte, aktivMinuten = 22, meter = 2700.0, kcal = 118, wocheSchritte = emptyList(), nacht = nacht,
-        ruhepulsWoche = emptyList(), hrvWoche = emptyList(), wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
-        wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = null,
-        koffein = emptyList(), letzteDaten = null,
+        ruhepulsWoche = ruhepulsWoche, hrvWoche = emptyList(), wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
+        wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = supplemente,
+        koffein = emptyList(), letzteDaten = null, tagesherz = tagesherz, mitSupCycle = mitSupCycle,
     )
+
+    private val tag = LocalDate.of(2026, 10, 2)
+    private fun um(stunde: Int, minute: Int = 0) = tag.atTime(stunde, minute)
+    private fun satz(stand: GesundheitsStand, jetzt: LocalDateTime) = g.tagesSatz(stand, jetzt) { "Slot $it" }
 
     @Test
     fun tageszeit_wechselt_um_elf_und_um_sechs() {
@@ -46,50 +55,75 @@ class TagesurteileTest {
     }
 
     @Test
-    fun mittags_mit_nacht_ausgeruht_und_schritte_zum_ziel() {
-        val s = g.tagesSatz(stand(), LocalTime.of(13, 40))
+    fun mittags_mit_nacht_ausgeruht_und_durchgeschlafen() {
+        val s = satz(stand(), um(13, 40))
         assertEquals(Tageszeit.TAG, s.tageszeit)
         assertEquals(Schlafurteil.AUSGERUHT, s.urteil)
+        assertEquals(500, s.schlafMinuten)
         assertTrue(s.durchgeschlafen)
-        assertEquals(20, s.schlafAbstand)
-        assertEquals(Schrittlage.NOCH, s.schrittlage)
-        assertEquals(6140, s.schritteFehlen)
+        assertEquals(3860, s.schritte)
         assertFalse(s.ohneDaten)
     }
 
     @Test
-    fun morgens_spricht_die_nacht_und_der_tag_hat_eben_begonnen() {
-        val s = g.tagesSatz(stand(schritte = 212, nacht = nacht(400, wach = 25)), LocalTime.of(6, 30))
+    fun morgens_spricht_die_nacht() {
+        val s = satz(stand(schritte = 212, nacht = nacht(400, wach = 25)), um(6, 30))
         assertEquals(Tageszeit.MORGEN, s.tageszeit)
         assertEquals(Schlafurteil.SEHR_KURZ, s.urteil)
         assertFalse(s.durchgeschlafen)
-        assertEquals(25, s.wachMinuten)
-        assertEquals(-80, s.schlafAbstand)
-        assertEquals(Schrittlage.BEGONNEN, s.schrittlage)
-    }
-
-    @Test
-    fun abends_zaehlt_der_anteil_und_ein_erreichtes_ziel_gilt_immer() {
-        assertEquals(Schrittlage.ANTEIL, g.tagesSatz(stand(schritte = 3860), LocalTime.of(20, 0)).schrittlage)
-        assertEquals(38, g.tagesSatz(stand(schritte = 3860), LocalTime.of(20, 0)).zielProzent)
-        assertEquals(Schrittlage.ERREICHT, g.tagesSatz(stand(schritte = 10_000), LocalTime.of(7, 0)).schrittlage)
-        assertEquals(0, g.tagesSatz(stand(schritte = 12_000), LocalTime.of(13, 0)).schritteFehlen)
+        assertEquals(Tageszeit.ABEND, satz(stand(), um(20, 0)).tageszeit)
     }
 
     @Test
     fun ohne_nacht_kein_urteil_und_ohne_alles_der_ruhige_zustand() {
-        val ohneNacht = g.tagesSatz(stand(nacht = null), LocalTime.of(13, 40))
+        val ohneNacht = satz(stand(nacht = null), um(13, 40))
         assertNull(ohneNacht.urteil)
-        assertNull(ohneNacht.schlafAbstand)
+        assertNull(ohneNacht.schlafMinuten)
+        assertNull(ohneNacht.ruhe)
         assertFalse(ohneNacht.durchgeschlafen)
         assertFalse(ohneNacht.ohneDaten)
-        assertTrue(g.tagesSatz(stand(schritte = 0, nacht = null, puls = emptyList()), LocalTime.of(13, 40)).ohneDaten)
+        assertTrue(satz(stand(schritte = 0, nacht = null, puls = emptyList()), um(13, 40)).ohneDaten)
     }
 
     @Test
     fun zehn_wachminuten_sind_nicht_mehr_durchgeschlafen() {
-        assertTrue(g.tagesSatz(stand(nacht = nacht(480, wach = 9)), LocalTime.of(7, 0)).durchgeschlafen)
-        assertFalse(g.tagesSatz(stand(nacht = nacht(480, wach = 10)), LocalTime.of(7, 0)).durchgeschlafen)
+        assertTrue(satz(stand(nacht = nacht(480, wach = 9)), um(7)).durchgeschlafen)
+        assertFalse(satz(stand(nacht = nacht(480, wach = 10)), um(7)).durchgeschlafen)
+    }
+
+    @Test
+    fun satz_nennt_den_ruhepuls_gegen_die_frueheren_naechte() {
+        // Dasselbe Urteil wie die Herzseite: 58 gegen 55 sind 3 bpm darueber.
+        val s = satz(stand(nacht = nacht(480, ruhepuls = 58), ruhepulsWoche = listOf(55, 55, 55)), um(7))
+        assertEquals(Herzurteil(3, 55.0, Vergleich.HOEHER, 3), s.ruhe)
+    }
+
+    @Test
+    fun satz_nennt_die_belastung_des_tages_von_jetzt() {
+        // Fuenf Lerntage mit 30 Minuten Belastung, heute 60: mehr als sonst.
+        val frueher = (1..5).map { Gesundheitsrechnung.Tagesherz(tag.minusDays(it.toLong()), 70, 30, 100) }
+        val heute = Gesundheitsrechnung.Tagesherz(tag, 72, 60, 100)
+        assertEquals(Vergleich.HOEHER, satz(stand(tagesherz = frueher + heute), um(15)).haerte)
+        // Am Tag danach ist "heute" ein anderer Tag - dann gibt es kein Urteil.
+        assertNull(g.tagesSatz(stand(tagesherz = frueher + heute), um(15).plusDays(1)) { "" }.haerte)
+    }
+
+    @Test
+    fun im_satz_steht_nur_ein_versaeumtes_praeparat() {
+        // Platz 1 um acht, Platz 2 ohne Namen um zwoelf, keiner genommen.
+        val plan = listOf(
+            SupCycle.Platz("Multivitamin", LocalTime.of(8, 0), true, 1, 0, 0, 0),
+            SupCycle.Platz("", LocalTime.of(12, 0), true, 1, 0, 0, 0),
+        )
+        val stand = SupCycle.Stand(tag, listOf("Multivitamin", ""), faellig = 0b11, genommen = 0, plan = plan)
+        assertNull(satz(stand(supplemente = stand), um(7, 59)).offen)
+        assertEquals("Multivitamin", satz(stand(supplemente = stand), um(8)).offen)
+        // Genommen ist es kein Thema mehr; dann ist der namenlose Platz der erste versaeumte.
+        val genommen = stand.copy(genommen = 0b01)
+        assertNull(satz(stand(supplemente = genommen), um(11)).offen)
+        assertEquals("Slot 2", satz(stand(supplemente = genommen), um(12)).offen)
+        // Ohne SupCycle auf der Uhr keine Praeparate.
+        assertNull(satz(stand(supplemente = stand, mitSupCycle = false), um(13)).offen)
     }
 
     @Test
@@ -185,51 +219,21 @@ class TagesurteileTest {
     }
 
     @Test
-    fun schrittwoche_zaehlt_ab_dem_ersten_tag_mit_schritten() {
-        val mi = LocalDate.of(2026, 9, 30)
-        val woche = (6 downTo 0).map { mi.minusDays(it.toLong()) }.zip(listOf(0L, 0L, 0L, 0L, 3489L, 6482L, 3860L))
-        val w = g.schrittwoche(woche)
-        assertEquals(listOf(mi, mi.minusDays(1), mi.minusDays(2)), w.tage.map { it.tag })
-        assertEquals(listOf(Tagesmerkmal.HEUTE, Tagesmerkmal.MEISTE, Tagesmerkmal.ERSTER), w.tage.map { it.merkmal })
-        assertEquals(LocalDate.of(2026, 9, 28), w.seit)
-        assertEquals(LocalDate.of(2026, 10, 4), w.volleWocheAb)
-    }
-
-    @Test
-    fun volle_schrittwoche_ohne_fussnote_und_mit_zielen() {
-        val mi = LocalDate.of(2026, 9, 30)
-        val woche = (6 downTo 0).map { mi.minusDays(it.toLong()) }.zip(listOf(4000L, 11000L, 5000L, 12000L, 3000L, 2000L, 100L))
-        val w = g.schrittwoche(woche)
-        assertEquals(7, w.tage.size)
-        assertNull(w.seit)
-        assertNull(w.volleWocheAb)
-        assertEquals(Tagesmerkmal.MEISTE, w.tage.first { it.schritte == 12000L }.merkmal)
-        assertEquals(Tagesmerkmal.ZIEL, w.tage.first { it.schritte == 11000L }.merkmal)
-        assertEquals(Tagesmerkmal.KEINS, w.tage.first { it.schritte == 4000L }.merkmal)
-    }
-
-    @Test
     fun phasenanteile_ergeben_hundert() {
-        // Tief 1:18, REM 2:20, leicht 4:42 wie im Entwurf.
-        assertEquals(listOf(16, 28, 56), g.phasenAnteile(intArrayOf(0, 282, 78, 140, 0)))
+        // Tief 1:18, REM 2:20, leicht 4:42 wie im Entwurf - je Index wie Nacht.phasen.
+        assertEquals(listOf(0, 56, 16, 28, 0), g.phasenAnteile(intArrayOf(0, 282, 78, 140, 0)))
+        // Einzeln gerundet waeren es 33 + 33 + 33.
         assertEquals(100, g.phasenAnteile(intArrayOf(0, 100, 100, 100, 0)).sum())
-        assertEquals(listOf(0, 0, 0), g.phasenAnteile(intArrayOf(10, 0, 0, 0, 0)))
+        // Wach zaehlt zur Zeit im Bett, wie in der Phasenkarte.
+        assertEquals(listOf(3, 33, 32, 32, 0), g.phasenAnteile(intArrayOf(10, 100, 100, 100, 0)))
+        assertEquals(listOf(100, 0, 0, 0, 0), g.phasenAnteile(intArrayOf(10, 0, 0, 0, 0)))
+        assertEquals(listOf(0, 0, 0, 0, 0), g.phasenAnteile(IntArray(5)))
     }
 
     @Test
-    fun ring_mit_ueberlauf_hoechstens_eine_runde() {
-        assertEquals(0.5f to 0f, g.ringAnteil(240.0, 480.0))
-        val (voll, plus) = g.ringAnteil(500.0, 480.0)
-        assertEquals(1f, voll)
-        assertEquals(20f / 480f, plus, 0.0001f)
-        assertEquals(1f to 1f, g.ringAnteil(2000.0, 480.0))
-    }
-
-    @Test
-    fun ohne_abschnitte_weder_durchgeschlafen_noch_wachminuten() {
-        val s = g.tagesSatz(stand(nacht = nacht(500, mitAbschnitten = false)), LocalTime.of(7, 0))
+    fun ohne_abschnitte_nicht_durchgeschlafen() {
+        val s = satz(stand(nacht = nacht(500, mitAbschnitten = false)), um(7))
         assertFalse(s.durchgeschlafen)
-        assertNull(s.wachMinuten)
         assertEquals(Schlafurteil.AUSGERUHT, s.urteil)
     }
 

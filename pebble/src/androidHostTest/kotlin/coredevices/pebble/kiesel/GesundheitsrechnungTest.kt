@@ -65,13 +65,6 @@ class GesundheitsrechnungTest {
     }
 
     @Test
-    fun schnitt_nur_ueber_tage_mit_wert() {
-        assertEquals(2000.0, Gesundheitsrechnung.schnittDerVortage(listOf(0.0, 1000.0, 3000.0), 2)!!, 0.001)
-        assertNull(Gesundheitsrechnung.schnittDerVortage(listOf(0.0, 1000.0), 2))
-        assertNull(Gesundheitsrechnung.schnittDerVortage(emptyList()))
-    }
-
-    @Test
     fun bettzeit_heute_oder_keine() {
         val zone = ZoneOffset.UTC
         val mittag = LocalDate.of(2026, 9, 30).atTime(12, 0).toInstant(zone)

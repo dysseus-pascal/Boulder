@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -18,24 +19,24 @@ import kotlin.math.roundToInt
 
 internal enum class Schlafurteil { AUSGERUHT, KURZ, SEHR_KURZ }
 
-/** Morgens zaehlt die Nacht, tagsueber der Rest zum Ziel, abends die Summe. */
+/** Die Tageszeit des Grusses oben auf der Seite. */
 internal enum class Tageszeit { MORGEN, TAG, ABEND }
-
-internal enum class Schrittlage { BEGONNEN, NOCH, ERREICHT, ANTEIL }
 
 internal data class Tagessatzdaten(
     val tageszeit: Tageszeit,
     /** Null ohne Nacht - dann spricht der Satz nur von Schritten. */
     val urteil: Schlafurteil?,
+    /** Die Schlafminuten der letzten Nacht, null ohne Nacht. */
+    val schlafMinuten: Int?,
+    /** Der Ruhepuls der letzten Nacht gegen die frueheren, null ohne Nacht. */
+    val ruhe: Herzurteil?,
+    /** Auch fuer den Nachtblock im Strahl - eine Schwelle fuer Satz und Strahl. */
     val durchgeschlafen: Boolean,
-    /** Null, wenn die Abschnitte der Nacht fehlen - dann ist ueber Wachsein nichts bekannt. */
-    val wachMinuten: Int?,
-    /** Minuten ueber (positiv) oder unter dem Schlafziel. */
-    val schlafAbstand: Int?,
     val schritte: Long,
-    val schrittlage: Schrittlage,
-    val schritteFehlen: Long,
-    val zielProzent: Int,
+    /** Die Belastung des Tages gegen die frueheren Tage, null ohne Urteil. */
+    val haerte: Vergleich?,
+    /** Das erste versaeumte Praeparat, sonst null. */
+    val offen: String?,
     /** Weder Schritte noch Puls noch Nacht: die Uhr hat heute nichts geschickt. */
     val ohneDaten: Boolean,
 )
@@ -55,12 +56,6 @@ internal data class Bandurteil(val urteil: Vergleich, val abstand: Int)
 internal enum class Praeparatlage { ALLE, OFFEN, FAELLIG, KEINE }
 
 internal data class Praeparatzeile(val genommen: Int, val faellig: Int, val lage: Praeparatlage, val namen: List<String>, val weitere: Int)
-
-internal enum class Tagesmerkmal { HEUTE, MEISTE, ERSTER, ZIEL, KEINS }
-
-internal data class Schritttag(val tag: LocalDate, val schritte: Long, val merkmal: Tagesmerkmal)
-
-internal data class Schrittwochendaten(val tage: List<Schritttag>, val seit: LocalDate?, val volleWocheAb: LocalDate?)
 
 /** So viele Schlaege neben dem Schnitt heisst der Ruhepuls noch "as usual". */
 internal const val RUHEPULS_SPANNE = 2
@@ -86,28 +81,29 @@ internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int = Gesundhe
     else -> Schlafurteil.SEHR_KURZ
 }
 
-/** Der Satz oben auf der Seite, als Bausteine - die Worte legt die Ansicht darum. */
-internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, uhrzeit: LocalTime): Tagessatzdaten {
-    val zeit = tageszeit(uhrzeit)
+/**
+ * Der Satz oben auf der Seite, als Bausteine - die Worte legt die Ansicht
+ * darum. Alles zu EINEM Zeitpunkt [jetzt]: Gruss, Belastung und versaeumte
+ * Praeparate. [platz] benennt einen Platz ohne Namen ("Slot 3").
+ */
+internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, jetzt: LocalDateTime, platz: (Int) -> String): Tagessatzdaten {
     val n = stand.nacht
     // Ohne Abschnitte ist phasen[0] eine Null aus Unwissen, kein "nie wach".
     val wach = n?.takeIf { it.abschnitte.isNotEmpty() }?.phasen?.get(0)
-    val lage = when {
-        stand.schritte >= Gesundheitsziele.SCHRITTE -> Schrittlage.ERREICHT
-        zeit == Tageszeit.MORGEN -> Schrittlage.BEGONNEN
-        zeit == Tageszeit.TAG -> Schrittlage.NOCH
-        else -> Schrittlage.ANTEIL
+    val offen = stand.supplemente?.takeIf { stand.mitSupCycle }?.let { s ->
+        val z = praeparatzeile(s.heute(platz), jetzt.toLocalTime())
+        // Nur Versaeumtes gehoert in den Satz - was erst spaeter ansteht, steht in der Liste.
+        if (z.lage == Praeparatlage.OFFEN) z.namen.firstOrNull() else null
     }
     return Tagessatzdaten(
-        tageszeit = zeit,
+        tageszeit = tageszeit(jetzt.toLocalTime()),
         urteil = n?.let { schlafurteil(it.schlafMinuten) },
+        schlafMinuten = n?.schlafMinuten,
+        ruhe = n?.let { ruhepulsUrteil(it.ruhepuls, stand.ruhepulsWoche) },
         durchgeschlafen = wach != null && wach < Gesundheitsziele.DURCHGESCHLAFEN_MIN,
-        wachMinuten = wach,
-        schlafAbstand = n?.let { it.schlafMinuten - Gesundheitsziele.SCHLAF_MIN },
         schritte = stand.schritte,
-        schrittlage = lage,
-        schritteFehlen = (Gesundheitsziele.SCHRITTE - stand.schritte).coerceAtLeast(0),
-        zielProzent = (stand.schritte * 100 / Gesundheitsziele.SCHRITTE).toInt(),
+        haerte = tagesurteil(stand.tagesherz, jetzt.toLocalDate())?.haerte,
+        offen = offen,
         ohneDaten = stand.schritte == 0L && n == null && stand.puls.isEmpty(),
     )
 }
@@ -155,10 +151,11 @@ internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, D
 internal fun Gesundheitsrechnung.hrvUrteil(tag: Gesundheitsrechnung.HrvTag?): Bandurteil? {
     val wert = tag?.wert ?: return null
     val (unten, oben) = tag.band ?: return null
+    // Was "im Band" heisst, entscheidet allein HrvTag.imBand - dieselbe Regel faerbt die Punkte im Bild.
     return when {
+        tag.imBand == true -> Bandurteil(Vergleich.WIE_IMMER, 0)
         wert < unten -> Bandurteil(Vergleich.TIEFER, unten - wert)
-        wert > oben -> Bandurteil(Vergleich.HOEHER, wert - oben)
-        else -> Bandurteil(Vergleich.WIE_IMMER, 0)
+        else -> Bandurteil(Vergleich.HOEHER, wert - oben)
     }
 }
 
@@ -224,54 +221,15 @@ internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, j
 }
 
 /**
- * Die Tage der Schrittliste, der juengste zuerst. Gezaehlt wird ab dem
- * ersten Tag mit Schritten: davor war die Uhr nicht da, und eine Null dort
- * waere eine Behauptung. Solange die Woche nicht voll ist, sagt die Seite,
- * ab wann sie es ist.
- */
-internal fun Gesundheitsrechnung.schrittwoche(woche: List<Pair<LocalDate, Long>>, ziel: Long = Gesundheitsziele.SCHRITTE): Schrittwochendaten {
-    if (woche.isEmpty()) return Schrittwochendaten(emptyList(), null, null)
-    val heute = woche.last().first
-    val ersterIndex = woche.indexOfFirst { it.second > 0 }.takeIf { it >= 0 } ?: woche.lastIndex
-    val gezaehlt = woche.drop(ersterIndex)
-    val voll = ersterIndex == 0
-    val vortage = gezaehlt.dropLast(1).filter { it.second > 0 }
-    val meiste = vortage.takeIf { it.size >= 2 }?.maxBy { it.second }?.first
-    val erster = gezaehlt.first().first.takeIf { !voll && it != heute }
-    val tage = gezaehlt.map { (tag, schritte) ->
-        val merkmal = when {
-            tag == heute -> Tagesmerkmal.HEUTE
-            tag == meiste -> Tagesmerkmal.MEISTE
-            tag == erster -> Tagesmerkmal.ERSTER
-            schritte >= ziel -> Tagesmerkmal.ZIEL
-            else -> Tagesmerkmal.KEINS
-        }
-        Schritttag(tag, schritte, merkmal)
-    }.asReversed()
-    val seit = gezaehlt.first().first.takeIf { !voll }
-    return Schrittwochendaten(tage, seit, seit?.plusDays(woche.size - 1L))
-}
-
-/**
- * Tief, REM und leicht in ganzen Prozent, die zusammen 100 ergeben: die
- * groessten Reste bekommen den Rest - sonst stuenden 16 + 28 + 55 da.
+ * Der Anteil jeder Phase an der Zeit im Bett in ganzen Prozent, je Index
+ * wie [Nacht.phasen]. Zusammen 100: die groessten Reste bekommen den Rest -
+ * einzeln gerundet stuenden bei drei gleich langen Phasen 33 + 33 + 33 da.
  */
 internal fun Gesundheitsrechnung.phasenAnteile(phasen: IntArray): List<Int> {
-    val werte = listOf(phasen[2], phasen[3], phasen[1])
-    val summe = werte.sum()
-    if (summe == 0) return listOf(0, 0, 0)
-    val roh = werte.map { it * 100.0 / summe }
+    val summe = phasen.sum()
+    if (summe == 0) return List(phasen.size) { 0 }
+    val roh = phasen.map { it * 100.0 / summe }
     val ganz = roh.map { floor(it).toInt() }.toMutableList()
     roh.withIndex().sortedByDescending { it.value - floor(it.value) }.take(100 - ganz.sum()).forEach { ganz[it.index]++ }
     return ganz
-}
-
-/**
- * Wieviel vom Ring gefuellt ist, und was darueber hinausgeht - der
- * Ueberlauf als zweite Runde, hoechstens eine volle.
- */
-internal fun Gesundheitsrechnung.ringAnteil(wert: Double, ziel: Double): Pair<Float, Float> {
-    if (ziel <= 0) return 0f to 0f
-    val anteil = (wert / ziel).coerceAtLeast(0.0)
-    return anteil.coerceAtMost(1.0).toFloat() to (anteil - 1).coerceIn(0.0, 1.0).toFloat()
 }

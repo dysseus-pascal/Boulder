@@ -52,8 +52,8 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Nacht
-import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Tagesstrahlrechnung
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.syncAlt
 import java.time.Instant
@@ -82,8 +82,8 @@ private fun zeitBreiteMessen(): Dp {
 }
 private val SPALTE_STRAHL = 22.dp
 
-/** Ein Ereignis des Tages auf dem Strahl. */
-private data class Ereignis(val zeit: Instant, val farbe: Color, val titel: String, val unter: String?, val bearbeitung: Bearbeitung? = null)
+/** Ein Ereignis aus [Tagesstrahlrechnung], wie die Zeile es zeigt: Farbe, Titel, Menge und was ein langer Druck bearbeitet. */
+private data class Strahlpunkt(val zeit: Instant, val farbe: Color, val titel: String, val unter: String?, val bearbeitung: Bearbeitung? = null)
 
 /**
  * Der Tag als Zeitstrahl, nur zum Ansehen: oben die Nacht, dann was heute war,
@@ -91,7 +91,7 @@ private data class Ereignis(val zeit: Instant, val farbe: Color, val titel: Stri
  * nur mit ihren Uhr-Apps (UhrApps), wie ueberall.
  */
 @Composable
-internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, wege: Gesundheitswege, geaendert: () -> Unit) {
+internal fun Tagesstrahl(s: GesundheitsStand, durchgeschlafen: Boolean, trainings: List<TrainingEintrag>, wege: Gesundheitswege, geaendert: () -> Unit) {
     var offen by remember { mutableStateOf<Bearbeitung?>(null) }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -102,35 +102,33 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
     val imperial = einheitenImperial()
     // Das Schema einmal gelesen: die Liste unten baut ausserhalb von Compose.
     val dunkel = Farben.dunkel()
-    val ereignisse = buildList {
-        trainings.filter { it.sitzung.startTime.atZone(zone).toLocalDate() == heute }.forEach { training ->
-            // Die Strecke wie in Sport (streckeVon): ein Schwimmen bleibt auch mit "Imperial Units" in Metern.
-            val unter = listOfNotNull(if (training.meter > 0) streckeVon(training, imperial).text else null, Formate.dauer(training.minuten)).joinToString(" · ")
-            add(Ereignis(training.sitzung.startTime, Farben.sport(training.sport).tonIm(dunkel), trainingsName(training), unter))
-        }
-        if (s.mitDrinktervall) {
-            // Ein Glas ist nur, was Drinktervall eintrug; Wasser anderer Apps steht mit seiner Menge da.
-            // Die Liter des Tages stehen in der Zeile "Water" darunter - hier beim letzten Glas noch einmal waeren sie doppelt.
-            s.glasEintraege.forEach { g ->
+    // Was auf den Strahl kommt und in welcher Reihenfolge, rechnet Tagesstrahlrechnung - hier nur Farbe und Worte.
+    val ereignisse = Tagesstrahlrechnung.ereignisse(s, trainings, heute, zone).map { e ->
+        when (e) {
+            is Tagesstrahlrechnung.Ereignis.Training -> {
+                val training = e.training
+                // Die Strecke wie in Sport (streckeVon): ein Schwimmen bleibt auch mit "Imperial Units" in Metern.
+                val unter = listOfNotNull(if (training.meter > 0) streckeVon(training, imperial).text else null, Formate.dauer(training.minuten)).joinToString(" · ")
+                Strahlpunkt(e.zeit, Farben.sport(training.sport).tonIm(dunkel), trainingsName(training), unter)
+            }
+            is Tagesstrahlrechnung.Ereignis.Wasser -> {
+                // Ein Glas ist nur, was Drinktervall eintrug; Wasser anderer Apps steht mit seiner Menge da.
+                // Die Liter des Tages stehen in der Zeile "Water" darunter - hier beim letzten Glas noch einmal waeren sie doppelt.
+                val g = e.glas
                 val titel = if (g.eigen) glas else wasser
                 val unter = if (g.eigen) null else Formate.menge(g.ml.toLong(), "ml").text
-                add(Ereignis(g.zeit, Farben.wasser.flaecheIm(dunkel), titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null))
+                Strahlpunkt(g.zeit, Farben.wasser.flaecheIm(dunkel), titel, unter, if (g.eigen) Bearbeitung.Glas(titel, g.zeit, g.id) else null)
             }
-            s.eintraege.filter { !it.praeparat }.forEach { e ->
-                add(Ereignis(e.zeit, Farben.koffein.flaecheIm(dunkel), e.name, e.koffeinMg?.let { Formate.menge(it, "mg").text }, if (e.eigen) Bearbeitung.Getraenk(e.name, e.zeit, e.id) else null))
+            is Tagesstrahlrechnung.Ereignis.Getraenk -> {
+                val t = e.eintrag
+                Strahlpunkt(t.zeit, Farben.koffein.flaecheIm(dunkel), t.name, t.koffeinMg?.let { Formate.menge(it, "mg").text }, if (t.eigen) Bearbeitung.Getraenk(t.name, t.zeit, t.id) else null)
             }
-        }
-        if (s.mitSupCycle) {
-            // Was SupCycle in einem Zug abhakte, steht als eine Zeile. Fremde Eintraege
-            // derselben Minute stehen daneben - sonst loeschte die Zeile nur einen Teil ihres Titels.
-            s.eintraege.filter { it.praeparat }.groupBy { it.zeit.epochSecond / 60 to it.eigen }.values.forEach { gruppe ->
-                val titel = gruppe.joinToString(", ") { it.name }
-                val zeit = gruppe.first().zeit
-                val bearbeitung = if (gruppe.first().eigen) Bearbeitung.Praeparate(titel, zeit, gruppe.map { it.id }, gruppe.map { it.kennung }) else null
-                add(Ereignis(zeit, Farben.praeparat.flaecheIm(dunkel), titel, null, bearbeitung))
+            is Tagesstrahlrechnung.Ereignis.Praeparate -> {
+                val bearbeitung = if (e.eigen) Bearbeitung.Praeparate(e.titel, e.zeit, e.eintraege.map { it.id }, e.eintraege.map { it.kennung }) else null
+                Strahlpunkt(e.zeit, Farben.praeparat.flaecheIm(dunkel), e.titel, null, bearbeitung)
             }
         }
-    }.sortedBy { it.zeit }
+    }
     val bett = Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone)?.takeIf { it.isAfter(jetzt) }
     val hinweis = herzHinweis(s)
     val bettKoffein = if (bett != null && s.mitDrinktervall) Gesundheitsrechnung.koffeinAktiv(s.koffein, bett).roundToInt() else 0
@@ -139,7 +137,7 @@ internal fun Tagesstrahl(s: GesundheitsStand, trainings: List<TrainingEintrag>, 
         Kopf(stringResource(R.string.ks_h_heute_bisher))
         CompositionLocalProvider(LocalZeitBreite provides zeitBreiteMessen()) {
         Column(Modifier.padding(start = INNEN, end = INNEN, bottom = 10.dp)) {
-            s.nacht?.let { n -> Nachtblock(n, hinweis) { wege.nacht(n.beginnUtc) } }
+            s.nacht?.let { n -> Nachtblock(n, durchgeschlafen, hinweis) { wege.nacht(n.beginnUtc) } }
             // Ohne Nacht von heute der Weg zur juengsten - sonst waeren fruehere Naechte und Sleep trends unerreichbar.
             if (s.nacht == null) s.juengsteNacht?.let { b -> KeineNacht { wege.nacht(b) } }
             ereignisse.forEach { e ->
@@ -306,9 +304,13 @@ private fun KeineNacht(oeffne: () -> Unit) {
     }
 }
 
-/** Oben: die Nacht, eingeschlafen oben, aufgewacht unten - ein Tipp oeffnet die Schlafansicht. */
+/**
+ * Oben: die Nacht, eingeschlafen oben, aufgewacht unten - ein Tipp oeffnet
+ * die Schlafansicht. [durchgeschlafen] aus dem Tagessatz: eine getestete
+ * Schwelle fuer Satz und Strahl.
+ */
 @Composable
-private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
+private fun Nachtblock(n: Nacht, durchgeschlafen: Boolean, hinweis: String?, oeffne: () -> Unit) {
     val context = LocalContext.current
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     Strahl(
@@ -350,9 +352,7 @@ private fun Nachtblock(n: Nacht, hinweis: String?, oeffne: () -> Unit) {
                 else -> null
             }
             if (werte != null) Unterzeile(werte + (hinweis?.takeIf { n.hrv != null }?.let { " · $it" } ?: ""))
-            // Ohne Abschnitte waere "durchgeschlafen" eine Behauptung aus Unwissen. Die Schwelle ist die getestete aus Tagesurteile.
-            val durch = n.abschnitte.isNotEmpty() && n.phasen[Farben.WACH] < Gesundheitsziele.DURCHGESCHLAFEN_MIN
-            Text(stringResource(if (durch) R.string.ks_f_aufgewacht_durch else R.string.ks_d_aufgewacht), fontSize = 15.sp, lineHeight = 20.sp)
+            Text(stringResource(if (durchgeschlafen) R.string.ks_f_aufgewacht_durch else R.string.ks_d_aufgewacht), fontSize = 15.sp, lineHeight = 20.sp)
         }
     }
 }

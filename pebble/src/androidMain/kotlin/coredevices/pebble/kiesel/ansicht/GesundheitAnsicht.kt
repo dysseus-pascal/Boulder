@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
@@ -94,13 +95,15 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege, geladen: () -> Unit = {}) 
     }
     val s = seite.stand
     val trainings = seite.trainings
-    val satz = Gesundheitsrechnung.tagesSatz(s, seite.gelesen.toLocalTime())
+    // Jetzt, nicht die Lesezeit des Stands: die Praeparatzeile darunter urteilt ebenso nach der Uhr, und Satz und Zeile sollen dasselbe sagen.
+    val platz = stringResource(R.string.ks_s_platz_n)
+    val satz = Gesundheitsrechnung.tagesSatz(s, LocalDateTime.now()) { String.format(platz, it) }
     // Dieselben Naechte wie die Akkuseite, damit die Zeile hier dasselbe sagt.
     val akku = remember(s.akkuNaechte, akkuJetzt) { Akkurechnung.rechne(s.akkuNaechte, akkuJetzt, Instant.now()) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { Tagessatz(s, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
-        item { Tagesstrahl(s, trainings, wege) { neu++ } }
+        item { Tagessatz(satz, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
+        item { Tagesstrahl(s, satz.durchgeschlafen, trainings, wege) { neu++ } }
         item { Koerperliste(s, wege, zeigeKoffein = { koffeinBlatt = true }, zeigePraeparate = { praeparatBlatt = true }) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }

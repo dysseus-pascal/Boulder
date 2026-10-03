@@ -43,6 +43,7 @@ import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.naechteSchnitt
+import coredevices.pebble.kiesel.phasenAnteile
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.schlafurteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -242,7 +243,9 @@ private fun Phasenkarte(phasen: IntArray) {
     // In der Reihenfolge der Bahnen des Hypnogramms darunter, wach oben - Zeilen und Bahnen liest man gleich herum.
     val reihe = PHASEN_VON_OBEN
     val namen = reihe.map { (_, name) -> stringResource(name) }
-    val anteile = reihe.map { (p, _) -> Formate.prozent((phasen[p] * 100f / imBett.coerceAtLeast(1)).roundToInt()) }
+    // Die getestete Rechnung: einzeln gerundet ergaben drei gleich lange Phasen 99 %.
+    val prozent = Gesundheitsrechnung.phasenAnteile(phasen)
+    val anteile = reihe.map { (p, _) -> Formate.prozent(prozent[p]) }
     Kasten {
         Kopf(stringResource(R.string.ks_n_phasen), stringResource(R.string.ks_n_im_bett, Formate.dauer(imBett.toLong())))
         Column(Modifier.padding(start = INNEN, end = INNEN, bottom = 8.dp)) {

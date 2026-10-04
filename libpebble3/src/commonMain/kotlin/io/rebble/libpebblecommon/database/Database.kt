@@ -9,6 +9,8 @@ import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.SQLiteDriver
+import co.touchlab.kermit.Logger
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
@@ -67,8 +69,16 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntryEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntrySyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlin.time.Instant
 
 internal const val DATABASE_FILENAME = "libpebble3.db"
+
+// Boulder: die Fassung des Schemas, an einer Stelle - sichereNeuereDatenbank vergleicht damit.
+internal const val DATENBANK_VERSION = 50
+
+private val logger = Logger.withTag("Database")
 
 @androidx.room.Database(
     entities = [
@@ -106,7 +116,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NachtAbschnittEntity::class,
         NachtHrvEntity::class,
     ],
-    version = 50,
+    version = DATENBANK_VERSION,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -210,3 +220,43 @@ fun getRoomDatabase(ctx: AppContext): Database {
 }
 
 internal expect fun getDatabaseBuilder(ctx: AppContext): RoomDatabase.Builder<Database>
+
+/**
+ * Boulder: stammt [datei] von einer neueren Fassung (user_version groesser als
+ * [version]), leert Room sie beim Oeffnen (fallbackToDestructiveMigrationOnDowngrade).
+ * Vorher kommt eine vollstaendige Kopie daneben, die Versionsnummer im Namen - so
+ * geht beim Zurueckspielen einer aelteren Fassung nichts still verloren; eine
+ * neuere Fassung kann sie wieder einlesen. Liefert den Pfad der Kopie.
+ *
+ * Laesst sich weder kopieren noch umbenennen, bricht der Start ab: lieber keine
+ * App als still geloeschte Naechte.
+ */
+internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, version: Int, jetzt: Instant): String? {
+    val pfad = Path(datei)
+    if (!SystemFileSystem.exists(pfad)) return null
+    val gefunden = try {
+        treiber.open(datei).use { verbindung ->
+            verbindung.prepare("PRAGMA user_version").use { it.step(); it.getLong(0).toInt() }
+        }
+    } catch (e: Exception) {
+        // Nicht lesbar: Room entscheidet wie bisher.
+        logger.e(e) { "Reading the database version failed" }
+        return null
+    }
+    if (gefunden <= version) return null
+    val ordner = pfad.parent ?: Path(".")
+    val kopie = Path(ordner, "libpebble3-v$gefunden-${jetzt.toEpochMilliseconds()}.db")
+    try {
+        // VACUUM INTO liest durch das WAL hindurch und schreibt eine einzelne, ganze Datei.
+        treiber.open(datei).use { it.execSQL("VACUUM INTO '${kopie.toString().replace("'", "''")}'") }
+    } catch (e: Exception) {
+        logger.e(e) { "Copying database version $gefunden failed; moving it aside instead" }
+        // Umbenennen braucht keinen Platz; WAL und SHM gehen mit, damit nichts fehlt.
+        for (endung in listOf("", "-wal", "-shm")) {
+            val von = Path("$datei$endung")
+            if (SystemFileSystem.exists(von)) SystemFileSystem.atomicMove(von, Path("$kopie$endung"))
+        }
+    }
+    logger.w { "Database version $gefunden is newer than $version (downgrade): saved as $kopie before Room resets it" }
+    return kopie.toString()
+}

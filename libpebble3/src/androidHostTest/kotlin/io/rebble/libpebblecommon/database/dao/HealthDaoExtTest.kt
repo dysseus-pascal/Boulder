@@ -44,6 +44,22 @@ class HealthDaoExtTest {
     }
 
     @Test
+    fun nachgelieferterPulsBeiGleichenSchrittenGewinnt() = runTest {
+        // Boulder: vorher blieb die Minute ohne Puls stehen, weil nur die Schritte zaehlten.
+        val dao = FakeHealthDao()
+        dao.zeilen[60] = minute(60, schritte = 10, puls = 0)
+        dao.zeilen[120] = minute(120, schritte = 10, puls = 70)
+        dao.insertHealthDataWithPriority(
+            listOf(
+                minute(60, schritte = 10, puls = 72),  // Puls kommt nach: ersetzt
+                minute(120, schritte = 10, puls = 0),  // Puls ginge verloren: bleibt alt
+            )
+        )
+        assertEquals(72, dao.zeilen.getValue(60).heartRate)
+        assertEquals(70, dao.zeilen.getValue(120).heartRate)
+    }
+
+    @Test
     fun gleicheMinuteImSelbenPaketVergleichtSichDerReiheNach() = runTest {
         val alt = FakeHealthDao()
         val neu = FakeHealthDao()

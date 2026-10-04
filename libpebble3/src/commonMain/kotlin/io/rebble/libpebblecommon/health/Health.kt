@@ -33,6 +33,7 @@ import io.rebble.libpebblecommon.services.decodeTypicalStepTotal
 import io.rebble.libpebblecommon.services.groupSleepSessions
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import io.rebble.libpebblecommon.util.datenbereich
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +62,9 @@ class Health(
 ) : HealthApi, HealthDataApi {
     private val logger = Logger.withTag("Health")
 
+    // Boulder: Einstellungen und Tageszahlen laufen hier; ein Datenbankfehler beendete vorher die App.
+    private val bereich = libPebbleCoroutineScope.datenbereich("Health")
+
     companion object {
         private val HEALTH_STATS_AVERAGE_DAYS = 30
         private val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
@@ -78,7 +82,7 @@ class Health(
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
         logger.d { "updateHealthSettings called: $healthSettings" }
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             healthSettingsDao.setWatchSettings(healthSettings)
             logger.d { "Health settings saved to database - will sync to watch via BlobDB" }
         }
@@ -142,13 +146,13 @@ class Health(
     }
 
     override fun sendHealthAveragesToWatch() {
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             updateHealthStats()
         }
     }
 
     private fun startPeriodicStatsUpdate() {
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             // Update health stats once daily at 7 AM
             while (true) {
                 val timeZone = TimeZone.currentSystemDefault()
@@ -172,7 +176,14 @@ class Health(
                 delay(delayUntilMorning)
 
                 logger.d { "HEALTH_STATS: Running scheduled daily stats update" }
-                updateHealthStats()
+                // Boulder: ein Fehler laesst nur diesen Morgen ausfallen, nicht alle folgenden.
+                try {
+                    updateHealthStats()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "HEALTH_STATS: scheduled update failed" }
+                }
             }
         }
     }

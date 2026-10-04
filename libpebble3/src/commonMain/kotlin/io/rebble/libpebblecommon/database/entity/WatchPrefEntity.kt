@@ -838,9 +838,24 @@ fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
             logger.e(e) { "Error decoding watch pref record $id" }
             return null
         }
+        // Boulder: eine Messstufe ausserhalb 1..5 nimmt die Firmware als Vorgabe
+        // (messstufe.c) - so steht sie dann auch hier. Ein TimeStyle-Satz anderer
+        // Laenge ist keiner; dann bleibt der bisherige Wert des Telefons.
+        val stufe = NumberWatchPref.BoulderMessstufe
+        val ts = BytesWatchPref.TimeStyleBedrock
+        val geprueft = when (type) {
+            stufe -> strValue.takeIf { it.toLongOrNull() in stufe.min.toLong()..stufe.max.toLong() }
+                ?: stufe.defaultValue.toString().also { logger.w { "Watch reported $id=$strValue, using ${stufe.defaultValue}" } }
+            ts -> strValue.takeIf { it.length == ts.defaultValue.length }
+                ?: run {
+                    logger.w { "Watch reported $id with ${strValue.length / 2} bytes, expected ${ts.defaultValue.length / 2}; ignored" }
+                    return null
+                }
+            else -> strValue
+        }
         return WatchPrefItem(
             id = id,
-            value = strValue,
+            value = geprueft,
             timestamp = Instant.fromEpochSeconds(timestamp.toLong()).asMillisecond(),
         )
     } catch (e: Exception) {

@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.health.parsers.NachtTeil
 import io.rebble.libpebblecommon.health.parsers.ParsedHealthData
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import io.rebble.libpebblecommon.util.datenbereich
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +70,7 @@ class HealthDataProcessor(
 
     // Boulder: ein Schub der Uhr sind Dutzende Pakete; gemeldet wird er einmal,
     // nach den Tageszahlen, damit die Meldung nicht vor ihnen ankommt.
-    private val schub = Schubsammler(scope) {
+    private val schub = Schubsammler(scope.datenbereich("HealthDataProcessor")) {
         aktualisiereHeute()
         _healthDataUpdated.tryEmit(Unit)
     }

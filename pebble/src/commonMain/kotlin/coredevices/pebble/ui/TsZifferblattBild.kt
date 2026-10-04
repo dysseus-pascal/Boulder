@@ -141,7 +141,8 @@ internal class TsLibPebbleQuelle(private val libPebble: LibPebble) : TsDatenQuel
     override suspend fun schritteUndDistanzCm(von: Long, bis: Long) =
         libPebble.getTotalHealthData(von, bis)?.let { (it.steps ?: 0L) to (it.distanceCm ?: 0L) }
     override suspend fun letzterPuls() = libPebble.getLatestHeartRateReading()
-    override suspend fun schlaf(von: Long, bis: Long) = libPebble.getSleepEntries(von, bis)
+    override suspend fun naechte(von: Long, bis: Long) = libPebble.getNaechte(von, bis)
+    override suspend fun nachtAbschnitte(von: Long, bis: Long) = libPebble.getNachtAbschnitte(von, bis)
 }
 
 private val tsDatenLogger = Logger.withTag("TsDaten")

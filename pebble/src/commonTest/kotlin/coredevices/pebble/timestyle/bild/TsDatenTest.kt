@@ -1,9 +1,9 @@
 package coredevices.pebble.timestyle.bild
 
 import io.rebble.libpebblecommon.connection.LatestHeartRate
-import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
-import io.rebble.libpebblecommon.health.OverlayType
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
@@ -16,7 +16,7 @@ import kotlin.uuid.Uuid
  * Was die Vorschau aus Boulders Daten macht - nach den Regeln der Firmware:
  * Schritte und Distanz seit Mitternacht (health_service_sum_today), Puls nur
  * bis 15 Minuten alt (health_service.c), Schlaf des Schlaftages bis 21 Uhr
- * (activity_sessions.c), Wetter von Ort 0.
+ * aus Boulders Naechten (Tag 88), Wetter von Ort 0.
  */
 class TsDatenTest {
     private val zuerich = TimeZone.of("Europe/Zurich")
@@ -48,42 +48,51 @@ class TsDatenTest {
         assertEquals(von to bis, tsSchlafFenster(spaet, zuerich))
     }
 
-    private fun abschnitt(start: Long, dauer: Long, typ: OverlayType) = OverlayDataEntity(
-        startTime = start, duration = dauer, type = typ.value, steps = 0, restingKiloCalories = 0,
-        activeKiloCalories = 0, distanceCm = 0, offsetUTC = 7200,
-    )
+    private val fenster = tag0310 - 5 * 3600 to tag0310 + 19 * 3600
+
+    /** Eine Nacht ab [beginn] (UTC), Einschlafen und Aufwachen in Minuten danach. */
+    private fun nacht(beginn: Long, einschlafen: Int, aufwachen: Int, schlaf: Int) =
+        NachtEntity(beginn, 7200, einschlafen = einschlafen, aufwachen = aufwachen, schlafMinuten = schlaf, ruhepuls = 0, hrv = 0)
 
     @Test
-    fun schlafZaehltWasImSchlaftagEndet() {
-        val fenster = tag0310 - 5 * 3600 to tag0310 + 19 * 3600
+    fun schlafKommtAusDerNachtOhneWachminuten() = runTest {
         val (von, bis) = fenster
-        val nacht = listOf(
-            // Die Nacht: 22:30-06:10 Schlaf (Ende im Fenster), darin 2 x Tiefschlaf.
-            abschnitt(von + 5400, 7 * 3600 + 40 * 60, OverlayType.Sleep),
-            abschnitt(von + 9000, 3600, OverlayType.DeepSleep),
-            abschnitt(von + 18000, 1800 + 59, OverlayType.DeepSleep), // 30 Minuten und 59 s -> 30
-            // Ein Nickerchen zaehlt mit, ein tiefes Nickerchen zum ruhigen Schlaf.
-            abschnitt(bis - 3 * 3600, 1200, OverlayType.Nap),
-            abschnitt(bis - 3 * 3600 + 300, 600, OverlayType.DeepNap),
-            // Endet genau an der Grenze heute 21:00: zaehlt noch.
-            abschnitt(bis - 600, 600, OverlayType.Nap),
-            // Endet genau gestern 21:00: gehoert zum Vortag.
-            abschnitt(von - 3600, 3600, OverlayType.Sleep),
-            // Endet nach heute 21:00: morgen.
-            abschnitt(bis - 600, 601, OverlayType.Sleep),
-            // Gehen ist kein Schlaf.
-            abschnitt(von + 40000, 1800, OverlayType.Walk),
+        // Die Nacht ab gestern 20:00: eingeschlafen 21:30, aufgewacht 07:56 - 626 Minuten, davon
+        // 37 wach. Die Uhr hatte nachgerechnet und alte Schlafbloecke stehen lassen: ihre Summe
+        // war 626. Es gilt die Nacht: 589.
+        val b = von - 3600
+        val heute = nacht(b, einschlafen = 90, aufwachen = 716, schlaf = 589)
+        val phasen = listOf(
+            NachtAbschnittEntity(b, 80, 100, 2), // beginnt vor dem Einschlafen: zaehlt ab 90, also 10
+            NachtAbschnittEntity(b, 100, 200, 1),
+            NachtAbschnittEntity(b, 200, 260, 2),
+            NachtAbschnittEntity(b, 260, 300, 0),
+            NachtAbschnittEntity(b, 300, 330, 2),
+            NachtAbschnittEntity(b, 330, 716, 3),
         )
-        val (gesamt, ruhig) = tsSchlafHeute(nacht, fenster)
-        assertEquals((7 * 60 + 40 + 20 + 10) * 60, gesamt)
-        assertEquals((60 + 30 + 10) * 60, ruhig)
+        // Endet genau gestern 21:00: gehoert zum Vortag. Endet nach heute 21:00: morgen.
+        val vortag = nacht(von - 6 * 3600, einschlafen = 60, aufwachen = 6 * 60, schlaf = 290)
+        val morgen = nacht(bis - 3600, einschlafen = 30, aufwachen = 61, schlaf = 31)
+        val quelle = Nachbau(naechte = listOf(vortag, heute, morgen), phasen = phasen)
+        val d = tsDatenLesen(quelle, jetzt, zuerich, verbunden = true)
+        assertEquals(589 * 60, d.schlafSekunden)
+        assertEquals((10 + 60 + 30) * 60, d.ruhigerSchlafSekunden)
+    }
+
+    @Test
+    fun eineNachtDieGenauAnDerGrenzeEndetZaehltNochHeute() {
+        val (von, bis) = fenster
+        val grenze = nacht(bis - 600 * 60, einschlafen = 0, aufwachen = 600, schlaf = 500)
+        val vortag = nacht(von - 600 * 60, einschlafen = 0, aufwachen = 600, schlaf = 480)
+        assertEquals(500 * 60 to 0, tsSchlafHeute(listOf(grenze, vortag), emptyList(), fenster))
     }
 
     private class Nachbau(
         val satz: WeatherAppEntry? = null,
         val schritte: Pair<Long, Long>? = null,
         val puls: LatestHeartRate? = null,
-        val abschnitte: List<OverlayDataEntity> = emptyList(),
+        val naechte: List<NachtEntity> = emptyList(),
+        val phasen: List<NachtAbschnittEntity> = emptyList(),
     ) : TsDatenQuelle {
         val fragen = mutableListOf<String>()
         override suspend fun wetter() = satz
@@ -92,9 +101,14 @@ class TsDatenTest {
             return schritte
         }
         override suspend fun letzterPuls() = puls
-        override suspend fun schlaf(von: Long, bis: Long): List<OverlayDataEntity> {
-            fragen += "schlaf $von $bis"
-            return abschnitte
+        // Wie die Datenbank: nur Naechte mit Beginn in [von, bis).
+        override suspend fun naechte(von: Long, bis: Long): List<NachtEntity> {
+            fragen += "naechte $von $bis"
+            return naechte.filter { it.beginnUtc in von until bis }
+        }
+        override suspend fun nachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity> {
+            fragen += "phasen $von $bis"
+            return phasen
         }
     }
 
@@ -107,9 +121,9 @@ class TsDatenTest {
         assertEquals(4230, d.distanzMeter)
         assertEquals(64, d.puls)
         assertEquals(true, d.verbunden)
-        // Schritte von Mitternacht bis jetzt einschliesslich; Schlaf ab einem Tag vor dem Fenster.
+        // Schritte von Mitternacht bis jetzt einschliesslich; Naechte ab einem Tag vor dem Fenster, ohne Nacht keine Phasen.
         assertEquals(
-            listOf("schritte $mitternacht ${jetzt.epochSeconds + 1}", "schlaf ${tag0310 - 29 * 3600} ${tag0310 + 19 * 3600}"),
+            listOf("schritte $mitternacht ${jetzt.epochSeconds + 1}", "naechte ${tag0310 - 29 * 3600} ${tag0310 + 19 * 3600}"),
             quelle.fragen,
         )
     }

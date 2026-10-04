@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -80,7 +81,8 @@ class PKJSApp(
     private suspend fun replyNACK(id: UByte) {
         if (!bestaetigt) return
         withTimeoutOrNull(1000) {
-            device.sendAppMessageResult(AppMessageResult.ACK(id))
+            // Boulder: Upstream schickte hier ein ACK - die Uhr gab die Nachricht dann auf.
+            device.sendAppMessageResult(AppMessageResult.NACK(id))
         }
     }
 
@@ -97,30 +99,42 @@ class PKJSApp(
 
     private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
         messages.onEach { appMessageData ->
-            jsRunner?.let { runner ->
-                if (!runner.readyState.value) {
-                    logger.w { "JsRunner not ready, waiting" }
-                    val result = withTimeoutOrNull(6.seconds) {
-                        runner.readyState.first { it }
-                    } ?: false
-                    if (!result) {
-                        logger.w { "JsRunner still not ready after waiting, sending NACK" }
-                        replyNACK(appMessageData.transactionId)
-                        return@onEach
-                    }
-                }
-                replyACK(appMessageData.transactionId)
-                val dataString = appMessageData.data.toJSData(appInfo.appKeys)
-                logger.d("Received app message: ${appMessageData.transactionId}")
-                runner.signalNewAppMessageData(dataString)
-            } ?: run {
-                logger.w { "JsRunner not init'd, sending NACK" }
-                replyNACK(appMessageData.transactionId)
-                return@onEach
+            // Boulder: eine Nachricht, die sich nicht weiterreichen laesst, beendet nicht
+            // den Empfang der ganzen Sitzung.
+            try {
+                empfange(appMessageData)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.e(e) { "Error handling app message ${appMessageData.transactionId}" }
             }
         }.catch {
             logger.e(it) { "Error receiving app message: ${it.message}" }
         }.launchIn(scope)
+    }
+
+    private suspend fun empfange(appMessageData: AppMessageData) {
+        jsRunner?.let { runner ->
+            if (!runner.readyState.value) {
+                logger.w { "JsRunner not ready, waiting" }
+                val result = withTimeoutOrNull(6.seconds) {
+                    runner.readyState.first { it }
+                } ?: false
+                if (!result) {
+                    logger.w { "JsRunner still not ready after waiting, sending NACK" }
+                    replyNACK(appMessageData.transactionId)
+                    return
+                }
+            }
+            replyACK(appMessageData.transactionId)
+            val dataString = appMessageData.data.toJSData(appInfo.appKeys)
+            logger.d("Received app message: ${appMessageData.transactionId}")
+            runner.signalNewAppMessageData(dataString)
+        } ?: run {
+            logger.w { "JsRunner not init'd, sending NACK" }
+            replyNACK(appMessageData.transactionId)
+            return
+        }
     }
 
     private fun launchOutgoingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
@@ -130,7 +144,11 @@ class PKJSApp(
             request.state.value = AppMessageRequest.State.TransactionId(tID)
             val appMessage = try {
                 request.data.toAppMessageData(appInfo, tID)
-            } catch (e: IllegalArgumentException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Boulder: nicht nur IllegalArgumentException - ein verschachteltes Objekt warf
+                // IllegalStateException und beendete das Senden der ganzen Sitzung.
                 logger.e(e) { "Invalid app message data" }
                 request.state.value = AppMessageRequest.State.DataError
                 return@onEach
@@ -180,11 +198,17 @@ class PKJSApp(
             return null
         }
         // Apps can declare "configurable" and never call Pebble.openURL(), so this must be bounded.
-        return withTimeoutOrNull(CONFIGURATION_URL_TIMEOUT) { url.await() } ?: run {
+        val adresse = withTimeoutOrNull(CONFIGURATION_URL_TIMEOUT) { url.await() } ?: run {
             url.cancel()
             logger.e { "Timed out waiting for configuration URL" }
-            null
+            return null
         }
+        // Boulder: die Adresse kommt aus dem JS der Uhr-App und geht in eine WebView.
+        if (!konfigurationsUrlErlaubt(adresse)) {
+            logger.e { "Configuration URL with scheme ${adresse.substringBefore(':').take(20)} refused" }
+            return null
+        }
+        return adresse
     }
 
     private fun injectJsRunner(scope: CoroutineScope): JsRunner =
@@ -223,6 +247,15 @@ class PKJSApp(
             jsRunner?.signalWebviewClosed(data)
         }
     }
+}
+
+// Boulder: Einstellungsseiten liegen im Netz (http wird spaeter zu https) oder kommen
+// als data:-Seite (Clay); javascript:, file:, content: oder intent: oeffnen keine WebView.
+private val KONFIGURATION_SCHEMATA = setOf("https", "http", "data")
+
+internal fun konfigurationsUrlErlaubt(url: String): Boolean {
+    val schema = url.substringBefore(':', missingDelimiterValue = "").trim().lowercase()
+    return schema in KONFIGURATION_SCHEMATA
 }
 
 fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {

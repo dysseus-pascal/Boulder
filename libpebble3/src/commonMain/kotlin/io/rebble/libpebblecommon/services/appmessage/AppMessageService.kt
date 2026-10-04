@@ -9,8 +9,10 @@ import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppTitleMessage
 import io.rebble.libpebblecommon.packets.AppMessage
 import io.rebble.libpebblecommon.packets.AppMessageTuple
 import io.rebble.libpebblecommon.services.ProtocolService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.first
@@ -40,7 +42,20 @@ class AppMessageService(
         protocolHandler.inboundMessages.onEach {
             when (it) {
                 is AppMessage.AppMessagePush -> {
-                    getReceivedMessagesChannel(it.uuid.get()).trySend(it.appMessageData())
+                    // Boulder: ein Tupel, das sich nicht lesen laesst (etwa eine Zahl mit 8 Byte,
+                    // die die Firmware nicht prueft), warf hier und beendete den Empfang aller
+                    // AppMessages dieser Verbindung. Jetzt faellt nur diese Nachricht weg.
+                    val daten = try {
+                        it.appMessageData()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        logger.e(e) { "Unreadable AppMessage ${it.transactionId.get()} for ${it.uuid.get()} dropped" }
+                        return@onEach
+                    }
+                    getReceivedMessagesChannel(daten.uuid).trySend(daten).onFailure { e ->
+                        logger.w(e) { "AppMessage ${daten.transactionId} for ${daten.uuid} dropped: buffer full" }
+                    }
                 }
             }
         }.launchIn(scope)

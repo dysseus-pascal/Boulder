@@ -6,12 +6,10 @@ import com.eygraber.uri.Uri
 import com.eygraber.uri.toAndroidUri
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.util.getTempFilePath
-import kotlinx.io.asSource
-import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import okio.FileNotFoundException
-import kotlin.use
+import java.io.File
+import java.io.IOException
 
 private val logger = Logger.withTag("PebbleDeepLinkHandler")
 
@@ -54,10 +52,29 @@ actual fun writeFile(
         return null
     }
     val fileToWrite = getTempFilePath(appContext, "sideloaded_file")
-    stream.asSource().buffered().use { source ->
-        SystemFileSystem.sink(fileToWrite).use { sink ->
-            source.transferTo(sink)
+    // Boulder: mit Obergrenze und gefangenem Fehler - die Datei kommt von einer beliebigen App,
+    // ein endloser oder abbrechender Strom fuellte sonst den Speicher oder beendete die App.
+    return try {
+        stream.use { quelle ->
+            File(fileToWrite.toString()).outputStream().use { ziel ->
+                val puffer = ByteArray(64 * 1024)
+                var gesamt = 0L
+                while (true) {
+                    val n = quelle.read(puffer)
+                    if (n < 0) break
+                    gesamt += n
+                    if (gesamt > SIDELOAD_MAX_BYTES) throw IOException("larger than $SIDELOAD_MAX_BYTES bytes")
+                    ziel.write(puffer, 0, n)
+                }
+            }
         }
+        fileToWrite
+    } catch (e: Exception) {
+        logger.e(e) { "writeFile: not copied" }
+        SystemFileSystem.delete(fileToWrite, mustExist = false)
+        null
     }
-    return fileToWrite
 }
+
+/** Boulder: groesser ist keine Firmware, App oder Sprachdatei einer Pebble (Firmware um 1 MB). */
+internal const val SIDELOAD_MAX_BYTES = 32L * 1024 * 1024

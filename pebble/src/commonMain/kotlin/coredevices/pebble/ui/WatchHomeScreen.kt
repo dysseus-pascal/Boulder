@@ -105,6 +105,7 @@ import coredevices.libindex.LibIndex
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.pebble.SideloadArt
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.M3Dialog
@@ -326,11 +327,24 @@ fun WatchHomeScreen(
         pendingFirmwareSideload?.let { pending ->
             AlertDialog(
                 onDismissRequest = deepLinkHandler::dismissPendingFirmwareSideload,
-                title = { Text("Sideload firmware?") },
+                // Boulder: dieselbe Rueckfrage fuer Apps und Sprachpakete.
+                title = {
+                    Text(
+                        when (pending.art) {
+                            SideloadArt.Firmware -> "Sideload firmware?"
+                            SideloadArt.App -> "Install app?"
+                            SideloadArt.LanguagePack -> "Install language pack?"
+                        }
+                    )
+                },
                 text = {
                     Text(
-                        "Install ${pending.fileName} on every connected watch? Only install " +
-                                "firmware from sources you trust."
+                        if (pending.art == SideloadArt.Firmware) {
+                            "Install ${pending.fileName} on every connected watch? Only install " +
+                                    "firmware from sources you trust."
+                        } else {
+                            pending.fileName
+                        }
                     )
                 },
                 confirmButton = {

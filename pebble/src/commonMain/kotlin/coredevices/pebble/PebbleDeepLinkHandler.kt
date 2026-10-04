@@ -16,7 +16,9 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -27,6 +29,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -60,7 +64,12 @@ interface PebbleDeepLinkHandler {
     fun navigateToTab(route: NavBarRoute)
 }
 
-data class PendingFirmwareSideload(val file: Path, val fileName: String)
+// Boulder: auch Apps (.pbw) und Sprachpakete (.pbl) warten auf die Rueckfrage - die
+// MainActivity nimmt Dateien von jeder App an, die sie ihr schickt.
+data class PendingFirmwareSideload(val file: Path, val fileName: String, val art: SideloadArt = SideloadArt.Firmware)
+
+/** Boulder: was eine Datei, die auf die Rueckfrage wartet, installiert. */
+enum class SideloadArt(val endung: String) { Firmware(".pbz"), App(".pbw"), LanguagePack(".pbl") }
 
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
@@ -83,6 +92,8 @@ class RealPebbleDeepLinkHandler(
     override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
         _pendingFirmwareSideload.asStateFlow()
     private var reservedSideloadCount = 0
+    // Boulder: Dateien kommen jetzt im Hintergrund an, auch zwei zugleich.
+    private val sideloadLock = Mutex()
 
     override fun consumeRequestIndexCompanion() {
         _requestIndexCompanion.value = false
@@ -141,9 +152,9 @@ class RealPebbleDeepLinkHandler(
                 true
             }
 
-            uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleLanguagePack(uri, uri.lastPathSegment!!)
-            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri, uri.lastPathSegment!!)
-            uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleApp(uri)
+            uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.LanguagePack)
+            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.Firmware)
+            uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.App)
             uri.scheme == "content" -> handleContentFallback(uri)
             else -> false
         }
@@ -158,56 +169,61 @@ class RealPebbleDeepLinkHandler(
         }
         logger.d { "filename: $name" }
         return when {
-            name.endsWith(".pbl") -> handleLanguagePack(uri, name)
-            name.endsWith(".pbz") -> handleFirmware(uri, name)
-            name.endsWith(".pbw") -> handleApp(uri)
+            name.endsWith(".pbl") -> handleSideload(uri, name, SideloadArt.LanguagePack)
+            name.endsWith(".pbz") -> handleSideload(uri, name, SideloadArt.Firmware)
+            name.endsWith(".pbw") -> handleSideload(uri, name, SideloadArt.App)
             else -> false
         }
     }
 
-    private fun handleLanguagePack(uri: Uri, name: String): Boolean {
-        logger.v { "handleLanguagePack() $uri" }
-        val file = writeFile(context, uri)
-        if (file == null) {
-            logger.w { "handleLanguagePack: couldn't write file" }
-            _snackBarMessages.tryEmit("Failed to load language pack file")
-            return false
+    // Boulder: Firmware, Apps und Sprachpakete gleich - erst kopieren (im Hintergrund, die Datei
+    // kann gross sein und handle() laeuft auf dem Hauptfaden), dann die Rueckfrage; installiert
+    // wird erst mit confirmPendingFirmwareSideload.
+    private fun handleSideload(uri: Uri, fileName: String, art: SideloadArt): Boolean {
+        logger.v { "handleSideload($art) $uri" }
+        GlobalScope.launch(Dispatchers.IO) {
+            val file = writeFile(context, uri)
+            if (file == null) {
+                logger.w { "handleSideload: couldn't write file" }
+                _snackBarMessages.tryEmit(
+                    when (art) {
+                        SideloadArt.Firmware -> "Failed to read firmware file"
+                        SideloadArt.App -> "Failed to read app file"
+                        SideloadArt.LanguagePack -> "Failed to load language pack file"
+                    }
+                )
+                return@launch
+            }
+            sideloadLock.withLock {
+                val previous = _pendingFirmwareSideload.value
+                val reserved = reserveSideloadCopy(file, art)
+                _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName, art)
+                previous?.takeIf { it.file != reserved }
+                    ?.let { SystemFileSystem.delete(it.file, mustExist = false) }
+            }
+            navigateToTab(PebbleNavBarRoutes.WatchesRoute)
         }
+        return true
+    }
+
+    private fun installLanguagePack(file: Path, name: String) {
         val connectedWatch =
             libPebble.watches.value.filterIsInstance<ConnectedPebble.Language>().firstOrNull()
         if (connectedWatch == null) {
-            logger.w { "handleLanguagePack: no connected watch" }
+            logger.w { "installLanguagePack: no connected watch" }
             _snackBarMessages.tryEmit("Failed to load language pack: no connected watch")
-            return false
+            return
         }
         _snackBarMessages.tryEmit("Installing language pack...")
         connectedWatch.installLanguagePack(file, name)
-        return true
     }
 
-    private fun handleFirmware(uri: Uri, fileName: String): Boolean {
-        logger.v { "handleFirmware() $uri" }
-        val file = writeFile(context, uri)
-        if (file == null) {
-            logger.w { "handleFirmware: couldn't write file" }
-            _snackBarMessages.tryEmit("Failed to read firmware file")
-            return false
-        }
-        val previous = _pendingFirmwareSideload.value
-        val reserved = reserveSideloadCopy(file)
-        _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName)
-        previous?.takeIf { it.file != reserved }
-            ?.let { SystemFileSystem.delete(it.file, mustExist = false) }
-        navigateToTab(PebbleNavBarRoutes.WatchesRoute)
-        return true
-    }
-
-    private fun reserveSideloadCopy(shared: Path): Path {
+    private fun reserveSideloadCopy(shared: Path, art: SideloadArt): Path {
         val directory = shared.parent ?: return shared
         if (reservedSideloadCount == 0) {
             sweepStaleSideloadCopies(directory)
         }
-        val reserved = Path(directory, "$RESERVED_SIDELOAD_PREFIX${reservedSideloadCount++}.pbz")
+        val reserved = Path(directory, "$RESERVED_SIDELOAD_PREFIX${reservedSideloadCount++}${art.endung}")
         return try {
             SystemFileSystem.delete(reserved, mustExist = false)
             SystemFileSystem.atomicMove(shared, reserved)
@@ -231,7 +247,11 @@ class RealPebbleDeepLinkHandler(
     override fun confirmPendingFirmwareSideload() {
         val pending = _pendingFirmwareSideload.value ?: return
         _pendingFirmwareSideload.value = null
-        sideloadFirmware(pending.file)
+        when (pending.art) {
+            SideloadArt.Firmware -> sideloadFirmware(pending.file)
+            SideloadArt.App -> GlobalScope.launch { libPebble.sideloadApp(pending.file) }
+            SideloadArt.LanguagePack -> installLanguagePack(pending.file, pending.fileName)
+        }
     }
 
     override fun dismissPendingFirmwareSideload() {
@@ -263,19 +283,6 @@ class RealPebbleDeepLinkHandler(
                 it.sideloadFirmware(file)
             }
         }
-    }
-
-    private fun handleApp(uri: Uri): Boolean {
-        logger.v { "handleApp() $uri" }
-        val file = writeFile(context, uri)
-        if (file == null) {
-            logger.w { "handleApp: couldn't write file" }
-            return false
-        }
-        GlobalScope.launch {
-            libPebble.sideloadApp(file)
-        }
-        return true
     }
 
     private fun handleBootConfig(path: String?): Boolean {

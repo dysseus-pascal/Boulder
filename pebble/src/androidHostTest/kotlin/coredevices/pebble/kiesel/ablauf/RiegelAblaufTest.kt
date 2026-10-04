@@ -113,6 +113,19 @@ class RiegelAblaufTest {
     }
 
     @Test
+    fun weist_die_akte_die_route_schon_im_bau_ab_bleibt_das_training_liegen() {
+        // Ein Punkt jenseits des Pols (eine kaputte Zeile, etwa aus einer alten Sicherung): die Akte wirft im Konstruktor.
+        val zeilen = (b until b + dauer step 10).joinToString("") { t ->
+            "{\"t\":$t,\"lat\":${if (t == b + 300) 95.0 else 47.0},\"lon\":8.0,\"g\":5.0}\n"
+        }
+        assertTrue(Spur.schreibeRoh(context, b, zeilen))
+        val meldung = verarbeite(zusammenfassung(art = 0))
+        // Als gescheitert gemeldet: der Begleiter laesst die Datei liegen, und der Riegel ist offen.
+        assertTrue(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        assertTrue(akte.saetze<ExerciseSessionRecord>().isEmpty())
+    }
+
+    @Test
     fun eine_hrv_ueber_200_ms_nimmt_das_training_nicht_mit() {
         // Yoga mit 250 ms: mehr nimmt die Akte nicht. Der Rest des Trainings bleibt.
         val meldung = verarbeite(zusammenfassung(art = 5, hrv = 250))

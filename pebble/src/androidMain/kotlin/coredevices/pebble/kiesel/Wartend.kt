@@ -77,7 +77,7 @@ internal object Wartend {
         // Auch der neue Name muss auf die Platte, sonst zeigt das Verzeichnis nach dem Neustart den alten Stand.
         try {
             FileChannel.open(ziel.parentFile!!.toPath(), StandardOpenOption.READ).use { it.force(true) }
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             logger.i { "Verzeichnis nicht synchronisiert: " + e.message }
         }
     }

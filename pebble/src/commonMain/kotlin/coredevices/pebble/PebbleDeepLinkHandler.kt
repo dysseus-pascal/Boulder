@@ -182,19 +182,20 @@ class RealPebbleDeepLinkHandler(
     private fun handleSideload(uri: Uri, fileName: String, art: SideloadArt): Boolean {
         logger.v { "handleSideload($art) $uri" }
         GlobalScope.launch(Dispatchers.IO) {
-            val file = writeFile(context, uri)
-            if (file == null) {
-                logger.w { "handleSideload: couldn't write file" }
-                _snackBarMessages.tryEmit(
-                    when (art) {
-                        SideloadArt.Firmware -> "Failed to read firmware file"
-                        SideloadArt.App -> "Failed to read app file"
-                        SideloadArt.LanguagePack -> "Failed to load language pack file"
-                    }
-                )
-                return@launch
-            }
+            // Unter der Sperre schon das Kopieren: writeFile schreibt immer in dieselbe Zwischendatei.
             sideloadLock.withLock {
+                val file = writeFile(context, uri)
+                if (file == null) {
+                    logger.w { "handleSideload: couldn't write file" }
+                    _snackBarMessages.tryEmit(
+                        when (art) {
+                            SideloadArt.Firmware -> "Failed to read firmware file"
+                            SideloadArt.App -> "Failed to read app file"
+                            SideloadArt.LanguagePack -> "Failed to load language pack file"
+                        }
+                    )
+                    return@launch
+                }
                 val previous = _pendingFirmwareSideload.value
                 val reserved = reserveSideloadCopy(file, art)
                 _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName, art)

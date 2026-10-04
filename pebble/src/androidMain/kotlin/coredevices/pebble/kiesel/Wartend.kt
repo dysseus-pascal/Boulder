@@ -4,6 +4,10 @@ import android.content.Context
 import co.touchlab.kermit.Logger
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 
 /**
  * Nachrichten der Uhr, die noch nicht verarbeitet sind - auf der Platte.
@@ -33,7 +37,7 @@ internal object Wartend {
     fun lege(context: Context, n: KieselNachricht, ordner: String = ORDNER, ersetzt: ((KieselNachricht) -> Boolean)? = null): File? = try {
         // Millisekunden und Zaehler, damit zwei Nachrichten derselben Sekunde nicht kollidieren.
         val f = File(verzeichnis(context, ordner), "${System.currentTimeMillis()}-${zaehler++}.json")
-        f.writeText(json.encodeToString(KieselNachricht.serializer(), n))
+        schreibeAtomar(f, json.encodeToString(KieselNachricht.serializer(), n))
         if (ersetzt != null) alle(context, ordner).filter { it != f && lies(it)?.let(ersetzt) == true }.forEach { it.delete() }
         f
     } catch (e: Exception) {
@@ -47,9 +51,49 @@ internal object Wartend {
      */
     fun ersetze(f: File, rest: KieselNachricht) {
         try {
-            f.writeText(json.encodeToString(KieselNachricht.serializer(), rest))
+            schreibeAtomar(f, json.encodeToString(KieselNachricht.serializer(), rest))
         } catch (e: Exception) {
-            logger.w { "Rest nicht gesichert: " + e.message }
+            logger.w { "Rest nicht gesichert, der alte Stand bleibt: " + e.message }
+        }
+    }
+
+    /**
+     * [text] nach [ziel], ganz oder gar nicht: erst in eine Hilfsdatei, auf
+     * die Platte gebracht (fsync), dann umbenannt. Gleich danach geht das ACK
+     * an die Uhr, und sie gibt ihre Kopie auf - bei einem Stromausfall in der
+     * Schreibpause des Dateisystems laege sonst eine leere oder halbe Datei
+     * da, die [lies] als unlesbar loescht. Wirft, wenn es nicht ging.
+     */
+    fun schreibeAtomar(ziel: File, text: String) {
+        val hilf = File(ziel.parentFile, ziel.name + HILF)
+        var fertig = false
+        try {
+            platte(hilf, text.toByteArray())
+            if (!hilf.renameTo(ziel)) throw IOException("Umbenennen nach ${ziel.name} ging nicht")
+            fertig = true
+        } finally {
+            if (!fertig) hilf.delete()
+        }
+        // Auch der neue Name muss auf die Platte, sonst zeigt das Verzeichnis nach dem Neustart den alten Stand.
+        try {
+            FileChannel.open(ziel.parentFile!!.toPath(), StandardOpenOption.READ).use { it.force(true) }
+        } catch (e: IOException) {
+            logger.i { "Verzeichnis nicht synchronisiert: " + e.message }
+        }
+    }
+
+    /** Endung der Hilfsdatei - nicht .json, damit [alle] sie nie als Nachricht liest. */
+    private const val HILF = ".neu"
+
+    /**
+     * Schreibt Bytes in eine Datei und bringt sie auf die Platte. NUR FUER
+     * TESTS austauschbar: dort bricht eine volle Platte nach einigen Bytes ab.
+     */
+    @Volatile
+    internal var platte: (File, ByteArray) -> Unit = { f, b ->
+        FileOutputStream(f).use { aus ->
+            aus.write(b)
+            aus.fd.sync()
         }
     }
 
@@ -69,7 +113,12 @@ internal object Wartend {
      * die Akte ein Recht dauerhaft verweigert, und jeder Start spielte alles ab.
      */
     fun alle(context: Context, ordner: String = ORDNER, hoechstensTage: Long? = null): List<File> {
-        val dateien = verzeichnis(context, ordner).listFiles { f -> f.name.endsWith(".json") }.orEmpty().sortedBy { it.name }
+        val v = verzeichnis(context, ordner)
+        // Eine Hilfsdatei, die laenger liegt, blieb von einem Absturz beim Schreiben: ihr Ziel hat
+        // den alten Stand, oder es gab keine Bestaetigung, und die Uhr schickt die Nachricht wieder.
+        v.listFiles { f -> f.name.endsWith(HILF) && System.currentTimeMillis() - f.lastModified() > 3_600_000L }.orEmpty()
+            .forEach { logger.i { "Hilfsdatei weg: ${it.name}" }; it.delete() }
+        val dateien = v.listFiles { f -> f.name.endsWith(".json") }.orEmpty().sortedBy { it.name }
         if (hoechstensTage == null) return dateien
         val (alt, frisch) = dateien.partition { verfallen(it.name, System.currentTimeMillis(), hoechstensTage) }
         alt.forEach { logger.w { "Verfallen, nicht eingetragen: ${it.name}" }; it.delete() }

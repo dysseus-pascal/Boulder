@@ -84,22 +84,18 @@ class HealthDataProcessor(
         private const val HEALTH_SLEEP_TAG: UInt = 83u
         private const val HEALTH_OVERLAY_TAG: UInt = 84u
         private const val HEALTH_HR_TAG: UInt = 85u
-        // Boulder-Firmware: die fertige Nacht mit allen Phasen (NachtDlsRecord)
-        private const val BOULDER_NACHT_TAG: UInt = 88u
-        // Boulder-Firmware: die HRV-Fenster dieser Nacht (NachtHrvDlsRecord). Eine
-        // aeltere Firmware schickt ihn nicht; ein aelteres Boulder quittiert ihn
-        // als unbekannt und wirft ihn weg.
-        private const val BOULDER_NACHT_HRV_TAG: UInt = 89u
 
-        val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG,
-            BOULDER_NACHT_TAG, BOULDER_NACHT_HRV_TAG)
+        // Boulder: nur Upstreams Tags. Die Naechte der Boulder-Firmware erkennt
+        // BoulderDls nach Tag UND Itemgroesse.
+        val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG)
 
         // Boulder: so oft rechnet ein Schub die Tageszahlen hoechstens neu.
         private val TAGESZAHLEN_ABSTAND = 1.hours
     }
 
     fun handleSessionOpen(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
-        if (tag !in HEALTH_TAGS) return
+        // Boulder: BoulderDls
+        if (tag !in HEALTH_TAGS && BoulderDls.art(tag, applicationUuid, itemSize) == null) return
 
         val session = HealthSession(tag, applicationUuid, itemSize)
         healthSessions[sessionId] = session
@@ -150,18 +146,28 @@ class HealthDataProcessor(
                 logger.d { "Received sleep tag data, processing as overlay" }
                 parseOverlayData(payload, itemSize, verworfen).let { { processOverlayData(it) } }
             }
-            BOULDER_NACHT_TAG -> parseNachtData(payload, itemSize, verworfen).let { { processNachtData(it) } }
-            BOULDER_NACHT_HRV_TAG -> parseNachtHrvData(payload, itemSize, verworfen).let { { processNachtHrvData(it) } }
             HEALTH_HR_TAG -> {
                 // Heart rate data is embedded in steps data for newer firmware
                 logger.d { "Received standalone HR data (tag 85), currently handled in steps data" };
                 { null }
             }
-            else -> {
+            else -> liesBoulder(tag, payload, itemSize, verworfen)
+        }
+
+    // Boulder: die Tags der Boulder-Firmware. Hierher kommt nur die System-UUID (speichere).
+    private fun liesBoulder(tag: UInt, payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit): suspend () -> String? {
+        val vorwaerts = BoulderDls.vorwaerts(tag)
+        return when (BoulderDls.art(tag, SYSTEM_APP_UUID, itemSize)) {
+            BoulderDls.Art.NACHT -> parseNachtData(payload, itemSize, vorwaerts, verworfen).let { { processNachtData(it) } }
+            BoulderDls.Art.HRV -> parseNachtHrvData(payload, itemSize, vorwaerts, verworfen).let { { processNachtHrvData(it) } }
+            // Ein Tag einer neueren Boulder-Firmware: unlesbar, also roh in die Quarantaene, nicht verwerfen.
+            BoulderDls.Art.UNBEKANNT -> throw IllegalArgumentException("Boulder tag 0x${tag.toString(16)} unknown to this app")
+            null -> {
                 logger.w { "Unknown health data tag: $tag" };
                 { null }
             }
         }
+    }
 
     // Boulder: am Ende eines Schubs statt bei itemsLeft == 0 - die Firmware schickt
     // dort immer 0xffff (dls_endpoint.c), der alte Zweig lief nie. Auch am selben Tag
@@ -205,8 +211,8 @@ class HealthDataProcessor(
             HEALTH_SLEEP_TAG -> "SLEEP"
             HEALTH_OVERLAY_TAG -> "OVERLAY"
             HEALTH_HR_TAG -> "HEART_RATE"
-            BOULDER_NACHT_TAG -> "NACHT"
-            BOULDER_NACHT_HRV_TAG -> "NACHT_HRV"
+            BoulderDls.NACHT_ALT, BoulderDls.NACHT -> "NACHT($tag)"
+            BoulderDls.HRV_ALT, BoulderDls.HRV -> "NACHT_HRV($tag)"
             else -> "UNKNOWN($tag)"
         }
 

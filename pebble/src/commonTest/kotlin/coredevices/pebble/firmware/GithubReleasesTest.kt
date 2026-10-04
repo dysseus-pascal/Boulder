@@ -1,5 +1,6 @@
 package coredevices.pebble.firmware
 
+import CoreAppVersion
 import coredevices.util.CoreConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -49,6 +50,7 @@ class GithubReleasesTest {
         status: HttpStatusCode = HttpStatusCode.OK,
         expectations: FirmwareArtifactExpectations = FirmwareArtifactExpectations(),
         requests: MutableList<HttpRequestData> = mutableListOf(),
+        app: CoreAppVersion = TEST_APP_VERSION,
     ): GithubReleases {
         val client = HttpClient(MockEngine { request ->
             requests += request
@@ -58,7 +60,7 @@ class GithubReleasesTest {
                 json(Json { ignoreUnknownKeys = true })
             }
         }
-        return GithubReleases(client, expectations, fixedTestClock)
+        return GithubReleases(client, expectations, fixedTestClock, app)
     }
 
     @Test
@@ -279,7 +281,7 @@ class GithubReleasesTest {
         val client = HttpClient(MockEngine { throw IOException("network down") }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         }
-        val checker = GithubReleases(client, FirmwareArtifactExpectations(), fixedTestClock)
+        val checker = GithubReleases(client, FirmwareArtifactExpectations(), fixedTestClock, TEST_APP_VERSION)
         val result = checker.getLatestFirmware(testWatchInfo(WatchHardwarePlatform.CORE_ASTERIX, "v4.30.0"), FirmwareUpdateChannel.Soaked)
         assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(result)
     }
@@ -341,5 +343,65 @@ class GithubReleasesTest {
             FirmwareUpdateChannel.Soaked,
         )
         assertIs<FirmwareUpdateCheckResult.FoundNoUpdate>(result)
+    }
+
+    // --- Boulder: Mindest-App ---
+
+    /** Ein Boulder-Release b3, dessen Notizen [notizen] sind; die Uhr laeuft b2. */
+    private fun mitNotizen(notizen: String) = "[" + releaseJson(
+        "v4.38.1-b3", 0, listOf(normalAsset("obelix_pvt", "v4.38.1-b3", digest('c'), 333)), body = notizen,
+    ) + "]"
+
+    private suspend fun pruefe(notizen: String, app: String, expectations: FirmwareArtifactExpectations = FirmwareArtifactExpectations()) =
+        checker(mitNotizen(notizen), expectations = expectations, app = CoreAppVersion(app)).getLatestFirmware(
+            testWatchInfo(WatchHardwarePlatform.CORE_OBELIX_PVT, "v4.38.1-b2"),
+            FirmwareUpdateChannel.Soaked,
+        )
+
+    @Test
+    fun eineFirmwareFuerEineNeuereAppWirdNichtAngeboten() = runTest {
+        val expectations = FirmwareArtifactExpectations()
+        val result = pruefe("Neue Tags fuer die Nacht.\n\nMindest-App: 0.50.0\n", "0.49.0", expectations)
+        assertEquals("Needs Boulder 0.50.0", assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(result).error)
+        // Nichts zum Einspielen vorgemerkt.
+        assertNull(expectations.lookup("https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/normal_obelix_pvt_v4.38.1-b3.pbz"))
+    }
+
+    @Test
+    fun abDerMindestAppWirdSieAngeboten() = runTest {
+        for (app in listOf("0.50.0", "0.50.1", "0.51.0", "1.0.0")) {
+            val result = pruefe("Mindest-App: 0.50.0", app)
+            assertEquals("v4.38.1-b3", assertIs<FirmwareUpdateCheckResult.FoundUpdate>(result, app).version.stringVersion)
+        }
+    }
+
+    @Test
+    fun verglichenWirdZahlFuerZahl() = runTest {
+        // Als Text waere 0.9.0 groesser als 0.10.0.
+        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 0.10.0", "0.9.0"))
+        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 1.0.0", "0.99.99"))
+        assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Mindest-App: 0.9.0", "0.10.0"))
+    }
+
+    @Test
+    fun ohneZeileGiltKeineGrenze() = runTest {
+        assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("", "0.0.1"))
+        assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Nur Text, keine Grenze.", "0.0.1"))
+    }
+
+    @Test
+    fun dieZeileGiltNurGenauSo() = runTest {
+        // Mitten in den Notizen und mit Windows-Zeilenenden (so speichert GitHub oft) gilt sie.
+        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Titel\r\nMindest-App: 0.50.0\r\nMehr", "0.49.0"))
+        // Anders geschrieben ist es keine Grenze.
+        for (zeile in listOf("Mindest-App: 0.50", "Mindest-App: 0.50.0 (Nacht)", " Mindest-App: 0.50.0", "mindest-app: 0.50.0", "Mindest-App:0.50.0")) {
+            assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe(zeile, "0.49.0"), zeile)
+        }
+    }
+
+    @Test
+    fun eineUnlesbareAppFassungBekommtKeineFirmwareMitGrenze() = runTest {
+        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 0.50.0", "dev"))
+        assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Mindest-App: 0.50.0", "0.50.0-3-gabcdef12"))
     }
 }

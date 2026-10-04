@@ -113,3 +113,44 @@ class KartenlinkTest {
         assertEquals("Bahnhof Bern", z.text)
     }
 }
+
+/**
+ * Kurzlinks aufloesen, ohne das Netz: ein Nachbau antwortet je Adresse mit
+ * einer Umleitung oder 200 und merkt sich, wohin gefragt wurde.
+ */
+class KartenlinkFolgeTest {
+    private val gefragt = mutableListOf<String>()
+
+    /** [antworten]: Adresse -> Ziel der Umleitung (302), oder null fuer 200. */
+    private fun netz(antworten: Map<String, String?>): (java.net.URL) -> java.net.HttpURLConnection = { url ->
+        gefragt += url.toString()
+        object : java.net.HttpURLConnection(url) {
+            override fun connect() {}
+            override fun disconnect() {}
+            override fun usingProxy() = false
+            override fun getResponseCode() = if (antworten[url.toString()] != null) 302 else 200
+            override fun getHeaderField(name: String?) = if (name == "Location") antworten[url.toString()] else null
+        }
+    }
+
+    @Test
+    fun `eine Umleitung ins eigene Netz wird nicht abgefragt`() {
+        val ende = Kartenlink.folge(
+            "https://maps.app.goo.gl/AbC",
+            oeffne = netz(mapOf("https://maps.app.goo.gl/AbC" to "http://192.168.1.1/admin?q=47.1,8.2")),
+        )
+        assertEquals(listOf("https://maps.app.goo.gl/AbC"), gefragt)
+        assertEquals("https://maps.app.goo.gl/AbC", ende)
+    }
+
+    @Test
+    fun `ein http-Kurzlink wird ueber https aufgeloest`() {
+        val ziel = "https://www.google.com/maps/place/Bern/@46.9,7.4,17z"
+        val ende = Kartenlink.folge(
+            "http://maps.app.goo.gl/AbC",
+            oeffne = netz(mapOf("https://maps.app.goo.gl/AbC" to "https://consent.google.com/ml?continue=x", "https://consent.google.com/ml?continue=x" to ziel)),
+        )
+        assertTrue(gefragt.all { it.startsWith("https://") })
+        assertEquals(ziel, ende)
+    }
+}

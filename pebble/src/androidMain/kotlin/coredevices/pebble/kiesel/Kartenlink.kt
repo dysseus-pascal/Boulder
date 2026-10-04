@@ -6,6 +6,7 @@ import android.net.Uri
 import co.touchlab.kermit.Logger
 import coredevices.pebble.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -156,13 +157,20 @@ internal object Kartenlink {
      * Hoechstens fuenf Sprünge - eine Kette, die laenger ist, ist keine
      * Umleitung mehr, sondern eine Schleife.
      *
-     * Laeuft auf einem Hintergrundfaden; der Aufrufer sorgt dafuer.
+     * NUR ZU GOOGLE UND NUR UEBER HTTPS: eine Umleitung woandershin (etwa ins
+     * eigene Netz, an den Router) wird nicht mehr abgefragt, es bleibt beim
+     * bisherigen Stand. Ein http-Kurzlink wird zu https - im Klartext liesse
+     * Android ihn ohnehin nicht hinaus.
+     *
+     * Laeuft auf einem Hintergrundfaden; der Aufrufer sorgt dafuer. [oeffne]
+     * nur fuer Tests: dort antwortet ein Nachbau statt des Netzes.
      */
-    fun folge(roh: String, spruenge: Int = 5): String {
-        var aktuell = roh
+    fun folge(roh: String, spruenge: Int = 5, oeffne: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }): String {
+        var aktuell = alsHttps(roh)
+        if (!darfFolgen(aktuell)) return roh
         repeat(spruenge) {
             val verbindung = try {
-                (URL(aktuell).openConnection() as HttpURLConnection).apply {
+                oeffne(URL(aktuell)).apply {
                     instanceFollowRedirects = false
                     requestMethod = "HEAD"
                     connectTimeout = 8000
@@ -177,8 +185,12 @@ internal object Kartenlink {
                 val code = verbindung.responseCode
                 if (code !in 300..399) return aktuell
                 val weiter = verbindung.getHeaderField("Location") ?: return aktuell
-                aktuell = if (weiter.startsWith("http")) weiter
-                          else URL(URL(aktuell), weiter).toString()
+                val naechste = alsHttps(if (weiter.startsWith("http")) weiter else URL(URL(aktuell), weiter).toString())
+                if (!darfFolgen(naechste)) {
+                    Logger.withTag("Kartenlink").w { "Umleitung zu ${host(naechste)} nicht gefolgt" }
+                    return aktuell
+                }
+                aktuell = naechste
             } catch (e: Exception) {
                 Logger.withTag("Kartenlink").w { "Kurzlink nicht aufgeloest: " + e.message }
                 return aktuell
@@ -187,6 +199,16 @@ internal object Kartenlink {
             }
         }
         return aktuell
+    }
+
+    private fun alsHttps(url: String): String =
+        if (url.startsWith("http://", ignoreCase = true)) "https://" + url.substring(7) else url
+
+    /** Wohin [folge] fragen darf: Google und seine Kurzlinkdienste, nur ueber https. */
+    private fun darfFolgen(url: String): Boolean {
+        if (!url.startsWith("https://", ignoreCase = true)) return false
+        val h = host(url) ?: return false
+        return istGoogle(h) || h in setOf("maps.app.goo.gl", "goo.gl", "g.co", "consent.google.com")
     }
 
     /**
@@ -203,7 +225,10 @@ internal object Kartenlink {
         }
         val name = ziel.text
         if (name.isNullOrBlank()) return@withContext null
-        Ortsuche.finde(context, name)?.let { (lat, lon) ->
+        val ort = Ortsuche.finde(context, name)
+        // Die Suche laesst sich nicht unterbrechen: kam inzwischen ein anderer Link, oeffnet dieser OsmAnd nicht mehr.
+        ensureActive()
+        ort?.let { (lat, lon) ->
             return@withContext oeffneZiel(context, lat, lon, name)?.let { context.getString(R.string.ks_k_weg_adresse, it) }
         }
         oeffneZiel(context, null, null, name)

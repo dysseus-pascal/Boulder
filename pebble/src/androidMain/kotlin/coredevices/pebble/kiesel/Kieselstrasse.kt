@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
+import co.touchlab.kermit.Logger
 import android.view.KeyEvent
 import coredevices.pebble.R
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -51,6 +51,7 @@ import kotlin.uuid.Uuid
  */
 internal object Kieselstrasse {
     private const val TAG = "Kieselstrasse"
+    private val logger = Logger.withTag(TAG)
 
     val UUID: Uuid = Uuid.parse("a83bf269-e798-45bc-9bf0-a0f68362a79a")
 
@@ -315,6 +316,7 @@ internal object Kieselstrasse {
             ctx.unbindService(verb)
         } catch (e: IllegalArgumentException) {
             // War schon geloest.
+            logger.i { "Schon geloest: " + e.message }
         }
         verbindung = null
         api = null
@@ -347,7 +349,7 @@ internal object Kieselstrasse {
                 setzeLage(Lage.ABONNIERT)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Abonnieren fehlgeschlagen: " + e.message)
+            logger.w { "Abonnieren fehlgeschlagen: " + e.message }
             setzeLage(Lage.ABO_FEHLER, e.message.orEmpty())
         }
     }
@@ -365,7 +367,7 @@ internal object Kieselstrasse {
                 rueckruf,
             )
         } catch (e: Exception) {
-            Log.w(TAG, "Abbestellen fehlgeschlagen: " + e.message)
+            logger.w { "Abbestellen fehlgeschlagen: " + e.message }
         }
         aboNummer = -1L
     }
@@ -432,7 +434,7 @@ internal object Kieselstrasse {
             melde(meter, art, strasse, info.arrivalTime, info.leftDistance, nr, winkel)
             if (abruf.navigation(true)) stimme(ctx)
         } catch (e: Exception) {
-            Log.w(TAG, "Nachfrage fehlgeschlagen: " + e.message)
+            logger.w { "Nachfrage fehlgeschlagen: " + e.message }
         }
     }
 
@@ -478,7 +480,7 @@ internal object Kieselstrasse {
                 val ergebnis = try {
                     uhr.sendAppMessage(AppMessageData(uhr.transactionSequence.next(), UUID, felder))
                 } catch (e: Exception) {
-                    Log.w(TAG, "An die Uhr: " + e.message)
+                    logger.w { "An die Uhr: " + e.message }
                     return@withLock
                 }
                 // Ein schnelles NACK kommt von der Uhr-App, die ihren Eingang gerade erst oeffnet.

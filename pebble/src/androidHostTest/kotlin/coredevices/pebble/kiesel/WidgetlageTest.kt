@@ -60,6 +60,31 @@ class WidgetlageTest {
 
     private val zink = SupCycle.Eintrag("Zinc", false)
 
+    @Test
+    fun widget_und_seite_nennen_dieselben_versaeumten_praeparate() {
+        // Eine Regel fuer beide (Gesundheitsrechnung.praeparatVersaeumt), den ganzen Tag hindurch.
+        val liste = listOf(
+            zink,
+            SupCycle.Eintrag("D3", true),
+            SupCycle.Eintrag("Black Maca", false, LocalTime.of(12, 30)),
+            SupCycle.Eintrag("Ashwagandha", false, LocalTime.of(20, 0)),
+        )
+        val g = Gesundheitsrechnung
+        for (minute in 0 until 24 * 60 step 7) {
+            val jetzt = LocalTime.of(minute / 60, minute % 60)
+            val z = g.praeparatzeile(liste, jetzt)
+            val seite = if (z.lage == Praeparatlage.OFFEN) z.namen + List(z.weitere) { "+" } else emptyList()
+            val widget = Widgetlage.versaeumtePraeparate(blick(tag.atTime(jetzt), praeparate = liste))
+            assertEquals(seite.size, widget.size, "um $jetzt")
+            assertEquals(seite.filter { it != "+" }, widget.take(2), "um $jetzt")
+        }
+        // Knapp vor und nach elf: Zink ohne Planzeit, obwohl D3 schon genommen ist.
+        assertEquals(emptyList(), Widgetlage.versaeumtePraeparate(blick(tag.atTime(10, 59), praeparate = liste)))
+        assertEquals(Praeparatlage.FAELLIG, g.praeparatzeile(liste, LocalTime.of(10, 59)).lage)
+        assertEquals(listOf("Zinc"), Widgetlage.versaeumtePraeparate(blick(tag.atTime(11, 0), praeparate = liste)))
+        assertEquals(Praeparatlage.OFFEN, g.praeparatzeile(liste, LocalTime.of(11, 0)).lage)
+    }
+
     // --- Vorrang ---
 
     @Test

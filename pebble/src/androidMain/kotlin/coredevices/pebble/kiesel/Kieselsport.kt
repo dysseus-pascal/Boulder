@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.records.ExerciseLap
 import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseSegment
@@ -41,6 +41,8 @@ internal data class KieselNachricht(
 internal object Kieselsport {
 
     private const val TAG = "Kieselsport"
+
+    private val logger = Logger.withTag(TAG)
 
     val UUID: Uuid = Uuid.parse("6c386250-a6d7-4a19-a485-52541b5d7c0d")
 
@@ -275,7 +277,10 @@ internal object Kieselsport {
      */
     private suspend fun streckeText(meter: Double, satzart: Int, name: String): String {
         val imperial = !Sport.von(satzart, name).immerMetrisch &&
-            try { einheitenImperialHolen() } catch (e: IllegalStateException) { false }
+            try { einheitenImperialHolen() } catch (e: IllegalStateException) {
+                logger.w { "Einheiten nicht lesbar, metrisch: " + e.message }
+                false
+            }
         return Formate.distanz(meter, imperial).text
     }
 
@@ -397,7 +402,7 @@ internal object Kieselsport {
         val becken = if (bahnen > 0) (felder[SP_METER] ?: 0).toDouble() / bahnen else 0.0
         val saetze = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende, plan.pausen)
         val runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList()
-        val pausen = pausenSegmente(plan.pausen, anfang, ende, saetze)
+        val pausen = pausenSegmente(mitNachlauf(plan, ende), anfang, ende, saetze)
 
         // NUR SAETZE UND BAHNEN IN DIE NOTIZ. Puls, Strecke und Kalorien der
         // Uhr standen frueher auch darin - roh, nicht entstoert, die kcal aus
@@ -414,7 +419,7 @@ internal object Kieselsport {
                 segments = segmente.sortedBy { it.startTime }, laps = laps, exerciseRoute = route,
             )
         } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Abschnitte abgewiesen: " + e.message)
+            logger.w { "Abschnitte abgewiesen: " + e.message }
             null
         }
         val satz = sitzung(saetze + pausen, runden)
@@ -428,7 +433,7 @@ internal object Kieselsport {
         val kurz = context.getString(R.string.ks_a_eingetragen, name, (dauer / 60).toInt(), dazu)
         var meldung = schreibe(context, satz ?: ohne, kurz, riegel = "kieselsport")
         if (hatAbschnitte && meldung == context.getString(R.string.ks_a_nicht_eingetragen)) {
-            Log.w(TAG, "Eintrag mit Abschnitten abgewiesen, zweiter Anlauf ohne")
+            logger.w { "Eintrag mit Abschnitten abgewiesen, zweiter Anlauf ohne" }
             meldung = schreibe(context, ohne, context.getString(R.string.ks_a_ohne_abschnitte, kurz), riegel = "kieselsport")
         }
 
@@ -485,7 +490,7 @@ internal object Kieselsport {
         val punkte = Spur.inSitzung(alle, anfang, ende)
         val (satzart, name) = artAlsSatzart(context, art)
         val strecke = Spur.laenge(punkte)
-        val pausen = pausenSegmente(plan.pausen, anfang, ende, emptyList())
+        val pausen = pausenSegmente(mitNachlauf(plan, ende), anfang, ende, emptyList())
         val satz = try {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
@@ -495,7 +500,7 @@ internal object Kieselsport {
                 exerciseRoute = routeAus(punkte, anfang, ende),
             )
         } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Nachtragen abgewiesen: " + e.message)
+            logger.w { "Nachtragen abgewiesen: " + e.message }
             return context.getString(R.string.ks_a_nicht_eingetragen)
         }
         val pausenSek = pausen.sumOf { Duration.between(it.startTime, it.endTime).seconds }
@@ -510,6 +515,10 @@ internal object Kieselsport {
 
     /** Nach der letzten Pause noch so viel Spur: das GPS haelt erst an, wenn ihre Meldung da ist. */
     const val PUFFER_S = 60L
+
+    /** Die Pausen samt GPS-Nachlauf ab der letzten Pause ([Trainingspausen.Plan.offen]): die Spur laeuft bis [PUFFER_S] weiter. */
+    fun mitNachlauf(plan: Trainingspausen.Plan, ende: Instant): List<Trainingspausen.Pause> =
+        plan.pausen + listOfNotNull(plan.offen?.takeIf { it < ende.epochSecond }?.let { Trainingspausen.Pause(it, ende.epochSecond) })
 
     /**
      * Ohne bekannte letzte Pause hoechstens so viel ueber die aktive Zeit
@@ -581,7 +590,7 @@ internal object Kieselsport {
             meldung
         } catch (e: Exception) {
             // Die haeufigste Ursache ist eine fehlende Erlaubnis.
-            Log.w(TAG, "Eintragen fehlgeschlagen: " + e.message)
+            logger.w { "Eintragen fehlgeschlagen: " + e.message }
             riegel?.let { Riegel.loese(context, it) }
             context.getString(R.string.ks_a_nicht_eingetragen)
         }

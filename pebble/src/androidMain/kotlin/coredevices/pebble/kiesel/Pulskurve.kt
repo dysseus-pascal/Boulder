@@ -3,10 +3,12 @@ package coredevices.pebble.kiesel
 import coredevices.pebble.R
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.time.Instant
 
@@ -27,6 +29,7 @@ import java.time.Instant
  */
 internal object Pulskurve {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
 
     private const val ORDNER = "puls"
     /** Hoechstens so viele Punkte je Eintrag - die Akte mag keine Riesen. */
@@ -45,7 +48,7 @@ internal object Pulskurve {
         try {
             datei(context, beginn).appendText("$sekunde,$puls\n")
         } catch (e: Exception) {
-            Log.w(TAG, "Pulskurve: " + e.message)
+            logger.w { "Pulskurve: " + e.message }
         }
     }
 
@@ -72,20 +75,41 @@ internal object Pulskurve {
      * Datei wieder bei Stueck 0 und haette den ersten Teil ersetzt.
      */
     @Synchronized
-    private fun lies(context: Context, beginn: Long): List<Pair<Int, Int>> {
+    private fun lies(context: Context, beginn: Long): Pair<List<Pair<Int, Int>>, Int> {
         val f = datei(context, beginn)
-        if (!f.exists()) return emptyList()
-        return f.readLines().mapNotNull { zeile ->
+        if (!f.exists()) return emptyList<Pair<Int, Int>>() to 0
+        // Dazu, wie viele Bytes die Datei dabei hatte: [vergiss] nimmt nur so viel weg.
+        val bytes = f.readBytes()
+        return String(bytes).lines().mapNotNull { zeile ->
             val t = zeile.split(',')
             if (t.size != 2) return@mapNotNull null
             val s = t[0].toIntOrNull() ?: return@mapNotNull null
             val p = t[1].toIntOrNull() ?: return@mapNotNull null
             if (p in 30..250) s to p else null
-        }.sortedBy { it.first }.distinctBy { it.first }
+        }.sortedBy { it.first }.distinctBy { it.first } to bytes.size
     }
 
-    suspend fun eintragen(context: Context, beginn: Long): Boolean {
-        val punkte = lies(context, beginn)
+    /** Vergisst nur die [gelesen] Bytes: ein Stueck, das waehrend des Eintragens ankam, bleibt fuer den naechsten. */
+    @Synchronized
+    private fun vergiss(context: Context, beginn: Long, gelesen: Int) {
+        val f = datei(context, beginn)
+        try {
+            if (!f.exists()) return
+            val bytes = f.readBytes()
+            if (bytes.size <= gelesen) f.delete() else f.writeBytes(bytes.copyOfRange(gelesen, bytes.size))
+        } catch (e: Exception) {
+            logger.w { "Pulskurve $beginn nicht aufgeraeumt, kommt beim naechsten Start noch einmal (dieselbe Kennung ersetzt): " + e.message }
+        }
+    }
+
+    // EINER NACH DEM ANDEREN: der Start traegt liegengebliebene Kurven ein, waehrend die Schlange neue
+    // Stuecke verarbeitet - von zwei Eintraegen derselben Kennung ersetzte der spaetere den vollstaendigeren.
+    private val einzeln = Mutex()
+
+    suspend fun eintragen(context: Context, beginn: Long): Boolean = einzeln.withLock { eintragenAllein(context, beginn) }
+
+    private suspend fun eintragenAllein(context: Context, beginn: Long): Boolean {
+        val (punkte, gelesen) = lies(context, beginn)
         if (punkte.size < 2) return false
         // DIE SEKUNDEN DER UHR SIND AKTIVE ZEIT. Gab es Pausen, wartet die
         // Kurve auf die Zusammenfassung: erst sie sagt, ob die Pausen stimmen
@@ -115,14 +139,14 @@ internal object Pulskurve {
             // Die Kalorien aus der ganzen Kurve in der Akte, nicht nur aus diesem
             // Stueck - scheitern sie, holt sie der naechste Start nach (Trainingswerte).
             Trainingswerte.schreibeKalorienAusPuls(context, beginn)
-            datei(context, beginn).delete()
+            vergiss(context, beginn, gelesen)
             KieselVerlauf.merke(
                 context,
                 context.resources.getQuantityString(R.plurals.ks_v_pulskurve, punkte.size, punkte.size),
             )
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Pulskurve nicht eingetragen: " + e.message)
+            logger.w { "Pulskurve nicht eingetragen: " + e.message }
             false
         }
     }

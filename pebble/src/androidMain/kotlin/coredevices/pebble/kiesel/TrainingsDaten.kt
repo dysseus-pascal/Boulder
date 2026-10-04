@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
@@ -170,6 +170,7 @@ internal data class TrainingDetail(
  */
 internal object TrainingsDaten {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
     private const val AUSGEBLENDET = "kiesel-spuren"
     private const val STRECKEN = "kiesel-strecken"
     private const val LAENGEN = "kiesel-spurlaengen"
@@ -389,13 +390,13 @@ internal object TrainingsDaten {
      */
     private fun ohneRoute(s: ExerciseSessionRecord): ExerciseSessionRecord =
         if (s.exerciseRouteResult !is ExerciseRouteResult.Data) s
-        else runCatching {
+        else versuche(TAG, "Sitzung ohne Route") {
             ExerciseSessionRecord(
                 startTime = s.startTime, startZoneOffset = s.startZoneOffset, endTime = s.endTime, endZoneOffset = s.endZoneOffset,
                 metadata = s.metadata, exerciseType = s.exerciseType, title = s.title, notes = s.notes,
                 segments = s.segments, laps = s.laps, exerciseRoute = null, plannedExerciseSessionId = s.plannedExerciseSessionId,
             )
-        }.getOrDefault(s)
+        } ?: s
 
     /**
      * DER LAENGENSPEICHER DER LISTE. Jedes Oeffnen der Sportseite las alle Spuren
@@ -479,7 +480,7 @@ internal object TrainingsDaten {
         val s = try {
             klient.readRecord(ExerciseSessionRecord::class, id).record
         } catch (e: Exception) {
-            Log.w(TAG, "Training lesen: " + e.message)
+            logger.w { "Training lesen: " + e.message }
             return@withContext null
         }
         val punkte = punkte(context, s)
@@ -543,10 +544,12 @@ internal object TrainingsDaten {
     }
 
     /**
-     * So lange nach seinem Ende zeigt das Widget ein Training - GesundheitWidget
-     * prueft danach selbst noch "toHours() < 3" (TrainingsDatenTest: dieselbe Grenze).
+     * So lange nach seinem Ende zeigt das Widget ein Training - EINE ZAHL fuer
+     * das Lesen ([juengstes]) und das Zeichnen ([zeigtImWidget]).
      */
     val WIDGET_FRIST: Duration = Duration.ofHours(3)
+
+    fun zeigtImWidget(ende: Instant, jetzt: Instant): Boolean = !zuAlt(ende, jetzt, WIDGET_FRIST)
 
     /** Endete es [grenze] oder laenger vor [jetzt]? Ohne Grenze (null) nie. */
     fun zuAlt(ende: Instant, jetzt: Instant, grenze: Duration?): Boolean =
@@ -614,9 +617,15 @@ internal object TrainingsDaten {
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            fehlendeAkteRechte(klient) - KOERPER_RECHTE
+            ohneKoerper(fehlendeAkteRechte(klient))
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            // Lieber keine Warnung als eine falsche - aber im Log, warum keine kam.
+            logger.w { "Rechte nicht lesbar: " + e.message }
             emptySet()
         }
     }
+
+    fun ohneKoerper(fehlend: Set<String>): Set<String> = fehlend - KOERPER_RECHTE
 }

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.versuche
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.OffeneSpur
@@ -245,8 +246,8 @@ internal fun SpurenAnsicht() {
                         TextButton(onClick = {
                             artFuer = null
                             scope.launch {
-                                val meldung = runCatching { Kieselsport.nachtragen(context, spur.beginn, art) }
-                                    .getOrElse { context.getString(R.string.ks_a_nicht_eingetragen) }
+                                val meldung = versuche("Kieselsport", "Nachtragen") { Kieselsport.nachtragen(context, spur.beginn, art) }
+                                    ?: context.getString(R.string.ks_a_nicht_eingetragen)
                                 Toast.makeText(context, meldung, Toast.LENGTH_LONG).show()
                                 neu++
                             }

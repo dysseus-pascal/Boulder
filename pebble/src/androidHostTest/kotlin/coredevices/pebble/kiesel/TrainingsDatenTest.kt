@@ -15,25 +15,31 @@ import kotlin.random.Random
  */
 class TrainingsDatenTest {
 
-    /** Die Pruefung im GesundheitWidget, woertlich: das Training bleibt, wenn das gilt. */
-    private fun widgetZeigt(ende: Instant, jetzt: Instant) = Duration.between(ende, jetzt).toHours() < 3
+    @Test
+    fun `das Widget zeigt ein Training drei Stunden lang`() {
+        // Die Frist selbst, festgenagelt - Lesen und Zeichnen nehmen beide sie.
+        assertEquals(Duration.ofHours(3), TrainingsDaten.WIDGET_FRIST)
+        val jetzt = Instant.ofEpochSecond(1_700_000_000)
+        val drei = Duration.ofHours(3)
+        // Knapp darunter noch, ab genau drei Stunden nicht mehr - auch eine Nanosekunde zaehlt.
+        assertTrue(TrainingsDaten.zeigtImWidget(jetzt.minus(drei).plusNanos(1), jetzt))
+        assertTrue(TrainingsDaten.zeigtImWidget(jetzt.minus(drei).plusSeconds(1), jetzt))
+        assertFalse(TrainingsDaten.zeigtImWidget(jetzt.minus(drei), jetzt))
+        assertFalse(TrainingsDaten.zeigtImWidget(jetzt.minus(drei).minusSeconds(1), jetzt))
+        // Ein Ende in der Zukunft (falsche Uhr der Quelle) ist nicht zu alt.
+        assertTrue(TrainingsDaten.zeigtImWidget(jetzt.plus(Duration.ofHours(2)), jetzt))
+    }
 
     @Test
     fun `das Fenster vor der Strecke laesst genau weg, was das Widget wegliesse`() {
         val jetzt = Instant.ofEpochSecond(1_700_000_000)
-        val ns = Duration.ofNanos(1)
-        val drei = Duration.ofHours(3)
         val zufall = Random(3)
-        val dauern = listOf(
-            Duration.ofHours(-2), ns.negated(), Duration.ZERO, Duration.ofSeconds(1),
-            drei.minus(Duration.ofSeconds(1)), drei.minus(ns), drei, drei.plus(ns), drei.plusSeconds(1), Duration.ofDays(1),
-        ) + List(5000) { Duration.ofMillis(zufall.nextLong(-3_600_000, 26 * 3_600_000)) }
+        val dauern = List(5000) { Duration.ofMillis(zufall.nextLong(-3_600_000, 26 * 3_600_000)) }
         for (d in dauern) {
             val ende = jetzt.minus(d)
-            assertEquals("Ende vor $d", widgetZeigt(ende, jetzt), !TrainingsDaten.zuAlt(ende, jetzt, TrainingsDaten.WIDGET_FRIST))
-            // Das Widget prueft einen Augenblick spaeter: was hier wegfaellt, faellt dort erst recht.
+            // Das Widget prueft einen Augenblick spaeter: was beim Lesen wegfaellt, faellt dort erst recht.
             val spaeter = jetzt.plusMillis(zufall.nextLong(0, 5000))
-            if (TrainingsDaten.zuAlt(ende, jetzt, TrainingsDaten.WIDGET_FRIST)) assertFalse("spaeter $d", widgetZeigt(ende, spaeter))
+            if (TrainingsDaten.zuAlt(ende, jetzt, TrainingsDaten.WIDGET_FRIST)) assertFalse("spaeter $d", TrainingsDaten.zeigtImWidget(ende, spaeter))
         }
     }
 

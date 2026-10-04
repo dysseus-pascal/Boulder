@@ -509,7 +509,8 @@ internal object Gesundheitsdaten {
             spo2 = spo2,
             tagesherz = tagesherz,
             blutdruck = blutdruck,
-            // Die Fake-Bibliothek meldet 0 statt nichts.
+            // Die echte Bibliothek meldet null, solange nichts da ist; eine 0 kaeme nur aus der
+            // Vorschau-Bibliothek (FakeLibPebble) oder von 1970 - beides keine letzten Daten.
             letzteDaten = versuche(TAG, "Letzte Daten") { q.letzterZeitstempel() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,

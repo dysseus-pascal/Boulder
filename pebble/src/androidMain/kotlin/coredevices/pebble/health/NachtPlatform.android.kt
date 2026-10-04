@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.time.TimeRangeFilter
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import coredevices.pebble.kiesel.versuche
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -30,7 +31,7 @@ internal fun nachtAlsSaetze(n: NachtEntity, abschnitte: List<NachtAbschnittEntit
     val aufwachen = zeit(n.aufwachen)
     // Der Versatz, den die Uhr zur Nacht gemeldet hat - nicht der des
     // Telefons von heute: die Uhr war dabei, das Telefon vielleicht woanders.
-    val versatzUhr = runCatching { ZoneOffset.ofTotalSeconds(n.utcZuLokal) }.getOrNull()
+    val versatzUhr = versuche("Naechte", "Versatz der Uhr ${n.utcZuLokal} s unbrauchbar, nehme den des Telefons") { ZoneOffset.ofTotalSeconds(n.utcZuLokal) }
     fun versatz(t: Instant): ZoneOffset = versatzUhr ?: coredevices.pebble.kiesel.versatz(t)
     val saetze = mutableListOf<Record>(
         SleepSessionRecord(

@@ -68,8 +68,9 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     }
 }
 
+/** Der Puls des Tages - internal fuer PulsKarteBildTest, der die ganze Karte zeichnet. */
 @Composable
-private fun PulsKarte(s: GesundheitsStand) {
+internal fun PulsKarte(s: GesundheitsStand) {
     val context = LocalContext.current
     val jetzt = Instant.now().epochSecond
     val letzter = s.puls.maxByOrNull { it.first }

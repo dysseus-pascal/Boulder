@@ -3,7 +3,7 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
+import co.touchlab.kermit.Logger
 import coredevices.pebble.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -112,6 +112,8 @@ internal object Kartenlink {
     private fun entschluessle(text: String): String = try {
         URLDecoder.decode(text, "UTF-8")
     } catch (e: Exception) {
+        // Ein kaputtes %-Zeichen: dann eben der Text, wie er kam.
+        Logger.withTag("Kartenlink").i { "Nicht dekodierbar, roh weiter: " + e.message }
         text
     }
 
@@ -168,6 +170,7 @@ internal object Kartenlink {
                     setRequestProperty("User-Agent", "Mozilla/5.0")
                 }
             } catch (e: Exception) {
+                Logger.withTag("Kartenlink").w { "Kurzlink nicht zu oeffnen: " + e.message }
                 return aktuell
             }
             try {
@@ -177,6 +180,7 @@ internal object Kartenlink {
                 aktuell = if (weiter.startsWith("http")) weiter
                           else URL(URL(aktuell), weiter).toString()
             } catch (e: Exception) {
+                Logger.withTag("Kartenlink").w { "Kurzlink nicht aufgeloest: " + e.message }
                 return aktuell
             } finally {
                 verbindung.disconnect()
@@ -221,7 +225,7 @@ internal object Kartenlink {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(paket).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
     } catch (e: Exception) {
-        Log.i("Kartenlink", "OsmAnd nimmt nicht: " + e.message)
+        Logger.withTag("Kartenlink").i { "OsmAnd nimmt nicht: " + e.message }
         false
     }
 }

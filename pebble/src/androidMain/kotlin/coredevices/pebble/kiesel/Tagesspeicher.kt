@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -125,7 +125,7 @@ private class Prefsfach(context: Context, override val name: String) : Fach {
 
     override fun alle(): Map<LocalDate, Map<String, Double>> = buildMap {
         p.all.forEach { (k, v) ->
-            val tag = runCatching { LocalDate.parse(k) }.getOrNull() ?: return@forEach
+            val tag = tagOderNull(k, "Trends") ?: return@forEach
             ausJson(v as? String ?: return@forEach)?.let { put(tag, it) }
         }
     }
@@ -139,15 +139,15 @@ private class Prefsfach(context: Context, override val name: String) : Fach {
     }
 
     override fun ergaenze(tag: LocalDate, werte: Map<String, Double>) {
-        val alt = p.getString(tag.toString(), null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
+        val alt = p.getString(tag.toString(), null)?.let { versuche("Trends", "Tag $tag unlesbar") { JSONObject(it) } } ?: JSONObject()
         werte.forEach { (k, v) -> if (!alt.has(k)) alt.put(k, v) }
         p.edit().putString(tag.toString(), alt.toString()).apply()
     }
 
-    private fun ausJson(text: String): Map<String, Double>? = runCatching {
+    private fun ausJson(text: String): Map<String, Double>? = versuche("Trends", "Tag unlesbar") {
         val o = JSONObject(text)
         o.keys().asSequence().associateWith { o.getDouble(it) }
-    }.getOrNull()
+    }
 }
 
 /**
@@ -209,7 +209,7 @@ internal object Tagesarchiv {
             Trenddaten.halteFest(applicationContext, KoinPlatform.getKoin().get())
             Result.success()
         } catch (e: Exception) {
-            Log.w("Trends", "Tagesarchiv: " + e.message)
+            Logger.withTag("Trends").w { "Tagesarchiv: " + e.message }
             Result.retry()
         }
     }

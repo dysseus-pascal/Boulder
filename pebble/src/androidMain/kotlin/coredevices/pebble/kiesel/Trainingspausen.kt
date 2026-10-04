@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import java.io.File
 
 /**
@@ -26,6 +26,7 @@ import java.io.File
  */
 internal object Trainingspausen {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
     private const val ORDNER = "pausen"
 
     /** Eine Pause in Epochensekunden, Wandzeit. */
@@ -52,9 +53,9 @@ internal object Trainingspausen {
     const val TOLERANZ_S = 90L
 
     /** Eine Datei lebt so lange - laenger wartet keine Zusammenfassung auf der Uhr. */
-    private const val AUFHEBEN_TAGE = 30L
+    internal const val AUFHEBEN_TAGE = 30L
     /** So lange wartet eine Kurve auf die Pruefung durch die Zusammenfassung. */
-    private const val WARTEN_S = 2 * 86_400L
+    internal const val WARTEN_S = 2 * 86_400L
 
     // --- Auf der Platte -------------------------------------------------------
 
@@ -71,7 +72,7 @@ internal object Trainingspausen {
             if (!f.exists()) aufraeumen(context, zeit)
             f.appendText((if (pause) "p," else "w,") + zeit + "\n")
         } catch (e: Exception) {
-            Log.w(TAG, "Pause: " + e.message)
+            logger.w { "Pause: " + e.message }
         }
     }
 
@@ -92,7 +93,7 @@ internal object Trainingspausen {
         val f = roh(context, beginn)
         if (f.exists()) ausMeldungen(meldungenAus(f.readLines())) else Plan.LEER
     } catch (e: Exception) {
-        Log.w(TAG, "Pausen lesen: " + e.message)
+        logger.w { "Pausen lesen: " + e.message }
         Plan.LEER
     }
 
@@ -106,7 +107,7 @@ internal object Trainingspausen {
         try {
             if (roh(context, beginn).exists()) gepr(context, beginn).writeText(alsZeilen(plan))
         } catch (e: Exception) {
-            Log.w(TAG, "Pausen ablegen: " + e.message)
+            logger.w { "Pausen ablegen: " + e.message }
         }
         return plan
     }
@@ -123,7 +124,7 @@ internal object Trainingspausen {
             if (!f.exists()) aufraeumen(context, beginn)
             f.writeText(alsZeilen(plan))
         } catch (e: Exception) {
-            Log.w(TAG, "Pausen ablegen: " + e.message)
+            logger.w { "Pausen ablegen: " + e.message }
         }
     }
 
@@ -133,7 +134,7 @@ internal object Trainingspausen {
         val f = gepr(context, beginn)
         if (f.exists()) ausZeilen(f.readLines()) else null
     } catch (e: Exception) {
-        Log.w(TAG, "Pausen lesen: " + e.message)
+        logger.w { "Pausen lesen: " + e.message }
         null
     }
 
@@ -152,6 +153,9 @@ internal object Trainingspausen {
     /** Die Fassung der Pausenliste, die die Uhr schickt (KS_PAUSEN_FASSUNG). */
     const val UHR_FASSUNG = 1
 
+    /** Soviel fasst ein Feld der Pausenliste (uint16): 65535 s, gut 18 Stunden. */
+    const val U16_MAX = 0xFFFFL
+
     /**
      * Die Pausenliste der Uhr (SP_PAUSEN) als Plan in Uhrzeit, oder null,
      * wenn sie fehlt oder nicht taugt - dann gelten die Zustandsmeldungen.
@@ -166,6 +170,9 @@ internal object Trainingspausen {
      */
     fun ausUhr(bytes: ByteArray?, anfang: Long, dauer: Long, ende: Long?): Plan? {
         if (bytes == null || bytes.size < 2 || bytes[0].toInt() != UHR_FASSUNG || (bytes.size - 2) % 4 != 0) return null
+        // UEBER 18,2 H AKTIV REICHT EIN uint16 NICHT: eine abgeschnittene Pause (70 000 s als 4 464 s)
+        // faende keine andere Pruefung - dann lieber die Zustandsmeldungen.
+        if (dauer > U16_MAX) return null
         val anzahl = (bytes.size - 2) / 4
         if ((bytes[1].toInt() and 0xFF) != anzahl) return null
         fun u16(i: Int): Long = ((bytes[i].toInt() and 0xFF) or ((bytes[i + 1].toInt() and 0xFF) shl 8)).toLong()

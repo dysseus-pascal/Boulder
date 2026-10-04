@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.health.fehlendeAkteRechte
 import org.koin.mp.KoinPlatform
@@ -20,6 +20,7 @@ import org.koin.mp.KoinPlatform
  */
 internal object Rechtefrage {
     private const val TAG = "Rechtefrage"
+    private val logger = Logger.withTag(TAG)
     // Ein neuer Schluessel: unter dem alten lag der versionCode als Long, und
     // getString auf einem Long wirft.
     private const val GEFRAGT = "akte_rechte_gefragt_fassung"
@@ -27,7 +28,7 @@ internal object Rechtefrage {
 
     suspend fun beimStart(context: Context) {
         // Der versionCode zaehlt Commits, also jeden Testbuild - gemeint ist die Fassung.
-        val fassung = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+        val fassung = versuche(TAG, "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
         val prefs = context.getSharedPreferences("boulder_rechtefrage", Context.MODE_PRIVATE)
         val gefragt = prefs.getString(GEFRAGT, null)
         // Zuerst die gemerkte Fassung: spart bei jedem weiteren Start den Aufruf in die Akte.
@@ -37,14 +38,14 @@ internal object Rechtefrage {
             val klient = Akte(context).bereit() ?: return
             fehlendeAkteRechte(klient)
         } catch (e: Exception) {
-            Log.w(TAG, "Rechte lesen: " + e.message)
+            logger.w { "Rechte lesen: " + e.message }
             return
         }
         if (!sollFragen(fehlend, gefragt, fassung)) return
         // Vor dem Dialog gemerkt, nicht danach: stirbt die App waehrend des
         // Dialogs, fragte sonst jeder Start wieder - eine Schleife ohne Ausweg.
         prefs.edit().putString(GEFRAGT, fassung).remove(GEFRAGT_ALT).apply()
-        Log.i(TAG, "Frage ${fehlend.size} fehlende Rechte: $fehlend")
+        logger.i { "Frage ${fehlend.size} fehlende Rechte: $fehlend" }
         KoinPlatform.getKoin().getOrNull<PlatformHealthSync>()?.requestPermissions(nurEinschalten = true)
     }
 

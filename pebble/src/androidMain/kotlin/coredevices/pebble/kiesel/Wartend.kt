@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -17,6 +17,7 @@ import java.io.File
  */
 internal object Wartend {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
     private const val ORDNER = "kieselsport-wartend"
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -36,7 +37,7 @@ internal object Wartend {
         if (ersetzt != null) alle(context, ordner).filter { it != f && lies(it)?.let(ersetzt) == true }.forEach { it.delete() }
         f
     } catch (e: Exception) {
-        Log.w(TAG, "Nachricht nicht gesichert: " + e.message)
+        logger.w { "Nachricht nicht gesichert: " + e.message }
         null
     }
 
@@ -48,7 +49,7 @@ internal object Wartend {
         try {
             f.writeText(json.encodeToString(KieselNachricht.serializer(), rest))
         } catch (e: Exception) {
-            Log.w(TAG, "Rest nicht gesichert: " + e.message)
+            logger.w { "Rest nicht gesichert: " + e.message }
         }
     }
 
@@ -57,7 +58,7 @@ internal object Wartend {
     fun lies(f: File): KieselNachricht? = try {
         json.decodeFromString(KieselNachricht.serializer(), f.readText())
     } catch (e: Exception) {
-        Log.w(TAG, "Nachricht nicht lesbar, weg damit: " + e.message)
+        logger.w { "Nachricht nicht lesbar, weg damit: " + e.message }
         f.delete()
         null
     }
@@ -71,9 +72,26 @@ internal object Wartend {
         val dateien = verzeichnis(context, ordner).listFiles { f -> f.name.endsWith(".json") }.orEmpty().sortedBy { it.name }
         if (hoechstensTage == null) return dateien
         val (alt, frisch) = dateien.partition { verfallen(it.name, System.currentTimeMillis(), hoechstensTage) }
-        alt.forEach { Log.w(TAG, "Verfallen, nicht eingetragen: ${it.name}"); it.delete() }
+        alt.forEach { logger.w { "Verfallen, nicht eingetragen: ${it.name}" }; it.delete() }
         return frisch
     }
+
+    /**
+     * Steht das Scheitern dieser Datei schon im Protokoll? EINMAL JE MELDUNG, NICHT JE START - ein dauerhaft
+     * verweigertes Recht fuellte es sonst. Im Namen vermerkt, damit auch ein Versuch nach einem Neustart zaehlt.
+     */
+    fun gemeldet(f: File): Boolean = f.name.endsWith(GEMELDET)
+
+    /** Vermerkt [gemeldet] im Namen; die Datei unter ihrem neuen Namen - oder der alten, wenn das Umbenennen nicht ging. */
+    fun alsGemeldet(f: File): File {
+        if (gemeldet(f)) return f
+        val neu = File(f.parentFile, f.name.removeSuffix(".json") + GEMELDET)
+        if (f.renameTo(neu)) return neu
+        logger.w { "Nicht als gemeldet vermerkt, die Zeile kommt beim naechsten Start wieder: ${f.name}" }
+        return f
+    }
+
+    private const val GEMELDET = "-gemeldet.json"
 
     /** Wann die Datei [name] abgelegt wurde, in Epochensekunden - also wann die Nachricht ankam; null bei einer fremden. */
     fun abgelegt(name: String): Long? = name.substringBefore('-').toLongOrNull()?.div(1000)

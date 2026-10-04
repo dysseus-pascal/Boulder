@@ -97,7 +97,7 @@ internal object Trainingsanalyse {
         ruhepuls: Int?, maxpuls: Int?,
     ): Double? {
         if (puls.isEmpty() || gewichtKg < 20 || alter <= 0) return null
-        val ruhe = (ruhepuls?.takeIf { it in 30..110 } ?: RUHEPULS_ERSATZ).toDouble()
+        val ruhe = (ruhepuls?.takeIf { it in RUHEPULS_GUELTIG } ?: RUHEPULS_ERSATZ).toDouble()
         // Den Maximalpuls prueft allein Herzgrenzen - eine zweite Pruefung hier verwarf
         // einen Wert, mit dem die Zonen derselben Seite rechneten. Ohne Wert Tanaka.
         val max = maxpuls?.toDouble() ?: (208 - 0.7 * alter)
@@ -137,6 +137,9 @@ internal object Trainingsanalyse {
     const val KCAL_JE_LITER = 5.0
     /** Ruhepuls, solange keine Nacht einen liefert - ein ueblicher Wert, eher wach als im Schlaf. */
     const val RUHEPULS_ERSATZ = 60
+
+    /** Nur ein Ruhepuls darin zaehlt, sonst der Ersatz - EINE STELLE fuer [kalorien] und Trainingswerte.ruheAusNaechten. */
+    val RUHEPULS_GUELTIG = 30..110
 
     /** VO2max in der Mitte (50. Perzentil) je Altersjahrzehnt, Mitte der Jahrzehnte 25 ... 75. */
     private val VO2MAX_MANN = doubleArrayOf(48.0, 42.4, 37.8, 32.6, 28.2, 24.4)

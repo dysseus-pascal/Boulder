@@ -7,6 +7,9 @@ import coredevices.pebble.health.syncNachFrage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import org.w3c.dom.Element
+import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -55,19 +58,55 @@ class RechteTest {
         assertFalse(Rechtefrage.sollFragen(emptySet(), null, "0.41.0"))
     }
 
-    @Test
-    fun gemerkte_fassung_zuerst_aendert_nichts() {
-        // beimStart fragt die Akte nur, wenn die Fassung noch nicht gefragt hat;
-        // das darf keinen Fall aendern, in dem sollFragen sonst ja gesagt haette.
-        for (fehlend in listOf(emptySet(), setOf(wasser))) {
-            for (gefragt in listOf(null, "0.40.0", "0.41.0")) {
-                if (Rechtefrage.schonGefragt(gefragt, "0.41.0")) {
-                    assertFalse(Rechtefrage.sollFragen(fehlend, gefragt, "0.41.0"))
-                }
+    /**
+     * Die Rechte, die die gebaute App anmeldet: uses-permission aus allen [manifeste]n,
+     * ausser denen, die eines mit tools:node="remove" streicht - so fuehrt der Merger zusammen.
+     * Gestrichen in einer Variante (release) heisst gestrichen.
+     */
+    private fun angemeldet(vararg manifeste: File): Set<String> {
+        val android = "http://schemas.android.com/apk/res/android"
+        val tools = "http://schemas.android.com/tools"
+        val gemeldet = mutableSetOf<String>()
+        val gestrichen = mutableSetOf<String>()
+        for (m in manifeste) {
+            val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }.newDocumentBuilder().parse(m)
+            val rechte = doc.getElementsByTagName("uses-permission")
+            for (i in 0 until rechte.length) {
+                val e = rechte.item(i) as Element
+                val name = e.getAttributeNS(android, "name")
+                if (e.getAttributeNS(tools, "node") in setOf("remove", "removeAll")) gestrichen += name else gemeldet += name
             }
         }
-        assertTrue(Rechtefrage.schonGefragt("0.41.0", "0.41.0"))
-        assertFalse(Rechtefrage.schonGefragt(null, "0.41.0"))
+        return gemeldet - gestrichen
+    }
+
+    private val manifesteDerApp = listOf(
+        "src/androidMain/AndroidManifest.xml",
+        "../androidApp/src/main/AndroidManifest.xml",
+        "../androidApp/src/debug/AndroidManifest.xml",
+        "../androidApp/src/release/AndroidManifest.xml",
+    ).map(::File)
+
+    @Test
+    fun ein_gestrichenes_recht_zaehlt_nicht() {
+        val ordner = kotlin.io.path.createTempDirectory("manifest").toFile()
+        val kopf = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">"""
+        val bibliothek = File(ordner, "a.xml").apply { writeText("""$kopf<uses-permission android:name="x.A" /><uses-permission android:name="x.B" /></manifest>""") }
+        val app = File(ordner, "b.xml").apply { writeText("""$kopf<uses-permission android:name="x.B" tools:node="remove" /></manifest>""") }
+        assertEquals(setOf("x.A"), angemeldet(bibliothek, app))
+        assertEquals(setOf("x.A", "x.B"), angemeldet(bibliothek))
+        ordner.deleteRecursively()
+    }
+
+    @Test
+    fun jedes_gefragte_recht_steht_im_manifest() {
+        val manifest = angemeldet(*manifesteDerApp.toTypedArray())
+        val gefragt = coredevices.pebble.health.alleRechteJederAkte()
+        // Was der Dialog fragt, ohne Anmeldung aber nie erteilt wird, stuende fuer immer als fehlend da.
+        assertEquals(emptySet(), gefragt - manifest, "Im Dialog, nicht im Manifest")
+        // Der Abgleich laeuft wirklich: ueber 30 Rechte, alle der Akte (heute 31).
+        assertTrue(gefragt.size > 30, "nur ${gefragt.size} Rechte")
+        assertTrue(gefragt.all { it.startsWith("android.permission.health.") })
     }
 
     @Test

@@ -11,6 +11,7 @@ import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.tagespulsUrteil
 import java.time.LocalDate
+import kotlin.math.abs
 
 /*
  * Die Texte zum Herzen, die mehrere Ansichten teilen: Herzzeile, Nachtblock
@@ -20,6 +21,37 @@ import java.time.LocalDate
 
 /** Der wache Tagesschnitt und was dazu zu sagen ist: Vergleich und Belastung. */
 internal class Tagespuls(val wachpuls: Int, val teile: List<String>)
+
+/** Ein Teil eines Herzsatzes: welcher Text, und die Zahl darin - IMMER EIN BETRAG, der Text sagt "above" oder "below". */
+internal data class Satzteil(val text: Int, val zahl: Int? = null)
+
+@Composable
+private fun Satzteil.wort(): String = if (zahl == null) stringResource(text) else stringResource(text, zahl)
+
+/** Der Teil zum wachen Tagespuls; [abstand] wie in Gesundheitsrechnung.Tagesurteil (mit Vorzeichen), null ohne Lerntage. */
+internal fun tagespulsTeil(abstand: Int?): Satzteil = when (abstand?.let { Gesundheitsrechnung.tagespulsUrteil(it) }) {
+    null -> Satzteil(R.string.ks_d_tagespuls)
+    Vergleich.HOEHER -> Satzteil(R.string.ks_d_tagespuls_hoch, abs(abstand))
+    Vergleich.TIEFER -> Satzteil(R.string.ks_d_tagespuls_tief, abs(abstand))
+    Vergleich.WIE_IMMER -> Satzteil(R.string.ks_d_tagespuls_gleich)
+}
+
+internal fun ruheTeil(ruhe: Herzurteil): Satzteil? = when (ruhe.urteil) {
+    Vergleich.WIE_IMMER -> Satzteil(R.string.ks_h_ruhe_wie_immer)
+    Vergleich.HOEHER -> Satzteil(R.string.ks_h_ruhe_hoeher, abs(ruhe.abstand))
+    Vergleich.TIEFER -> Satzteil(R.string.ks_h_ruhe_tiefer, abs(ruhe.abstand))
+    null -> null
+}
+
+internal fun hrvTeil(hrv: Bandurteil): Satzteil = when (hrv.urteil) {
+    Vergleich.WIE_IMMER -> Satzteil(R.string.ks_h_hrv_wie_immer)
+    Vergleich.HOEHER -> Satzteil(R.string.ks_h_hrv_hoeher, abs(hrv.abstand))
+    Vergleich.TIEFER -> Satzteil(R.string.ks_h_hrv_tiefer, abs(hrv.abstand))
+}
+
+internal fun urteilTeile(ruhe: Herzurteil, hrv: Bandurteil?): List<Satzteil> =
+    if (ruhe.urteil == Vergleich.WIE_IMMER && hrv?.urteil == Vergleich.WIE_IMMER) listOf(Satzteil(R.string.ks_h_beide_wie_immer))
+    else listOfNotNull(ruheTeil(ruhe), hrv?.let(::hrvTeil))
 
 /**
  * Der Tagespuls fuer die Herzzeile und oben auf der Herzseite - eine Rechnung
@@ -32,12 +64,7 @@ internal fun tagespuls(s: GesundheitsStand): Tagespuls? {
     val wach = urteil.heute.wachpuls ?: return null
     // Der Tagesschnitt statt des letzten Werts: der sagt, wie der Tag war
     // Ohne Lerntage kein Abstand, dann nur der Schnitt; die Schwelle steht getestet in tagespulsUrteil.
-    val abstand = urteil.abstand
-    val vergleich = if (abstand == null) stringResource(R.string.ks_d_tagespuls) else when (Gesundheitsrechnung.tagespulsUrteil(abstand)) {
-        Vergleich.HOEHER -> stringResource(R.string.ks_d_tagespuls_hoch, abstand)
-        Vergleich.TIEFER -> stringResource(R.string.ks_d_tagespuls_tief, -abstand)
-        Vergleich.WIE_IMMER -> stringResource(R.string.ks_d_tagespuls_gleich)
-    }
+    val vergleich = tagespulsTeil(urteil.abstand).wort()
     val last = urteil.heute.belastung.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
     return Tagespuls(wach, listOfNotNull(vergleich, last))
 }
@@ -57,22 +84,4 @@ internal fun herzHinweis(s: GesundheitsStand): String? {
 
 /** Der Satz zu Ruhepuls und HRV, wenn wenigstens eins davon ein Urteil hat. */
 @Composable
-internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String {
-    if (ruhe.urteil == Vergleich.WIE_IMMER && hrv?.urteil == Vergleich.WIE_IMMER) return stringResource(R.string.ks_h_beide_wie_immer)
-    val teile = listOfNotNull(
-        when (ruhe.urteil) {
-            Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_ruhe_wie_immer)
-            Vergleich.HOEHER -> stringResource(R.string.ks_h_ruhe_hoeher, ruhe.abstand)
-            Vergleich.TIEFER -> stringResource(R.string.ks_h_ruhe_tiefer, ruhe.abstand)
-            null -> null
-        },
-        hrv?.let {
-            when (it.urteil) {
-                Vergleich.WIE_IMMER -> stringResource(R.string.ks_h_hrv_wie_immer)
-                Vergleich.HOEHER -> stringResource(R.string.ks_h_hrv_hoeher, it.abstand)
-                Vergleich.TIEFER -> stringResource(R.string.ks_h_hrv_tiefer, it.abstand)
-            }
-        },
-    )
-    return teile.joinToString(" ")
-}
+internal fun urteilSatz(ruhe: Herzurteil, hrv: Bandurteil?): String = urteilTeile(ruhe, hrv).map { it.wort() }.joinToString(" ")

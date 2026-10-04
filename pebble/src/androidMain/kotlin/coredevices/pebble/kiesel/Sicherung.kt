@@ -2,7 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -98,13 +98,14 @@ internal object Sicherungsformat {
             if (fassung <= 0) return null
             fun tage(feld: String) = w[feld]?.jsonArray.orEmpty().mapNotNull { e ->
                 val z = e as? JsonObject ?: return@mapNotNull null
-                val tag = runCatching { LocalDate.parse(z["datum"]?.jsonPrimitive?.content) }.getOrNull() ?: return@mapNotNull null
+                val tag = tagOderNull(z["datum"]?.jsonPrimitive?.content, "Sicherung") ?: return@mapNotNull null
                 val werte = SPALTEN.mapNotNull { s -> z[s]?.jsonPrimitive?.doubleOrNull?.takeIf { !it.isNaN() }?.let { s to it } }.toMap()
                 if (werte.isEmpty()) null else tag to werte
             }
             val spuren = w["spuren"]?.jsonArray.orEmpty().mapNotNull { it.jsonPrimitive.longOrNull?.takeIf { v -> v > 0 } }
             Stand(fassung, w["erzeugt"]?.jsonPrimitive?.content.orEmpty(), tage("tage"), spuren, tage("vorgeschichte"))
         } catch (e: Exception) {
+            Logger.withTag("Sicherung").w { "Sicherung nicht lesbar: " + e.message }
             null
         }
     }
@@ -147,7 +148,7 @@ internal class Ordner(private val context: Context, private val baum: Uri) {
         context.contentResolver.openOutputStream(ziel.uri, "wt")?.use { it.write(inhalt.toByteArray()) } ?: error("cannot write $datei")
         true
     } catch (e: Exception) {
-        Log.w("Sicherung", "Schreiben: " + e.message)
+        Logger.withTag("Sicherung").w { "Schreiben: " + e.message }
         false
     }
 
@@ -156,6 +157,8 @@ internal class Ordner(private val context: Context, private val baum: Uri) {
         val quelle = d.findFile(datei)?.takeIf { it.isFile } ?: error("missing")
         context.contentResolver.openInputStream(quelle.uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
     } catch (e: Exception) {
+        // Meist gibt es die Datei (noch) nicht - kein Fehler.
+        Logger.withTag("Sicherung").i { "Nicht gelesen ($pfad): " + e.message }
         null
     }
 
@@ -308,7 +311,7 @@ internal object Sichern {
                 val meldung = if (ordner(c) != null) jetzt(c, KoinPlatform.getKoin().get()) else null
                 ausgang(meldung, kein, c.getString(R.string.ks_b_fehlgeschlagen), runAttemptCount)
             } catch (e: Exception) {
-                Log.w("Sicherung", "Taeglich: " + e.message)
+                Logger.withTag("Sicherung").w { "Taeglich: " + e.message }
                 nachFehler(runAttemptCount)
             }
             return when (aus) {

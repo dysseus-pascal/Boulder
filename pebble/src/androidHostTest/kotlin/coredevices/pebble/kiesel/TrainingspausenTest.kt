@@ -192,14 +192,44 @@ class TrainingspausenTest {
     }
 
     @Test
-    fun mitDemEndeDerUhrBrauchtEsKeinenPuffer() {
+    fun mitDemEndeDerUhrEndetDieSpurHoechstensEineMinuteNachDerPause() {
         // Die letzte Pause ging verloren, die Zusammenfassung kam nach der Heimfahrt:
-        // die Spur endet trotzdem eine Minute nach der Pause, nicht zwanzig.
+        // die Spur endet trotzdem eine Minute nach der Pause, nicht zwanzig. Der
+        // Puffer bleibt - der GPS-Nachlauf ist Pause (siehe dieNachlaufminuteIstPause).
         val plan = Trainingspausen.ausUhr(liste(), anfang, 3600, anfang + 3600)!!
         val punkte = (0..7200L step 60).map { Spur.Punkt(anfang + it, 47.0, 8.0, null, 5f) }
         val ende = Kieselsport.sitzungsEnde(
             java.time.Instant.ofEpochSecond(anfang), 3600, punkte, java.time.Instant.ofEpochSecond(anfang + 7200), plan,
         )
         assertTrue(ende.epochSecond <= anfang + 3600 + Kieselsport.PUFFER_S + 1)
+    }
+
+    @Test
+    fun dieNachlaufminuteIstPause() {
+        val plan = Trainingspausen.Plan(listOf(Trainingspausen.Pause(anfang + 600, anfang + 900)), offen = anfang + 1500)
+        // Die Spur lief 41 s ueber die letzte Pause: die Zeit danach ist Pause, nicht Training.
+        assertEquals(
+            listOf(Trainingspausen.Pause(anfang + 600, anfang + 900), Trainingspausen.Pause(anfang + 1500, anfang + 1541)),
+            Kieselsport.mitNachlauf(plan, java.time.Instant.ofEpochSecond(anfang + 1541)),
+        )
+        // Endet die Sitzung an der letzten Pause (ohne Spur), kommt nichts dazu.
+        assertEquals(plan.pausen, Kieselsport.mitNachlauf(plan, java.time.Instant.ofEpochSecond(anfang + 1500)))
+        // Ohne bekannte letzte Pause weiss niemand, wo die aktive Zeit endete: nichts dazu.
+        assertEquals(plan.pausen, Kieselsport.mitNachlauf(plan.copy(offen = null), java.time.Instant.ofEpochSecond(anfang + 1541)))
+    }
+
+    @Test
+    fun ueberAchtzehnStundenTraegtDieListeNicht() {
+        // So schickt die Firmware eine Pause bei aktiver Sekunde 70 000: gar nicht, nur mitgezaehlt
+        // (pausen.c) - die Zahl passt nicht, die Liste faellt.
+        assertNull(Trainingspausen.ausUhr(liste(600 to 300, gesamt = 2), anfang, 70_000, null))
+        // Ein Sender, der abschnitte, schriebe sie als 70 000 - 65 536 = 4 464: auch das faellt.
+        val abgeschnitten = liste(4464 to 600)
+        assertNull(Trainingspausen.ausUhr(abgeschnitten, anfang, 70_000, null))
+        // Bis zur Grenze gilt sie: 65 535 aktive Sekunden passen noch in das Feld.
+        val plan = Trainingspausen.ausUhr(abgeschnitten, anfang, Trainingspausen.U16_MAX, null)!!
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 4464, anfang + 5064)), plan.pausen)
+        assertNull(Trainingspausen.ausUhr(abgeschnitten, anfang, Trainingspausen.U16_MAX + 1, null))
+        assertEquals(65_535L, Trainingspausen.U16_MAX)
     }
 }

@@ -465,14 +465,11 @@ fun LockerScreen(
                     PullToRefreshBox(isRefreshing = viewModel.storeIsRefreshing || viewModel.lockerIsRefreshing, onRefresh = {
                         viewModel.startLockerRefresh(libPebble, sharedViewModel.watchType.value)
                     }) {
-                        val myApps by remember(lockerEntries) {
-                            derivedStateOf {
-                                lockerEntries.filter {
-                                            it.showOnMainLockerScreen() &&
-                                            (it.uuid != activeWatchface.uuid || it.uuid != lockerEntries.first().uuid)
-                                }
-                            }
-                        }
+                        // Boulder: das aktive Zifferblatt steht AUCH im Karussell (Gravel liess es
+                        // weg, wenn es vorn stand - bei "nach Nutzung sortiert" also immer; so fehlte
+                        // TimeStyle Bedrock unter "My Watchfaces"). Gilt fuer alle Zifferblaetter;
+                        // die Liste haengt nur noch an den Eintraegen.
+                        val myApps = remember(lockerEntries) { karussellEintraege(lockerEntries) }
 
                         // For each feed, track which app IDs and UUIDs appear in higher-priority feeds
                         // so duplicates can be excluded from lower feeds.
@@ -1262,6 +1259,12 @@ private fun SectionHeader(text: String) {
 
 @Composable
 fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
+    // Boulder: TimeStyle Bedrock hat kein festes Bild - die Kachel zeichnet das
+    // Zifferblatt mit den aktuellen Einstellungen (derselbe Nachbau wie die Vorschau).
+    if (entry.commonAppType is CommonAppType.System && entry.commonAppType.app == SystemApps.TimeStyleBedrock) {
+        TsBedrockKachel(modifier.height(size).widthIn(max = size))
+        return
+    }
     val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     val placeholder = remember {
         ColorPainter(placeholderColor)
@@ -1294,7 +1297,8 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     SystemApps.Tictoc -> "drawable/tictoc.png"
                     SystemApps.Timeline -> "drawable/timeline.png"
                     SystemApps.Kickstart -> "drawable/kickstart.png"
-                    SystemApps.TimeStyleBedrock -> "drawable/timestyle_bedrock.png"
+                    // Boulder: zeichnet TsBedrockKachel (oben), nie ein Bild.
+                    SystemApps.TimeStyleBedrock -> error("TimeStyle Bedrock has no picture")
                 }
                 Res.getUri(resUri)
             }

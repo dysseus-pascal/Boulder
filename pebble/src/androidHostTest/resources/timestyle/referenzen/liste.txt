@@ -1,0 +1,30 @@
+r01_vorgabe|24|km|
+r02_links_gross|24|km|--left --large
+r03_leiste_schwarz|24|km|--time f4 --sidebar c0 --sidebar-text f4
+r04_leiste_blau|24|km|--sidebar c7 --sidebar-text fc --widgets weather,steps,heartrate
+r05_weiss_rot|24|km|--background ff --time c3 --sidebar f0 --sidebar-text ff
+r06_vorhersage_uv_puls|24|km|--widgets forecast,uv,heartrate
+r07_akku_zone_woche|24|km|--widgets battery,timezone,week --utc-offset 9 --tz-name TYO
+r08_sekunden_beats_schlaf|24|km|--widgets seconds,beats,sleep
+r09_distanz_km_tiefschlaf|24|km|--widgets steps,none,sleep --distance --restful --comma
+r10_distanz_meilen|24|mi|--widgets steps,none,date --distance
+r11_gross_vorhersage_akku_schlaf|24|km|--large --widgets forecast,battery,sleep
+r12_gross_links_puls_distanz_woche|24|km|--large --left --widgets heartrate,steps,week --distance
+r13_gross_ungarisch|24|km|--large --left --widgets date,uv,steps --language 24
+r14_gross_zone_ueberlang|24|km|--large --widgets timezone,beats,week --tz-name WWWW
+r15_deutsch|24|km|--language 2
+r16_tuerkisch_akku|24|km|--language 6 --widgets battery,none,date
+r17_katalanisch_woche|24|km|--language 15 --widgets week,none,date
+r18_griechisch_ohne_paket|24|km|--language 9
+r19_russisch_ohne_paket|24|km|--language 17 --widgets week,none,date
+r20_regular|24|km|--font 0
+r21_bold|24|km|--font 2
+r22_bold_hour_12h|12|km|--font 3
+r23_bold_minute_links_12h|12|mi|--font 4 --left
+r24_regular_gross_orange|24|km|--font 0 --large --time f4 --sidebar c0 --sidebar-text f4
+r25_bold_null_12h|12|km|--font 2 --leading-zero
+r26_leco_null_12h_distanz|12|mi|--leading-zero --distance --comma --widgets weather,steps,date
+r27_leco_leer_12h|12|km|--widgets none,none,none --background d2 --time ff
+r28_akku_ohne_prozent|24|km|--no-battery-pct --widgets battery,date,weather
+r29_kompakt_doppelt|24|km|--large --widgets forecast,date,forecast
+r30_mitte_weg_doppelt|24|km|--large --widgets forecast,forecast,forecast

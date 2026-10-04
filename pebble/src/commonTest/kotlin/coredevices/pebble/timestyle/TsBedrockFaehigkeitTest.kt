@@ -9,13 +9,32 @@ import kotlin.test.assertTrue
 
 class TsBedrockFaehigkeitTest {
     @Test
+    fun uvDerStundeAbB24() {
+        // b23 zeigte den UV-Wert des Tages, ab b24 den der Stunde. Unbekannt ist wie
+        // ueberall NICHT faehig (bis zur Nacharbeit galt es hier als "neueste").
+        assertFalse(tsUvJeStunde(22))
+        assertFalse(tsUvJeStunde(23))
+        assertTrue(tsUvJeStunde(24))
+        assertTrue(tsUvJeStunde(25))
+        assertFalse(tsUvJeStunde(null))
+    }
+
+    @Test
     fun regelJeBuild() {
-        // (faehig, Kachel, Settings) wie in der Spezifikation 5.3.
-        fun drei(build: Int?) = tsBedrockFaehigkeit(build).let { Triple(it.faehig, it.kachel, it.einstellungen) }
-        assertEquals(Triple(true, true, true), drei(null))
-        assertEquals(Triple(false, false, false), drei(21))
-        assertEquals(Triple(true, true, false), drei(22))
-        assertEquals(Triple(true, true, true), drei(23))
+        // (faehig, Kachel, Settings, Schriften). UNBEKANNT (kein -bN: offizielle Firmware oder
+        // Entwicklungsbau) IST NICHT FAEHIG - bis 0.48 galt es als faehig, so lief der Emulator
+        // nie durch die Sperren.
+        fun vier(build: Int?) = tsBedrockFaehigkeit(build).let { listOf(it.faehig, it.kachel, it.einstellungen, it.schriften) }
+        assertEquals(listOf(false, false, false, false), vier(null))
+        assertEquals(listOf(false, false, false, false), vier(21))
+        assertEquals(listOf(true, true, false, false), vier(22))
+        assertEquals(listOf(true, true, true, false), vier(23))
+        assertEquals(listOf(true, true, true, true), vier(24))
+        assertEquals(listOf(true, true, true, true), vier(31))
+        // Die Grenzen mit ihrem Wert festgenagelt.
+        assertEquals(22, TS_BEDROCK_AB_BUILD)
+        assertEquals(23, TS_BEDROCK_EINSTELLUNGEN_AB_BUILD)
+        assertEquals(24, TS_BEDROCK_SCHRIFTEN_AB_BUILD)
     }
 
     @Test
@@ -83,13 +102,25 @@ class TsBedrockFaehigkeitTest {
     }
 
     @Test
-    fun entwicklungsbauGiltAlsFaehig() = runTest {
+    fun entwicklungsbauGiltNichtAlsFaehig() = runTest {
         val p = Probe("01aa", mutableMapOf("S1" to "22"))
-        assertTrue(p.neu.verbunden("S1", "v4.38.4-3-gabcdef12"))
-        assertEquals("0", p.gesehen["S1"])
-        // Derselbe Bau noch einmal: nicht bei jeder Verbindung neu.
+        // Ohne -bN weiss Boulder nicht, ob die Firmware tsBedrock kennt: nichts senden.
         assertFalse(p.neu.verbunden("S1", "v4.38.4-3-gabcdef12"))
+        assertEquals("0", p.gesehen["S1"])
+        assertFalse(p.neu.verbunden("S1", "v4.38.4-3-gabcdef12"))
+        assertEquals(0, p.gesetzt.size)
+        // Danach eine Firmware mit -b23: einmal neu setzen.
+        assertTrue(p.neu.verbunden("S1", "v4.38.4-b23"))
         assertEquals(1, p.gesetzt.size)
+    }
+
+    @Test
+    fun von23Auf24NichtNeu() = runTest {
+        // b23 hat den ganzen Satz gespeichert (auch Schrift und Sprache), b24 liest ihn nur
+        // anders: kein neuer Zeitstempel noetig.
+        val p = Probe("01aa", mutableMapOf("S1" to "23"))
+        assertFalse(p.neu.verbunden("S1", "v4.38.4-b24"))
+        assertEquals(emptyList(), p.gesetzt)
     }
 
     // Spezifikation 2.6: "zuletzt gesehener Build < 23 ODER UNBEKANNT" - die
@@ -98,12 +129,12 @@ class TsBedrockFaehigkeitTest {
     @Test
     fun vonOffiziellerFirmwareAuf23EinmalNeuGesetzt() = runTest {
         val p = Probe("01aa")
-        assertTrue(p.neu.verbunden("S1", "v4.4.0"))
+        assertFalse(p.neu.verbunden("S1", "v4.4.0"))
         assertEquals("0", p.gesehen["S1"])
         assertTrue(p.neu.verbunden("S1", "v4.38.4-b23"))
-        assertEquals(listOf("01aa", "01aa"), p.gesetzt)
+        assertEquals(listOf("01aa"), p.gesetzt)
         assertFalse(p.neu.verbunden("S1", "v4.38.4-b23"))
-        assertEquals(2, p.gesetzt.size)
+        assertEquals(1, p.gesetzt.size)
     }
 
     @Test

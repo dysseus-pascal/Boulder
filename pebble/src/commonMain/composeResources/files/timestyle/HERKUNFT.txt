@@ -1,0 +1,57 @@
+Boulder: Herkunft und Lizenz der Dateien in diesem Ordner
+========================================================
+
+Die Vorschau von TimeStyle Bedrock zeichnet das Zifferblatt mit denselben
+Dateien wie die Firmware (pebbleos, resources/); TsZifferblattReferenzTest
+prueft, dass sie byte-gleich sind (SHA-256).
+
+  *.pdc, LECO1976-Regular.ffont
+      aus TimeStyle von Dan Tilden (freakified) und den TimeStyle-Mitwirkenden,
+      https://github.com/freakified/TimeStylePebble, Stand e2be725, MIT-Lizenz
+      (unten). LECO1976-Regular.ffont enthaelt die Umrisse der Ziffern der
+      Schrift LECO 1976; eine eigene Lizenzangabe fuer die Schrift gibt es im
+      TimeStyle-Repo nicht. PebbleOS liefert dieselbe Schrift selbst als
+      Systemschrift aus (LECO_*_NUMBERS*.pbf).
+
+  KumbhSans-Regular.ffont, KumbhSans-Bold.ffont
+      Leerzeichen, Ziffern und Doppelpunkt der Schrift Kumbh Sans 1.005,
+      Copyright 2020 The KumbhSans Project Authors
+      (https://github.com/xconsau/KumbhSans), SIL Open Font License 1.1
+      (KumbhSans-OFL.txt), kein reservierter Name. Abgeleitet bei Staerke
+      350 bzw. 600 mit tools/boulder/timestyle_schriften.sh der Firmware.
+
+  GOTHIC_18_BOLD.pbf, GOTHIC_24_BOLD.pbf, GOTHIC_28_BOLD.pbf
+      die Pixelschriften "Gothic" der Pebble-Firmware, byte-gleich mit
+      resources/{common,normal}/base/pbf/ im Firmware-Repository (Fork von
+      github.com/coredevices/pebbleos). Dort kamen sie mit Commit 1a7d6575c
+      hinzu: "Bitmap fonts extracted from public QEMU images" - also aus
+      den oeffentlichen Emulator-Abbildern der urspruenglichen Pebble-
+      Firmware gezogen, nicht neu erstellt.
+      LIZENZ UNGEKLAERT: Das Repository steht unter der Apache License 2.0,
+      nennt fuer diese Schriften aber keine eigene Lizenz und keinen
+      Rechteinhaber (anders als fuer die Emoji: EMOJI.LICENSE.txt). Ob die
+      Apache-Lizenz des Repositorys sie deckt, ist damit NICHT belegt.
+      Dieselben Dateien stecken in jeder Firmware dieses Repositorys (auch
+      in Boulders Firmware-Releases); die App verteilt sie zusaetzlich.
+
+--------------------------------------------------------------------------
+
+The MIT License (MIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

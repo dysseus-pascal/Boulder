@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.WeatherPrefsValue
+import io.rebble.libpebblecommon.database.entity.getWeatherSettings
 import io.rebble.libpebblecommon.database.entity.setWeatherSettings
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.launch
@@ -31,7 +32,21 @@ class WeatherManager(
             appPrefsEntryDao.setWeatherSettings(WeatherPrefsValue(weatherData.map { it.key }))
         }
     }
+
+    override suspend fun wetterDerUhr(): WeatherAppEntry? =
+        wetterOrtNull(appPrefsEntryDao.getWeatherSettings()) { weatherAppEntryDao.getEntry(it) }
 }
+
+/**
+ * Boulder: der Satz von Ort 0 der [reihenfolge] - wie die Firmware
+ * (weather_service.c, prv_get_default_location_key): NUR Ort 0, ohne
+ * Ausweichen auf Ort 1, wenn dessen Satz fehlt. [satz] liest einen
+ * (nicht geloeschten) Satz nach Schluessel.
+ */
+internal suspend fun wetterOrtNull(
+    reihenfolge: WeatherPrefsValue?,
+    satz: suspend (Uuid) -> WeatherAppEntry?,
+): WeatherAppEntry? = reihenfolge?.locationUuids?.firstOrNull()?.let { satz(it) }
 
 fun WeatherLocationData.WeatherLocationDataPopulated.toWeatherAppEntry() = WeatherAppEntry(
     key = key,

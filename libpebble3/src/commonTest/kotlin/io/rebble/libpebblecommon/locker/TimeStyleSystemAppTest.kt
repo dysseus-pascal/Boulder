@@ -15,7 +15,9 @@ class TimeStyleSystemAppTest {
         assertEquals(listOf(WatchType.EMERY), ts.compatiblePlatforms)
         assertEquals("Boulder", ts.developerName)
         assertEquals("TimeStyle Bedrock", ts.displayName)
-        // Direkt hinter Kickstart: so setzt insertSystemApps es hinter seinen Vorgaenger.
+        // Nur die Reihenfolge der Aufzaehlung: Kickstart ist der Vorgaenger, hinter den
+        // insertSystemApps ein spaeter hinzugekommenes Zifferblatt setzt. WOHIN es in einem
+        // bestehenden Locker wirklich kommt, prueft LockerSystemAppsTest.
         assertEquals(SystemApps.Kickstart.ordinal + 1, ts.ordinal)
     }
 

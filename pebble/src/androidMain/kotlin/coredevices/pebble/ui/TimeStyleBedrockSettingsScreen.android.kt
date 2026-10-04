@@ -1,16 +1,17 @@
 package coredevices.pebble.ui
 
-import android.text.format.DateFormat
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,10 +20,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -36,6 +40,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,33 +54,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.russhwolf.settings.Settings
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.ansicht.Farben
@@ -87,20 +84,34 @@ import coredevices.pebble.kiesel.ansicht.Schaltzeile
 import coredevices.pebble.kiesel.ansicht.Seite
 import coredevices.pebble.kiesel.ansicht.Zeichen
 import coredevices.pebble.kiesel.ansicht.Zeile
-import coredevices.pebble.kiesel.ansicht.bildBeschreibung
 import coredevices.pebble.kiesel.ansicht.flaeche
 import coredevices.pebble.kiesel.ansicht.ton
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.timestyle.TS_BEDROCK_SCHRIFTEN_AB_BUILD
+import coredevices.pebble.timestyle.TS_FARBVORLAGEN
 import coredevices.pebble.timestyle.TS_SPRACHEN
+import coredevices.pebble.timestyle.TS_SPRACHEN_BIS_B23
 import coredevices.pebble.timestyle.TS_VERSAETZE
 import coredevices.pebble.timestyle.TS_WIDGETS
 import coredevices.pebble.timestyle.TsBedrockEinstellungen
 import coredevices.pebble.timestyle.TsBedrockNeusetzen
+import coredevices.pebble.timestyle.TsFarbvorlage
 import coredevices.pebble.timestyle.TsWidget
 import coredevices.pebble.timestyle.alsHex
+import coredevices.pebble.timestyle.alsVorlage
+import coredevices.pebble.timestyle.bild.TsSchriftwahl
+import coredevices.pebble.timestyle.gleicheFarben
+import coredevices.pebble.timestyle.mitEigener
+import coredevices.pebble.timestyle.mitVorlage
+import coredevices.pebble.timestyle.ohneStelle
 import coredevices.pebble.timestyle.tsAusHex
+import coredevices.pebble.timestyle.tsBedrockFaehigkeit
+import coredevices.pebble.timestyle.TsSprachpaketMerker
+import coredevices.pebble.timestyle.tsSprachpaketHinweis
+import coredevices.pebble.timestyle.tsEigeneAlsText
+import coredevices.pebble.timestyle.tsEigeneAusText
 import coredevices.pebble.timestyle.tsNameEingabe
-import coredevices.pebble.timestyle.tsZonenText
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BytesWatchPref
 import io.rebble.libpebblecommon.timeline.TimelineColor
@@ -109,9 +120,7 @@ import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
-import kotlin.time.Clock
+import org.koin.compose.koinInject
 
 /** Der Wert aus der Datenbank; [hex] null = nie gesetzt. Eigener Typ, damit "noch nicht geladen" (null) davon getrennt ist. */
 private data class Gelesen(val hex: String?)
@@ -130,10 +139,20 @@ private enum class Farbfeld { Zeit, Hintergrund, Leiste, Leistentext }
 /** Warten nach der letzten Aenderung, bevor sie zur Uhr geht - ein Schieben durch die Palette ist EIN Schreiben. */
 private const val ENTPRELLEN_MS = 500L
 
+/** Die eigenen Farbvorlagen in den Einstellungen des Telefons (tsEigeneAlsText). */
+private const val EIGENE_VORLAGEN = "ts_bedrock_eigene_vorlagen"
+
+/** Die Schriften in der Reihenfolge des Originals (Default, LECO, Bold, Bold Hour, Bold Minute). */
+private val SCHRIFTEN = with(TsSchriftwahl) { listOf(SANS, LECO, FETT, FETTE_STUNDE, FETTE_MINUTE) }
+
+/** Die Intervall-Vibration in der Reihenfolge des Originals: aus, alle 30 Minuten, jede Stunde. */
+private val VIBRATIONEN = listOf(0, 2, 1)
+
 /**
- * Boulder: die Einstellungen von TimeStyle Bedrock. Oben fest die Vorschau,
- * darunter die Abschnitte. Jede Aenderung geht nach [ENTPRELLEN_MS] selbst
- * zur Uhr (kein Speichern-Knopf) - als EIN Wert "tsBedrock" ueber die
+ * Boulder: die Einstellungen von TimeStyle Bedrock. Oben fest die Vorschau -
+ * dasselbe Bild, das die Uhr zeichnet (timestyle/bild) -, darunter die
+ * Abschnitte. Jede Aenderung geht nach [ENTPRELLEN_MS] selbst zur Uhr (kein
+ * Speichern-Knopf) - als EIN Wert "tsBedrock" ueber die
  * Uhreinstellungen-Synchronisation (siehe TsBedrockFormat).
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,6 +164,21 @@ actual fun TimeStyleBedrockSettingsScreen(topBarParams: TopBarParams, nav: NavBa
         libPebble.watchPrefs.map { Gelesen(TsBedrockNeusetzen.ausListe(it)) }
     }.collectAsState(null)
     val konfig by libPebble.config.collectAsState()
+    val umgebung = rememberTsUmgebung()
+    val faehig = tsBedrockFaehigkeit(umgebung.build)
+    val telefon: Settings = koinInject()
+    // Das Sprachpaket der Uhr: verbunden das gemeldete, getrennt das zuletzt gemerkte (TsSprachpaketMerker).
+    val uhr = lastConnectedWatch()
+    val verbundeneUhr = uhr as? ConnectedPebbleDevice
+    val paketWissen = remember(telefon, uhr) {
+        TsSprachpaketMerker(telefon).wissen(uhr?.serial, verbundeneUhr != null, verbundeneUhr?.installedLanguagePack?.isoLocal)
+    }
+    var eigene by remember { mutableStateOf(tsEigeneAusText(telefon.getStringOrNull(EIGENE_VORLAGEN))) }
+    fun eigeneSetzen(neu: List<TsFarbvorlage>) {
+        eigene = neu
+        telefon.putString(EIGENE_VORLAGEN, tsEigeneAlsText(neu))
+    }
+
     // Der Stand der Seite, solange er noch nicht in der Datenbank steht. Danach zaehlt wieder die Datenbank.
     var entwurf by remember { mutableStateOf<TsBedrockEinstellungen?>(null) }
     val aktuellGelesen by rememberUpdatedState(gelesen)
@@ -186,24 +220,34 @@ actual fun TimeStyleBedrockSettingsScreen(topBarParams: TopBarParams, nav: NavBa
     }
     val aendere: (TsBedrockEinstellungen) -> Unit = { entwurf = it }
     var blatt by remember { mutableStateOf<Farbfeld?>(null) }
+    var vorlagenOffen by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         // Fest ueber der Liste: jede Aenderung weiter unten ist hier sofort zu sehen.
-        Vorschau(stand, Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp, bottom = 10.dp).width(128.dp))
+        TsZifferblattBild(
+            stand, umgebung, stringResource(R.string.ts_vorschau),
+            Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
+            wunschHoehe = 160.dp,
+        )
         Seite(Modifier.weight(1f)) {
             if (!konfig.watchConfig.enableWatchSettingsSync) Kasten {
                 Schaltzeile(stringResource(R.string.ts_sync), an = false) { an ->
                     libPebble.updateConfig(konfig.copy(watchConfig = konfig.watchConfig.copy(enableWatchSettingsSync = an)))
                 }
             }
-            Uhrabschnitt(stand, aendere)
+            Uhrabschnitt(stand, faehig.schriften, aendere)
             Leistenabschnitt(stand, aendere)
             Widgetabschnitt(stand, aendere)
-            Farbabschnitt(stand) { blatt = it }
+            Farbabschnitt(stand, oeffne = { blatt = it }, vorlagen = { vorlagenOffen = true })
             Kasten {
+                // Bis b23 nimmt die Uhr nur die 29 Sprachen ohne Sprachpaket an.
+                val sprachen = if (faehig.schriften) TS_SPRACHEN else TS_SPRACHEN.filter { it.first in TS_SPRACHEN_BIS_B23 }
+                val paket = stringResource(R.string.ts_sprachpaket)
                 Auswahlzeile(
-                    stringResource(R.string.ts_k_sprache), stand.languageId, TS_SPRACHEN.map { it.first },
+                    stringResource(R.string.ts_k_sprache), stand.languageId, sprachen.map { it.first },
                     text = { id -> TS_SPRACHEN.first { it.first == id }.second },
+                    unter = paket.takeIf { tsSprachpaketHinweis(stand.languageId, paketWissen) },
+                    zusatz = { id -> paket.takeIf { tsSprachpaketHinweis(id, paketWissen) } },
                 ) { aendere(stand.copy(languageId = it)) }
             }
         }
@@ -228,14 +272,47 @@ actual fun TimeStyleBedrockSettingsScreen(topBarParams: TopBarParams, nav: NavBa
             blatt = null
         }
     }
+    if (vorlagenOffen) {
+        Vorlagenblatt(
+            stand = stand,
+            eigene = eigene,
+            schliesse = { vorlagenOffen = false },
+            waehle = { aendere(stand.mitVorlage(it)) },
+            speichere = { eigeneSetzen(eigene.mitEigener(stand.alsVorlage())) },
+            loesche = { eigeneSetzen(eigene.ohneStelle(it)) },
+        )
+    }
 }
 
 @Composable
-private fun Uhrabschnitt(s: TsBedrockEinstellungen, aendere: (TsBedrockEinstellungen) -> Unit) = Kasten {
+private fun schriftName(id: Int): String = stringResource(
+    when (id) {
+        TsSchriftwahl.SANS -> R.string.ts_s_regular
+        TsSchriftwahl.FETT -> R.string.ts_s_bold
+        TsSchriftwahl.FETTE_STUNDE -> R.string.ts_s_bold_h
+        TsSchriftwahl.FETTE_MINUTE -> R.string.ts_s_bold_m
+        else -> R.string.ts_s_leco
+    },
+)
+
+@Composable
+private fun Uhrabschnitt(s: TsBedrockEinstellungen, schriften: Boolean, aendere: (TsBedrockEinstellungen) -> Unit) = Kasten {
     Kopf(stringResource(R.string.ts_k_uhr))
+    val namen = SCHRIFTEN.associateWith { schriftName(it) }
+    // Bis b23 zeichnet die Uhr immer LECO: dann steht hier, was sie zeigt, und die Wahl ist gesperrt.
+    Auswahlzeile(
+        stringResource(R.string.ts_schrift), if (schriften) s.clockFontId else TsSchriftwahl.LECO, SCHRIFTEN,
+        text = { namen[it] ?: "" },
+        unter = if (schriften) null else stringResource(R.string.ts_ab_build, TS_BEDROCK_SCHRIFTEN_AB_BUILD),
+        aktiv = schriften,
+    ) { aendere(s.copy(clockFontId = it)) }
     Schaltzeile(stringResource(R.string.ts_null_vorn), an = s.showLeadingZero) { aendere(s.copy(showLeadingZero = it)) }
-    val stufen = listOf(stringResource(R.string.ts_vibe_aus), stringResource(R.string.ts_vibe_stunde), stringResource(R.string.ts_vibe_halb))
-    Auswahlzeile(stringResource(R.string.ts_stundenvibe), s.hourlyVibe, listOf(0, 1, 2), text = { stufen[it] }) {
+    val stufen = mapOf(
+        0 to stringResource(R.string.ts_vibe_aus),
+        1 to stringResource(R.string.ts_vibe_stunde),
+        2 to stringResource(R.string.ts_vibe_halb),
+    )
+    Auswahlzeile(stringResource(R.string.ts_stundenvibe), s.hourlyVibe, VIBRATIONEN, text = { stufen[it] ?: "" }) {
         aendere(s.copy(hourlyVibe = it))
     }
     Schaltzeile(stringResource(R.string.ts_bt_vibe), an = s.btVibe) { aendere(s.copy(btVibe = it)) }
@@ -286,14 +363,15 @@ private fun Widgetabschnitt(s: TsBedrockEinstellungen, aendere: (TsBedrockEinste
     Kopf(stringResource(R.string.ts_k_widgets))
     val namen = TS_WIDGETS.associateWith { widgetName(it) }
     listOf(R.string.ts_oben, R.string.ts_mitte, R.string.ts_unten).forEachIndexed { platz, titel ->
+        // Wie das Original: ein Widget gibt es nur einmal, sein alter Platz wird leer.
         Auswahlzeile(stringResource(titel), s.widgets[platz], TS_WIDGETS, text = { namen[it] ?: "" }) { w ->
-            aendere(s.copy(widgets = s.widgets.toMutableList().also { it[platz] = w }))
+            aendere(s.mitWidget(platz, w))
         }
     }
-    // Die Zeilen zu einem Widget erscheinen nur, wenn es gewaehlt ist; ihr Wert bleibt auch versteckt erhalten.
-    if (s.zeigt(TsWidget.AKKU)) {
-        Schaltzeile(stringResource(R.string.ts_akku_prozent), an = s.showBatteryPct) { aendere(s.copy(showBatteryPct = it)) }
-    } else {
+    // Wie das Original: Akku in Prozent immer (er gilt auch fuer die Akku-Warnung),
+    // die Warnung nur ohne Akku-Widget, die Zeilen der uebrigen Widgets nur mit ihnen.
+    Schaltzeile(stringResource(R.string.ts_akku_prozent), an = s.showBatteryPct) { aendere(s.copy(showBatteryPct = it)) }
+    if (!s.zeigt(TsWidget.AKKU)) {
         // Der Schalter heisst "anzeigen", das Feld der Uhr "abschalten" - darum verneint.
         Schaltzeile(stringResource(R.string.ts_akku_warnung), an = !s.disableAutobattery) { aendere(s.copy(disableAutobattery = !it)) }
     }
@@ -307,21 +385,26 @@ private fun Widgetabschnitt(s: TsBedrockEinstellungen, aendere: (TsBedrockEinste
         Zweierwahl(stringResource(R.string.ts_schritte_zeigen), stringResource(R.string.ts_schritte), stringResource(R.string.ts_distanz), rechtsGewaehlt = s.healthUseDistance) {
             aendere(s.copy(healthUseDistance = it))
         }
-        Zweierwahl(stringResource(R.string.ts_dezimal), ".", ",", rechtsGewaehlt = s.decimalSeparator == ',') {
-            aendere(s.copy(decimalSeparator = if (it) ',' else '.'))
-        }
     }
     if (s.zeigt(TsWidget.SCHLAF)) {
         Zweierwahl(stringResource(R.string.ts_schlaf_zeigen), stringResource(R.string.ts_schlaf_gesamt), stringResource(R.string.ts_schlaf_ruhig), rechtsGewaehlt = s.healthUseRestfulSleep) {
             aendere(s.copy(healthUseRestfulSleep = it))
         }
     }
+    Zweierwahl(stringResource(R.string.ts_dezimal), ".", ",", rechtsGewaehlt = s.decimalSeparator == ',') {
+        aendere(s.copy(decimalSeparator = if (it) ',' else '.'))
+    }
     Spacer(Modifier.height(4.dp))
 }
 
 @Composable
-private fun Farbabschnitt(s: TsBedrockEinstellungen, oeffne: (Farbfeld) -> Unit) = Kasten {
+private fun Farbabschnitt(s: TsBedrockEinstellungen, oeffne: (Farbfeld) -> Unit, vorlagen: () -> Unit) = Kasten {
     Kopf(stringResource(R.string.ts_k_farben))
+    Zeile(
+        stringResource(R.string.ts_vorlagen), minHoehe = 56.dp, chevron = true,
+        rechts = { Vorlagenkachel(s.alsVorlage(), 40.dp) },
+        onClick = vorlagen,
+    )
     listOf(
         Triple(R.string.ts_f_zeit, s.timeColor, Farbfeld.Zeit),
         Triple(R.string.ts_f_hintergrund, s.timeBgColor, Farbfeld.Hintergrund),
@@ -347,23 +430,58 @@ private fun Farbpunkt(farbe: Color, groesse: Dp, modifier: Modifier = Modifier) 
 }
 
 /**
- * Eine Zeile mit Wert rechts; ein Tipp oeffnet die Auswahl darunter am rechten
- * Rand. Ein Chevron nach unten statt nach rechts: die Zeile fuehrt nicht weiter.
+ * Eine Farbvorlage im Kleinen wie im Original (Ziffern in der Zeitfarbe auf
+ * dem Hintergrund, rechts die Leiste mit einem Punkt in der Schriftfarbe).
+ * Ein Farbmuster, kein Bild der Uhr - das zeigt die Vorschau oben.
  */
 @Composable
-private fun <T> Auswahlzeile(titel: String, wert: T, optionen: List<T>, text: (T) -> String, waehle: (T) -> Unit) {
+private fun Vorlagenkachel(v: TsFarbvorlage, breite: Dp, modifier: Modifier = Modifier) {
+    val form = RoundedCornerShape(4.dp)
+    Row(
+        modifier.width(breite).aspectRatio(200f / 228f).clip(form).background(gfarbe(v.hintergrund))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), form),
+    ) {
+        Box(Modifier.weight(0.75f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Text(
+                "6\n32", color = gfarbe(v.zeit), fontWeight = FontWeight.Black,
+                fontSize = (breite.value * 0.26f).sp, lineHeight = (breite.value * 0.28f).sp,
+            )
+        }
+        Box(Modifier.weight(0.25f).fillMaxHeight().background(gfarbe(v.leiste)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(breite * 0.08f).clip(CircleShape).background(gfarbe(v.leistentext)))
+        }
+    }
+}
+
+/**
+ * Eine Zeile mit Wert rechts; ein Tipp oeffnet die Auswahl darunter am rechten
+ * Rand. Ein Chevron nach unten statt nach rechts: die Zeile fuehrt nicht weiter.
+ * [unter] ein kurzes Label unter dem Titel, [zusatz] je Option ein Label rechts
+ * in der Auswahl, [aktiv] false sperrt die Auswahl.
+ */
+@Composable
+private fun <T> Auswahlzeile(
+    titel: String,
+    wert: T,
+    optionen: List<T>,
+    text: (T) -> String,
+    unter: String? = null,
+    zusatz: (T) -> String? = { null },
+    aktiv: Boolean = true,
+    waehle: (T) -> Unit,
+) {
     var offen by remember { mutableStateOf(false) }
     val grau = MaterialTheme.colorScheme.onSurfaceVariant
     Box(Modifier.fillMaxWidth()) {
         Zeile(
-            titel, minHoehe = 56.dp, chevron = false,
+            titel, unter = unter, minHoehe = 56.dp, chevron = false,
             rechts = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(text(wert), fontSize = 15.sp, color = grau, maxLines = 1)
-                    Icon(AUF, null, Modifier.size(18.dp), tint = grau)
+                    if (aktiv) Icon(AUF, null, Modifier.size(18.dp), tint = grau)
                 }
             },
-            onClick = { offen = true },
+            onClick = if (aktiv) ({ offen = true }) else null,
         )
         Box(Modifier.align(Alignment.BottomEnd).padding(end = INNEN)) {
             DropdownMenu(expanded = offen, onDismissRequest = { offen = false }) {
@@ -373,8 +491,14 @@ private fun <T> Auswahlzeile(titel: String, wert: T, optionen: List<T>, text: (T
                     } else {
                         null
                     }
+                    val label = zusatz(o)
                     DropdownMenuItem(
-                        text = { Text(text(o)) },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(text(o))
+                                if (label != null) Text(label, fontSize = 12.sp, color = grau)
+                            }
+                        },
                         onClick = {
                             offen = false
                             waehle(o)
@@ -472,7 +596,78 @@ private fun Farbblatt(titel: String, aktuell: Int, schliesse: () -> Unit, waehle
     }
 }
 
-/** Das Menue oben rechts: nur "Reset" (zurueck auf das Foto-Zifferblatt). */
+/**
+ * Die Farbvorlagen als Blatt: oben die eigenen (speichern, loeschen), darunter
+ * die 77 des Originals in seinen Gruppen. Ein Tipp uebernimmt die vier Farben;
+ * das Blatt bleibt offen, damit man vergleichen kann (die Vorschau steht darueber).
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun Vorlagenblatt(
+    stand: TsBedrockEinstellungen,
+    eigene: List<TsFarbvorlage>,
+    schliesse: () -> Unit,
+    waehle: (TsFarbvorlage) -> Unit,
+    speichere: () -> Unit,
+    loesche: (Int) -> Unit,
+) {
+    val aktuell = stand.alsVorlage()
+    ModalBottomSheet(onDismissRequest = schliesse, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
+        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            Kopf(stringResource(R.string.ts_eigene))
+            FlowRow(Modifier.padding(horizontal = INNEN), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                eigene.forEachIndexed { i, v ->
+                    Box {
+                        Vorlagenwahl(v, null, v.gleicheFarben(aktuell)) { waehle(v) }
+                        val loeschen = stringResource(R.string.ts_loeschen)
+                        IconButton(onClick = { loesche(i) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                            Icon(Icons.Default.Close, loeschen, Modifier.size(16.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surface))
+                        }
+                    }
+                }
+            }
+            if (eigene.none { it.gleicheFarben(aktuell) }) {
+                TextButton(onClick = speichere, modifier = Modifier.padding(horizontal = 8.dp)) { Text(stringResource(R.string.ts_speichern)) }
+            }
+            TS_FARBVORLAGEN.groupBy { it.gruppe }.forEach { (gruppe, liste) ->
+                Kopf(gruppe)
+                FlowRow(Modifier.padding(horizontal = INNEN), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    liste.forEach { v -> Vorlagenwahl(v, v.name, v.gleicheFarben(aktuell)) { waehle(v) } }
+                }
+            }
+        }
+    }
+}
+
+/** Eine waehlbare Vorlage mit Namen darunter; die gerade aktive mit Ring. */
+@Composable
+private fun Vorlagenwahl(v: TsFarbvorlage, name: String?, gewaehlt: Boolean, waehle: () -> Unit) {
+    Column(
+        Modifier.width(72.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = waehle)
+            .semantics {
+                contentDescription = name ?: "Saved"
+                selected = gewaehlt
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Vorlagenkachel(
+            v, 64.dp,
+            Modifier.padding(top = 4.dp).then(
+                if (gewaehlt) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(4.dp)) else Modifier,
+            ),
+        )
+        if (name != null) {
+            Text(name, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
+        }
+    }
+}
+
+/**
+ * Das Menue oben rechts: nur "Reset to defaults" - ALLE Einstellungen zurueck auf
+ * die Vorgabe der Firmware (TsBedrockEinstellungen.VORGABE = settings.c: LECO, weiss
+ * auf schwarz, Wetter/Schritte/Datum, Englisch). Nicht "Aenderungen verwerfen";
+ * die eigenen Farbvorlagen bleiben.
+ */
 @Composable
 private fun Ueberlauf(zuruecksetzen: () -> Unit) {
     var offen by remember { mutableStateOf(false) }
@@ -490,8 +685,6 @@ private fun Ueberlauf(zuruecksetzen: () -> Unit) {
     }
 }
 
-// --- Vorschau ---------------------------------------------------------------------------
-
 /** Der Chevron nach unten - der Baukasten hat nur die Richtungen zum Blaettern. */
 private val AUF: ImageVector = ImageVector.Builder(
     defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f,
@@ -501,123 +694,3 @@ private val AUF: ImageVector = ImageVector.Builder(
         strokeLineWidth = 2f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
     )
 }.build()
-
-/** Beispielwerte je Widget, Zeile fuer Zeile. Die Vorschau zeigt den Aufbau, keine echten Daten. */
-private fun beispiel(w: Int, s: TsBedrockEinstellungen, zonenStunde: String): List<String> = when (w) {
-    TsWidget.WETTER -> listOf("18°")
-    TsWidget.VORHERSAGE -> listOf("21/9")
-    TsWidget.UV -> listOf("4")
-    TsWidget.SCHRITTE -> listOf(if (s.healthUseDistance) "4${s.decimalSeparator}2km" else "5${s.decimalSeparator}5k")
-    TsWidget.SCHLAF -> listOf(if (s.healthUseRestfulSleep) "2h" else "7h")
-    TsWidget.PULS -> listOf("62")
-    TsWidget.AKKU -> if (s.showBatteryPct) listOf("80%") else emptyList()
-    TsWidget.ZEITZONE -> listOf(s.altclockName, zonenStunde)
-    TsWidget.DATUM -> listOf("SAT", "3", "OCT")
-    TsWidget.SEKUNDEN -> listOf(":42")
-    TsWidget.WOCHE -> listOf("41")
-    TsWidget.BEATS -> listOf("@512")
-    else -> emptyList()
-}
-
-/**
- * Das Zifferblatt im Kleinen, 200 x 228 wie emery: Zeit 9:41 zweizeilig,
- * die Leiste (34 bzw. 43 Pixel) mit den drei Widgets. NICHT PIXELGENAU -
- * LECO gibt es auf dem Telefon nicht; es soll Farben, Lage und Inhalt zeigen.
- */
-@Composable
-private fun Vorschau(s: TsBedrockEinstellungen, modifier: Modifier) {
-    val messer = rememberTextMeasurer()
-    val context = LocalContext.current
-    val vierundzwanzig = DateFormat.is24HourFormat(context)
-    // Die zweite Zeitzone zur Beispielzeit 9:41 hier - auf die Minute wie die Uhr (halbe Stunden).
-    val hier = remember { TimeZone.currentSystemDefault() }
-    val heute = remember(hier) { Clock.System.todayIn(hier) }
-    val zonenStunde = tsZonenText(heute, hier, s.altclockOffset, vierundzwanzig, s.showLeadingZero)
-    val beschreibung = stringResource(R.string.ts_vorschau)
-    // Mit feinem Rand: im hellen Schema verschwaende eine weisse Leiste sonst in der Seite.
-    val rand = MaterialTheme.colorScheme.outlineVariant
-    Canvas(
-        modifier.aspectRatio(200f / 228f).clip(RoundedCornerShape(8.dp))
-            .border(1.dp, rand, RoundedCornerShape(8.dp)).bildBeschreibung(beschreibung),
-    ) {
-        val px = size.width / 200f
-        drawRect(gfarbe(s.timeBgColor))
-        val leiste = (if (s.useLargeFonts) 43f else 34f) * px
-        val leisteX = if (s.sidebarOnLeft) 0f else size.width - leiste
-        drawRect(gfarbe(s.sidebarColor), Offset(leisteX, 0f), Size(leiste, size.height))
-
-        // Die Zeit: zwei Zeilen, so gross, dass sie das Feld neben der Leiste fuellen.
-        val uhrX = if (s.sidebarOnLeft) leiste else 0f
-        val uhrBreite = size.width - leiste
-        // Pixel in sp ohne die Schriftgroesse des Telefons: die Vorschau ist ein Bild, kein Text.
-        // toSp() statt "/ fontScale": ab Android 14 waechst grosse Schrift NICHT linear, die
-        // Division machte die Ziffern bei grosser Systemschrift zu klein. toSp() nimmt dieselbe
-        // Umrechnung, mit der der TextMeasurer zurueckrechnet - die Pixel stimmen also genau.
-        val zeitStil = TextStyle(fontSize = (size.height * 0.44f).toSp(), fontWeight = FontWeight.Black, color = gfarbe(s.timeColor))
-        listOf(if (s.showLeadingZero) "09" else "9", "41").forEachIndexed { i, zeile ->
-            val m = messer.measure(AnnotatedString(zeile), zeitStil)
-            val mitteY = size.height * (if (i == 0) 0.27f else 0.73f)
-            drawText(m, topLeft = Offset(uhrX + (uhrBreite - m.size.width) / 2f, mitteY - m.size.height / 2f))
-        }
-
-        // Die drei Widgets: oben am Rand, in der Mitte, unten am Rand - wie auf der Uhr.
-        val schrift = (if (s.useLargeFonts) 21f else 17f) * px
-        val textFarbe = gfarbe(s.sidebarTextColor)
-        val randAbstand = 5f * px
-        repeat(3) { platz ->
-            val w = s.widgets[platz]
-            val zeilen = beispiel(w, s, zonenStunde)
-            val hoehe = schrift * 1.15f
-            val akkuSymbol = w == TsWidget.AKKU
-            val gesamt = zeilen.size * hoehe + (if (akkuSymbol) hoehe else 0f)
-            var y = when (platz) {
-                0 -> randAbstand
-                1 -> (size.height - gesamt) / 2f
-                else -> size.height - randAbstand - gesamt
-            }
-            if (akkuSymbol) {
-                akku(leisteX + leiste / 2f, y + hoehe / 2f, leiste * 0.6f, hoehe * 0.55f, textFarbe, px)
-                y += hoehe
-            }
-            zeilen.forEachIndexed { i, text ->
-                // Das Datum: die Zahl im Kalenderblatt wie auf der Uhr.
-                val blatt = w == TsWidget.DATUM && i == 1
-                widgetText(messer, text, leisteX, leiste, y, hoehe, schrift, textFarbe, blatt, px)
-                y += hoehe
-            }
-        }
-    }
-}
-
-/** Eine Zeile Leistentext, mittig; zu breit (grosse Schrift des Telefons, "4.2km") wird sie kleiner. */
-private fun DrawScope.widgetText(
-    messer: TextMeasurer, text: String, leisteX: Float, leiste: Float, y: Float, hoehe: Float,
-    schrift: Float, farbe: Color, blatt: Boolean, px: Float,
-) {
-    if (text.isEmpty()) return
-    // Pixel -> sp ueber toSp(), wie in der Vorschau oben (nichtlineare Schriftskalierung).
-    var stil = TextStyle(fontSize = schrift.toSp(), fontWeight = FontWeight.Bold, color = farbe)
-    var m = messer.measure(AnnotatedString(text), stil)
-    val platz = leiste * 0.9f
-    if (m.size.width > platz) {
-        // In Pixeln verkleinern: die Breite waechst mit den Pixeln linear, nicht mit sp.
-        stil = stil.copy(fontSize = (schrift * platz / m.size.width).toSp())
-        m = messer.measure(AnnotatedString(text), stil)
-    }
-    val x = leisteX + (leiste - m.size.width) / 2f
-    val oben = y + (hoehe - m.size.height) / 2f
-    drawText(m, topLeft = Offset(x, oben))
-    if (blatt) {
-        val rand = 3f * px
-        drawRect(farbe, Offset(leisteX + leiste * 0.2f, y + rand / 2f), Size(leiste * 0.6f, hoehe - rand), style = Stroke(width = 1.5f * px))
-    }
-}
-
-/** Das Akkusymbol: Umriss mit Pol und halber Fuellung. */
-private fun DrawScope.akku(mitteX: Float, mitteY: Float, breite: Float, hoehe: Float, farbe: Color, px: Float) {
-    val links = mitteX - breite / 2f
-    val oben = mitteY - hoehe / 2f
-    drawRect(farbe, Offset(links, oben), Size(breite * 0.9f, hoehe), style = Stroke(width = 1.5f * px))
-    drawRect(farbe, Offset(links + breite * 0.9f, mitteY - hoehe * 0.2f), Size(breite * 0.1f, hoehe * 0.4f))
-    drawRect(farbe, Offset(links + 2.5f * px, oben + 2.5f * px), Size((breite * 0.9f - 5f * px) * 0.8f, hoehe - 5f * px))
-}

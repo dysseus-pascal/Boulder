@@ -12,6 +12,7 @@ import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.health.UhrNachfrage
 import coredevices.pebble.timestyle.TsBedrockNeusetzen
+import coredevices.pebble.timestyle.TsSprachpaketMerker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
@@ -72,6 +73,8 @@ class PebbleAppDelegate(
         gespeicherterWert = { TsBedrockNeusetzen.ausListe(libPebble.watchPrefs.first()) },
         setze = { libPebble.setWatchPref(WatchPreference(BytesWatchPref.TimeStyleBedrock, it)) },
     )
+    // Boulder: das Sprachpaket je Uhr merken - die TimeStyle-Seite braucht es auch bei getrennter Uhr.
+    private val tsSprachpaketMerker = TsSprachpaketMerker(settings)
 
     fun init() {
         logger.d { "init()" }
@@ -116,6 +119,9 @@ class PebbleAppDelegate(
             }
             GlobalScope.launch {
                 tsBedrockNeusetzen.beobachte(libPebble.watches)
+            }
+            GlobalScope.launch {
+                tsSprachpaketMerker.beobachteUhren(libPebble.watches)
             }
             GlobalScope.launch {
                 libPebble.analyticsEvents.collect {

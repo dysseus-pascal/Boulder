@@ -93,6 +93,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.entity.LockerAppPermissionType
 import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
+import coredevices.pebble.timestyle.tsBedrockSeiteVorhanden
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -411,19 +412,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                             Spacer(Modifier.height(5.dp))
                             val watchName = lastConnectedWatch?.displayName() ?: ""
-                            val onWatchText = if (entry.isCompatible && entry.isSynced()) {
-                                if (appIsRunning) {
-                                    "Running On Watch $watchName"
-                                } else {
-                                    "On Watch $watchName"
-                                }
-                            } else if (!entry.isCompatible) {
-                                "Not Compatible with $watchName"
-                            } else if (entry.commonAppType !is CommonAppType.Store) {
-                                "Not On Watch $watchName"
-                            } else {
-                                null
-                            }
+                            // Boulder: aufDerUhrText (LockerUtil) - mit dem Firmware-Hinweis fuer
+                            // TimeStyle Bedrock statt "Not Compatible".
+                            val onWatchText = entry.aufDerUhrText(watchName, appIsRunning)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 entry.CompatibilityWarning(topBarParams)
                                 if (onWatchText != null) {
@@ -1020,7 +1011,9 @@ fun SnackbarHostState.showSnackbar(scope: CoroutineScope, message: String) {
 fun CommonApp.hasSettings(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.configurable
     // Boulder: TimeStyle Bedrock hat eine Seite in Boulder statt einer Konfigseite der App.
-    is CommonAppType.System -> commonAppType.app == SystemApps.TimeStyleBedrock && commonAppType.einstellbar
+    // Nur wo es die Seite gibt (Android; iOS zeigt dort nur "Only available on Android.").
+    is CommonAppType.System -> commonAppType.app == SystemApps.TimeStyleBedrock && commonAppType.einstellbar &&
+        tsBedrockSeiteVorhanden
     is CommonAppType.Store -> false
 }
 

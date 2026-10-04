@@ -2,7 +2,7 @@
 <!-- Boulder: die Einstellungen von TimeStyle Bedrock (Apps > Faces > Settings). Nur Labels, keine Saetze. -->
 <resources>
     <string name="ts_titel">TimeStyle Bedrock</string>
-    <string name="ts_reset">Reset</string>
+    <string name="ts_reset">Reset to defaults</string>
     <string name="ts_mehr">More options</string>
     <string name="ts_vorschau">Watchface preview</string>
     <string name="ts_sync">Watch settings sync</string>
@@ -14,11 +14,20 @@
     <string name="ts_k_sprache">Language</string>
 
     <string name="ts_null_vorn">Leading zero</string>
-    <string name="ts_stundenvibe">Hourly vibration</string>
+    <string name="ts_stundenvibe">Vibration on interval</string>
     <string name="ts_vibe_aus">Off</string>
     <string name="ts_vibe_stunde">Every hour</string>
     <string name="ts_vibe_halb">Every half hour</string>
     <string name="ts_bt_vibe">Vibrate on disconnect</string>
+    <string name="ts_schrift">Font</string>
+    <string name="ts_s_regular">Regular</string>
+    <string name="ts_s_leco">LECO</string>
+    <string name="ts_s_bold">Bold</string>
+    <string name="ts_s_bold_h">Bold Hour</string>
+    <string name="ts_s_bold_m">Bold Minute</string>
+    <!-- Die Nummer kommt aus TS_BEDROCK_SCHRIFTEN_AB_BUILD, nie fest hier (TsBeschriftungTest). -->
+    <string name="ts_ab_build">Needs firmware b%1$d</string>
+    <string name="ts_sprachpaket">language pack</string>
 
     <string name="ts_lage">Position</string>
     <string name="ts_links">Left</string>
@@ -62,4 +71,8 @@
     <string name="ts_f_hintergrund">Background</string>
     <string name="ts_f_leiste">Sidebar</string>
     <string name="ts_f_leistentext">Sidebar text</string>
+    <string name="ts_vorlagen">Presets</string>
+    <string name="ts_eigene">Saved</string>
+    <string name="ts_speichern">Save current colors</string>
+    <string name="ts_loeschen">Delete</string>
 </resources>

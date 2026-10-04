@@ -66,6 +66,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherManager
 import io.rebble.libpebblecommon.web.LockerEntry
@@ -263,6 +264,14 @@ interface HealthDataApi {
 
 interface Weather {
     fun updateWeatherData(weatherData: List<WeatherLocationData>)
+
+    /**
+     * Boulder: der Wettersatz, den die Uhr als Standardort liest - Ort 0 der
+     * Reihenfolge, die Boulder ihr zuletzt geschickt hat. Null, wenn es keinen
+     * gibt (dann hat auch die Uhr kein Standardwetter). Fuer die Vorschau von
+     * TimeStyle Bedrock, damit sie dasselbe Wetter zeigt wie die Uhr.
+     */
+    suspend fun wetterDerUhr(): WeatherAppEntry? = null
 }
 
 interface Timeline {

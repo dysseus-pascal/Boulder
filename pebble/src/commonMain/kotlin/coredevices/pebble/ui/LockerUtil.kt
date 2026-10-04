@@ -79,6 +79,7 @@ import io.rebble.libpebblecommon.locker.AppPlatform
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.locker.SystemApps
+import coredevices.pebble.timestyle.TS_BEDROCK_AB_BUILD
 import coredevices.pebble.timestyle.tsBedrockFaehigkeit
 import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -199,13 +200,7 @@ fun loadLockerEntries(
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild)
-            if (!showIncompatible && !app.isCompatible) {
-                return@mapNotNull null
-            }
-            if (!showScaled && !app.isNativelyCompatible) {
-                return@mapNotNull null
-            }
-            app
+            app.takeIf { a -> a.imLockerZeigen(showIncompatible, showScaled) }
         }
     }
 }
@@ -306,18 +301,44 @@ fun CommonApp.SettingsButton(
     }
 }
 
+/**
+ * Boulder: bei TimeStyle Bedrock auf zu alter oder unbekannter Firmware liegt
+ * es an der Firmware, nicht an der Uhr - dann DIESER Satz statt "Not
+ * compatible", ueberall wo die Inkompatibilitaet steht. Sonst null.
+ */
+fun CommonApp.firmwareHinweis(): String? =
+    if ((commonAppType as? CommonAppType.System)?.firmwareFehlt == true) {
+        "Needs Boulder firmware b$TS_BEDROCK_AB_BUILD or newer"
+    } else {
+        null
+    }
+
+/**
+ * Die Zeile unter dem Namen auf der App-Seite ("On Watch ...", "Not
+ * Compatible with ..."). Boulder: herausgeloest, damit der Firmware-Hinweis
+ * auch hier steht und ein Test es prueft.
+ */
+fun CommonApp.aufDerUhrText(uhrName: String, laeuft: Boolean): String? = when {
+    isCompatible && isSynced() -> if (laeuft) "Running On Watch $uhrName" else "On Watch $uhrName"
+    !isCompatible -> firmwareHinweis() ?: "Not Compatible with $uhrName"
+    commonAppType !is CommonAppType.Store -> "Not On Watch $uhrName"
+    else -> null
+}
+
 @Composable
 fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
     if (!isCompatible) {
+        val hinweis = firmwareHinweis() ?: "Not compatible with this watch"
         IconButton(
             modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
             onClick = {
-                topBarParams.showSnackbar("Not compatible with this watch")
+                topBarParams.showSnackbar(hinweis)
             },
         ) {
             Icon(
                 Icons.Filled.Block,
-                contentDescription = "Not compatible with this watch",
+                // Boulder: dieselbe Aussage wie die Snackbar (Vorlesen, Barrierefreiheit).
+                contentDescription = hinweis,
                 modifier = Modifier.fillMaxSize(),
                 tint = boulderGruen,
             )
@@ -454,7 +475,22 @@ sealed class CommonAppType {
         override val order: Int,
         // Boulder: die Firmware nimmt Einstellungen fuer diese App an (TimeStyle Bedrock ab b23).
         val einstellbar: Boolean = false,
+        // Boulder: passt zur Uhr, nur die Firmware ist zu alt oder unbekannt (TimeStyle Bedrock).
+        val firmwareFehlt: Boolean = false,
     ) : CommonAppType(), CommonAppTypeLocal
+}
+
+/**
+ * Ob [this] in der Liste steht. Boulder: ein Systemzifferblatt, das nur an der
+ * Firmware scheitert (TimeStyle Bedrock vor b22 oder bei unbekannter Firmware),
+ * bleibt MIT HINWEIS stehen (Sperrsymbol, siehe CompatibilityWarning) - still
+ * zu verschwinden liess sich vom Nutzer nicht erklaeren.
+ */
+fun CommonApp.imLockerZeigen(showIncompatible: Boolean, showScaled: Boolean): Boolean {
+    val nurFirmware = (commonAppType as? CommonAppType.System)?.firmwareFehlt == true
+    if (!showIncompatible && !isCompatible && !nurFirmware) return false
+    if (!showScaled && !isNativelyCompatible) return false
+    return true
 }
 
 fun LockerWrapper.asCommonApp(
@@ -485,6 +521,7 @@ fun LockerWrapper.asCommonApp(
                 app = systemApp,
                 order = properties.order,
                 einstellbar = timeStyle && faehigkeit.einstellungen,
+                firmwareFehlt = timeStyle && compatiblePlatform.isCompatible() && !faehigkeit.kachel,
             )
         },
         type = properties.type,
@@ -723,6 +760,16 @@ fun CommonApp.showOnMainLockerScreen(): Boolean = when (commonAppType) {
     // watchfaces.
     is CommonAppType.System -> type == AppType.Watchface
 }
+
+/**
+ * Boulder: die Eintraege des Karussells "My Watchfaces"/"My Apps" - alles,
+ * was auf den Hauptbildschirm gehoert, AUCH das aktive Zifferblatt. Gravel
+ * liess das aktive weg, sobald es vorn stand (bei "nach Nutzung sortiert" also
+ * immer), und so fehlte TimeStyle Bedrock unter "My Watchfaces". Darum haengt
+ * die Liste bewusst NICHT vom aktiven Zifferblatt ab.
+ */
+fun karussellEintraege(eintraege: List<CommonApp>): List<CommonApp> =
+    eintraege.filter { it.showOnMainLockerScreen() }
 
 fun CommonApp.isSynced(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.sync

@@ -65,43 +65,85 @@ class SupCycleTest {
     @Test
     fun faellig_folgt_zyklus_und_raster_der_uhr() {
         val zyklus = SupCycle.Platz("Maca", LocalTime.of(8, 0), true, alle = 1, wochenAn = 1, wochenAus = 1, anker = 100)
-        assertTrue(SupCycle.faelligAm(zyklus, 100))
-        assertTrue(SupCycle.faelligAm(zyklus, 106))
-        assertFalse(SupCycle.faelligAm(zyklus, 107))
-        assertFalse(SupCycle.faelligAm(zyklus, 113))
-        assertTrue(SupCycle.faelligAm(zyklus, 114))
-        // Vor dem Anker steht der Zyklus auf seinem ersten Tag.
-        assertTrue(SupCycle.faelligAm(zyklus, 90))
-        val jedenZweiten = zyklus.copy(alle = 2, wochenAn = 0)
-        assertTrue(SupCycle.faelligAm(jedenZweiten, 102))
-        assertFalse(SupCycle.faelligAm(jedenZweiten, 103))
-        assertFalse(SupCycle.faelligAm(zyklus.copy(benutzt = false), 100))
-        assertEquals(0b01L, SupCycle.faellig(listOf(zyklus, zyklus.copy(anker = 93)), 100))
+        // Zyklus und Raster rechnen in beiden Fassungen gleich.
+        for (f in listOf(SupCycle.PLANFASSUNG_ALT, SupCycle.PLANFASSUNG_KALENDER)) {
+            assertTrue(SupCycle.faelligAm(zyklus, 100, f))
+            assertTrue(SupCycle.faelligAm(zyklus, 106, f))
+            assertFalse(SupCycle.faelligAm(zyklus, 107, f))
+            assertFalse(SupCycle.faelligAm(zyklus, 113, f))
+            assertTrue(SupCycle.faelligAm(zyklus, 114, f))
+            // Vor dem Anker steht der Zyklus auf seinem ersten Tag.
+            assertTrue(SupCycle.faelligAm(zyklus, 90, f))
+            val jedenZweiten = zyklus.copy(alle = 2, wochenAn = 0)
+            assertTrue(SupCycle.faelligAm(jedenZweiten, 102, f))
+            assertFalse(SupCycle.faelligAm(jedenZweiten, 103, f))
+            assertFalse(SupCycle.faelligAm(zyklus.copy(benutzt = false), 100, f))
+            assertEquals(0b01L, SupCycle.faellig(listOf(zyklus, zyklus.copy(anker = 93)), 100, f))
+        }
     }
 
     @Test
-    fun uhrtag_zaehlt_wie_plan_today() {
+    fun einnahmewochen_ohne_pause_sind_ab_fassung_2_eine_kur_die_endet() {
+        // Audit N6: 4 Wochen, keine Pause, ab Tag 100 - Tag 127 der letzte.
+        val kur = SupCycle.Platz("Ashwagandha", LocalTime.of(20, 0), true, alle = 1, wochenAn = 4, wochenAus = 0, anker = 100)
+        assertTrue(SupCycle.faelligAm(kur, 127, SupCycle.PLANFASSUNG_KALENDER))
+        assertFalse(SupCycle.faelligAm(kur, 128, SupCycle.PLANFASSUNG_KALENDER))
+        assertFalse(SupCycle.faelligAm(kur, 600, SupCycle.PLANFASSUNG_KALENDER))
+        // Eine Uhr-App bis 0.15.0 erinnert endlos weiter - so rechnet Boulder mit ihrem Plan auch.
+        assertTrue(SupCycle.faelligAm(kur, 600, SupCycle.PLANFASSUNG_ALT))
+    }
+
+    @Test
+    fun uhrtag_zaehlt_wie_plan_today_der_jeweiligen_uhr() {
         val tag = LocalDate.of(2026, 10, 2)
-        // Oestlich von Greenwich liegt die Ortsmitternacht noch am Vortag (UTC) - so zaehlt die Uhr.
-        assertEquals(LocalDate.of(2026, 10, 1).toEpochDay(), SupCycle.uhrTag(tag, ZoneId.of("Europe/Zurich")))
-        assertEquals(tag.toEpochDay(), SupCycle.uhrTag(tag, ZoneId.of("America/New_York")))
+        val zuerich = ZoneId.of("Europe/Zurich")
+        val newYork = ZoneId.of("America/New_York")
+        // Ab Fassung 2 zaehlt die Uhr das Datum (kalender.c) - in jeder Zone.
+        assertEquals(tag.toEpochDay(), SupCycle.uhrTag(tag, zuerich, SupCycle.PLANFASSUNG_KALENDER))
+        assertEquals(tag.toEpochDay(), SupCycle.uhrTag(tag, newYork, SupCycle.PLANFASSUNG_KALENDER))
+        // London am Umstellungssonntag 25.10.2026: das Datum, nicht der Vortag.
+        val sonntag = LocalDate.of(2026, 10, 25)
+        assertEquals(20_751L, SupCycle.uhrTag(sonntag, ZoneId.of("Europe/London"), SupCycle.PLANFASSUNG_KALENDER))
+        // Bis 0.15.0: oestlich von Greenwich liegt die Ortsmitternacht noch am Vortag (UTC).
+        assertEquals(LocalDate.of(2026, 10, 1).toEpochDay(), SupCycle.uhrTag(tag, zuerich, SupCycle.PLANFASSUNG_ALT))
+        assertEquals(tag.toEpochDay(), SupCycle.uhrTag(tag, newYork, SupCycle.PLANFASSUNG_ALT))
+    }
+
+    @Test
+    fun die_fassung_kommt_aus_der_meldung() {
+        assertEquals(SupCycle.PLANFASSUNG_ALT, SupCycle.planfassung(KieselNachricht(mapOf(SupCycle.SC_TODAY to 20261002L))))
+        assertEquals(SupCycle.PLANFASSUNG_KALENDER, SupCycle.planfassung(KieselNachricht(mapOf(SupCycle.SC_PLANFASSUNG to 2L))))
     }
 
     @Test
     fun neuer_tag_ohne_meldung_rechnet_aus_dem_plan() {
         val zone = ZoneId.of("Europe/Zurich")
         val heute = LocalDate.of(2026, 10, 2)
-        // "Abends" jeden zweiten Tag, gestern war einer - heute steht es nicht an.
-        val plan = SupCycle.plan(platz("Multivitamin", 8, 0) + platz("Abends", 20, 0, alle = 2, anker = SupCycle.uhrTag(heute, zone).toInt() - 1))
-        val gestern = SupCycle.Stand(heute.minusDays(1), listOf("Multivitamin", "Abends"), 0b11, 0b11)
-        val s = SupCycle.standFuer(heute, zone, gestern, plan)!!
-        assertEquals(heute, s.tag)
-        assertEquals(0b01L, s.faellig)
-        assertEquals(listOf(SupCycle.Eintrag("Multivitamin", false, LocalTime.of(8, 0))), s.heute { "Platz $it" })
-        // Was die Uhr heute meldete, gilt - mit den Planzeiten dazu.
-        val gemeldet = SupCycle.Stand(heute, listOf("Multivitamin", "Abends"), 0b11, 0b01)
-        assertEquals(LocalTime.of(20, 0), SupCycle.standFuer(heute, zone, gemeldet, plan)!!.heute { "" }[1].zeit)
-        assertNull(SupCycle.standFuer(heute, zone, gestern, emptyList()))
+        // "Abends" jeden zweiten Tag, gestern war einer - heute steht es nicht an. In jeder
+        // Fassung, solange der Anker in derselben zaehlt.
+        for (f in listOf(SupCycle.PLANFASSUNG_ALT, SupCycle.PLANFASSUNG_KALENDER)) {
+            val plan = SupCycle.plan(platz("Multivitamin", 8, 0) + platz("Abends", 20, 0, alle = 2, anker = SupCycle.uhrTag(heute, zone, f).toInt() - 1))
+            val gestern = SupCycle.Stand(heute.minusDays(1), listOf("Multivitamin", "Abends"), 0b11, 0b11)
+            val s = SupCycle.standFuer(heute, zone, gestern, plan, f)!!
+            assertEquals(heute, s.tag)
+            assertEquals(0b01L, s.faellig)
+            assertEquals(listOf(SupCycle.Eintrag("Multivitamin", false, LocalTime.of(8, 0))), s.heute { "Platz $it" })
+            // Was die Uhr heute meldete, gilt - mit den Planzeiten dazu.
+            val gemeldet = SupCycle.Stand(heute, listOf("Multivitamin", "Abends"), 0b11, 0b01)
+            assertEquals(LocalTime.of(20, 0), SupCycle.standFuer(heute, zone, gemeldet, plan, f)!!.heute { "" }[1].zeit)
+            assertNull(SupCycle.standFuer(heute, zone, gestern, emptyList(), f))
+        }
+    }
+
+    @Test
+    fun anker_einer_neuen_uhr_als_kalendertag() {
+        // Audit M1: eine Uhr mit Fassung 2 schickt "jeden zweiten Tag ab gestern" als Kalendertag.
+        // Gerechnet wie bis 0.15.0 stuende es in Zuerich heute an - einen Tag daneben.
+        val zone = ZoneId.of("Europe/Zurich")
+        val heute = LocalDate.of(2026, 10, 2)
+        val plan = SupCycle.plan(platz("Abends", 20, 0, alle = 2, anker = heute.minusDays(1).toEpochDay().toInt()))
+        assertEquals(0L, SupCycle.standFuer(heute, zone, null, plan, SupCycle.PLANFASSUNG_KALENDER)!!.faellig)
+        assertEquals(0b1L, SupCycle.standFuer(heute.plusDays(1), zone, null, plan, SupCycle.PLANFASSUNG_KALENDER)!!.faellig)
     }
 
     @Test

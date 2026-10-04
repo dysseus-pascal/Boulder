@@ -57,6 +57,20 @@ internal object SupCycle {
     const val SC_TAKEN_AT = 10045 //< je Platz 4 Byte little endian, Sekunden seit 1970, 0 = offen
     const val SC_UNTAKE = 10046 //< an die Uhr: Bitmaske, dazu TODAY und die gemeinten TAKEN_AT
 
+    /**
+     * Wie der Plan zu lesen ist - die Uhr schickt es mit jedem Plan (plan.h,
+     * SC_PLANFASSUNG). Fehlt der Schluessel, ist es eine Uhr-App bis 0.15.0:
+     * [PLANFASSUNG_ALT]. Die Haken haengen in beiden Faellen am Datum (TODAY),
+     * nicht an der Fassung.
+     */
+    const val SC_PLANFASSUNG = 10048
+
+    /** Anker als Ortsmitternacht durch 86400; Einnahmewochen ohne Pause laufen endlos. */
+    const val PLANFASSUNG_ALT = 1
+
+    /** Anker als Kalendertag; Einnahmewochen ohne Pause sind eine Kur, die endet. */
+    const val PLANFASSUNG_KALENDER = 2
+
     /** Ein Platz im Plan: 26 Byte, davon 16 fuer den Namen (plan.h in SupCycle). */
     private const val PLATZ_BYTES = 26
     private const val NAME_BYTES = 16
@@ -250,39 +264,60 @@ internal object SupCycle {
     }
 
     /**
-     * Der Tag, wie SupCycle ihn zaehlt (plan_today): die Ortsmitternacht in
-     * Sekunden seit 1970, ganzzahlig durch einen Tag. Oestlich von Greenwich
-     * ist das der Kalendertag davor - die Uhr und ihr Anker zaehlen gleich,
-     * also das Telefon auch.
+     * Der Tag, wie SupCycle ihn zaehlt (plan_today) - je nach [fassung] des
+     * Plans, denn der Anker zaehlt genauso.
+     *
+     * [PLANFASSUNG_KALENDER] ist der Kalendertag (days_from_civil in
+     * SupCycles kalender.c, hier toEpochDay). Bis SupCycle 0.15.0
+     * ([PLANFASSUNG_ALT]) war es die Ortsmitternacht in Sekunden seit 1970,
+     * ganzzahlig durch einen Tag: oestlich von Greenwich der Kalendertag
+     * davor, und in London am Umstellungssonntag mitten am Tag springend
+     * (Audit M1). Eine alte Uhr-App rechnet so weiter, also das Telefon mit
+     * ihrem Plan auch.
      */
-    fun uhrTag(tag: LocalDate, zone: ZoneId): Long = Math.floorDiv(tag.atStartOfDay(zone).toEpochSecond(), 86_400L)
+    fun uhrTag(tag: LocalDate, zone: ZoneId, fassung: Int): Long =
+        if (fassung >= PLANFASSUNG_KALENDER) tag.toEpochDay()
+        else Math.floorDiv(tag.atStartOfDay(zone).toEpochSecond(), 86_400L)
 
-    /** Ob [p] am Tag [tag] ansteht - plan_due_on und cycle.c der Uhr nachgerechnet. */
-    fun faelligAm(p: Platz, tag: Long): Boolean {
+    /** Die Fassung aus einer Meldung der Uhr - ohne Schluessel die alte. */
+    fun planfassung(n: KieselNachricht): Int = n.zahlen[SC_PLANFASSUNG]?.toInt() ?: PLANFASSUNG_ALT
+
+    /**
+     * Ob [p] am Tag [tag] ansteht - plan_due_on und cycle.c der Uhr
+     * nachgerechnet, in der [fassung] des Plans.
+     */
+    fun faelligAm(p: Platz, tag: Long, fassung: Int): Boolean {
         if (!p.benutzt) return false
         val seit = maxOf(0L, tag - p.anker)
         if (p.alle > 1 && seit % p.alle != 0L) return false
-        if (p.wochenAn == 0 || p.wochenAus == 0) return true
+        if (p.wochenAn == 0) return true
         val an = p.wochenAn * 7L
+        // Einnahmewochen ohne Pause sind seit Fassung 2 eine Kur, die
+        // nach [wochenAn] Wochen endet (Audit N6); vorher liefen sie endlos.
+        if (p.wochenAus == 0) return fassung < PLANFASSUNG_KALENDER || seit < an
         return seit % (an + p.wochenAus * 7L) < an
     }
 
-    fun faellig(plan: List<Platz>, tag: Long): Long =
-        plan.withIndex().fold(0L) { maske, (i, p) -> if (faelligAm(p, tag)) maske or (1L shl i) else maske }
+    fun faellig(plan: List<Platz>, tag: Long, fassung: Int): Long =
+        plan.withIndex().fold(0L) { maske, (i, p) -> if (faelligAm(p, tag, fassung)) maske or (1L shl i) else maske }
 
     /**
      * Der Stand fuer [heute]. HAT SICH DIE UHR HEUTE NOCH NICHT GEMELDET,
      * rechnet das Telefon aus dem zuletzt gemeldeten Plan, was ansteht -
      * genommen ist dann nichts. Sonst fehlte die Zeile bis zum ersten Haken.
+     * [fassung]: die des gespeicherten Plans.
      */
-    fun standFuer(heute: LocalDate, zone: ZoneId, gemeldet: Stand?, plan: List<Platz>): Stand? = when {
+    fun standFuer(heute: LocalDate, zone: ZoneId, gemeldet: Stand?, plan: List<Platz>, fassung: Int): Stand? = when {
         gemeldet != null && gemeldet.tag == heute -> gemeldet.copy(plan = plan)
         plan.isEmpty() -> null
-        else -> Stand(heute, plan.map { it.name }, faellig(plan, uhrTag(heute, zone)), 0L, plan)
+        else -> Stand(heute, plan.map { it.name }, faellig(plan, uhrTag(heute, zone, fassung), fassung), 0L, plan)
     }
 
     private fun gespeicherterPlan(p: SharedPreferences): List<Platz> =
         p.getString("plan", null)?.let { versuche(TAG, "Gespeicherter Plan") { plan(Base64.decode(it, Base64.DEFAULT)) } }.orEmpty()
+
+    /** Ohne Eintrag stammt der gespeicherte Plan von einer Uhr-App bis 0.15.0 (oder einem Boulder davor). */
+    private fun gespeicherteFassung(p: SharedPreferences): Int = p.getInt("planfassung", PLANFASSUNG_ALT)
 
     /**
      * Der Stand von heute, oder nichts. Gestern ist hier nicht interessant.
@@ -293,7 +328,7 @@ internal object SupCycle {
         val gemeldet = tagOderNull(p.getString("tag", null), TAG)?.let { tag ->
             Stand(tag, p.getString("namen", "")!!.split("\n"), p.getLong("faellig", 0), p.getLong("genommen", 0) and p.getLong("verworfen", 0).inv())
         }
-        return standFuer(LocalDate.now(), ZoneId.systemDefault(), gemeldet, gespeicherterPlan(p))
+        return standFuer(LocalDate.now(), ZoneId.systemDefault(), gemeldet, gespeicherterPlan(p), gespeicherteFassung(p))
     }
 
     /** Die Quote je Tag (faellig, genommen) - fuer Verlauf und Trends. */
@@ -529,7 +564,11 @@ internal object SupCycle {
                 putLong("genommen", genommen)
                 putLong("eingetragen", eingetragen)
                 putLong("verworfen", verworfen)
-                if (planBytes != null) putString("plan", Base64.encodeToString(planBytes, Base64.NO_WRAP))
+                if (planBytes != null) {
+                    putString("plan", Base64.encodeToString(planBytes, Base64.NO_WRAP))
+                    // Die Fassung gehoert zum Plan: mit ihm gemerkt, mit ihm ersetzt.
+                    putInt("planfassung", planfassung(n))
+                }
                 if (zeiten != null) putString("zeiten", zeitenText(zeiten)) else remove("zeiten")
                 schreibeRuecknahme(nochOffen(liesRuecknahme(p), tag, genommen, zeiten))
                 apply()

@@ -16,6 +16,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import kotlin.uuid.Uuid
 
 /**
@@ -133,7 +134,7 @@ internal class KieselsportBegleiter(
             }
         }
 
-        /** Zahlen, Texte und Bytes getrennt - so, wie die Aufgaben sie lesen. */
+        /** Zahlen, Texte und Bytes getrennt - so, wie die Aufgaben sie lesen; dazu die Zone beim Empfang. */
         fun zerlege(daten: Map<Int, Any>): KieselNachricht {
             val zahlen = mutableMapOf<Int, Long>()
             val texte = mutableMapOf<Int, String>()
@@ -149,7 +150,7 @@ internal class KieselsportBegleiter(
                     is ByteArray -> bytes[k] = v
                 }
             }
-            return KieselNachricht(zahlen, texte, bytes)
+            return KieselNachricht(zahlen, texte, bytes, zone = ZoneId.systemDefault().id)
         }
     }
 }

@@ -120,13 +120,15 @@ internal object Drinktervall {
         } ?: return null
         if (wann <= 0) return null
         // Auch der Kaffee faehrt mit, bis das Telefon bestaetigt - also
-        // womoeglich zweimal.
-        if (!Riegel.neu(context, "drinktervall-kaffee", wann.toString())) return null
+        // womoeglich zweimal. Gemerkt wird er erst, wenn er in der Akte steht.
+        if (Riegel.schonDa(context, "drinktervall-kaffee", wann.toString())) return null
 
         val beginn = minOf(Instant.ofEpochSecond(wann), Instant.now())
+        val zone = n.zoneBeimEmpfang()
         val name = Kaffeesorten.name(context, p, if (eigen) n.texte[DT_DRINK_NAME]?.ifBlank { null } ?: context.getString(R.string.ks_h_getraenk_eigen) else null)
-        val satz = Kaffeesorten.satz(p, name, Kieselsport.vonDerUhr("drinktervall-kaffee-$wann"), beginn)
-        return Kieselsport.schreibe(context, satz, context.getString(R.string.ks_w_kaffee_eingetragen, name), riegel = "drinktervall-kaffee")
+        val ende = beginn.plusSeconds(60)
+        val satz = Kaffeesorten.satz(p, name, Kieselsport.vonDerUhr("drinktervall-kaffee-$wann"), beginn, ende, versatz(beginn, zone), versatz(ende, zone))
+        return Kieselsport.schreibe(context, satz, context.getString(R.string.ks_w_kaffee_eingetragen, name), Riegel.Marke("drinktervall-kaffee", wann.toString()))
     }
 
     /** Ein Glas Wasser aus Drinktervall - und nebenbei, mit [merkeZiel], Ziel und Glasgroesse. */
@@ -147,21 +149,22 @@ internal object Drinktervall {
         if (ml <= 0 || wann <= 0) return null
         // NICHT ZWEIMAL FUER DENSELBEN AUGENBLICK: die Uhr schickt ihren Stand
         // bei jeder Gelegenheit mit, nicht nur beim Trinken.
-        if (!Riegel.neu(context, "drinktervall", wann.toString())) return null
+        if (Riegel.schonDa(context, "drinktervall", wann.toString())) return null
+        val zone = n.zoneBeimEmpfang()
 
         // HOECHSTENS JETZT: geht die Uhr ein paar Sekunden vor, laege das Glas
         // in der Zukunft - und die Akte lehnt einen solchen Eintrag ab.
         val beginn = minOf(Instant.ofEpochSecond(wann), Instant.now())
         val satz = HydrationRecord(
             startTime = beginn,
-            startZoneOffset = versatz(beginn),
+            startZoneOffset = versatz(beginn, zone),
             // Eine Minute: die Akte will eine Spanne, und ein Glas trinkt sich
             // nicht in einem Augenblick.
             endTime = beginn.plusSeconds(60),
-            endZoneOffset = versatz(beginn),
+            endZoneOffset = versatz(beginn, zone),
             volume = Volume.milliliters(ml.toDouble()),
             metadata = Kieselsport.vonDerUhr("drinktervall-$wann"),
         )
-        return Kieselsport.schreibe(context, satz, context.getString(R.string.ks_w_eingetragen, ml.toInt()), riegel = "drinktervall")
+        return Kieselsport.schreibe(context, satz, context.getString(R.string.ks_w_eingetragen, ml.toInt()), Riegel.Marke("drinktervall", wann.toString()))
     }
 }

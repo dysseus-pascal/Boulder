@@ -127,8 +127,20 @@ internal object Sicherungsformat {
     }
 }
 
+/** Wohin die Sicherung schreibt: der freigegebene [Ordner], im Test ein Nachbau. */
+internal interface Ablage {
+    /** Die Datei [pfad] mit [inhalt] ueberschreiben oder anlegen; false, wenn es nicht ging. */
+    fun lege(pfad: String, inhalt: String, typ: String = "application/json"): Boolean
+
+    /** Der Inhalt von [pfad], null ohne Datei. */
+    fun hole(pfad: String): String?
+
+    /** [pfad] loeschen; true auch, wenn es ihn nicht gab. */
+    fun weg(pfad: String): Boolean
+}
+
 /** Ein Ordner, den man Boulder einmal freigegeben hat (Storage Access Framework). */
-internal class Ordner(private val context: Context, private val baum: Uri) {
+internal class Ordner(private val context: Context, private val baum: Uri) : Ablage {
     val name: String get() = DocumentFile.fromTreeUri(context, baum)?.name ?: baum.lastPathSegment.orEmpty()
 
     private fun wurzel(): DocumentFile? = DocumentFile.fromTreeUri(context, baum)?.takeIf { it.exists() && it.isDirectory }
@@ -142,7 +154,7 @@ internal class Ordner(private val context: Context, private val baum: Uri) {
         return d to teile.last()
     }
 
-    fun lege(pfad: String, inhalt: String, typ: String = "application/json"): Boolean = try {
+    override fun lege(pfad: String, inhalt: String, typ: String): Boolean = try {
         val (d, datei) = zerlege(pfad, anlegen = true) ?: error("folder not reachable")
         val ziel = d.findFile(datei)?.takeIf { it.isFile } ?: d.createFile(typ, datei) ?: error("cannot create $datei")
         context.contentResolver.openOutputStream(ziel.uri, "wt")?.use { it.write(inhalt.toByteArray()) } ?: error("cannot write $datei")
@@ -152,7 +164,7 @@ internal class Ordner(private val context: Context, private val baum: Uri) {
         false
     }
 
-    fun hole(pfad: String): String? = try {
+    override fun hole(pfad: String): String? = try {
         val (d, datei) = zerlege(pfad, anlegen = false) ?: error("missing")
         val quelle = d.findFile(datei)?.takeIf { it.isFile } ?: error("missing")
         context.contentResolver.openInputStream(quelle.uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
@@ -160,6 +172,14 @@ internal class Ordner(private val context: Context, private val baum: Uri) {
         // Meist gibt es die Datei (noch) nicht - kein Fehler.
         Logger.withTag("Sicherung").i { "Nicht gelesen ($pfad): " + e.message }
         null
+    }
+
+    override fun weg(pfad: String): Boolean = try {
+        val (d, datei) = zerlege(pfad, anlegen = false) ?: error("folder not reachable")
+        d.findFile(datei)?.delete() ?: true
+    } catch (e: Exception) {
+        Logger.withTag("Sicherung").w { "Loeschen ($pfad): " + e.message }
+        false
     }
 
     val erreichbar: Boolean get() = wurzel()?.canWrite() == true
@@ -210,25 +230,89 @@ internal object Sichern {
         val tage = jeTag(stand.eigen)
         val spuren = Spur.alle(context)
         // Die Vorgeschichte getrennt: beim Zurueckholen soll sie wieder nur die Zeit davor fuellen.
-        if (!o.lege(Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString(), jeTag(stand.vorgeschichte)))) {
+        if (!legeSicher(o, Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString(), jeTag(stand.vorgeschichte)), "application/json")) {
             return@withContext context.getString(R.string.ks_b_fehlgeschlagen)
         }
-        val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         // JE ORDNER: nach einem Ordnerwechsel gehoeren die alten Spuren auch in den neuen.
-        val schluessel = "spuren@" + ordnerUri(context)
+        val neu = sichereSpuren(context, o, "spuren@" + ordnerUri(context), spuren)
+        context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit().putLong("zuletzt", System.currentTimeMillis()).apply()
+        context.getString(R.string.ks_b_gesichert, tage.size, neu)
+    }
+
+    /**
+     * Die Spuren, die im Ordner fehlen oder dort kuerzer sind als hier - mit
+     * Zahl der Bytes gemerkt ("beginn:bytes"): die laufende Aufnahme haengt
+     * weiter an, und eine einmal halb gesicherte Spur bliebe sonst halb. Ein
+     * Eintrag ohne Bytes (vor dieser Fassung) gilt als halb und wird einmal
+     * neu gesichert. Rueckgabe: wie viele geschrieben wurden.
+     */
+    internal fun sichereSpuren(context: Context, o: Ablage, schluessel: String, spuren: List<Long>): Int {
+        val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         // Vor 0.25.0 galt eine Liste fuer jeden Ordner: sie zaehlt einmal fuer den jetzigen.
         val oben = (p.getStringSet(schluessel, null) ?: p.getStringSet("spuren", emptySet())).orEmpty().toMutableSet()
         var neu = 0
-        spuren.filter { it.toString() !in oben }.forEach { b ->
+        spuren.forEach { b ->
+            // Erst die Groesse: den Inhalt jeder Spur bei jedem Lauf zu lesen kostete bei Hunderten Trainings Sekunden.
+            if ("$b:${Spur.groesse(context, b)}" in oben) return@forEach
             val inhalt = Spur.roh(context, b) ?: return@forEach
-            if (o.lege(Sicherungsformat.SPURORDNER + "/" + Sicherungsformat.spurname(b), inhalt, "application/x-ndjson")) {
-                oben += b.toString()
+            if (legeSicher(o, spurpfad(b), inhalt, "application/x-ndjson")) {
+                oben.removeAll { it == "$b" || it.startsWith("$b:") }
+                oben += "$b:${inhalt.toByteArray().size}"
                 neu++
             }
         }
-        p.edit().putStringSet(schluessel, oben).putLong("zuletzt", System.currentTimeMillis()).apply()
-        context.getString(R.string.ks_b_gesichert, tage.size, neu)
+        p.edit().putStringSet(schluessel, oben).apply()
+        return neu
     }
+
+    private fun spurpfad(b: Long) = Sicherungsformat.SPURORDNER + "/" + Sicherungsformat.spurname(b)
+
+    /**
+     * Neben [pfad] die Zweitdatei: "boulder.json" wird "boulder-neu.json".
+     * DIESELBE ENDUNG: sonst haengt der Anbieter des Ordners eine passende an,
+     * und die Datei waere beim naechsten Mal nicht mehr zu finden.
+     */
+    internal fun zweitname(pfad: String): String {
+        val punkt = pfad.lastIndexOf('.')
+        return if (punkt <= pfad.lastIndexOf('/')) "$pfad-neu" else pfad.substring(0, punkt) + "-neu" + pfad.substring(punkt)
+    }
+
+    /**
+     * [inhalt] nach [pfad], ohne die letzte gute Fassung aufs Spiel zu setzen:
+     * erst in die Zweitdatei, zurueckgelesen, dann in die Datei selbst, wieder
+     * zurueckgelesen, dann die Zweitdatei weg. Bricht es irgendwo ab, ist eine
+     * der beiden ganz ([holeStand], [holeSpur]). Umbenennen ginge nicht: manche
+     * Anbieter (Cloud) legen bei gleichem Namen eine zweite Datei an.
+     */
+    internal fun legeSicher(o: Ablage, pfad: String, inhalt: String, typ: String): Boolean {
+        val zweit = zweitname(pfad)
+        if (!o.lege(zweit, inhalt, typ) || o.hole(zweit) != inhalt) {
+            Logger.withTag("Sicherung").w { "Zweitdatei $zweit nicht vollstaendig, $pfad bleibt wie sie war" }
+            return false
+        }
+        if (!o.lege(pfad, inhalt, typ) || o.hole(pfad) != inhalt) {
+            Logger.withTag("Sicherung").w { "$pfad nicht vollstaendig, es gilt $zweit" }
+            return false
+        }
+        if (!o.weg(zweit)) Logger.withTag("Sicherung").i { "$zweit bleibt liegen" }
+        return true
+    }
+
+    /** Boulders Sicherung: die juengere lesbare aus Datei und Zweitdatei (siehe [legeSicher]). */
+    internal fun holeStand(o: Ablage, pfad: String = Sicherungsformat.BOULDER): Sicherungsformat.Stand? =
+        listOfNotNull(Sicherungsformat.ausJson(o.hole(pfad)), Sicherungsformat.ausJson(o.hole(zweitname(pfad))))
+            .maxByOrNull { erzeugtUm(it.erzeugt) }
+
+    private fun erzeugtUm(text: String): Instant = try {
+        Instant.parse(text)
+    } catch (e: java.time.format.DateTimeParseException) {
+        Logger.withTag("Sicherung").i { "Zeit der Sicherung nicht lesbar: " + e.message }
+        Instant.EPOCH
+    }
+
+    /** Eine Spur: die laengere aus Datei und Zweitdatei - eine Spur waechst nur, die laengere ist die vollstaendigere. */
+    internal fun holeSpur(o: Ablage, b: Long): String? =
+        listOfNotNull(o.hole(spurpfad(b)), o.hole(zweitname(spurpfad(b)))).maxByOrNull { it.length }
 
     /**
      * Holt aus dem Ordner, was hier fehlt: aus Boulders eigener Sicherung und
@@ -242,8 +326,10 @@ internal object Sichern {
      */
     suspend fun zurueck(context: Context): String = withContext(Dispatchers.IO) {
         val o = ordner(context) ?: return@withContext context.getString(R.string.ks_b_kein_ordner)
-        val staende = listOf(Sicherungsformat.BOULDER, Sicherungsformat.KIESEL_HELPER)
-            .mapNotNull { datei -> Sicherungsformat.ausJson(o.hole(datei))?.let { datei to it } }
+        val staende = listOfNotNull(
+            holeStand(o)?.let { Sicherungsformat.BOULDER to it },
+            Sicherungsformat.ausJson(o.hole(Sicherungsformat.KIESEL_HELPER))?.let { Sicherungsformat.KIESEL_HELPER to it },
+        )
         if (staende.isEmpty()) return@withContext context.getString(R.string.ks_b_keine_sicherung)
         val tage = mutableSetOf<LocalDate>()
         var spuren = 0
@@ -265,7 +351,7 @@ internal object Sichern {
             }
             s.spuren.forEach { b ->
                 if (Spur.vorhanden(context, b)) return@forEach
-                val inhalt = o.hole(Sicherungsformat.SPURORDNER + "/" + Sicherungsformat.spurname(b)) ?: return@forEach
+                val inhalt = holeSpur(o, b) ?: return@forEach
                 if (Spur.schreibeRoh(context, b, inhalt)) spuren++
             }
         }

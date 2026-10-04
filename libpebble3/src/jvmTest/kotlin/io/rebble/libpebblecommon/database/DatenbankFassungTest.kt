@@ -14,10 +14,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.nio.file.Files
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -77,7 +80,7 @@ class DatenbankFassungTest {
         assertNull(runBlocking { db.nachtDao().juengsteNacht() })
         db.close()
         // ... aber vorher kam die ganze Datei daneben, die Fassung im Namen.
-        val kopie = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") }
+        val kopie = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
         roh(kopie) {
             assertEquals(DATENBANK_VERSION + 1L, it.zahl("PRAGMA user_version"))
             assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
@@ -92,6 +95,52 @@ class DatenbankFassungTest {
         assertEquals(beginn, runBlocking { db.nachtDao().juengsteNacht()?.beginnUtc })
         db.close()
         assertEquals(listOf("libpebble3.db"), ordner.listFiles()!!.map { it.name }.filter { it.endsWith(".db") })
+    }
+
+    private fun dbDateien() = ordner.listFiles()!!.map { it.name }.filter { it.endsWith(".db") }.sorted()
+
+    @Test
+    fun beimBauenBleibtDieDateiUnberuehrt() {
+        // In der App baut Koin die Datenbank auf dem Main-Thread (Application.onCreate).
+        // Beiseitegelegt wird erst beim ersten Oeffnen durch Room, auf dessen Abfrage-Thread.
+        schreibeNacht()
+        roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
+        val db = getRoomDatabase(AppContext())
+        assertEquals(listOf("libpebble3.db"), dbDateien())
+        assertNull(runBlocking { db.nachtDao().juengsteNacht() })
+        db.close()
+        assertEquals(1, dbDateien().count { it.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") })
+    }
+
+    @Test
+    fun dieNeuereDateiWirdUmbenanntNichtKopiert() {
+        // Auf das erste Oeffnen wartet der Main-Thread (WatchManager, runBlocking): eine
+        // Kopie dauerte mit der Groesse der Datei, Umbenennen nicht. Gleicher Inode = umbenannt.
+        schreibeNacht()
+        roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
+        val inode = Files.getAttribute(datei.toPath(), "unix:ino")
+        val db = getRoomDatabase(AppContext())
+        runBlocking { db.nachtDao().juengsteNacht() }
+        db.close()
+        val beiseite = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
+        assertEquals(inode, Files.getAttribute(beiseite.toPath(), "unix:ino"))
+    }
+
+    @Test
+    fun laesstSieSichNichtBeiseitelegenBekommtRoomKeineVerbindung() {
+        schreibeNacht()
+        roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
+        val jetzt = Instant.fromEpochMilliseconds(1_790_500_000_000)
+        // Am Zielnamen liegt ein Ordner: das Umbenennen scheitert.
+        File(ordner, "libpebble3-v${DATENBANK_VERSION + 1}-${jetzt.toEpochMilliseconds()}.db").apply { mkdir(); File(this, "x").writeText("x") }
+        val schutz = DowngradeSchutz(BundledSQLiteDriver(), DATENBANK_VERSION, object : Clock { override fun now() = jetzt })
+        // Auch beim zweiten Versuch nicht: sonst leerte Room die Datei.
+        assertFails { schutz.open(datei.absolutePath) }
+        assertFails { schutz.open(datei.absolutePath) }
+        roh {
+            assertEquals(DATENBANK_VERSION + 1L, it.zahl("PRAGMA user_version"))
+            assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
+        }
     }
 
     private fun schema(fassung: Int): JsonObject =

@@ -33,6 +33,19 @@ class Datalogging(
         watchInfo: WatchInfo,
         itemSize: UShort,
     ): Boolean {
+        // Boulder: mit Itemgroesse 0 laesst sich kein Item abteilen. Schritte, Sitzungen
+        // und Heartbeat bestaetigten das Paket bisher ungelesen, die Memfault-Schleife
+        // rueckte nie weiter und endete nur ueber eine Ausnahme beim Lesen. Wie alles
+        // Unlesbare kommt es roh in die Quarantaene; erst danach gibt die Uhr es frei.
+        if (itemSize.toInt() == 0 && wirdGelesen(tag, uuid)) {
+            if (data.isEmpty()) {
+                logger.w { "Datalogging tag $tag with item size 0 and no data; nothing to keep" }
+                return true
+            }
+            logger.e { "Datalogging tag $tag with item size 0 (session $sessionId, ${data.size} bytes); unreadable" }
+            return quarantaene.lege(tag, sessionId, itemSize, data, "item size 0")
+        }
+
         // Handle health tags
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             return when (val ablage = healthDataProcessor.speichere(sessionId, tag, uuid, itemSize, data)) {
@@ -56,6 +69,12 @@ class Datalogging(
         }
         return true
     }
+
+    // Boulder: die Tags, deren Items Boulder selbst liest. Alles andere wird wie
+    // bisher nur bestaetigt (Gesundheit fremder Apps, Datalogging von Watchapps).
+    private fun wirdGelesen(tag: UInt, uuid: Uuid): Boolean =
+        uuid == SYSTEM_APP_UUID &&
+            (tag in HealthDataProcessor.HEALTH_TAGS || tag == MEMFAULT_CHUNKS_TAG || tag == ANALYTICS_HEARTBEAT_TAG)
 
     private fun systemDaten(tag: UInt, data: ByteArray, watchInfo: WatchInfo, itemSize: UShort) {
         when (tag) {

@@ -26,10 +26,12 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
 import kotlinx.io.buffered
 import java.nio.file.Files
+import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -52,6 +54,9 @@ class DlsBestaetigungTest {
         java.io.File(ordner).deleteRecursively()
     }
 
+    /** Wie oft Memfault oder Heartbeat etwas hochgeladen haetten. */
+    private var hochgeladen = 0
+
     /** Was an die Uhr ging und was der Speicher tat, in einer Reihe. */
     private val ereignisse = mutableListOf<String>()
 
@@ -59,8 +64,8 @@ class DlsBestaetigungTest {
         override suspend fun fetchLocker() = error("nicht im Test")
         override suspend fun removeFromLocker(id: Uuid) = error("nicht im Test")
         override suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean) = error("nicht im Test")
-        override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {}
-        override fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo) {}
+        override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) { hochgeladen++ }
+        override fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo) { hochgeladen++ }
     }
 
     /** Die echte NachtDao, deren Speichern eines Teils sich beobachten, bremsen oder scheitern laesst. */
@@ -248,5 +253,56 @@ class DlsBestaetigungTest {
         a.uhr.schicke(5, byteArrayOf(7))
         runCurrent()
         assertEquals(emptyList(), ereignisse)
+    }
+
+    @Test
+    fun itemgroesseNullWirdNichtUngelesenBestaetigt() = runTest {
+        // Schritte, Sitzungen und Heartbeat mit Itemgroesse 0 wurden bestaetigt,
+        // ohne dass etwas gelesen oder abgelegt war - die Uhr gab sie frei, weg waren sie.
+        val a = baue()
+        a.uhr.oeffne(6, 81, 0)
+        a.uhr.oeffne(7, 84, 0)
+        a.uhr.oeffne(8, 87, 0)
+        ereignisse.clear()
+        a.uhr.schicke(6, ByteArray(12) { 1 })
+        a.uhr.schicke(7, ByteArray(12) { 2 })
+        a.uhr.schicke(8, ByteArray(12) { 3 })
+        runCurrent()
+        assertEquals(listOf("ACK 6", "ACK 7", "ACK 8"), ereignisse)
+        val dateien = quarantaeneDateien().sortedBy { it.name }
+        assertEquals(
+            listOf("dls-tag81-item0-", "dls-tag84-item0-", "dls-tag87-item0-"),
+            dateien.map { it.name.substringBefore("1790") },
+        )
+        dateien.forEachIndexed { i, datei -> assertContentEquals(ByteArray(12) { (i + 1).toByte() }, datei.readBytes()) }
+        assertEquals(0, hochgeladen)
+    }
+
+    @Test
+    fun memfaultMitItemgroesseNullEndetUndLiegtInDerQuarantaene() {
+        // Mit Itemgroesse 0 rueckt die Memfault-Leseschleife nicht weiter. Haengt sie,
+        // haengt der DLS-Arbeiter und mit ihm jedes ACK - darum ein eigener Faden mit Frist.
+        var fehler: Throwable? = null
+        val faden = thread(isDaemon = true) {
+            try {
+                runTest {
+                    val a = baue()
+                    a.uhr.oeffne(9, 86, 0)
+                    ereignisse.clear()
+                    a.uhr.schicke(9, ByteArray(16) { 5 })
+                    runCurrent()
+                }
+            } catch (t: Throwable) {
+                fehler = t
+            }
+        }
+        faden.join(30_000)
+        assertFalse(faden.isAlive, "the datalogging worker hangs")
+        fehler?.let { throw it }
+        assertEquals(listOf("ACK 9"), ereignisse)
+        assertEquals(0, hochgeladen)
+        val datei = quarantaeneDateien().single()
+        assertTrue(datei.name.startsWith("dls-tag86-item0-"))
+        assertContentEquals(ByteArray(16) { 5 }, datei.readBytes())
     }
 }

@@ -16,8 +16,10 @@ import kotlin.reflect.KClass
 /**
  * Der Zeitzonenversatz zu einem Zeitpunkt - fuer jeden Eintrag in die Akte.
  * Ohne ihn zeigte die Akte auf Reisen die Ortszeit von hier statt von dort.
+ * [zone]: wo das Telefon zum Zeitpunkt war - bei einem nachgetragenen Eintrag
+ * die beim Empfang (KieselNachricht.zoneBeimEmpfang), nicht die von heute.
  */
-internal fun versatz(t: Instant): ZoneOffset = ZoneId.systemDefault().rules.getOffset(t)
+internal fun versatz(t: Instant, zone: ZoneId = ZoneId.systemDefault()): ZoneOffset = zone.rules.getOffset(t)
 
 /**
  * Die Gesundheitsakte (Health Connect), wenn es sie gibt.

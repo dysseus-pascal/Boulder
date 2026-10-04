@@ -1,9 +1,9 @@
 package coredevices.pebble.timestyle.bild
 
 import io.rebble.libpebblecommon.connection.LatestHeartRate
-import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
-import io.rebble.libpebblecommon.health.OverlayType
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -49,8 +49,11 @@ interface TsDatenQuelle {
 
     suspend fun letzterPuls(): LatestHeartRate?
 
-    /** Schlafabschnitte (Schlaf, Tiefschlaf, Nickerchen) mit Beginn in [von, bis). */
-    suspend fun schlaf(von: Long, bis: Long): List<OverlayDataEntity>
+    /** Boulders Naechte (Tag 88) mit Beginn in [von, bis). */
+    suspend fun naechte(von: Long, bis: Long): List<NachtEntity>
+
+    /** Die Phasen der Naechte mit Beginn in [von, bis). */
+    suspend fun nachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity>
 }
 
 /** Wie lange ein Pulswert "jetzt" bleibt (HS_MAX_AGE_HR_SAMPLE, health_service.c). */
@@ -81,24 +84,28 @@ internal fun tsSchlafFenster(jetzt: Instant, zone: TimeZone): Pair<Long, Long> {
     return von to bis
 }
 
+/** Die Phase "tief" in Boulders Naechten (schlafanalyse.c). */
+private const val PHASE_TIEF = 2
+
 /**
- * Schlaf heute wie activity_sessions.c (prv_compute_sleep_stats): alle
- * Abschnitte, die im Schlaftag ENDEN ([tsSchlafFenster]); Schlaf und
- * Nickerchen zaehlen zum Schlaf, Tief-Schlaf und Tief-Nickerchen zum ruhigen
- * Schlaf. Ergebnis in Sekunden (gesamt, ruhig).
+ * Schlaf heute aus Boulders Naechten (Tag 88), wie die Uhr ihn kuenftig
+ * zeigt: jede Nacht, die im Schlaftag ENDET ([tsSchlafFenster]), mit ihrem
+ * Schlaf ohne Wachminuten; ruhig ist die Phase tief. NICHT AUS DEN
+ * SCHLAFSITZUNGEN (Tag 84): rechnet die Uhr eine Nacht nach, bleiben dort
+ * die alten Bloecke stehen, und eine Summe zaehlte sie doppelt. Ergebnis in
+ * Sekunden (gesamt, ruhig).
  */
-internal fun tsSchlafHeute(abschnitte: List<OverlayDataEntity>, fenster: Pair<Long, Long>): Pair<Int, Int> {
+internal fun tsSchlafHeute(naechte: List<NachtEntity>, abschnitte: List<NachtAbschnittEntity>, fenster: Pair<Long, Long>): Pair<Int, Int> {
     val (von, bis) = fenster
-    // Die Uhr zaehlt je Abschnitt ganze Minuten (length_min).
     var gesamtMin = 0L
     var ruhigMin = 0L
-    for (a in abschnitte) {
-        val ende = a.startTime + a.duration
+    for (n in naechte) {
+        if (n.aufwachen <= n.einschlafen) continue
+        val ende = n.beginnUtc + n.aufwachen * 60L
         if (ende <= von || ende > bis) continue
-        when (a.type) {
-            OverlayType.Sleep.value, OverlayType.Nap.value -> gesamtMin += a.duration / 60
-            OverlayType.DeepSleep.value, OverlayType.DeepNap.value -> ruhigMin += a.duration / 60
-        }
+        gesamtMin += n.schlafMinuten
+        ruhigMin += abschnitte.filter { it.beginnUtc == n.beginnUtc && it.phase == PHASE_TIEF }
+            .sumOf { (minOf(it.bis, n.aufwachen) - maxOf(it.von, n.einschlafen)).coerceAtLeast(0).toLong() }
     }
     return (gesamtMin * 60).toInt() to (ruhigMin * 60).toInt()
 }
@@ -120,9 +127,11 @@ suspend fun tsDatenLesen(
     // health_service_sum_today: von Mitternacht bis jetzt (die laufende Minute eingeschlossen).
     val (schritte, distanzCm) = quelle.schritteUndDistanzCm(mitternacht, jetztUtc + 1) ?: (0L to 0L)
     val fenster = tsSchlafFenster(jetzt, zone)
-    // Ein Abschnitt, der im Fenster endet, beginnt hoechstens einen Tag frueher.
-    val abschnitte = quelle.schlaf(fenster.first - 24 * 60 * 60, fenster.second)
-    val (schlaf, ruhig) = tsSchlafHeute(abschnitte, fenster)
+    // Eine Nacht, die im Fenster endet, beginnt hoechstens einen Tag frueher.
+    val ab = fenster.first - 24 * 60 * 60
+    val naechte = quelle.naechte(ab, fenster.second)
+    val abschnitte = if (naechte.isEmpty()) emptyList() else quelle.nachtAbschnitte(ab, fenster.second)
+    val (schlaf, ruhig) = tsSchlafHeute(naechte, abschnitte, fenster)
     val uhrVersatz = zone.offsetAtSekunden(jetzt)
     return TsDaten(
         wetter = tsWetterAusSatz(quelle.wetter(), jetzt, uhrVersatz, uvJeStunde),

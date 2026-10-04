@@ -203,6 +203,16 @@ class SitzungsendeTest {
     }
 
     @Test
+    fun zwei_punkte_derselben_sekunde_werfen_nicht() {
+        // Die Spur speichert Sekunden; das gebuendelte GPS liefert zwei Fixe in einer.
+        // Die Akte verlangt streng steigende Zeiten - es bleibt der erste.
+        val doppelt = listOf(p(1_000_010), Spur.Punkt(1_000_010, 47.001, 8.0, null, 5f), p(1_000_500))
+        val route = Kieselsport.routeAus(doppelt, a, a.plusSeconds(600))!!
+        org.junit.Assert.assertEquals(listOf(1_000_010L, 1_000_500L), route.route.map { it.time.epochSecond })
+        org.junit.Assert.assertEquals(47.0, route.route.first().latitude, 0.0)
+    }
+
+    @Test
     fun route_ohne_punkte_vor_dem_beginn() {
         val ende = Kieselsport.sitzungsEnde(a, 60, listOf(p(999_990), p(1_000_010), p(1_000_500)), a.plusSeconds(99_999))
         val route = Kieselsport.routeAus(listOf(p(999_990), p(1_000_010), p(1_000_500)), a, ende)!!

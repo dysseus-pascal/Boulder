@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.metadata.Metadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.UUID
 import kotlin.reflect.KClass
 
 /**
@@ -56,13 +57,17 @@ internal object Akteneintraege {
         }
     }
 
-    /** Eine Tasse von Hand - mit denselben Werten, die die Uhr fuer diese Sorte eintraegt. */
-    suspend fun trinkeKoffein(context: Context, art: Int): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * Eine Tasse von Hand - mit denselben Werten, die die Uhr fuer diese Sorte eintraegt.
+     * [jetzt] nur fuer Tests: zwei Tassen in derselben Sekunde.
+     */
+    suspend fun trinkeKoffein(context: Context, art: Int, jetzt: Instant = Instant.now()): Boolean = withContext(Dispatchers.IO) {
         val p = Kaffeesorten.portion(art) ?: return@withContext false
-        val jetzt = Instant.now()
         try {
-            // Eigene Kennung per manualEntry - manualEntryWithId setzte die der Akte.
-            val metadaten = Metadata.manualEntry("koffein-${jetzt.epochSecond}", 0L, Device(type = Device.TYPE_PHONE))
+            // Eigene Kennung per manualEntry - manualEntryWithId setzte die der Akte. EINDEUTIG
+            // JE TASSE: bei gleicher Kennung ersetzte die Akte die erste. Der Anfang bleibt
+            // "koffein-", an ihm erkennt die Gesundheitsseite das Getraenk.
+            val metadaten = Metadata.manualEntry("koffein-${jetzt.epochSecond}-${UUID.randomUUID()}", 0L, Device(type = Device.TYPE_PHONE))
             Akte(context).bereit()?.insertRecords(listOf(Kaffeesorten.satz(p, Kaffeesorten.name(context, p), metadaten, jetzt))) != null
         } catch (e: Exception) {
             logger.w { "Koffein eintragen: " + e.message }

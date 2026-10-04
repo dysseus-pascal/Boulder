@@ -16,17 +16,36 @@ import coredevices.pebble.kiesel.ansicht.einheitenImperialHolen
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.DateTimeException
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import kotlin.uuid.Uuid
 
-/** Eine Nachricht von Kieselsport, nach Art der Werte getrennt. */
+/**
+ * Eine Nachricht von Kieselsport, nach Art der Werte getrennt.
+ *
+ * [zone]: die Zeitzone des Telefons beim Empfang. Eine liegengebliebene
+ * Nachricht wird womoeglich erst nach einer Reise eingetragen - ihr Versatz
+ * ist dann der von dort, wo sie ankam. Null bei Dateien aelterer Fassungen.
+ */
 @Serializable
 internal data class KieselNachricht(
     val zahlen: Map<Int, Long>,
     val texte: Map<Int, String> = emptyMap(),
     val bytes: Map<Int, ByteArray> = emptyMap(),
-)
+    val zone: String? = null,
+) {
+    /** Die Zone beim Empfang, sonst die von jetzt. */
+    fun zoneBeimEmpfang(): ZoneId = zone?.let { id ->
+        try {
+            ZoneId.of(id)
+        } catch (e: DateTimeException) {
+            Logger.withTag("Kieselsport").w { "Zone $id unbrauchbar, nehme die von jetzt: ${e.message}" }
+            null
+        }
+    } ?: ZoneId.systemDefault()
+}
 
 /**
  * Kieselsport - was die Trainings-App der Uhr dem Telefon sagt.
@@ -378,12 +397,12 @@ internal object Kieselsport {
         val plan = Trainingspausen.ausUhr(n.bytes[SP_PAUSEN], beginn, dauer, felder[SP_ENDE])
             ?.also { Trainingspausen.uebernimm(context, beginn, it) }
             ?: Trainingspausen.pruefe(context, beginn, dauer, jetzt.epochSecond)
-        if (!Riegel.neu(context, "kieselsport", beginn.toString())) return null
+        // Gesetzt wird der Riegel erst in schreibe, wenn die Akte die Sitzung genommen hat.
+        if (Riegel.schonDa(context, "kieselsport", beginn.toString())) return null
+        val riegel = Riegel.Marke("kieselsport", beginn.toString())
 
-        if (Akte(context).bereit() == null) {
-            Riegel.loese(context, "kieselsport")
-            return context.getString(R.string.ks_g_akte_fehlt)
-        }
+        if (Akte(context).bereit() == null) return context.getString(R.string.ks_g_akte_fehlt)
+        val zone = n.zoneBeimEmpfang()
         val anfang = Instant.ofEpochSecond(beginn)
         // DIE STRECKE KOMMT VOM TELEFON, nicht von der Uhr - als Route an der Sitzung.
         val alle = withContext(Dispatchers.IO) { Spur.lies(context, beginn) }
@@ -395,14 +414,24 @@ internal object Kieselsport {
         val kcal = felder[SP_KCAL] ?: 0
 
         val strecke = if (punkte.size >= 2) Spur.laenge(punkte) else 0.0
-        val route = routeAus(punkte, anfang, ende)
-
         val abschnitte = abschnitteAus(texte[SP_ABSCHNITTE])
         val bahnen = felder[SP_BAHNEN] ?: 0
         val becken = if (bahnen > 0) (felder[SP_METER] ?: 0).toDouble() / bahnen else 0.0
-        val saetze = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende, plan.pausen)
-        val runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList()
-        val pausen = pausenSegmente(mitNachlauf(plan, ende), anfang, ende, saetze)
+        // DIE AKTE PRUEFT SCHON IM KONSTRUKTOR (Route, Bahnen): was sie abweist, wirft hier.
+        // Dann bleibt die Datei liegen, und der naechste Start versucht es wieder.
+        val stuecke = try {
+            val saetze = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende, plan.pausen)
+            Stuecke(
+                route = routeAus(punkte, anfang, ende),
+                saetze = saetze,
+                runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList(),
+                pausen = pausenSegmente(mitNachlauf(plan, ende), anfang, ende, saetze),
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.w { "Training $beginn nicht zu bauen, bleibt liegen: " + e.message }
+            return context.getString(R.string.ks_a_nicht_eingetragen)
+        }
+        val (route, saetze, runden, pausen) = stuecke
 
         // NUR SAETZE UND BAHNEN IN DIE NOTIZ. Puls, Strecke und Kalorien der
         // Uhr standen frueher auch darin - roh, nicht entstoert, die kcal aus
@@ -413,7 +442,7 @@ internal object Kieselsport {
         // Bahnen streng und weist im Zweifel den GANZEN Eintrag ab.
         fun sitzung(segmente: List<ExerciseSegment>, laps: List<ExerciseLap>): ExerciseSessionRecord? = try {
             ExerciseSessionRecord(
-                startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
+                startTime = anfang, startZoneOffset = versatz(anfang, zone), endTime = ende, endZoneOffset = versatz(ende, zone),
                 exerciseType = satzart, title = name, notes = notiz,
                 metadata = vonDerUhr(kennung(beginn)),
                 segments = segmente.sortedBy { it.startTime }, laps = laps, exerciseRoute = route,
@@ -431,10 +460,10 @@ internal object Kieselsport {
             if (saetze.isNotEmpty()) append(", " + context.getString(R.string.ks_a_saetze, (felder[SP_SAETZE] ?: 0).toInt()))
         }
         val kurz = context.getString(R.string.ks_a_eingetragen, name, (dauer / 60).toInt(), dazu)
-        var meldung = schreibe(context, satz ?: ohne, kurz, riegel = "kieselsport")
+        var meldung = schreibe(context, satz ?: ohne, kurz, riegel)
         if (hatAbschnitte && meldung == context.getString(R.string.ks_a_nicht_eingetragen)) {
             logger.w { "Eintrag mit Abschnitten abgewiesen, zweiter Anlauf ohne" }
-            meldung = schreibe(context, ohne, context.getString(R.string.ks_a_ohne_abschnitte, kurz), riegel = "kieselsport")
+            meldung = schreibe(context, ohne, context.getString(R.string.ks_a_ohne_abschnitte, kurz), riegel)
         }
 
         // Kalorien und Strecke als eigene Saetze - auch wenn die Sitzung
@@ -444,17 +473,19 @@ internal object Kieselsport {
         Trainingswerte.schreibeKalorienDerUhr(context, beginn, anfang, ende, kcal)
 
         // YOGA BRINGT EINE HRV MIT - als eigener Satz zum Ende des Trainings.
-        felder[SP_HRV]?.takeIf { it in 5..300 }?.let { hrv ->
-            if (Riegel.neu(context, "kieselsport-hrv", beginn.toString())) {
+        // Hoechstens 200 ms: mehr weist schon der Konstruktor ab, und der Wurf nahm Kurve und Kalorien mit.
+        felder[SP_HRV]?.takeIf { it !in HRV_MS }?.let { logger.i { "HRV $it ms von $beginn ausserhalb $HRV_MS, nicht eingetragen" } }
+        felder[SP_HRV]?.takeIf { it in HRV_MS }?.let { hrv ->
+            if (!Riegel.schonDa(context, "kieselsport-hrv", beginn.toString())) {
                 schreibe(
                     context,
                     HeartRateVariabilityRmssdRecord(
-                        time = ende, zoneOffset = versatz(ende),
+                        time = ende, zoneOffset = versatz(ende, zone),
                         heartRateVariabilityMillis = hrv.toDouble(),
                         metadata = vonDerUhr("kieselsport-hrv-$beginn"),
                     ),
                     context.getString(R.string.ks_a_hrv_eingetragen, hrv.toInt()),
-                    riegel = "kieselsport-hrv",
+                    Riegel.Marke("kieselsport-hrv", beginn.toString()),
                 )
                 meldung += ", " + context.getString(R.string.ks_a_hrv, hrv.toInt())
             }
@@ -551,7 +582,11 @@ internal object Kieselsport {
     fun routeAus(punkte: List<Spur.Punkt>, von: Instant, bis: Instant): ExerciseRoute? =
         Spur.inSitzung(punkte, von, bis).takeIf { it.size >= 2 }?.let(::routeAus)
 
-    fun routeAus(punkte: List<Spur.Punkt>): ExerciseRoute = ExerciseRoute(punkte.map { p ->
+    /**
+     * Die Akte verlangt streng steigende Zeiten, die Spur kennt nur Sekunden:
+     * zwei Punkte derselben Sekunde liessen die ganze Sitzung werfen. Der erste bleibt.
+     */
+    fun routeAus(punkte: List<Spur.Punkt>): ExerciseRoute = ExerciseRoute(punkte.distinctBy { it.zeit }.map { p ->
         ExerciseRoute.Location(
             time = Instant.ofEpochSecond(p.zeit),
             latitude = p.lat,
@@ -576,23 +611,31 @@ internal object Kieselsport {
         Metadata.autoRecorded(Device(type = Device.TYPE_WATCH), kennung)
 
     /**
-     * In die Akte schreiben - und bei einem Fehlschlag den Riegel wieder
-     * oeffnen, sonst liefe der naechste Versuch der Uhr ins Leere.
+     * In die Akte schreiben - und erst danach den [riegel] setzen: bricht
+     * das Eintragen ab, auch durch das Ende des Prozesses, fehlt der Riegel,
+     * und der naechste Versuch traegt ein.
      */
-    suspend fun schreibe(context: Context, satz: Record, meldung: String, riegel: String? = null): String {
-        val klient = Akte(context).bereit()
-        if (klient == null) {
-            riegel?.let { Riegel.loese(context, it) }
-            return context.getString(R.string.ks_g_akte_fehlt)
-        }
+    suspend fun schreibe(context: Context, satz: Record, meldung: String, riegel: Riegel.Marke? = null): String {
+        val klient = Akte(context).bereit() ?: return context.getString(R.string.ks_g_akte_fehlt)
         return try {
             klient.insertRecords(listOf(satz))
+            riegel?.let { Riegel.merke(context, it) }
             meldung
         } catch (e: Exception) {
             // Die haeufigste Ursache ist eine fehlende Erlaubnis.
             logger.w { "Eintragen fehlgeschlagen: " + e.message }
-            riegel?.let { Riegel.loese(context, it) }
             context.getString(R.string.ks_a_nicht_eingetragen)
         }
     }
+
+    /** Was die Akte an der Sitzung eines Trainings prueft (siehe trageEin). */
+    private data class Stuecke(
+        val route: ExerciseRoute?,
+        val saetze: List<ExerciseSegment>,
+        val runden: List<ExerciseLap>,
+        val pausen: List<ExerciseSegment>,
+    )
+
+    /** Was Health Connect als RMSSD annimmt. */
+    private val HRV_MS = 5L..200L
 }

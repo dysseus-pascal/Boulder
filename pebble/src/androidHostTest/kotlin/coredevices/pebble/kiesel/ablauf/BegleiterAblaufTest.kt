@@ -357,7 +357,9 @@ class BegleiterAblaufTest {
         val eingang = Channel<AppMessageData>(Channel.UNLIMITED)
         runBlocking { KieselsportBegleiter(context, geraet(uhr)).start(eingang.consumeAsFlow()) }
         eingang.trySend(zusammenfassung(6))
-        warte("erster Versuch") { zeilen() == 1 }
+        // Bis auch der Vermerk im Namen steht: die Zeile kommt kurz davor, und ein Start dazwischen
+        // fande die Datei noch unter dem alten Namen, die der Arbeiter gleich darauf umbenennt.
+        warte("erster Versuch") { zeilen() == 1 && kieselAblage.listFiles().orEmpty().all { Wartend.gemeldet(it) } }
         val versuche = akte.schreibversuche
         for (start in 1..2) {
             runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }

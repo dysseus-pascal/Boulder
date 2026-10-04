@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.withLock
 import net.osmand.aidlapi.IOsmAndAidlCallback
 import net.osmand.aidlapi.IOsmAndAidlInterface
 import net.osmand.aidlapi.gpx.AGpxBitmap
+import net.osmand.aidlapi.info.AppInfoParams
 import net.osmand.aidlapi.logcat.OnLogcatMessageParams
 import net.osmand.aidlapi.navigation.ADirectionInfo
 import net.osmand.aidlapi.navigation.ANavigationUpdateParams
@@ -84,9 +85,17 @@ internal object Kieselstrasse {
     val stand: StateFlow<Stand> = _stand.asStateFlow()
     val lage: Lage get() = _stand.value.lage
 
-    @Volatile private var api: IOsmAndAidlInterface? = null
+    /**
+     * OsmAnds Schnittstelle, solange gebunden. AUFRUFE DARIN NIE UNTER DER
+     * SPERRE DIESES OBJEKTS: sie gehen in OsmAnds Prozess, ohne Zeitlimit -
+     * haengt OsmAnd, warteten sonst alle Wege hier (Uhr-App, Bindung, Takt).
+     * Intern statt privat nur fuer den Test (eine Attrappe von OsmAnd).
+     */
+    @Volatile internal var api: IOsmAndAidlInterface? = null
     private var verbindung: ServiceConnection? = null
     private var aboNummer = -1L
+    // Ein Abonnieren laeuft gerade ausserhalb der Sperre - ein zweites gleichzeitiges hielte zwei Rueckrufe fest.
+    private var abonniertGerade = false
     private var app: Context? = null
     private var libPebble: LibPebble? = null
     private val bereich = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -165,19 +174,22 @@ internal object Kieselstrasse {
         if (lage != Lage.BEREIT && lage != Lage.ABONNIERT) pruefe(context)
     }
 
-    @Synchronized
     private fun pruefeJetzt(ctx: Context) {
-        if (app == null) app = ctx
-        if (api != null) {
-            abonniere(ctx)
-            return
+        val gebunden = synchronized(this) {
+            if (app == null) app = ctx
+            if (api == null) {
+                abruf.pruefe(jetzt())
+                stimme(ctx)
+                false
+            } else {
+                true
+            }
         }
-        abruf.pruefe(jetzt())
-        stimme(ctx)
+        if (gebunden) abonniere(ctx)
     }
 
     @Synchronized
-    private fun uhrApp(ctx: Context, offen: Boolean) {
+    internal fun uhrApp(ctx: Context, offen: Boolean) {
         if (abruf.uhrApp(offen, jetzt())) {
             // Die Uhr-App ist neu gestartet und kennt nur ihren gespeicherten Stand.
             letzteArt = -1
@@ -257,21 +269,24 @@ internal object Kieselstrasse {
         abruf.geprueft()
     }
 
-    @Synchronized
     private fun nachDemBinden(ctx: Context) {
         abonniere(ctx)
-        abruf.geprueft()
-        if (abruf.offen) frageAb(ctx)
-        stimme(ctx)
+        val offen = synchronized(this) {
+            abruf.geprueft()
+            abruf.offen
+        }
+        if (offen) frageAb(ctx)
+        synchronized(this) { stimme(ctx) }
     }
 
     // Eine verspaetete Meldung einer schon geloesten Bindung darf nichts mehr setzen.
-    @Synchronized
     private fun verbunden(ctx: Context, verb: ServiceConnection, paket: String, binder: IBinder?) {
-        if (verbindung !== verb) return
-        api = IOsmAndAidlInterface.Stub.asInterface(binder)
-        setzeLage(Lage.VERBUNDEN, paket)
-        KieselVerlauf.merke(ctx, ctx.getString(R.string.ks_o_verbunden_v, paket))
+        synchronized(this) {
+            if (verbindung !== verb) return
+            api = IOsmAndAidlInterface.Stub.asInterface(binder)
+            setzeLage(Lage.VERBUNDEN, paket)
+            KieselVerlauf.merke(ctx, ctx.getString(R.string.ks_o_verbunden_v, paket))
+        }
         nachDemBinden(ctx)
     }
 
@@ -330,17 +345,31 @@ internal object Kieselstrasse {
         })
     }
 
-    @Synchronized
     private fun abonniere(ctx: Context) {
-        val schnitt = api ?: return
-        if (aboNummer >= 0) return
-        try {
+        val schnitt = synchronized(this) {
+            if (aboNummer >= 0 || abonniertGerade) return
+            api?.also { abonniertGerade = true }
+        } ?: return
+        // Der Aufruf in OsmAnd ohne Sperre (siehe api).
+        val nummer = try {
             // -1 heisst: OsmAnd hat Boulder als verbundene App eingetragen,
             // aber ausgeschaltet - erst ein Schalter unter Plugins gibt sie frei.
-            val nummer = schnitt.registerForNavigationUpdates(
-                ANavigationUpdateParams().apply { setSubscribeToUpdates(true) },
-                rueckruf,
-            )
+            schnitt.registerForNavigationUpdates(ANavigationUpdateParams().apply { setSubscribeToUpdates(true) }, rueckruf)
+        } catch (e: Exception) {
+            logger.w { "Abonnieren fehlgeschlagen: " + e.message }
+            synchronized(this) {
+                abonniertGerade = false
+                if (api === schnitt) setzeLage(Lage.ABO_FEHLER, e.message.orEmpty())
+            }
+            return
+        }
+        synchronized(this) {
+            abonniertGerade = false
+            // Inzwischen geloest: das Abo gehoert zu keiner Bindung mehr.
+            if (api !== schnitt) {
+                if (nummer >= 0) bestelleAb(schnitt, nummer)
+                return
+            }
             aboNummer = nummer
             if (nummer < 0) {
                 setzeLage(Lage.FREISCHALTEN)
@@ -348,9 +377,6 @@ internal object Kieselstrasse {
             } else {
                 setzeLage(Lage.ABONNIERT)
             }
-        } catch (e: Exception) {
-            logger.w { "Abonnieren fehlgeschlagen: " + e.message }
-            setzeLage(Lage.ABO_FEHLER, e.message.orEmpty())
         }
     }
 
@@ -358,18 +384,25 @@ internal object Kieselstrasse {
     private fun abbestelle() {
         val schnitt = api ?: return
         if (aboNummer < 0) return
-        try {
-            schnitt.registerForNavigationUpdates(
-                ANavigationUpdateParams().apply {
-                    setSubscribeToUpdates(false)
-                    callbackId = aboNummer
-                },
-                rueckruf,
-            )
-        } catch (e: Exception) {
-            logger.w { "Abbestellen fehlgeschlagen: " + e.message }
-        }
+        bestelleAb(schnitt, aboNummer)
         aboNummer = -1L
+    }
+
+    /** Im Hintergrund: der Aufruf geht in OsmAnds Prozess, und der Aufrufer haelt die Sperre (siehe api). */
+    private fun bestelleAb(schnitt: IOsmAndAidlInterface, nummer: Long) {
+        bereich.launch {
+            try {
+                schnitt.registerForNavigationUpdates(
+                    ANavigationUpdateParams().apply {
+                        setSubscribeToUpdates(false)
+                        callbackId = nummer
+                    },
+                    rueckruf,
+                )
+            } catch (e: Exception) {
+                logger.w { "Abbestellen fehlgeschlagen: " + e.message }
+            }
+        }
     }
 
     // Nur als Anlass: die Werte holt immer frageAb, so gibt es einen Weg zu ihnen.
@@ -392,21 +425,35 @@ internal object Kieselstrasse {
      * Abonnement stand. Ob er es in Boulder tut, steht im Verlauf: der erste
      * je Bindung wird vermerkt, die Zahl beim Loesen.
      */
-    @Synchronized
     private fun rueckrufKam(ctx: Context) {
-        if (abruf.rueckruf()) {
-            KieselVerlauf.merke(ctx, ctx.getString(R.string.ks_o_rueckruf_v))
-            stimme(ctx)
+        val offen = synchronized(this) {
+            if (abruf.rueckruf()) {
+                KieselVerlauf.merke(ctx, ctx.getString(R.string.ks_o_rueckruf_v))
+                stimme(ctx)
+            }
+            abruf.offen
         }
-        if (abruf.offen) frageAb(ctx)
+        if (offen) frageAb(ctx)
     }
 
-    /** getAppInfo liefert, was der Rueckruf meldet, auf Nachfrage. */
-    @Synchronized
-    private fun frageAb(ctx: Context) {
+    /** getAppInfo liefert, was der Rueckruf meldet, auf Nachfrage. Nie unter der Sperre aufrufen (siehe api). */
+    internal fun frageAb(ctx: Context) {
         val schnitt = api ?: return
+        val info = try {
+            schnitt.appInfo
+        } catch (e: Exception) {
+            logger.w { "Nachfrage fehlgeschlagen: " + e.message }
+            return
+        } ?: return
+        synchronized(this) {
+            // Inzwischen geloest: die Antwort gehoert zu keiner Bindung mehr.
+            if (api !== schnitt) return
+            nimmAntwort(ctx, info)
+        }
+    }
+
+    private fun nimmAntwort(ctx: Context, info: AppInfoParams) {
         try {
-            val info = schnitt.appInfo ?: return
             val kurve = info.turnInfo
             // "next_" ist die Abzweigung, die kommt; nur sie hat eine Entfernung.
             val meter = kurve?.getInt("next_turn_distance", -1) ?: -1
@@ -445,18 +492,51 @@ internal object Kieselstrasse {
         letzteArt = art
         letzteMeter = meter
         letzterTakt = jetzt
+        sende(felderFuerUhr(meter, art, strasse, ankunft, rest, ausfahrt, winkel))
+    }
 
+    /** Die Felder einer Anweisung an die Uhr-App. */
+    fun felderFuerUhr(meter: Int, art: Int, strasse: String, ankunft: Long, rest: Int, ausfahrt: Int, winkel: Int?): Map<Int, Any> {
         val felder = mutableMapOf<Int, Any>(
             ABBIEGEART to art,
             ENTFERNUNG to meter,
             // Leer loescht auf der Uhr die Strasse der vorigen Abzweigung.
-            STRASSE to strasse,
+            STRASSE to strasseFuerUhr(strasse),
         )
-        if (ankunft > 0) felder[ANKUNFT] = ankunft.toInt()
+        // ALS INT32 MIT DEN BITS DER VORZEICHENLOSEN ZAHL: die Uhr nimmt nur TUPLE_INT. Bis 2038
+        // ist es dieselbe Zahl; ab dann muss die Uhr sie als uint32 lesen, die App schickt schon richtig.
+        if (ankunft in 1..0xFFFF_FFFFL) felder[ANKUNFT] = ankunft.toUInt().toInt()
         if (rest > 0) felder[REST] = rest
         if (ausfahrt > 0) felder[AUSFAHRT] = ausfahrt
         if (winkel != null) felder[WINKEL] = winkel
-        sende(felder)
+        return felder
+    }
+
+    /** So viele Bytes behaelt die Uhr vom Strassennamen (KST_STRASSE_LEN 48, mit Nullbyte). */
+    const val STRASSE_BYTES = 47
+
+    /**
+     * Der Name, auf [STRASSE_BYTES] Bytes UTF-8 gekuerzt - an einer
+     * Zeichengrenze. Die Uhr kuerzt selbst byteweise, auch mitten in einem
+     * Umlaut, und ungueltiges UTF-8 zeichnet sie gar nicht: die Zeile bliebe
+     * leer. Kuerzer ist auch die Nachricht - ueber 320 Bytes verwirft die Uhr sie ganz.
+     */
+    fun strasseFuerUhr(s: String): String {
+        var bytes = 0
+        var i = 0
+        while (i < s.length) {
+            val zeichen = s.codePointAt(i)
+            val laenge = when {
+                zeichen < 0x80 -> 1
+                zeichen < 0x800 -> 2
+                zeichen < 0x10000 -> 3
+                else -> 4
+            }
+            if (bytes + laenge > STRASSE_BYTES) break
+            bytes += laenge
+            i += Character.charCount(zeichen)
+        }
+        return s.substring(0, i)
     }
 
     /** Minus eins heisst "keine Zahl" - eine Null hiesse "genau hier abbiegen". */

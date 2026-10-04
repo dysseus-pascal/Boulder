@@ -568,7 +568,6 @@ class FakeLibPebble : LibPebble {
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()
     override suspend fun getTypicalSteps(dayOfWeek: Int) = emptyList<Long>()
     override suspend fun getTypicalSleepSeconds() = 0L
-    override suspend fun populateDebugHealthData() {}
 }
 
 fun fakeWatches(): List<PebbleDevice> {

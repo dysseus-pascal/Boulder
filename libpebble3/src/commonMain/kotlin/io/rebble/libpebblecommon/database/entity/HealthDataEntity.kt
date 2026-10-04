@@ -32,7 +32,10 @@ data class OverlayDataEntity(
     val steps: Int,
     val restingKiloCalories: Int,
     val activeKiloCalories: Int,
-    val distanceCm: Int,
+    // Boulder: die Firmware schickt Meter (ActivitySessionDataStepping.distance_meters);
+    // die Spalte behaelt ihren alten Namen, damit kein Schema wechselt.
+    @ColumnInfo(name = "distanceCm")
+    val distanceM: Int,
     val offsetUTC: Int,
     /** Selbst gestartet (Training) statt von der Uhr erkannt. Nur die Boulder-Firmware liefert es. */
     @ColumnInfo(defaultValue = "0")

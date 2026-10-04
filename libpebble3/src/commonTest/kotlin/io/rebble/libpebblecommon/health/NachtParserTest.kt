@@ -88,7 +88,40 @@ class NachtParserTest {
 
     @Test
     fun unbekannteFassungWirdUebersprungen() {
-        assertEquals(0, parseNachtData(satz(version = 2, abschnitte = emptyList()), 324u).size)
+        val verworfen = mutableListOf<String>()
+        assertEquals(0, parseNachtData(satz(version = 2, abschnitte = emptyList()), 324u) { verworfen += it }.size)
+        assertEquals(1, verworfen.size)
+    }
+
+    @Test
+    fun fremdeGroesseIstKeineNacht() {
+        // Ein 40-Byte-Satz mit Bit 0 (Tag 88 koennte einmal Upstream belegen).
+        val kurz = satz(abschnitte = emptyList()).copyOf(40).also { it[2] = 40; it[3] = 0 }
+        assertTrue(parseNachtData(kurz, 40u).isEmpty())
+        // Itemgroesse stimmt, das size-Feld des Satzes nicht.
+        val falsch = satz(version = 3, abschnitte = listOf(Triple(137, 200, 1))).also { it[2] = 44; it[3] = 1 }
+        assertTrue(parseNachtData(falsch, 328u).isEmpty())
+        assertEquals(1, parseNachtData(satz(version = 3, abschnitte = listOf(Triple(137, 200, 1))), 328u).size)
+    }
+
+    @Test
+    fun unmoeglicherTeilWirdVerworfen() {
+        assertTrue(parseNachtData(satz(teil = 2, teile = 2, abschnitte = emptyList()), 324u).isEmpty())
+        // Eine Nacht ohne Abschnitte schickt die Firmware als Teil 0 von 0 (nacht.c, prv_schicke).
+        val leer = parseNachtData(satz(teil = 0, teile = 0, abschnitte = emptyList()), 324u).single()
+        assertEquals(0, leer.teile)
+        assertEquals(490, leer.nacht.schlafMinuten)
+    }
+
+    @Test
+    fun unplausibleAbschnitteFallenWeg() {
+        val verworfen = mutableListOf<String>()
+        val t = parseNachtData(
+            satz(abschnitte = listOf(Triple(137, 192, 1), Triple(300, 100, 2), Triple(192, 225, 9), Triple(225, 280, 3))),
+            324u,
+        ) { verworfen += it }.single()
+        assertEquals(listOf(137 to 192, 225 to 280), t.abschnitte.map { it.von to it.bis })
+        assertEquals(1, verworfen.size)
     }
 }
 
@@ -141,6 +174,14 @@ class NachtHrvParserTest {
         assertEquals(48, teile[0].fenster.size)
         assertEquals(1, teile[1].teil)
         assertEquals(480, teile[1].fenster.single().minute)
+    }
+
+    @Test
+    fun fremdeGroesseIstKeinHrvSatz() {
+        val kurz = satz(fenster = listOf(Triple(0, 50, 50))).copyOf(100).also { it[2] = 100; it[3] = 0 }
+        assertTrue(parseNachtHrvData(kurz, 100u).isEmpty())
+        val falsch = satz(fenster = listOf(Triple(0, 50, 50))).also { it[2] = 0; it[3] = 1 }
+        assertTrue(parseNachtHrvData(falsch, 251u).isEmpty())
     }
 
     @Test

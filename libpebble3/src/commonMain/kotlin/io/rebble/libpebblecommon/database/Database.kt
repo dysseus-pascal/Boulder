@@ -9,6 +9,8 @@ import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.SQLiteDriver
+import co.touchlab.kermit.Logger
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
@@ -67,8 +69,19 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntryEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntrySyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 internal const val DATABASE_FILENAME = "libpebble3.db"
+
+// Boulder: die Fassung des Schemas, an einer Stelle - sichereNeuereDatenbank vergleicht damit.
+internal const val DATENBANK_VERSION = 50
+
+private val logger = Logger.withTag("Database")
 
 @androidx.room.Database(
     entities = [
@@ -106,7 +119,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NachtAbschnittEntity::class,
         NachtHrvEntity::class,
     ],
-    version = 50,
+    version = DATENBANK_VERSION,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -204,9 +217,105 @@ fun getRoomDatabase(ctx: AppContext): Database {
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
         // V7 required a full re-create.
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-        .setDriver(BundledSQLiteDriver())
+        // Boulder: der Treiber legt eine neuere Datei beiseite, bevor Room sie leert.
+        .setDriver(DowngradeSchutz(BundledSQLiteDriver(), DATENBANK_VERSION, Clock.System))
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
 }
 
 internal expect fun getDatabaseBuilder(ctx: AppContext): RoomDatabase.Builder<Database>
+
+/**
+ * Boulder: legt eine Datei einer neueren Fassung beiseite, bevor Room sie oeffnet
+ * (siehe [sichereNeuereDatenbank]).
+ *
+ * Das geschieht im ersten open() von Room, nicht beim Bauen der Datenbank: gebaut
+ * wird sie in der App auf dem Main-Thread (Application.onCreate, ueber Koin),
+ * geoeffnet erst beim ersten Zugriff, auf dem Abfrage-Thread (Dispatchers.IO) und
+ * unter Rooms Oeffnungssperre - keine Verbindung von Room ist vorher offen.
+ */
+internal class DowngradeSchutz(
+    private val treiber: SQLiteDriver,
+    private val version: Int,
+    private val uhr: Clock,
+) : SQLiteDriver, SynchronizedObject() {
+    // Nur unter der Sperre: alle Verbindungen warten, bis die Datei geprueft ist.
+    private var geprueft = false
+
+    override val hasConnectionPool: Boolean get() = treiber.hasConnectionPool
+
+    override fun open(fileName: String): SQLiteConnection {
+        synchronized(this) {
+            if (!geprueft) {
+                // Wirft es, bleibt geprueft false: Room bekommt keine Verbindung und leert nichts.
+                sichereNeuereDatenbank(fileName, treiber, version, uhr.now())
+                geprueft = true
+            }
+        }
+        return treiber.open(fileName)
+    }
+}
+
+/**
+ * Boulder: stammt [datei] von einer neueren Fassung (user_version groesser als
+ * [version]), leerte Room sie beim Oeffnen (fallbackToDestructiveMigrationOnDowngrade).
+ * Vorher wird sie umbenannt, die Versionsnummer im Namen: Room findet keine Datei
+ * und legt eine neue an, die alte bleibt Byte fuer Byte erhalten - so geht beim
+ * Zurueckspielen einer aelteren Fassung nichts still verloren, und eine neuere
+ * Fassung kann sie wieder einlesen. Liefert den neuen Pfad.
+ *
+ * Umbenennen statt Kopieren (VACUUM INTO): es dauert unabhaengig von der Groesse
+ * nur Millisekunden. Auf das erste Oeffnen wartet in der App der Main-Thread
+ * (WatchManager liest die bekannten Uhren mit runBlocking), eine Kopie der ganzen
+ * Datei kaeme dort einem ANR nahe.
+ *
+ * Laesst sie sich nicht beiseitelegen, wirft es: lieber keine Datenbank als still
+ * geloeschte Naechte.
+ */
+internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, version: Int, jetzt: Instant): String? {
+    val pfad = Path(datei)
+    if (!SystemFileSystem.exists(pfad)) return null
+    val gefunden = try {
+        treiber.open(datei).use { verbindung ->
+            verbindung.prepare("PRAGMA user_version").use { it.step(); it.getLong(0).toInt() }
+        }
+    } catch (e: Exception) {
+        // Nicht lesbar: Room entscheidet wie bisher.
+        logger.e(e) { "Reading the database version failed" }
+        return null
+    }
+    if (gefunden <= version) return null
+    try {
+        // Das WAL in die Datei schreiben: danach liegt meist alles in einer Datei.
+        treiber.open(datei).use { it.prepare("PRAGMA wal_checkpoint(TRUNCATE)").use { s -> s.step() } }
+    } catch (e: Exception) {
+        // Nicht schlimm: die Begleitdateien gehen unten mit.
+        logger.w(e) { "Checkpoint of database version $gefunden failed; moving its WAL along" }
+    }
+    val ordner = pfad.parent ?: Path(".")
+    val ziel = Path(ordner, "libpebble3-v$gefunden-${jetzt.toEpochMilliseconds()}.db")
+    // Begleitdateien zuerst, die Datenbank zuletzt. Scheitert ein Schritt, gehen die
+    // schon verschobenen zurueck: dann liegt alles wie vorher, und open() wirft.
+    val verschoben = mutableListOf<Pair<Path, Path>>()
+    try {
+        for (endung in listOf("-wal", "-journal", "-shm", "")) {
+            val von = Path("$datei$endung")
+            if (!SystemFileSystem.exists(von)) continue
+            val nach = Path("$ziel$endung")
+            SystemFileSystem.atomicMove(von, nach)
+            verschoben += von to nach
+        }
+    } catch (e: Exception) {
+        logger.e(e) { "Moving database version $gefunden aside failed; not opening it" }
+        for ((von, nach) in verschoben.asReversed()) {
+            try {
+                SystemFileSystem.atomicMove(nach, von)
+            } catch (z: Exception) {
+                logger.e(z) { "Moving $nach back to $von failed" }
+            }
+        }
+        throw IllegalStateException("Database version $gefunden could not be kept before the downgrade", e)
+    }
+    logger.w { "Database version $gefunden is newer than $version (downgrade): moved to $ziel, Room starts a new one" }
+    return ziel.toString()
+}

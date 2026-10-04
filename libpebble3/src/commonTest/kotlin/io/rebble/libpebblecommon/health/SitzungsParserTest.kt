@@ -41,7 +41,7 @@ class SitzungsParserTest {
         // Vorlage las aktive und Ruhe-kcal vertauscht.
         assertEquals(12, bewegung.activeKiloCalories)
         assertEquals(80, bewegung.restingKiloCalories)
-        assertEquals(1500, bewegung.distanceCm)
+        assertEquals(1500, bewegung.distanceM)
         assertFalse(bewegung.manual)
         val training = saetze[1]
         assertEquals(OverlayType.OpenWorkout.value, training.type)
@@ -63,6 +63,19 @@ class SitzungsParserTest {
         assertEquals(25_000L, saetze[0].duration)
         assertEquals(OverlayType.Movement.value, saetze[1].type)
         assertEquals(1800, saetze[1].steps)
+    }
+
+    @Test
+    fun nurFassung7TraegtDasKennzeichen() {
+        // Eine kuenftige Upstream-Fassung 5 hat Bit 2 gesetzt, an Byte 26 steht aber etwas anderes.
+        val fremd = satz(5, 5, 1_790_000_000, 900, 1100, 1) + byteArrayOf(0)
+        fremd[2] = 28
+        assertFalse(parseOverlayData(fremd, 28u).single().manual)
+        // Fassung 7, deren size-Feld das Kennzeichen nicht einschliesst.
+        val ohne = satz(7, 7, 1_790_000_000, 900, 1100, 1)
+        ohne[2] = 26
+        assertFalse(parseOverlayData(ohne, 27u).single().manual)
+        assertTrue(parseOverlayData(satz(7, 7, 1_790_000_000, 900, 1100, 1), 27u).single().manual)
     }
 
     @Test

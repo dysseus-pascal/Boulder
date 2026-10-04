@@ -132,6 +132,9 @@ class PKJSAppBestaetigungTest {
         advanceTimeBy(7.seconds)
         runCurrent()
         assertEquals(1, allein.antworten.size)
+        // Ein NACK: die Uhr meldet der App outbox_failed und schickt neu, statt die Nachricht aufzugeben.
+        val antwort = allein.antworten.single()
+        assertTrue(antwort is AppMessageResult.NACK, "nicht bereit muss NACK sein, war ${antwort::class.simpleName}")
         allein.app.stop()
         aufraeumen()
 

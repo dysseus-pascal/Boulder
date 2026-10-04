@@ -29,7 +29,7 @@ suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>)
         for ((von, bis) in zeitbereiche(data.map { it.timestamp })) {
             getHealthDataForRange(von, bis).associateByTo(bestand) { it.timestamp }
         }
-        val wahl = vorrang(data, bestand, { it.timestamp }, { it.steps.toLong() })
+        val wahl = vorrang(data, bestand, { it.timestamp }, ::minutenGewicht)
         if (wahl.zuSchreiben.isNotEmpty()) insertHealthData(wahl.zuSchreiben)
         logger.d { "Health data insert complete: ${wahl.zusammenfassung("higher steps", "lower/equal steps")}" }
     }
@@ -55,6 +55,11 @@ suspend fun HealthDao.insertOverlayDataWithDeduplication(data: List<OverlayDataE
         logger.d { "Overlay data insert complete: ${wahl.zusammenfassung("longer duration", "shorter/equal duration")}" }
     }
 }
+
+// Boulder: mehr Schritte gewinnen wie bisher; bei gleich vielen gewinnt eine Minute
+// mit Puls gegen eine ohne - sonst fiele ein nachgelieferter Puls weg.
+private fun minutenGewicht(minute: HealthDataEntity): Long =
+    minute.steps.toLong() * 2 + if (minute.heartRate > 0) 1 else 0
 
 internal data class Vorrangwahl<T>(
     val zuSchreiben: List<T>,

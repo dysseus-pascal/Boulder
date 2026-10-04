@@ -20,7 +20,7 @@ internal class Schubsammler(
     scope: CoroutineScope,
     private val ruhe: Duration = 5.seconds,
     private val hoechstens: Duration = 60.seconds,
-    private val melde: () -> Unit,
+    private val melde: suspend () -> Unit,
 ) {
     // CONFLATED: stossAn blockiert nie den Empfang, und mehr als "es gab etwas" braucht es nicht.
     private val anstoesse = Channel<Unit>(Channel.CONFLATED)

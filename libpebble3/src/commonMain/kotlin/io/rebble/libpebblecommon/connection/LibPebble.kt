@@ -257,9 +257,6 @@ interface HealthDataApi {
 
     /** Returns the 30-day average sleep duration in seconds. */
     suspend fun getTypicalSleepSeconds(): Long
-
-    /** Wipes all health data and populates 30 days of fake data for testing. */
-    suspend fun populateDebugHealthData()
 }
 
 interface Weather {

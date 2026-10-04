@@ -35,6 +35,8 @@ import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -134,10 +136,10 @@ class CompanionAppLifecycleManager(
                     CoroutineName("BuiltInCompanion-$uuid") +
                     exceptionHandler
             runningApps.value = listOf(app)
-            val channel = Channel<AppMessageData>(Channel.BUFFERED)
+            val channel = begleiterEingang()
             app.start(channel.receiveAsFlow())
             activeAppScope.launch {
-                device.inboundAppMessages(uuid).collect { channel.trySend(it) }
+                device.inboundAppMessages(uuid).collect { channel.reicheWeiter(it, uuid) }
             }
         } catch (e: CancellationException) {
             throw e
@@ -174,7 +176,7 @@ class CompanionAppLifecycleManager(
             runningApps.value = newApps
             val pkjsRunning = newApps.any { it is PKJSApp }
 
-            val appIncomingChannels = newApps.map { Channel<AppMessageData>(Channel.BUFFERED) }
+            val appIncomingChannels = newApps.map { begleiterEingang() }
 
             newApps.zip(appIncomingChannels).forEach { (app, channel) ->
                 app.start(channel.receiveAsFlow())
@@ -183,7 +185,7 @@ class CompanionAppLifecycleManager(
             activeAppScope.launch {
                 device.inboundAppMessages(lockerEntry.id).collect { message ->
                     for (channel in appIncomingChannels) {
-                        channel.trySend(message)
+                        channel.reicheWeiter(message, lockerEntry.id)
                     }
                 }
             }
@@ -294,6 +296,18 @@ class CompanionAppLifecycleManager(
         connectionScope.launch {
             sessionCoordinator.run(appRunStateService.runningApp)
         }
+    }
+}
+
+// Boulder: der Eingang je Begleiter. Die Uhr schickt erst nach einer Antwort weiter,
+// der Fluss ist also begrenzt. BUFFERED (64) verwarf still, sobald ein Begleiter
+// hinterherhing - etwa PebbleKit JS, das bis zu 6 s auf sein JS wartet, waehrend
+// der Begleiter daneben jede Nachricht sofort bestaetigt.
+internal fun begleiterEingang(): Channel<AppMessageData> = Channel(Channel.UNLIMITED)
+
+internal fun SendChannel<AppMessageData>.reicheWeiter(nachricht: AppMessageData, an: Uuid) {
+    trySend(nachricht).onFailure {
+        Logger.withTag("CompanionAppLifecycleManager").e(it) { "App message ${nachricht.transactionId} for $an dropped" }
     }
 }
 

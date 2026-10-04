@@ -1,8 +1,11 @@
 package io.rebble.libpebblecommon.health.parsers
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+
+private val logger = Logger.withTag("NachtHrvParser")
 
 /** Ein Satz auf Tag 89: ein Teil der HRV-Fenster einer Nacht. */
 data class NachtHrvTeil(
@@ -20,18 +23,30 @@ data class NachtHrvTeil(
  * Tag 88; darueber gehoeren die beiden zusammen.
  *
  * EINE UNBEKANNTE FASSUNG wird uebersprungen statt geraten: Bit 0 der Version
- * muss gesetzt sein, wie bei den Naechten.
+ * muss gesetzt sein, wie bei den Naechten. Ebenso ein Satz, der nicht die Groesse
+ * eines HRV-Satzes hat. Jeder verworfene Satz geht mit Grund an [verworfen].
  */
-fun parseNachtHrvData(payload: ByteArray, itemSize: UShort): List<NachtHrvTeil> {
+fun parseNachtHrvData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit = {}): List<NachtHrvTeil> {
     val groesse = itemSize.toInt()
-    if (payload.isEmpty() || groesse < HRV_KOPF_BYTES) return emptyList()
+    if (payload.isEmpty()) return emptyList()
+    if (groesse < HRV_SATZ_BYTES) {
+        val grund = "Nacht-HRV: item size $groesse < $HRV_SATZ_BYTES, ${payload.size} bytes dropped"
+        logger.w { grund }
+        verworfen(grund)
+        return emptyList()
+    }
     val aus = mutableListOf<NachtHrvTeil>()
     for (satz in 0 until payload.size / groesse) {
         val b = DataBuffer(payload.copyOfRange(satz * groesse, (satz + 1) * groesse).toUByteArray())
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
-        b.getUShort() // size
-        if (version and 1 == 0) continue
+        val satzGroesse = b.getUShort().toInt()
+        if (version and 1 == 0 || satzGroesse != groesse) {
+            val grund = "Nacht-HRV: record $satz dropped (version $version, size $satzGroesse, item size $groesse)"
+            logger.w { grund }
+            verworfen(grund)
+            continue
+        }
         val beginn = b.getUInt().toLong()
         val teil = b.getUByte().toInt()
         val teile = b.getUByte().toInt()
@@ -54,3 +69,4 @@ fun parseNachtHrvData(payload: ByteArray, itemSize: UShort): List<NachtHrvTeil> 
 private const val HRV_KOPF_BYTES = 11
 private const val HRV_FENSTER_BYTES = 5
 private const val HRV_FENSTER_JE_SATZ = 48
+private const val HRV_SATZ_BYTES = HRV_KOPF_BYTES + HRV_FENSTER_JE_SATZ * HRV_FENSTER_BYTES

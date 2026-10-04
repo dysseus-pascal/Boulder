@@ -108,6 +108,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntryDao
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.getRoomDatabase
+import io.rebble.libpebblecommon.database.boulder.boulderDatenModul
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.datalogging.DlsQuarantaene
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
@@ -334,7 +335,8 @@ fun initKoin(
     koin.loadModules(
         listOf(
             module {
-                includes(platformModule, pkjsPlatformModule)
+                // Boulder: boulderDatenModul (boulder.db, NachtDao)
+                includes(platformModule, pkjsPlatformModule, boulderDatenModul)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }
@@ -368,7 +370,6 @@ fun initKoin(
                 single { get<Database>().notificationRuleDao() }
                 single { get<Database>().healthDao() }
                 single { get<Database>().spo2Dao() }
-                single { get<Database>().nachtDao() }
                 single { get<Database>().healthStatDao() }
                 singleOf(::HealthDataProcessor)
                 single { get<Database>().watchPrefDao() }

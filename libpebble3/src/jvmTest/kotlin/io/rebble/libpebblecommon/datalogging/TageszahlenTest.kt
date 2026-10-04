@@ -3,6 +3,8 @@ package io.rebble.libpebblecommon.datalogging
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.boulder.BoulderDatenbank
+import io.rebble.libpebblecommon.database.testBoulderDatenbank
 import io.rebble.libpebblecommon.database.testDatenbank
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
@@ -28,10 +30,12 @@ import kotlin.time.Instant
  */
 class TageszahlenTest {
     private var db: Database? = null
+    private var boulder: BoulderDatenbank? = null
 
     @AfterTest
     fun zu() {
         db?.close()
+        boulder?.close()
     }
 
     private class StellbareUhr(var jetzt: Instant) : Clock {
@@ -64,7 +68,8 @@ class TageszahlenTest {
         val datenbank = testDatenbank(coroutineContext[CoroutineDispatcher]!!).also { db = it }
         val verarbeitung = HealthDataProcessor(
             LibPebbleCoroutineScope(backgroundScope.coroutineContext),
-            datenbank.healthDao(), datenbank.healthStatDao(), datenbank.spo2Dao(), datenbank.nachtDao(), uhr,
+            datenbank.healthDao(), datenbank.healthStatDao(), datenbank.spo2Dao(),
+            testBoulderDatenbank(coroutineContext[CoroutineDispatcher]!!).also { boulder = it }.nachtDao(), uhr,
         )
         runCurrent()
         suspend fun schub(schritte: Int, nach: Duration) {

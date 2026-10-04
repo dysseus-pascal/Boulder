@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.Pulsreihe
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.NachtDao
+import io.rebble.libpebblecommon.database.boulder.NachtUmzug
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
@@ -59,6 +60,8 @@ class Health(
     private val watchManager: WatchManager,
     private val healthDataProcessor: HealthDataProcessor,
     private val nachtDao: NachtDao,
+    // Boulder: die Naechte ziehen beim Start nach boulder.db, nicht erst beim ersten Lesen.
+    private val nachtUmzug: NachtUmzug,
 ) : HealthApi, HealthDataApi {
     private val logger = Logger.withTag("Health")
 
@@ -78,6 +81,16 @@ class Health(
 
     fun init() {
         startPeriodicStatsUpdate()
+        bereich.launch {
+            try {
+                nachtUmzug.sicherstellen()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // NachtUmzug hat es geloggt; der naechste Zugriff auf die Naechte versucht es erneut.
+                logger.w { "Night move not done at start: ${e.message}" }
+            }
+        }
     }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {

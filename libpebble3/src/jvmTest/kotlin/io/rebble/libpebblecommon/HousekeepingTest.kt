@@ -6,6 +6,8 @@ import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
+import io.rebble.libpebblecommon.database.boulder.BoulderDatenbank
+import io.rebble.libpebblecommon.database.testBoulderDatenbank
 import io.rebble.libpebblecommon.database.testDatenbank
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
@@ -27,10 +29,12 @@ import kotlin.time.Instant
  */
 class HousekeepingTest {
     private var db: Database? = null
+    private var boulder: BoulderDatenbank? = null
 
     @AfterTest
     fun zu() {
         db?.close()
+        boulder?.close()
     }
 
     private val jetzt = Instant.fromEpochSeconds(1_790_500_000)
@@ -58,18 +62,20 @@ class HousekeepingTest {
     @Test
     fun spo2VerfaelltNach90TagenDieNaechteBleiben() = runTest {
         val datenbank = testDatenbank(coroutineContext[CoroutineDispatcher]!!).also { db = it }
+        // Die Naechte liegen in boulder.db; das Aufraeumen kennt sie nicht.
+        val naechte = testBoulderDatenbank(coroutineContext[CoroutineDispatcher]!!).also { boulder = it }.nachtDao()
         val alt = (jetzt - 91.days).epochSeconds
         val neu = (jetzt - 1.days).epochSeconds
         datenbank.spo2Dao().insertSpo2Readings(listOf(Spo2ReadingEntity(alt, 94, 5), Spo2ReadingEntity(neu, 97, 5)))
         val nacht = NachtEntity((jetzt - 400.days).epochSeconds, 7200, 30, 450, 400, 50, 40)
-        datenbank.nachtDao().speichereNachtTeil(nacht, ersterTeil = true, listOf(NachtAbschnittEntity(nacht.beginnUtc, 30, 450, 1)))
+        naechte.speichereNachtTeil(nacht, ersterTeil = true, listOf(NachtAbschnittEntity(nacht.beginnUtc, 30, 450, 1)))
 
         housekeeping(datenbank.healthDao(), datenbank).init()
         runCurrent()
 
         assertEquals(listOf(neu), datenbank.spo2Dao().getSpo2ReadingsAfter(0).map { it.timestamp })
-        assertEquals(listOf(nacht.beginnUtc), datenbank.nachtDao().naechte(0, Long.MAX_VALUE).map { it.beginnUtc })
-        assertEquals(1, datenbank.nachtDao().abschnitte(nacht.beginnUtc).size)
+        assertEquals(listOf(nacht.beginnUtc), naechte.naechte(0, Long.MAX_VALUE).map { it.beginnUtc })
+        assertEquals(1, naechte.abschnitte(nacht.beginnUtc).size)
     }
 
     @Test

@@ -192,6 +192,8 @@ class BoulderDlsTest {
         val app = Uuid.parse("12345678-1234-1234-1234-123456789abc")
         assertTrue(d.schicke(0x4001u, 328, nachtSatz(), uuid = app))
         assertTrue(d.schicke(0x4003u, 64, ByteArray(64), uuid = app))
+        // Auch mit Itemgroesse 0: das ist Sache der App, nicht Boulders Quarantaene.
+        assertTrue(d.schicke(0x4001u, 0, ByteArray(8), uuid = app))
         assertTrue(naechte().isEmpty())
         assertTrue(quarantaene().isEmpty())
     }

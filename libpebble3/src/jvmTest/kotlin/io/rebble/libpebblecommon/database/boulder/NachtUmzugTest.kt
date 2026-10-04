@@ -25,6 +25,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.lang.reflect.Modifier
+import java.lang.reflect.Proxy
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -298,16 +301,34 @@ class NachtUmzugTest {
     }
 
     @Test
-    fun jedeMethodeDesNachtDaoWartetAufDenUmzug() {
-        // Eine nicht ueberschriebene Methode mit Rumpf (etwa eine @Transaction) liefe am
-        // echten Dao vorbei: ohne seine Transaktion und ohne auf den Umzug zu warten.
-        // Die Methoden der Schnittstelle selbst, ohne die Hilfen, die Kotlin fuer Rumpf-Methoden erzeugt.
+    fun jedeMethodeGehtAnDieselbeMethodeDesEchtenDao() = runBlocking<Unit> {
+        // Eine nicht ueberschriebene Methode mit Rumpf (etwa eine @Transaction) liefe ueber
+        // die Einzelmethoden des Wrappers statt an die des echten Dao - ohne dessen Transaktion.
+        val aufgerufen = mutableListOf<String>()
+        val echt = Proxy.newProxyInstance(NachtDao::class.java.classLoader, arrayOf(NachtDao::class.java)) { _, m, _ ->
+            aufgerufen += m.name
+            null
+        } as NachtDao
+        // Frisch und schon umgezogen: der Wrapper ruft danach ohne Warten durch.
+        val umzug = umzug(alt(), neu()).also { it.sicherstellen() }
+        val wrapper = UmgezogenerNachtDao(echt, umzug)
         val methoden = NachtDao::class.java.declaredMethods.filter { !it.isSynthetic && !Modifier.isStatic(it.modifiers) }
-        val fehlt = methoden.filterNot { m ->
-            runCatching { UmgezogenerNachtDao::class.java.getDeclaredMethod(m.name, *m.parameterTypes) }.isSuccess
+        for (m in methoden) {
+            aufgerufen.clear()
+            m.invoke(wrapper, *m.parameterTypes.map(::platzhalter).toTypedArray())
+            assertEquals(listOf(m.name), aufgerufen, m.name)
         }
-        assertEquals(emptyList(), fehlt.map { it.name })
         assertTrue("speichereNachtTeil" in methoden.map { it.name })
         assertEquals(12, methoden.size)
+    }
+
+    private fun platzhalter(typ: Class<*>): Any? = when (typ) {
+        java.lang.Long.TYPE -> 0L
+        Integer.TYPE -> 0
+        java.lang.Boolean.TYPE -> false
+        List::class.java -> emptyList<Any>()
+        NachtEntity::class.java -> NachtEntity(0, 0, 0, 0, 0, 0, 0)
+        Continuation::class.java -> Continuation<Any?>(EmptyCoroutineContext) {}
+        else -> error("kein Platzhalter fuer $typ")
     }
 }

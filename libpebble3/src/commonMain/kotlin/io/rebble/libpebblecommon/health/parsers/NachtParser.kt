@@ -1,9 +1,12 @@
 package io.rebble.libpebblecommon.health.parsers
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+
+private val logger = Logger.withTag("NachtParser")
 
 /** Ein Satz auf Tag 88: die Kopfwerte der Nacht und ein Teil ihrer Abschnitte. */
 data class NachtTeil(
@@ -21,18 +24,31 @@ data class NachtTeil(
  * phase (u8). Little Endian, gepackt.
  *
  * EINE UNBEKANNTE FASSUNG wird uebersprungen statt geraten: Bit 0 der Version
- * muss gesetzt sein, wie bei den Sitzungen.
+ * muss gesetzt sein, wie bei den Sitzungen. Ebenso ein Satz, der nicht die
+ * Groesse eines Nachtsatzes hat (Tag 88 koennte einmal Upstream belegen), und
+ * einer mit unmoeglichem Teil. Jeder verworfene Satz geht mit Grund an [verworfen].
  */
-fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
+fun parseNachtData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit = {}): List<NachtTeil> {
     val groesse = itemSize.toInt()
-    if (payload.isEmpty() || groesse < KOPF_BYTES) return emptyList()
+    if (payload.isEmpty()) return emptyList()
+    if (groesse < ANHANG_OFFSET) {
+        melde(verworfen, "Nacht: item size $groesse < $ANHANG_OFFSET, ${payload.size} bytes dropped")
+        return emptyList()
+    }
     val aus = mutableListOf<NachtTeil>()
     for (satz in 0 until payload.size / groesse) {
         val b = DataBuffer(payload.copyOfRange(satz * groesse, (satz + 1) * groesse).toUByteArray())
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
-        b.getUShort() // size
-        if (version and 1 == 0) continue
+        val satzGroesse = b.getUShort().toInt()
+        if (version and 1 == 0) {
+            melde(verworfen, "Nacht: record $satz has unknown version $version")
+            continue
+        }
+        if (satzGroesse != groesse) {
+            melde(verworfen, "Nacht: record $satz says size $satzGroesse, session item size is $groesse")
+            continue
+        }
         val beginn = b.getUInt().toLong()
         val zuLokal = b.getInt()
         val einschlafen = b.getUShort().toInt()
@@ -41,10 +57,15 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
         val ruhepuls = b.getUByte().toInt()
         val teil = b.getUByte().toInt()
         val teile = b.getUByte().toInt()
+        // Eine Nacht ohne Abschnitte kommt als Teil 0 von 0 (nacht.c, prv_schicke).
+        if (teil >= maxOf(teile, 1)) {
+            melde(verworfen, "Nacht ab $beginn: part $teil of $teile is impossible")
+            continue
+        }
         val hrv = b.getUShort().toInt()
         val anzahl = b.getUByte().toInt()
         val passen = minOf(ABSCHNITTE_JE_SATZ, (groesse - KOPF_BYTES) / ABSCHNITT_BYTES)
-        val abschnitte = (0 until minOf(anzahl, passen)).map {
+        val gelesen = (0 until minOf(anzahl, passen)).map {
             NachtAbschnittEntity(
                 beginnUtc = beginn,
                 von = b.getUShort().toInt(),
@@ -52,11 +73,16 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
                 phase = b.getUByte().toInt(),
             )
         }
+        // Die Firmware baut jeden Abschnitt mit von < bis und einer SchlafPhase 0..4.
+        val abschnitte = gelesen.filter { it.von < it.bis && it.phase in PHASEN }
+        if (abschnitte.size < gelesen.size) {
+            melde(verworfen, "Nacht ab $beginn: ${gelesen.size - abschnitte.size} implausible sections dropped")
+        }
         // AB FASSUNG 3 (Bit 1): hinter den 60 Abschnitten Akku und Messstufe. Die
         // Stelle ist fest, egal wie viele Abschnitte belegt sind.
         var nacht = NachtEntity(beginn, zuLokal, einschlafen, aufwachen, schlaf, ruhepuls, hrv)
         if (version and 2 != 0 && groesse >= ANHANG_OFFSET + 4) {
-            b.getBytes(ANHANG_OFFSET - (KOPF_BYTES + abschnitte.size * ABSCHNITT_BYTES))
+            b.getBytes(ANHANG_OFFSET - (KOPF_BYTES + gelesen.size * ABSCHNITT_BYTES))
             val akkuBeginn = b.getUByte().toInt()
             val akkuEnde = b.getUByte().toInt()
             val flags = b.getUByte().toInt()
@@ -73,7 +99,14 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort): List<NachtTeil> {
     return aus
 }
 
+// Kein stilles Verwerfen: die Uhr hat den Satz nach dem ACK nicht mehr.
+private fun melde(verworfen: (String) -> Unit, grund: String) {
+    logger.w { grund }
+    verworfen(grund)
+}
+
 private const val KOPF_BYTES = 24
 private const val ABSCHNITT_BYTES = 5
 private const val ABSCHNITTE_JE_SATZ = 60
 private const val ANHANG_OFFSET = KOPF_BYTES + ABSCHNITTE_JE_SATZ * ABSCHNITT_BYTES
+private val PHASEN = 0..4

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
@@ -47,4 +48,19 @@ interface NachtDao {
 
     @Query("SELECT * FROM boulder_nacht_hrv WHERE beginnUtc = :beginnUtc ORDER BY minute ASC")
     suspend fun hrv(beginnUtc: Long): List<NachtHrvEntity>
+
+    // Ein Teil am Stueck: endete die App zwischen Loeschen und Schreiben, fehlten
+    // sonst die Abschnitte dieser Nacht.
+    @Transaction
+    suspend fun speichereNachtTeil(nacht: NachtEntity, ersterTeil: Boolean, abschnitte: List<NachtAbschnittEntity>) {
+        speichereNacht(nacht)
+        if (ersterTeil) loescheAbschnitte(nacht.beginnUtc)
+        speichereAbschnitte(abschnitte)
+    }
+
+    @Transaction
+    suspend fun speichereHrvTeil(beginnUtc: Long, ersterTeil: Boolean, fenster: List<NachtHrvEntity>) {
+        if (ersterTeil) loescheHrv(beginnUtc)
+        speichereHrv(fenster)
+    }
 }

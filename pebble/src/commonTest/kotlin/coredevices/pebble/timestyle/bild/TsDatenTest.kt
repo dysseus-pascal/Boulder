@@ -50,7 +50,7 @@ class TsDatenTest {
 
     private fun abschnitt(start: Long, dauer: Long, typ: OverlayType) = OverlayDataEntity(
         startTime = start, duration = dauer, type = typ.value, steps = 0, restingKiloCalories = 0,
-        activeKiloCalories = 0, distanceCm = 0, offsetUTC = 7200,
+        activeKiloCalories = 0, distanceM = 0, offsetUTC = 7200,
     )
 
     @Test

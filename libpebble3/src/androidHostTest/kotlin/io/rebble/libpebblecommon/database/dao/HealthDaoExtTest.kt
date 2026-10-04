@@ -135,7 +135,7 @@ class HealthDaoExtTest {
 
     private fun zufallsoverlay(z: Random) = OverlayDataEntity(
         startTime = z.nextLong(0, 6) * 3600, duration = z.nextLong(0, 5) * 600, type = z.nextInt(1, 4),
-        steps = z.nextInt(0, 1000), restingKiloCalories = 0, activeKiloCalories = 0, distanceCm = 0, offsetUTC = 0,
+        steps = z.nextInt(0, 1000), restingKiloCalories = 0, activeKiloCalories = 0, distanceM = 0, offsetUTC = 0,
     )
 }
 

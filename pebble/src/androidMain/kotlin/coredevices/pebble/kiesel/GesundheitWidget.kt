@@ -7,7 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import co.touchlab.kermit.Logger
 import android.view.View
 import android.widget.RemoteViews
 import coredevices.pebble.R
@@ -59,7 +59,7 @@ class GesundheitWidget : AppWidgetProvider() {
                 // zeichnen: wer den offenen Anstoss gab, hat die Seiten schon veraltet.
                 if (ausgang == Einzellauf.Ausgang.OFFEN) zeichneNeu(context)
             } catch (e: Exception) {
-                Log.w("Widget", "Zeichnen: " + e.message)
+                Logger.withTag("Widget").w { "Zeichnen: " + e.message }
             } finally {
                 fertig.finish()
             }
@@ -75,7 +75,7 @@ class GesundheitWidget : AppWidgetProvider() {
     }
 
     companion object {
-        private val zeichner = Einzellauf(hoechstens = 2, beiFehler = { Log.w("Widget", "Zeichnen: " + it.message) })
+        private val zeichner = Einzellauf(hoechstens = 2, beiFehler = { Logger.withTag("Widget").w { "Zeichnen: " + it.message } })
         private const val DATEI = "kiesel-widget"
         private const val WUNSCH = "wunsch"
         private const val WUNSCH_BIS = "wunsch_bis"
@@ -140,7 +140,7 @@ class GesundheitWidget : AppWidgetProvider() {
                 val pi = taktAbsicht(context, anlegen = true, ids) ?: return
                 context.getSystemService(AlarmManager::class.java)?.setWindow(AlarmManager.RTC, um.toEpochMilli(), FENSTER_MS, pi)
             } catch (e: RuntimeException) {
-                Log.w("Widget", "Takt: " + e.message)
+                Logger.withTag("Widget").w { "Takt: " + e.message }
             }
         }
 
@@ -155,6 +155,21 @@ class GesundheitWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_IMMUTABLE or if (anlegen) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE,
             )
 
+        internal suspend fun trainingFuerWidget(context: Context, jetzt: Instant, zone: ZoneId): Widgetlage.Training? =
+            TrainingsDaten.juengstes(context, Duration.ofDays(1))
+                ?.takeIf { TrainingsDaten.zeigtImWidget(it.sitzung.endTime, jetzt) }
+                ?.let { t ->
+                    Widgetlage.Training(
+                        ende = t.sitzung.endTime.atZone(zone).toLocalDateTime(),
+                        name = TrainingsDaten.name(context, t.sitzung),
+                        minuten = t.minuten,
+                        puls = TrainingsDaten.mittelpuls(context, t.sitzung)?.toDouble(),
+                        km = t.meter.takeIf { it > 0 }?.div(1000),
+                        beginn = t.sitzung.startTime.epochSecond,
+                        metrisch = t.sport.immerMetrisch,
+                    )
+                }
+
         /** Der Blick fuer die Lage, und bis wann ein Kachelwunsch gilt (fuer den Takt). */
         private suspend fun blick(context: Context, s: GesundheitsStand): Pair<Widgetlage.Blick, LocalDateTime?> {
             val zone = ZoneId.systemDefault()
@@ -164,26 +179,14 @@ class GesundheitWidget : AppWidgetProvider() {
             // fremden App neben der eigenen -, mit rohem Puls aller Quellen.
             var training: Widgetlage.Training? = null
             try {
-                training = TrainingsDaten.juengstes(context, Duration.ofDays(1))
-                    ?.takeIf { Duration.between(it.sitzung.endTime, Instant.now()).toHours() < 3 }
-                    ?.let { t ->
-                        Widgetlage.Training(
-                            ende = t.sitzung.endTime.atZone(zone).toLocalDateTime(),
-                            name = TrainingsDaten.name(context, t.sitzung),
-                            minuten = t.minuten,
-                            puls = TrainingsDaten.mittelpuls(context, t.sitzung)?.toDouble(),
-                            km = t.meter.takeIf { it > 0 }?.div(1000),
-                            beginn = t.sitzung.startTime.epochSecond,
-                            metrisch = t.sport.immerMetrisch,
-                        )
-                    }
+                training = trainingFuerWidget(context, Instant.now(), zone)
             } catch (e: Exception) {
-                Log.w("Widget", "Training: " + e.message)
+                Logger.withTag("Widget").w { "Training: " + e.message }
             }
             val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
             val bis = p.getLong(WUNSCH_BIS, 0)
             val wunsch = if (bis > System.currentTimeMillis()) {
-                p.getString(WUNSCH, null)?.let { runCatching { Widgetlage.Art.valueOf(it) }.getOrNull() }
+                p.getString(WUNSCH, null)?.let { versuche("Widget", "Unbekannter Wunsch $it") { Widgetlage.Art.valueOf(it) } }
             } else null
             val platz = context.getString(R.string.ks_s_platz_n)
             // Gravels "Imperial Units" auch hier: das Widget zeigte sonst km neben einer App in mi.

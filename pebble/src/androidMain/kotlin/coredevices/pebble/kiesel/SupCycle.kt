@@ -3,7 +3,7 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -30,12 +30,13 @@ import kotlin.uuid.Uuid
  */
 internal object SupCycle {
     private const val TAG = "SupCycle"
+    private val logger = Logger.withTag(TAG)
     private const val HEUTE = "kiesel-supplemente"
     private const val QUOTEN = "kiesel-supplemente-quoten"
     private const val NACHTRAG = "kiesel-supplemente-nachtrag"
 
     /** So lange wartet ein abgehaktes Praeparat eines frueheren Tages auf die Akte (wie die Ablage im Mithoerer). */
-    private const val NACHTRAG_TAGE = 30L
+    internal const val NACHTRAG_TAGE = 30L
 
     val UUID: Uuid = Uuid.parse("33ce868a-2beb-4335-9421-4d741ed16eb3")
 
@@ -183,7 +184,7 @@ internal object SupCycle {
     }
 
     private fun liesRuecknahme(p: SharedPreferences): Ruecknahme? {
-        val tag = p.getString("zurueck_tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
+        val tag = tagOderNull(p.getString("zurueck_tag", null), TAG) ?: return null
         val maske = p.getLong("zurueck", 0L).takeIf { it != 0L } ?: return null
         return Ruecknahme(tag, maske, zeitenAus(p.getString("zurueck_zeiten", null)).orEmpty())
     }
@@ -281,7 +282,7 @@ internal object SupCycle {
     }
 
     private fun gespeicherterPlan(p: SharedPreferences): List<Platz> =
-        p.getString("plan", null)?.let { runCatching { plan(Base64.decode(it, Base64.DEFAULT)) }.getOrNull() }.orEmpty()
+        p.getString("plan", null)?.let { versuche(TAG, "Gespeicherter Plan") { plan(Base64.decode(it, Base64.DEFAULT)) } }.orEmpty()
 
     /**
      * Der Stand von heute, oder nichts. Gestern ist hier nicht interessant.
@@ -289,7 +290,7 @@ internal object SupCycle {
      */
     fun heute(context: Context): Stand? {
         val p = context.getSharedPreferences(HEUTE, Context.MODE_PRIVATE)
-        val gemeldet = p.getString("tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { tag ->
+        val gemeldet = tagOderNull(p.getString("tag", null), TAG)?.let { tag ->
             Stand(tag, p.getString("namen", "")!!.split("\n"), p.getLong("faellig", 0), p.getLong("genommen", 0) and p.getLong("verworfen", 0).inv())
         }
         return standFuer(LocalDate.now(), ZoneId.systemDefault(), gemeldet, gespeicherterPlan(p))
@@ -298,7 +299,7 @@ internal object SupCycle {
     /** Die Quote je Tag (faellig, genommen) - fuer Verlauf und Trends. */
     fun quoten(context: Context): Map<LocalDate, Pair<Int, Int>> =
         context.getSharedPreferences(QUOTEN, Context.MODE_PRIVATE).all.mapNotNull { (k, v) ->
-            val tag = runCatching { LocalDate.parse(k) }.getOrNull() ?: return@mapNotNull null
+            val tag = tagOderNull(k, TAG) ?: return@mapNotNull null
             val (f, g) = (v as? String)?.split(":")?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 2 } ?: return@mapNotNull null
             tag to (f to g)
         }.toMap()
@@ -385,7 +386,7 @@ internal object SupCycle {
         if (weg.isNotEmpty()) klient.deleteRecords(NutritionRecord::class, recordIdsList = weg, clientRecordIdsList = emptyList())
         true
     } catch (e: Exception) {
-        Log.w(TAG, "Zurueckgenommenes Praeparat nicht geloescht: " + e.message)
+        logger.w { "Zurueckgenommenes Praeparat nicht geloescht: " + e.message }
         false
     }
 
@@ -412,7 +413,7 @@ internal object SupCycle {
                 )))
                 eingetragen = eingetragen or (1L shl platz)
             } catch (e: Exception) {
-                Log.w(TAG, "Praeparat nicht eingetragen: " + e.message)
+                logger.w { "Praeparat nicht eingetragen: " + e.message }
             }
         }
         return eingetragen
@@ -424,7 +425,7 @@ internal object SupCycle {
         val grenze = LocalDate.now().minusDays(NACHTRAG_TAGE)
         p.edit().apply {
             // Was laenger wartet, ist verfallen - wie die Ablage, aus der es kaeme.
-            p.all.keys.filter { k -> runCatching { LocalDate.parse(k) }.getOrNull()?.isBefore(grenze) ?: true }.forEach { remove(it) }
+            p.all.keys.filter { k -> tagOderNull(k, TAG)?.isBefore(grenze) ?: true }.forEach { remove(it) }
             if (fehlt == 0L) remove(tag.toString()) else putLong(tag.toString(), fehlt)
             apply()
         }
@@ -458,11 +459,11 @@ internal object SupCycle {
         val faellig = n.zahlen[SC_DUE] ?: return null
         val genommen = n.zahlen[SC_TAKEN] ?: 0L
         val tag = UhrApps.datum(ymd) ?: run {
-            Log.w(TAG, "Unbrauchbares Datum $ymd")
+            logger.w { "Unbrauchbares Datum $ymd" }
             return null
         }
         val p = context.getSharedPreferences(HEUTE, Context.MODE_PRIVATE)
-        val gemerkt = p.getString("tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val gemerkt = tagOderNull(p.getString("tag", null), TAG)
         // EIN AELTERER TAG UEBERSCHREIBT DEN STAND NICHT - ein liegengebliebener
         // Stand von gestern drehte sonst den von heute zurueck. Er traegt nur nach.
         if (gemerkt != null && tag.isBefore(gemerkt)) return nachtrag(context, n, tag, faellig, genommen)

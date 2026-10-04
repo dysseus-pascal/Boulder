@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
@@ -40,6 +40,7 @@ import java.time.Instant
  */
 internal object Trainingswerte {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
 
     // Die Akte behaelt bei gleicher Kennung die hoehere Fassung und uebergeht
     // eine niedrigere: die Kalorien aus dem Puls schlagen die der Uhr, egal was
@@ -50,7 +51,7 @@ internal object Trainingswerte {
     private const val FASSUNG_PULS_BIS_0_40 = 2L
 
     /** Puls-Kalorien so lange nachholen - aeltere Trainings bleiben, wie sie sind. */
-    private const val NACHHOLEN_TAGE = 14L
+    internal const val NACHHOLEN_TAGE = 14L
 
     /** Hoechstens eine Tempoprobe so oft - jede Sekunde waeren tausende je Stunde. */
     const val TEMPO_TAKT_S = 10L
@@ -141,7 +142,7 @@ internal object Trainingswerte {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Sitzung fuer die Kalorien: " + e.message)
+            logger.w { "Sitzung fuer die Kalorien: " + e.message }
             null
         } ?: return null
         return kalorienAusPuls(context, klient, sitzung)
@@ -165,7 +166,7 @@ internal object Trainingswerte {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Kalorien nachholen: " + e.message)
+            logger.w { "Kalorien nachholen: " + e.message }
             return
         }
         sitzungen.filter { it.metadata.clientRecordId == Kieselsport.kennung(it.startTime.epochSecond) }
@@ -181,10 +182,14 @@ internal object Trainingswerte {
      * Sonderrecht kein fremdes Gewicht heraus, die Rechnung nimmt dann das
      * eingestellte. Sonst bliebe dieser Stand fuer immer; so ersetzt ihn die
      * erste Rechnung, die die Waage lesen kann (spaetestens das Detail).
-     * Doppelt gezaehlt, damit jede Fassung bis 0.42 (2 + Pulswerte) darunter liegt.
+     * Ebenso der Ruhepuls der Naechte den Ersatz: die Uhr synct sie oft erst nach dem Training.
+     * Vierfach gezaehlt, damit jede fruehere Fassung (2 + 2 * Pulswerte + Waage) darunter liegt.
      */
-    fun fassungAusPuls(pulswerte: Int, waage: Boolean): Long =
-        FASSUNG_PULS_BIS_0_40 + 2L * pulswerte + (if (waage) 1 else 0)
+    fun fassungAusPuls(pulswerte: Int, waage: Boolean, ruheAusNaechten: Boolean): Long =
+        FASSUNG_PULS_BIS_0_40 + 4L * pulswerte + (if (ruheAusNaechten) 2 else 0) + (if (waage) 1 else 0)
+
+    /** Rechnete [Trainingsanalyse.kalorien] mit dem Ruhepuls der Naechte - nicht ohne sie, nicht mit einem verworfenen? */
+    fun ruheAusNaechten(ruhepuls: Int?): Boolean = ruhepuls != null && ruhepuls in Trainingsanalyse.RUHEPULS_GUELTIG
 
     /** Lohnt es, neu zu schreiben? Nur, wenn die Akte nichts so Vollstaendiges hat. */
     fun lohntSich(vorhanden: Long?, fassung: Long): Boolean = vorhanden == null || vorhanden < fassung
@@ -197,7 +202,6 @@ internal object Trainingswerte {
             val roh = TrainingsDaten.rohpuls(klient, context, s)
             if (roh.isEmpty()) return null
             val koerper = koerperVor(context, klient, s.startTime) ?: return null
-            val fassung = fassungAusPuls(roh.size, koerper.ausWaage)
             val vorhanden = try {
                 klient.lies(context, ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(s.startTime, s.endTime), Herkunft.EIGENE)
                     .firstOrNull { it.metadata.clientRecordId == "kieselsport-kcal-$beginn" }?.metadata?.clientRecordVersion
@@ -205,10 +209,15 @@ internal object Trainingswerte {
                 throw e
             } catch (e: Exception) {
                 // Nicht lesbar heisst nur: neu schreiben - die Akte behaelt trotzdem die hoehere Fassung.
+                logger.w { "Vorhandene Kalorien von $beginn nicht lesbar, schreibe neu: ${e.message}" }
                 null
             }
-            if (!lohntSich(vorhanden, fassung)) return null
+            // ERST DIE OBERGRENZE, DANN DIE NAECHTE: haelt die Akte schon die beste Fassung,
+            // liest der Start (holeKalorienNach) die Naechte gar nicht erst.
+            if (!lohntSich(vorhanden, fassungAusPuls(roh.size, koerper.ausWaage, ruheAusNaechten = true))) return null
             val (ruhepuls, maxpuls) = herzgrenzenVor(context, KoinPlatform.getKoin().get<HealthDataApi>(), s.startTime)
+            val fassung = fassungAusPuls(roh.size, koerper.ausWaage, ruheAusNaechten(ruhepuls))
+            if (!lohntSich(vorhanden, fassung)) return null
             val kcal = Trainingsanalyse.aktiveKalorien(
                 Trainingsanalyse.entstoert(roh), koerper.kg, koerper.alter, koerper.geschlecht, ruhepuls, maxpuls,
             ) ?: return null
@@ -218,7 +227,7 @@ internal object Trainingswerte {
             throw e
         } catch (e: Exception) {
             // Meist fehlt ein Recht - der naechste Start holt es nach (holeKalorienNach).
-            Log.w(TAG, "Kalorien aus dem Puls: " + e.message)
+            logger.w { "Kalorien aus dem Puls: " + e.message }
             return null
         }
     }
@@ -236,6 +245,7 @@ internal object Trainingswerte {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            logger.w { "Naechte vor $start nicht lesbar, Ruhepuls ersetzt: ${e.message}" }
             emptyList()
         }
         val ruhe = Herzgrenzen.ruhepuls(naechte.sortedBy { it.beginnUtc }.map { it.ruhepuls })
@@ -265,7 +275,7 @@ internal object Trainingswerte {
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        Log.w(TAG, "Gewicht lesen: " + e.message)
+        logger.w { "Gewicht lesen: " + e.message }
         null
     }
 
@@ -288,7 +298,7 @@ internal object Trainingswerte {
         throw e
     } catch (e: Exception) {
         // Meist fehlt das Recht fuer diese eine Satzart.
-        Log.w(TAG, satz::class.simpleName + " nicht eingetragen: " + e.message)
+        logger.w { satz::class.simpleName + " nicht eingetragen: " + e.message }
         false
     }
 }

@@ -177,6 +177,32 @@ class AuswertungTest {
         assertFalse(v.klar)
     }
 
+    /**
+     * Fuenf Tage A mit {-2, -1, 0, 1, 2} + [abstand], fuenf Tage B mit {-2, -1, 0, 1, 2}:
+     * Stichprobenvarianz je 10/4 = 2,5, gepoolt 2,5; der Standardfehler der Mediane
+     * 1,25 * sqrt(2,5) * sqrt(1/5 + 1/5) = 1,25 * sqrt(1) = 1,25 bpm. Von Hand, nicht aus der Formel.
+     */
+    private fun zweiGruppen(abstand: Double): Auswertung.Gruppenvergleich {
+        val schwankung = listOf(-2.0, -1.0, 0.0, 1.0, 2.0)
+        val werte = schwankung.mapIndexed { i, w -> tag(i + 1L, w + abstand) } + schwankung.mapIndexed { i, w -> tag(i + 6L, w) }
+        val a = (1L..5L).map { heute.minusDays(it) }.toSet()
+        return Auswertung.vergleich(werte, heute) { t -> t in a }
+    }
+
+    @Test
+    fun `klar erst ab zwei Standardfehlern`() {
+        val knappDarunter = zweiGruppen(1.9 * 1.25)
+        assertEquals(2.375, knappDarunter.unterschied, 1e-9)
+        assertEquals(Math.sqrt(2.5), knappDarunter.streuung, 1e-9)
+        assertFalse("1,9 Standardfehler sind Rauschen", knappDarunter.klar)
+        val knappDarueber = zweiGruppen(2.1 * 1.25)
+        assertEquals(2.625, knappDarueber.unterschied, 1e-9)
+        assertTrue("2,1 Standardfehler sind ein Muster", knappDarueber.klar)
+        // Andersherum ebenso: das Vorzeichen zaehlt nicht.
+        assertFalse(zweiGruppen(-1.9 * 1.25).klar)
+        assertTrue(zweiGruppen(-2.1 * 1.25).klar)
+    }
+
     @Test
     fun `zu wenig Tage in einer Gruppe`() {
         val werte = (1L..20L).map { tag(it, it.toDouble()) }

@@ -200,17 +200,21 @@ internal fun Gesundheitsrechnung.naechteTeilen(naechte: List<NachtEntity>, heute
     return letzte to frueher
 }
 
+/** Ohne Planzeit (aeltere SupCycle) gilt ein Praeparat ab dieser Stunde als versaeumt - morgens ist nichts versaeumt. */
+internal const val PRAEPARATE_OHNE_PLAN_AB = 11
+
+/** Versaeumt: nicht genommen und die Planzeit vorbei. EINE REGEL FUER WIDGET UND GESUNDHEITSSEITE. */
+internal fun Gesundheitsrechnung.praeparatVersaeumt(e: SupCycle.Eintrag, jetzt: LocalTime): Boolean =
+    !e.genommen && (e.zeit?.let { !jetzt.isBefore(it) } ?: (jetzt.hour >= PRAEPARATE_OHNE_PLAN_AB))
+
 /**
- * Was bei den Praeparaten zu sagen ist. "Offen" (mit Warnfarbe) ist erst,
- * was seine Planzeit hinter sich hat; davor ist es schlicht faellig - um
- * acht ist das Abendpraeparat nicht versaeumt. Ohne Planzeit (aeltere
- * SupCycle) gilt der Rest erst nach dem ersten Haken als offen. [namen]
- * nennt die offenen, sonst die faelligen.
+ * Was bei den Praeparaten zu sagen ist. "Offen" (mit Warnfarbe) ist, was versaeumt ist
+ * ([praeparatVersaeumt]), davor ist es schlicht faellig. [namen] nennt die offenen, sonst die faelligen.
  */
 internal fun Gesundheitsrechnung.praeparatzeile(liste: List<SupCycle.Eintrag>, jetzt: LocalTime = LocalTime.now()): Praeparatzeile {
     val genommen = liste.count { it.genommen }
     val rest = liste.filterNot { it.genommen }
-    val versaeumt = rest.filter { e -> e.zeit?.let { !jetzt.isBefore(it) } ?: (genommen > 0) }
+    val versaeumt = rest.filter { praeparatVersaeumt(it, jetzt) }
     val lage = when {
         liste.isEmpty() -> Praeparatlage.KEINE
         rest.isEmpty() -> Praeparatlage.ALLE

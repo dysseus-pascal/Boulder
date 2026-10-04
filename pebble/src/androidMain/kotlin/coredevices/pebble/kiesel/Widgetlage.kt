@@ -80,16 +80,14 @@ internal object Widgetlage {
         val trainingBeginn: Long?, //< gesetzt, wenn ein Tipp auf die Trainingsseite fuehren soll
     )
 
-    private val TRAINING_FRIST: Duration = Duration.ofHours(2)
-    private val MORGEN_FRIST: Duration = Duration.ofHours(3)
-    private const val ABEND_AB = 20
+    internal val TRAINING_FRIST: Duration = Duration.ofHours(2)
+    internal val MORGEN_FRIST: Duration = Duration.ofHours(3)
+    internal const val ABEND_AB = 20
     /** Ab dieser Stunde zeigt ein erreichtes Schrittziel die Bilanz. */
-    private const val ZIEL_AB = 16
-    /** Ohne Planzeit mahnt das Widget erst ab dieser Stunde - morgens ist nichts versaeumt. */
-    private const val PRAEPARATE_OHNE_PLAN_AB = 11
+    internal const val ZIEL_AB = 16
     /** Die Wassermahnung gilt von dieser Stunde bis vor [WASSER_BIS]. */
-    private const val WASSER_AB = 9
-    private const val WASSER_BIS = 22
+    internal const val WASSER_AB = 9
+    internal const val WASSER_BIS = 22
 
     /**
      * Hoechstens so lange bis zum naechsten Zeichnen ohne neue Daten - so oft
@@ -310,14 +308,9 @@ internal object Widgetlage {
         return null
     }
 
-    /**
-     * Die Praeparate, an die zu erinnern ist: nicht genommen, und ihre
-     * Planzeit ist vorbei - das Abendpraeparat ist mittags noch nicht
-     * versaeumt. Ohne Planzeit ab [PRAEPARATE_OHNE_PLAN_AB] Uhr.
-     */
-    fun versaeumtePraeparate(b: Blick): List<String> = b.praeparate.filter { e ->
-        !e.genommen && (e.zeit?.let { !b.jetzt.toLocalTime().isBefore(it) } ?: (b.jetzt.hour >= PRAEPARATE_OHNE_PLAN_AB))
-    }.map { it.name }
+    /** Die Praeparate, an die zu erinnern ist - dieselbe Regel wie auf der Gesundheitsseite ([praeparatVersaeumt]). */
+    fun versaeumtePraeparate(b: Blick): List<String> =
+        b.praeparate.filter { Gesundheitsrechnung.praeparatVersaeumt(it, b.jetzt.toLocalTime()) }.map { it.name }
 
     /**
      * Welcher Anteil des Tagesziels bis zu dieser Stunde getrunken sein soll.

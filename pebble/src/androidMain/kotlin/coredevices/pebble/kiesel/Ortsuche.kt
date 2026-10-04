@@ -2,7 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import android.location.Geocoder
-import android.util.Log
+import co.touchlab.kermit.Logger
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -71,7 +71,7 @@ internal object Ortsuche {
                 ?.firstOrNull()
                 ?.let { it.latitude to it.longitude }
         } catch (e: Exception) {
-            Log.w("Ortsuche", "Geocoder: " + e.message)
+            Logger.withTag("Ortsuche").w { "Geocoder: " + e.message }
             null
         }
     }
@@ -88,14 +88,14 @@ internal object Ortsuche {
                 setRequestProperty("Accept", "application/json")
             }
         } catch (e: Exception) {
-            Log.w("Ortsuche", "Nominatim: " + e.message)
+            Logger.withTag("Ortsuche").w { "Nominatim: " + e.message }
             return null
         }
         return try {
             if (verbindung.responseCode != 200) return null
             ausAntwort(verbindung.inputStream.bufferedReader().use { it.readText() })
         } catch (e: Exception) {
-            Log.w("Ortsuche", "Nominatim: " + e.message)
+            Logger.withTag("Ortsuche").w { "Nominatim: " + e.message }
             null
         } finally {
             verbindung.disconnect()
@@ -117,6 +117,7 @@ internal object Ortsuche {
         else if (lat < -90 || lat > 90 || lon < -180 || lon > 180) null
         else lat to lon
     } catch (e: Exception) {
+        Logger.withTag("Ortsuche").w { "Antwort nicht lesbar: " + e.message }
         null
     }
 }

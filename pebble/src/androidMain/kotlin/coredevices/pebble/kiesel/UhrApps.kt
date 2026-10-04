@@ -27,9 +27,7 @@ internal object UhrApps {
     fun hat(apps: Set<Uuid>?, app: Uuid): Boolean = apps?.contains(app) ?: true
 
     /** Ein Kalendertag JJJJMMTT, wie SupCycle und Drinktervall ihn schicken - null, wenn er keiner ist. */
-    fun datum(ymd: Long): LocalDate? = try {
+    fun datum(ymd: Long): LocalDate? = versuche("UhrApps", "Kein Kalendertag $ymd") {
         LocalDate.of((ymd / 10000).toInt(), ((ymd / 100) % 100).toInt(), (ymd % 100).toInt())
-    } catch (e: Exception) {
-        null
     }
 }

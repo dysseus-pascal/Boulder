@@ -16,6 +16,7 @@ import coredevices.pebble.kiesel.ansicht.SportTrendAnsicht
 import coredevices.pebble.kiesel.ansicht.Sportwege
 import coredevices.pebble.kiesel.ansicht.SpurenAnsicht
 import coredevices.pebble.kiesel.ansicht.TrainingDetailAnsicht
+import coredevices.pebble.kiesel.tagOderNull
 import java.time.LocalDate
 
 /** Der Titel und ein grauer Zusatz rechts daneben, wie das Datum neben "Health". */
@@ -49,7 +50,7 @@ actual fun TrainingScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 @Composable
 actual fun TrainingAlleScreen(topBarParams: TopBarParams, nav: NavBarNav, tag: String?) {
     Seitenkopf(topBarParams, stringResource(R.string.ks_sp_alle), stringResource(R.string.ks_sp_90_tage))
-    SportListeAnsicht(tag?.let { runCatching { LocalDate.parse(it) }.getOrNull() }) {
+    SportListeAnsicht(tagOderNull(tag, "Sportliste")) {
         nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it))
     }
 }

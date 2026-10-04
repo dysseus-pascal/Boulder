@@ -27,6 +27,10 @@ import kotlin.uuid.Uuid
  * mit der hier nichts anzufangen ist - sonst schickte die Uhr sie endlos
  * wieder. Gibt es keine Akte, bleibt es trotzdem bei der Bestaetigung: die
  * Zusammenfassung liegt dann im Protokoll als nicht eingetragen.
+ *
+ * ZUSAMMENFASSUNG UND KURVENSTUECK ERST AUF DIE PLATTE (Wartend): mit der Bestaetigung gibt die Uhr
+ * ihre Kopie auf. Geht das Sichern nicht, kommt ein NACK, und die Uhr schickt nach 2 s und bei jedem
+ * Start wieder (telefon.c, prv_abgelehnt).
  */
 internal class KieselsportBegleiter(
     private val context: Context,
@@ -50,15 +54,24 @@ internal class KieselsportBegleiter(
                 // DIE ZEIT DES EMPFANGS, nicht die des Abarbeitens: hinter einem
                 // langen Eintrag in die Akte kaeme ein Weiter Sekunden spaeter dran.
                 val empfangen = System.currentTimeMillis() / 1000
-                // Die Zusammenfassung erst auf die Platte, dann bestaetigen
+                // Zusammenfassung und Kurvenstueck erst auf die Platte, dann bestaetigen
                 // (siehe Wartend). NUR SIE: eine liegengebliebene Zustandsmeldung
                 // startete beim naechsten Start das GPS fuer ein laengst
-                // beendetes Training. Geht das Sichern nicht, wird trotzdem
-                // bestaetigt und direkt verarbeitet - wie bisher.
+                // beendetes Training, und die Einstellungen schickt die Uhr bei jedem Start neu.
                 val n = zerlege(nachricht.data)
-                val datei = if (n.zahlen.containsKey(Kieselsport.SP_DAUER)) Wartend.lege(app, n) else null
+                if (!aufheben(n)) {
+                    device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))
+                    auftraege.send(Auftrag(app, nachricht = n, empfangen = empfangen))
+                    return@collect
+                }
+                val datei = Wartend.lege(app, n)
+                if (datei == null) {
+                    logger.w { "Meldung zu ${n.zahlen[Kieselsport.SP_BEGINN]} nicht gesichert - NACK, die Uhr behaelt sie" }
+                    device.sendAppMessageResult(AppMessageResult.NACK(nachricht.transactionId))
+                    return@collect
+                }
                 device.sendAppMessageResult(AppMessageResult.ACK(nachricht.transactionId))
-                auftraege.send(if (datei != null) Auftrag(app, datei, empfangen = empfangen) else Auftrag(app, nachricht = n, empfangen = empfangen))
+                auftraege.send(Auftrag(app, datei, empfangen = empfangen))
             }
         }
     }
@@ -70,9 +83,7 @@ internal class KieselsportBegleiter(
     }
 
     /** [empfangen]: Epochensekunden; null bei einer Datei vom letzten Mal - dann zaehlt ihre Ablage. */
-    private class Auftrag(
-        val context: Context, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null, val empfangen: Long? = null,
-    )
+    private class Auftrag(val context: Context, val datei: java.io.File? = null, val nachricht: KieselNachricht? = null, val empfangen: Long? = null)
 
     companion object {
         private val logger = Logger.withTag("Kieselsport")
@@ -82,12 +93,15 @@ internal class KieselsportBegleiter(
          * zu, sobald das Telefon bestaetigt hat - und damit endet der
          * Empfang. Haengte das Eintragen an ihm, bräche es mitten in der Akte
          * ab. Also eine Warteschlange fuer die ganze App: bestaetigt wird
-         * sofort, gearbeitet der Reihe nach, und die Reihenfolge
+         * nach dem Sichern, gearbeitet der Reihe nach, und die Reihenfolge
          * (Zusammenfassung vor Kurve) bleibt.
          */
         private val auftraege = Channel<Auftrag>(Channel.UNLIMITED)
 
         private var arbeitet = false
+
+        /** Was vor der Bestaetigung auf die Platte muss: Zusammenfassung (sie hat eine Dauer) und Kurvenstueck. */
+        internal fun aufheben(n: KieselNachricht): Boolean = Kieselsport.SP_DAUER in n.zahlen || Kieselsport.SP_KURVE in n.bytes
 
         // KEIN init-BLOCK (Regel in CLAUDE.md): der Arbeiter startet mit der
         // ersten Sitzung, nicht beim Laden der Klasse.
@@ -101,9 +115,17 @@ internal class KieselsportBegleiter(
                     val empfangen = a.empfangen ?: a.datei?.let { Wartend.abgelegt(it.name) } ?: (System.currentTimeMillis() / 1000)
                     try {
                         val meldung = Kieselsport.verarbeite(a.context, n, empfangen)
-                        meldung?.let { KieselVerlauf.merke(a.context, it) }
-                        // Bleibt liegen, was die Akte nicht nahm - der naechste Start versucht es wieder.
-                        if (!Kieselsport.gescheitert(a.context, meldung)) a.datei?.delete()
+                        val gescheitert = Kieselsport.gescheitert(a.context, meldung)
+                        // Bleibt liegen, was die Akte nicht nahm - der naechste Start versucht es wieder,
+                        // ohne Verfall (er verloere das Training); im Protokoll steht es einmal (Wartend.gemeldet).
+                        var datei = a.datei
+                        if (gescheitert && datei != null && Wartend.gemeldet(datei)) {
+                            logger.w { "Zusammenfassung ${datei.name} wartet weiter: $meldung" }
+                        } else {
+                            meldung?.let { KieselVerlauf.merke(a.context, it) }
+                            if (gescheitert && meldung != null && datei != null) datei = Wartend.alsGemeldet(datei)
+                        }
+                        if (!gescheitert) datei?.delete()
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht nicht verarbeitet: ${e.message}" }
                     }
@@ -149,6 +171,9 @@ internal class Verarbeitet(val meldung: String?, val gescheitert: Boolean = fals
  * Uhr nimmt Glas und Kaffee mit der Bestaetigung aus ihrer Schlange. Was die
  * Akte nicht nahm, bleibt liegen und kommt beim naechsten Start dran.
  * Darum bestaetigt er immer selbst, auch neben PebbleKit JS ([BestaetigtSelbst]).
+ *
+ * GEHT DAS SICHERN NICHT, KOMMT EIN NACK: Drinktervall behaelt Glas und Kaffee in seiner Schlange,
+ * SupCycle seinen Stand, und beide schicken wieder. Eine Zielmeldung wird ohne Datei bestaetigt.
  */
 internal class Mithoerer(
     private val context: Context,
@@ -164,12 +189,22 @@ internal class Mithoerer(
         sitzung.launch {
             incomingAppMessages.collect {
                 val n = KieselsportBegleiter.zerlege(it.data)
+                if (!aufheben(uuid, n)) {
+                    device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
+                    auftraege.send(app to Gehoert(uuid, nachricht = n))
+                    return@collect
+                }
                 // Ein SupCycle-Stand ersetzt den vorigen desselben Tages ganz; der eines
                 // frueheren Tages bleibt, bis er nachgetragen ist. Glaeser und Kaffees sind je ein eigener Eintrag.
                 val ersetzt: ((KieselNachricht) -> Boolean)? = if (uuid == SupCycle.UUID) { alt -> SupCycle.selberTag(alt, n) } else null
-                val datei = if (aufheben(uuid, n)) Wartend.lege(app, n, ablage(uuid), ersetzt) else null
+                val datei = Wartend.lege(app, n, ablage(uuid), ersetzt)
+                if (datei == null) {
+                    logger.w { "Meldung von $uuid nicht gesichert - NACK, die Uhr behaelt sie" }
+                    device.sendAppMessageResult(AppMessageResult.NACK(it.transactionId))
+                    return@collect
+                }
                 device.sendAppMessageResult(AppMessageResult.ACK(it.transactionId))
-                auftraege.send(app to if (datei != null) Gehoert(uuid, datei = datei) else Gehoert(uuid, nachricht = n))
+                auftraege.send(app to Gehoert(uuid, datei = datei))
             }
         }
         if (uuid == SupCycle.UUID) sitzung.launch { ruecknahmen(app) }
@@ -218,7 +253,7 @@ internal class Mithoerer(
         private fun ablage(uuid: Uuid) = "uhrapp-wartend-$uuid"
 
         /** So lange wartet ein Glas oder Praeparat auf die Akte - die Seite zeigt ohnehin nur die letzten Wochen. */
-        private const val VERFALL_TAGE = 30L
+        internal const val VERFALL_TAGE = 30L
 
         /** Nur was einen Eintrag fuer die Akte traegt - eine blosse Zielmeldung kommt ohnehin wieder. */
         private fun aufheben(uuid: Uuid, n: KieselNachricht): Boolean = when (uuid) {
@@ -243,17 +278,21 @@ internal class Mithoerer(
                             SupCycle.UUID -> SupCycle.verarbeite(context, n)
                             else -> null
                         }
-                        // Ein erneut gescheiterter Nachtrag stand schon einmal im Protokoll.
-                        e?.meldung?.takeUnless { g.nachgeholt && e.gescheitert }?.let {
+                        // Ein Scheitern steht einmal je Meldung im Protokoll (Wartend.gemeldet).
+                        var datei = g.datei
+                        if (e?.gescheitert == true && datei != null && Wartend.gemeldet(datei)) {
+                            logger.w { "Meldung ${datei.name} von ${g.uuid} wartet weiter: ${e.meldung}" }
+                        } else e?.meldung?.let {
                             KieselVerlauf.merke(context, it)
                             GesundheitWidget.stosseAn(context)
                             Trenddaten.eintragGeschrieben()
+                            if (e.gescheitert && datei != null) datei = Wartend.alsGemeldet(datei)
                         }
                         val rest = e?.takeIf { it.gescheitert }?.rest
                         // Nur was scheiterte, bleibt liegen: ein schon eingetragener Kaffee kaeme
                         // sonst bei jedem Start wieder - auch nachdem er geloescht oder geaendert ist.
-                        if (e?.gescheitert != true) g.datei?.delete()
-                        else if (rest != null) g.datei?.let { Wartend.ersetze(it, rest) }
+                        if (e?.gescheitert != true) datei?.delete()
+                        else if (rest != null) datei?.let { Wartend.ersetze(it, rest) }
                     } catch (e: Exception) {
                         logger.e(e) { "Nachricht von ${g.uuid} nicht verarbeitet: ${e.message}" }
                     }

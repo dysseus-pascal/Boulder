@@ -44,7 +44,12 @@ class BytesWatchPrefTest {
     fun hexZuBytesZuHexVerlustfrei() {
         val bytes = item(v1).value(params())!!
         assertEquals(32, bytes.size)
-        assertContentEquals(v1.hexAlsBytes()!!, bytes.asByteArray())
+        // Die Erwartung woertlich, Byte fuer Byte aus v1 - nicht aus hexAlsBytes, das hier mitgeprueft wird.
+        val erwartet = intArrayOf(
+            0x01, 0xF4, 0xC1, 0xDF, 0xFF, 0x02, 0x01, 0x02, 0x03, 0x09, 0x0D, 0xFB, 0x2C, 0x8F, 0x03, 0x00,
+            0x4E, 0x59, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ).map { it.toByte() }.toByteArray()
+        assertContentEquals(erwartet, bytes.asByteArray())
         // Zurueck, wie die Uhr den Wert einem neuen Telefon meldet.
         val write = DbWrite(
             token = 1u,

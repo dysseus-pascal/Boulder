@@ -10,7 +10,7 @@ import android.graphics.Point
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -353,7 +353,7 @@ private fun warteAufKacheln(k: MapView, breite: Int, hoehe: Int, fertig: (Bitmap
                 val foto = try {
                     Bitmap.createBitmap(breite, hoehe, Bitmap.Config.ARGB_8888).also { k.draw(Canvas(it)) }
                 } catch (e: Exception) {
-                    Log.w("Kartenvorschau", "Standbild: " + e.message)
+                    Logger.withTag("Kartenvorschau").w { "Standbild: " + e.message }
                     return@post
                 }
                 fertig(foto)
@@ -386,6 +386,7 @@ private object Standbild {
     fun lies(context: Context, schluessel: String): Bitmap? = try {
         datei(context, schluessel).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
     } catch (e: Exception) {
+        Logger.withTag("Kartenvorschau").w { "Zwischenbild nicht lesbar: " + e.message }
         null
     }
 
@@ -399,7 +400,7 @@ private object Standbild {
                 teil.outputStream().use { foto.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 teil.renameTo(ziel)
             } catch (e: Exception) {
-                Log.w("Kartenvorschau", "Standbild sichern: " + e.message)
+                Logger.withTag("Kartenvorschau").w { "Standbild sichern: " + e.message }
             }
         }
     }

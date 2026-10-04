@@ -2,7 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import android.location.Location
-import android.util.Log
+import co.touchlab.kermit.Logger
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.longOrNull
@@ -27,6 +27,7 @@ import java.io.File
  */
 internal object Spur {
     private const val TAG = "Kieselsport"
+    private val logger = Logger.withTag(TAG)
 
     /** Ein Punkt: Zeit, Ort, Höhe. Mehr braucht keine Karte. */
     data class Punkt(
@@ -74,7 +75,7 @@ internal object Spur {
             }
             if (text.isNotEmpty()) datei(context, beginn).appendText(text)
         } catch (e: Exception) {
-            Log.w(TAG, "Spurpunkt: " + e.message)
+            logger.w { "Spurpunkt: " + e.message }
         }
     }
 
@@ -86,9 +87,9 @@ internal object Spur {
         if (!d.exists()) return emptyList()
         return try {
             // Eine Zeile je Lesen: so zaehlt logcat, wie oft eine Seite die Spuren noch liest.
-            d.bufferedReader().useLines { z -> z.mapNotNull(::zeile).toList() }.also { Log.i(TAG, "Spur gelesen: ${d.name}, ${it.size} Punkte") }
+            d.bufferedReader().useLines { z -> z.mapNotNull(::zeile).toList() }.also { logger.i { "Spur gelesen: ${d.name}, ${it.size} Punkte" } }
         } catch (e: Exception) {
-            Log.w(TAG, "Spur lesen: " + e.message)
+            logger.w { "Spur lesen: " + e.message }
             null
         }
     }
@@ -204,7 +205,7 @@ internal object Spur {
         val d = datei(context, beginn)
         if (d.exists()) d.readText() else null
     } catch (e: Exception) {
-        Log.w(TAG, "Spur lesen: " + e.message)
+        logger.w { "Spur lesen: " + e.message }
         null
     }
 
@@ -213,7 +214,7 @@ internal object Spur {
         val d = datei(context, beginn)
         if (d.exists()) false else { d.writeText(inhalt); true }
     } catch (e: Exception) {
-        Log.w(TAG, "Spur schreiben: " + e.message)
+        logger.w { "Spur schreiben: " + e.message }
         false
     }
 

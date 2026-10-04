@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import co.touchlab.kermit.Logger
 import android.content.Context
 import java.time.ZoneOffset
 import java.time.ZoneId
@@ -26,12 +27,17 @@ internal fun versatz(t: Instant): ZoneOffset = ZoneId.systemDefault().rules.getO
  * zeigt erst das Schreiben selbst - die Akte weist dann ab.
  */
 internal class Akte(private val context: Context) {
-    fun bereit(): HealthConnectClient? =
-        if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
-            HealthConnectClient.getOrCreate(context)
-        } else {
-            null
-        }
+    fun bereit(): HealthConnectClient? = ersatz ?: if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
+        HealthConnectClient.getOrCreate(context)
+    } else {
+        null
+    }
+
+    companion object {
+        /** NUR FUER ABLAUFTESTS (src/androidHostTest): eine Akte im Speicher statt Health Connect, das Robolectric nicht hat. */
+        @Volatile
+        internal var ersatz: HealthConnectClient? = null
+    }
 }
 
 /** Wessen Eintraege eine Abfrage der Akte liest. */
@@ -59,6 +65,10 @@ private const val SEITE = 1000
 private const val HOECHSTENS_SEITEN = 100
 
 private const val TAG = "Akte"
+private val logger = Logger.withTag(TAG)
+
+/** Welche Gruende fuer den Rueckgriff auf das Eigene schon im Log stehen (siehe [mitHerkunft]). */
+private val gemeldet: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
 /**
  * Alle Eintraege von [klasse] in [zeitraum], aelteste zuerst - DAS EINE LESEN
@@ -123,7 +133,9 @@ private suspend fun <R> mitHerkunft(context: Context, herkunft: Herkunft, lesen:
             throw e
         } catch (e: Exception) {
             // Jeder Fehler, nicht nur das fehlende Recht, wie zuvor: scheitert
-            // auch der zweite Versuch, wirft er.
+            // auch der zweite Versuch, wirft er. Einmal je Grund ins Log: das Widget liest im Hintergrund oft so.
+            val grund = "${e.javaClass.simpleName}: ${e.message}"
+            if (gemeldet.add(grund)) logger.i { "Fremde Eintraege nicht lesbar, nur eigene ($grund)" }
             lesen(eigene)
         }
     }

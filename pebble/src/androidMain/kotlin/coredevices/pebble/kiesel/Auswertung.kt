@@ -214,6 +214,12 @@ internal object Auswertung {
     /** So viele Tage braucht jede Gruppe, damit ein Vergleich erscheint. */
     const val VERGLEICH_MINDESTENS = 5
 
+    /** Ab so vielen Standardfehlern heisst ein Unterschied "klar" - darunter ist es Rauschen von Tag zu Tag. */
+    const val KLAR_AB_FEHLERN = 2.0
+
+    /** Der Median streut etwa 1,25-mal so stark wie der Mittelwert (bei normalverteilten Tagen sqrt(pi/2)). */
+    const val MEDIAN_STREUT = 1.25
+
     /**
      * Die Werte von [ziel] in den [Fenster.VERGLEICH_TAGE] Tagen vor [grenze], nach
      * [gruppe] aufgeteilt: true Gruppe A, false Gruppe B, null gehoert zu keiner
@@ -238,10 +244,10 @@ internal object Auswertung {
         val streuung = if (a.size + b.size > 2) {
             kotlin.math.sqrt(((a.size - 1).coerceAtLeast(0) * varianz(a) + (b.size - 1).coerceAtLeast(0) * varianz(b)) / (a.size + b.size - 2).coerceAtLeast(1))
         } else 0.0
-        // Der Standardfehler des Unterschieds; der Median streut etwa 1.25-mal so stark wie der Mittelwert.
-        val fehler = if (a.isNotEmpty() && b.isNotEmpty()) 1.25 * streuung * kotlin.math.sqrt(1.0 / a.size + 1.0 / b.size) else Double.MAX_VALUE
+        // Der Standardfehler des Unterschieds der Mediane.
+        val fehler = if (a.isNotEmpty() && b.isNotEmpty()) MEDIAN_STREUT * streuung * kotlin.math.sqrt(1.0 / a.size + 1.0 / b.size) else Double.MAX_VALUE
         val unterschied = ma - mb
-        val klar = a.isNotEmpty() && b.isNotEmpty() && if (fehler > 0) kotlin.math.abs(unterschied) >= 2 * fehler else unterschied != 0.0
+        val klar = a.isNotEmpty() && b.isNotEmpty() && if (fehler > 0) kotlin.math.abs(unterschied) >= KLAR_AB_FEHLERN * fehler else unterschied != 0.0
         return Gruppenvergleich(a, b, ma, mb, unterschied, streuung, klar)
     }
 

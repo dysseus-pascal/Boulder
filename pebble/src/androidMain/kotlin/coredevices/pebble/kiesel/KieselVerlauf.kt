@@ -23,7 +23,10 @@ internal object KieselVerlauf {
     fun merke(context: Context, zeile: String) {
         logger.i { zeile }
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
-        val alt = try { JSONArray(p.getString(SCHLUESSEL, "[]")) } catch (e: Exception) { JSONArray() }
+        val alt = try { JSONArray(p.getString(SCHLUESSEL, "[]")) } catch (e: Exception) {
+            logger.w { "Protokoll unlesbar, beginnt neu: " + e.message }
+            JSONArray()
+        }
         val neu = JSONArray()
         neu.put(JSONObject().put("t", System.currentTimeMillis()).put("z", zeile))
         for (i in 0 until minOf(alt.length(), HOECHSTENS - 1)) neu.put(alt.get(i))
@@ -33,7 +36,10 @@ internal object KieselVerlauf {
     /** Juengste zuerst: Zeitpunkt in Millisekunden und Text. */
     fun alle(context: Context): List<Pair<Long, String>> {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
-        val a = try { JSONArray(p.getString(SCHLUESSEL, "[]")) } catch (e: Exception) { return emptyList() }
+        val a = try { JSONArray(p.getString(SCHLUESSEL, "[]")) } catch (e: Exception) {
+            logger.w { "Protokoll unlesbar: " + e.message }
+            return emptyList()
+        }
         return (0 until a.length()).mapNotNull { i ->
             val o = a.optJSONObject(i) ?: return@mapNotNull null
             o.optLong("t") to o.optString("z")

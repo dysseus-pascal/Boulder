@@ -1,6 +1,7 @@
 package coredevices.pebble.firmware
 
 import android.os.Build
+import co.touchlab.kermit.Logger
 import java.math.BigInteger
 import java.security.GeneralSecurityException
 import java.security.KeyFactory
@@ -36,10 +37,13 @@ private fun plattformPruefen(nachricht: ByteArray, signatur: ByteArray, oeffentl
             verify(signatur)
         }
     } catch (e: NoSuchAlgorithmException) {
+        // Die Plattform kann kein Ed25519: es zaehlt die eigene Pruefung allein.
+        Logger.withTag("Firmware").i { "Ed25519 der Plattform fehlt, nur die eigene Pruefung: " + e.message }
         null
     } catch (e: GeneralSecurityException) {
         // Ein Schluessel oder eine Signatur, die die Plattform nicht einmal
         // liest, ist ungueltig - nicht "nicht verfuegbar".
+        Logger.withTag("Firmware").w { "Signatur von der Plattform abgelehnt: " + e.message }
         false
     }
 }

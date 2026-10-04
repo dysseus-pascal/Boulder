@@ -357,7 +357,7 @@ internal object Gesundheitsrechnung {
 
     /**
      * Tiefster und hoechster Puls, wie die Linie des Pulsbands sie zeigt: aus
-     * den Medianen der [fuenfMinuten], vor dem Glaetten. Aus den Rohwerten
+     * den Medianen der [fuenfMinuten], den Punkten der [pulslinie]. Aus den Rohwerten
      * bestimmte ein einzelner Ausreisser des Sensors Spanne und Zone im Satz,
      * und die Kurve darunter erreichte ihn nie.
      */
@@ -398,6 +398,9 @@ internal object Gesundheitsrechnung {
     }
 
     private const val TAGESBEGINN_H = 6L
+
+    /** Die Linie des Pulsbands, UNGEGLAETTET: je Stueck die Mediane, aus denen der Satz Spanne, Spitze und Zone nennt. */
+    fun pulslinie(bins: List<Pulsbin>): List<List<Pair<Long, Int>>> = stuecke(bins).map { st -> st.map { it.sekunde to it.median } }
 
     /** Zusammenhaengende Stuecke einer Bin-Reihe: mehr als [luecke] Sekunden ohne Bin trennen sie. */
     fun stuecke(bins: List<Pulsbin>, luecke: Long = 900): List<List<Pulsbin>> {

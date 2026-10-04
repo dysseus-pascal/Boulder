@@ -31,6 +31,7 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Blutdruck
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.Kurvenzug
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Pulsbin
 import coredevices.pebble.kiesel.Statistik
@@ -39,7 +40,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import kotlin.math.roundToInt
 
 /*
  * Die Bilder der Gesundheitsseiten (Zeitstrahl, Herz, Nacht). Fuer alle gilt
@@ -183,8 +183,8 @@ internal fun Tageskurve(
  * Der Puls der letzten 24 Stunden wie bei Google Health und Garmin: graue
  * Saeulen fuer die Spanne jeder halben Stunde, darueber die Linie in der
  * Farbe ihrer Zone, die Zonengrenzen als gepunktete Linien mit ihrer Zahl
- * rechts. Die Linie ist nur leicht geglaettet (eine Viertelstunde): staerker
- * gemittelt erreichte ein kurzer Anstieg seine Zone nicht mehr, und gerade
+ * rechts. Die Linie geht ungeglaettet durch jeden Fuenf-Minuten-Median: so erreicht
+ * ein kurzer Anstieg seine Zone, und gerade
  * der soll zu sehen sein. Luecken ueber einer Viertelstunde brechen die Linie
  * - dort war die Uhr nicht am Arm.
  *
@@ -205,13 +205,13 @@ internal fun Pulsband(
     beschreibung: String? = null,
 ) {
     if (bins.isEmpty() || zonen.size != 3 || farben.size != 4) return
-    // Saeulen und geglaettete Stuecke einmal je Bins, nicht in jedem Zeichnen:
+    // Saeulen und Stuecke der Linie einmal je Bins, nicht in jedem Zeichnen:
     // Sekunde der Mitte, hoechster und tiefster Wert je halbe Stunde.
     val saeulen = remember(bins) {
         bins.groupBy { it.sekunde / 1800 }.values.map { l -> Triple(l.first().sekunde / 1800 * 1800 + 900, l.maxOf { it.hoechster }, l.minOf { it.tiefster }) }
     }
-    // Ein einzelner Bin bleibt roh (ein Punkt), laengere Stuecke werden leicht geglaettet.
-    val stuecke = remember(bins) { Gesundheitsrechnung.stuecke(bins).map { if (it.size == 1) it else glaetten(it, 1) } }
+    // Ein einzelner Bin bleibt ein Punkt, laengere Stuecke eine Linie durch alle ihre Mediane.
+    val stuecke = remember(bins) { Gesundheitsrechnung.pulslinie(bins) }
     val messer = rememberTextMeasurer()
     val stil = achsStil()
     // Durchscheinend, nicht deckend (aufKarte): die Saeulen liegen ueber den
@@ -259,14 +259,13 @@ internal fun Pulsband(
         val dicke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         stuecke.forEach { st ->
             if (st.size == 1) {
-                val z = Gesundheitsrechnung.pulsZone(st[0].median, zonen)
-                drawCircle(farben[z], 2.5.dp.toPx(), Offset(x(st[0].sekunde), y(st[0].median)))
+                val (sekunde, median) = st[0]
+                drawCircle(farben[Gesundheitsrechnung.pulsZone(median, zonen)], 2.5.dp.toPx(), Offset(x(sekunde), y(median)))
                 return@forEach
             }
-            val p = st.map { Offset(x(it.sekunde), y(it.median)) }
             val linie = Path().apply {
-                moveTo(p.first().x, p.first().y)
-                weich(p)
+                moveTo(x(st[0].first), y(st[0].second))
+                Kurvenzug.durch(st.map { x(it.first) }, st.map { y(it.second) }).forEach { k -> cubicTo(k.c1x, k.c1y, k.c2x, k.c2y, k.x1, k.y1) }
             }
             for (z in 0..3) {
                 clipRect(left = -10f, top = streifen[z + 1], right = size.width, bottom = streifen[z]) {
@@ -418,20 +417,10 @@ internal fun Blutdruckbild(
     }
 }
 
-/** Gleitendes Mittel ueber [halb] Bins nach jeder Seite - Median, Tiefster und Hoechster je fuer sich. */
-private fun glaetten(bins: List<Pulsbin>, halb: Int): List<Pulsbin> = bins.indices.map { i ->
-    val fenster = bins.subList(maxOf(0, i - halb), minOf(bins.size, i + halb + 1))
-    Pulsbin(
-        bins[i].sekunde,
-        fenster.map { it.median }.average().roundToInt(),
-        fenster.map { it.tiefster }.average().roundToInt(),
-        fenster.map { it.hoechster }.average().roundToInt(),
-    )
-}
-
 /**
  * Durch die Punkte weich weiterzeichnen: Kurven von Mitte zu Mitte mit den
  * Punkten als Stuetzen. Der Pfad steht schon auf dem ersten Punkt.
+ * Schneidet Gipfel ab: nur fuer Linien ohne Zahl, die sie erreichen muessten.
  */
 private fun Path.weich(p: List<Offset>) {
     if (p.size < 3) { p.drop(1).forEach { lineTo(it.x, it.y) }; return }

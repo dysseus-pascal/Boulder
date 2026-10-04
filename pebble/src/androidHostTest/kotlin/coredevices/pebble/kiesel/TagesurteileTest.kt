@@ -203,19 +203,23 @@ class TagesurteileTest {
     }
 
     @Test
-    fun praeparate_erst_nach_dem_ersten_haken_offen() {
+    fun praeparate_ohne_planzeit_erst_ab_elf_offen() {
         fun e(name: String, genommen: Boolean) = SupCycle.Eintrag(name, genommen)
-        val morgens = g.praeparatzeile(listOf(e("Multivitamin", false), e("Creatine", false), e("Zinc", false), e("Magnesium", false)))
+        val morgens = g.praeparatzeile(listOf(e("Multivitamin", false), e("Creatine", false), e("Zinc", false), e("Magnesium", false)), LocalTime.of(10, 59))
         assertEquals(Praeparatlage.FAELLIG, morgens.lage)
         assertEquals(listOf("Multivitamin", "Creatine"), morgens.namen)
         assertEquals(2, morgens.weitere)
-        val mittags = g.praeparatzeile(listOf(e("Multivitamin", true), e("Creatine", true), e("Zinc", true), e("Magnesium", false)))
+        // Drei schon genommen, um 10:59: der vierte ist faellig, nicht versaeumt.
+        val drei = listOf(e("Multivitamin", true), e("Creatine", true), e("Zinc", true), e("Magnesium", false))
+        assertEquals(Praeparatlage.FAELLIG, g.praeparatzeile(drei, LocalTime.of(10, 59)).lage)
+        val mittags = g.praeparatzeile(drei, LocalTime.of(11, 0))
         assertEquals(Praeparatlage.OFFEN, mittags.lage)
         assertEquals(listOf("Magnesium"), mittags.namen)
         assertEquals(3, mittags.genommen)
         assertEquals(4, mittags.faellig)
-        assertEquals(Praeparatlage.ALLE, g.praeparatzeile(listOf(e("Zinc", true))).lage)
-        assertEquals(Praeparatlage.KEINE, g.praeparatzeile(emptyList()).lage)
+        assertEquals(Praeparatlage.ALLE, g.praeparatzeile(listOf(e("Zinc", true)), LocalTime.of(20, 0)).lage)
+        assertEquals(Praeparatlage.KEINE, g.praeparatzeile(emptyList(), LocalTime.of(20, 0)).lage)
+        assertEquals(11, PRAEPARATE_OHNE_PLAN_AB)
     }
 
     @Test

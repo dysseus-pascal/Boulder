@@ -1,7 +1,11 @@
 package coredevices.pebble.kiesel
 
-import android.util.Log
+import java.time.LocalDate
+import co.touchlab.kermit.Logger
 import kotlin.coroutines.cancellation.CancellationException
+
+/** Ein Tag aus dem eigenen Speicher ("2026-10-03"), oder null mit einer Zeile im Log unter [wo]. */
+internal fun tagOderNull(text: String?, wo: String): LocalDate? = text?.let { versuche(wo, "Kein Tag: $it") { LocalDate.parse(it) } }
 
 /**
  * Ein Zugriff, dessen Fehler die Seite nicht kippen soll: gelingt er nicht,
@@ -17,6 +21,6 @@ internal inline fun <T> versuche(tag: String, was: String, block: () -> T): T? =
 } catch (e: CancellationException) {
     throw e
 } catch (e: Exception) {
-    Log.w(tag, "$was: " + e.message)
+    Logger.withTag(tag).w { "$was: " + e.message }
     null
 }

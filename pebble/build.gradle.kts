@@ -157,6 +157,12 @@ kotlin {
             }
         }
 
+        // Boulder: Ablauftests (Kieselsport, Mithoerer, SupCycle, Drinktervall)
+        // brauchen einen Context mit Dateien, Prefs und Texten.
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
+        }
+
         iosMain {
             dependencies {
                 // Add iOS-specific dependencies here. This a source set created by Kotlin Gradle

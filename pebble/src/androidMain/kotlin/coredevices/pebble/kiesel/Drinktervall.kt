@@ -62,7 +62,7 @@ internal object Drinktervall {
     fun ziel(context: Context): Ziel? {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         if (!p.contains("glaeser")) return null
-        val tag = p.getString("tag", null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val tag = tagOderNull(p.getString("tag", null), "Drinktervall")
         val soll = if (p.contains("soll")) p.getInt("soll", Gesundheitsziele.WASSER_GLAESER) else null
         return zielFuer(LocalDate.now(), tag, p.getInt("glaeser", Gesundheitsziele.WASSER_GLAESER), soll, p.getInt("glas_ml", Gesundheitsziele.GLAS_ML))
     }

@@ -1,7 +1,7 @@
 package coredevices.pebble.kiesel
 
 import android.content.Context
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.metadata.Device
@@ -19,6 +19,7 @@ import kotlin.reflect.KClass
 internal object Akteneintraege {
     // Derselbe Log-Name wie beim Lesen: im Log bleibt die Gesundheitsseite eine Quelle.
     private const val TAG = "Gesundheit"
+    private val logger = Logger.withTag(TAG)
 
     /**
      * Eintraege aus der Akte loeschen - nur Boulders eigene, andere lehnt die
@@ -29,7 +30,7 @@ internal object Akteneintraege {
         try {
             Akte(context).bereit()?.deleteRecords(klasse, recordIdsList = ids, clientRecordIdsList = emptyList()) != null
         } catch (e: Exception) {
-            Log.w(TAG, "Loeschen: " + e.message)
+            logger.w { "Loeschen: " + e.message }
             false
         }
     }
@@ -50,7 +51,7 @@ internal object Akteneintraege {
             ))
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Getraenk aendern: " + e.message)
+            logger.w { "Getraenk aendern: " + e.message }
             false
         }
     }
@@ -64,7 +65,7 @@ internal object Akteneintraege {
             val metadaten = Metadata.manualEntry("koffein-${jetzt.epochSecond}", 0L, Device(type = Device.TYPE_PHONE))
             Akte(context).bereit()?.insertRecords(listOf(Kaffeesorten.satz(p, Kaffeesorten.name(context, p), metadaten, jetzt))) != null
         } catch (e: Exception) {
-            Log.w(TAG, "Koffein eintragen: " + e.message)
+            logger.w { "Koffein eintragen: " + e.message }
             false
         }
     }

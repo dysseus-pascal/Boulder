@@ -30,6 +30,7 @@ import coredevices.pebble.kiesel.Nachtexport
 import coredevices.pebble.kiesel.Sichern
 import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingsDaten
+import coredevices.pebble.kiesel.versuche
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -69,7 +70,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     val fehlend = mahnung.fehlendeRechte
     fun gehe(route: NavBarRoute): () -> Unit = { navBarNav?.navigateTo(route) }
     fun oeffne(intent: Intent): () -> Unit = {
-        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        versuche("Einstellungen", "Seite ${intent.action} nicht geoeffnet") { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
     val appSeite = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 

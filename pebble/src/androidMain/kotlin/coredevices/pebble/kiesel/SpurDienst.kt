@@ -19,7 +19,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,7 +95,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
         // location darf ohne Standortberechtigung gar nicht erst in den
         // Vordergrund gehen.
         if (!darfOrten(this)) {
-            Log.w(TAG, "Keine Standortberechtigung - Spur entfällt")
+            logger.w { "Keine Standortberechtigung - Spur entfällt" }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -152,7 +152,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
         } catch (e: Exception) {
             // DAS IST KEIN FEHLER, DEN MAN VERSCHWEIGEN DARF. Wer nach dem
             // Lauf eine leere Karte sieht, soll nachlesen können, warum.
-            Log.w(TAG, "Vordergrunddienst: " + e.message)
+            logger.w { "Vordergrunddienst: " + e.message }
             KieselVerlauf.merke(
                 this, getString(R.string.ks_sp_nicht_zugelassen, e.message ?: e.javaClass.simpleName)
             )
@@ -180,7 +180,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             laeuft = true
             aufnahme.value = beginn
         } catch (e: Exception) {
-            Log.w(TAG, "Ortung: " + e.message)
+            logger.w { "Ortung: " + e.message }
             beende()
         }
     }
@@ -199,7 +199,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
                 hand.postDelayed(nachlaufVorbei, NACHLAUF_MS)
                 return
             } catch (e: Exception) {
-                Log.w(TAG, "Puffer holen: " + e.message)
+                logger.w { "Puffer holen: " + e.message }
             }
         }
         beende()
@@ -223,7 +223,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             true
         } catch (e: Exception) {
             frueher = 0L
-            Log.w(TAG, "Puffer beim Wechsel: " + e.message)
+            logger.w { "Puffer beim Wechsel: " + e.message }
             false
         }
     }
@@ -257,7 +257,8 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             try {
                 getSystemService(LocationManager::class.java)?.removeUpdates(this)
             } catch (e: Exception) {
-                // schon abgemeldet - nichts zu tun
+                // Abmelden wirft sonst nicht, auch nicht zweimal - ein Fehler hier ist unerwartet.
+                logger.w { "Ortung nicht abgemeldet: " + e.message }
             }
             laeuft = false
         }
@@ -306,6 +307,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
         /** Der Beginn des Trainings, das gerade aufgezeichnet wird, 0 ohne - fuer [stoppeUndWarte]. */
         private val aufnahme = MutableStateFlow(0L)
         private const val TAG = "Kieselsport"
+        private val logger = Logger.withTag(TAG)
         private const val AUS = "coredevices.pebble.kiesel.SPUR_AUS"
         private const val EXTRA_BEGINN = "beginn"
         private const val EXTRA_ART = "art"
@@ -337,7 +339,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
             // OHNE ERLAUBNIS WIRD DER DIENST GAR NICHT ERST GESTARTET. Ein
             // Vordergrunddienst, der beim Start scheitert, reisst die App mit.
             if (!darfOrten(context)) {
-                Log.w(TAG, "Keine Standortberechtigung - Spur entfällt")
+                logger.w { "Keine Standortberechtigung - Spur entfällt" }
                 KieselVerlauf.merke(context, context.getString(R.string.ks_sp_ohne_standort))
                 return
             }
@@ -350,7 +352,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
                 // Android 12 und neuer lassen einen Vordergrunddienst aus dem
                 // Hintergrund heraus nicht in jedem Fall zu. Das Training wird
                 // trotzdem eingetragen - nur ohne Strecke.
-                Log.w(TAG, "Spurdienst nicht gestartet: " + e.message)
+                logger.w { "Spurdienst nicht gestartet: " + e.message }
                 KieselVerlauf.merke(
                     context, context.getString(R.string.ks_sp_ohne_strecke_x, e.message ?: e.javaClass.simpleName)
                 )
@@ -375,7 +377,7 @@ internal class SpurDienst : android.app.Service(), LocationListener {
                 context.startService(i)
             } catch (e: Exception) {
                 // Laeuft er nicht mehr, ist nichts zu stoppen.
-                Log.i(TAG, "Spurdienst lief nicht: " + e.message)
+                logger.i { "Spurdienst lief nicht: " + e.message }
             }
         }
     }

@@ -18,6 +18,7 @@ import com.viktormykhailiv.kmp.health.HealthManager
 import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KIESEL_RECHTE
 import coredevices.pebble.kiesel.nurVerfuegbare
+import coredevices.pebble.kiesel.versuche
 import kotlin.reflect.KClass
 import kotlinx.coroutines.CompletableDeferred
 
@@ -57,15 +58,18 @@ private fun standardRechte(readTypes: List<HealthDataType>, writeTypes: List<Hea
  * zaehlen. Eine Stelle, damit Zahl und Dialog nicht auseinanderlaufen.
  */
 internal fun alleAkteRechte(klient: HealthConnectClient): Set<String> =
-    nurVerfuegbare(
-        standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
-            WRITE_OXYGEN_SATURATION + KIESEL_RECHTE
-    ) { funktion ->
+    nurVerfuegbare(alleRechteJederAkte()) { funktion ->
         // Kann die Akte nicht sagen, was sie kann, fehlt ihr die Funktion - lieber
         // ein Recht nicht fragen als es fuer immer als fehlend zaehlen.
-        runCatching { klient.features.getFeatureStatus(funktion) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE }
-            .getOrDefault(false)
+        versuche("HealthConnect", "Funktion $funktion nicht abfragbar, ihr Recht wird nicht gefragt") {
+            klient.features.getFeatureStatus(funktion) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        } ?: false
     }
+
+/** Boulder: dieselben Rechte vor dem Abgleich mit der Akte - jedes muss im Manifest stehen (RechteTest). */
+internal fun alleRechteJederAkte(): Set<String> =
+    standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
+        WRITE_OXYGEN_SATURATION + KIESEL_RECHTE
 
 /** Boulder: was davon noch nicht erteilt ist. */
 internal suspend fun fehlendeAkteRechte(klient: HealthConnectClient): Set<String> =

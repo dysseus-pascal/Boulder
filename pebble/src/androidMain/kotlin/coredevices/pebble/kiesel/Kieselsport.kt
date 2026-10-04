@@ -474,6 +474,7 @@ internal object Kieselsport {
 
         // YOGA BRINGT EINE HRV MIT - als eigener Satz zum Ende des Trainings.
         // Hoechstens 200 ms: mehr weist schon der Konstruktor ab, und der Wurf nahm Kurve und Kalorien mit.
+        felder[SP_HRV]?.takeIf { it !in HRV_MS }?.let { logger.i { "HRV $it ms von $beginn ausserhalb $HRV_MS, nicht eingetragen" } }
         felder[SP_HRV]?.takeIf { it in HRV_MS }?.let { hrv ->
             if (!Riegel.schonDa(context, "kieselsport-hrv", beginn.toString())) {
                 schreibe(

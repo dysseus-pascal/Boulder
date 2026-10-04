@@ -59,6 +59,8 @@ internal fun nachtAlsSaetze(n: NachtEntity, abschnitte: List<NachtAbschnittEntit
     }
     if (n.hrv in 1..200) {
         saetze += HeartRateVariabilityRmssdRecord(aufwachen, versatz(aufwachen), n.hrv.toDouble(), Metadata.autoRecorded(geraet, "boulder-nacht-hrv-${n.beginnUtc}"))
+    } else if (n.hrv > 200) {
+        logger.i { "Night ${n.beginnUtc}: HRV ${n.hrv} ms above what Health Connect takes, not written" }
     }
     return saetze
 }

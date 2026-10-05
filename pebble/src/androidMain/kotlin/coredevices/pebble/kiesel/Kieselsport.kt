@@ -37,15 +37,21 @@ internal data class KieselNachricht(
     val zone: String? = null,
 ) {
     /** Die Zone beim Empfang, sonst die von jetzt. */
-    fun zoneBeimEmpfang(): ZoneId = zone?.let { id ->
-        try {
-            ZoneId.of(id)
-        } catch (e: DateTimeException) {
-            Logger.withTag("Kieselsport").w { "Zone $id unbrauchbar, nehme die von jetzt: ${e.message}" }
-            null
-        }
-    } ?: ZoneId.systemDefault()
+    fun zoneBeimEmpfang(): ZoneId = zoneOderJetzt(zone)
 }
+
+/**
+ * Eine gemerkte Zone (einer Nachricht, einer Pulskurve), sonst die von jetzt -
+ * auch bei einer, die dieses Telefon nicht (mehr) kennt.
+ */
+internal fun zoneOderJetzt(id: String?): ZoneId = id?.let {
+    try {
+        ZoneId.of(it)
+    } catch (e: DateTimeException) {
+        Logger.withTag("Kieselsport").w { "Zone $it unbrauchbar, nehme die von jetzt: ${e.message}" }
+        null
+    }
+} ?: ZoneId.systemDefault()
 
 /**
  * Kieselsport - was die Trainings-App der Uhr dem Telefon sagt.
@@ -318,8 +324,9 @@ internal object Kieselsport {
             val beginn = felder[SP_BEGINN] ?: return null
             val ab = (felder[SP_KURVE_AB] ?: 0).toInt()
             val anzahl = (felder[SP_KURVE_ANZAHL] ?: 0).toInt()
+            // Mit der Zone beim Empfang: die Kurve geht womoeglich erst nach einer Reise in die Akte.
             werte.forEachIndexed { i, b ->
-                Pulskurve.anhaengen(context, beginn, (ab + i) * KURVE_TAKT_S, b.toInt() and 0xFF)
+                Pulskurve.anhaengen(context, beginn, (ab + i) * KURVE_TAKT_S, b.toInt() and 0xFF, n.zone)
             }
             return if (ab + werte.size >= anzahl && Pulskurve.vorhanden(context, beginn)) {
                 // Eine Kurve ohne einen einzigen Pulswert ist kein Fehler, sondern
@@ -482,9 +489,10 @@ internal object Kieselsport {
 
         // Kalorien und Strecke als eigene Saetze - auch wenn die Sitzung
         // abgewiesen wurde: der naechste Versuch der Uhr ersetzt sie nur.
+        // MIT DER ZONE DER NACHRICHT, wie die Sitzung: sonst truegen Saetze desselben Trainings verschiedene Versaetze.
         val meter = if (strecke > 0) strecke else (felder[SP_METER] ?: 0).toDouble()
-        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, meter, punkte)
-        Trainingswerte.schreibeKalorienDerUhr(context, beginn, anfang, ende, kcal)
+        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, meter, punkte, zone)
+        Trainingswerte.schreibeKalorienDerUhr(context, beginn, anfang, ende, kcal, zone)
 
         // YOGA BRINGT EINE HRV MIT - als eigener Satz zum Ende des Trainings.
         // Hoechstens 200 ms: mehr weist schon der Konstruktor ab, und der Wurf nahm Kurve und Kalorien mit.

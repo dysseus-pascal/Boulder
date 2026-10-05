@@ -465,6 +465,10 @@ internal object Kieselsport {
             logger.w { "Eintrag mit Abschnitten abgewiesen, zweiter Anlauf ohne" }
             meldung = schreibe(context, ohne, context.getString(R.string.ks_a_ohne_abschnitte, kurz), riegel)
         }
+        // OB DIE SITZUNG DRIN IST, ENTSCHEIDET ALLEIN ueber die Datei (KieselsportBegleiter). HRV
+        // und Pulskurve haengen unten ihren Zusatz an - eine abgewiesene Sitzung mit Zusatz saehe
+        // fuer gescheitert() eingetragen aus, die Datei waere weg und mit ihr das Training.
+        val sitzungAbgewiesen = meldung.takeIf { gescheitert(context, it) }
 
         // Kalorien und Strecke als eigene Saetze - auch wenn die Sitzung
         // abgewiesen wurde: der naechste Versuch der Uhr ersetzt sie nur.
@@ -477,7 +481,7 @@ internal object Kieselsport {
         felder[SP_HRV]?.takeIf { it !in HRV_MS }?.let { logger.i { "HRV $it ms von $beginn ausserhalb $HRV_MS, nicht eingetragen" } }
         felder[SP_HRV]?.takeIf { it in HRV_MS }?.let { hrv ->
             if (!Riegel.schonDa(context, "kieselsport-hrv", beginn.toString())) {
-                schreibe(
+                val hrvMeldung = schreibe(
                     context,
                     HeartRateVariabilityRmssdRecord(
                         time = ende, zoneOffset = versatz(ende, zone),
@@ -487,7 +491,8 @@ internal object Kieselsport {
                     context.getString(R.string.ks_a_hrv_eingetragen, hrv.toInt()),
                     Riegel.Marke("kieselsport-hrv", beginn.toString()),
                 )
-                meldung += ", " + context.getString(R.string.ks_a_hrv, hrv.toInt())
+                // Nur was in der Akte steht, steht auch im Protokoll.
+                if (!gescheitert(context, hrvMeldung)) meldung += ", " + context.getString(R.string.ks_a_hrv, hrv.toInt())
             }
         }
 
@@ -495,7 +500,8 @@ internal object Kieselsport {
         if (Pulskurve.eintragen(context, beginn)) meldung += ", " + context.getString(R.string.ks_a_pulskurve)
         // Kam die Kurve vor der Sitzung, fehlte ihr das Fenster fuer die Kalorien.
         else Trainingswerte.schreibeKalorienAusPuls(context, beginn)
-        return meldung
+        // HRV und Kurve stehen schon (Riegel, feste Kennung): der naechste Versuch bringt nur die Sitzung.
+        return sitzungAbgewiesen ?: meldung
     }
 
     /**

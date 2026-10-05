@@ -48,9 +48,9 @@ class SyncOhneNaechteTest {
     private var naechteLesbar = false
 
     /** Was in der Akte steht, nach Art und Beginn. */
-    private val akte = mutableListOf<Pair<String, Long>>()
+    private val inDerAkte = mutableListOf<Pair<String, Long>>()
 
-    private val healthManager = object : HealthManager {
+    private val akte = object : HealthManager {
         override fun isAvailable(): Result<Boolean> = Result.success(true)
         override suspend fun isAuthorized(readTypes: List<HealthDataType>, writeTypes: List<HealthDataType>) = Result.success(true)
         override suspend fun requestAuthorization(readTypes: List<HealthDataType>, writeTypes: List<HealthDataType>, background: Boolean): Result<Boolean> = TODO()
@@ -64,9 +64,9 @@ class SyncOhneNaechteTest {
         override suspend fun writeData(records: List<HealthRecord>): Result<Unit> {
             records.forEach { r ->
                 when (r) {
-                    is ExerciseSessionRecord -> akte += "training" to r.startTime.epochSeconds
-                    is SleepSessionRecord -> akte += "schlaf" to r.startTime.epochSeconds
-                    else -> akte += "sonst" to 0L
+                    is ExerciseSessionRecord -> inDerAkte += "training" to r.startTime.epochSeconds
+                    is SleepSessionRecord -> inDerAkte += "schlaf" to r.startTime.epochSeconds
+                    else -> inDerAkte += "sonst" to 0L
                 }
             }
             return Result.success(Unit)
@@ -90,19 +90,19 @@ class SyncOhneNaechteTest {
 
     @Test
     fun ohneNaechteWartetNurDerSchlafUndWasDanachKommt() = runBlocking {
-        val tracker = HealthSyncTracker(MapSettings()).apply { setEnabled(true) }
-        val sync = PlatformHealthSync(nieGefragt, tracker, AppResumed(), healthManager, daten)
+        val stand = HealthSyncTracker(MapSettings()).apply { setEnabled(true) }
+        val abgleich = PlatformHealthSync(nieGefragt, stand, AppResumed(), akte, daten)
 
-        sync.sync()
+        abgleich.sync()
         // Das Training davor ist drin; der Schlaf wartet - und mit ihm alles danach, denn der
         // Zeiger ist einer, und ein zweites Mal geschrieben stuende es doppelt in der Akte.
-        assertEquals(listOf("training" to vorher.startTime), akte)
-        assertEquals(vorher.startTime, tracker.lastSyncedOverlayTimestamp)
+        assertEquals(listOf("training" to vorher.startTime), inDerAkte)
+        assertEquals(vorher.startTime, stand.lastSyncedOverlayTimestamp)
 
         // Sind die Naechte wieder lesbar, kommt der Rest - nichts doppelt, nichts verloren.
         naechteLesbar = true
-        sync.sync()
-        assertEquals(listOf("training" to vorher.startTime, "schlaf" to schlaf.startTime, "training" to nachher.startTime), akte)
-        assertEquals(nachher.startTime, tracker.lastSyncedOverlayTimestamp)
+        abgleich.sync()
+        assertEquals(listOf("training" to vorher.startTime, "schlaf" to schlaf.startTime, "training" to nachher.startTime), inDerAkte)
+        assertEquals(nachher.startTime, stand.lastSyncedOverlayTimestamp)
     }
 }

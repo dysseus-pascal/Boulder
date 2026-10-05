@@ -333,7 +333,7 @@ fun WatchHomeScreen(
                         when (pending.art) {
                             SideloadArt.Firmware -> "Sideload firmware?"
                             SideloadArt.App -> "Install app?"
-                            SideloadArt.LanguagePack -> "Install language pack?"
+                            SideloadArt.Sprachpaket -> "Install language pack?"
                         }
                     )
                 },

@@ -69,7 +69,7 @@ interface PebbleDeepLinkHandler {
 data class PendingFirmwareSideload(val file: Path, val fileName: String, val art: SideloadArt = SideloadArt.Firmware)
 
 /** Boulder: was eine Datei, die auf die Rueckfrage wartet, installiert. */
-enum class SideloadArt(val endung: String) { Firmware(".pbz"), App(".pbw"), LanguagePack(".pbl") }
+enum class SideloadArt(val endung: String) { Firmware(".pbz"), App(".pbw"), Sprachpaket(".pbl") }
 
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
@@ -93,7 +93,7 @@ class RealPebbleDeepLinkHandler(
         _pendingFirmwareSideload.asStateFlow()
     private var reservedSideloadCount = 0
     // Boulder: Dateien kommen jetzt im Hintergrund an, auch zwei zugleich.
-    private val sideloadLock = Mutex()
+    private val sideloadSperre = Mutex()
 
     override fun consumeRequestIndexCompanion() {
         _requestIndexCompanion.value = false
@@ -152,9 +152,9 @@ class RealPebbleDeepLinkHandler(
                 true
             }
 
-            uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.LanguagePack)
-            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.Firmware)
-            uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleSideload(uri, uri.lastPathSegment!!, SideloadArt.App)
+            uri.lastPathSegment?.endsWith(".pbl") ?: false -> behandleSideload(uri, uri.lastPathSegment!!, SideloadArt.Sprachpaket)
+            uri.lastPathSegment?.endsWith(".pbz") ?: false -> behandleSideload(uri, uri.lastPathSegment!!, SideloadArt.Firmware)
+            uri.lastPathSegment?.endsWith(".pbw") ?: false -> behandleSideload(uri, uri.lastPathSegment!!, SideloadArt.App)
             uri.scheme == "content" -> handleContentFallback(uri)
             else -> false
         }
@@ -169,9 +169,9 @@ class RealPebbleDeepLinkHandler(
         }
         logger.d { "filename: $name" }
         return when {
-            name.endsWith(".pbl") -> handleSideload(uri, name, SideloadArt.LanguagePack)
-            name.endsWith(".pbz") -> handleSideload(uri, name, SideloadArt.Firmware)
-            name.endsWith(".pbw") -> handleSideload(uri, name, SideloadArt.App)
+            name.endsWith(".pbl") -> behandleSideload(uri, name, SideloadArt.Sprachpaket)
+            name.endsWith(".pbz") -> behandleSideload(uri, name, SideloadArt.Firmware)
+            name.endsWith(".pbw") -> behandleSideload(uri, name, SideloadArt.App)
             else -> false
         }
     }
@@ -179,19 +179,19 @@ class RealPebbleDeepLinkHandler(
     // Boulder: Firmware, Apps und Sprachpakete gleich - erst kopieren (im Hintergrund, die Datei
     // kann gross sein und handle() laeuft auf dem Hauptfaden), dann die Rueckfrage; installiert
     // wird erst mit confirmPendingFirmwareSideload.
-    private fun handleSideload(uri: Uri, fileName: String, art: SideloadArt): Boolean {
-        logger.v { "handleSideload($art) $uri" }
+    private fun behandleSideload(uri: Uri, fileName: String, art: SideloadArt): Boolean {
+        logger.v { "behandleSideload($art) $uri" }
         GlobalScope.launch(Dispatchers.IO) {
             // Unter der Sperre schon das Kopieren: writeFile schreibt immer in dieselbe Zwischendatei.
-            sideloadLock.withLock {
+            sideloadSperre.withLock {
                 val file = writeFile(context, uri)
                 if (file == null) {
-                    logger.w { "handleSideload: couldn't write file" }
+                    logger.w { "behandleSideload: couldn't write file" }
                     _snackBarMessages.tryEmit(
                         when (art) {
                             SideloadArt.Firmware -> "Failed to read firmware file"
                             SideloadArt.App -> "Failed to read app file"
-                            SideloadArt.LanguagePack -> "Failed to load language pack file"
+                            SideloadArt.Sprachpaket -> "Failed to load language pack file"
                         }
                     )
                     return@launch
@@ -251,7 +251,7 @@ class RealPebbleDeepLinkHandler(
         when (pending.art) {
             SideloadArt.Firmware -> sideloadFirmware(pending.file)
             SideloadArt.App -> GlobalScope.launch { libPebble.sideloadApp(pending.file) }
-            SideloadArt.LanguagePack -> installLanguagePack(pending.file, pending.fileName)
+            SideloadArt.Sprachpaket -> installLanguagePack(pending.file, pending.fileName)
         }
     }
 

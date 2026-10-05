@@ -28,8 +28,9 @@ import kotlin.uuid.Uuid
 
 /**
  * Welche Datalogging-Tags Boulder als Nacht liest: 88/89 nur mit genau der
- * Itemgroesse der Boulder-Saetze, 0x4001/0x4002 auch mit groesseren Saetzen
- * einer neueren Firmware, Unbekanntes aus 0x4000-0x40FF roh in die Quarantaene.
+ * Itemgroesse der Boulder-Saetze, 0x4001/0x4002 in bekannter Fassung auch aus
+ * groesseren Saetzen, eine neuere Fassung und Unbekanntes aus 0x4000-0x40FF roh
+ * in die Quarantaene.
  * Echtes Datalogging, echter HealthDataProcessor, echte Room-Datenbanken; nur
  * die Quarantaene liegt in einem Temp-Ordner.
  */
@@ -149,13 +150,58 @@ class BoulderDlsTest {
     }
 
     @Test
-    fun neueTagsNehmenGroessereSaetzeEinerNeuerenFirmware() = runTest {
+    fun neueTagsLesenAusGroesserenSaetzenDenBekanntenTeilEinerBekanntenFassung() = runTest {
+        // Fassung 3 bzw. 1 mit hinten angehaengten Bytes: gelesen wird, was diese App kennt.
         val d = datalogging()
-        assertTrue(d.schicke(0x4001u, 340, nachtSatz(version = 4, groesse = 340) + nachtSatz(version = 4, groesse = 340)))
-        assertTrue(d.schicke(0x4002u, 260, hrvSatz(version = 2, groesse = 260)))
+        assertTrue(d.schicke(0x4001u, 340, nachtSatz(groesse = 340) + nachtSatz(groesse = 340)))
+        assertTrue(d.schicke(0x4002u, 260, hrvSatz(groesse = 260)))
         assertEquals(listOf(erwartet), naechte())
         assertEquals(listOf(120 to 57, 150 to 61), hrv())
         assertTrue(quarantaene().isEmpty())
+    }
+
+    @Test
+    fun eineNeuereFassungLiegtRohInDerQuarantaeneUndWirdBestaetigt() = runTest {
+        // Ihr Aufbau ist dieser App unbekannt: geraten kaemen Akku und Messstufe womoeglich
+        // aus Abschnittsbytes. Bestaetigt wird trotzdem, sonst liefe der Speicher der Uhr voll.
+        val d = datalogging()
+        val fassung4 = nachtSatz(version = 4, groesse = 340) + nachtSatz(version = 4, groesse = 340)
+        assertTrue(d.schicke(0x4001u, 340, fassung4))
+        // Der Fall aus der Pruefung: 80 Abschnitte, 428 Byte, Fassung 5.
+        val achtzig = nachtSatz(version = 5, groesse = 428)
+        assertTrue(d.schicke(0x4001u, 428, achtzig))
+        val hrv2 = hrvSatz(version = 2, groesse = 260)
+        assertTrue(d.schicke(0x4002u, 260, hrv2))
+        // Gleich gross wie heute, aber neuere Fassung: ebenso.
+        val gleichGross = nachtSatz(version = 4)
+        assertTrue(d.schicke(0x4001u, 328, gleichGross))
+        assertTrue(naechte().isEmpty())
+        assertTrue(hrv().isEmpty())
+        val dateien = quarantaene().sortedBy { it.name }
+        assertEquals(
+            listOf("dls-tag16385-item328-", "dls-tag16385-item340-", "dls-tag16385-item428-", "dls-tag16386-item260-"),
+            dateien.map { it.name.substringBefore("1790") },
+        )
+        assertContentEquals(gleichGross, dateien[0].readBytes())
+        assertContentEquals(fassung4, dateien[1].readBytes())
+        assertContentEquals(achtzig, dateien[2].readBytes())
+        assertContentEquals(hrv2, dateien[3].readBytes())
+    }
+
+    @Test
+    fun mehrAbschnitteAlsEinSatzFasstLandenInDerQuarantaene() = runTest {
+        // Abgeschnitten fehlte der Rest der Nacht ohne Spur.
+        val d = datalogging()
+        val nacht = nachtSatz().also { it[23] = 61 }
+        assertTrue(d.schicke(0x4001u, 328, nacht))
+        val fenster = hrvSatz().also { it[10] = 49 }
+        assertTrue(d.schicke(0x4002u, 251, fenster))
+        assertTrue(naechte().isEmpty())
+        assertTrue(hrv().isEmpty())
+        val dateien = quarantaene().sortedBy { it.name }
+        assertEquals(listOf("dls-tag16385-item328-", "dls-tag16386-item251-"), dateien.map { it.name.substringBefore("1790") })
+        assertContentEquals(nacht, dateien[0].readBytes())
+        assertContentEquals(fenster, dateien[1].readBytes())
     }
 
     @Test

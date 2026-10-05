@@ -27,8 +27,10 @@ data class NachtHrvTeil(
  * eines HRV-Satzes hat. Jeder verworfene Satz geht mit Grund an [verworfen].
  *
  * [vorwaerts] (die neuen Tags, BoulderDls): die Fassung zaehlt aufwaerts statt
- * als Bitfeld, und ein groesserer Satz einer neueren Firmware wird bis zu den
- * 48 Fenstern gelesen - der Rest ist dort neu.
+ * als Bitfeld, und gelesen wird NUR EINE BEKANNTE FASSUNG ([HRV_FASSUNGEN]),
+ * aus einem groesseren Satz bis zu den 48 Fenstern. Eine neuere Fassung oder
+ * ein Satz mit mehr Fenstern, als einer fasst, geht mit Grund an [verworfen],
+ * also roh in die Quarantaene, statt geraten zu werden.
  */
 fun parseNachtHrvData(
     payload: ByteArray,
@@ -50,7 +52,7 @@ fun parseNachtHrvData(
         verworfen(grund)
     }
     if (vorwaerts && groesse > HRV_SATZ_BYTES) {
-        logger.i { "Nacht-HRV: ${groesse - HRV_SATZ_BYTES} bytes per record are newer than this app; not read" }
+        logger.w { "Nacht-HRV: item size $groesse > $HRV_SATZ_BYTES; a known version is read up to its windows, a newer one is quarantined" }
     }
     val aus = mutableListOf<NachtHrvTeil>()
     for (satz in 0 until payload.size / groesse) {
@@ -58,7 +60,7 @@ fun parseNachtHrvData(
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
         val satzGroesse = b.getUShort().toInt()
-        val bekannt = if (vorwaerts) version >= 1 else version and 1 != 0
+        val bekannt = if (vorwaerts) version in HRV_FASSUNGEN else version and 1 != 0
         if (!bekannt || satzGroesse != groesse) {
             val grund = "Nacht-HRV: record $satz dropped (version $version, size $satzGroesse, item size $groesse)"
             logger.w { grund }
@@ -69,8 +71,15 @@ fun parseNachtHrvData(
         val teil = b.getUByte().toInt()
         val teile = b.getUByte().toInt()
         val anzahl = b.getUByte().toInt()
-        // Nie ueber den Satz hinaus lesen, auch wenn die Anzahl mehr behauptet.
+        // Nie ueber den Satz hinaus lesen: behauptet die Anzahl mehr, ist es kein Satz
+        // dieser Fassung, und abgeschnitten fehlten Fenster ohne Spur.
         val passen = minOf(HRV_FENSTER_JE_SATZ, (groesse - HRV_KOPF_BYTES) / HRV_FENSTER_BYTES)
+        if (anzahl > passen) {
+            val grund = "Nacht-HRV ab $beginn: record $satz claims $anzahl windows, at most $passen fit"
+            logger.w { grund }
+            verworfen(grund)
+            continue
+        }
         val fenster = (0 until minOf(anzahl, passen)).map {
             NachtHrvEntity(
                 beginnUtc = beginn,
@@ -88,3 +97,5 @@ private const val HRV_KOPF_BYTES = 11
 private const val HRV_FENSTER_BYTES = 5
 private const val HRV_FENSTER_JE_SATZ = 48
 private const val HRV_SATZ_BYTES = HRV_KOPF_BYTES + HRV_FENSTER_JE_SATZ * HRV_FENSTER_BYTES
+// Die Fassungen von NachtHrvDlsRecord, deren Aufbau diese App kennt (NACHT_HRV_DLS_VERSION).
+private val HRV_FASSUNGEN = setOf(1)

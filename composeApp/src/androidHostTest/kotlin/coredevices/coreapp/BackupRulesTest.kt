@@ -101,23 +101,41 @@ class BackupRulesTest {
         }
     }
 
+    // Boulder: both can grow past the 25 MB cloud quota, and over quota the system stops
+    // backing up the app altogether. The folder names come from the code that writes there.
+    private val ausgenommen = setOf("file" to DlsQuarantaene.ORDNER, "database" to BEISEITE_ORDNER)
+
     @Test
-    fun `Quarantaene und beiseitegelegte Datenbanken bleiben aus dem Cloud-Backup`() {
-        // Boulder: both can grow past the 25 MB cloud quota, and over quota the system stops
-        // backing up the app altogether. The folder names come from the code that writes there.
-        val ausgenommen = setOf("file" to DlsQuarantaene.ORDNER, "database" to BEISEITE_ORDNER)
+    fun `ab API 31 bleiben Quarantaene und beiseitegelegte Datenbanken aus dem Cloud-Backup`() {
         val v31 = parse(resFile("xml", "backup_rules.xml"))
         val cloud = v31.elementsNamed("cloud-backup").single().childElements("exclude")
             .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
         assertTrue(cloud.containsAll(ausgenommen), "cloud-backup excludes $cloud")
-        // Device transfer has no quota: there the copies move to the new phone with everything else.
+        // From API 31 device transfer has its own section and no quota: there the copies move
+        // to the new phone with everything else.
         val transfer = v31.elementsNamed("device-transfer").single().childElements("exclude")
             .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
         assertTrue(transfer.intersect(ausgenommen).isEmpty(), "device-transfer excludes $transfer")
-        val v28 = parse(resFile("xml-v28", "full_backup_content.xml")).elementsNamed("exclude")
-            .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
-        assertTrue(v28.containsAll(ausgenommen), "API 28-30 excludes $v28")
     }
+
+    @Test
+    fun `auf API 28 bis 30 bleiben sie aus Backup und Geraeteuebertragung`() {
+        // Bis API 30 gibt es nur diese eine Regeldatei, fuer das Cloud-Backup und die
+        // Uebertragung zugleich; ein exclude gilt ohne Bedingung fuer beide. Die Kopien
+        // bleiben dort also auch beim Geraetewechsel auf dem alten Telefon - bekannt, und
+        // der Preis dafuer, dass sie das Cloud-Backup nicht ueber die 25 MB druecken.
+        val v28 = parse(resFile("xml-v28", "full_backup_content.xml"))
+        val excludes = v28.elementsNamed("exclude").filter { (it.getAttribute("domain") to it.getAttribute("path")) in ausgenommen }
+        assertEquals(ausgenommen, excludes.map { it.getAttribute("domain") to it.getAttribute("path") }.toSet())
+        excludes.forEach { assertEquals(setOf("domain", "path"), it.attributeNames(), "exclude ${it.getAttribute("path")}") }
+        // Kein eigener Abschnitt fuer die Uebertragung, den es in diesem Format nicht gibt.
+        assertEquals(setOf("include", "exclude"), v28.documentElement.childElementNames())
+    }
+
+    private fun Element.attributeNames(): Set<String> = (0 until attributes.length).map { attributes.item(it).nodeName }.toSet()
+
+    private fun Element.childElementNames(): Set<String> =
+        (0 until childNodes.length).map { childNodes.item(it) }.filterIsInstance<Element>().map { it.tagName }.toSet()
 
     private fun parse(file: File) = DocumentBuilderFactory.newInstance()
         .newDocumentBuilder()

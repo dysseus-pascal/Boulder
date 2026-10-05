@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -50,7 +51,8 @@ class AppMessageService(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        logger.e(e) { "Unreadable AppMessage ${it.transactionId.get()} for ${it.uuid.get()} dropped" }
+                        logger.e(e) { "Unreadable AppMessage ${it.transactionId.get()} for ${it.uuid.get()} dropped, NACK" }
+                        lehneAb(it.transactionId.get())
                         return@onEach
                     }
                     getReceivedMessagesChannel(daten.uuid).trySend(daten).onFailure { e ->
@@ -59,6 +61,21 @@ class AppMessageService(
                 }
             }
         }.launchIn(scope)
+    }
+
+    // Boulder: kein Begleiter sieht die unlesbare Nachricht, also antwortet keiner. Ohne
+    // NACK wartete die Uhr-App bis zu ihrem Timeout (10 s, app_message_internal.h) mit
+    // blockierter Outbox. Eigene Coroutine: der Empfang wartet nicht auf den Versand.
+    private fun lehneAb(transactionId: UByte) {
+        scope.launch {
+            try {
+                protocolHandler.send(AppMessage.AppMessageNACK(transactionId))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "NACK for unreadable AppMessage $transactionId not sent" }
+            }
+        }
     }
 
     /**

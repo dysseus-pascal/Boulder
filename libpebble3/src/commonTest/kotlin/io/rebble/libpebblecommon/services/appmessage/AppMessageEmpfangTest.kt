@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -20,6 +21,39 @@ import kotlin.uuid.Uuid
  */
 class AppMessageEmpfangTest {
     private val uuid = Uuid.parse("00000000-0000-0000-0000-0000000000dd")
+
+    @Test
+    fun eineUnlesbareNachrichtBekommtSofortEinNack() = runTest {
+        // Sonst wartete die Uhr-App mit blockierter Outbox bis zu ihrem Timeout (10 s).
+        val gesendet = mutableListOf<Any>()
+        val uhr = TestPebbleProtocolHandler { gesendet += it }
+        val dienst = AppMessageService(uhr, ConnectionCoroutineScope(backgroundScope.coroutineContext))
+        dienst.init()
+        runCurrent()
+        val achtByte = AppMessageTuple().apply {
+            key.set(1u)
+            type.set(AppMessageTuple.Type.Int.value)
+            dataLength.set(8u)
+            data.set(UByteArray(8))
+        }
+        uhr.receivePacket(AppMessage.AppMessagePush(7u, uuid, listOf(achtByte)))
+        runCurrent()
+        val antwort = assertIs<AppMessage.AppMessageNACK>(gesendet.single())
+        assertEquals(7u.toUByte(), antwort.transactionId.get())
+    }
+
+    @Test
+    fun eineLesbareNachrichtBeantwortetDerDienstNicht() = runTest {
+        // Bestaetigen ist Sache des Begleiters (er sichert erst) - der Dienst schweigt.
+        val gesendet = mutableListOf<Any>()
+        val uhr = TestPebbleProtocolHandler { gesendet += it }
+        val dienst = AppMessageService(uhr, ConnectionCoroutineScope(backgroundScope.coroutineContext))
+        dienst.init()
+        runCurrent()
+        uhr.receivePacket(AppMessage.AppMessagePush(8u, uuid, listOf(AppMessageTuple.createInt(1u, 42))))
+        runCurrent()
+        assertEquals(emptyList(), gesendet)
+    }
 
     @Test
     fun eineUnlesbareNachrichtBeendetDenEmpfangNicht() = runTest {

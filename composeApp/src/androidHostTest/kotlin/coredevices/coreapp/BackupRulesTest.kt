@@ -1,5 +1,7 @@
 package coredevices.coreapp
 
+import io.rebble.libpebblecommon.database.BEISEITE_ORDNER
+import io.rebble.libpebblecommon.datalogging.DlsQuarantaene
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -85,7 +87,8 @@ class BackupRulesTest {
         // each rule set that backs up the file domain must exclude that directory.
         val v28 = parse(resFile("xml-v28", "full_backup_content.xml"))
         assertEquals(
-            setOf("models", "debug-captures"),
+            // Boulder: plus the Datalogging quarantine (see the test below).
+            setOf("models", "debug-captures", DlsQuarantaene.ORDNER),
             v28.elementsNamed("exclude").filter { it.getAttribute("domain") == "file" }.map { it.getAttribute("path") }.toSet(),
         )
         val v31 = parse(resFile("xml", "backup_rules.xml"))
@@ -96,6 +99,24 @@ class BackupRulesTest {
                 "$section does not exclude files/debug-captures",
             )
         }
+    }
+
+    @Test
+    fun `Quarantaene und beiseitegelegte Datenbanken bleiben aus dem Cloud-Backup`() {
+        // Boulder: both can grow past the 25 MB cloud quota, and over quota the system stops
+        // backing up the app altogether. The folder names come from the code that writes there.
+        val ausgenommen = setOf("file" to DlsQuarantaene.ORDNER, "database" to BEISEITE_ORDNER)
+        val v31 = parse(resFile("xml", "backup_rules.xml"))
+        val cloud = v31.elementsNamed("cloud-backup").single().childElements("exclude")
+            .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
+        assertTrue(cloud.containsAll(ausgenommen), "cloud-backup excludes $cloud")
+        // Device transfer has no quota: there the copies move to the new phone with everything else.
+        val transfer = v31.elementsNamed("device-transfer").single().childElements("exclude")
+            .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
+        assertTrue(transfer.intersect(ausgenommen).isEmpty(), "device-transfer excludes $transfer")
+        val v28 = parse(resFile("xml-v28", "full_backup_content.xml")).elementsNamed("exclude")
+            .map { it.getAttribute("domain") to it.getAttribute("path") }.toSet()
+        assertTrue(v28.containsAll(ausgenommen), "API 28-30 excludes $v28")
     }
 
     private fun parse(file: File) = DocumentBuilderFactory.newInstance()

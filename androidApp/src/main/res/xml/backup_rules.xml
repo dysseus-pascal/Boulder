@@ -29,6 +29,14 @@
         <!-- Debug-only dictation captures: voice data kept for the capture hook and deleted
              when it is turned off. They stay on this phone. -->
         <exclude domain="file" path="debug-captures" />
+        <!-- Boulder: Datalogging packets Boulder could not read (DlsQuarantaene), up to 20 MB
+             against the same 25 MB quota. Raw watch data, kept for a later version to read;
+             losing them in a restore costs little, the quota costs every backup. -->
+        <exclude domain="file" path="dls-quarantaene" />
+        <!-- Boulder: databases of a newer version set aside before a downgrade
+             (sichereNeuereDatenbank), each a full copy. Rules take no wildcards, so they sit
+             in their own folder. They stay on the phone and in device transfer. -->
+        <exclude domain="database" path="beiseite" />
     </cloud-backup>
     <device-transfer>
         <!-- No quota applies here, but the weights are re-downloadable and would only slow a

@@ -41,7 +41,7 @@ class GithubReleases(
     private val expectations: FirmwareArtifactExpectations,
     private val clock: Clock,
     // Boulder: gegen die Zeile "Mindest-App" eines Releases (MindestApp).
-    private val appVersion: CoreAppVersion,
+    private val appFassung: CoreAppVersion,
 ) {
     private val logger = Logger.withTag("GithubReleases")
 
@@ -68,30 +68,44 @@ class GithubReleases(
         }
         val revision = watch.platform.revision
         val candidates = releases.mapNotNull { it.toCandidate(revision) }
-        val selected = selectRelease(candidates.map { it.selectable }, channel, clock.now())
-        if (selected == null) {
+        // Was die Auswahl ohne Mindest-App naehme: nur noch, um den Stand "braucht
+        // neuere App" zu melden, wenn keine passende Firmware neuer ist.
+        val neueste = selectRelease(candidates.map { it.selectable }, channel, clock.now())
+        if (neueste == null) {
             logger.w { "No selectable PebbleOS release for '$revision' among ${releases.size} releases" }
             return FirmwareUpdateCheckResult.UpdateCheckFailed(GENERIC_FAILURE)
+        }
+        // Boulder: ZUERST NACH DER MINDEST-APP FILTERN, dann waehlen. Verlangt die
+        // neueste Firmware eine neuere App, bekommt die Uhr die neueste, die diese
+        // App lesen kann - sonst blieben Korrekturen davor bis zum App-Update liegen,
+        // und eine Uhr in Recovery bekaeme gar keine Firmware.
+        val passende = candidates.filter { c -> c.mindestApp?.let { MindestApp.erfuellt(appFassung.version, it) } ?: true }
+        val selected = selectRelease(passende.map { it.selectable }, channel, clock.now())
+        // Strictly newer only: equality must never re-offer (see
+        // ReleaseTagVersion), and a channel switch back from Early must never
+        // offer a downgrade. Recovery always gets an offer.
+        val anbietbar = { r: SelectableRelease ->
+            watch.runningFwVersion.isRecovery || running == null || r.version > running
+        }
+        if (selected == null || !anbietbar(selected)) {
+            // Keine passende ist neuer: der neutrale Stand nur, wenn eine neuere auf die App wartet.
+            val wartet = candidates.first { it.selectable == neueste }.mindestApp
+                ?.takeIf { anbietbar(neueste) && !MindestApp.erfuellt(appFassung.version, it) }
+            if (wartet != null) {
+                logger.w { "Release ${neueste.version.raw} needs Boulder $wartet, this app is ${appFassung.version}; no suitable newer release" }
+                return FirmwareUpdateCheckResult.BrauchtNeuereApp(wartet)
+            }
+            return FirmwareUpdateCheckResult.FoundNoUpdate
         }
         // Structural match: distinct releases cannot produce equal
         // selectables (tags are unique per release), and equality still
         // holds if selection ever returns a copy instead of the same
         // instance.
-        val chosen = candidates.first { it.selectable == selected }
-        // Strictly newer only: equality must never re-offer (see
-        // ReleaseTagVersion), and a channel switch back from Early must never
-        // offer a downgrade.
-        if (!watch.runningFwVersion.isRecovery && running != null && chosen.selectable.version <= running) {
-            return FirmwareUpdateCheckResult.FoundNoUpdate
-        }
+        val chosen = passende.first { it.selectable == selected }
         val chosenTag = chosen.selectable.version.raw
-        // Boulder: eine Firmware, die eine neuere App braucht, gibt es erst nach dem App-Update.
-        chosen.mindestApp?.let { mindest ->
-            if (!MindestApp.erfuellt(appVersion.version, mindest)) {
-                logger.w { "Release $chosenTag needs Boulder $mindest, this app is ${appVersion.version}; not offering it" }
-                return FirmwareUpdateCheckResult.BrauchtNeuereApp(mindest)
-            }
-        }
+        candidates.first { it.selectable == neueste }.mindestApp
+            ?.takeIf { !MindestApp.erfuellt(appFassung.version, it) }
+            ?.let { logger.i { "Release ${neueste.version.raw} needs Boulder $it; offering $chosenTag instead" } }
         val displayVersion = FirmwareVersion.from(
             tag = chosenTag,
             isRecovery = false,

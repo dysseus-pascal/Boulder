@@ -69,7 +69,7 @@ class FirmwareSparTest {
     @Test
     fun zweiteAbfrageIstBedingtUndBietetDasselbe() = runTest {
         val anfragen = mutableListOf<HttpRequestData>()
-        val releases = GithubReleases(github(anfragen), FirmwareArtifactExpectations(), uhr, TEST_APP_VERSION)
+        val releases = GithubReleases(github(anfragen), FirmwareArtifactExpectations(), uhr, TEST_APP_FASSUNG)
         val erste = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(releases.getLatestFirmware(watch, FirmwareUpdateChannel.Soaked))
         val zweite = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(releases.getLatestFirmware(watch, FirmwareUpdateChannel.Soaked))
         assertEquals(erste, zweite)
@@ -80,7 +80,7 @@ class FirmwareSparTest {
     @Test
     fun ohneEtagWieBisherVolleAbfrage() = runTest {
         val anfragen = mutableListOf<HttpRequestData>()
-        val releases = GithubReleases(github(anfragen, etag = null), FirmwareArtifactExpectations(), uhr, TEST_APP_VERSION)
+        val releases = GithubReleases(github(anfragen, etag = null), FirmwareArtifactExpectations(), uhr, TEST_APP_FASSUNG)
         releases.getLatestFirmware(watch, FirmwareUpdateChannel.Soaked)
         releases.getLatestFirmware(watch, FirmwareUpdateChannel.Soaked)
         assertEquals(listOf(null, null), anfragen.map { it.headers[HttpHeaders.IfNoneMatch] })
@@ -116,7 +116,7 @@ class FirmwareSparTest {
             memfault = Memfault(nieGefragt(), MapSettings(), Platform.Android, memfaultToken = null),
             engDashOta = EngDashOta(nieGefragt(), PebbleHttpClient(SignedOutAccounts(), nieGefragt(), lazy { fail("LibPebble") })),
             cohorts = testCohorts(nieGefragt(), expectations),
-            githubReleases = GithubReleases(client, expectations, uhr, TEST_APP_VERSION),
+            githubReleases = GithubReleases(client, expectations, uhr, TEST_APP_FASSUNG),
             channel = { FirmwareUpdateChannel.Soaked },
             coreConfig = CoreConfigFlow(MutableStateFlow(CoreConfig())),
             coreAnalytics = keineAnalytics(),

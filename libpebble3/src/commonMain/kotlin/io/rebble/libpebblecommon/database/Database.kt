@@ -17,10 +17,6 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.HealthDao
-import io.rebble.libpebblecommon.database.dao.NachtDao
-import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
-import io.rebble.libpebblecommon.database.entity.NachtEntity
-import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
@@ -78,8 +74,15 @@ import kotlin.time.Instant
 
 internal const val DATABASE_FILENAME = "libpebble3.db"
 
+/**
+ * Boulder: diese Datenbank zaehlt nur Upstream-Schritte, um diesen Versatz
+ * verschoben (Upstream 45 = 1045). Boulders eigene Tabellen liegen in
+ * BoulderDatenbank (boulder.db), mit eigener Zaehlung.
+ */
+const val UPSTREAM_VERSATZ = 1000
+
 // Boulder: die Fassung des Schemas, an einer Stelle - sichereNeuereDatenbank vergleicht damit.
-internal const val DATENBANK_VERSION = 50
+internal const val DATENBANK_VERSION = UPSTREAM_VERSATZ + 45
 
 private val logger = Logger.withTag("Database")
 
@@ -115,9 +118,6 @@ private val logger = Logger.withTag("Database")
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
-        NachtEntity::class,
-        NachtAbschnittEntity::class,
-        NachtHrvEntity::class,
     ],
     version = DATENBANK_VERSION,
     autoMigrations = [
@@ -166,6 +166,8 @@ private val logger = Logger.withTag("Database")
         AutoMigration(from = 48, to = 49),
         // Boulder: boulder_nacht_hrv, die HRV-Fenster je Nacht (Tag 89)
         AutoMigration(from = 49, to = 50),
+        // Boulder: 50 -> 1045 ist MIGRATION_50_1045 unten. Upstream-Schritte ab hier
+        // mit UPSTREAM_VERSATZ: aus Upstreams 45 -> 46 wird 1045 -> 1046.
     ],
     exportSchema = true,
 )
@@ -186,7 +188,6 @@ abstract class Database : RoomDatabase() {
     abstract fun vibePatternDao(): VibePatternDao
     abstract fun healthDao(): HealthDao
     abstract fun spo2Dao(): Spo2Dao
-    abstract fun nachtDao(): NachtDao
     abstract fun healthStatDao(): HealthStatDao
     abstract fun watchPrefDao(): WatchPrefRealDao
     abstract fun weatherAppDao(): WeatherAppRealDao
@@ -211,9 +212,20 @@ val MIGRATION_39_40 = object : Migration(39, 40) {
     }
 }
 
+/**
+ * Boulder: die Naechte ziehen nach boulder.db (NachtUmzug). Ihre Tabellen bleiben
+ * in dieser Fassung hier liegen - Room kennt sie nicht mehr und laesst sie in
+ * Ruhe -, darum gibt es nichts zu tun. Ziel ist fest Upstream 45: kuenftige
+ * Upstream-Schritte setzen hier an.
+ */
+val MIGRATION_50_1045 = object : Migration(50, UPSTREAM_VERSATZ + 45) {
+    override fun migrate(connection: SQLiteConnection) {}
+}
+
 fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
-        .addMigrations(MIGRATION_39_40)
+        // Boulder: MIGRATION_50_1045
+        .addMigrations(MIGRATION_39_40, MIGRATION_50_1045)
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
         // V7 required a full re-create.
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
@@ -293,7 +305,9 @@ internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, versio
         logger.w(e) { "Checkpoint of database version $gefunden failed; moving its WAL along" }
     }
     val ordner = pfad.parent ?: Path(".")
-    val ziel = Path(ordner, "libpebble3-v$gefunden-${jetzt.toEpochMilliseconds()}.db")
+    // Der Name der Datei ohne .db, damit libpebble3.db und boulder.db unterscheidbar beiseite liegen.
+    val stamm = pfad.name.removeSuffix(".db")
+    val ziel = Path(ordner, "$stamm-v$gefunden-${jetzt.toEpochMilliseconds()}.db")
     // Begleitdateien zuerst, die Datenbank zuletzt. Scheitert ein Schritt, gehen die
     // schon verschobenen zurueck: dann liegt alles wie vorher, und open() wirft.
     val verschoben = mutableListOf<Pair<Path, Path>>()

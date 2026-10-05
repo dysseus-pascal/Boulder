@@ -25,7 +25,14 @@ die Regeln von Gravel, mit diesen Abweichungen:
   `:osmand-api`). Seine Einstellungen haengen ueber `boulderSettingsItems` in
   Gravels Einstellungsliste (Sektionen Health, Sport, Navigation).
 - Datalogging, Parser und Rohdaten-Tabellen der Minutendaten bleiben die Quelle;
-  die Naechte rechnet die Boulder-Firmware (Tag 88, Tabelle `boulder_nacht`).
+  die Naechte rechnet die Boulder-Firmware (Tag 88 bzw. 0x4001, siehe `BoulderDls`).
+- Zwei Datenbanken: `libpebble3.db` zaehlt nur Upstream (Version =
+  `UPSTREAM_VERSATZ` 1000 + Upstream-Version, heute 1045); einzige Boulder-Reste
+  dort sind `spo2_readings` und `overlay_data.manual`. Eigene Tabellen nur in
+  `BoulderDatenbank` (`boulder.db`, eigene Zaehlung). Upstream-Patch mit
+  `git apply -3 --exclude='libpebble3/schema/*'`; aus Upstreams
+  `AutoMigration(from = 45, to = 46)` wird `from = UPSTREAM_VERSATZ + 45, to =
+  UPSTREAM_VERSATZ + 46`. `SchemaWaechterTest` vergleicht mit Upstream 45.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
 - Gravel-Stand: 0.3.3. Remote `upstream` ist Gravel

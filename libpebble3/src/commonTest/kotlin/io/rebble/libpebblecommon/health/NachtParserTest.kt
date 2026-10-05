@@ -89,7 +89,7 @@ class NachtParserTest {
     @Test
     fun unbekannteFassungWirdUebersprungen() {
         val verworfen = mutableListOf<String>()
-        assertEquals(0, parseNachtData(satz(version = 2, abschnitte = emptyList()), 324u) { verworfen += it }.size)
+        assertEquals(0, parseNachtData(satz(version = 2, abschnitte = emptyList()), 328u) { verworfen += it }.size)
         assertEquals(1, verworfen.size)
     }
 

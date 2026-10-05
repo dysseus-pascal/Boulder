@@ -25,8 +25,17 @@ data class NachtHrvTeil(
  * EINE UNBEKANNTE FASSUNG wird uebersprungen statt geraten: Bit 0 der Version
  * muss gesetzt sein, wie bei den Naechten. Ebenso ein Satz, der nicht die Groesse
  * eines HRV-Satzes hat. Jeder verworfene Satz geht mit Grund an [verworfen].
+ *
+ * [vorwaerts] (die neuen Tags, BoulderDls): die Fassung zaehlt aufwaerts statt
+ * als Bitfeld, und ein groesserer Satz einer neueren Firmware wird bis zu den
+ * 48 Fenstern gelesen - der Rest ist dort neu.
  */
-fun parseNachtHrvData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit = {}): List<NachtHrvTeil> {
+fun parseNachtHrvData(
+    payload: ByteArray,
+    itemSize: UShort,
+    vorwaerts: Boolean = false,
+    verworfen: (String) -> Unit = {},
+): List<NachtHrvTeil> {
     val groesse = itemSize.toInt()
     if (payload.isEmpty()) return emptyList()
     if (groesse < HRV_SATZ_BYTES) {
@@ -35,13 +44,22 @@ fun parseNachtHrvData(payload: ByteArray, itemSize: UShort, verworfen: (String) 
         verworfen(grund)
         return emptyList()
     }
+    if (payload.size % groesse != 0) {
+        val grund = "Nacht-HRV: ${payload.size % groesse} bytes after the last whole record dropped"
+        logger.w { grund }
+        verworfen(grund)
+    }
+    if (vorwaerts && groesse > HRV_SATZ_BYTES) {
+        logger.i { "Nacht-HRV: ${groesse - HRV_SATZ_BYTES} bytes per record are newer than this app; not read" }
+    }
     val aus = mutableListOf<NachtHrvTeil>()
     for (satz in 0 until payload.size / groesse) {
         val b = DataBuffer(payload.copyOfRange(satz * groesse, (satz + 1) * groesse).toUByteArray())
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
         val satzGroesse = b.getUShort().toInt()
-        if (version and 1 == 0 || satzGroesse != groesse) {
+        val bekannt = if (vorwaerts) version >= 1 else version and 1 != 0
+        if (!bekannt || satzGroesse != groesse) {
             val grund = "Nacht-HRV: record $satz dropped (version $version, size $satzGroesse, item size $groesse)"
             logger.w { grund }
             verworfen(grund)

@@ -7,6 +7,8 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.boulder.BoulderDatenbank
+import io.rebble.libpebblecommon.database.testBoulderDatenbank
 import io.rebble.libpebblecommon.database.testDatenbank
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
@@ -30,10 +32,12 @@ import kotlin.time.Instant
  */
 class NachtSchreibwegTest {
     private var db: Database? = null
+    private var boulder: BoulderDatenbank? = null
 
     @AfterTest
     fun zu() {
         db?.close()
+        boulder?.close()
     }
 
     private val beginn = 1_790_445_600L
@@ -80,7 +84,8 @@ class NachtSchreibwegTest {
     @Test
     fun zweiTeileGleichzeitigVerlierenKeinenAbschnitt() = runTest {
         val datenbank = testDatenbank(coroutineContext[CoroutineDispatcher]!!).also { db = it }
-        val nachtDao = LangsamLoeschendeNachtDao(datenbank.nachtDao())
+        val naechte = testBoulderDatenbank(coroutineContext[CoroutineDispatcher]!!).also { boulder = it }
+        val nachtDao = LangsamLoeschendeNachtDao(naechte.nachtDao())
         val verarbeitung = HealthDataProcessor(
             LibPebbleCoroutineScope(backgroundScope.coroutineContext),
             datenbank.healthDao(), datenbank.healthStatDao(), datenbank.spo2Dao(), nachtDao,
@@ -92,12 +97,12 @@ class NachtSchreibwegTest {
         val b = launch { verarbeitung.speichere(1u, 88u, SYSTEM_APP_UUID, 328u, teil1) }
         testScheduler.advanceTimeBy(2.seconds)
         a.join(); b.join()
-        assertEquals(61, datenbank.nachtDao().abschnitte(beginn).size)
+        assertEquals(61, naechte.nachtDao().abschnitte(beginn).size)
     }
 
     @Test
     fun einTeilWirdGanzOderGarNichtGeschrieben() = runTest {
-        val datenbank = testDatenbank(coroutineContext[CoroutineDispatcher]!!).also { db = it }
+        val datenbank = testBoulderDatenbank(coroutineContext[CoroutineDispatcher]!!).also { boulder = it }
         val dao = datenbank.nachtDao()
         val nacht = NachtEntity(beginn, 7200, 30, 400, 350, 50, 40)
         dao.speichereNachtTeil(nacht, ersterTeil = true, listOf(NachtAbschnittEntity(beginn, 30, 200, 1)))

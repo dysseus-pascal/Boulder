@@ -1,5 +1,6 @@
 package coredevices.pebble.firmware
 
+import CoreAppVersion
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
@@ -39,6 +40,8 @@ class GithubReleases(
     private val httpClient: HttpClient,
     private val expectations: FirmwareArtifactExpectations,
     private val clock: Clock,
+    // Boulder: gegen die Zeile "Mindest-App" eines Releases (MindestApp).
+    private val appVersion: CoreAppVersion,
 ) {
     private val logger = Logger.withTag("GithubReleases")
 
@@ -82,6 +85,13 @@ class GithubReleases(
             return FirmwareUpdateCheckResult.FoundNoUpdate
         }
         val chosenTag = chosen.selectable.version.raw
+        // Boulder: eine Firmware, die eine neuere App braucht, gibt es erst nach dem App-Update.
+        chosen.mindestApp?.let { mindest ->
+            if (!MindestApp.erfuellt(appVersion.version, mindest)) {
+                logger.w { "Release $chosenTag needs Boulder $mindest, this app is ${appVersion.version}; not offering it" }
+                return FirmwareUpdateCheckResult.UpdateCheckFailed("Needs Boulder $mindest")
+            }
+        }
         val displayVersion = FirmwareVersion.from(
             tag = chosenTag,
             isRecovery = false,
@@ -194,6 +204,7 @@ class GithubReleases(
             assetSize = asset?.size,
             digestHex = digestHex,
             signaturUrl = signatur?.browserDownloadUrl,
+            mindestApp = MindestApp.aus(body),
         )
     }
 
@@ -207,6 +218,7 @@ class GithubReleases(
         val assetSize: Long?,
         val digestHex: String?,
         val signaturUrl: String?,
+        val mindestApp: String?,
     )
 
     companion object {
@@ -234,6 +246,8 @@ data class GithubReleaseDto(
     @SerialName("published_at")
     val publishedAt: String? = null,
     val assets: List<GithubReleaseAssetDto> = emptyList(),
+    // Boulder: die Notizen des Releases, fuer die Zeile "Mindest-App".
+    val body: String? = null,
 )
 
 @Serializable

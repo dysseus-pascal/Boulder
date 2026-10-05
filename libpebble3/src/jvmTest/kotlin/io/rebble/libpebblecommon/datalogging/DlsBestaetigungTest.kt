@@ -9,6 +9,8 @@ import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.boulder.BoulderDatenbank
+import io.rebble.libpebblecommon.database.testBoulderDatenbank
 import io.rebble.libpebblecommon.database.testDatenbank
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -47,10 +49,12 @@ import kotlin.uuid.Uuid
 class DlsBestaetigungTest {
     private val ordner = Files.createTempDirectory("dls-quarantaene").toString()
     private var db: Database? = null
+    private var boulder: BoulderDatenbank? = null
 
     @AfterTest
     fun aufraeumen() {
         db?.close()
+        boulder?.close()
         java.io.File(ordner).deleteRecursively()
     }
 
@@ -87,13 +91,14 @@ class DlsBestaetigungTest {
     private class Aufbau(
         val uhr: TestPebbleProtocolHandler,
         val nachtDao: BeobachteteNachtDao,
-        val db: Database,
+        val db: BoulderDatenbank,
     )
 
     private suspend fun TestScope.baue(): Aufbau {
         val dispatcher = coroutineContext[CoroutineDispatcher]!!
         val datenbank = testDatenbank(dispatcher).also { db = it }
-        val nachtDao = BeobachteteNachtDao(datenbank.nachtDao(), ereignisse)
+        val naechte = testBoulderDatenbank(dispatcher).also { boulder = it }
+        val nachtDao = BeobachteteNachtDao(naechte.nachtDao(), ereignisse)
         val verarbeitung = HealthDataProcessor(
             LibPebbleCoroutineScope(backgroundScope.coroutineContext),
             datenbank.healthDao(),
@@ -121,7 +126,7 @@ class DlsBestaetigungTest {
         val info = (fakeWatch(connected = true) as ConnectedPebbleDevice).watchInfo
         dienst.realInit(info)
         runCurrent()
-        return Aufbau(uhr, nachtDao, datenbank)
+        return Aufbau(uhr, nachtDao, naechte)
     }
 
     private suspend fun TestPebbleProtocolHandler.oeffne(sitzung: Int, tag: Int, itemSize: Int) =

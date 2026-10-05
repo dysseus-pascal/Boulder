@@ -4,8 +4,12 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.database.boulder.BOULDER_DB_VERSION
+import io.rebble.libpebblecommon.database.boulder.NachtUmzug
+import io.rebble.libpebblecommon.database.boulder.getBoulderDatenbank
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -21,23 +25,25 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Die Datenbank ueber Fassungen hinweg, mit dem echten getRoomDatabase (JVM:
- * die Datei liegt in java.io.tmpdir, hier ein eigener Ordner).
+ * Die Datenbanken ueber Fassungen hinweg, mit dem echten getRoomDatabase und
+ * getBoulderDatenbank (JVM: die Dateien liegen in java.io.tmpdir, hier ein
+ * eigener Ordner).
  *
  * D6: eine Datei einer neueren Fassung leert Room beim Oeffnen; vorher muss
- * eine Kopie daneben liegen. Migrationen: eine Datenbank im Schema 45..49,
- * gebaut aus den exportierten Schemas, kommt mit allen Zeilen auf 50 - so wie
- * es MigrationTestHelper.runMigrationsAndValidate prueft (Room vergleicht nach
- * der Migration das Schema mit den Entities und wirft bei einer Abweichung).
+ * sie daneben liegen - fuer libpebble3.db wie fuer boulder.db. Migrationen:
+ * eine Datenbank im Schema 45..50, gebaut aus den exportierten Schemas, kommt
+ * mit allen Zeilen auf 1045 - so wie es MigrationTestHelper.runMigrationsAndValidate
+ * prueft (Room vergleicht nach der Migration das Schema mit den Entities und
+ * wirft bei einer Abweichung). Die Nacht-Tabellen bleiben dabei liegen.
  */
 class DatenbankFassungTest {
     private val ordner = Files.createTempDirectory("libpebble3-db").toFile()
     private val tmpVorher = System.getProperty("java.io.tmpdir")
     private val datei get() = File(ordner, "libpebble3.db")
+    private val boulderDatei get() = File(ordner, "boulder.db")
     private val schemas = File("schema/io.rebble.libpebblecommon.database.Database")
 
     @BeforeTest
@@ -59,42 +65,49 @@ class DatenbankFassungTest {
 
     private val beginn = 1_790_445_600L
 
-    private fun schreibeNacht() = runBlocking {
+    private fun schreibeSpo2() = runBlocking {
         val db = getRoomDatabase(AppContext())
-        db.nachtDao().speichereNachtTeil(
-            NachtEntity(beginn, 7200, 30, 450, 400, 50, 40),
-            ersterTeil = true,
-            listOf(NachtAbschnittEntity(beginn, 30, 200, 1), NachtAbschnittEntity(beginn, 200, 450, 2)),
-        )
+        db.spo2Dao().insertSpo2Readings(listOf(Spo2ReadingEntity(beginn, 96, 5), Spo2ReadingEntity(beginn + 60, 95, 5)))
         db.close()
     }
 
+    private fun spo2(db: Database) = runBlocking { db.spo2Dao().getSpo2Readings(0, Long.MAX_VALUE) }
+
     @Test
     fun eineNeuereDatenbankLiegtVorDemLeerenDaneben() {
-        schreibeNacht()
+        schreibeSpo2()
         // Wie nach dem Zurueckspielen einer aelteren Fassung: die Datei ist neuer als das Schema.
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
 
         val db = getRoomDatabase(AppContext())
         // Room leert weiterhin (fallbackToDestructiveMigrationOnDowngrade) ...
-        assertNull(runBlocking { db.nachtDao().juengsteNacht() })
+        assertTrue(spo2(db).isEmpty())
         db.close()
         // ... aber vorher kam die ganze Datei daneben, die Fassung im Namen.
         val kopie = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
         roh(kopie) {
             assertEquals(DATENBANK_VERSION + 1L, it.zahl("PRAGMA user_version"))
-            assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
-            assertEquals(2, it.zahl("SELECT COUNT(*) FROM boulder_nacht_abschnitt"))
+            assertEquals(2, it.zahl("SELECT COUNT(*) FROM spo2_readings"))
         }
     }
 
     @Test
     fun dieEigeneFassungBleibtOhneKopie() {
-        schreibeNacht()
+        schreibeSpo2()
         val db = getRoomDatabase(AppContext())
-        assertEquals(beginn, runBlocking { db.nachtDao().juengsteNacht()?.beginnUtc })
+        assertEquals(2, spo2(db).size)
         db.close()
-        assertEquals(listOf("libpebble3.db"), ordner.listFiles()!!.map { it.name }.filter { it.endsWith(".db") })
+        assertEquals(listOf("libpebble3.db"), dbDateien())
+    }
+
+    @Test
+    fun eineFassungAus50IstKeinDowngrade() {
+        // Die Schwelle ist 1045, nicht mehr 50: eine Datei aus 0.49 (50) wird migriert, nicht beiseitegelegt.
+        legeAn(50)
+        val db = getRoomDatabase(AppContext())
+        assertEquals(1, spo2(db).size)
+        db.close()
+        assertEquals(listOf("libpebble3.db"), dbDateien())
     }
 
     private fun dbDateien() = ordner.listFiles()!!.map { it.name }.filter { it.endsWith(".db") }.sorted()
@@ -103,11 +116,11 @@ class DatenbankFassungTest {
     fun beimBauenBleibtDieDateiUnberuehrt() {
         // In der App baut Koin die Datenbank auf dem Main-Thread (Application.onCreate).
         // Beiseitegelegt wird erst beim ersten Oeffnen durch Room, auf dessen Abfrage-Thread.
-        schreibeNacht()
+        schreibeSpo2()
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
         val db = getRoomDatabase(AppContext())
         assertEquals(listOf("libpebble3.db"), dbDateien())
-        assertNull(runBlocking { db.nachtDao().juengsteNacht() })
+        assertTrue(spo2(db).isEmpty())
         db.close()
         assertEquals(1, dbDateien().count { it.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") })
     }
@@ -116,11 +129,11 @@ class DatenbankFassungTest {
     fun dieNeuereDateiWirdUmbenanntNichtKopiert() {
         // Auf das erste Oeffnen wartet der Main-Thread (WatchManager, runBlocking): eine
         // Kopie dauerte mit der Groesse der Datei, Umbenennen nicht. Gleicher Inode = umbenannt.
-        schreibeNacht()
+        schreibeSpo2()
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
         val inode = Files.getAttribute(datei.toPath(), "unix:ino")
         val db = getRoomDatabase(AppContext())
-        runBlocking { db.nachtDao().juengsteNacht() }
+        spo2(db)
         db.close()
         val beiseite = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
         assertEquals(inode, Files.getAttribute(beiseite.toPath(), "unix:ino"))
@@ -128,7 +141,7 @@ class DatenbankFassungTest {
 
     @Test
     fun laesstSieSichNichtBeiseitelegenBekommtRoomKeineVerbindung() {
-        schreibeNacht()
+        schreibeSpo2()
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
         val jetzt = Instant.fromEpochMilliseconds(1_790_500_000_000)
         // Am Zielnamen liegt ein Ordner: das Umbenennen scheitert.
@@ -139,9 +152,49 @@ class DatenbankFassungTest {
         assertFails { schutz.open(datei.absolutePath) }
         roh {
             assertEquals(DATENBANK_VERSION + 1L, it.zahl("PRAGMA user_version"))
-            assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
+            assertEquals(2, it.zahl("SELECT COUNT(*) FROM spo2_readings"))
         }
     }
+
+    // --- boulder.db ---
+
+    private fun schreibeNacht() = runBlocking {
+        val db = getBoulderDatenbank(AppContext())
+        db.nachtDao().speichereNachtTeil(
+            NachtEntity(beginn, 7200, 30, 450, 400, 50, 40),
+            ersterTeil = true,
+            listOf(NachtAbschnittEntity(beginn, 30, 200, 1), NachtAbschnittEntity(beginn, 200, 450, 2)),
+        )
+        db.close()
+    }
+
+    @Test
+    fun eineNeuereBoulderDatenbankLiegtDanebenUndNichtsGehtVerloren() {
+        schreibeNacht()
+        roh(boulderDatei) { it.execSQL("PRAGMA user_version = ${BOULDER_DB_VERSION + 1}") }
+
+        // Ohne Schutz wirft Room hier (keine Migration 2 -> 1); mit Schutz beginnt boulder.db neu.
+        val db = getBoulderDatenbank(AppContext())
+        assertEquals(null, runBlocking { db.nachtDao().juengsteNacht() })
+        db.close()
+        val beiseite = ordner.listFiles()!!.single { it.name.startsWith("boulder-v${BOULDER_DB_VERSION + 1}-") && it.name.endsWith(".db") }
+        roh(beiseite) {
+            assertEquals(BOULDER_DB_VERSION + 1L, it.zahl("PRAGMA user_version"))
+            assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
+            assertEquals(2, it.zahl("SELECT COUNT(*) FROM boulder_nacht_abschnitt"))
+        }
+    }
+
+    @Test
+    fun dieEigeneBoulderFassungBleibtOhneKopie() {
+        schreibeNacht()
+        val db = getBoulderDatenbank(AppContext())
+        assertEquals(beginn, runBlocking { db.nachtDao().juengsteNacht()?.beginnUtc })
+        db.close()
+        assertEquals(listOf("boulder.db"), dbDateien())
+    }
+
+    // --- Migrationen ---
 
     private fun schema(fassung: Int): JsonObject =
         Json.parseToJsonElement(File(schemas, "$fassung.json").readText()).jsonObject.getValue("database").jsonObject
@@ -181,8 +234,13 @@ class DatenbankFassungTest {
     private fun migriereVon(fassung: Int) {
         val tabellen = legeAn(fassung)
         val db = getRoomDatabase(AppContext())
-        // Der erste Zugriff oeffnet: Room migriert auf 50 und prueft das Schema.
-        runBlocking { db.nachtDao().juengsteNacht() }
+        // Der erste Zugriff oeffnet: Room migriert auf 1045 und prueft das Schema.
+        spo2(db)
+        // Danach der Umzug, wie beim Start der App: die Nacht aus der alten Tabelle kommt nach boulder.db.
+        val boulder = getBoulderDatenbank(AppContext())
+        runBlocking { NachtUmzug(db, boulder).sicherstellen() }
+        val umgezogen = runBlocking { boulder.nachtDao().naechte(0, Long.MAX_VALUE) }
+        boulder.close()
         db.close()
         val ziel = schema(DATENBANK_VERSION)
         val zielTabellen = ziel.getValue("entities").jsonArray.map { it.jsonObject.tabelle }.toSet()
@@ -195,17 +253,23 @@ class DatenbankFassungTest {
             for (t in tabellen.filter { it in zielTabellen }) {
                 assertEquals(1, c.zahl("SELECT COUNT(*) FROM `$t`"), "Zeile in $t nach Migration $fassung -> $DATENBANK_VERSION")
             }
+            // Die Nacht-Tabellen kennt 1045 nicht mehr; sie bleiben mit ihren Zeilen liegen.
+            for (t in tabellen.filter { it.startsWith("boulder_nacht") }) {
+                assertEquals(1, c.zahl("SELECT COUNT(*) FROM `$t`"), "$t nach Migration $fassung -> $DATENBANK_VERSION")
+            }
             if ("overlay_data" in tabellen && fassung < 47) {
                 // 46 -> 47 fuegt manual mit Vorgabe 0 an.
                 assertEquals(0, c.zahl("SELECT manual FROM overlay_data"))
             }
         }
+        assertEquals(if ("boulder_nacht" in tabellen) listOf(1L) else emptyList(), umgezogen.map { it.beginnUtc })
         assertTrue(ordner.listFiles()!!.none { it.name.startsWith("libpebble3-v") })
     }
 
-    @Test fun migration45Bis50() = migriereVon(45)
-    @Test fun migration46Bis50() = migriereVon(46)
-    @Test fun migration47Bis50() = migriereVon(47)
-    @Test fun migration48Bis50() = migriereVon(48)
-    @Test fun migration49Bis50() = migriereVon(49)
+    @Test fun migration45Bis1045() = migriereVon(45)
+    @Test fun migration46Bis1045() = migriereVon(46)
+    @Test fun migration47Bis1045() = migriereVon(47)
+    @Test fun migration48Bis1045() = migriereVon(48)
+    @Test fun migration49Bis1045() = migriereVon(49)
+    @Test fun migration50Bis1045() = migriereVon(50)
 }

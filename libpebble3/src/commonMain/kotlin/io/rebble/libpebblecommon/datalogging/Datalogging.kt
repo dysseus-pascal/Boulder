@@ -37,7 +37,7 @@ class Datalogging(
         // und Heartbeat bestaetigten das Paket bisher ungelesen, die Memfault-Schleife
         // rueckte nie weiter und endete nur ueber eine Ausnahme beim Lesen. Wie alles
         // Unlesbare kommt es roh in die Quarantaene; erst danach gibt die Uhr es frei.
-        if (itemSize.toInt() == 0 && wirdGelesen(tag, uuid)) {
+        if (itemSize.toInt() == 0 && wirdGelesen(tag, uuid, itemSize)) {
             if (data.isEmpty()) {
                 logger.w { "Datalogging tag $tag with item size 0 and no data; nothing to keep" }
                 return true
@@ -47,7 +47,8 @@ class Datalogging(
         }
 
         // Handle health tags
-        if (tag in HealthDataProcessor.HEALTH_TAGS) {
+        // Boulder: auch die Tags der Boulder-Firmware (BoulderDls), Unbekanntes aus ihrem Bereich inklusive.
+        if (tag in HealthDataProcessor.HEALTH_TAGS || BoulderDls.art(tag, uuid, itemSize) != null) {
             return when (val ablage = healthDataProcessor.speichere(sessionId, tag, uuid, itemSize, data)) {
                 Ablage.Gesichert -> true
                 is Ablage.Quarantaene -> quarantaene.lege(tag, sessionId, itemSize, data, ablage.grund)
@@ -72,9 +73,9 @@ class Datalogging(
 
     // Boulder: die Tags, deren Items Boulder selbst liest. Alles andere wird wie
     // bisher nur bestaetigt (Gesundheit fremder Apps, Datalogging von Watchapps).
-    private fun wirdGelesen(tag: UInt, uuid: Uuid): Boolean =
-        uuid == SYSTEM_APP_UUID &&
-            (tag in HealthDataProcessor.HEALTH_TAGS || tag == MEMFAULT_CHUNKS_TAG || tag == ANALYTICS_HEARTBEAT_TAG)
+    private fun wirdGelesen(tag: UInt, uuid: Uuid, itemSize: UShort): Boolean =
+        BoulderDls.art(tag, uuid, itemSize) != null || (uuid == SYSTEM_APP_UUID &&
+            (tag in HealthDataProcessor.HEALTH_TAGS || tag == MEMFAULT_CHUNKS_TAG || tag == ANALYTICS_HEARTBEAT_TAG))
 
     private fun systemDaten(tag: UInt, data: ByteArray, watchInfo: WatchInfo, itemSize: UShort) {
         when (tag) {
@@ -109,15 +110,15 @@ class Datalogging(
     }
 
     fun openSession(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
-        if (tag in HealthDataProcessor.HEALTH_TAGS) {
+        // Boulder: BoulderDls
+        if (tag in HealthDataProcessor.HEALTH_TAGS || BoulderDls.art(tag, applicationUuid, itemSize) != null) {
             healthDataProcessor.handleSessionOpen(sessionId, tag, applicationUuid, itemSize)
         }
     }
 
     fun closeSession(sessionId: UByte, tag: UInt) {
-        if (tag in HealthDataProcessor.HEALTH_TAGS) {
-            healthDataProcessor.handleSessionClose(sessionId)
-        }
+        // Boulder: auch fuer die Boulder-Tags; vergessen wird nur, was beim Oeffnen gemerkt wurde.
+        healthDataProcessor.handleSessionClose(sessionId)
     }
 
     companion object {

@@ -15,6 +15,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.rebble.libpebblecommon.connection.FakeLibPebble
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -25,6 +26,9 @@ import kotlin.time.Instant
  * file; keeping them here means a DTO field or constructor change touches
  * one place.
  */
+
+/** Boulder: die App-Fassung der Tests, fuer die Zeile "Mindest-App" (MindestApp). */
+val TEST_APP_VERSION: CoreAppVersion = CoreAppVersion("0.49.0")
 
 /** The suite's fixed "now": fixtures state publish ages relative to this. */
 val TEST_NOW: Instant = Instant.parse("2026-07-31T00:00:00Z")
@@ -87,9 +91,10 @@ fun releaseJson(
     assets: List<String>,
     prerelease: Boolean = false,
     draft: Boolean = false,
+    body: String = "",
 ): String = buildString {
     append("""{"tag_name":"$tag","html_url":"https://github.com/x","prerelease":$prerelease,"draft":$draft,""")
-    append(""""published_at":"${TEST_NOW - ageDays.days}","body":"",""")
+    append(""""published_at":"${TEST_NOW - ageDays.days}","body":${JsonPrimitive(body)},""")
     append(""""assets":[${assets.joinToString(",")}]}""")
 }
 

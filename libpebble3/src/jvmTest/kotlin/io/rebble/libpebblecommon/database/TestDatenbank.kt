@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.database
 
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import io.rebble.libpebblecommon.database.boulder.BoulderDatenbank
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -11,6 +12,13 @@ import kotlin.coroutines.CoroutineContext
  */
 internal fun testDatenbank(kontext: CoroutineContext): Database =
     Room.inMemoryDatabaseBuilder<Database>()
+        .setDriver(BundledSQLiteDriver())
+        .setQueryCoroutineContext(kontext)
+        .build()
+
+/** Boulders Datenbank (die Naechte) im Speicher, wie [testDatenbank]. */
+internal fun testBoulderDatenbank(kontext: CoroutineContext): BoulderDatenbank =
+    Room.inMemoryDatabaseBuilder<BoulderDatenbank>()
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(kontext)
         .build()

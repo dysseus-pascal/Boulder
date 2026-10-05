@@ -27,13 +27,29 @@ data class NachtTeil(
  * muss gesetzt sein, wie bei den Sitzungen. Ebenso ein Satz, der nicht die
  * Groesse eines Nachtsatzes hat (Tag 88 koennte einmal Upstream belegen), und
  * einer mit unmoeglichem Teil. Jeder verworfene Satz geht mit Grund an [verworfen].
+ *
+ * [vorwaerts] (die neuen Tags, BoulderDls): mindestens Fassung 3 mit Anhang,
+ * die Fassung zaehlt aufwaerts statt als Bitfeld, und ein groesserer Satz einer
+ * neueren Firmware wird bis zum Anhang gelesen - der Rest ist dort neu.
  */
-fun parseNachtData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit = {}): List<NachtTeil> {
+fun parseNachtData(
+    payload: ByteArray,
+    itemSize: UShort,
+    vorwaerts: Boolean = false,
+    verworfen: (String) -> Unit = {},
+): List<NachtTeil> {
     val groesse = itemSize.toInt()
     if (payload.isEmpty()) return emptyList()
-    if (groesse < ANHANG_OFFSET) {
-        melde(verworfen, "Nacht: item size $groesse < $ANHANG_OFFSET, ${payload.size} bytes dropped")
+    val mindestens = if (vorwaerts) ANHANG_OFFSET + ANHANG_BYTES else ANHANG_OFFSET
+    if (groesse < mindestens) {
+        melde(verworfen, "Nacht: item size $groesse < $mindestens, ${payload.size} bytes dropped")
         return emptyList()
+    }
+    if (payload.size % groesse != 0) {
+        melde(verworfen, "Nacht: ${payload.size % groesse} bytes after the last whole record dropped")
+    }
+    if (vorwaerts && groesse > ANHANG_OFFSET + ANHANG_BYTES) {
+        logger.i { "Nacht: ${groesse - ANHANG_OFFSET - ANHANG_BYTES} bytes per record are newer than this app; not read" }
     }
     val aus = mutableListOf<NachtTeil>()
     for (satz in 0 until payload.size / groesse) {
@@ -41,7 +57,8 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> 
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
         val satzGroesse = b.getUShort().toInt()
-        if (version and 1 == 0) {
+        val bekannt = if (vorwaerts) version >= FASSUNG_VORWAERTS else version and 1 != 0
+        if (!bekannt) {
             melde(verworfen, "Nacht: record $satz has unknown version $version")
             continue
         }
@@ -81,7 +98,7 @@ fun parseNachtData(payload: ByteArray, itemSize: UShort, verworfen: (String) -> 
         // AB FASSUNG 3 (Bit 1): hinter den 60 Abschnitten Akku und Messstufe. Die
         // Stelle ist fest, egal wie viele Abschnitte belegt sind.
         var nacht = NachtEntity(beginn, zuLokal, einschlafen, aufwachen, schlaf, ruhepuls, hrv)
-        if (version and 2 != 0 && groesse >= ANHANG_OFFSET + 4) {
+        if (vorwaerts || (version and 2 != 0 && groesse >= ANHANG_OFFSET + ANHANG_BYTES)) {
             b.getBytes(ANHANG_OFFSET - (KOPF_BYTES + gelesen.size * ABSCHNITT_BYTES))
             val akkuBeginn = b.getUByte().toInt()
             val akkuEnde = b.getUByte().toInt()
@@ -109,4 +126,7 @@ private const val KOPF_BYTES = 24
 private const val ABSCHNITT_BYTES = 5
 private const val ABSCHNITTE_JE_SATZ = 60
 private const val ANHANG_OFFSET = KOPF_BYTES + ABSCHNITTE_JE_SATZ * ABSCHNITT_BYTES
+private const val ANHANG_BYTES = 4
+// Die erste Fassung mit Anhang (NACHT_DLS_VERSION 3); spaetere haengen nur hinten an.
+private const val FASSUNG_VORWAERTS = 3
 private val PHASEN = 0..4

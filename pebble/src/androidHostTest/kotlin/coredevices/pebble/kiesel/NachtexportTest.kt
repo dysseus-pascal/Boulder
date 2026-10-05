@@ -1,9 +1,13 @@
 package coredevices.pebble.kiesel
 
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
+import kotlinx.coroutines.runBlocking
+import java.lang.reflect.Proxy
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class NachtexportTest {
     // 26.9.2026, 20:00 in Zuerich (Sommerzeit).
@@ -19,6 +23,16 @@ class NachtexportTest {
             NachtHrvEntity(beginn, 120, 57, 0),
         ), zone)
         assertEquals("\nhrv_minute,uhrzeit,rmssd,puls\n120,22:00,57,0\n150,22:30,49,54\n", text)
+    }
+
+    @Test
+    fun scheitert_das_lesen_der_naechte_kommt_null_statt_eines_absturzes() = runBlocking {
+        // Wie bei einem gescheiterten Umzug nach boulder.db: jeder Zugriff auf die Naechte wirft.
+        // Der Export laeuft im Scope der Einstellungsseite - ein Wurf dort beendete die App.
+        val api = Proxy.newProxyInstance(HealthDataApi::class.java.classLoader, arrayOf(HealthDataApi::class.java)) { _, methode, _ ->
+            throw IllegalStateException("Nachtumzug gescheitert (${methode.name})")
+        } as HealthDataApi
+        assertNull(Nachtexport.csv(api))
     }
 
     @Test

@@ -17,9 +17,19 @@ import java.time.format.DateTimeFormatter
  * run-as heraus. Faellt weg, sobald die Ergebnisse passen.
  */
 internal object Nachtexport {
+    /**
+     * Die juengste Nacht der letzten drei Tage als (Name, CSV), oder null. Auch
+     * null, wenn das Lesen scheitert (etwa solange der Umzug nach boulder.db
+     * scheitert) - mit Grund im Log: der Aufruf laeuft im Scope der Seite, ein
+     * Wurf dort beendete die App.
+     */
     suspend fun csv(api: HealthDataApi): Pair<String, String>? = withContext(Dispatchers.IO) {
+        versuche("Nachtexport", "Nacht nicht lesbar") { lies(api) }
+    }
+
+    private suspend fun lies(api: HealthDataApi): Pair<String, String>? {
         val jetzt = Instant.now().epochSecond
-        val e = api.getNaechte(jetzt - 3 * 86_400L, jetzt).maxByOrNull { it.beginnUtc } ?: return@withContext null
+        val e = api.getNaechte(jetzt - 3 * 86_400L, jetzt).maxByOrNull { it.beginnUtc } ?: return null
         val bis = e.beginnUtc + (e.aufwachen + 60) * 60L
         val minuten = api.getHealthDataForRange(e.beginnUtc, bis).associateBy { it.timestamp }
         val abschnitte = api.getNachtAbschnitte(e.beginnUtc)
@@ -39,7 +49,7 @@ internal object Nachtexport {
             append(hrvTeil(e.beginnUtc, hrv, zone))
         }
         val name = "nacht-" + DateTimeFormatter.ofPattern("yyyy-MM-dd").format(Instant.ofEpochSecond(e.beginnUtc).atZone(zone))
-        name to text
+        return name to text
     }
 
     /**

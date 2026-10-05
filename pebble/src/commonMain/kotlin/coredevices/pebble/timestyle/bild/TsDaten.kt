@@ -1,9 +1,11 @@
 package coredevices.pebble.timestyle.bild
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LatestHeartRate
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
+import kotlinx.coroutines.CancellationException
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -21,6 +23,8 @@ import kotlin.time.Instant
  * GRENZE: Gesundheitsdaten kommen von der Uhr in Stapeln - die letzten
  * Minuten kann die Uhr schon gezaehlt haben, Boulder noch nicht.
  */
+
+private val logger = Logger.withTag("TsDaten")
 
 /** Was die Vorschau ausser Zeit, Einheiten und Akku von der Uhr wissen muss. */
 data class TsDaten(
@@ -129,9 +133,18 @@ suspend fun tsDatenLesen(
     val fenster = tsSchlafFenster(jetzt, zone)
     // Eine Nacht, die im Fenster endet, beginnt hoechstens einen Tag frueher.
     val ab = fenster.first - 24 * 60 * 60
-    val naechte = quelle.naechte(ab, fenster.second)
-    val abschnitte = if (naechte.isEmpty()) emptyList() else quelle.nachtAbschnitte(ab, fenster.second)
-    val (schlaf, ruhig) = tsSchlafHeute(naechte, abschnitte, fenster)
+    // Boulders Naechte koennen ausfallen (etwa solange der Umzug nach boulder.db
+    // scheitert): dann zeigt das Bild Schlaf 0, Wetter, Schritte und Puls bleiben.
+    val (schlaf, ruhig) = try {
+        val naechte = quelle.naechte(ab, fenster.second)
+        val abschnitte = if (naechte.isEmpty()) emptyList() else quelle.nachtAbschnitte(ab, fenster.second)
+        tsSchlafHeute(naechte, abschnitte, fenster)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "TimeStyle preview: Boulder's nights unreadable, sleep shown as 0" }
+        0 to 0
+    }
     val uhrVersatz = zone.offsetAtSekunden(jetzt)
     return TsDaten(
         wetter = tsWetterAusSatz(quelle.wetter(), jetzt, uhrVersatz, uvJeStunde),

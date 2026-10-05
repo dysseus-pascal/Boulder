@@ -93,6 +93,8 @@ class TsDatenTest {
         val puls: LatestHeartRate? = null,
         val naechte: List<NachtEntity> = emptyList(),
         val phasen: List<NachtAbschnittEntity> = emptyList(),
+        /** Wirft beim Lesen der Naechte, wie ein gescheiterter Umzug nach boulder.db. */
+        val nachtFehler: Exception? = null,
     ) : TsDatenQuelle {
         val fragen = mutableListOf<String>()
         override suspend fun wetter() = satz
@@ -104,6 +106,7 @@ class TsDatenTest {
         // Wie die Datenbank: nur Naechte mit Beginn in [von, bis).
         override suspend fun naechte(von: Long, bis: Long): List<NachtEntity> {
             fragen += "naechte $von $bis"
+            nachtFehler?.let { throw it }
             return naechte.filter { it.beginnUtc in von until bis }
         }
         override suspend fun nachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity> {
@@ -126,6 +129,18 @@ class TsDatenTest {
             listOf("schritte $mitternacht ${jetzt.epochSeconds + 1}", "naechte ${tag0310 - 29 * 3600} ${tag0310 + 19 * 3600}"),
             quelle.fragen,
         )
+    }
+
+    @Test
+    fun ohneNaechteBleibtDerRestDesBildes() = runTest {
+        // Boulders Naechte nicht lesbar: Schlaf 0, aber Schritte, Distanz und Puls wie sonst.
+        val quelle = Nachbau(
+            schritte = 5523L to 423_099L,
+            puls = LatestHeartRate(64, jetzt.epochSeconds - 60),
+            nachtFehler = IllegalStateException("Nachtumzug gescheitert"),
+        )
+        val d = tsDatenLesen(quelle, jetzt, zuerich, verbunden = true)
+        assertEquals(TsDaten(null, 5523, 4230, 64, 0, 0, verbunden = true), d)
     }
 
     @Test

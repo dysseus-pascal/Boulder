@@ -465,7 +465,7 @@ fun initKoin(
                 single {
                     DlsQuarantaene(get()) {
                         val pbw = getLockerPBWCacheDirectory(appContext)
-                        Path(pbw.parent ?: pbw, "dls-quarantaene")
+                        Path(pbw.parent ?: pbw, DlsQuarantaene.ORDNER)
                     }
                 }
                 singleOf(::Health)

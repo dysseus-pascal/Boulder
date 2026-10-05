@@ -1,5 +1,7 @@
 package coredevices.pebble.firmware
 
+import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+
 /**
  * Boulder: die Zeile "Mindest-App: X.Y.Z" in den Notizen eines Firmware-Releases.
  *
@@ -28,4 +30,26 @@ internal object MindestApp {
 
     private fun zahlen(fassung: String): List<Int>? =
         FASSUNG.find(fassung.trim())?.groupValues?.drop(1)?.map { it.toIntOrNull() ?: return null }
+}
+
+/**
+ * Boulder: was die Uhrenseite unter der Uhr zeigt, wenn die Pruefung kein
+ * Angebot ergab - ein Fehler (rote Karte) oder nur ein Stand (neutral).
+ */
+internal sealed interface FirmwareHinweis {
+    val text: String
+
+    data class Fehler(override val text: String) : FirmwareHinweis
+
+    data class Stand(override val text: String) : FirmwareHinweis
+}
+
+/**
+ * Wartet die Firmware nur auf ein App-Update, ist das kein Fehler: ein kurzes
+ * Label ohne Fehlerrot. Ohne Hinweis (Angebot, nichts Neues, noch keine Pruefung): null.
+ */
+internal fun firmwareHinweis(ergebnis: FirmwareUpdateCheckResult?): FirmwareHinweis? = when (ergebnis) {
+    is FirmwareUpdateCheckResult.UpdateCheckFailed -> FirmwareHinweis.Fehler(ergebnis.error)
+    is FirmwareUpdateCheckResult.BrauchtNeuereApp -> FirmwareHinweis.Stand("Firmware update needs Boulder ${ergebnis.mindestApp}")
+    else -> null
 }

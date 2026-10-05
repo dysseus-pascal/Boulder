@@ -362,7 +362,8 @@ class GithubReleasesTest {
     fun eineFirmwareFuerEineNeuereAppWirdNichtAngeboten() = runTest {
         val expectations = FirmwareArtifactExpectations()
         val result = pruefe("Neue Tags fuer die Nacht.\n\nMindest-App: 0.50.0\n", "0.49.0", expectations)
-        assertEquals("Needs Boulder 0.50.0", assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(result).error)
+        // Kein Fehler, nur ein Stand: die Firmware wartet auf das App-Update.
+        assertEquals(FirmwareUpdateCheckResult.BrauchtNeuereApp("0.50.0"), result)
         // Nichts zum Einspielen vorgemerkt.
         assertNull(expectations.lookup("https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/normal_obelix_pvt_v4.38.1-b3.pbz"))
     }
@@ -378,8 +379,8 @@ class GithubReleasesTest {
     @Test
     fun verglichenWirdZahlFuerZahl() = runTest {
         // Als Text waere 0.9.0 groesser als 0.10.0.
-        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 0.10.0", "0.9.0"))
-        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 1.0.0", "0.99.99"))
+        assertIs<FirmwareUpdateCheckResult.BrauchtNeuereApp>(pruefe("Mindest-App: 0.10.0", "0.9.0"))
+        assertIs<FirmwareUpdateCheckResult.BrauchtNeuereApp>(pruefe("Mindest-App: 1.0.0", "0.99.99"))
         assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Mindest-App: 0.9.0", "0.10.0"))
     }
 
@@ -392,7 +393,7 @@ class GithubReleasesTest {
     @Test
     fun dieZeileGiltNurGenauSo() = runTest {
         // Mitten in den Notizen und mit Windows-Zeilenenden (so speichert GitHub oft) gilt sie.
-        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Titel\r\nMindest-App: 0.50.0\r\nMehr", "0.49.0"))
+        assertIs<FirmwareUpdateCheckResult.BrauchtNeuereApp>(pruefe("Titel\r\nMindest-App: 0.50.0\r\nMehr", "0.49.0"))
         // Anders geschrieben ist es keine Grenze.
         for (zeile in listOf("Mindest-App: 0.50", "Mindest-App: 0.50.0 (Nacht)", " Mindest-App: 0.50.0", "mindest-app: 0.50.0", "Mindest-App:0.50.0")) {
             assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe(zeile, "0.49.0"), zeile)
@@ -401,7 +402,7 @@ class GithubReleasesTest {
 
     @Test
     fun eineUnlesbareAppFassungBekommtKeineFirmwareMitGrenze() = runTest {
-        assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(pruefe("Mindest-App: 0.50.0", "dev"))
+        assertIs<FirmwareUpdateCheckResult.BrauchtNeuereApp>(pruefe("Mindest-App: 0.50.0", "dev"))
         assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Mindest-App: 0.50.0", "0.50.0-3-gabcdef12"))
     }
 }

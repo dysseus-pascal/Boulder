@@ -174,7 +174,7 @@ class PlatformHealthSync(
             healthDataApi.getOverlayEntriesAfter(tracker.lastSyncedOverlayTimestamp, SYNC_OVERLAYS).isNotEmpty() ||
             (supportsOxygenSaturationWriting() &&
                 (healthDataApi.getLatestSpo2Reading()?.timestampEpochSec ?: 0L) > tracker.lastSyncedSpo2Timestamp) ||
-            (supportsNaechteWriting() && neueNaechte().isNotEmpty())
+            (supportsNaechteWriting() && naechteOderNull("new nights") { neueNaechte() }?.isNotEmpty() == true)
 
     private suspend fun syncStepsAndHeartRate() {
         val lastTimestamp = tracker.lastSyncedStepsTimestamp
@@ -243,9 +243,11 @@ class PlatformHealthSync(
         // AUCH DIE ZULETZT GESCHRIEBENE NACHT NOCH EINMAL, wenn sie sich
         // geaendert hat: die Uhr schickt eine Nacht nach weiterem Schlaf mit
         // demselben Beginn erneut. Die Akte ersetzt sie (gleiche Kennung).
-        val naechte = neueNaechte()
+        val naechte = naechteOderNull("new nights") { neueNaechte() } ?: return
         if (naechte.isEmpty()) return
-        val mitPhasen = naechte.map { it to healthDataApi.getNachtAbschnitte(it.beginnUtc) }
+        val mitPhasen = naechteOderNull("phases of new nights") {
+            naechte.map { it to healthDataApi.getNachtAbschnitte(it.beginnUtc) }
+        } ?: return
         if (writeNaechteToPlatform(mitPhasen)) {
             val juengste = naechte.maxBy { it.beginnUtc }
             tracker.lastSyncedNachtBeginn = juengste.beginnUtc
@@ -261,6 +263,20 @@ class PlatformHealthSync(
     }
 
     private fun nachtStand(n: NachtEntity): String = "${n.aufwachen}:${n.schlafMinuten}"
+
+    /**
+     * Boulder: ein Zugriff auf Boulders Naechte, oder null mit Log. Sie liegen in
+     * boulder.db; scheitert der Umzug dorthin, wirft jeder Zugriff, bis er gelingt.
+     * Das darf Schritte, Puls, Trainings und SpO2 nicht mit aufhalten.
+     */
+    private suspend fun <T> naechteOderNull(was: String, lies: suspend () -> T): T? = try {
+        lies()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "Boulder nights unreadable ($was); trying again on the next sync" }
+        null
+    }
 
     private suspend fun syncOxygenSaturation() {
         if (!supportsOxygenSaturationWriting()) return
@@ -299,11 +315,24 @@ class PlatformHealthSync(
         // Boulder: wo die Firmware eine Nacht gerechnet hat, schreibt syncNaechte den Schlaf
         // mit allen Phasen; die Sitzungen aus den Aktivitaetsdaten wuerden ihn verdoppeln.
         val nachtSpannen = if (supportsNaechteWriting() && sleepOverlays.isNotEmpty()) {
-            healthDataApi.getNaechte(sleepOverlays.minOf { it.startTime } - 86_400, sleepOverlays.maxOf { it.startTime } + 86_400)
-                .map { it.schlafSpanne() }
+            naechteOderNull("nights around sleep overlays") {
+                healthDataApi.getNaechte(sleepOverlays.minOf { it.startTime } - 86_400, sleepOverlays.maxOf { it.startTime } + 86_400)
+                    .map { it.schlafSpanne() }
+            }
         } else emptyList()
-        val sleepRecords = if (supportsSleepWriting()) buildSleepSessions(ohneFirmwareNacht(sleepOverlays, nachtSpannen)) else emptyList()
-        if (sleepRecords.isNotEmpty()) {
+        // Boulder: ohne die Naechte kein Schlaf (er koennte eine Nacht verdoppeln). Trainings
+        // davor gehen trotzdem; ab dem ersten Schlaf wartet alles, denn es gibt nur einen
+        // Zeiger, und ein zweites Mal geschrieben stuende ein Training doppelt in der Akte
+        // (health-kmp gibt die Kennung nicht als clientRecordId weiter).
+        val schlafWartet = nachtSpannen == null
+        val trainings = if (schlafWartet) {
+            val ersterSchlaf = sleepOverlays.minOf { it.startTime }
+            exerciseOverlays.filter { it.startTime < ersterSchlaf }
+        } else exerciseOverlays
+        val sleepRecords = if (supportsSleepWriting() && nachtSpannen != null) buildSleepSessions(ohneFirmwareNacht(sleepOverlays, nachtSpannen)) else emptyList()
+        if (schlafWartet) {
+            logger.w { "Holding back ${sleepOverlays.size} sleep overlays until Boulder's nights are readable" }
+        } else if (sleepRecords.isNotEmpty()) {
             logger.v { "Writing ${sleepRecords.size} sleep sessions to health platform" }
             val result = healthManager.writeData(sleepRecords)
             if (result.isSuccess) {
@@ -318,7 +347,7 @@ class PlatformHealthSync(
 
         // Write exercise records separately
         val exerciseRecords = mutableListOf<HealthRecord>()
-        for (overlay in exerciseOverlays) {
+        for (overlay in trainings) {
             if (overlay.duration <= 0) continue
             // Boulder: selbst gestartete Trainings (Kieselsport in der
             // Boulder-Firmware) traegt der Kieselsport-Empfang ein - mit Art,
@@ -353,13 +382,13 @@ class PlatformHealthSync(
         if (exerciseRecords.isNotEmpty()) {
             val result = healthManager.writeData(exerciseRecords)
             if (result.isSuccess) {
-                maxSyncedTimestamp = maxOf(maxSyncedTimestamp, exerciseOverlays.maxOf { it.startTime })
+                maxSyncedTimestamp = maxOf(maxSyncedTimestamp, trainings.maxOf { it.startTime })
                 logger.d { "Synced ${exerciseRecords.size} exercise records" }
             } else {
                 logger.e { "Failed to write exercise records: ${result.exceptionOrNull()}" }
             }
-        } else if (exerciseOverlays.isNotEmpty()) {
-            maxSyncedTimestamp = maxOf(maxSyncedTimestamp, exerciseOverlays.maxOf { it.startTime })
+        } else if (trainings.isNotEmpty()) {
+            maxSyncedTimestamp = maxOf(maxSyncedTimestamp, trainings.maxOf { it.startTime })
         }
 
         if (maxSyncedTimestamp > lastTimestamp) {

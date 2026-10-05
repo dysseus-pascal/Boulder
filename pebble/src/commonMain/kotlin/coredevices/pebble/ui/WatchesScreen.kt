@@ -138,8 +138,10 @@ import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
+import coredevices.pebble.firmware.FirmwareHinweis
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.VerifiedFirmwareInstaller
+import coredevices.pebble.firmware.firmwareHinweis
 import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
@@ -2083,21 +2085,31 @@ fun WatchDetails(
             primaryColor = true,
             modifier = Modifier.padding(vertical = 5.dp),
         )
-    } else if (firmwareUpdateAvailable is FirmwareUpdateCheckResult.UpdateCheckFailed) {
-        Card(
-            modifier = Modifier
+    } else {
+        // Boulder: firmwareHinweis trennt Fehler (rote Karte) vom blossen Stand (neutral).
+        when (val hinweis = firmwareHinweis(firmwareUpdateAvailable)) {
+            is FirmwareHinweis.Fehler -> Card(
+                modifier = Modifier
 //                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer
-            )
-        ) {
-            Text(
-                text = firmwareUpdateAvailable.error,
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = hinweis.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(15.dp)
+                )
+            }
+            is FirmwareHinweis.Stand -> Text(
+                text = hinweis.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.padding(15.dp)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            null -> {}
         }
     }
     val failureInfo = watch.connectionFailureInfo

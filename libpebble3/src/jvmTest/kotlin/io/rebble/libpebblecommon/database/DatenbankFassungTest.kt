@@ -83,8 +83,10 @@ class DatenbankFassungTest {
         // Room leert weiterhin (fallbackToDestructiveMigrationOnDowngrade) ...
         assertTrue(spo2(db).isEmpty())
         db.close()
-        // ... aber vorher kam die ganze Datei daneben, die Fassung im Namen.
-        val kopie = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
+        // ... aber vorher kam die ganze Datei daneben, die Fassung im Namen - im Unterordner,
+        // den backup_rules.xml vom Cloud-Backup ausnimmt, nicht neben der Datenbank.
+        assertTrue(ordner.listFiles()!!.none { it.name.startsWith("libpebble3-v") })
+        val kopie = beiseite().single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
         roh(kopie) {
             assertEquals(DATENBANK_VERSION + 1L, it.zahl("PRAGMA user_version"))
             assertEquals(2, it.zahl("SELECT COUNT(*) FROM spo2_readings"))
@@ -112,6 +114,9 @@ class DatenbankFassungTest {
 
     private fun dbDateien() = ordner.listFiles()!!.map { it.name }.filter { it.endsWith(".db") }.sorted()
 
+    /** Was im Ordner der beiseitegelegten Fassungen liegt (leer, wenn es ihn nicht gibt). */
+    private fun beiseite(): List<File> = File(ordner, BEISEITE_ORDNER).listFiles()?.toList().orEmpty()
+
     @Test
     fun beimBauenBleibtDieDateiUnberuehrt() {
         // In der App baut Koin die Datenbank auf dem Main-Thread (Application.onCreate).
@@ -122,7 +127,7 @@ class DatenbankFassungTest {
         assertEquals(listOf("libpebble3.db"), dbDateien())
         assertTrue(spo2(db).isEmpty())
         db.close()
-        assertEquals(1, dbDateien().count { it.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") })
+        assertEquals(1, beiseite().count { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") })
     }
 
     @Test
@@ -135,8 +140,8 @@ class DatenbankFassungTest {
         val db = getRoomDatabase(AppContext())
         spo2(db)
         db.close()
-        val beiseite = ordner.listFiles()!!.single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
-        assertEquals(inode, Files.getAttribute(beiseite.toPath(), "unix:ino"))
+        val kopie = beiseite().single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
+        assertEquals(inode, Files.getAttribute(kopie.toPath(), "unix:ino"))
     }
 
     @Test
@@ -145,7 +150,8 @@ class DatenbankFassungTest {
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
         val jetzt = Instant.fromEpochMilliseconds(1_790_500_000_000)
         // Am Zielnamen liegt ein Ordner: das Umbenennen scheitert.
-        File(ordner, "libpebble3-v${DATENBANK_VERSION + 1}-${jetzt.toEpochMilliseconds()}.db").apply { mkdir(); File(this, "x").writeText("x") }
+        File(File(ordner, BEISEITE_ORDNER).apply { mkdirs() }, "libpebble3-v${DATENBANK_VERSION + 1}-${jetzt.toEpochMilliseconds()}.db")
+            .apply { mkdir(); File(this, "x").writeText("x") }
         val schutz = DowngradeSchutz(BundledSQLiteDriver(), DATENBANK_VERSION, object : Clock { override fun now() = jetzt })
         // Auch beim zweiten Versuch nicht: sonst leerte Room die Datei.
         assertFails { schutz.open(datei.absolutePath) }
@@ -177,8 +183,9 @@ class DatenbankFassungTest {
         val db = getBoulderDatenbank(AppContext())
         assertEquals(null, runBlocking { db.nachtDao().juengsteNacht() })
         db.close()
-        val beiseite = ordner.listFiles()!!.single { it.name.startsWith("boulder-v${BOULDER_DB_VERSION + 1}-") && it.name.endsWith(".db") }
-        roh(beiseite) {
+        assertTrue(ordner.listFiles()!!.none { it.name.startsWith("boulder-v") })
+        val kopie = beiseite().single { it.name.startsWith("boulder-v${BOULDER_DB_VERSION + 1}-") && it.name.endsWith(".db") }
+        roh(kopie) {
             assertEquals(BOULDER_DB_VERSION + 1L, it.zahl("PRAGMA user_version"))
             assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht"))
             assertEquals(2, it.zahl("SELECT COUNT(*) FROM boulder_nacht_abschnitt"))
@@ -264,6 +271,7 @@ class DatenbankFassungTest {
         }
         assertEquals(if ("boulder_nacht" in tabellen) listOf(1L) else emptyList(), umgezogen.map { it.beginnUtc })
         assertTrue(ordner.listFiles()!!.none { it.name.startsWith("libpebble3-v") })
+        assertTrue(beiseite().isEmpty())
     }
 
     @Test fun migration45Bis1045() = migriereVon(45)

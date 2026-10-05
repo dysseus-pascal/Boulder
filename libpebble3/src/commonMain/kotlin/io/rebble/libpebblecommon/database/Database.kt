@@ -283,6 +283,11 @@ internal class DowngradeSchutz(
  *
  * Laesst sie sich nicht beiseitelegen, wirft es: lieber keine Datenbank als still
  * geloeschte Naechte.
+ *
+ * Die Kopie liegt im Unterordner [BEISEITE_ORDNER] neben der Datei: die Regeln
+ * fuer das Cloud-Backup kennen keine Platzhalter (libpebble3-v*.db), einen Ordner
+ * schliessen sie aus. Jede Kopie ist eine ganze Datenbank; mitgesichert kippte sie
+ * die 25-MB-Grenze, und das System sicherte dann gar nichts mehr von der App.
  */
 internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, version: Int, jetzt: Instant): String? {
     val pfad = Path(datei)
@@ -304,7 +309,7 @@ internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, versio
         // Nicht schlimm: die Begleitdateien gehen unten mit.
         logger.w(e) { "Checkpoint of database version $gefunden failed; moving its WAL along" }
     }
-    val ordner = pfad.parent ?: Path(".")
+    val ordner = Path(pfad.parent ?: Path("."), BEISEITE_ORDNER)
     // Der Name der Datei ohne .db, damit libpebble3.db und boulder.db unterscheidbar beiseite liegen.
     val stamm = pfad.name.removeSuffix(".db")
     val ziel = Path(ordner, "$stamm-v$gefunden-${jetzt.toEpochMilliseconds()}.db")
@@ -312,6 +317,8 @@ internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, versio
     // schon verschobenen zurueck: dann liegt alles wie vorher, und open() wirft.
     val verschoben = mutableListOf<Pair<Path, Path>>()
     try {
+        // Derselbe Datentraeger wie die Datei: das Umbenennen bleibt atomar.
+        SystemFileSystem.createDirectories(ordner, mustCreate = false)
         for (endung in listOf("-wal", "-journal", "-shm", "")) {
             val von = Path("$datei$endung")
             if (!SystemFileSystem.exists(von)) continue
@@ -333,3 +340,10 @@ internal fun sichereNeuereDatenbank(datei: String, treiber: SQLiteDriver, versio
     logger.w { "Database version $gefunden is newer than $version (downgrade): moved to $ziel, Room starts a new one" }
     return ziel.toString()
 }
+
+/**
+ * Boulder: Unterordner neben den Datenbanken fuer die beiseitegelegten Fassungen
+ * ([sichereNeuereDatenbank]). backup_rules.xml nimmt ihn vom Cloud-Backup aus -
+ * wer ihn umbenennt, muss die Regeln mitziehen (BackupRulesTest prueft es).
+ */
+const val BEISEITE_ORDNER = "beiseite"

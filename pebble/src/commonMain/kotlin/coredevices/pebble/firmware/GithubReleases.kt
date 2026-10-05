@@ -89,7 +89,7 @@ class GithubReleases(
         chosen.mindestApp?.let { mindest ->
             if (!MindestApp.erfuellt(appVersion.version, mindest)) {
                 logger.w { "Release $chosenTag needs Boulder $mindest, this app is ${appVersion.version}; not offering it" }
-                return FirmwareUpdateCheckResult.UpdateCheckFailed("Needs Boulder $mindest")
+                return FirmwareUpdateCheckResult.BrauchtNeuereApp(mindest)
             }
         }
         val displayVersion = FirmwareVersion.from(

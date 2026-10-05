@@ -337,6 +337,15 @@ sealed class FirmwareUpdateCheckResult {
     data class UpdateCheckFailed(
         val error: String,
     ) : FirmwareUpdateCheckResult()
+
+    /**
+     * Boulder: es gibt eine neuere Firmware, sie braucht aber mindestens die App
+     * [mindestApp] (Zeile "Mindest-App" im Release). Kein Fehler - die Firmware
+     * wartet nur auf das App-Update.
+     */
+    data class BrauchtNeuereApp(
+        val mindestApp: String,
+    ) : FirmwareUpdateCheckResult()
 }
 
 interface Calendar {

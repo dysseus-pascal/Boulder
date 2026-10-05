@@ -70,6 +70,10 @@ class KalorienAblaufTest {
     @Volatile
     private var naechteGefragt = 0
 
+    /** Was die Frage nach den Naechten wirft - wie der Zugriff, dessen Umzug nach boulder.db scheiterte. */
+    @Volatile
+    private var naechteWerfen: Exception? = null
+
     /** Nur was die Kalorien fragen; alles andere wirft - ein neuer Weg muss erst hierher. */
     private inline fun <reified T> nur(vararg antworten: Pair<String, () -> Any?>): T {
         val m = antworten.toMap()
@@ -96,7 +100,7 @@ class KalorienAblaufTest {
         Akte.ersatz = akte
         val e = einstellungen()
         val lib = nur<LibPebble>("getHealthSettings" to { flowOf(e) })
-        val api = nur<HealthDataApi>("getNaechte" to { naechteGefragt++; naechte })
+        val api = nur<HealthDataApi>("getNaechte" to { naechteGefragt++; naechteWerfen?.let { throw it }; naechte })
         startKoin { modules(module { single { lib }; single { api } }) }
     }
 
@@ -259,5 +263,17 @@ class KalorienAblaufTest {
         } finally {
             TimeZone.setDefault(vorher)
         }
+    }
+
+    @Test
+    fun scheitert_der_zugriff_auf_die_naechte_kommt_das_training_trotzdem_mit_kalorien_in_die_akte() {
+        // Der Zugriff auf die Naechte wartet auf ihren Umzug nach boulder.db und wirft, wenn er scheiterte.
+        naechteWerfen = IllegalStateException("Night move failed recently")
+        laufMitKurve()
+        assertTrue(naechteGefragt > 0, "Naechte nicht gefragt")
+        assertEquals(1, akte.saetze<ExerciseSessionRecord>().size)
+        assertEquals(1, akte.saetze<HeartRateRecord>().size)
+        // Die Kalorien aus dem Puls kommen trotzdem - mit dem Ersatz-Ruhepuls, wie ohne Naechte.
+        assertEquals(Trainingswerte.fassungAusPuls(120, waage = false, ruheAusNaechten = false), kalorien().metadata.clientRecordVersion)
     }
 }

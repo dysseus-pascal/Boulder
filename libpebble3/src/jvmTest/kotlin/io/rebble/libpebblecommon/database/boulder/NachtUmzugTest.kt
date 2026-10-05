@@ -26,8 +26,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.lang.reflect.Modifier
 import java.lang.reflect.Proxy
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.EmptyCoroutineContext
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
+import org.junit.Assume.assumeTrue
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -281,9 +283,15 @@ class NachtUmzugTest {
     }
 
     @Test
-    fun echteTelefonKopie() = runBlocking<Unit> {
+    fun echteTelefonKopie() {
         // Nur von Hand: UMZUG_ECHTE_DB zeigt auf eine Kopie der Datenbank vom Telefon.
-        val pfad = System.getenv("UMZUG_ECHTE_DB") ?: return@runBlocking
+        // Ohne sie meldet JUnit den Test als uebersprungen, nicht als bestanden.
+        val pfad = System.getenv("UMZUG_ECHTE_DB")
+        assumeTrue("UMZUG_ECHTE_DB not set: manual check against a phone copy", pfad != null)
+        runBlocking { pruefeEchteKopie(checkNotNull(pfad)) }
+    }
+
+    private suspend fun pruefeEchteKopie(pfad: String) {
         File(pfad).copyTo(altDatei, overwrite = true)
         val soll = BundledSQLiteDriver().open(altDatei.absolutePath).use { c ->
             listOf("boulder_nacht", "boulder_nacht_abschnitt", "boulder_nacht_hrv", "spo2_readings").map { t ->
@@ -300,26 +308,60 @@ class NachtUmzugTest {
         assertEquals(soll[3], alt.spo2Dao().getSpo2Readings(0, Long.MAX_VALUE).size.toLong())
     }
 
+    /** Die Methoden von NachtDao, die der Wrapper alle ueberschreiben muss. */
+    private val methoden = NachtDao::class.java.declaredMethods.filter { !it.isSynthetic && !Modifier.isStatic(it.modifiers) }
+
+    /** Ein NachtDao, der nur aufzeichnet, welche Methode ihn erreicht. */
+    private fun aufzeichnenderDao(aufgerufen: MutableList<String>) =
+        Proxy.newProxyInstance(NachtDao::class.java.classLoader, arrayOf(NachtDao::class.java)) { _, m, _ ->
+            aufgerufen += m.name
+            null
+        } as NachtDao
+
+    // Ruft eine suspend-Methode per Reflexion wie ein Kotlin-Aufrufer: wartet, wenn sie
+    // aussetzt, und wirft, was sie wirft.
+    private suspend fun rufe(m: Method, ziel: Any): Any? = try {
+        suspendCoroutineUninterceptedOrReturn { weiter ->
+            m.invoke(ziel, *m.parameterTypes.dropLast(1).map(::platzhalter).toTypedArray(), weiter)
+        }
+    } catch (e: InvocationTargetException) {
+        throw e.targetException
+    }
+
     @Test
     fun jedeMethodeGehtAnDieselbeMethodeDesEchtenDao() = runBlocking<Unit> {
         // Eine nicht ueberschriebene Methode mit Rumpf (etwa eine @Transaction) liefe ueber
         // die Einzelmethoden des Wrappers statt an die des echten Dao - ohne dessen Transaktion.
         val aufgerufen = mutableListOf<String>()
-        val echt = Proxy.newProxyInstance(NachtDao::class.java.classLoader, arrayOf(NachtDao::class.java)) { _, m, _ ->
-            aufgerufen += m.name
-            null
-        } as NachtDao
         // Frisch und schon umgezogen: der Wrapper ruft danach ohne Warten durch.
         val umzug = umzug(alt(), neu()).also { it.sicherstellen() }
-        val wrapper = UmgezogenerNachtDao(echt, umzug)
-        val methoden = NachtDao::class.java.declaredMethods.filter { !it.isSynthetic && !Modifier.isStatic(it.modifiers) }
+        val wrapper = UmgezogenerNachtDao(aufzeichnenderDao(aufgerufen), umzug)
         for (m in methoden) {
             aufgerufen.clear()
-            m.invoke(wrapper, *m.parameterTypes.map(::platzhalter).toTypedArray())
+            rufe(m, wrapper)
             assertEquals(listOf(m.name), aufgerufen, m.name)
         }
         assertTrue("speichereNachtTeil" in methoden.map { it.name })
         assertEquals(12, methoden.size)
+    }
+
+    @Test
+    fun ohneUmzugErreichtKeineMethodeDenEchtenDao() = runBlocking<Unit> {
+        // Jede Methode wartet zuerst auf den Umzug. Schriebe etwa speichereHrvTeil vorher in
+        // boulder.db, scheiterte der Umzug danach bei jedem Versuch an seinen Pruefsummen.
+        legeAlteDbAn(50, ::fuelleNaechte)
+        val neu = neu()
+        val aufgerufen = mutableListOf<String>()
+        // Der Umzug bricht vor dem Vermerk ab; die Zeit steht, also wirft jeder Zugriff erneut.
+        val umzug = umzug(alt(), neu).apply { vorDemVermerk = { throw IllegalStateException("Abbruch") } }
+        val wrapper = UmgezogenerNachtDao(aufzeichnenderDao(aufgerufen), umzug)
+        for (m in methoden) {
+            assertFailsWith<IllegalStateException>(m.name) { rufe(m, wrapper) }
+            assertEquals(emptyList(), aufgerufen, m.name)
+        }
+        assertEquals(12, methoden.size)
+        assertNull(neu.umzugDao().vermerk())
+        assertEquals(0, zahl(neu, "SELECT COUNT(*) FROM boulder_nacht_hrv"))
     }
 
     private fun platzhalter(typ: Class<*>): Any? = when (typ) {
@@ -328,7 +370,6 @@ class NachtUmzugTest {
         java.lang.Boolean.TYPE -> false
         List::class.java -> emptyList<Any>()
         NachtEntity::class.java -> NachtEntity(0, 0, 0, 0, 0, 0, 0)
-        Continuation::class.java -> Continuation<Any?>(EmptyCoroutineContext) {}
         else -> error("kein Platzhalter fuer $typ")
     }
 }

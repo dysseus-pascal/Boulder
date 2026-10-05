@@ -33,6 +33,16 @@ die Regeln von Gravel, mit diesen Abweichungen:
   `git apply -3 --exclude='libpebble3/schema/*'`; aus Upstreams
   `AutoMigration(from = 45, to = 46)` wird `from = UPSTREAM_VERSATZ + 45, to =
   UPSTREAM_VERSATZ + 46`. `SchemaWaechterTest` vergleicht mit Upstream 45.
+- Rueckweg 0.50 -> 0.49 (oder aelter, per `adb install -d`): 0.50 hebt
+  `libpebble3.db` auf 1045, und der alte Code von 0.49 (Fassung 50,
+  `fallbackToDestructiveMigrationOnDowngrade`, ohne `DowngradeSchutz`) leert sie
+  beim Oeffnen GANZ - health_data, overlay_data samt manual, spo2_readings,
+  Uhren, Locker, Prefs. Die Naechte liegen in `boulder.db` und bleiben, sind fuer
+  0.49 aber unsichtbar; was 0.49 dann an Naechten empfaengt, sieht 0.50 danach
+  nicht (der Umzug laeuft nur einmal). Laeuft auf der Uhr schon b25, verwirft
+  0.49 jede neue Nacht (0x4001/0x4002 nach dem ACK). Vorher `libpebble3.db` und
+  `boulder.db` sichern und die Uhr zuerst auf b24 stellen. Im Code nicht zu
+  beheben: das Leeren macht die alte Fassung.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
 - Gravel-Stand: 0.3.3. Remote `upstream` ist Gravel

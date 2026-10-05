@@ -50,7 +50,7 @@ class GithubReleasesTest {
         status: HttpStatusCode = HttpStatusCode.OK,
         expectations: FirmwareArtifactExpectations = FirmwareArtifactExpectations(),
         requests: MutableList<HttpRequestData> = mutableListOf(),
-        app: CoreAppVersion = TEST_APP_VERSION,
+        app: CoreAppVersion = TEST_APP_FASSUNG,
     ): GithubReleases {
         val client = HttpClient(MockEngine { request ->
             requests += request
@@ -281,7 +281,7 @@ class GithubReleasesTest {
         val client = HttpClient(MockEngine { throw IOException("network down") }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         }
-        val checker = GithubReleases(client, FirmwareArtifactExpectations(), fixedTestClock, TEST_APP_VERSION)
+        val checker = GithubReleases(client, FirmwareArtifactExpectations(), fixedTestClock, TEST_APP_FASSUNG)
         val result = checker.getLatestFirmware(testWatchInfo(WatchHardwarePlatform.CORE_ASTERIX, "v4.30.0"), FirmwareUpdateChannel.Soaked)
         assertIs<FirmwareUpdateCheckResult.UpdateCheckFailed>(result)
     }
@@ -404,5 +404,72 @@ class GithubReleasesTest {
     fun eineUnlesbareAppFassungBekommtKeineFirmwareMitGrenze() = runTest {
         assertIs<FirmwareUpdateCheckResult.BrauchtNeuereApp>(pruefe("Mindest-App: 0.50.0", "dev"))
         assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefe("Mindest-App: 0.50.0", "0.50.0-3-gabcdef12"))
+    }
+
+    // --- Boulder: Mindest-App ueber mehrere Releases ---
+
+    /** b4 verlangt App 0.51.0, b3 App 0.50.0, b2 nichts. */
+    private fun dreiFassungen() = "[" + listOf(
+        releaseJson("v4.38.1-b4", 0, listOf(normalAsset("obelix_pvt", "v4.38.1-b4", digest('d'), 444)), body = "Mindest-App: 0.51.0"),
+        releaseJson("v4.38.1-b3", 1, listOf(normalAsset("obelix_pvt", "v4.38.1-b3", digest('c'), 333)), body = "Mindest-App: 0.50.0"),
+        releaseJson("v4.38.1-b2", 2, listOf(normalAsset("obelix_pvt", "v4.38.1-b2", digest('b'), 222))),
+    ).joinToString(",") + "]"
+
+    private fun paketUrl(tag: String) = "https://github.com/dysseus-pascal/boulder-firmware/releases/download/x/normal_obelix_pvt_$tag.pbz"
+
+    private suspend fun pruefeDrei(
+        app: String,
+        laeuft: String,
+        recovery: Boolean = false,
+        kanal: FirmwareUpdateChannel = FirmwareUpdateChannel.Soaked,
+        expectations: FirmwareArtifactExpectations = FirmwareArtifactExpectations(),
+    ) = checker(dreiFassungen(), expectations = expectations, app = CoreAppVersion(app)).getLatestFirmware(
+        testWatchInfo(WatchHardwarePlatform.CORE_OBELIX_PVT, laeuft, isRecovery = recovery),
+        kanal,
+    )
+
+    @Test
+    fun istDieNeuesteZuNeuKommtDieNeuestePassende() = runTest {
+        for (kanal in FirmwareUpdateChannel.entries) {
+            val expectations = FirmwareArtifactExpectations()
+            val update = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefeDrei("0.50.0", "v4.38.1-b2", kanal = kanal, expectations = expectations), "$kanal")
+            assertEquals("v4.38.1-b3", update.version.stringVersion, "$kanal")
+            assertEquals(paketUrl("v4.38.1-b3"), update.url)
+            // Vorgemerkt ist nur, was angeboten wird.
+            assertEquals("v4.38.1-b3", expectations.lookup(paketUrl("v4.38.1-b3"))?.versionTag)
+            assertNull(expectations.lookup(paketUrl("v4.38.1-b4")))
+        }
+        // Eine App ohne beide Fassungen bekommt b2, das keine Grenze nennt.
+        val alt = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefeDrei("0.49.0", "v4.38.1-b1"))
+        assertEquals("v4.38.1-b2", alt.version.stringVersion)
+    }
+
+    @Test
+    fun derStandBrauchtNeuereAppNurWennKeinePassendeNeuerIst() = runTest {
+        // Die Uhr hat b3: neuer ist nur b4, und das braucht 0.51.0.
+        assertEquals(FirmwareUpdateCheckResult.BrauchtNeuereApp("0.51.0"), pruefeDrei("0.50.0", "v4.38.1-b3"))
+        // Die Uhr hat b2, die App ist 0.49.0: b3 und b4 warten, gemeldet wird die Grenze der neuesten.
+        assertEquals(FirmwareUpdateCheckResult.BrauchtNeuereApp("0.51.0"), pruefeDrei("0.49.0", "v4.38.1-b2"))
+        // Laeuft schon die neueste, wartet nichts.
+        assertIs<FirmwareUpdateCheckResult.FoundNoUpdate>(pruefeDrei("0.49.0", "v4.38.1-b4"))
+        // Mit der neuen App die neueste.
+        val neu = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefeDrei("0.51.0", "v4.38.1-b3"))
+        assertEquals("v4.38.1-b4", neu.version.stringVersion)
+    }
+
+    @Test
+    fun eineUhrInRecoveryBekommtDieNeuestePassende() = runTest {
+        for ((app, erwartet) in listOf("0.49.0" to "v4.38.1-b2", "0.50.0" to "v4.38.1-b3", "0.51.0" to "v4.38.1-b4")) {
+            for (laeuft in listOf("v4.38.1-b4", "unknown")) {
+                val update = assertIs<FirmwareUpdateCheckResult.FoundUpdate>(pruefeDrei(app, laeuft, recovery = true), "$app $laeuft")
+                assertEquals(erwartet, update.version.stringVersion, "$app $laeuft")
+            }
+        }
+        // Passt keine, bleibt nur der Stand: auch Recovery bekommt nichts, das diese App nicht liest.
+        val keine = checker(mitNotizen("Mindest-App: 0.50.0"), app = CoreAppVersion("0.49.0")).getLatestFirmware(
+            testWatchInfo(WatchHardwarePlatform.CORE_OBELIX_PVT, "v4.38.1-b2", isRecovery = true),
+            FirmwareUpdateChannel.Soaked,
+        )
+        assertEquals(FirmwareUpdateCheckResult.BrauchtNeuereApp("0.50.0"), keine)
     }
 }

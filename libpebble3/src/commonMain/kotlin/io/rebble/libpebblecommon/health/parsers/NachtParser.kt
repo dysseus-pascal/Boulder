@@ -28,9 +28,13 @@ data class NachtTeil(
  * Groesse eines Nachtsatzes hat (Tag 88 koennte einmal Upstream belegen), und
  * einer mit unmoeglichem Teil. Jeder verworfene Satz geht mit Grund an [verworfen].
  *
- * [vorwaerts] (die neuen Tags, BoulderDls): mindestens Fassung 3 mit Anhang,
- * die Fassung zaehlt aufwaerts statt als Bitfeld, und ein groesserer Satz einer
- * neueren Firmware wird bis zum Anhang gelesen - der Rest ist dort neu.
+ * [vorwaerts] (die neuen Tags, BoulderDls): die Fassung zaehlt aufwaerts statt
+ * als Bitfeld, und gelesen wird NUR EINE BEKANNTE FASSUNG ([NACHT_FASSUNGEN]).
+ * Deren bekannter Teil wird auch aus einem groesseren Satz gelesen (die Firmware
+ * haengt nur hinten an). Eine neuere Fassung geht dagegen mit Grund an
+ * [verworfen], also roh in die Quarantaene: ihr Aufbau ist hier unbekannt, und
+ * geraten waeren Akku und Messstufe womoeglich Abschnittsbytes. Dasselbe gilt
+ * fuer einen Satz, der mehr Abschnitte behauptet, als ein Satz fasst.
  */
 fun parseNachtData(
     payload: ByteArray,
@@ -49,7 +53,7 @@ fun parseNachtData(
         melde(verworfen, "Nacht: ${payload.size % groesse} bytes after the last whole record dropped")
     }
     if (vorwaerts && groesse > ANHANG_OFFSET + ANHANG_BYTES) {
-        logger.i { "Nacht: ${groesse - ANHANG_OFFSET - ANHANG_BYTES} bytes per record are newer than this app; not read" }
+        logger.w { "Nacht: item size $groesse > ${ANHANG_OFFSET + ANHANG_BYTES}; a known version is read up to its attachment, a newer one is quarantined" }
     }
     val aus = mutableListOf<NachtTeil>()
     for (satz in 0 until payload.size / groesse) {
@@ -57,7 +61,7 @@ fun parseNachtData(
         b.setEndian(Endian.Little)
         val version = b.getUShort().toInt()
         val satzGroesse = b.getUShort().toInt()
-        val bekannt = if (vorwaerts) version >= FASSUNG_VORWAERTS else version and 1 != 0
+        val bekannt = if (vorwaerts) version in NACHT_FASSUNGEN else version and 1 != 0
         if (!bekannt) {
             melde(verworfen, "Nacht: record $satz has unknown version $version")
             continue
@@ -82,6 +86,12 @@ fun parseNachtData(
         val hrv = b.getUShort().toInt()
         val anzahl = b.getUByte().toInt()
         val passen = minOf(ABSCHNITTE_JE_SATZ, (groesse - KOPF_BYTES) / ABSCHNITT_BYTES)
+        // Mehr Abschnitte, als der bekannte Aufbau fasst: kein Satz dieser Fassung.
+        // Abgeschnitten fehlte der Rest der Nacht ohne Spur.
+        if (anzahl > passen) {
+            melde(verworfen, "Nacht ab $beginn: record $satz claims $anzahl sections, at most $passen fit")
+            continue
+        }
         val gelesen = (0 until minOf(anzahl, passen)).map {
             NachtAbschnittEntity(
                 beginnUtc = beginn,
@@ -127,6 +137,8 @@ private const val ABSCHNITT_BYTES = 5
 private const val ABSCHNITTE_JE_SATZ = 60
 private const val ANHANG_OFFSET = KOPF_BYTES + ABSCHNITTE_JE_SATZ * ABSCHNITT_BYTES
 private const val ANHANG_BYTES = 4
-// Die erste Fassung mit Anhang (NACHT_DLS_VERSION 3); spaetere haengen nur hinten an.
-private const val FASSUNG_VORWAERTS = 3
+// Die Fassungen von NachtDlsRecord, deren Aufbau diese App kennt (NACHT_DLS_VERSION in
+// boulder/nacht.h). Eine neue Fassung kommt hier erst mit ihrem Leser dazu - und in die
+// Notizen ihres Firmware-Releases die Zeile "Mindest-App" (MindestApp in :pebble).
+private val NACHT_FASSUNGEN = setOf(3)
 private val PHASEN = 0..4

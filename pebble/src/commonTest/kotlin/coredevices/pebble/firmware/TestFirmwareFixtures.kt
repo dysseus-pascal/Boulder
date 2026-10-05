@@ -28,7 +28,7 @@ import kotlin.time.Instant
  */
 
 /** Boulder: die App-Fassung der Tests, fuer die Zeile "Mindest-App" (MindestApp). */
-val TEST_APP_VERSION: CoreAppVersion = CoreAppVersion("0.49.0")
+val TEST_APP_FASSUNG: CoreAppVersion = CoreAppVersion("0.49.0")
 
 /** The suite's fixed "now": fixtures state publish ages relative to this. */
 val TEST_NOW: Instant = Instant.parse("2026-07-31T00:00:00Z")

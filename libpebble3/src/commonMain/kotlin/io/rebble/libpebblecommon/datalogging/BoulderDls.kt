@@ -10,8 +10,10 @@ import kotlin.uuid.Uuid
  *
  * 88/89 sind die alten Tags. Upstream koennte sie einmal selbst belegen; als
  * Nacht gelten sie darum nur mit genau der Itemgroesse eines Nachtsatzes. Die
- * neuen 0x4001/0x4002 liegen im eigenen Bereich 0x4000-0x40FF und nehmen auch
- * groessere Saetze einer kuenftigen Firmware an (vorwaertsvertraeglich).
+ * neuen 0x4001/0x4002 liegen im eigenen Bereich 0x4000-0x40FF. Dort liest die
+ * App nur Fassungen, deren Aufbau sie kennt, auch aus einem groesseren Satz;
+ * eine neuere Fassung liegt roh in der Quarantaene und wird bestaetigt
+ * (NachtParser, NachtHrvParser).
  */
 object BoulderDls {
     const val NACHT_ALT: UInt = 88u

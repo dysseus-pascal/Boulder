@@ -1,6 +1,7 @@
 package coredevices.pebble.kiesel.ablauf
 
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.location.Location
 import coredevices.pebble.kiesel.Ablage
 import coredevices.pebble.kiesel.Sichern
@@ -53,6 +54,15 @@ class SicherungAblaufTest {
         override fun weg(pfad: String): Boolean {
             dateien.remove(pfad)
             return true
+        }
+
+        /** Wie oft der ganze Ordner abgefragt wurde. */
+        var abfragen = 0
+
+        override fun groessen(ordner: String): Map<String, Long> {
+            abfragen++
+            return dateien.filterKeys { it.startsWith("$ordner/") }
+                .map { (pfad, inhalt) -> pfad.removePrefix("$ordner/") to inhalt.toByteArray().size.toLong() }.toMap()
         }
     }
 
@@ -130,5 +140,50 @@ class SicherungAblaufTest {
         o.stirbBeim = 2
         assertFailsWith<ProzessEnde> { Sichern.sichereSpuren(context, o, "spuren@test", Spur.alle(context)) }
         assertEquals(4, assertNotNull(Sichern.holeSpur(o, b)).lines().count { it.isNotBlank() })
+    }
+
+    /** Was eine Fassung vor 0.41 unter dem Schluessel des Ordners merkte: nur den Beginn, ohne Bytes. */
+    private fun alteintraege(schluessel: String, vararg spuren: Long) =
+        context.getSharedPreferences("kiesel-sicherung", MODE_PRIVATE).edit().putStringSet(schluessel, spuren.map { "$it" }.toSet()).commit()
+
+    @Test
+    fun ein_alteintrag_wird_mit_dem_ordner_abgeglichen_statt_neu_geschrieben() {
+        val ganz = 1_790_000_000L
+        val halb = 1_790_100_000L
+        Spur.haengeAn(context, ganz, listOf(ort(ganz), ort(ganz + 10)))
+        Spur.haengeAn(context, halb, listOf(ort(halb), ort(halb + 10)))
+        // Im Ordner: die eine Spur ganz, die andere nur zur Haelfte - beide gemerkt ohne Bytes.
+        val o = Ordner()
+        o.dateien["spuren/spur-$ganz.jsonl"] = assertNotNull(Spur.roh(context, ganz))
+        o.dateien["spuren/spur-$halb.jsonl"] = assertNotNull(Spur.roh(context, halb)).let { it.substring(0, it.length / 2) }
+        assertTrue(alteintraege("spuren@test", ganz, halb))
+
+        // Nur die halbe wird geschrieben (Zweitdatei und Datei), und der Ordner einmal abgefragt.
+        assertEquals(1, Sichern.sichereSpuren(context, o, "spuren@test", Spur.alle(context)))
+        assertEquals(2, o.geschrieben)
+        assertEquals(1, o.abfragen)
+        assertEquals(Spur.roh(context, halb), o.dateien["spuren/spur-$halb.jsonl"])
+        // Danach sind beide mit Bytes gemerkt: der naechste Lauf fragt den Ordner gar nicht mehr.
+        assertEquals(0, Sichern.sichereSpuren(context, o, "spuren@test", Spur.alle(context)))
+        assertEquals(1, o.abfragen)
+    }
+
+    @Test
+    fun was_vor_einem_abbruch_gesichert_war_gilt_beim_naechsten_lauf() {
+        val erste = 1_790_100_000L
+        val zweite = 1_790_000_000L
+        Spur.haengeAn(context, erste, listOf(ort(erste), ort(erste + 10)))
+        Spur.haengeAn(context, zweite, listOf(ort(zweite), ort(zweite + 10)))
+        // Die juengste zuerst (Spur.alle): zwei Schreiben fuer sie, beim dritten endet der Prozess.
+        val o = Ordner(stirbBeim = 3)
+        assertFailsWith<ProzessEnde> { Sichern.sichereSpuren(context, o, "spuren@test", Spur.alle(context)) }
+        assertEquals(Spur.roh(context, erste), o.dateien["spuren/spur-$erste.jsonl"])
+
+        // Der naechste Tageslauf sichert nur noch, was fehlt.
+        o.stirbBeim = 0
+        o.geschrieben = 0
+        assertEquals(1, Sichern.sichereSpuren(context, o, "spuren@test", Spur.alle(context)))
+        assertEquals(2, o.geschrieben)
+        assertEquals(Spur.roh(context, zweite), o.dateien["spuren/spur-$zweite.jsonl"])
     }
 }

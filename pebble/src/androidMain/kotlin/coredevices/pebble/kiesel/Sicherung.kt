@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import co.touchlab.kermit.Logger
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.CoroutineWorker
@@ -137,6 +138,9 @@ internal interface Ablage {
 
     /** [pfad] loeschen; true auch, wenn es ihn nicht gab. */
     fun weg(pfad: String): Boolean
+
+    /** Name und Groesse in Bytes jeder Datei in [ordner], mit einer Abfrage; null, wenn es nicht ging. */
+    fun groessen(ordner: String): Map<String, Long>?
 }
 
 /** Ein Ordner, den man Boulder einmal freigegeben hat (Storage Access Framework). */
@@ -180,6 +184,28 @@ internal class Ordner(private val context: Context, private val baum: Uri) : Abl
     } catch (e: Exception) {
         Logger.withTag("Sicherung").w { "Loeschen ($pfad): " + e.message }
         false
+    }
+
+    // EINE ABFRAGE FUER DEN GANZEN ORDNER: findFile listet ihn je Datei neu, und name/length
+    // fragten den Anbieter je Datei zweimal - bei Hunderten Spuren in der Cloud Minuten.
+    override fun groessen(ordner: String): Map<String, Long>? = try {
+        val d = wurzel()?.findFile(ordner)?.takeIf { it.isDirectory }
+        if (d == null) {
+            emptyMap()
+        } else {
+            val kinder = DocumentsContract.buildChildDocumentsUriUsingTree(baum, DocumentsContract.getDocumentId(d.uri))
+            val spalten = arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_SIZE)
+            buildMap {
+                context.contentResolver.query(kinder, spalten, null, null, null)?.use { c ->
+                    while (c.moveToNext()) {
+                        if (!c.isNull(0) && !c.isNull(1)) put(c.getString(0), c.getLong(1))
+                    }
+                } ?: error("no answer from the provider")
+            }
+        }
+    } catch (e: Exception) {
+        Logger.withTag("Sicherung").w { "Groessen ($ordner): " + e.message }
+        null
     }
 
     val erreichbar: Boolean get() = wurzel()?.canWrite() == true
@@ -243,25 +269,41 @@ internal object Sichern {
      * Die Spuren, die im Ordner fehlen oder dort kuerzer sind als hier - mit
      * Zahl der Bytes gemerkt ("beginn:bytes"): die laufende Aufnahme haengt
      * weiter an, und eine einmal halb gesicherte Spur bliebe sonst halb. Ein
-     * Eintrag ohne Bytes (vor dieser Fassung) gilt als halb und wird einmal
-     * neu gesichert. Rueckgabe: wie viele geschrieben wurden.
+     * Eintrag ohne Bytes (vor dieser Fassung) wird einmal mit der Groesse der
+     * Datei im Ordner abgeglichen: gleich gross gilt als ganz, sonst wird neu
+     * gesichert. Rueckgabe: wie viele geschrieben wurden.
      */
     internal fun sichereSpuren(context: Context, o: Ablage, schluessel: String, spuren: List<Long>): Int {
         val p = context.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
         // Vor 0.25.0 galt eine Liste fuer jeden Ordner: sie zaehlt einmal fuer den jetzigen.
         val oben = (p.getStringSet(schluessel, null) ?: p.getStringSet("spuren", emptySet())).orEmpty().toMutableSet()
+        // NUR WENN ES ALTEINTRAEGE GIBT, und dann einmal fuer alle: jede Spur blind neu zu
+        // sichern hiess beim ersten Lauf fuenf Ordneraufrufe je Spur.
+        val imOrdner by lazy { o.groessen(Sicherungsformat.SPURORDNER).orEmpty() }
+        // JE SPUR GEMERKT, nicht erst am Ende: endet der Lauf vorher (Zeitlimit des Workers,
+        // Prozessende), gilt beim naechsten, was schon im Ordner steht.
+        fun merke() = p.edit().putStringSet(schluessel, HashSet(oben)).apply()
         var neu = 0
         spuren.forEach { b ->
             // Erst die Groesse: den Inhalt jeder Spur bei jedem Lauf zu lesen kostete bei Hunderten Trainings Sekunden.
-            if ("$b:${Spur.groesse(context, b)}" in oben) return@forEach
+            val hier = Spur.groesse(context, b)
+            if ("$b:$hier" in oben) return@forEach
+            if ("$b" in oben && hier >= 0 && imOrdner[Sicherungsformat.spurname(b)] == hier) {
+                oben.remove("$b")
+                oben += "$b:$hier"
+                merke()
+                return@forEach
+            }
             val inhalt = Spur.roh(context, b) ?: return@forEach
             if (legeSicher(o, spurpfad(b), inhalt, "application/x-ndjson")) {
                 oben.removeAll { it == "$b" || it.startsWith("$b:") }
                 oben += "$b:${inhalt.toByteArray().size}"
+                merke()
                 neu++
             }
         }
-        p.edit().putStringSet(schluessel, oben).apply()
+        // Auch ohne Aenderung: die Liste von vor 0.25.0 gilt danach unter dem Schluessel dieses Ordners.
+        merke()
         return neu
     }
 

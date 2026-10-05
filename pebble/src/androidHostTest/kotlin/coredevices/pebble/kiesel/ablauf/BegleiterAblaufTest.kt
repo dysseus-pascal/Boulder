@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel.ablauf
 import android.content.Context
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import coredevices.pebble.R
@@ -13,6 +14,7 @@ import coredevices.pebble.kiesel.KieselVerlauf
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.KieselsportBegleiter
 import coredevices.pebble.kiesel.Mithoerer
+import coredevices.pebble.kiesel.Pulskurve
 import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.Wartend
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -375,5 +377,63 @@ class BegleiterAblaufTest {
         runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }
         warte("Training in der Akte") { akte.saetze<ExerciseSessionRecord>().isNotEmpty() }
         warte("Datei verarbeitet") { kieselAblage.listFiles().orEmpty().isEmpty() }
+    }
+
+    /** Yoga, 30 min, mit der HRV der Uhr. */
+    private fun yoga(id: Int, hrv: Int) = AppMessageData(
+        id.toUByte(), Kieselsport.UUID,
+        mapOf(
+            Kieselsport.SP_ART to 5, Kieselsport.SP_BEGINN to beginn.toInt(), Kieselsport.SP_DAUER to 1800,
+            Kieselsport.SP_ENDE to (beginn + 1800).toInt(), Kieselsport.SP_HRV to hrv,
+        ),
+    )
+
+    /** Bis die Datei verarbeitet ist: geloescht oder als gemeldet umbenannt. */
+    private fun warteBisVerarbeitet() = warte("Datei verarbeitet") { kieselAblage.listFiles().orEmpty().all { Wartend.gemeldet(it) } }
+
+    @Test
+    fun ein_abgewiesenes_yoga_mit_hrv_bleibt_liegen() {
+        // Die Akte nimmt die HRV, verweigert aber die Sitzung (Recht fehlt). Yoga hat keine Spur:
+        // ohne die Datei gaebe es keinen zweiten Versuch.
+        assertNotNull(Wartend.lege(context, KieselsportBegleiter.zerlege(yoga(50, hrv = 45).data)))
+        akte.weistAb = { r -> if (r is ExerciseSessionRecord) SecurityException("WRITE_EXERCISE fehlt") else null }
+        runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }
+        warte("HRV in der Akte") { akte.saetze<HeartRateVariabilityRmssdRecord>().isNotEmpty() }
+        warteBisVerarbeitet()
+        assertEquals(1, kieselAblage.listFiles().orEmpty().size, "Training mit der Datei verloren")
+        val nicht = context.getString(R.string.ks_a_nicht_eingetragen)
+        assertTrue(KieselVerlauf.alle(context).any { it.second == nicht }, KieselVerlauf.alle(context).toString())
+
+        // Mit dem Recht kommt die Sitzung beim naechsten Start hinein - die HRV nicht doppelt.
+        akte.weistAb = { null }
+        runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }
+        warte("Training in der Akte") { akte.saetze<ExerciseSessionRecord>().isNotEmpty() }
+        warte("Datei weg") { kieselAblage.listFiles().orEmpty().isEmpty() }
+        assertEquals(1, akte.saetze<HeartRateVariabilityRmssdRecord>().size)
+    }
+
+    @Test
+    fun ein_abgewiesenes_training_dessen_kurve_schon_wartete_gilt_als_gescheitert() {
+        // Die Kurve lag schon da (sie wartete auf die Zusammenfassung); die Sitzung weist die Akte ab.
+        // Direkt durch verarbeite: beim Start des Begleiters truege sonst Pulskurve.alleEintragen
+        // die Kurve womoeglich vorher ein, und der Zusatz kaeme gar nicht erst an die Meldung.
+        for (i in 0 until 60) Pulskurve.anhaengen(context, beginn, i * 10, 120)
+        akte.weistAb = { r -> if (r is ExerciseSessionRecord) SecurityException("WRITE_EXERCISE fehlt") else null }
+        val meldung = runBlocking { Kieselsport.verarbeite(context, KieselsportBegleiter.zerlege(zusammenfassung(51).data), beginn + 1810) }
+        assertEquals(60, kurvenproben().size)
+        // Nur an gescheitert() erkennt der Begleiter, dass die Datei liegen bleiben muss.
+        assertTrue(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+    }
+
+    @Test
+    fun eine_hrv_die_die_akte_nicht_nahm_steht_nicht_im_protokoll() {
+        akte.weistAb = { r -> if (r is HeartRateVariabilityRmssdRecord) SecurityException("WRITE_HRV fehlt") else null }
+        assertNotNull(Wartend.lege(context, KieselsportBegleiter.zerlege(yoga(52, hrv = 45).data)))
+        runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }
+        warte("Training in der Akte") { akte.saetze<ExerciseSessionRecord>().isNotEmpty() }
+        warte("Datei weg") { kieselAblage.listFiles().orEmpty().isEmpty() }
+        val hrv = context.getString(R.string.ks_a_hrv, 45)
+        val zeile = KieselVerlauf.alle(context).map { it.second }.first { it.startsWith(context.getString(R.string.ks_a_titel_yoga)) }
+        assertTrue(hrv !in zeile, "HRV im Protokoll, obwohl nicht eingetragen: $zeile")
     }
 }

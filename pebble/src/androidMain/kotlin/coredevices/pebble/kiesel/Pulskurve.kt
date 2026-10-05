@@ -40,16 +40,33 @@ internal object Pulskurve {
 
     private fun datei(context: Context, beginn: Long) = File(ordner(context), "$beginn.csv")
 
+    /**
+     * Die Zone beim Empfang der Kurve (KieselNachricht.zone) - neben der Kurve,
+     * nicht in ihr: [vergiss] schneidet die Kurve vorne ab. Kurven aelterer
+     * Fassungen haben keine und nehmen die Zone von jetzt.
+     */
+    private fun zonendatei(context: Context, beginn: Long) = File(ordner(context), "$beginn.zone")
+
+    /** [zone]: die beim Empfang; die erste gemerkte gilt fuer die ganze Kurve, wie die Zone der Sitzung. */
     @Synchronized
-    fun anhaengen(context: Context, beginn: Long, sekunde: Int, puls: Int) {
+    fun anhaengen(context: Context, beginn: Long, sekunde: Int, puls: Int, zone: String? = null) {
         // Kein Puls ist kein Punkt: eine Null in der Kurve saehe aus wie ein
         // Herzstillstand.
         if (puls <= 0) return
         try {
+            zone?.let { z -> zonendatei(context, beginn).takeIf { !it.exists() }?.writeText(z) }
             datei(context, beginn).appendText("$sekunde,$puls\n")
         } catch (e: Exception) {
             logger.w { "Pulskurve: " + e.message }
         }
+    }
+
+    @Synchronized
+    private fun zone(context: Context, beginn: Long): String? = try {
+        zonendatei(context, beginn).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null }
+    } catch (e: Exception) {
+        logger.w { "Zone der Pulskurve $beginn nicht lesbar, nehme die von jetzt: " + e.message }
+        null
     }
 
     /** Gibt es ueberhaupt Pulswerte? Ohne Sensorkontakt kommen nur Nullen, und die werden nie gesammelt. */
@@ -96,7 +113,13 @@ internal object Pulskurve {
         try {
             if (!f.exists()) return
             val bytes = f.readBytes()
-            if (bytes.size <= gelesen) f.delete() else f.writeBytes(bytes.copyOfRange(gelesen, bytes.size))
+            if (bytes.size <= gelesen) {
+                f.delete()
+                // Mit der Kurve geht ihre Zone; ein spaeteres Stueck bringt seine eigene mit.
+                zonendatei(context, beginn).delete()
+            } else {
+                f.writeBytes(bytes.copyOfRange(gelesen, bytes.size))
+            }
         } catch (e: Exception) {
             logger.w { "Pulskurve $beginn nicht aufgeraeumt, kommt beim naechsten Start noch einmal (dieselbe Kennung ersetzt): " + e.message }
         }
@@ -120,12 +143,14 @@ internal object Pulskurve {
         fun zeit(s: Int): Instant = Instant.ofEpochSecond(Trainingspausen.wand(pausen, beginn, s.toLong()))
         val klient = Akte(context).bereit() ?: return false
         val anfang = Instant.ofEpochSecond(beginn)
+        // Der Versatz von dort, wo die Kurve ankam - wie Sitzung, Strecke und Kalorien desselben Trainings.
+        val zone = zoneOderJetzt(zone(context, beginn))
         val saetze = punkte.chunked(JE_EINTRAG).map { stueck ->
             HeartRateRecord(
                 startTime = zeit(stueck.first().first),
-                startZoneOffset = versatz(anfang),
+                startZoneOffset = versatz(anfang, zone),
                 endTime = zeit(stueck.last().first).plusSeconds(1),
-                endZoneOffset = versatz(anfang),
+                endZoneOffset = versatz(anfang, zone),
                 samples = stueck.map { (s, p) ->
                     HeartRateRecord.Sample(zeit(s), p.toLong())
                 },

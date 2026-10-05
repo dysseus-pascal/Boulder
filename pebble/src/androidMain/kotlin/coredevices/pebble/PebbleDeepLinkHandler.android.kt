@@ -63,7 +63,7 @@ actual fun writeFile(
                     val n = quelle.read(puffer)
                     if (n < 0) break
                     gesamt += n
-                    if (gesamt > SIDELOAD_MAX_BYTES) throw IOException("larger than $SIDELOAD_MAX_BYTES bytes")
+                    if (gesamt > SIDELOAD_HOECHSTENS_BYTES) throw IOException("larger than $SIDELOAD_HOECHSTENS_BYTES bytes")
                     ziel.write(puffer, 0, n)
                 }
             }
@@ -77,4 +77,4 @@ actual fun writeFile(
 }
 
 /** Boulder: groesser ist keine Firmware, App oder Sprachdatei einer Pebble (Firmware um 1 MB). */
-internal const val SIDELOAD_MAX_BYTES = 32L * 1024 * 1024
+internal const val SIDELOAD_HOECHSTENS_BYTES = 32L * 1024 * 1024

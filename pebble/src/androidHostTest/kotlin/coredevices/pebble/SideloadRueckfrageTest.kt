@@ -97,7 +97,7 @@ class SideloadRueckfrageTest {
         h.handle(Uri.parse("content://dateien/x.pbl"))
         warte("Rueckfrage") { h.pendingFirmwareSideload.value != null }
         val datei = File(h.pendingFirmwareSideload.value!!.file.toString())
-        assertEquals(SideloadArt.LanguagePack, h.pendingFirmwareSideload.value!!.art)
+        assertEquals(SideloadArt.Sprachpaket, h.pendingFirmwareSideload.value!!.art)
         assertTrue(datei.exists())
         h.dismissPendingFirmwareSideload()
         assertFalse(datei.exists())

@@ -2,10 +2,15 @@ package coredevices.pebble.kiesel.ablauf
 
 import android.content.Context
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.SpeedRecord
 import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KieselNachricht
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.KieselsportBegleiter
+import coredevices.pebble.kiesel.Spur
 import coredevices.pebble.kiesel.Trainingswerte
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -32,6 +37,8 @@ import org.robolectric.annotation.Config
 import java.io.File
 import java.lang.reflect.Proxy
 import java.time.Instant
+import java.time.ZoneId
+import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -63,6 +70,10 @@ class KalorienAblaufTest {
     @Volatile
     private var naechteGefragt = 0
 
+    /** Was die Frage nach den Naechten wirft - wie der Zugriff, dessen Umzug nach boulder.db scheiterte. */
+    @Volatile
+    private var naechteWerfen: Exception? = null
+
     /** Nur was die Kalorien fragen; alles andere wirft - ein neuer Weg muss erst hierher. */
     private inline fun <reified T> nur(vararg antworten: Pair<String, () -> Any?>): T {
         val m = antworten.toMap()
@@ -89,7 +100,7 @@ class KalorienAblaufTest {
         Akte.ersatz = akte
         val e = einstellungen()
         val lib = nur<LibPebble>("getHealthSettings" to { flowOf(e) })
-        val api = nur<HealthDataApi>("getNaechte" to { naechteGefragt++; naechte })
+        val api = nur<HealthDataApi>("getNaechte" to { naechteGefragt++; naechteWerfen?.let { throw it }; naechte })
         startKoin { modules(module { single { lib }; single { api } }) }
     }
 
@@ -206,5 +217,63 @@ class KalorienAblaufTest {
         val mitNaechten = Trainingswerte.fassungAusPuls(120, waage = false, ruheAusNaechten = true)
         warte("kcal mit den Naechten") { kalorienOderNichts()?.metadata?.clientRecordVersion == mitNaechten }
         assertTrue(kalorien().energy.inKilocalories > ersatz, "${kalorien().energy.inKilocalories} > $ersatz")
+    }
+
+    @Test
+    fun alle_saetze_eines_trainings_tragen_den_versatz_vom_empfang() {
+        // Ein Lauf kommt in New York an und wird erst in Zuerich eingetragen (die Datei wartete).
+        val vorher = TimeZone.getDefault()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("Europe/Zurich"))
+            val newYork = ZoneId.of("America/New_York")
+            val dort = newYork.rules.getOffset(Instant.ofEpochSecond(b))
+            val zeilen = (b..b + 1190 step 10).joinToString("") { t -> "{\"t\":$t,\"lat\":${47.0 + (t - b) * 1e-5},\"lon\":8.0,\"g\":5.0}\n" }
+            assertTrue(Spur.schreibeRoh(context, b, zeilen))
+            verarbeite(
+                KieselNachricht(
+                    mapOf(
+                        Kieselsport.SP_ART to 0L, Kieselsport.SP_BEGINN to b, Kieselsport.SP_DAUER to 1200L,
+                        Kieselsport.SP_ENDE to b + 1200, Kieselsport.SP_KCAL to 150L,
+                    ),
+                    zone = newYork.id,
+                ),
+                b + 1210,
+            )
+            assertEquals(dort, akte.saetze<ExerciseSessionRecord>().single().startZoneOffset)
+            assertEquals(dort, akte.saetze<DistanceRecord>().single().startZoneOffset)
+            assertTrue(akte.saetze<SpeedRecord>().isNotEmpty())
+            assertEquals(setOf(dort), akte.saetze<SpeedRecord>().map { it.startZoneOffset }.toSet())
+            // Die Kalorien der Uhr, bis die Kurve da ist.
+            assertEquals(Trainingswerte.FASSUNG_UHR, kalorien().metadata.clientRecordVersion)
+            assertEquals(dort, kalorien().startZoneOffset)
+
+            // Die Kurve kam ebenfalls in New York an.
+            verarbeite(
+                KieselNachricht(
+                    zahlen = mapOf(Kieselsport.SP_BEGINN to b, Kieselsport.SP_KURVE_AB to 0L, Kieselsport.SP_KURVE_ANZAHL to 120L),
+                    bytes = mapOf(Kieselsport.SP_KURVE to ByteArray(120) { 150.toByte() }),
+                    zone = newYork.id,
+                ),
+                b + 1220,
+            )
+            assertEquals(setOf(dort), akte.saetze<HeartRateRecord>().map { it.startZoneOffset }.toSet())
+            // Und die Kalorien aus ihr, die die der Uhr ersetzen.
+            assertTrue(kalorien().metadata.clientRecordVersion > Trainingswerte.FASSUNG_UHR)
+            assertEquals(dort, kalorien().startZoneOffset)
+        } finally {
+            TimeZone.setDefault(vorher)
+        }
+    }
+
+    @Test
+    fun scheitert_der_zugriff_auf_die_naechte_kommt_das_training_trotzdem_mit_kalorien_in_die_akte() {
+        // Der Zugriff auf die Naechte wartet auf ihren Umzug nach boulder.db und wirft, wenn er scheiterte.
+        naechteWerfen = IllegalStateException("Night move failed recently")
+        laufMitKurve()
+        assertTrue(naechteGefragt > 0, "Naechte nicht gefragt")
+        assertEquals(1, akte.saetze<ExerciseSessionRecord>().size)
+        assertEquals(1, akte.saetze<HeartRateRecord>().size)
+        // Die Kalorien aus dem Puls kommen trotzdem - mit dem Ersatz-Ruhepuls, wie ohne Naechte.
+        assertEquals(Trainingswerte.fassungAusPuls(120, waage = false, ruheAusNaechten = false), kalorien().metadata.clientRecordVersion)
     }
 }

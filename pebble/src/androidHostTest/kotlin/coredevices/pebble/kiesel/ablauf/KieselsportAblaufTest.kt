@@ -1,6 +1,7 @@
 package coredevices.pebble.kiesel.ablauf
 
 import android.content.Context
+import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -33,6 +34,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -252,5 +254,46 @@ class KieselsportAblaufTest {
         val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
         assertEquals(listOf(600L to 900L, 1500L to 1541L), pausen)
         assertEquals(dauer, TrainingEintrag(s, Sport.Laufen, true, 0.0).sekunden)
+    }
+
+    @Test
+    fun ein_kaputter_spurpunkt_kostet_nur_die_route() {
+        // Ein Punkt mit Breite 95 (etwa aus einer alten Sicherung): die Akte weist schon die Route
+        // ab. Er steht bei jedem Versuch wieder da - liegen bleiben hiesse nie eintragen.
+        bisZurZusammenfassung(art = 0)
+        val zeilen = ((b until pauseVon step 10) + (pauseBis..gespeichert step 10)).joinToString("") { t ->
+            val lat = if (t == b + 300) 95.0 else 47.0 + (t - b) * 1e-5
+            "{\"t\":$t,\"lat\":$lat,\"lon\":8.0,\"g\":5.0}\n"
+        }
+        assertTrue(Spur.schreibeRoh(context, b, zeilen))
+        val meldung = verarbeite(zusammenfassung(art = 0, mitAbschnitten = false), gespeichert + 100)
+
+        assertFalse(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        val s = sitzung()
+        assertTrue(s.exerciseRouteResult is ExerciseRouteResult.NoData, "Route ${s.exerciseRouteResult}")
+        // Der Rest bleibt: die Pause steht an ihrer Uhrzeit, die Dauer ist die der Uhr.
+        val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
+        assertEquals(600L to 900L, pausen.first())
+        assertEquals(dauer, TrainingEintrag(s, Sport.Laufen, true, 0.0).sekunden)
+    }
+
+    @Test
+    fun eine_unmoegliche_bahnlaenge_kostet_nur_die_bahnen() {
+        // Zwei Bahnen ueber 2000 km: die Akte nimmt hoechstens 1000 km je Bahn und wirft schon beim Bauen.
+        bisZurZusammenfassung(art = 6)
+        val n = zusammenfassung(art = 6, mitAbschnitten = false)
+        val meldung = verarbeite(
+            n.copy(
+                zahlen = n.zahlen + mapOf(Kieselsport.SP_BAHNEN to 2L, Kieselsport.SP_METER to 4_000_000L),
+                texte = mapOf(Kieselsport.SP_ABSCHNITTE to "0:1:60;700:1:60"),
+            ),
+            gespeichert + 5,
+        )
+        assertFalse(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        val s = sitzung()
+        assertEquals(emptyList(), s.laps)
+        // Die Pause bleibt: sie haengt nicht an den Bahnen.
+        val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
+        assertEquals(listOf(600L to 900L), pausen)
     }
 }

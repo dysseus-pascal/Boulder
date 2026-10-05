@@ -39,6 +39,7 @@ import net.osmand.aidlapi.navigation.ADirectionInfo
 import net.osmand.aidlapi.navigation.ANavigationUpdateParams
 import net.osmand.aidlapi.navigation.OnVoiceNavigationParams
 import net.osmand.aidlapi.search.SearchResult
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.uuid.Uuid
 
 /**
@@ -106,7 +107,9 @@ internal object Kieselstrasse {
     private var taktMs: Long? = null
     private var wecker: Job? = null
 
-    private var letzteArt = -1
+    /** Die Abbiegeart, die zuletzt an die Uhr ging. Intern statt privat nur fuer den Test. */
+    internal var letzteArt = -1
+        private set
     private var letzteMeter = -1
     private var letzterTakt = 0L
     // Die erste Antwort nach dem Oeffnen geht auch ohne Navigation an die Uhr:
@@ -345,7 +348,8 @@ internal object Kieselstrasse {
         })
     }
 
-    private fun abonniere(ctx: Context) {
+    /** Die Rueckrufe der gebundenen Schnittstelle bestellen. Intern statt privat nur fuer den Test. */
+    internal fun abonniere(ctx: Context) {
         val schnitt = synchronized(this) {
             if (aboNummer >= 0 || abonniertGerade) return
             api?.also { abonniertGerade = true }
@@ -357,18 +361,20 @@ internal object Kieselstrasse {
             schnitt.registerForNavigationUpdates(ANavigationUpdateParams().apply { setSubscribeToUpdates(true) }, rueckruf)
         } catch (e: Exception) {
             logger.w { "Abonnieren fehlgeschlagen: " + e.message }
-            synchronized(this) {
+            val nochmal = synchronized(this) {
                 abonniertGerade = false
                 if (api === schnitt) setzeLage(Lage.ABO_FEHLER, e.message.orEmpty())
+                neueBindungOhneAbo(schnitt)
             }
+            if (nochmal) abonniere(ctx)
             return
         }
-        synchronized(this) {
+        val nochmal = synchronized(this) {
             abonniertGerade = false
             // Inzwischen geloest: das Abo gehoert zu keiner Bindung mehr.
             if (api !== schnitt) {
                 if (nummer >= 0) bestelleAb(schnitt, nummer)
-                return
+                return@synchronized neueBindungOhneAbo(schnitt)
             }
             aboNummer = nummer
             if (nummer < 0) {
@@ -377,8 +383,18 @@ internal object Kieselstrasse {
             } else {
                 setzeLage(Lage.ABONNIERT)
             }
+            false
         }
+        // Ausserhalb der Sperre, wie der erste Aufruf (siehe api).
+        if (nochmal) abonniere(ctx)
     }
+
+    /**
+     * Kam waehrend des Abonnierens fuer [alt] eine neue Bindung, ging ihr eigenes
+     * Abonnieren leer aus: es sah [abonniertGerade] und kehrte um. Ohne zweiten
+     * Anlauf bliebe sie ohne Rueckrufe, bis die Uhr-App neu startet.
+     */
+    private fun neueBindungOhneAbo(alt: IOsmAndAidlInterface): Boolean = api.let { it != null && it !== alt } && aboNummer < 0
 
     // Sonst hielte OsmAnd den Rueckruf einer Bindung fest, die es nicht mehr gibt.
     private fun abbestelle() {
@@ -436,9 +452,14 @@ internal object Kieselstrasse {
         if (offen) frageAb(ctx)
     }
 
+    // Takt und Rueckruf fragen gleichzeitig nach (siehe api): die Nummer sagt, welche Frage die juengere war.
+    private val nachfragen = AtomicLong()
+    private var genommen = 0L
+
     /** getAppInfo liefert, was der Rueckruf meldet, auf Nachfrage. Nie unter der Sperre aufrufen (siehe api). */
     internal fun frageAb(ctx: Context) {
         val schnitt = api ?: return
+        val nummer = nachfragen.incrementAndGet()
         val info = try {
             schnitt.appInfo
         } catch (e: Exception) {
@@ -448,6 +469,10 @@ internal object Kieselstrasse {
         synchronized(this) {
             // Inzwischen geloest: die Antwort gehoert zu keiner Bindung mehr.
             if (api !== schnitt) return
+            // ALTE ANTWORT NACH EINER NEUEREN: sie braechte die vorige Abbiegung zurueck auf
+            // die Uhr - mit einem Summen, weil sich die Art aendert. Die naechste Frage kommt ohnehin.
+            if (nummer < genommen) return
+            genommen = nummer
             nimmAntwort(ctx, info)
         }
     }

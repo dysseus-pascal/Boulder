@@ -113,16 +113,18 @@ class RiegelAblaufTest {
     }
 
     @Test
-    fun weist_die_akte_die_route_schon_im_bau_ab_bleibt_das_training_liegen() {
+    fun weist_die_akte_die_route_schon_im_bau_ab_kommt_das_training_ohne_route() {
         // Ein Punkt jenseits des Pols (eine kaputte Zeile, etwa aus einer alten Sicherung): die Akte wirft im Konstruktor.
+        // Liegen bleiben hiesse nie eintragen - der Punkt steht bei jedem Versuch wieder da.
         val zeilen = (b until b + dauer step 10).joinToString("") { t ->
             "{\"t\":$t,\"lat\":${if (t == b + 300) 95.0 else 47.0},\"lon\":8.0,\"g\":5.0}\n"
         }
         assertTrue(Spur.schreibeRoh(context, b, zeilen))
         val meldung = verarbeite(zusammenfassung(art = 0))
-        // Als gescheitert gemeldet: der Begleiter laesst die Datei liegen, und der Riegel ist offen.
-        assertTrue(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
-        assertTrue(akte.saetze<ExerciseSessionRecord>().isEmpty())
+        assertTrue(!Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        assertTrue(akte.saetze<ExerciseSessionRecord>().single().exerciseRouteResult is ExerciseRouteResult.NoData)
+        // Und der Riegel steht: die Datei darf gehen.
+        assertEquals(null, verarbeite(zusammenfassung(art = 0)))
     }
 
     @Test

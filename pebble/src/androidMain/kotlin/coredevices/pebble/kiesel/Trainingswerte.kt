@@ -25,6 +25,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.mp.KoinPlatform
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /**
  * Was ein Training neben der Sitzung in die Akte bringt: aktive Kalorien,
@@ -81,42 +83,56 @@ internal object Trainingswerte {
         return aus
     }
 
-    /** Distanz, Hoehenmeter und Tempo eines Trainings - [punkte] schon auf die Sitzung beschnitten. */
-    suspend fun schreibeStrecke(context: Context, beginn: Long, anfang: Instant, ende: Instant, meter: Double, punkte: List<Spur.Punkt>) {
+    /**
+     * Distanz, Hoehenmeter und Tempo eines Trainings - [punkte] schon auf die Sitzung beschnitten.
+     * [zone]: die der Nachricht (KieselNachricht.zoneBeimEmpfang), wie bei der Sitzung.
+     */
+    suspend fun schreibeStrecke(
+        context: Context, beginn: Long, anfang: Instant, ende: Instant, meter: Double, punkte: List<Spur.Punkt>,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ) {
         val klient = Akte(context).bereit() ?: return
         if (meter > 0) {
-            schreibe(klient, DistanceRecord(
-                startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
-                distance = Length.meters(meter),
-                metadata = Kieselsport.vonDerUhr("kieselsport-distanz-$beginn"),
-            ))
+            schreibe(klient) {
+                DistanceRecord(
+                    startTime = anfang, startZoneOffset = versatz(anfang, zone), endTime = ende, endZoneOffset = versatz(ende, zone),
+                    distance = Length.meters(meter),
+                    metadata = Kieselsport.vonDerUhr("kieselsport-distanz-$beginn"),
+                )
+            }
         }
         // Derselbe Aufstieg, den Sportseite und Detail zeigen (Trainingsanalyse.hoehen).
         val auf = Trainingsanalyse.aufstieg(punkte)
         if (auf > 0) {
-            schreibe(klient, ElevationGainedRecord(
-                startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
-                elevation = Length.meters(auf),
-                metadata = Kieselsport.vonDerUhr("kieselsport-hoehe-$beginn"),
-            ))
+            schreibe(klient) {
+                ElevationGainedRecord(
+                    startTime = anfang, startZoneOffset = versatz(anfang, zone), endTime = ende, endZoneOffset = versatz(ende, zone),
+                    elevation = Length.meters(auf),
+                    metadata = Kieselsport.vonDerUhr("kieselsport-hoehe-$beginn"),
+                )
+            }
         }
         tempoProben(punkte, anfang.epochSecond, ende.epochSecond).chunked(TEMPO_JE_EINTRAG).forEach { stueck ->
             val von = Instant.ofEpochSecond(stueck.first().first)
             val bis = Instant.ofEpochSecond(stueck.last().first + 1)
-            schreibe(klient, SpeedRecord(
-                startTime = von, startZoneOffset = versatz(von), endTime = bis, endZoneOffset = versatz(bis),
-                samples = stueck.map { (t, v) -> SpeedRecord.Sample(Instant.ofEpochSecond(t), Velocity.metersPerSecond(v)) },
-                // Nach der Sekunde des ersten Werts: so ersetzt ein zweiter Durchlauf jedes Stueck einzeln.
-                metadata = Kieselsport.vonDerUhr("kieselsport-tempo-$beginn-${stueck.first().first - beginn}"),
-            ))
+            schreibe(klient) {
+                SpeedRecord(
+                    startTime = von, startZoneOffset = versatz(von, zone), endTime = bis, endZoneOffset = versatz(bis, zone),
+                    samples = stueck.map { (t, v) -> SpeedRecord.Sample(Instant.ofEpochSecond(t), Velocity.metersPerSecond(v)) },
+                    // Nach der Sekunde des ersten Werts: so ersetzt ein zweiter Durchlauf jedes Stueck einzeln.
+                    metadata = Kieselsport.vonDerUhr("kieselsport-tempo-$beginn-${stueck.first().first - beginn}"),
+                )
+            }
         }
     }
 
     /** Die aktiven Kalorien, die die Uhr gezaehlt hat - nur bis der Puls besseres liefert. */
-    suspend fun schreibeKalorienDerUhr(context: Context, beginn: Long, anfang: Instant, ende: Instant, kcal: Long) {
+    suspend fun schreibeKalorienDerUhr(
+        context: Context, beginn: Long, anfang: Instant, ende: Instant, kcal: Long, zone: ZoneId = ZoneId.systemDefault(),
+    ) {
         if (kcal <= 0) return
         val klient = Akte(context).bereit() ?: return
-        schreibe(klient, kalorien(beginn, anfang, ende, kcal.toDouble(), FASSUNG_UHR))
+        schreibe(klient) { kalorien(beginn, anfang, ende, kcal.toDouble(), FASSUNG_UHR, versatz(anfang, zone), versatz(ende, zone)) }
     }
 
     /**
@@ -222,7 +238,10 @@ internal object Trainingswerte {
                 Trainingsanalyse.entstoert(roh), koerper.kg, koerper.alter, koerper.geschlecht, ruhepuls, maxpuls,
             ) ?: return null
             if (kcal <= 0) return null
-            return kcal.takeIf { schreibe(klient, kalorien(beginn, s.startTime, s.endTime, kcal, fassung)) }
+            // Der Versatz der Sitzung: sie traegt die Zone ihrer Nachricht, nicht die von jetzt.
+            val von = s.startZoneOffset ?: versatz(s.startTime)
+            val bis = s.endZoneOffset ?: versatz(s.endTime)
+            return kcal.takeIf { schreibe(klient) { kalorien(beginn, s.startTime, s.endTime, kcal, fassung, von, bis) } }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -285,20 +304,31 @@ internal object Trainingswerte {
         HealthGender.Other -> Trainingsanalyse.Geschlecht.Andere
     }
 
-    private fun kalorien(beginn: Long, anfang: Instant, ende: Instant, kcal: Double, fassung: Long) = ActiveCaloriesBurnedRecord(
-        startTime = anfang, startZoneOffset = versatz(anfang), endTime = ende, endZoneOffset = versatz(ende),
+    private fun kalorien(
+        beginn: Long, anfang: Instant, ende: Instant, kcal: Double, fassung: Long, von: ZoneOffset, bis: ZoneOffset,
+    ) = ActiveCaloriesBurnedRecord(
+        startTime = anfang, startZoneOffset = von, endTime = ende, endZoneOffset = bis,
         energy = Energy.kilocalories(kcal),
         metadata = Metadata.autoRecorded(Device(type = Device.TYPE_WATCH), "kieselsport-kcal-$beginn", fassung),
     )
 
-    private suspend fun schreibe(klient: HealthConnectClient, satz: Record): Boolean = try {
-        klient.insertRecords(listOf(satz))
-        true
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        // Meist fehlt das Recht fuer diese eine Satzart.
-        logger.w { satz::class.simpleName + " nicht eingetragen: " + e.message }
-        false
+    /**
+     * [bau] erst hier, im try: die Akte prueft schon im Konstruktor, und ein Wurf dort (etwa
+     * eine Strecke ueber 1000 km aus einem kaputten Wert der Uhr) nahm sonst HRV und Kurve mit.
+     */
+    private suspend fun schreibe(klient: HealthConnectClient, bau: () -> Record): Boolean {
+        var art = "Satz"
+        return try {
+            val satz = bau()
+            art = satz::class.simpleName ?: art
+            klient.insertRecords(listOf(satz))
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Meist fehlt das Recht fuer diese eine Satzart.
+            logger.w { "$art nicht eingetragen: " + e.message }
+            false
+        }
     }
 }

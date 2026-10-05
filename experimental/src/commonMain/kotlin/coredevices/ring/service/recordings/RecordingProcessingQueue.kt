@@ -496,12 +496,17 @@ class RecordingProcessingQueue(
                 recordingId = res,
                 transferId = transferId
             ))
+            transferRepository.linkRecordingToTransfer(
+                transferId = transferId,
+                recordingId = res
+            )
             res
         } else {
             val firestoreRecordingsDao: FirestoreRecordingsDao = get()
-            val id = recordingRepository.createRecording(
+            val id = recordingRepository.createRecordingForTransfer(
                 firestoreId = firestoreRecordingsDao.newDocumentId(),
-                localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created
+                localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created,
+                transferId = transferId,
             )
             queueTaskRepository.updateTaskRecordingId(
                 taskId = handle.taskId,
@@ -516,10 +521,6 @@ class RecordingProcessingQueue(
             )
             id
         }
-        transferRepository.linkRecordingToTransfer(
-            transferId = transferId,
-            recordingId = recordingId
-        )
         handleRecording(
             handle = handle,
             recordingId = recordingId,

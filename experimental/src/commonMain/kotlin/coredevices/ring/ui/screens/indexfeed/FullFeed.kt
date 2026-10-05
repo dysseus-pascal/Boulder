@@ -78,6 +78,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryErrorType
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
@@ -222,6 +224,9 @@ fun FullFeed(coreNav: CoreNav) {
                             onOpenObject = { id -> coreNav.navigateTo(RingRoutes.ObjectDetails(id)) },
                         )
                     }
+                    is FullFeedViewModel.Entry.PendingTransfer -> item(key = entry.uniqueKey) {
+                        PendingTransferRow(entry.transfer)
+                    }
                 }
             }
             if (state.entries.isEmpty()) {
@@ -361,6 +366,30 @@ private fun DayDivider(label: String, sticky: Boolean = false) {
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.8.sp,
         )
+    }
+}
+
+// ── Pending transfer row: right-aligned bubble, mirrors the user bubble ─
+
+@Composable
+private fun PendingTransferRow(transfer: RingTransfer) {
+    val colors = IndexTheme.colors
+    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .clip(RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp))
+                .background(colors.primary)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Text(
+                if (transfer.status == RingTransferStatus.Completed) "Processing…" else "Transferring…",
+                color = colors.onPrimary,
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                letterSpacing = (-0.1).sp,
+            )
+        }
     }
 }
 

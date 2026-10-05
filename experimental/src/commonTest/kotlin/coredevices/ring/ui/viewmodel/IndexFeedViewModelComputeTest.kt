@@ -4,6 +4,8 @@ package coredevices.ring.ui.viewmodel
 
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
@@ -38,6 +40,37 @@ class IndexFeedViewModelComputeTest {
         val peek = state.recordings.single()
         assertEquals("Added to calendar", peek.primaryChip)
         assertFalse(peek.orphan)
+    }
+
+    @Test
+    fun pendingTransfersSurfaceUnlessSearching() {
+        val transfer = RingTransfer(
+            id = 7,
+            recordingId = null,
+            recordingEntryId = null,
+            isCurrentIndexIteration = true,
+            transferInfo = null,
+            status = RingTransferStatus.Started,
+        )
+        val state = IndexFeedViewModel.compute(
+            recordings = emptyList(),
+            items = emptyList(),
+            lists = emptyList(),
+            entries = emptyList(),
+            query = "",
+            pendingTransfers = listOf(transfer),
+        )
+        assertEquals(listOf(7L), state.pendingTransfers.map { it.id })
+
+        val searching = IndexFeedViewModel.compute(
+            recordings = emptyList(),
+            items = emptyList(),
+            lists = emptyList(),
+            entries = emptyList(),
+            query = "milk",
+            pendingTransfers = listOf(transfer),
+        )
+        assertTrue(searching.pendingTransfers.isEmpty())
     }
 
     @Test

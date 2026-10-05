@@ -16,6 +16,7 @@ import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -66,10 +67,11 @@ class FullFeedViewModel(
         recordingRepo.getLatestToolSemanticResults()
             .map { results -> results.associate { it.recordingId to it.semanticResult } }
             .distinctUntilChanged(),
-    ) { inputs, semanticResults ->
+        ringTransferDao.getPendingTransfersFlow(),
+    ) { inputs, semanticResults, pendingTransfers ->
         compute(
             inputs.recordings, inputs.items, inputs.lists, inputs.entries,
-            inputs.query.trim(), semanticResults,
+            inputs.query.trim(), semanticResults, pendingTransfers,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -142,6 +144,12 @@ class FullFeedViewModel(
         ) : Entry() {
             override val uniqueKey: String get() = "rec-${recording.id}"
         }
+
+        /** A ring transfer still in flight (or queued for processing) that has
+         *  no [LocalRecording] yet — rendered as a "Transferring…" bubble. */
+        data class PendingTransfer(val transfer: RingTransfer) : Entry() {
+            override val uniqueKey: String get() = "transfer-${transfer.id}"
+        }
     }
 
     data class Chip(
@@ -160,6 +168,7 @@ class FullFeedViewModel(
             /** Latest tool-call semantic result per recording id, used to surface
              *  failures — they create no item, so there's no chip to render. */
             semanticResults: Map<Long, SemanticResult?> = emptyMap(),
+            pendingTransfers: List<RingTransfer> = emptyList(),
         ): UiState {
             val q = query.lowercase()
             fun match(text: String?) = q.isEmpty() || (text ?: "").lowercase().contains(q)
@@ -176,6 +185,32 @@ class FullFeedViewModel(
 
             val out = mutableListOf<Entry>()
             var lastDay: LocalDate? = null
+
+            fun emitDayDivider(ts: Instant) {
+                val day = ts.toLocalDateTime(tz).date
+                if (day != lastDay) {
+                    out += Entry.DayDivider(
+                        label = dayLabel(today, day),
+                        ts = ts.toEpochMilliseconds(),
+                    )
+                    lastDay = day
+                }
+            }
+
+            val pendingSorted = if (q.isEmpty()) {
+                pendingTransfers.sortedBy { it.createdAt.toEpochMilliseconds() }
+            } else emptyList()
+            var pendingIdx = 0
+            fun flushPendingBefore(ts: Instant?) {
+                while (pendingIdx < pendingSorted.size &&
+                    (ts == null || pendingSorted[pendingIdx].createdAt < ts)
+                ) {
+                    val t = pendingSorted[pendingIdx++]
+                    emitDayDivider(t.createdAt)
+                    out += Entry.PendingTransfer(t)
+                }
+            }
+
             for (r in sorted) {
                 val recordingEntries = entriesByRec[r.id].orEmpty()
                     .sortedWith(compareBy<RecordingEntryEntity> { it.timestamp }.thenBy { it.id })
@@ -189,14 +224,8 @@ class FullFeedViewModel(
                 val matchedItems = recItems.filter { match(it.title) || match(it.body) }
                 if (q.isNotEmpty() && !matchedRec && matchedItems.isEmpty()) continue
 
-                val recDay = r.localTimestamp.toLocalDateTime(tz).date
-                if (recDay != lastDay) {
-                    out += Entry.DayDivider(
-                        label = dayLabel(today, recDay),
-                        ts = r.localTimestamp.toEpochMilliseconds(),
-                    )
-                    lastDay = recDay
-                }
+                flushPendingBefore(r.localTimestamp)
+                emitDayDivider(r.localTimestamp)
                 out += Entry.RecordingRow(
                     recording = r,
                     transcription = transcription,
@@ -218,6 +247,7 @@ class FullFeedViewModel(
                         ?.userErrorMessage?.takeIf { it.isNotBlank() && retryEntry == null },
                 )
             }
+            flushPendingBefore(null)
             return UiState(entries = out)
         }
 

@@ -1,5 +1,7 @@
 package coredevices.ring.database.room.repository
 
+import androidx.room.Transactor
+import androidx.room.useWriterConnection
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryErrorType
@@ -45,6 +47,20 @@ class RecordingRepository(
                 updated = updated?.let { Instant.fromEpochMilliseconds(it) } ?: Clock.System.now()
             )
         )
+    }
+
+    /** Inserts the recording and links it to [transferId] in one transaction,
+     *  so observers never see the recording with its transfer still unlinked. */
+    suspend fun createRecordingForTransfer(
+        firestoreId: String,
+        localTimestamp: Instant,
+        transferId: Long,
+    ): Long = db.useWriterConnection { tr ->
+        tr.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
+            val id = createRecording(firestoreId = firestoreId, localTimestamp = localTimestamp)
+            db.ringTransferDao().linkRecordingToTransfer(id = transferId, recordingId = id)
+            id
+        }
     }
 
     fun getAllRecordings() =

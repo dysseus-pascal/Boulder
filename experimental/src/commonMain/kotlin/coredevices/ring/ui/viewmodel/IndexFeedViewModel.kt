@@ -8,6 +8,7 @@ import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -90,11 +91,13 @@ class IndexFeedViewModel(
             .map { results -> results.associate { it.recordingId to it.semanticResult } }
             .distinctUntilChanged(),
         animatingDoneIds,
-    ) { tuple, semanticResults, animating ->
+        ringTransferDao.getPendingTransfersFlow(),
+    ) { tuple, semanticResults, animating, pendingTransfers ->
         compute(
             tuple.recordings, tuple.items, tuple.lists, tuple.entries,
             tuple.query.trim(), animating,
             semanticResults = semanticResults,
+            pendingTransfers = pendingTransfers,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -212,6 +215,9 @@ class IndexFeedViewModel(
 
     data class UiState(
         val recordings: List<RecordingPeek>,
+        /** Ring transfers still in flight (or queued for processing) with no
+         *  recording yet — shown as "Transferring…" peek cards. */
+        val pendingTransfers: List<RingTransfer> = emptyList(),
         /** Tasks shown in the home Todos section, paged horizontally by the UI. */
         val todosPreview: List<CachedItem>,
         /** Total Todos count (for the section header). */
@@ -286,6 +292,7 @@ class IndexFeedViewModel(
              *  that don't produce a feed item (calendar events live only in the phone
              *  calendar). */
             semanticResults: Map<Long, SemanticResult?> = emptyMap(),
+            pendingTransfers: List<RingTransfer> = emptyList(),
         ): UiState {
             val isSearching = query.isNotEmpty()
             val q = query.lowercase()
@@ -443,6 +450,9 @@ class IndexFeedViewModel(
 
             return UiState(
                 recordings = recordingsView,
+                pendingTransfers = if (isSearching) emptyList() else {
+                    pendingTransfers.sortedByDescending { it.createdAt.toEpochMilliseconds() }
+                },
                 todosPreview = todosPreview,
                 totalTodos = rawTodos.size,
                 notesLists = notesListsFiltered,

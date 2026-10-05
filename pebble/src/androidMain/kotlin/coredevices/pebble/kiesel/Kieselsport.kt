@@ -418,20 +418,28 @@ internal object Kieselsport {
         val bahnen = felder[SP_BAHNEN] ?: 0
         val becken = if (bahnen > 0) (felder[SP_METER] ?: 0).toDouble() / bahnen else 0.0
         // DIE AKTE PRUEFT SCHON IM KONSTRUKTOR (Route, Bahnen): was sie abweist, wirft hier.
-        // Dann bleibt die Datei liegen, und der naechste Start versucht es wieder.
-        val stuecke = try {
-            val saetze = if (bahnen > 0) emptyList() else alsSegmente(abschnitte, anfang, ende, plan.pausen)
-            Stuecke(
-                route = routeAus(punkte, anfang, ende),
-                saetze = saetze,
-                runden = if (bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList(),
-                pausen = pausenSegmente(mitNachlauf(plan, ende), anfang, ende, saetze),
-            )
+        // EIN BAUFEHLER KOMMT BEI JEDEM VERSUCH WIEDER - ein kaputter Spurpunkt aendert sich
+        // nicht. Liegen bleiben hiesse also nie eintragen. Darum faellt nur weg, was wirft:
+        // erst die Route, dann Saetze, Runden und Pausen; eine Sitzung ohne sie ist gueltig.
+        val route = try {
+            routeAus(punkte, anfang, ende)
         } catch (e: IllegalArgumentException) {
-            logger.w { "Training $beginn nicht zu bauen, bleibt liegen: " + e.message }
-            return context.getString(R.string.ks_a_nicht_eingetragen)
+            logger.w { "Route von $beginn abgewiesen, Sitzung ohne: " + e.message }
+            null
         }
-        val (route, saetze, runden, pausen) = stuecke
+        fun stuecke(mitAbschnitten: Boolean): Triple<List<ExerciseSegment>, List<ExerciseLap>, List<ExerciseSegment>> {
+            val saetze = if (mitAbschnitten && bahnen <= 0) alsSegmente(abschnitte, anfang, ende, plan.pausen) else emptyList()
+            val runden = if (mitAbschnitten && bahnen > 0) alsBahnen(abschnitte, anfang, ende, becken, plan.pausen) else emptyList()
+            return Triple(saetze, runden, pausenSegmente(mitNachlauf(plan, ende), anfang, ende, saetze))
+        }
+        val (saetze, runden, pausen) = listOf(true, false).firstNotNullOfOrNull { mitAbschnitten ->
+            try {
+                stuecke(mitAbschnitten)
+            } catch (e: IllegalArgumentException) {
+                logger.w { "Stuecke von $beginn nicht zu bauen (mit Abschnitten: $mitAbschnitten), weiter ohne: " + e.message }
+                null
+            }
+        } ?: Triple(emptyList(), emptyList(), emptyList())
 
         // NUR SAETZE UND BAHNEN IN DIE NOTIZ. Puls, Strecke und Kalorien der
         // Uhr standen frueher auch darin - roh, nicht entstoert, die kcal aus
@@ -440,19 +448,21 @@ internal object Kieselsport {
 
         // ERST MIT ALLEM, DANN NUR MIT DEN PAUSEN: die Akte prueft Saetze und
         // Bahnen streng und weist im Zweifel den GANZEN Eintrag ab.
-        fun sitzung(segmente: List<ExerciseSegment>, laps: List<ExerciseLap>): ExerciseSessionRecord? = try {
+        fun sitzung(segmente: List<ExerciseSegment>, laps: List<ExerciseLap>, mitRoute: Boolean = true): ExerciseSessionRecord? = try {
             ExerciseSessionRecord(
                 startTime = anfang, startZoneOffset = versatz(anfang, zone), endTime = ende, endZoneOffset = versatz(ende, zone),
                 exerciseType = satzart, title = name, notes = notiz,
                 metadata = vonDerUhr(kennung(beginn)),
-                segments = segmente.sortedBy { it.startTime }, laps = laps, exerciseRoute = route,
+                segments = segmente.sortedBy { it.startTime }, laps = laps, exerciseRoute = route.takeIf { mitRoute },
             )
         } catch (e: IllegalArgumentException) {
             logger.w { "Abschnitte abgewiesen: " + e.message }
             null
         }
         val satz = sitzung(saetze + pausen, runden)
-        val ohne = sitzung(pausen, emptyList()) ?: sitzung(emptyList(), emptyList()) ?: return context.getString(R.string.ks_a_nicht_eingetragen)
+        // Zuletzt auch ohne Route: wiese die Sitzung sie ab, waere es bei jedem Versuch so.
+        val ohne = sitzung(pausen, emptyList()) ?: sitzung(emptyList(), emptyList())
+            ?: sitzung(emptyList(), emptyList(), mitRoute = false) ?: return context.getString(R.string.ks_a_nicht_eingetragen)
         val hatAbschnitte = satz != null && (saetze.isNotEmpty() || runden.isNotEmpty())
         val dazu = buildString {
             if (strecke > 0) append(", " + streckeText(strecke, satzart, name))
@@ -633,14 +643,6 @@ internal object Kieselsport {
             context.getString(R.string.ks_a_nicht_eingetragen)
         }
     }
-
-    /** Was die Akte an der Sitzung eines Trainings prueft (siehe trageEin). */
-    private data class Stuecke(
-        val route: ExerciseRoute?,
-        val saetze: List<ExerciseSegment>,
-        val runden: List<ExerciseLap>,
-        val pausen: List<ExerciseSegment>,
-    )
 
     /** Was Health Connect als RMSSD annimmt. */
     private val HRV_MS = 5L..200L

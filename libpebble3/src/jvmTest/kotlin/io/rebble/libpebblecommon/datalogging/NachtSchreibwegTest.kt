@@ -57,27 +57,17 @@ class NachtSchreibwegTest {
     }
 
     /**
-     * Die echte NachtDao, nur das Loeschen ist langsam - wie hinter einer belegten
-     * Schreibsperre: es wartet, bis Teil 1 gespeichert ist (hoechstens 1,5 s).
+     * Die echte NachtDao (mit ihrer Transaktion), nur kommt Teil 0 spaet dran - wie
+     * hinter einer belegten Schreibsperre: er wartet, bis Teil 1 gespeichert ist
+     * (hoechstens 1,5 s). Den Ablauf eines Teils baut sie nicht nach, sie verzoegert ihn nur.
      */
-    private class LangsamLoeschendeNachtDao(private val echt: NachtDao) : NachtDao by echt {
+    private class SpaeterErsterTeil(private val echt: NachtDao) : NachtDao by echt {
         val teil1Gespeichert = CompletableDeferred<Unit>()
 
-        override suspend fun loescheAbschnitte(beginnUtc: Long) {
-            withTimeoutOrNull(1500.milliseconds) { teil1Gespeichert.await() }
-            echt.loescheAbschnitte(beginnUtc)
-        }
-
-        override suspend fun speichereAbschnitte(abschnitte: List<NachtAbschnittEntity>) {
-            echt.speichereAbschnitte(abschnitte)
-            if (abschnitte.any { it.von >= 300 }) teil1Gespeichert.complete(Unit)
-        }
-
-        // Ohne Datenbank-Transaktion: hier soll allein die Reihenfolge der Pakete schuetzen.
         override suspend fun speichereNachtTeil(nacht: NachtEntity, ersterTeil: Boolean, abschnitte: List<NachtAbschnittEntity>) {
-            speichereNacht(nacht)
-            if (ersterTeil) loescheAbschnitte(nacht.beginnUtc)
-            speichereAbschnitte(abschnitte)
+            if (ersterTeil) withTimeoutOrNull(1500.milliseconds) { teil1Gespeichert.await() }
+            echt.speichereNachtTeil(nacht, ersterTeil, abschnitte)
+            if (!ersterTeil) teil1Gespeichert.complete(Unit)
         }
     }
 
@@ -85,7 +75,7 @@ class NachtSchreibwegTest {
     fun zweiTeileGleichzeitigVerlierenKeinenAbschnitt() = runTest {
         val datenbank = testDatenbank(coroutineContext[CoroutineDispatcher]!!).also { db = it }
         val naechte = testBoulderDatenbank(coroutineContext[CoroutineDispatcher]!!).also { boulder = it }
-        val nachtDao = LangsamLoeschendeNachtDao(naechte.nachtDao())
+        val nachtDao = SpaeterErsterTeil(naechte.nachtDao())
         val verarbeitung = HealthDataProcessor(
             LibPebbleCoroutineScope(backgroundScope.coroutineContext),
             datenbank.healthDao(), datenbank.healthStatDao(), datenbank.spo2Dao(), nachtDao,

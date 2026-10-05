@@ -42,6 +42,7 @@
         <package android:name="net.dinglisch.android.taskerm"/>
     </queries>
     <application>
+        <!-- Widget disabled. Keep it out of the manifest: older installs persisted an enabled component state.
         <receiver android:name=".glance.VoiceWidgetReceiver"
                   android:exported="true"
                   android:enabled="false">
@@ -52,6 +53,7 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/voice_widget_info" />
         </receiver>
+        -->
         <receiver android:name="coredevices.ring.reminders.ReminderReceiver"
                     android:exported="false">
         </receiver>

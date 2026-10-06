@@ -24,7 +24,8 @@ import kotlin.math.roundToInt
  * heute 13:40, die Nacht ab 21:46 mit den Phasen des Entwurfs (7:59 h,
  * Ruhepuls 55, HRV 50), Espresso 6:44, drei Praeparate um 8:00 und
  * Magnesium offen um 20:00, zwei Glaeser, ein Spaziergang um 10:30, gestern
- * eine Fahrt. NUR DATEN - gezeichnet wird mit dem Code der App.
+ * eine Fahrt, vor acht Tagen ein Lauf (immer in einer frueheren Woche).
+ * NUR DATEN - gezeichnet wird mit dem Code der App.
  */
 internal object Healthbeispiel {
     val zone: ZoneId = ZoneId.systemDefault()
@@ -74,7 +75,7 @@ internal object Healthbeispiel {
 
     val spaziergang = TrainingEintrag(sitzung(um(10, 30), 50, ExerciseSessionRecord.EXERCISE_TYPE_WALKING, "Walk"), Sport.Wandern, true, 2700.0)
     private val fahrt = TrainingEintrag(sitzung(um(17, 5, heute.minusDays(1)), 62, ExerciseSessionRecord.EXERCISE_TYPE_BIKING, "Ride"), Sport.Bike, true, 24_300.0)
-    private val lauf3 = TrainingEintrag(sitzung(um(7, 10, heute.minusDays(3)), 41, ExerciseSessionRecord.EXERCISE_TYPE_RUNNING, "Run"), Sport.Laufen, true, 7_800.0)
+    private val lauf3 = TrainingEintrag(sitzung(um(7, 10, heute.minusDays(8)), 41, ExerciseSessionRecord.EXERCISE_TYPE_RUNNING, "Run"), Sport.Laufen, true, 7_800.0)
 
     /** Die Uebersicht der Sportseite: neuestes zuerst. */
     val sport = TrainingsUebersicht(true, listOf(spaziergang, fahrt, lauf3), emptyList())

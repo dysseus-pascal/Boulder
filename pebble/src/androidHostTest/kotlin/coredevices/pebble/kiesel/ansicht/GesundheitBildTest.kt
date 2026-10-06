@@ -127,8 +127,22 @@ class GesundheitBildTest {
         // wirken um 13:40 noch 24 mg, um 21:46 noch etwa 8.
         val stack = g.beschreibungen.firstOrNull { it.startsWith("Stack") }
         assertEquals("Stack, Magnesium due, 3 of 4 supplements, 24 mg caffeine now, ≈ 8 mg at bedtime", stack)
-        // Das Sport-Feld: der Spaziergang von heute, und die Zahl der Woche wie auf der Sportseite.
+        // Das Sport-Feld: der Spaziergang von heute, und die Trainings dieser Woche (Montag bis heute) -
+        // die Fahrt von gestern zaehlt mit, ausser heute ist Montag; der Lauf vor acht Tagen nie.
         assertTrue(texte.any { it.startsWith("Walk 2.7 km · today") }, "$texte")
+        val woche = if (b.heute.dayOfWeek == java.time.DayOfWeek.MONDAY) 1 else 2
+        assertTrue("$woche this week" in texte, "$texte")
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h600dp-xxhdpi")
+    fun kein_alter_puls_neben_dem_jetzt() {
+        val b = Healthbeispiel
+        // Der letzte Puls ist von 13:38: um 13:53 ist er 15 Minuten alt und steht noch, um 13:54 nicht mehr.
+        val frisch = band(zeichne("tagesband-1353") { Tagesband(b.stand, emptyList(), b.jetzt.plusSeconds(13 * 60), false, b.wege) {} })
+        assertTrue(frisch.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single().endsWith(" bpm"))
+        val alt = band(zeichne("tagesband-1354") { Tagesband(b.stand, emptyList(), b.jetzt.plusSeconds(14 * 60), false, b.wege) {} })
+        assertTrue("bpm" !in alt.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single())
     }
 
     @Test

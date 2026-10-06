@@ -106,6 +106,13 @@ object PebbleNavBarRoutes {
     @Serializable
     data object HerzRoute : NavBarRoute
 
+    // Boulder 0.51: Water und Stack (Praeparate und Koffein) - Unterseiten von Health.
+    @Serializable
+    data object WasserRoute : NavBarRoute
+
+    @Serializable
+    data object StackRoute : NavBarRoute
+
     @Serializable
     data object KoerperRoute : NavBarRoute
 
@@ -274,6 +281,12 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.HerzRoute>(viewModel) {
         HerzScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.WasserRoute>(viewModel) {
+        WasserScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.StackRoute>(viewModel) {
+        StackScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.KoerperRoute>(viewModel) {
         KoerperScreen(topBarParams, nav)

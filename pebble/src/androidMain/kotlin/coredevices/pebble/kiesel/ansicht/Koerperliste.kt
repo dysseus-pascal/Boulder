@@ -79,7 +79,7 @@ internal fun Koerperliste(
             )
         }
         // Stack fasst Praeparate und Koffein; ohne beide Uhr-Apps entfaellt die Zeile wie vorher ihre zwei.
-        if (s.mitDrinktervall || (s.mitSupCycle && s.supplemente != null)) add { Stackzeile(s, jetzt) { wege.stack?.invoke() } }
+        if (s.mitDrinktervall || (s.mitSupCycle && s.supplemente != null)) add { Stackzeile(s, jetzt, wege.stack) }
     }
     Kasten {
         zeilen.forEachIndexed { i, z ->

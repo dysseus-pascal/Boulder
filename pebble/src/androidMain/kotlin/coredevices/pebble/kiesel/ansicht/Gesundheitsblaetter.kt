@@ -26,7 +26,6 @@ import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.Akteneintraege
 import coredevices.pebble.kiesel.Kaffeesorten
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,8 +33,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,7 +47,6 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.SupCycle
 import java.time.Instant
-import java.time.LocalTime
 import kotlin.math.roundToInt
 
 /** Was ein langer Druck mit einem Ereignis tun kann - nur bei Boulders eigenen Eintraegen. */
@@ -165,8 +161,9 @@ private fun Haken(text: String, an: Boolean, setze: (Boolean) -> Unit) {
 
 /**
  * Koffein von Hand eintragen - darunter, was gestern spaet eingetragen
- * wurde: der Strahl zeigt nur heute, und ein Fehleintrag um 23:50 soll sich
- * auch nach Mitternacht noch aendern lassen.
+ * wurde: Stack zeigt nur heute, und ein Fehleintrag um 23:50 soll sich
+ * auch nach Mitternacht noch aendern lassen. Seit 0.51 hinter "Add
+ * caffeine" auf der Seite Stack.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,42 +203,6 @@ internal fun KoffeinBlatt(s: GesundheitsStand, onDismiss: () -> Unit, bearbeite:
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * Die Praeparate des Tages, abgehakt oder offen - die Liste, die frueher auf
- * der Karte stand. Steht im Blatt hinter Stack ([StackBlatt]); ohne SupCycle leer.
- */
-@Composable
-internal fun PraeparatListe(s: GesundheitsStand) {
-    val stand = s.supplemente?.takeIf { s.mitSupCycle } ?: return
-    val context = LocalContext.current
-    val rand = MaterialTheme.colorScheme.outline
-    val platz = stringResource(R.string.ks_s_platz_n)
-    val liste = stand.heute { String.format(platz, it) }
-    val jetzt = LocalTime.now()
-    Column {
-        // Der Zusatz ohne "·": den Trenner setzt der Kopf.
-        Kopf(
-            stringResource(R.string.ks_h_praeparate_heute),
-            Formate.zahl(liste.count { it.genommen }.toLong()) + " " + stringResource(R.string.ks_h_von_n, liste.size),
-        )
-        if (liste.isEmpty()) Leerzeile(stringResource(R.string.ks_h_p_keine))
-        liste.forEachIndexed { i, e ->
-            if (i > 0) Trenner()
-            // Die Planzeit darunter - in Warnfarbe erst, wenn sie ohne Haken verstrichen ist.
-            val versaeumt = !e.genommen && e.zeit?.let { !jetzt.isBefore(it) } == true
-            Zeile(
-                e.name,
-                unter = e.zeit?.let { Formate.uhrzeit(context, it) },
-                unterFarbe = if (versaeumt) Farben.warnung.ton() else null,
-                zeichen = {
-                    if (e.genommen) Tonkreis(Zeichen.haken, Farben.praeparat, 0.18f)
-                    else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))
-                },
-            )
         }
     }
 }

@@ -178,6 +178,20 @@
     <string name="ks_st_praeparate">supplements</string>
     <string name="ks_st_koffein_jetzt">caffeine now</string>
     <string name="ks_st_bett">at bedtime</string>
+    <!-- Die Seiten Water und Stack (0.51) -->
+    <string name="ks_w_von_liter">of %1$s l</string>
+    <plurals name="ks_w_glaeser">
+        <item quantity="one">%1$d glass</item>
+        <item quantity="other">%1$d glasses</item>
+    </plurals>
+    <string name="ks_w_sieben_tage">Last 7 days</string>
+    <string name="ks_w_ziel_erreicht">goal reached %1$d\u00A0×</string>
+    <string name="ks_st_offen">still open</string>
+    <string name="ks_st_genommen">%1$s taken</string>
+    <string name="ks_st_kurwoche">week %1$d of %2$d</string>
+    <string name="ks_st_heute_mg">%1$s mg today</string>
+    <string name="ks_st_aktiv_jetzt">mg active now</string>
+    <string name="ks_st_bett_um">at %1$s</string>
     <!-- Schlafansicht nach Konzept F -->
     <string name="ks_n_durch_die_nacht">THROUGH THE NIGHT</string>
     <string name="ks_n_koerper">BODY DURING SLEEP</string>

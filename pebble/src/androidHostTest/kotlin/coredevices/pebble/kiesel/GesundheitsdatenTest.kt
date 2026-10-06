@@ -107,14 +107,24 @@ class GesundheitsdatenTest {
             return zeitHeute - 300
         }
 
+        /** Ab wann zuletzt Wasser gefragt wurde - wie [blutdruckVon]. */
+        var wasserVon: Instant? = null
+
         override suspend fun wasser(von: Instant, bis: Instant): List<Wasserroh> {
             gefragt += "wasser"
+            wasserVon = von
             fun um(stunden: Long) = Instant.ofEpochSecond(zeitHeute - stunden * 3600 + 17)
+            fun tag(vor: Long, h: Int, m: Int) = heute.minusDays(vor).atTime(h, m).atZone(zone).toInstant()
             return listOf(
                 Wasserroh(um(1), "w1", true, 250.0), Wasserroh(um(3), "w2", false, 333.3), Wasserroh(um(5), "w3", true, 249.6),
                 Wasserroh(um(20), "w4", true, 250.0), Wasserroh(um(23), "w5", false, 500.0),
                 // Knapp innerhalb der 24 Stunden: ein um eine Stunde kuerzeres Fenster verloere es.
                 Wasserroh(Instant.ofEpochSecond(zeitHeute - 85_000), "w6", true, 250.0),
+                // Die Woche der Seite Water: frueher Morgen und spaeter Abend gehoeren je zu ihrem Tag,
+                // der Tag vor der Woche zu keinem.
+                Wasserroh(tag(2, 10, 0), "w7", true, 250.0), Wasserroh(tag(2, 15, 30), "w8", false, 500.4),
+                Wasserroh(tag(4, 0, 5), "w9", true, 250.0), Wasserroh(tag(6, 23, 50), "w10", true, 300.0),
+                Wasserroh(tag(7, 12, 0), "w11", true, 999.0),
             ).filter { !it.zeit.isBefore(von) && it.zeit.isBefore(bis) }
         }
 
@@ -289,6 +299,41 @@ class GesundheitsdatenTest {
     }
 
     /**
+     * DIE WASSERWOCHE DER SEITE WATER: sieben Tage bis heute aus derselben
+     * einen Abfrage wie das Wasser von heute, je Tag gesummt wie heute - die
+     * Saeule von heute ist dieselbe Zahl wie "0.5 of 2.5 l" darueber. Das
+     * Widget zeigt sie nicht und liest darum nicht weiter zurueck.
+     */
+    @Test
+    fun dieWasserwocheZaehltSiebenTageWieHeute() = runBlocking {
+        val zeiten = listOf(
+            LocalDateTime.of(2026, 10, 3, 13, 5), LocalDateTime.of(2026, 10, 4, 0, 10),
+            LocalDateTime.of(2026, 3, 29, 8, 0), LocalDateTime.of(2026, 10, 25, 2, 30),
+        )
+        for (zeit in zeiten) {
+            val jetzt = zeit.atZone(zone).toInstant()
+            val heute = jetzt.atZone(zone).toLocalDate()
+            val q = Quelle(7, jetzt, zone, null)
+            val s = Gesundheitsdaten.lade(q, voll = true, jetzt, zone)
+            assertEquals(1, q.gefragt.count { it == "wasser" }, "$zeit")
+            assertEquals((6 downTo 0).map { heute.minusDays(it.toLong()) }, s.wasserWoche.map { it.first }, "$zeit")
+            assertEquals(s.wasserMl, s.wasserWoche.last().second, "$zeit")
+            // Jeder Tag: alles Wasser, das in ihn faellt - aus allen Eintraegen der Quelle, auch denen vor der Woche.
+            val alle = q.wasser(Instant.EPOCH, jetzt)
+            for ((tag, ml) in s.wasserWoche) {
+                assertEquals(alle.filter { it.zeit.atZone(zone).toLocalDate() == tag }.sumOf { it.ml }.toInt(), ml, "$zeit, $tag")
+            }
+            // Die Tage vor gestern sind gefuellt - sonst haette der Vergleich nur das Fenster von heute gesehen.
+            assertTrue(s.wasserWoche.dropLast(2).count { it.second > 0 } >= 3, "$zeit: ${s.wasserWoche}")
+            val w = Quelle(7, jetzt, zone, null)
+            val widget = Gesundheitsdaten.lade(w, voll = false, jetzt, zone)
+            assertTrue(widget.wasserWoche.isEmpty(), "$zeit")
+            val grenze = minOf(heute.atStartOfDay(zone).toInstant(), jetzt.minusSeconds(86_400))
+            assertTrue(!assertNotNull(w.wasserVon).isBefore(grenze), "$zeit: Widget las Wasser ab ${w.wasserVon}")
+        }
+    }
+
+    /**
      * Gesundheitsdaten.lies aus Boulder 0.46.0, WOERTLICH BIS AUF DIE ZUGRIFFE:
      * Datenbank, Akte und Einstellungen kommen aus derselben Quelle wie bei
      * [Gesundheitsdaten.lade], "jetzt" ist fest, und das Tagesherz rechnet die
@@ -414,9 +459,10 @@ class GesundheitsdatenTest {
             assertEquals(vergleichbar(alt.nacht), vergleichbar(neu.nacht), "$zeit, Apps $apps, Lauf $seed")
             // Was 0.51 fuer das Tagesband dazulas, kannte die alte Fassung nicht - eigens geprueft in dasBand...
             // Ebenso die Blutdruckwoche der Herzseite (0.51) - eigens geprueft in dieBlutdruckwoche...
+            // und die Wasserwoche der Seite Water (0.51) - eigens geprueft in dieWasserwoche...
             assertEquals(
                 alt.copy(nacht = null),
-                neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList(), blutdruckWoche = null),
+                neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList(), blutdruckWoche = null, wasserWoche = emptyList()),
                 "$zeit, Apps $apps, Lauf $seed",
             )
             // Der Vergleich ist nicht leer: Puls, Tagesherz, Nacht, Akkunaechte, Eintraege von heute und gestern.

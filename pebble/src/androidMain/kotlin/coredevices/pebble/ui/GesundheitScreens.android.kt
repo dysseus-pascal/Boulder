@@ -14,7 +14,9 @@ import coredevices.pebble.kiesel.ansicht.KoerperAnsicht
 import coredevices.pebble.kiesel.ansicht.NachtAnsicht
 import coredevices.pebble.kiesel.ansicht.ProtokollAnsicht
 import coredevices.pebble.kiesel.ansicht.SicherungAnsicht
+import coredevices.pebble.kiesel.ansicht.StackAnsicht
 import coredevices.pebble.kiesel.ansicht.TrendAnsicht
+import coredevices.pebble.kiesel.ansicht.WasserAnsicht
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.res.stringResource as androidString
 
@@ -34,10 +36,9 @@ actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 /**
  * Wohin Health fuehrt. ALLES AUF DEN STAPEL VON HEALTH, auch Sport: seit
  * 0.51 ist Sport kein Reiter mehr, sondern eine Unterseite - der Pfeil oben
- * und die Zurueck-Taste fuehren so von selbst nach Health zurueck.
- * Water fuehrt noch in die Ernaehrungs-Trends wie bisher die Zeile, bis es
- * die Seite Water gibt; Stack bleibt bis zu seiner Seite leer (siehe
- * [Gesundheitswege.stack]).
+ * und die Zurueck-Taste fuehren so von selbst nach Health zurueck. Ebenso
+ * Water und Stack; die Ernaehrungs-Trends, zu denen bis 0.50 die Zeilen
+ * Water und Caffeine fuehrten, erreicht man von beiden aus ([ernaehrungstrend]).
  */
 internal fun gesundheitswege(nav: NavBarNav) = Gesundheitswege(
     nacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
@@ -47,8 +48,12 @@ internal fun gesundheitswege(nav: NavBarNav) = Gesundheitswege(
     koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
     sport = { nav.navigateTo(PebbleNavBarRoutes.TrainingRoute) },
     training = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },
-    wasser = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("ernaehrung")) },
+    wasser = { nav.navigateTo(PebbleNavBarRoutes.WasserRoute) },
+    stack = { nav.navigateTo(PebbleNavBarRoutes.StackRoute) },
 )
+
+/** Die Trends von Wasser, Koffein und Praeparaten - die letzte Zeile von Water und Stack. */
+internal fun ernaehrungstrend(nav: NavBarNav): () -> Unit = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("ernaehrung")) }
 
 /**
  * Der Titel der Herzseite: derselbe Name wie ihre Zeile auf Health ("Heart &
@@ -69,6 +74,14 @@ actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         oeffneTrend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("herz")) },
     )
 }
+
+@Composable
+actual fun WasserScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, R.string.ks_d_wasser) { WasserAnsicht(ernaehrungstrend(nav)) }
+
+@Composable
+actual fun StackScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, R.string.ks_st_titel) { StackAnsicht(ernaehrungstrend(nav)) }
 
 @Composable
 actual fun KoerperScreen(topBarParams: TopBarParams, nav: NavBarNav) =

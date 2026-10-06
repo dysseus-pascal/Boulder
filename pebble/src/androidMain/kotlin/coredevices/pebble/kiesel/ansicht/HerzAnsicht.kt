@@ -290,11 +290,13 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
 }
 
 /**
- * Die letzte Zeile der Seite: der Weg zu den Herztrends und ihrem "What
- * makes a difference" - im Stil der Zeilen auf Health, mit Zeichen und Chevron.
+ * Die letzte Zeile der Seite: der Weg zu den Trends und ihrem "What makes
+ * a difference" - im Stil der Zeilen auf Health, mit Zeichen und Chevron.
+ * Auch auf Water und Stack: dorthin fuehrten bis 0.50 die Zeilen Water und
+ * Caffeine, und ohne die Zeile waeren die Ernaehrungstrends unerreichbar.
  */
 @Composable
-private fun Trendzeile(oeffneTrend: () -> Unit) {
+internal fun Trendzeile(oeffneTrend: () -> Unit) {
     Kasten {
         Zeile(
             stringResource(R.string.ks_h_trends), stringResource(R.string.ks_h_was_zaehlt),

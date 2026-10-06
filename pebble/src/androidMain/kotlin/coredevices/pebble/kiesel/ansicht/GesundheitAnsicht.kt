@@ -1,21 +1,16 @@
 package coredevices.pebble.kiesel.ansicht
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,8 +18,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
-import coredevices.pebble.kiesel.Akteneintraege
-import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
@@ -34,7 +27,6 @@ import coredevices.pebble.kiesel.tagesSatz
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.time.Instant
 import java.time.LocalDate
@@ -53,13 +45,10 @@ internal data class Gesundheitswege(
     val sport: () -> Unit,
     /** Das Detail eines Trainings aus dem Tagesband. */
     val training: (String) -> Unit,
+    /** Die Seite Water. */
     val wasser: () -> Unit,
-    /**
-     * Die Seite Stack. NULL, SOLANGE ES SIE NICHT GIBT: dann oeffnet Health
-     * die bisherigen Blaetter Praeparate und "Add caffeine" in einem
-     * ([StackBlatt]) - ihre Zeilen ersetzt Stack schon.
-     */
-    val stack: (() -> Unit)? = null,
+    /** Die Seite Stack: Praeparate und Koffein, mit "Add caffeine" (bis 0.50 eigene Blaetter). */
+    val stack: () -> Unit,
 )
 
 /** Was die Seite zeigt: der Stand und wann er gelesen wurde. */
@@ -102,13 +91,9 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege) {
     val context = LocalContext.current
     val lies = rememberGesundheitslader()
     val libPebble = koinInject<LibPebble>()
-    val scope = rememberCoroutineScope()
     val uhren by libPebble.watches.collectAsState()
     val akkuJetzt = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
     var neu by remember { mutableIntStateOf(0) }
-    var stackBlatt by remember { mutableStateOf(false) }
-    var koffeinBlatt by remember { mutableStateOf(false) }
-    var bearbeite by remember { mutableStateOf<Bearbeitung?>(null) }
 
     // Neue Minutendaten von der Uhr (rememberUhrschub): dann stimmen Schritte und Puls nicht mehr.
     val seite = rememberStand(remember { zuletztHeute() }, neu, rememberUhrschub()) {
@@ -125,26 +110,7 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege) {
         Ladekreis()
         return
     }
-    val mitStack = if (wege.stack != null) wege else wege.copy(stack = { stackBlatt = true })
-    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, mitStack, koerper) { neu++ }
-
-    if (stackBlatt) StackBlatt(seite.stand, onDismiss = { stackBlatt = false }) { stackBlatt = false; koffeinBlatt = true }
-    if (koffeinBlatt) {
-        KoffeinBlatt(
-            seite.stand, onDismiss = { koffeinBlatt = false },
-            bearbeite = { koffeinBlatt = false; bearbeite = it },
-        ) { art ->
-            koffeinBlatt = false
-            val fehler = context.getString(R.string.ks_h_koffein_fehler)
-            scope.launch {
-                // Ohne Rueckmeldung glaubte man den Kaffee eingetragen, und die Zahl stuende still.
-                if (!Akteneintraege.trinkeKoffein(context, art)) Toast.makeText(context, fehler, Toast.LENGTH_LONG).show()
-                GesundheitWidget.stosseAn(context)
-                neu++
-            }
-        }
-    }
-    bearbeite?.let { b -> Bearbeitungsblatt(b, onDismiss = { bearbeite = null }) { bearbeite = null; neu++ } }
+    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, wege, koerper) { neu++ }
 }
 
 /**
@@ -180,27 +146,5 @@ internal fun GesundheitInhalt(
         item { Koerperliste(s, jetzt, wege, koerper) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }
-    }
-}
-
-/**
- * Bis die Seite Stack steht: ein Blatt mit den bisherigen zwei Zielen -
- * die Praeparate des Tages und "Add caffeine" (Koffein von Hand, Eintraege
- * von gestern). So bleibt beides erreichbar, seit Stack die Zeilen
- * Supplements und Caffeine ersetzt.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StackBlatt(s: GesundheitsStand, onDismiss: () -> Unit, koffein: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        PraeparatListe(s)
-        if (s.mitDrinktervall) {
-            Trenner(0.dp)
-            Zeile(
-                stringResource(R.string.ks_h_koffein_dazu), zeichen = { Tonkreis(Zeichen.tasse, Farben.koffein, 0.30f) },
-                onClick = koffein,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
     }
 }

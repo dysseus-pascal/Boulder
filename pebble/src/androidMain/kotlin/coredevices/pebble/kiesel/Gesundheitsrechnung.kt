@@ -425,6 +425,14 @@ internal object Gesundheitsrechnung {
         return bett.atTime(uhrzeit).atZone(zone).toInstant()
     }
 
+    /**
+     * Der Beginn des laufenden Tags um sechs - DERSELBE TAG, auf den
+     * [bettzeitHeute] die Bettzeit legt: um 00:30 hat er gestern um sechs
+     * begonnen. Die Koffeinkurve der Seite Stack beginnt hier.
+     */
+    fun tagesbeginn(jetzt: Instant, zone: ZoneId): Instant =
+        jetzt.atZone(zone).minusHours(TAGESBEGINN_H).toLocalDate().atTime(TAGESBEGINN_H.toInt(), 0).atZone(zone).toInstant()
+
     private const val TAGESBEGINN_H = 6L
 
     /** Die Linie des Pulsbands, UNGEGLAETTET: je Stueck die Mediane, aus denen der Satz Spanne, Spitze und Zone nennt. */

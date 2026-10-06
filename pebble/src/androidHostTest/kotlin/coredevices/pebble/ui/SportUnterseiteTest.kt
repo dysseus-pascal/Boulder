@@ -109,16 +109,24 @@ class SportUnterseiteTest {
     }
 
     @Test
-    fun health_fuehrt_zu_sport_training_und_wasser() {
+    fun health_fuehrt_zu_sport_training_wasser_und_stack() {
         val m = Mitschrift()
         val w = gesundheitswege(m)
         w.sport()
         w.training("abc")
         w.wasser()
+        w.stack()
         assertEquals(
-            listOf<Any>(PebbleNavBarRoutes.TrainingRoute, PebbleNavBarRoutes.TrainingDetailRoute("abc"), PebbleNavBarRoutes.TrendRoute("ernaehrung")),
+            listOf<Any>(
+                PebbleNavBarRoutes.TrainingRoute, PebbleNavBarRoutes.TrainingDetailRoute("abc"),
+                PebbleNavBarRoutes.WasserRoute, PebbleNavBarRoutes.StackRoute,
+            ),
             m.ziele,
         )
+        // Die Ernaehrungs-Trends, zu denen bis 0.50 die Zeile Water fuehrte: jetzt von Water und Stack aus.
+        m.ziele.clear()
+        ernaehrungstrend(m)()
+        assertEquals(listOf<Any>(PebbleNavBarRoutes.TrendRoute("ernaehrung")), m.ziele)
     }
 
     // --- Der echte Stapel und das Bild ---

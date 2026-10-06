@@ -88,20 +88,53 @@ internal object SupCycle {
         val alle: Int, val wochenAn: Int, val wochenAus: Int, val anker: Long,
     )
 
-    data class Stand(val tag: LocalDate, val namen: List<String>, val faellig: Long, val genommen: Long, val plan: List<Platz> = emptyList()) {
+    /**
+     * [fassung]: wie der [plan] zu lesen ist (siehe [uhrTag]) - die Seite
+     * Stack rechnet damit die Kurwoche wie die Uhr.
+     */
+    data class Stand(
+        val tag: LocalDate, val namen: List<String>, val faellig: Long, val genommen: Long, val plan: List<Platz> = emptyList(),
+        val fassung: Int = PLANFASSUNG_ALT,
+    ) {
         /**
          * Nur was heute faellig ist, in der Reihenfolge des Plans. Ein
          * Praeparat in der Pausenwoche gehoert nicht auf die Liste - ein
          * "offen" daneben waere ein Vorwurf.
          */
-        fun heute(platz: (Int) -> String): List<Eintrag> = (0 until 64)
+        fun heute(platz: (Int) -> String): List<Eintrag> = heuteJePlatz(platz).map { it.second }
+
+        /**
+         * Dasselbe mit dem Platz (0..63) jedes Eintrags: an ihm haengen seine
+         * Kennung in der Akte ([kennung]) und seine Kur im [plan].
+         */
+        fun heuteJePlatz(platz: (Int) -> String): List<Pair<Int, Eintrag>> = (0 until 64)
             .filter { ((faellig shr it) and 1L) == 1L }
             .map { i ->
-                Eintrag(
+                i to Eintrag(
                     namen.getOrNull(i)?.ifBlank { null } ?: platz(i + 1), ((genommen shr i) and 1L) == 1L,
                     plan.getOrNull(i)?.takeIf { it.benutzt }?.zeit,
                 )
             }
+    }
+
+    /** Die wievielte Einnahmewoche einer Kur heute ist ("week 3 of 8"): [woche] von [von]. */
+    data class Kurwoche(val woche: Int, val von: Int)
+
+    /**
+     * Die Kurwoche von [p] am Tag [tag] (wie [uhrTag] ihn zaehlt) - nach
+     * derselben Rechnung wie [faelligAm], damit Woche und Haken der Uhr
+     * zusammenpassen. Null ohne Kur ([Platz.wochenAn] 0), in der Pause und
+     * fuer Einnahmewochen ohne Pause in der alten Fassung: die liefen endlos,
+     * eine "Woche 40 von 8" waere Unsinn.
+     */
+    fun kurwoche(p: Platz, tag: Long, fassung: Int): Kurwoche? {
+        if (!p.benutzt || p.wochenAn == 0) return null
+        if (p.wochenAus == 0 && fassung < PLANFASSUNG_KALENDER) return null
+        val seit = maxOf(0L, tag - p.anker)
+        val an = p.wochenAn * 7L
+        val imZyklus = if (p.wochenAus == 0) seit else seit % (an + p.wochenAus * 7L)
+        if (imZyklus >= an) return null
+        return Kurwoche((imZyklus / 7).toInt() + 1, p.wochenAn)
     }
 
     /** Welche Plaetze seit dem letzten Bericht neu abgehakt wurden - nur faellige. */
@@ -308,9 +341,9 @@ internal object SupCycle {
      * [fassung]: die des gespeicherten Plans.
      */
     fun standFuer(heute: LocalDate, zone: ZoneId, gemeldet: Stand?, plan: List<Platz>, fassung: Int): Stand? = when {
-        gemeldet != null && gemeldet.tag == heute -> gemeldet.copy(plan = plan)
+        gemeldet != null && gemeldet.tag == heute -> gemeldet.copy(plan = plan, fassung = fassung)
         plan.isEmpty() -> null
-        else -> Stand(heute, plan.map { it.name }, faellig(plan, uhrTag(heute, zone, fassung), fassung), 0L, plan)
+        else -> Stand(heute, plan.map { it.name }, faellig(plan, uhrTag(heute, zone, fassung), fassung), 0L, plan, fassung)
     }
 
     private fun gespeicherterPlan(p: SharedPreferences): List<Platz> =

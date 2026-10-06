@@ -20,6 +20,14 @@ expect fun TrendScreen(topBarParams: TopBarParams, nav: NavBarNav, gruppe: Strin
 @Composable
 expect fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
+// Boulder 0.51: Water - die Menge von heute, die Glaeser und die Woche - aus der Gesundheitsseite.
+@Composable
+expect fun WasserScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
+// Boulder 0.51: Stack - Praeparate und Koffein - aus der Gesundheitsseite.
+@Composable
+expect fun StackScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 // Boulder: Gewicht und Zusammensetzung einer Waage aus Health Connect - aus der Gesundheitsseite.
 @Composable
 expect fun KoerperScreen(topBarParams: TopBarParams, nav: NavBarNav)

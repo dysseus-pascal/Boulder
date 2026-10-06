@@ -24,7 +24,8 @@ import kotlin.math.roundToInt
  * Ein Tag zum Zeichnen, nach den Beispielwerten des Entwurfs "Erlebnis-Health":
  * heute 13:40, die Nacht ab 21:46 mit den Phasen des Entwurfs (7:59 h,
  * Ruhepuls 55, HRV 50), Espresso 6:44, drei Praeparate um 8:00 und
- * Magnesium offen um 20:00, zwei Glaeser, ein Spaziergang um 10:30, gestern
+ * Magnesium offen um 20:00 (Zink als Kur in Woche 3 von 8), zwei Glaeser und
+ * die Wasserwoche des Entwurfs, ein Spaziergang um 10:30, gestern
  * eine Fahrt, vor acht Tagen ein Lauf (immer in einer frueheren Woche).
  * NUR DATEN - gezeichnet wird mit dem Code der App.
  */
@@ -85,9 +86,14 @@ internal object Healthbeispiel {
     /** Die Uebersicht der Sportseite: neuestes zuerst. */
     val sport = TrainingsUebersicht(true, listOf(spaziergang, fahrt, lauf3), emptyList())
 
+    // Mit den Kennungen, die SupCycle in die Akte schreibt: an ihnen findet Stack die Einnahmezeit.
     private val praeparate = listOf("Multivitamin", "Zinc", "D3").mapIndexed { i, name ->
-        Tageseintrag(um(8, 0).plusSeconds(i * 10L), true, name, null, id = "p$i", eigen = true, kennung = "supcycle-$i")
+        Tageseintrag(um(8, 0).plusSeconds(i * 10L), true, name, null, id = "p$i", eigen = true, kennung = SupCycle.kennung(heute, i, name))
     }
+
+    /** Das Wasser der Woche nach dem Entwurf "Erlebnis-Wasser" (2.6, 2.1, 2.7, 2.5, 1.8, 2.9 l), heute 0.5 l. */
+    val wasserWoche: List<Pair<LocalDate, Int>> = listOf(2600, 2100, 2700, 2500, 1800, 2900, 500)
+        .mapIndexed { i, ml -> heute.minusDays(6L - i) to ml }
 
     val stand = GesundheitsStand(
         schritte = 3860, aktivMinuten = 54, meter = 2950.0,
@@ -104,10 +110,12 @@ internal object Healthbeispiel {
             heute, listOf("Multivitamin", "Zinc", "D3", "Magnesium"), 0b1111, 0b0111,
             listOf(
                 SupCycle.Platz("Multivitamin", LocalTime.of(8, 0), true, 1, 0, 0, 0),
-                SupCycle.Platz("Zinc", LocalTime.of(8, 0), true, 1, 0, 0, 0),
+                // Zink als Kur wie Creatine im Entwurf: acht Wochen Einnahme, vier Pause, heute in der dritten Woche.
+                SupCycle.Platz("Zinc", LocalTime.of(8, 0), true, 1, 8, 4, heute.toEpochDay() - 16),
                 SupCycle.Platz("D3", LocalTime.of(8, 0), true, 1, 0, 0, 0),
                 SupCycle.Platz("Magnesium", LocalTime.of(20, 0), true, 1, 0, 0, 0),
             ),
+            SupCycle.PLANFASSUNG_KALENDER,
         ),
         koffein = listOf(um(6, 44) to 63.0),
         eintraege = (praeparate + Tageseintrag(um(6, 44), false, "Espresso, sugar", 63.0, id = "k1", eigen = true, kennung = "koffein-1"))
@@ -116,6 +124,7 @@ internal object Healthbeispiel {
         letzteDaten = jetzt.minusSeconds(120),
         bandPuls = bandPuls,
         schrittBins = schrittBins,
+        wasserWoche = wasserWoche,
     )
 
     /** Wohin die Seite fuehrt - im Bild nirgendwohin. */

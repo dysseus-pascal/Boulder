@@ -145,6 +145,11 @@ internal data class GesundheitsStand(
     val bandPuls: List<Pair<Long, Int>> = emptyList(),
     /** Die Schritte je halbe Stunde ab dem Anfang des Tagesbands: Beginn in Sekunden, Schritte. */
     val schrittBins: List<Pair<Long, Long>> = emptyList(),
+    /**
+     * Das Wasser der letzten sieben Tage in ml, aeltester zuerst, heute =
+     * [wasserMl] - die Saeulen der Seite Water. Nur die Seiten lesen es.
+     */
+    val wasserWoche: List<Pair<LocalDate, Int>> = emptyList(),
 )
 
 /** Ein Wassereintrag der Akte, roh: die Menge ungerundet, die Summe des Tages rundet erst am Ende. */
@@ -436,8 +441,10 @@ internal object Gesundheitsdaten {
         val schlafJeTag = naechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.schlafMinuten }
 
         val vorEinemTag = jetzt.minus(Duration.ofHours(24))
-        // Wasser nur von heute und den letzten 24 Stunden - weiter zurueck zeigt es keine Seite.
+        // Wasser von heute und den letzten 24 Stunden; die Seiten dazu die Woche fuer Water
+        // in derselben Abfrage - das Widget zeigt sie nicht und liest sie nicht.
         val wasserVon = minOf(Instant.ofEpochSecond(anfang(heute)), vorEinemTag)
+            .let { if (voll) minOf(it, Instant.ofEpochSecond(anfang(woche.first()))) else it }
         val wasser = versuche(TAG, "Wasser lesen") { q.wasser(wasserVon, jetzt) }.orEmpty()
         val heuteWasser = wasser.filter { it.zeit.atZone(zone).toLocalDate() == heute }
         val nahrung = versuche(TAG, "Ernaehrung lesen") { q.nahrung(vorEinemTag, jetzt) }.orEmpty()
@@ -545,6 +552,10 @@ internal object Gesundheitsdaten {
             akkuNaechte = naechteAb(vonAkku),
             bandPuls = bandPuls,
             schrittBins = schrittBins,
+            // GESUMMT WIE HEUTE ([wasserMl]): die Saeule von heute ist dieselbe Zahl wie "0.5 of 2.5 l" darueber.
+            wasserWoche = Gesundheitsrechnung.reihe(
+                woche, wasser.groupBy { it.zeit.atZone(zone).toLocalDate() }.mapValues { (_, l) -> l.sumOf { it.ml }.toInt() }, 0,
+            ),
         )
     }
 

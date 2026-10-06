@@ -440,7 +440,7 @@ private fun Bandsymbol(
             ({ wege.training(t.id) })
         } ?: ({ oeffneListe(sym.marken) })
         art == Art.WASSER -> wege.wasser
-        art == Art.KAFFEE || art == Art.PRAEPARAT -> ({ wege.stack?.invoke() })
+        art == Art.KAFFEE || art == Art.PRAEPARAT -> wege.stack
         else -> null
     }
     // Ein Eintrag allein geht gleich ins Blatt; mehrere zusammengefasste erst in die Liste.

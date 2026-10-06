@@ -95,6 +95,17 @@ class FormateTest {
     }
 
     @Test
+    fun literFeinFuerEinzelneGlaeser() {
+        // Ein Glas ist 0.25 l, nicht "0.3" wie mit einer Stelle; ganze Liter ohne Nullen.
+        assertEquals("0.25", f.literFein(250, us))
+        assertEquals("0.5", f.literFein(500, us))
+        assertEquals("1", f.literFein(1000, us))
+        assertEquals("1.25", f.literFein(1250, us))
+        assertEquals("0", f.literFein(0, us))
+        assertEquals("0,33", f.literFein(333, de))
+    }
+
+    @Test
     fun dauerInEinerForm() {
         assertEquals("45 min", f.dauer(45))
         assertEquals("1:05 h", f.dauer(65))

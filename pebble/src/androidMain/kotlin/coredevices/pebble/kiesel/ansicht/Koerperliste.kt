@@ -95,7 +95,8 @@ internal fun Koerperliste(
  * erst, wenn ihre Planzeit verstrichen ist), darunter drei Werte - wie
  * viele genommen sind, wie viel Koffein jetzt wirkt und zur Schlafenszeit
  * noch wirken wird. Was keine Daten hat, entfaellt: ohne SupCycle die
- * Praeparate, ohne Drinktervall das Koffein, nach der Schlafenszeit ihr Wert.
+ * Praeparate, ohne Drinktervall oder ohne Koffein in den letzten 24 Stunden
+ * das Koffein, nach der Schlafenszeit ihr Wert.
  */
 @Composable
 private fun Stackzeile(s: GesundheitsStand, jetzt: Instant, oeffne: () -> Unit) {
@@ -114,9 +115,12 @@ private fun Stackzeile(s: GesundheitsStand, jetzt: Instant, oeffne: () -> Unit) 
             else -> it.namen.firstOrNull()?.let { n -> stringResource(eins, n) }
         }
     }
-    val aktiv = if (s.mitDrinktervall) Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt() else null
+    // Ohne Getraenk mit Koffein (s.koffein: die letzten 24 Stunden) gibt es keinen Koffeinwert:
+    // "0 mg caffeine now" und "≈ 0 mg at bedtime" waeren dann Fuellung, keine Daten.
+    val mitKoffein = s.mitDrinktervall && s.koffein.isNotEmpty()
+    val aktiv = if (mitKoffein) Gesundheitsrechnung.koffeinAktiv(s.koffein, jetzt).roundToInt() else null
     // Die Schlafenszeit wie bisher im Strahl: nur solange sie kommt - danach hiesse "at bedtime" morgen.
-    val bett = if (s.mitDrinktervall) Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone) else null
+    val bett = if (mitKoffein) Gesundheitsrechnung.bettzeit(s.nacht?.einschlafen, jetzt, zone) else null
     val bettMg = bett?.let { Gesundheitsrechnung.koffeinAktiv(s.koffein, it).roundToInt() }
     val titel = stringResource(R.string.ks_st_titel)
     val praeparate = stringResource(R.string.ks_st_praeparate)

@@ -58,8 +58,8 @@ import kotlin.test.assertTrue
  * Blutdruck zwei Baender und die Punkte daneben bernstein, die Zeile Trends
  * am Ende - und ohne fruehere Werte alles neutral.
  *
- * Die Bilder liegen danach unter build/herzseite.png und
- * build/herzseite-neutral.png.
+ * Die Bilder liegen danach unter build/herzseite.png,
+ * build/herzseite-neutral.png und build/herzseite-blutdruck-ohne-woche.png.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -257,5 +257,27 @@ class HerzBildTest {
             // Die Punkte stehen trotzdem da - neutral.
             assertTrue(g.flecken(r, g.farben.neutral, (10 * g.dichte * g.dichte).toInt()).isNotEmpty(), "$anfang: keine neutralen Punkte")
         }
+    }
+
+    /**
+     * OHNE MESSUNG IN DER WOCHE nennt die Blutdruckkarte die Tage, aus denen
+     * ihr Wert stammt: zuletzt vor sieben Tagen gemessen, also "last 30
+     * days" mit dem Schnitt dieser Tage - nicht "last 7 days" ueber einem
+     * Wert ausserhalb der Woche. Kein Bild der Woche, kein Urteil.
+     */
+    @Test
+    fun ohne_messung_in_der_woche_nennt_die_karte_ihre_dreissig_tage() {
+        val g = zeichne("herzseite-blutdruck-ohne-woche", Herzbeispiel.stand(blutdruckInDerWoche = false))
+        g.mitText("BLOOD PRESSURE · last 30 days")
+        assertTrue("BLOOD PRESSURE · last 7 days" !in g.texte, "${g.texte}")
+        // Die juengste Sitzung von vor sieben Tagen; der Schnitt der 23 Sitzungen der letzten 30 Tage
+        // (vor 7 bis 29 Tagen: zwoelfmal 129/83, elfmal 116/74) ist 123/79.
+        assertTrue("129/83 mmHg" in g.texte, "${g.texte}")
+        assertTrue(g.texte.any { it.endsWith(" · avg 123/79") }, "${g.texte}")
+        assertTrue(g.alle().none { g.beschreibung(it)?.startsWith("BLOOD PRESSURE") == true }, "Bild der Woche ohne Messung darin")
+        // Das eine Urteil ist das der HRV, rechts neben ihrem Kopf.
+        val urteil = g.alle().filter { g.text(it) in urteile }
+        assertEquals(1, urteil.size, "${g.texte}")
+        assertTrue(abs(urteil.single().boundsInRoot.center.y - g.mitText("HRV · last 7 nights").boundsInRoot.center.y) < 4 * g.dichte)
     }
 }

@@ -232,4 +232,36 @@ class TagesbandrechnungTest {
         assertTrue(s.first().buendel)
         assertEquals(80f, s.last().x)
     }
+
+    // --- Die Pulslinie ---
+
+    /** Ein Puls je [sekunden] ab [ab]. */
+    private fun puls(ab: Instant, vararg sekunden: Long, bpm: Int = 70) = sekunden.map { ab.epochSecond + it to bpm }
+
+    @Test
+    fun ueber_eine_viertelstunde_ohne_messung_bricht_die_linie() {
+        // Der Fall der Gegenpruefung: 10:00 und 10:19 liegen in den Fenstern 10:00 und 10:15 - deren Anfaenge
+        // trennen nur 15 Minuten, die Messungen aber 19. Die Linie bricht.
+        assertEquals(2, Tagesbandrechnung.pulslinie(puls(um(10), 0, 19 * 60L)).size)
+        // An der Grenze: genau 15 min ohne Messung bleibt eine Linie, eine Sekunde mehr bricht sie -
+        // obwohl beide Male dieselben zwei Fenster (10:00 und 10:15) entstehen.
+        assertEquals(1, Tagesbandrechnung.pulslinie(puls(um(10), 0, 900)).size)
+        assertEquals(2, Tagesbandrechnung.pulslinie(puls(um(10), 0, 901)).size)
+    }
+
+    @Test
+    fun jedes_stueck_traegt_die_mediane_seiner_fuenf_minuten() {
+        // Jede Minute 10:00-10:09, dann 20 min nichts, dann jede Minute 10:30-10:39 - unsortiert hereingegeben.
+        val punkte = (0..9).flatMap { m -> listOf(um(10, m).epochSecond to 60 + m, um(10, 30 + m).epochSecond to 90 + m) }
+        val linie = Tagesbandrechnung.pulslinie(punkte)
+        assertEquals(
+            listOf(
+                // Der obere Median der fuenf Minuten, am Anfang des Fensters.
+                listOf(um(10).epochSecond to 62, um(10, 5).epochSecond to 67),
+                listOf(um(10, 30).epochSecond to 92, um(10, 35).epochSecond to 97),
+            ),
+            linie,
+        )
+        assertTrue(Tagesbandrechnung.pulslinie(emptyList()).isEmpty())
+    }
 }

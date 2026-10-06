@@ -189,10 +189,10 @@ internal fun Tagesband(
         s.supplemente?.takeIf { s.mitSupCycle }?.heute { String.format(platz, it) }?.size ?: 0
     }
 
-    val bins = remember(s.bandPuls) { Gesundheitsrechnung.fuenfMinuten(s.bandPuls) }
-    val linie = remember(bins) { Gesundheitsrechnung.pulslinie(bins) }
-    val pulsTief = minOf(45, (bins.minOfOrNull { it.median } ?: 45) - 3)
-    val pulsHoch = maxOf(115, (bins.maxOfOrNull { it.median } ?: 115) + 3)
+    val linie = remember(s.bandPuls) { Tagesbandrechnung.pulslinie(s.bandPuls) }
+    val mediane = remember(linie) { linie.flatten().map { it.second } }
+    val pulsTief = minOf(45, (mediane.minOrNull() ?: 45) - 3)
+    val pulsHoch = maxOf(115, (mediane.maxOrNull() ?: 115) + 3)
     fun yPuls(bpm: Int): Dp = PULS_UNTEN - (PULS_UNTEN - PULS_OBEN) * ((bpm - pulsTief).toFloat() / (pulsHoch - pulsTief))
     // Der letzte Puls nur, wenn er frisch ist - seit 0.35 zeigt "jetzt" keinen veralteten.
     val jetztPuls = s.puls.maxByOrNull { it.first }?.takeIf { Gesundheitsrechnung.pulsFrisch(it.first, jetzt.epochSecond) }
@@ -282,7 +282,7 @@ internal fun Tagesband(
                                 Size(14.dp.toPx(), hoehe), CornerRadius(2.dp.toPx()),
                             )
                         }
-                        // Der Puls; Luecken ueber einer Viertelstunde brechen die Linie (pulslinie).
+                        // Der Puls; Luecken ueber einer Viertelstunde zwischen zwei Messungen brechen die Linie (Tagesbandrechnung.pulslinie).
                         linie.forEach { stueck ->
                             val punkte = stueck.map { (sek, bpm) -> Offset(x(Instant.ofEpochSecond(sek + 150)).dp.toPx(), yPuls(bpm).toPx()) }
                             if (punkte.size == 1) drawCircle(pulsfarbe, 1.5.dp.toPx(), punkte[0])

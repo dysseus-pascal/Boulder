@@ -58,19 +58,25 @@ internal object Herzbeispiel {
         (if (mitFrueheren) (7..46).associate { k -> tag(k) to if (k % 2 == 0) 44 else 57 } else emptyMap()) +
             hrvWoche.mapIndexed { i, w -> tag(6 - i) to w }
 
-    /** Eine Sitzung je Tag um 7:10: 40 Tage vor der Woche am Rand des Entwurfsbands, dann die Woche. */
-    fun blutdruckAlle(mitFrueheren: Boolean = true): List<Blutdruck> =
+    /**
+     * Eine Sitzung je Tag um 7:10: 40 Tage vor der Woche am Rand des
+     * Entwurfsbands, dann die Woche. [inDerWoche] = false: die Woche ohne
+     * Messung - die juengste Sitzung ist dann die von vor sieben Tagen (129/83).
+     */
+    fun blutdruckAlle(mitFrueheren: Boolean = true, inDerWoche: Boolean = true): List<Blutdruck> =
         (if (mitFrueheren) (46 downTo 7).map { k ->
             if (k % 2 == 0) Blutdruck(b.um(7, 10, tag(k)), 116, 74) else Blutdruck(b.um(7, 10, tag(k)), 129, 83)
-        } else emptyList()) + obenWoche.indices.map { i -> Blutdruck(b.um(7, 10, tag(6 - i)), obenWoche[i], untenWoche[i]) }
+        } else emptyList()) +
+            (if (inDerWoche) obenWoche.indices.map { i -> Blutdruck(b.um(7, 10, tag(6 - i)), obenWoche[i], untenWoche[i]) } else emptyList())
 
     /**
      * Der Stand der Herzseite, wie [coredevices.pebble.kiesel.Gesundheitsdaten.lade]
      * ihn baute. [mitFrueheren] = false: nur die Woche selbst - zu wenig fruehere
-     * Werte fuer ein Band, die Woche steht neutral da.
+     * Werte fuer ein Band, die Woche steht neutral da. [blutdruckInDerWoche] =
+     * false: zuletzt vor sieben Tagen gemessen, in der Woche nicht.
      */
-    fun stand(mitFrueheren: Boolean = true): GesundheitsStand {
-        val alle = blutdruckAlle(mitFrueheren)
+    fun stand(mitFrueheren: Boolean = true, blutdruckInDerWoche: Boolean = true): GesundheitsStand {
+        val alle = blutdruckAlle(mitFrueheren, blutdruckInDerWoche)
         return GesundheitsStand(
             schritte = 0, aktivMinuten = 0, meter = 0.0, wocheSchritte = emptyList(),
             nacht = b.nacht,

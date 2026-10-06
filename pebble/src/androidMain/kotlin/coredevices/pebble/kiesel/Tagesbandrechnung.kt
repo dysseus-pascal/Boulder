@@ -41,6 +41,9 @@ internal object Tagesbandrechnung {
     /** So weit darf ein Symbol nach rechts ruecken, bevor es mit dem davor gebuendelt wird. */
     const val SCHUB_DP = 24f
 
+    /** Mehr als so viel Zeit zwischen zwei Messungen bricht die Pulslinie. */
+    val PULS_LUECKE: Duration = Duration.ofMinutes(15)
+
     /** Das Zeitfenster des Bands. */
     data class Fenster(val von: Instant, val bis: Instant)
 
@@ -117,6 +120,25 @@ internal object Tagesbandrechnung {
                     .forEach { add(Ereignis.Praeparate(it)) }
             }
         }.sortedBy { it.zeit }
+    }
+
+    /**
+     * Die Pulslinie des Bands: je Stueck die Mediane der Fuenf-Minuten-Fenster
+     * ([Gesundheitsrechnung.fuenfMinuten]), Sekunde des Fensteranfangs und Puls.
+     * GETRENNT WIRD AN DEN MESSUNGEN, NICHT AN DEN FENSTERN: deren Anfaenge
+     * liegen bis zu fuenf Minuten vor der Messung - 10:00 und 10:19 (Fenster
+     * 10:00 und 10:15) blieben so ueber 19 Minuten ohne Puls verbunden. Die
+     * Herzseite trennt weiter an den Fenstern ([Gesundheitsrechnung.pulslinie]),
+     * ihr Pulsband bleibt, wie es ist.
+     */
+    fun pulslinie(punkte: List<Pair<Long, Int>>): List<List<Pair<Long, Int>>> {
+        val laeufe = mutableListOf<MutableList<Pair<Long, Int>>>()
+        punkte.sortedBy { it.first }.forEach { p ->
+            val lauf = laeufe.lastOrNull()
+            if (lauf == null || p.first - lauf.last().first > PULS_LUECKE.seconds) laeufe += mutableListOf(p) else lauf += p
+        }
+        // Je Lauf eigene Fenster: zwei Laeufe liegen mehr als eine Viertelstunde auseinander und teilen keines.
+        return laeufe.map { lauf -> Gesundheitsrechnung.fuenfMinuten(lauf).map { it.sekunde to it.median } }
     }
 
     /** Ein Praeparat, das heute noch geplant ist. */

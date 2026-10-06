@@ -144,9 +144,10 @@
     <string name="ks_f_tag">Good afternoon</string>
     <string name="ks_f_abend">Good evening</string>
     <string name="ks_f_schlaf">%1$s: %2$s of sleep</string>
-    <string name="ks_f_ruhe_ok"> and a resting heart rate as usual</string>
-    <string name="ks_f_ruhe_hoch"> and a resting heart rate %1$d bpm above usual</string>
-    <string name="ks_f_ruhe_tief"> and a resting heart rate %1$d bpm below usual</string>
+    <!-- In Anfuehrungszeichen: ohne sie schneidet aapt das fuehrende Leerzeichen ab ("of sleepand"). -->
+    <string name="ks_f_ruhe_ok">" and a resting heart rate as usual"</string>
+    <string name="ks_f_ruhe_hoch">" and a resting heart rate %1$d bpm above usual"</string>
+    <string name="ks_f_ruhe_tief">" and a resting heart rate %1$d bpm below usual"</string>
     <plurals name="ks_f_schritte_wert">
         <item quantity="one">%1$s step</item>
         <item quantity="other">%1$s steps</item>

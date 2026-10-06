@@ -22,9 +22,11 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
+import coredevices.pebble.R
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -46,7 +48,9 @@ import kotlin.test.assertTrue
  * der sichtbaren Breite), was sagt das Band, welche Zeilen stehen darunter.
  *
  * Die Bilder liegen danach unter build/health-start.png (die Seite, wie sie
- * oeffnet) und build/tagesband-ganz.png (das ganze Band, ungeschnitten).
+ * oeffnet), build/tagesband-ganz.png (das ganze Band, ungeschnitten),
+ * build/tagesband-luecke.png (die Pulslinie ueber einer Luecke) und
+ * build/health-ohne-koffein*.png (Stack ohne Koffein).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -127,6 +131,8 @@ class GesundheitBildTest {
             assertTrue(t in texte, "\"$t\" fehlt in $texte")
         }
         assertTrue("Supplements" !in texte && "Caffeine" !in texte, "alte Zeilen in $texte")
+        // Der Satz oben mit seinem Leerzeichen zwischen "sleep" und "and", wie im Entwurf.
+        assertTrue(texte.any { "7:59 h of sleep and a resting heart rate as usual." in it }, "$texte")
         // Stack: 3 von 4 genommen, Magnesium kommt erst um 20:00 - noch nicht versaeumt; 63 mg um 6:44
         // wirken um 13:40 noch 24 mg, um 21:46 noch etwa 8.
         val stack = g.beschreibungen.firstOrNull { it.startsWith("Stack") }
@@ -136,6 +142,79 @@ class GesundheitBildTest {
         assertTrue(texte.any { it.startsWith("Walk 2.7 km · today") }, "$texte")
         val woche = if (b.heute.dayOfWeek == java.time.DayOfWeek.MONDAY) 1 else 2
         assertTrue("$woche this week" in texte, "$texte")
+    }
+
+    /**
+     * Die Teile des Satzes, die an "of sleep" anschliessen, beginnen mit
+     * ihrem Leerzeichen - alle drei, nicht nur der, den das Bild zeigt.
+     */
+    @Test
+    @Config(sdk = [35])
+    fun der_ruhepuls_im_satz_beginnt_mit_seinem_leerzeichen() {
+        val c = RuntimeEnvironment.getApplication()
+        assertEquals(" and a resting heart rate as usual", c.getString(R.string.ks_f_ruhe_ok))
+        assertEquals(" and a resting heart rate 4 bpm above usual", c.getString(R.string.ks_f_ruhe_hoch, 4))
+        assertEquals(" and a resting heart rate 4 bpm below usual", c.getString(R.string.ks_f_ruhe_tief, 4))
+    }
+
+    /**
+     * STACK OHNE KOFFEIN: mit Drinktervall, aber ohne Getraenk mit Koffein
+     * in den letzten 24 Stunden gibt es keine Koffeinwerte - kein "0 mg
+     * caffeine now", kein "≈ 0 mg at bedtime". Die Praeparate bleiben. Ohne
+     * SupCycle bleibt nur der Titel: die Zeile fuehrt weiter zu Stack, wo
+     * Koffein eingetragen wird.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h1500dp-xxhdpi")
+    fun stack_ohne_koffein_nennt_keine_null_mg() {
+        val b = Healthbeispiel
+        val ohneKoffein = b.stand.copy(koffein = emptyList(), eintraege = b.stand.eintraege.filter { it.praeparat })
+        assertTrue(ohneKoffein.mitDrinktervall)
+        val g = zeichne("health-ohne-koffein") {
+            GesundheitInhalt(ohneKoffein, b.sport, 78, b.jetzt, imperial = false, b.wege, koerper = null) {}
+        }
+        assertEquals("Stack, Magnesium due, 3 of 4 supplements", g.beschreibungen.firstOrNull { it.startsWith("Stack") })
+        assertTrue("caffeine now" !in g.texte && "at bedtime" !in g.texte, "${g.texte}")
+        assertTrue("supplements" in g.texte, "${g.texte}")
+
+        val nurDrinktervall = ohneKoffein.copy(mitSupCycle = false)
+        val h = zeichne("health-ohne-koffein-ohne-supcycle") {
+            GesundheitInhalt(nurDrinktervall, b.sport, 78, b.jetzt, imperial = false, b.wege, koerper = null) {}
+        }
+        assertEquals("Stack", h.beschreibungen.firstOrNull { it.startsWith("Stack") })
+        assertTrue(listOf("supplements", "caffeine now", "at bedtime").none { it in h.texte }, "${h.texte}")
+    }
+
+    /**
+     * DIE PULSLINIE BRICHT UEBER EINER LUECKE, gemessen an den Messungen:
+     * ohne Puls zwischen 10:00 und 10:19 steht um 10:10 keine Linie, davor
+     * und danach schon. Die Fenster 10:00 und 10:15 allein haetten die
+     * Luecke ueberbrueckt.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w1100dp-h400dp-xxhdpi")
+    fun die_pulslinie_bricht_ueber_einer_luecke() {
+        val b = Healthbeispiel
+        val luecke = b.stand.bandPuls.filter { it.first <= b.um(10, 0).epochSecond || it.first >= b.um(10, 19).epochSecond }
+        assertTrue(luecke.any { it.first == b.um(10, 0).epochSecond } && luecke.any { it.first == b.um(10, 19).epochSecond })
+        var pulsfarbe = 0
+        val g = zeichne("tagesband-luecke") {
+            pulsfarbe = Farben.puls.ton().toArgb()
+            Box(Modifier.padding(12.dp)) { Tagesband(b.stand.copy(bandPuls = luecke), emptyList(), b.jetzt, imperial = false, b.wege) {} }
+        }
+        val r = band(g).boundsInRoot
+        val von = b.nacht.einschlafen.minusSeconds(15 * 60)
+        fun x(h: Int, m: Int) = r.left + (12 + java.time.Duration.between(von, b.um(h, m)).seconds / 3600f * 40) * g.dichte
+        // Rot in der Hoehe der Pulslinie (26-96 dp unter dem Kopf des Bands), in einer Spalte von 2 dp.
+        fun rot(h: Int, m: Int): Int {
+            val mitte = x(h, m).toInt()
+            val breit = g.dichte.toInt()
+            return (mitte - breit..mitte + breit).sumOf { sx ->
+                ((r.top + 22 * g.dichte).toInt()..(r.top + 100 * g.dichte).toInt()).count { sy -> g.bei(sx, sy) == pulsfarbe }
+            }
+        }
+        assertEquals(0, rot(10, 10), "Linie ueber der Luecke")
+        assertTrue(rot(9, 50) > 0 && rot(10, 30) > 0, "keine Linie vor oder nach der Luecke")
     }
 
     @Test

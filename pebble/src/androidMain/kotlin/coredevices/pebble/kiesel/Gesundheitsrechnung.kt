@@ -288,7 +288,10 @@ internal object Gesundheitsrechnung {
      * ([bandwoche]) - ein Wert je Tag, jeder Tag mit seinem Band. [schnitt]:
      * der Schnitt der Sitzungen dieser sieben Tage wie in [blutdruckstand].
      */
-    data class Blutdruckwoche(val oben: List<Bandtag>, val unten: List<Bandtag>, val schnitt: Pair<Int, Int>?)
+    data class Blutdruckwoche(val oben: List<Bandtag>, val unten: List<Bandtag>, val schnitt: Pair<Int, Int>?) {
+        /** Ob in diesen sieben Tagen gemessen wurde - nur dann zeigt die Herzseite die Woche. */
+        val gemessen: Boolean get() = oben.any { it.wert != null }
+    }
 
     /**
      * Die sieben Tage bis [heute] aus den [messungen] (mindestens

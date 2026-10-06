@@ -181,6 +181,12 @@ private val WOCHENBILD = 190.dp
  * Tage - oben und unten je an ihrem Band, gruen darin, bernstein daneben,
  * ohne genug fruehere Tage neutral. Ohne Messung in [Fenster.BLUTDRUCK_TAGE]
  * Tagen fehlt die Karte - die Uhr misst keinen Blutdruck.
+ *
+ * OHNE MESSUNG IN DER WOCHE bleibt die Karte wie bis 0.50 fuer die letzte
+ * Sitzung der [Fenster.BLUTDRUCK_TAGE] Tage stehen - wer seltener misst,
+ * saehe sonst gar nichts mehr. Dann nennt der Kopf diese Tage und der
+ * Schnitt gilt ihnen: "last 7 days" ueber einem Wert von vor drei Wochen,
+ * ohne Bild und ohne Urteil, versprach etwas anderes, als dastand.
  */
 @Composable
 private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand, woche: Gesundheitsrechnung.Blutdruckwoche?, jetzt: Instant) {
@@ -188,13 +194,16 @@ private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand, woche: Gesundh
     val imBand = Farben.imBand.ton()
     val ausserBand = Farben.ausserBand.ton()
     val titel = stringResource(R.string.ks_h_blutdruck_k)
-    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.WOCHE_TAGE)
+    // Die Woche nur, wenn darin gemessen wurde; sonst gelten Kopf und Schnitt den Tagen, aus denen der grosse Wert stammt.
+    val gemessen = woche?.takeIf { it.gemessen }
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, if (gemessen != null) Fenster.WOCHE_TAGE else Fenster.BLUTDRUCK_TAGE.toInt())
     val wert = Formate.zahl(b.letzte.oben.toLong()) + "/" + Formate.zahl(b.letzte.unten.toLong())
-    // Der Schnitt der sieben Tage, die Titel und Bild zeigen.
-    val schnitt = woche?.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
+    // Der Schnitt der Tage, die der Kopf nennt - der Woche oder, ohne Messung darin, der Fenster.BLUTDRUCK_TAGE.
+    val schnitt = (if (gemessen != null) gemessen.schnitt else b.schnitt)
+        ?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
     // Das Urteil gilt dem juengsten Tag mit Messung in der Woche - dem Tag des grossen Werts, wenn er in der Woche liegt.
-    val tag = woche?.oben?.indexOfLast { it.wert != null }?.takeIf { it >= 0 }
-    val urteil = tag?.let { Gesundheitsrechnung.blutdrucklage(woche.oben[it], woche.unten[it]) }?.let { lage ->
+    val tag = gemessen?.oben?.indexOfLast { it.wert != null }?.takeIf { it >= 0 }
+    val urteil = tag?.let { Gesundheitsrechnung.blutdrucklage(gemessen.oben[it], gemessen.unten[it]) }?.let { lage ->
         when (lage) {
             Blutdrucklage.IM_BAND -> Kopfurteil(stringResource(R.string.ks_h_im_band), imBand)
             Blutdrucklage.DARUEBER -> Kopfurteil(stringResource(R.string.ks_h_ueber_band), ausserBand)
@@ -205,13 +214,13 @@ private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand, woche: Gesundh
     Abschnitt(titel, zusatz, urteil = urteil?.text, urteilFarbe = urteil?.farbe) {
         // Am Zeilenanfang gross: "Today, 8:14 AM", "Yesterday, 8:14 AM", sonst das Datum - die eine Form aus Formate.
         Hauptwert(wert, "mmHg", listOfNotNull(Formate.zeitpunkt(context, b.letzte.zeit, jetzt), schnitt).joinToString(" · "))
-        if (woche != null) {
-            val nachSatz = "$titel, $zusatz: " + woche.oben.zip(woche.unten).joinToString(", ") { (o, u) ->
+        if (gemessen != null) {
+            val nachSatz = "$titel, $zusatz: " + gemessen.oben.zip(gemessen.unten).joinToString(", ") { (o, u) ->
                 Formate.wochentagLang(o.tag.dayOfWeek) + " " +
                     (if (o.wert != null && u.wert != null) Formate.Angabe("${Formate.zahl(o.wert.toLong())}/${Formate.zahl(u.wert.toLong())}", "mmHg").text else Formate.FEHLT)
             }
             // Zwei Reihen in einem Bild: oben und unten teilen Achse und Tage, wie im Entwurf.
-            Bandwoche(listOf(woche.oben, woche.unten), imBand, ausserBand, hoehe = WOCHENBILD, rasterSchritt = 10, beschreibung = nachSatz) {
+            Bandwoche(listOf(gemessen.oben, gemessen.unten), imBand, ausserBand, hoehe = WOCHENBILD, rasterSchritt = 10, beschreibung = nachSatz) {
                 Formate.wochentagKurz(it.dayOfWeek)
             }
         }

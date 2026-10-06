@@ -342,7 +342,7 @@ class NachtUmzugTest {
             assertEquals(listOf(m.name), aufgerufen, m.name)
         }
         assertTrue("speichereNachtTeil" in methoden.map { it.name })
-        assertEquals(12, methoden.size)
+        assertEquals(14, methoden.size)
     }
 
     @Test
@@ -359,7 +359,7 @@ class NachtUmzugTest {
             assertFailsWith<IllegalStateException>(m.name) { rufe(m, wrapper) }
             assertEquals(emptyList(), aufgerufen, m.name)
         }
-        assertEquals(12, methoden.size)
+        assertEquals(14, methoden.size)
         assertNull(neu.umzugDao().vermerk())
         assertEquals(0, zahl(neu, "SELECT COUNT(*) FROM boulder_nacht_hrv"))
     }

@@ -367,6 +367,19 @@ internal object Gesundheitsrechnung {
             .map { l -> l.maxBy { it.schlafMinuten } }.sortedBy { it.beginnUtc }
 
     /**
+     * FUER DIE HRV die laengste Nacht je Tag MIT HRV (ueber 0). [jeTag] nimmt
+     * die laengste ueberhaupt; hatte sie keine HRV, fehlte der Tag in der
+     * HRV-Woche, obwohl eine kuerzere Nacht desselben Morgens eine hatte.
+     * Schlaf und alles andere bleiben bei [jeTag].
+     */
+    fun jeTagMitHrv(naechte: List<NachtEntity>, zone: ZoneId): List<NachtEntity> =
+        jeTag(naechte.filter { it.hrv > 0 }, zone)
+
+    /** Die HRV-Woche bis [heute]: je Tag die Nacht aus [jeTagMitHrv], jede mit ihrem Band ([bandwoche]). */
+    fun hrvWoche(naechte: List<NachtEntity>, heute: LocalDate, zone: ZoneId): List<Bandtag> =
+        bandwoche(jeTagMitHrv(naechte, zone).associate { nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }, heute)
+
+    /**
      * Der Puls in Fuenf-Minuten-Fenstern. Der Median statt des Mittels: ein
      * einzelner Ausreisser der Uhr soll die Linie nicht ziehen, die Spanne
      * zeigt ihn trotzdem. Die Bins liegen auf vollen Fuenf-Minuten-Marken.

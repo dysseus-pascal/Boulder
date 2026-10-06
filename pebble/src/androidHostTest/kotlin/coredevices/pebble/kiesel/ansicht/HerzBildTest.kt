@@ -30,7 +30,16 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.GesundheitsStand
+import coredevices.pebble.health.schreibeNaechte
+import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.HrvReparatur
 import coredevices.pebble.kiesel.Koerperzeile
+import coredevices.pebble.kiesel.ablauf.FakeAkte
+import coredevices.pebble.kiesel.ablauf.naechteApi
+import coredevices.pebble.kiesel.ablauf.naechteImSpeicher
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
+import kotlinx.coroutines.runBlocking
 import coredevices.pebble.ui.HERZ_TITEL
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -63,7 +72,9 @@ import kotlin.test.assertTrue
  *
  * Die Bilder liegen danach unter build/herzseite.png,
  * build/herzseite-hrv4-blutdruck1.png, build/herzseite-hrv8-blutdruck5.png,
- * build/herzseite-ohne-waage.png und build/herzseite-blutdruck-ohne-woche.png.
+ * build/herzseite-ohne-waage.png und build/herzseite-blutdruck-ohne-woche.png,
+ * dazu die HRV-Woche vor und nach der Reparatur (0.52):
+ * build/herzseite-hrv-vor-reparatur.png und build/herzseite-hrv-nach-reparatur.png.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -436,5 +447,73 @@ class HerzBildTest {
         val urteil = g.alle().filter { g.text(it) in urteile }
         assertEquals(1, urteil.size, "${g.texte}")
         assertTrue(abs(urteil.single().boundsInRoot.center.y - g.mitText("HRV · last 7 nights").boundsInRoot.center.y) < 4 * g.dichte)
+    }
+
+    /**
+     * DIE HRV-WOCHE VOR UND NACH DER EINMALIGEN REPARATUR (0.52), aus Boulders
+     * echter Nachtdatenbank im Speicher: die Woche wie auf dem Telefon am
+     * 6.10. Do (53) und Sa (61) waren mit HRV empfangen und vom Sync in die
+     * Akte geschrieben, dann ohne HRV ersetzt (bis 0.51); So und Mo hatten
+     * unter b24 nie eine. Die Reparatur liest Boulders eigene Saetze der Akte
+     * zurueck - danach fuenf Punkte statt drei, das Band einen Tag frueher,
+     * der Schnitt 57 statt 56. So und Mo bleiben leer.
+     *
+     * Die Woche rechnet die App aus den Naechten ([Gesundheitsrechnung.hrvWoche]),
+     * gezeichnet wird mit ihrem Code; die Bilder liegen unter
+     * build/herzseite-hrv-vor-reparatur.png und build/herzseite-hrv-nach-reparatur.png.
+     */
+    @Test
+    fun hrv_woche_vor_und_nach_der_reparatur() {
+        val zone = Healthbeispiel.zone
+        val heute = Herzbeispiel.heute
+        val akte = FakeAkte(context.packageName).apply { erteilt = setOf(HrvReparatur.RECHT) }
+        val db = naechteImSpeicher(context)
+        try {
+            val dao = db.nachtDao()
+            /** Die Nacht zum Morgen [k] Tage vor heute: ab 22:00 am Vorabend, aufgewacht 06:30. */
+            fun nacht(k: Int, hrv: Int) = NachtEntity(
+                heute.minusDays(k + 1L).atTime(22, 0).atZone(zone).toEpochSecond(), 7200,
+                einschlafen = 30, aufwachen = 510, schlafMinuten = 450, ruhepuls = 54, hrv = hrv,
+            )
+            val woche = mapOf(9 to 58, 6 to 64, 5 to 53, 4 to 55, 3 to 61, 2 to 0, 1 to 0, 0 to 50).map { (k, hrv) -> k to nacht(k, hrv) }.toMap()
+            runBlocking {
+                for (n in woche.values) {
+                    val phasen = listOf(NachtAbschnittEntity(n.beginnUtc, 30, 510, 1))
+                    dao.speichereNachtTeil(n, ersterTeil = true, phasen)
+                    assertTrue(schreibeNaechte(context, akte, listOf(n to phasen)))
+                }
+                // Do und Sa: nach dem Firmware-Update ohne HRV neu, ersetzt wie bis 0.51.
+                for (k in listOf(5, 3)) dao.speichereNacht(woche.getValue(k).copy(hrv = 0))
+            }
+            fun hrvWoche() = runBlocking { Gesundheitsrechnung.hrvWoche(dao.naechte(0, Long.MAX_VALUE), heute, zone) }
+            fun stand() = Herzbeispiel.stand(emptyMap(), Herzbeispiel.blutdruckEinTag()).copy(hrvTage = hrvWoche())
+
+            val vorher = zeichne("herzseite-hrv-vor-reparatur", stand())
+            val ausgang = runBlocking { HrvReparatur.einmal(context, naechteApi(dao), akte, Herzbeispiel.jetzt) }
+            assertEquals(HrvReparatur.Ausgang.Gelaufen(repariert = 2, ohneHrv = 4), ausgang)
+            val nachher = zeichne("herzseite-hrv-nach-reparatur", stand())
+
+            // Wie auf dem Telefon: We 64, Fr 55, Tu 50, Schnitt 56 - danach dazu Th 53 und Sa 61, Schnitt 57.
+            vorher.mitText("Last night · 7-night avg 56")
+            nachher.mitText("Last night · 7-night avg 57")
+            assertTrue("50 ms" in vorher.texte && "50 ms" in nachher.texte)
+            val mittenVorher = tagesmitten(vorher, punkte(vorher, vorher.bild("HRV, last 7 nights:").boundsInRoot))
+            val bildNachher = nachher.bild("HRV, last 7 nights:").boundsInRoot
+            val mittenNachher = tagesmitten(nachher, punkte(nachher, bildNachher))
+            assertEquals(3, mittenVorher.size, "vorher: $mittenVorher")
+            assertEquals(5, mittenNachher.size, "nachher: $mittenNachher")
+            // Nachher: die ersten vier Tage und heute; So und Mo ohne Punkt.
+            val tag = (mittenNachher.last() - mittenNachher.first()) / 6
+            for ((soll, ist) in ((0..3).map { mittenNachher.first() + it * tag } + mittenNachher.last()).zip(mittenNachher)) {
+                assertEquals(soll, ist, 2.0 * nachher.dichte)
+            }
+            // Kein Urteil (weniger als sieben Werte), das Band nachher ab dem dritten Tag statt ab dem vierten.
+            assertTrue(nachher.pixelIn(bildNachher) { it == nachher.farben.imBand || it == nachher.farben.ausserBand }.isEmpty())
+            assertEquals(mittenNachher.first() + 2 * tag, bandBreite(nachher, bildNachher).first.toDouble(), 2.0 * nachher.dichte)
+            val vorherBild = vorher.bild("HRV, last 7 nights:").boundsInRoot
+            assertEquals(mittenVorher.first() + 3 * tag, bandBreite(vorher, vorherBild).first.toDouble(), 2.0 * vorher.dichte)
+        } finally {
+            db.close()
+        }
     }
 }

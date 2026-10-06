@@ -45,13 +45,20 @@ class GesundheitsdatenTest {
     private val zone = ZoneId.of("Europe/Zurich")
 
     /** Eine Quelle aus festen Zufallsdaten, die mitschreibt, was gefragt wurde. */
-    private class Quelle(seed: Int, jetzt: Instant, private val zone: ZoneId, private val apps: Set<Uuid>?) : Gesundheitsquelle {
+    private class Quelle(
+        seed: Int,
+        jetzt: Instant,
+        private val zone: ZoneId,
+        private val apps: Set<Uuid>?,
+        /** Genau diese Naechte statt der zufaelligen. */
+        naechteStatt: List<NachtEntity>? = null,
+    ) : Gesundheitsquelle {
         val gefragt = mutableListOf<String>()
         private val r = Random(seed)
         private val heute = jetzt.atZone(zone).toLocalDate()
 
         // 45 Naechte, dazu ein Kurzschlaf am Morgen mancher Tage (eine zweite Nacht fuer denselben Tag).
-        private val naechteAlle: List<NachtEntity> = (0..45).flatMap { d ->
+        private val naechteAlle: List<NachtEntity> = naechteStatt ?: (0..45).flatMap { d ->
             val beginn = heute.minusDays(d.toLong() + 1).atTime(21, 0).atZone(zone).toEpochSecond()
             val ein = 30 + r.nextInt(120)
             val auf = ein + 300 + r.nextInt(240)
@@ -268,6 +275,38 @@ class GesundheitsdatenTest {
         }
         // Mindestens eine Nacht begann vor dem 24-Stunden-Fenster - sonst haette der Test nichts gezeigt.
         assertTrue(mehrAls24 > 0, "keine Nacht vor dem 24-Stunden-Fenster")
+    }
+
+    /**
+     * DIE HRV-WOCHE NIMMT JE TAG DIE LAENGSTE NACHT MIT HRV (0.52): hat die
+     * laengste Nacht eines Morgens keine (die Uhr rechnete sie ohne HRV neu),
+     * zaehlt eine kuerzere desselben Morgens mit HRV. Schlaf, die Nacht von
+     * heute und alles andere bleiben bei der laengsten.
+     */
+    @Test
+    fun dieHrvWocheNimmtDieLaengsteNachtMitHrv() = runBlocking {
+        val heute = LocalDate.of(2026, 10, 6)
+        val jetzt = heute.atTime(13, 0).atZone(zone).toInstant()
+        /** Eine Nacht ab [ab] Ortszeit, [schlaf] Minuten bis zum Aufwachen. */
+        fun nacht(ab: LocalDateTime, schlaf: Int, hrv: Int) =
+            NachtEntity(ab.atZone(zone).toEpochSecond(), 7200, 0, schlaf, schlaf, 52, hrv)
+        val naechte = listOf(
+            // 3.10.: beide mit HRV - die laengste zaehlt, nicht die hoehere.
+            nacht(LocalDateTime.of(2026, 10, 2, 22, 30), 450, 61), nacht(LocalDateTime.of(2026, 10, 3, 6, 50), 60, 80),
+            // 4.10.: nur eine Nacht, ohne HRV.
+            nacht(LocalDateTime.of(2026, 10, 3, 22, 30), 440, 0),
+            // Heute: die lange ohne HRV, danach eine kurze mit.
+            nacht(LocalDateTime.of(2026, 10, 5, 22, 0), 480, 0), nacht(LocalDateTime.of(2026, 10, 6, 6, 40), 85, 50),
+        )
+        val s = Gesundheitsdaten.lade(Quelle(1, jetzt, zone, null, naechte), voll = true, jetzt, zone)
+        val hrv = s.hrvTage.associate { it.tag to it.wert }
+        assertEquals(50, hrv[heute])
+        assertEquals(61, hrv[LocalDate.of(2026, 10, 3)])
+        assertNull(hrv[LocalDate.of(2026, 10, 4)])
+        // Schlaf und die Nacht von heute: weiter die laengste.
+        assertEquals(480, s.wocheSchlaf.toMap()[heute])
+        assertEquals(480, s.nacht?.schlafMinuten)
+        assertNull(s.nacht?.hrv)
     }
 
     /**

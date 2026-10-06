@@ -214,6 +214,16 @@ class UmgezogenerNachtDao(private val echt: NachtDao, private val umzug: NachtUm
         return echt.juengsteNacht()
     }
 
+    override suspend fun nacht(beginnUtc: Long): NachtEntity? {
+        umzug.sicherstellen()
+        return echt.nacht(beginnUtc)
+    }
+
+    override suspend fun setzeHrvWennLeer(beginnUtc: Long, hrv: Int): Int {
+        umzug.sicherstellen()
+        return echt.setzeHrvWennLeer(beginnUtc, hrv)
+    }
+
     override suspend fun abschnitte(beginnUtc: Long): List<NachtAbschnittEntity> {
         umzug.sicherstellen()
         return echt.abschnitte(beginnUtc)

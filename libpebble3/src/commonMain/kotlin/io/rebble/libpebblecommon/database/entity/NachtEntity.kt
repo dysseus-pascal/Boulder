@@ -38,6 +38,14 @@ data class NachtEntity(
 )
 
 /**
+ * Diese Fassung einer Nacht, aber mit der HRV von [gespeichert], wenn diese
+ * keine hat (0) und die gespeicherte eine gemessene (ueber 0). Sonst
+ * unveraendert - siehe NachtDao.speichereNachtTeil.
+ */
+fun NachtEntity.mitHrvVon(gespeichert: NachtEntity?): NachtEntity =
+    if (hrv <= 0 && gespeichert != null && gespeichert.hrv > 0) copy(hrv = gespeichert.hrv) else this
+
+/**
  * Ein Abschnitt einer Nacht: [von] bis vor [bis], in Minuten ab dem Beginn der
  * Nacht. [phase] wie SchlafPhase in der Firmware: 0 wach, 1 leicht, 2 tief,
  * 3 REM, 4 Schlaf ohne Phase (Nacht ohne Puls).

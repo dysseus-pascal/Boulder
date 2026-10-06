@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -18,9 +19,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akkurechnung
+import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.HrvReparatur
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.TrainingsUebersicht
 import coredevices.pebble.kiesel.tagesSatz
@@ -93,6 +96,16 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege) {
     val uhren by libPebble.watches.collectAsState()
     val akkuJetzt = uhren.filterIsInstance<ConnectedPebbleDevice>().firstNotNullOfOrNull { it.batteryLevel }
     var neu by remember { mutableIntStateOf(0) }
+    val api = koinInject<HealthDataApi>()
+    // EINMAL JE INSTALLATION (0.52): die HRV der Naechte, die eine Fassung ohne HRV
+    // ueberschrieb, aus Boulders eigenen Saetzen der Akte zurueck. Hier beim Oeffnen
+    // von Health, abseits von Verbindung und Benachrichtigungen; danach neu lesen.
+    LaunchedEffect(Unit) {
+        if (HrvReparatur.beimOeffnen(context, api) > 0) {
+            GesundheitWidget.stosseAn(context)
+            neu++
+        }
+    }
 
     // Neue Minutendaten von der Uhr (rememberUhrschub): dann stimmen Schritte und Puls nicht mehr.
     val seite = rememberStand(remember { zuletztHeute() }, neu, rememberUhrschub()) {

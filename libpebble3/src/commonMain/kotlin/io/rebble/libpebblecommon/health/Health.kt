@@ -295,6 +295,8 @@ class Health(
 
     override suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity> = nachtDao.hrv(beginnUtc)
 
+    override suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean = nachtDao.setzeHrvWennLeer(beginnUtc, hrv) > 0
+
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)
 

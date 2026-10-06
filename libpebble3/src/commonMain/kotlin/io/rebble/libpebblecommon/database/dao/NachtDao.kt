@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
+import io.rebble.libpebblecommon.database.entity.mitHrvVon
 
 @Dao
 interface NachtDao {
@@ -30,6 +31,18 @@ interface NachtDao {
     @Query("SELECT * FROM boulder_nacht ORDER BY beginnUtc DESC LIMIT 1")
     suspend fun juengsteNacht(): NachtEntity?
 
+    @Query("SELECT * FROM boulder_nacht WHERE beginnUtc = :beginnUtc")
+    suspend fun nacht(beginnUtc: Long): NachtEntity?
+
+    /**
+     * Die HRV einer Nacht eintragen - NUR WENN SIE KEINE HAT (0 oder null).
+     * Die Bedingung steht in der Abfrage selbst: kommt die Nacht zwischen
+     * Lesen und Schreiben mit einer gemessenen HRV neu, bleibt die neue.
+     * Liefert die Zahl der geaenderten Naechte (0 oder 1).
+     */
+    @Query("UPDATE boulder_nacht SET hrv = :hrv WHERE beginnUtc = :beginnUtc AND (hrv IS NULL OR hrv <= 0)")
+    suspend fun setzeHrvWennLeer(beginnUtc: Long, hrv: Int): Int
+
     @Query("SELECT * FROM boulder_nacht_abschnitt WHERE beginnUtc = :beginnUtc ORDER BY von ASC")
     suspend fun abschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
 
@@ -51,9 +64,16 @@ interface NachtDao {
 
     // Ein Teil am Stueck: endete die App zwischen Loeschen und Schreiben, fehlten
     // sonst die Abschnitte dieser Nacht.
+    //
+    // KEINE LEERE HRV UEBER EINE GEMESSENE: bis Firmware b24 lagen die
+    // HRV-Fenster nur im RAM der Uhr. Nach einem Firmware-Update am Morgen
+    // rechnete sie die Nacht ohne HRV neu und schickte sie mit demselben
+    // Beginn noch einmal - das Ersetzen nahm hrv = 0 mit, und die gemessene
+    // war weg (1.10. und 3.10.2026). Alles andere ersetzt die neue Fassung
+    // wie bisher, und eine neue HRV ueber 0 ersetzt die alte.
     @Transaction
     suspend fun speichereNachtTeil(nacht: NachtEntity, ersterTeil: Boolean, abschnitte: List<NachtAbschnittEntity>) {
-        speichereNacht(nacht)
+        speichereNacht(nacht.mitHrvVon(nacht(nacht.beginnUtc)))
         if (ersterTeil) loescheAbschnitte(nacht.beginnUtc)
         speichereAbschnitte(abschnitte)
     }

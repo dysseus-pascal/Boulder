@@ -153,8 +153,12 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
         return ReadRecordResponse(e.satz as T)
     }
 
+    /** Jede Leseanfrage, in der Reihenfolge - wer was mit welcher Herkunft las. */
+    val lesungen: MutableList<ReadRecordsRequest<*>> = java.util.Collections.synchronizedList(mutableListOf())
+
     @Suppress("UNCHECKED_CAST")
     override suspend fun <T : Record> readRecords(request: ReadRecordsRequest<T>): ReadRecordsResponse<T> {
+        lesungen += request
         val quellen = request.dataOriginFilter.map { it.packageName }.toSet()
         val passend = synchronized(this) {
             eintraege.filter { e ->

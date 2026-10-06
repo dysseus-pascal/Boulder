@@ -528,10 +528,7 @@ internal object Gesundheitsdaten {
             Gesundheitsrechnung.tagesherz(minutenpuls, vonTagesherz, schlafSpannen, zonen, jetzt.atZone(zone).toLocalTime(), zone, heute)
         }.orEmpty()
         val langeNaechte = Gesundheitsrechnung.jeTag(naechteAb(vonHrv), zone)
-        val hrvTage = versuche(TAG, "HRV-Woche") {
-            val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
-            Gesundheitsrechnung.bandwoche(jeTag, heute)
-        }.orEmpty()
+        val hrvTage = versuche(TAG, "HRV-Woche") { Gesundheitsrechnung.hrvWoche(naechteAb(vonHrv), heute, zone) }.orEmpty()
         // Ohne Nacht von heute fuehrt nur dieser Weg zu den frueheren Naechten und
         // zu Sleep trends; nach Wochen ohne Uhr reichen die 37 Tage oben nicht.
         val juengste = if (nacht != null) null else langeNaechte.lastOrNull()?.beginnUtc

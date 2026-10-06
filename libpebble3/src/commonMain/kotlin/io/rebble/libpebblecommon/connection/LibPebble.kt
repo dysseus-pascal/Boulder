@@ -252,6 +252,13 @@ interface HealthDataApi {
     /** Boulder: die HRV-Fenster einer Nacht (Tag 89), in Minuten ab ihrem Beginn; leer bei aelterer Firmware. */
     suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity>
 
+    /**
+     * Boulder: die HRV einer gespeicherten Nacht eintragen, nur wenn sie keine
+     * hat (0 oder null) - fuer die einmalige Reparatur aus Boulders eigenen
+     * Saetzen der Akte (0.52). True, wenn die Nacht geaendert wurde.
+     */
+    suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean
+
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?
 

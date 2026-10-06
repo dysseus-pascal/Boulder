@@ -33,6 +33,12 @@ internal fun schlafstufe(phase: Int): Int = when (phase) {
 internal fun nachtKennung(n: NachtEntity): String = NACHT_PRAEFIX + n.beginnUtc
 
 /**
+ * Die Kennung der HRV einer Nacht in der Akte. Dieselbe liest die einmalige
+ * Reparatur (HrvReparatur) zurueck - darum an einer Stelle.
+ */
+internal fun nachtHrvKennung(beginnUtc: Long): String = "boulder-nacht-hrv-$beginnUtc"
+
+/**
  * Die Saetze einer Nacht fuer die Akte. Was die Akte schon im Konstruktor
  * abweist, kommt gar nicht erst hinein: Phasen ausserhalb des Schlafs werden
  * beschnitten, ueberlappende verworfen, eine HRV ueber 200 ms faellt weg.
@@ -58,7 +64,7 @@ internal fun nachtAlsSaetze(n: NachtEntity, abschnitte: List<NachtAbschnittEntit
         saetze += RestingHeartRateRecord(aufwachen, versatz(aufwachen), n.ruhepuls.toLong(), Metadata.autoRecorded(geraet, "boulder-ruhepuls-${n.beginnUtc}"))
     }
     if (n.hrv in 1..200) {
-        saetze += HeartRateVariabilityRmssdRecord(aufwachen, versatz(aufwachen), n.hrv.toDouble(), Metadata.autoRecorded(geraet, "boulder-nacht-hrv-${n.beginnUtc}"))
+        saetze += HeartRateVariabilityRmssdRecord(aufwachen, versatz(aufwachen), n.hrv.toDouble(), Metadata.autoRecorded(geraet, nachtHrvKennung(n.beginnUtc)))
     } else if (n.hrv > 200) {
         logger.i { "Night ${n.beginnUtc}: HRV ${n.hrv} ms above what Health Connect takes, not written" }
     }

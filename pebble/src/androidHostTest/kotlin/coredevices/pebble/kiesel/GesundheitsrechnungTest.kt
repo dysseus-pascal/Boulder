@@ -65,6 +65,23 @@ class GesundheitsrechnungTest {
     }
 
     @Test
+    fun fuer_die_hrv_die_laengste_nacht_mit_hrv() {
+        // Wie oben zwei Naechte fuer denselben Morgen; die laengere kam ohne HRV neu (Firmware-Update).
+        val b = LocalDate.of(2026, 9, 28).atTime(20, 0).toEpochSecond(ZoneOffset.UTC)
+        val lang = NachtEntity(b, 7200, 120, 600, 450, 52, 0)
+        val kurz = NachtEntity(b + 600 * 60, 7200, 0, 90, 85, 50, 57)
+        val ohne = NachtEntity(b - 86400, 7200, 130, 660, 500, 51, 0)
+        val alle = listOf(ohne, lang, kurz)
+        // Der Schlaf bleibt bei der laengsten.
+        assertEquals(listOf(ohne, lang), Gesundheitsrechnung.jeTag(alle, ZoneOffset.UTC))
+        assertEquals(listOf(kurz), Gesundheitsrechnung.jeTagMitHrv(alle, ZoneOffset.UTC))
+        // Zwei mit HRV: die laengere, nicht die mit der hoeheren.
+        assertEquals(listOf(lang.copy(hrv = 45)), Gesundheitsrechnung.jeTagMitHrv(listOf(lang.copy(hrv = 45), kurz), ZoneOffset.UTC))
+        val woche = Gesundheitsrechnung.hrvWoche(alle, LocalDate.of(2026, 9, 29), ZoneOffset.UTC)
+        assertEquals(listOf(null, 57), woche.takeLast(2).map { it.wert })
+    }
+
+    @Test
     fun bettzeit_heute_oder_keine() {
         val zone = ZoneOffset.UTC
         val mittag = LocalDate.of(2026, 9, 30).atTime(12, 0).toInstant(zone)

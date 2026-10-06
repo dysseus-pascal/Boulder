@@ -292,6 +292,14 @@ internal object Farben {
     fun raster(): Color = MaterialTheme.colorScheme.outlineVariant
 
     /**
+     * Was noch kommt, blass hinterlegt (das Tagesband rechts vom Jetzt). Aus
+     * der Schrift abgeleitet wie [spur], aber halb so deckend: die Zukunft
+     * soll zuruecktreten, nicht wie eine leere Saeule aussehen.
+     */
+    @Composable
+    fun zukunft(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.035f)
+
+    /**
      * Die leere Spur hinter einer Saeule. Neutral aus der Schrift abgeleitet:
      * surfaceVariant ist im hellen Schema ein Lila, das sonst nirgends vorkommt.
      */

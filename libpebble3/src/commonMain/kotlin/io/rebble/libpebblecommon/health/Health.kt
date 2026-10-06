@@ -239,6 +239,9 @@ class Health(
         return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
     }
 
+    override suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Pair<Long, Long>> =
+        healthDao.getSchritteJeHalbstunde(start, end).map { it.beginn to it.schritte }
+
     override suspend fun getDailyAggregates(start: Long, end: Long) =
         healthDao.getDailyMovementAggregates(start, end)
 

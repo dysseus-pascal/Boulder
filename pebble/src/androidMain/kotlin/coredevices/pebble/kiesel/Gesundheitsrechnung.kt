@@ -390,11 +390,19 @@ internal object Gesundheitsrechnung {
      * vorbei, null: "um 22:54 wirken noch 1 mg" ohne Datum laese sich als
      * heute Abend, gemeint waere morgen.
      */
-    fun bettzeit(einschlafen: Instant?, jetzt: Instant, zone: ZoneId): Instant? {
+    fun bettzeit(einschlafen: Instant?, jetzt: Instant, zone: ZoneId): Instant? =
+        bettzeitHeute(einschlafen, jetzt, zone).takeIf { it.isAfter(jetzt) }
+
+    /**
+     * Dieselbe Bettzeit des laufenden Tags, AUCH WENN SIE VORBEI IST: das
+     * Tagesband reicht bis zu ihr, auch wenn man noch wach ist - dann zeigt
+     * es sie nur nicht mehr als Mond.
+     */
+    fun bettzeitHeute(einschlafen: Instant?, jetzt: Instant, zone: ZoneId): Instant {
         val uhrzeit = einschlafen?.atZone(zone)?.toLocalTime()?.withSecond(0)?.withNano(0) ?: LocalTime.of(22, 0)
         val tag = jetzt.atZone(zone).minusHours(TAGESBEGINN_H).toLocalDate()
         val bett = if (uhrzeit.hour < TAGESBEGINN_H) tag.plusDays(1) else tag
-        return bett.atTime(uhrzeit).atZone(zone).toInstant().takeIf { it.isAfter(jetzt) }
+        return bett.atTime(uhrzeit).atZone(zone).toInstant()
     }
 
     private const val TAGESBEGINN_H = 6L

@@ -331,28 +331,6 @@ internal object TrainingsDaten {
     }
 
     /**
-     * Die Trainings von heute, aelteste zuerst, fuer den Zeitstrahl der
-     * Gesundheitsseite. Alle, nicht nur das juengste: neben der Fahrt am Abend
-     * fehlte sonst der Lauf am Morgen. Nicht ueber [uebersicht]: die liest ein
-     * Vierteljahr samt Spurdateien, die Seite braucht einen Tag.
-     */
-    suspend fun heute(context: Context): List<TrainingEintrag> = withContext(Dispatchers.IO) {
-        val klient = Akte(context).bereit() ?: return@withContext emptyList()
-        val jetzt = Instant.now()
-        val anfang = jetzt.atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-        val sitzungen = versuche(TAG, "Trainings von heute lesen") {
-            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(anfang, jetzt)).filterNot { erkannt(context, it) }
-        } ?: return@withContext emptyList()
-        // Dieselbe Strecke wie auf der Sportseite - auch 1500 m im Becken.
-        val distanzen = distanzen(klient, context, anfang, jetzt)
-        val laengen = Laengen(context)
-        // Ohne Route: die Gesundheitsseite haelt die Eintraege, solange der Prozess lebt.
-        gewaehlt(context, sitzungen).filter { !it.startTime.isBefore(anfang) }.sortedBy { it.startTime }
-            .map { s -> eintrag(context, s, distanzen, laengen).let { it.copy(sitzung = ohneRoute(it.sitzung)) } }
-            .also { laengen.sichere() }
-    }
-
-    /**
      * Die Spur eines Trainings, beschnitten auf seine Sitzung - wie die Route in
      * der Akte. So zeigen Liste, Karte und Detail dieselbe Strecke, die dort
      * steht. Ohne Spurdatei die Route der Akte, wenn sie sie herausgibt

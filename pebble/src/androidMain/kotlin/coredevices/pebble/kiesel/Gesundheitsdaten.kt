@@ -107,11 +107,11 @@ internal data class GesundheitsStand(
     val mitDrinktervall: Boolean = true,
     /** SupCycle auf der Uhr: nur dann die Praeparate. */
     val mitSupCycle: Boolean = true,
-    /** Getraenke und Praeparate von heute, fuer den Tagesstrahl. */
+    /** Getraenke und Praeparate von heute, fuer das Tagesband. */
     val eintraege: List<Tageseintrag> = emptyList(),
     /** Der Puls dieses Tages und der frueheren bis zur selben Uhrzeit, aelteste zuerst. */
     val tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
-    /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesstrahl. */
+    /** Die Glaeser von heute mit Kennung - zum Loeschen im Tagesband. */
     val glasEintraege: List<Glaseintrag> = emptyList(),
     /** Blutdruck der letzten [Fenster.BLUTDRUCK_TAGE] Tage aus der Akte, aelteste zuerst. */
     val blutdruck: List<Blutdruck> = emptyList(),
@@ -135,6 +135,14 @@ internal data class GesundheitsStand(
      * Akkuseite - damit die Zeile auf Health dasselbe sagt wie sie.
      */
     val akkuNaechte: List<NachtEntity> = emptyList(),
+    /**
+     * Der Puls des Tagesbands, ab dessen Anfang ([Tagesbandrechnung.von]) bis
+     * jetzt. EIGENS NEBEN [puls]: das Band beginnt beim Einschlafen und reicht
+     * spaetabends weiter als 24 Stunden zurueck; die Herzseite zeigt genau 24.
+     */
+    val bandPuls: List<Pair<Long, Int>> = emptyList(),
+    /** Die Schritte je halbe Stunde ab dem Anfang des Tagesbands: Beginn in Sekunden, Schritte. */
+    val schrittBins: List<Pair<Long, Long>> = emptyList(),
 )
 
 /** Ein Wassereintrag der Akte, roh: die Menge ungerundet, die Summe des Tages rundet erst am Ende. */
@@ -158,6 +166,8 @@ internal interface Gesundheitsquelle {
     suspend fun naechte(von: Long, bis: Long): List<NachtEntity>
     suspend fun abschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
     suspend fun puls(von: Long, bis: Long): Pulsreihe
+    /** Die Schritte je halbe Stunde, siehe [HealthDataApi.getSchritteJeHalbstunde]. */
+    suspend fun schritte(von: Long, bis: Long): List<Pair<Long, Long>>
     suspend fun spo2(von: Long, bis: Long): List<Pair<Long, Int>>
     suspend fun letzterZeitstempel(): Long?
     suspend fun wasser(von: Instant, bis: Instant): List<Wasserroh>?
@@ -182,6 +192,7 @@ private class Telefonquelle(private val context: Context, private val api: Healt
     override suspend fun naechte(von: Long, bis: Long) = api.getNaechte(von, bis)
     override suspend fun abschnitte(beginnUtc: Long) = api.getNachtAbschnitte(beginnUtc)
     override suspend fun puls(von: Long, bis: Long) = api.getPulsMinuten(von, bis)
+    override suspend fun schritte(von: Long, bis: Long) = api.getSchritteJeHalbstunde(von, bis)
     override suspend fun spo2(von: Long, bis: Long) = api.getSpo2Readings(von, bis).map { it.timestamp to it.spo2Percent }
     override suspend fun letzterZeitstempel() = api.getLatestTimestamp()
 
@@ -476,6 +487,12 @@ internal object Gesundheitsdaten {
         val puls = buildList {
             for (i in 0 until minutenpuls.size) if (minutenpuls.zeiten[i] >= vor24) add(minutenpuls.zeiten[i] to minutenpuls.werte[i])
         }
+        // Das Tagesband beginnt beim Einschlafen - aus derselben Reihe, ohne zweite Abfrage.
+        val bandVon = Tagesbandrechnung.von(nacht, heute, zone).epochSecond
+        val bandPuls = buildList {
+            for (i in 0 until minutenpuls.size) if (minutenpuls.zeiten[i] >= bandVon) add(minutenpuls.zeiten[i] to minutenpuls.werte[i])
+        }
+        val schrittBins = versuche(TAG, "Schritte je halbe Stunde") { q.schritte(bandVon, jetzt.epochSecond) }.orEmpty()
         // Spaetabends liegt das Einschlafen der letzten Nacht vor dem 24-Stunden-Fenster:
         // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
         val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
@@ -516,6 +533,8 @@ internal object Gesundheitsdaten {
             hrvTage = hrvTage,
             juengsteNacht = juengste,
             akkuNaechte = naechteAb(vonAkku),
+            bandPuls = bandPuls,
+            schrittBins = schrittBins,
         )
     }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.text.format.DateFormat
 import android.text.format.DateUtils
 import coredevices.pebble.R
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.time.DayOfWeek
 import java.time.Instant
@@ -121,6 +122,17 @@ internal object Formate {
     /** Liter mit einer Stelle ohne Einheit: "1.2"; nichts getrunken ist "0", nicht "0.0". */
     fun liter(ml: Int, locale: Locale = Locale.getDefault()): String =
         if (ml <= 0) String.format(locale, "%d", 0) else String.format(locale, "%.1f", ml / 1000.0)
+
+    /**
+     * Liter auf zwei Stellen ohne Einheit und ohne Nullen am Ende: "0.25",
+     * "0.5", "1". Fuer ein einzelnes Glas im Tagesband - [liter] machte aus
+     * 250 ml "0.3".
+     */
+    fun literFein(ml: Int, locale: Locale = Locale.getDefault()): String {
+        val text = zahl(ml.coerceAtLeast(0) / 1000.0, 2, locale)
+        val komma = DecimalFormatSymbols.getInstance(locale).decimalSeparator
+        return if (komma in text) text.trimEnd('0').trimEnd(komma) else text
+    }
 
     /**
      * Eine Menge auf ganze gerundet, mit Einheit getrennt: "95 mg", "300 ml",

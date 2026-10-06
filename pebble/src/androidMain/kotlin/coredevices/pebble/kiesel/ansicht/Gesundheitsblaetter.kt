@@ -210,38 +210,38 @@ internal fun KoffeinBlatt(s: GesundheitsStand, onDismiss: () -> Unit, bearbeite:
     }
 }
 
-/** Die Praeparate des Tages, abgehakt oder offen - die Liste, die frueher auf der Karte stand. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Die Praeparate des Tages, abgehakt oder offen - die Liste, die frueher auf
+ * der Karte stand. Steht im Blatt hinter Stack ([StackBlatt]); ohne SupCycle leer.
+ */
 @Composable
-internal fun PraeparatBlatt(s: GesundheitsStand, onDismiss: () -> Unit) {
-    val stand = s.supplemente ?: return
+internal fun PraeparatListe(s: GesundheitsStand) {
+    val stand = s.supplemente?.takeIf { s.mitSupCycle } ?: return
     val context = LocalContext.current
     val rand = MaterialTheme.colorScheme.outline
     val platz = stringResource(R.string.ks_s_platz_n)
     val liste = stand.heute { String.format(platz, it) }
     val jetzt = LocalTime.now()
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
-            // Der Zusatz ohne "·": den Trenner setzt der Kopf.
-            Kopf(
-                stringResource(R.string.ks_h_praeparate_heute),
-                Formate.zahl(liste.count { it.genommen }.toLong()) + " " + stringResource(R.string.ks_h_von_n, liste.size),
+    Column {
+        // Der Zusatz ohne "·": den Trenner setzt der Kopf.
+        Kopf(
+            stringResource(R.string.ks_h_praeparate_heute),
+            Formate.zahl(liste.count { it.genommen }.toLong()) + " " + stringResource(R.string.ks_h_von_n, liste.size),
+        )
+        if (liste.isEmpty()) Leerzeile(stringResource(R.string.ks_h_p_keine))
+        liste.forEachIndexed { i, e ->
+            if (i > 0) Trenner()
+            // Die Planzeit darunter - in Warnfarbe erst, wenn sie ohne Haken verstrichen ist.
+            val versaeumt = !e.genommen && e.zeit?.let { !jetzt.isBefore(it) } == true
+            Zeile(
+                e.name,
+                unter = e.zeit?.let { Formate.uhrzeit(context, it) },
+                unterFarbe = if (versaeumt) Farben.warnung.ton() else null,
+                zeichen = {
+                    if (e.genommen) Tonkreis(Zeichen.haken, Farben.praeparat, 0.18f)
+                    else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))
+                },
             )
-            if (liste.isEmpty()) Leerzeile(stringResource(R.string.ks_h_p_keine))
-            liste.forEachIndexed { i, e ->
-                if (i > 0) Trenner()
-                // Die Planzeit darunter - in Warnfarbe erst, wenn sie ohne Haken verstrichen ist.
-                val versaeumt = !e.genommen && e.zeit?.let { !jetzt.isBefore(it) } == true
-                Zeile(
-                    e.name,
-                    unter = e.zeit?.let { Formate.uhrzeit(context, it) },
-                    unterFarbe = if (versaeumt) Farben.warnung.ton() else null,
-                    zeichen = {
-                        if (e.genommen) Tonkreis(Zeichen.haken, Farben.praeparat, 0.18f)
-                        else Box(Modifier.size(36.dp).padding(9.dp).border(1.6.dp, rand, CircleShape))
-                    },
-                )
-            }
         }
     }
 }

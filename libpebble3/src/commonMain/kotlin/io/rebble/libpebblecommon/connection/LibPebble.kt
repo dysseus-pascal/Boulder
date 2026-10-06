@@ -194,6 +194,16 @@ interface HealthDataApi {
         return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
     }
 
+    /**
+     * Boulder: die Schritte je halbe Stunde in [start, end) als (Beginn in
+     * Sekunden, Schritte), nur Fenster mit Schritten, aelteste zuerst - fuer
+     * das Tagesband. Der Rumpf hier gilt fuer Ersatz-Implementierungen ohne
+     * eigene Abfrage; [io.rebble.libpebblecommon.health.Health] zaehlt in der Datenbank.
+     */
+    suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Pair<Long, Long>> =
+        getHealthDataForRange(start, end).filter { it.steps > 0 }.groupBy { it.timestamp / 1800 * 1800 }
+            .map { (beginn, minuten) -> beginn to minuten.sumOf { it.steps.toLong() } }.sortedBy { it.first }
+
     /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
     suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
 

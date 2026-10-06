@@ -97,6 +97,22 @@ interface HealthDao {
     @Query("SELECT timestamp, heartRate FROM health_data WHERE timestamp >= :start AND timestamp < :end AND heartRate > 0 ORDER BY timestamp ASC")
     suspend fun getPulsMinuten(start: Long, end: Long): List<PulsMinute>
 
+    /**
+     * Boulder: die Schritte je halbe Stunde fuer das Tagesband der
+     * Gesundheitsseite - gezaehlt in der Datenbank, statt bis zu 1'600
+     * Minutenzeilen ganz zu holen. Die Fenster liegen auf vollen halben
+     * Stunden der Weltzeit; das sind volle halbe Stunden jeder Ortszeit mit
+     * einem Versatz in halben Stunden (in Nepal laegen sie eine Viertelstunde daneben).
+     */
+    @Query("""
+        SELECT (timestamp / 1800) * 1800 AS beginn, SUM(steps) AS schritte
+        FROM health_data
+        WHERE timestamp >= :start AND timestamp < :end AND steps > 0
+        GROUP BY timestamp / 1800
+        ORDER BY beginn ASC
+        """)
+    suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Schritthalbstunde>
+
     @Query("SELECT * FROM health_data WHERE timestamp > :afterTimestamp ORDER BY timestamp ASC")
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
 
@@ -174,4 +190,10 @@ data class HRZoneCount(
 data class PulsMinute(
     val timestamp: Long,
     val heartRate: Int,
+)
+
+/** Boulder: die Schritte einer halben Stunde ab [beginn] (Sekunde), siehe [HealthDao.getSchritteJeHalbstunde]. */
+data class Schritthalbstunde(
+    val beginn: Long,
+    val schritte: Long,
 )

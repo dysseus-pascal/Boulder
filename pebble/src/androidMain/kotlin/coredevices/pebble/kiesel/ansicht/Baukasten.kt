@@ -558,6 +558,10 @@ internal object Zeichen {
     val haken = bild(2f, 0f, "M5 12.5l4.5 4.5L19 7.5")
     val zu = bild(2f, 0f, "M7 7l10 10M17 7L7 17")
     val ort = bild(2f, 0f, "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z", kreis(12f, 9.8f, 2.3f))
+    /** Ein Laeufer - das Sport-Feld auf Health und ein Training im Tagesband. */
+    val laeufer = bild(2f, 0f, kreis(14f, 4.5f, 1.8f), "M7 11l3-3 4 1 2 3 3 1", "M12 9l-2 6 3 2-1 5", "M10 15l-3 6")
+    /** Eine Mondsichel - die Schlafenszeit im Tagesband. */
+    val mond = bild(2f, 0f, "M19 15.5A8 8 0 0 1 8.5 5a8 8 0 1 0 10.5 10.5z")
     /** Eine Personenwaage mit Zeiger - die Zeile "Body". */
     val waage = bild(
         2f, 0f,

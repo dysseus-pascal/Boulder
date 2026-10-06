@@ -1,20 +1,10 @@
 package coredevices.pebble.ui
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.health
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.ansicht.AkkuAnsicht
 import coredevices.pebble.kiesel.ansicht.GesundheitAnsicht
 import coredevices.pebble.kiesel.ansicht.Gesundheitswege
@@ -26,36 +16,39 @@ import coredevices.pebble.kiesel.ansicht.ProtokollAnsicht
 import coredevices.pebble.kiesel.ansicht.SicherungAnsicht
 import coredevices.pebble.kiesel.ansicht.TrendAnsicht
 import org.jetbrains.compose.resources.stringResource
-import java.time.LocalDate
 import androidx.compose.ui.res.stringResource as androidString
 
 @Composable
 actual fun GesundheitScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val titel = stringResource(Res.string.health)
-    // Neu mit jedem Stand der Seite: nach Mitternacht spraeche sie sonst von gestern.
-    var heute by remember { mutableStateOf(Formate.datumMitWochentag(LocalDate.now())) }
     LaunchedEffect(Unit) {
         topBarParams.title(titel)
         topBarParams.searchAvailable(null)
-        // Das Datum rechts neben dem Titel, wie im Entwurf - die Seite spricht von "heute".
-        topBarParams.actions {
-            Text(
-                heute, Modifier.padding(end = 16.dp),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // Kein Datum mehr rechts (0.51, Entwurf "Erlebnis-Health"). Leer gesetzt, nicht
+        // weggelassen: zurueck von Sport stuende sonst dessen Datum neben "Health".
+        topBarParams.actions {}
     }
-    GesundheitAnsicht(
-        Gesundheitswege(
-            nacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
-            trend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute(it)) },
-            herz = { nav.navigateTo(PebbleNavBarRoutes.HerzRoute) },
-            akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
-            koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
-        ),
-        geladen = { heute = Formate.datumMitWochentag(LocalDate.now()) },
-    )
+    GesundheitAnsicht(gesundheitswege(nav))
 }
+
+/**
+ * Wohin Health fuehrt. ALLES AUF DEN STAPEL VON HEALTH, auch Sport: seit
+ * 0.51 ist Sport kein Reiter mehr, sondern eine Unterseite - der Pfeil oben
+ * und die Zurueck-Taste fuehren so von selbst nach Health zurueck.
+ * Water fuehrt noch in die Ernaehrungs-Trends wie bisher die Zeile, bis es
+ * die Seite Water gibt; Stack bleibt bis zu seiner Seite leer (siehe
+ * [Gesundheitswege.stack]).
+ */
+internal fun gesundheitswege(nav: NavBarNav) = Gesundheitswege(
+    nacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
+    trend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute(it)) },
+    herz = { nav.navigateTo(PebbleNavBarRoutes.HerzRoute) },
+    akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
+    koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
+    sport = { nav.navigateTo(PebbleNavBarRoutes.TrainingRoute) },
+    training = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },
+    wasser = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("ernaehrung")) },
+)
 
 @Composable
 actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {

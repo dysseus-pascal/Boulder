@@ -91,6 +91,11 @@ class GesundheitsdatenTest {
             return Pulsreihe(zeiten, IntArray(zeiten.size) { 50 + (zeiten[it] / 120 % 70).toInt() })
         }
 
+        override suspend fun schritte(von: Long, bis: Long): List<Pair<Long, Long>> {
+            gefragt += "schritte $von"
+            return (von / 1800 * 1800 + 1800 until bis step 1800).map { it to 100 + it / 1800 % 900 }
+        }
+
         override suspend fun spo2(von: Long, bis: Long): List<Pair<Long, Int>> {
             gefragt += "spo2"
             return listOf(von + 60 to 96, bis - 60 to 94)
@@ -196,6 +201,8 @@ class GesundheitsdatenTest {
             for (nie in listOf("puls", "spo2", "blutdruck", "tageswerte", "maxpuls", "letzte")) {
                 assertTrue(nie !in schlank.gefragt, "Widget fragte $nie")
             }
+            // Die Schritte je halbe Stunde zeigt nur das Tagesband der Seite.
+            assertTrue(schlank.gefragt.none { it.startsWith("schritte") }, "Widget fragte die Schritte des Bands")
             // Eine Abfrage der Naechte, ab dem Vergleich (9 Tage) statt 37.
             val vonVergleich = jetzt.atZone(zone).toLocalDate().minusDays(Fenster.VERGLEICHSNAECHTE + 2L).atStartOfDay(zone).toEpochSecond()
             assertEquals(listOf("naechte $vonVergleich"), schlank.gefragt.filter { it.startsWith("naechte") })
@@ -215,6 +222,37 @@ class GesundheitsdatenTest {
         assertTrue(s.tagesherz.isNotEmpty())
         assertEquals(Fenster.WOCHE_TAGE, s.wocheSchritte.size)
         assertEquals(8432L, s.wocheSchritte.last().second)
+    }
+
+    /**
+     * DAS BAND BEGINNT BEIM EINSCHLAFEN, auch weiter als 24 Stunden zurueck:
+     * spaetabends liegt das Einschlafen der letzten Nacht vor dem Fenster der
+     * Herzseite. Sein Puls kommt aus derselben einen Abfrage, die Schritte je
+     * halbe Stunde ab demselben Anfang.
+     */
+    @Test
+    fun dasBandBekommtPulsUndSchritteAbDemEinschlafen() = runBlocking {
+        var mehrAls24 = 0
+        for (seed in 1..8) {
+            val jetzt = LocalDateTime.of(2026, 10, 3, 23, 50).atZone(zone).toInstant()
+            val q = Quelle(seed, jetzt, zone, null)
+            val s = Gesundheitsdaten.lade(q, voll = true, jetzt, zone)
+            val n = s.nacht ?: continue
+            val von = n.einschlafen.epochSecond - 15 * 60
+            assertEquals(1, q.gefragt.count { it == "puls" })
+            // Die Quelle hat alle zwei Minuten einen Puls: der erste des Bands liegt hoechstens zwei Minuten nach seinem Anfang.
+            assertTrue(s.bandPuls.first().first in von until von + 120, "Band ab ${s.bandPuls.first().first}, Anfang $von")
+            assertTrue(s.bandPuls.all { it.first >= von })
+            assertEquals(s.bandPuls.sortedBy { it.first }, s.bandPuls)
+            // Die 24 Stunden der Herzseite bleiben, wie sie sind.
+            assertTrue(s.puls.all { it.first >= jetzt.epochSecond - 86_400 })
+            assertTrue(s.puls.isNotEmpty() && s.bandPuls.isNotEmpty())
+            if (von < jetzt.epochSecond - 86_400) mehrAls24++
+            assertEquals(listOf("schritte $von"), q.gefragt.filter { it.startsWith("schritte") })
+            assertTrue(s.schrittBins.isNotEmpty())
+        }
+        // Mindestens eine Nacht begann vor dem 24-Stunden-Fenster - sonst haette der Test nichts gezeigt.
+        assertTrue(mehrAls24 > 0, "keine Nacht vor dem 24-Stunden-Fenster")
     }
 
     /**
@@ -341,7 +379,8 @@ class GesundheitsdatenTest {
             val neu = Gesundheitsdaten.lade(Quelle(seed * 31 + i, jetzt, zone, apps), voll = true, jetzt, zone)
             // Die Nacht eigens: ihre Phasen sind ein IntArray, das data class nur als Objekt vergleicht.
             assertEquals(vergleichbar(alt.nacht), vergleichbar(neu.nacht), "$zeit, Apps $apps, Lauf $seed")
-            assertEquals(alt.copy(nacht = null), neu.copy(nacht = null), "$zeit, Apps $apps, Lauf $seed")
+            // Was 0.51 fuer das Tagesband dazulas, kannte die alte Fassung nicht - eigens geprueft in dasBand...
+            assertEquals(alt.copy(nacht = null), neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList()), "$zeit, Apps $apps, Lauf $seed")
             // Der Vergleich ist nicht leer: Puls, Tagesherz, Nacht, Akkunaechte, Eintraege von heute und gestern.
             listOf(neu.puls, neu.tagesherz, listOfNotNull(neu.nacht), neu.akkuNaechte, neu.eintraege, neu.gestern, neu.hrvTage)
                 .forEachIndexed { k, teil -> if (teil.isNotEmpty()) gefuellt[k]++ }

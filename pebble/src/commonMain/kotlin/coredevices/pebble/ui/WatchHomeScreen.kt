@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Search
@@ -95,7 +94,6 @@ import com.russhwolf.settings.set
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
-import coreapp.pebble.generated.resources.training
 import coreapp.pebble.generated.resources.health
 import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
@@ -232,7 +230,6 @@ fun WatchHomeScreen(
         val watchfacesNavController = rememberNavController()
         val notificationsNavController = rememberNavController()
         val indexNavController = rememberNavController()
-        val trainingNavController = rememberNavController()
         val gesundheitNavController = rememberNavController()
         val settingsNavController = rememberNavController()
 
@@ -241,7 +238,6 @@ fun WatchHomeScreen(
             watchfacesNavController,
             notificationsNavController,
             indexNavController,
-            trainingNavController,
             gesundheitNavController,
             settingsNavController
         ) {
@@ -250,7 +246,6 @@ fun WatchHomeScreen(
                 WatchHomeNavTab.WatchFaces to watchfacesNavController,
                 WatchHomeNavTab.Notifications to notificationsNavController,
                 WatchHomeNavTab.Index to indexNavController,
-                WatchHomeNavTab.Training to trainingNavController,
                 WatchHomeNavTab.Gesundheit to gesundheitNavController,
                 WatchHomeNavTab.Settings to settingsNavController,
             )
@@ -807,7 +802,6 @@ enum class WatchHomeNavTab(
         PebbleNavBarRoutes.IndexRoute
     ),
     Watches(Res.string.devices, Icons.Outlined.Watch, PebbleNavBarRoutes.WatchesRoute),
-    Training(Res.string.training, Icons.AutoMirrored.Filled.DirectionsRun, PebbleNavBarRoutes.TrainingRoute),
     Gesundheit(Res.string.health, Icons.Outlined.FavoriteBorder, PebbleNavBarRoutes.GesundheitRoute),
     Notifications(
         Res.string.notifications,
@@ -822,11 +816,11 @@ enum class WatchHomeNavTab(
 
     companion object {
         // Boulder: Gravels Health-Seite ist ausgebaut; an ihrer Stelle die
-        // Trainings von Kieselsport und die Gesundheitsuebersicht aus
-        // Kiesel-Helper. Gesundheit zuerst, dann Sport (Nutzerwunsch), der Rest
-        // wie bei Gravel.
+        // Gesundheitsuebersicht aus Kiesel-Helper, zuerst (Nutzerwunsch), der
+        // Rest wie bei Gravel. Sport ist seit 0.51 kein Reiter mehr, sondern
+        // eine Unterseite von Health (TrainingRoute auf dessen Stapel).
         fun navBarEntries(indexEnabled: Boolean): List<WatchHomeNavTab> {
-            val tabs = mutableListOf(Gesundheit, Training, WatchFaces)
+            val tabs = mutableListOf(Gesundheit, WatchFaces)
             if (indexEnabled) tabs.add(Index)
             tabs.add(Watches)
             tabs.add(Notifications)

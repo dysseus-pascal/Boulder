@@ -42,8 +42,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -81,7 +83,8 @@ import java.time.temporal.ChronoUnit
 /*
  * DAS TAGESBAND - der Tag quer, von der letzten Nacht bis zur naechsten
  * Schlafenszeit, 40 dp je Stunde und seitlich wischbar. Von oben: die
- * Stunden, der Puls, eine gemeinsame Zeile fuer Schlaf und Schritte (sie
+ * Stunden, der Puls vor seinen Bezugslinien (Ruhepuls, Zonengrenzen; die
+ * Zahlen fest rechts daneben), eine gemeinsame Zeile fuer Schlaf und Schritte (sie
  * ueberschneiden sich nie), die Symbole der Eintraege und unter der Nacht
  * ihr Text. Die Masse stehen im Entwurf "Erlebnis-Health"; was wohin
  * kommt und wie dichte Symbole zusammengehen, rechnet [Tagesbandrechnung].
@@ -102,6 +105,18 @@ private val RASTER_OBEN = 18.dp
 /** Die Zeile des Pulses. */
 private val PULS_OBEN = 26.dp
 private val PULS_UNTEN = 96.dp
+
+/** So deckend steht die Ruhelinie ueber der Karte: gedaempftes Herzrot hinter der vollen Pulslinie. */
+private const val RUHE_DECKUNG = 0.55f
+
+/**
+ * Die Spalte der Zahlen rechts neben dem Band: so breit wie [ZAHL_MUSTER] in
+ * der Schrift der Achsen, dazu [ZAHL_LUFT] zum Band und [ZAHL_RAND] zum
+ * Kartenrand. Gemessen, nicht fest: mit grosser Schrift werden die Zahlen breiter, die Spalte mit ihnen.
+ */
+private const val ZAHL_MUSTER = "000"
+private val ZAHL_LUFT = 4.dp
+private val ZAHL_RAND = 10.dp
 
 /** Die Schrittsaeulen stehen unten buendig hier; die Symbole beginnen 10 dp darunter. */
 private val SCHRITT_BODEN = 142.dp
@@ -190,10 +205,12 @@ internal fun Tagesband(
     }
 
     val linie = remember(s.bandPuls) { Tagesbandrechnung.pulslinie(s.bandPuls) }
-    val mediane = remember(linie) { linie.flatten().map { it.second } }
-    val pulsTief = minOf(45, (mediane.minOrNull() ?: 45) - 3)
-    val pulsHoch = maxOf(115, (mediane.maxOrNull() ?: 115) + 3)
-    fun yPuls(bpm: Int): Dp = PULS_UNTEN - (PULS_UNTEN - PULS_OBEN) * ((bpm - pulsTief).toFloat() / (pulsHoch - pulsTief))
+    // Die Skala aus dem, was die Linie zeigt, dem Ruhepuls der Nacht (ihr Text nennt ihn, und
+    // damit auch die Beschreibung fuer TalkBack) und den Zonen der Herzseite.
+    val skala = remember(linie, nacht?.ruhepuls, s.pulsZonen) {
+        Tagesbandrechnung.pulsskala(nacht?.ruhepuls, s.pulsZonen, linie.flatten().map { it.second })
+    }
+    fun yPuls(bpm: Int): Dp = PULS_UNTEN - (PULS_UNTEN - PULS_OBEN) * ((bpm - skala.tief).toFloat() / (skala.hoch - skala.tief))
     // Der letzte Puls nur, wenn er frisch ist - seit 0.35 zeigt "jetzt" keinen veralteten.
     val jetztPuls = s.puls.maxByOrNull { it.first }?.takeIf { Gesundheitsrechnung.pulsFrisch(it.first, jetzt.epochSecond) }
 
@@ -202,6 +219,10 @@ internal fun Tagesband(
     val raster = Farben.raster().aufKarte(0.5f)
     val zukunft = Farben.zukunft()
     val pulsfarbe = Farben.puls.ton()
+    // Gedaempft: die Ruhelinie ist Massstab, nicht Messung - der Puls davor soll vorne stehen.
+    val ruhefarbe = pulsfarbe.aufKarte(RUHE_DECKUNG)
+    val zonenfarben = Farben.pulszonen.map { it.ton() }
+    val achse = achsStil()
     val bewegung = Farben.bewegung.flaeche()
     val bewegungBlass = bewegung.aufKarte(0.45f)
     val stunde = stundenText()
@@ -227,18 +248,31 @@ internal fun Tagesband(
         Kopf(titel)
         BoxWithConstraints(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
             val dichte = LocalDensity.current
-            // Das Jetzt bei drei Vierteln der Breite, der Rest davor; am Anfang nie davor.
-            val start = with(dichte) { (x(jetzt).dp - maxWidth * JETZT_ANTEIL).coerceAtLeast(0.dp).roundToPx() }
+            val bandHoehe = hoeheMitSchrift(HOEHE)
+            // DIE ZAHLEN DER LINIEN IN EINER EIGENEN SPALTE RECHTS, nicht im Band: so bleiben sie
+            // beim Wischen stehen, und das Ausblenden am rechten Rand bleibt sichtbar (es zeigt,
+            // dass es weitergeht). Ohne Linien keine Spalte - das Band behaelt seine Breite.
+            val spalte = if (skala.linien.isEmpty()) 0.dp
+            else with(dichte) { messer.measure(ZAHL_MUSTER, achse).size.width.toDp() } + ZAHL_LUFT + ZAHL_RAND
+            val sichtbar = maxWidth - spalte
+            // Das Jetzt bei drei Vierteln der sichtbaren Breite, der Rest davor; am Anfang nie davor.
+            val start = with(dichte) { (x(jetzt).dp - sichtbar * JETZT_ANTEIL).coerceAtLeast(0.dp).roundToPx() }
             val scroll = rememberScrollState(start)
+            if (spalte > 0.dp) Canvas(Modifier.align(Alignment.TopEnd).size(spalte, bandHoehe)) {
+                skala.linien.forEach { l ->
+                    val m = messer.measure(Formate.zahl(l.bpm.toLong()), achse)
+                    drawText(m, topLeft = Offset(size.width - ZAHL_RAND.toPx() - m.size.width, yPuls(l.bpm).toPx() - m.size.height / 2f))
+                }
+            }
             Box(
-                Modifier.fillMaxWidth().raenderAusblenden(AUSBLENDEN).horizontalScroll(scroll)
+                Modifier.width(sichtbar).raenderAusblenden(AUSBLENDEN).horizontalScroll(scroll)
                     .clearAndSetSemantics {
                         contentDescription = beschreibung
                         if (nachtOeffnen != null) onClick { nachtOeffnen(); true }
                     },
             ) {
                 // Mit grosser Schrift waechst die Hoehe um das, was die Werte unten mehr brauchen.
-                Box(Modifier.size(breite.dp, hoeheMitSchrift(HOEHE))) {
+                Box(Modifier.size(breite.dp, bandHoehe)) {
                     Canvas(Modifier.matchParentSize()) {
                         val unten = size.height
                         // Die Zukunft blass hinterlegt.
@@ -281,6 +315,16 @@ internal fun Tagesband(
                                 Offset((x(t) + 3f).dp.toPx(), SCHRITT_BODEN.toPx() - hoehe),
                                 Size(14.dp.toPx(), hoehe), CornerRadius(2.dp.toPx()),
                             )
+                        }
+                        // Hinter dem Puls seine Bezugslinien quer durchs Band, nach den Regeln der App:
+                        // der Ruhepuls gestrichelt, die Zonengrenzen gepunktet in ihrer Zonenfarbe wie auf der Herzseite.
+                        val gestrichelt = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+                        val gepunktet = PathEffect.dashPathEffect(floatArrayOf(0.1f, 9.dp.toPx()))
+                        skala.linien.forEach { l ->
+                            val ly = yPuls(l.bpm).toPx()
+                            val zonenfarbe = l.zone?.let { zonenfarben.getOrNull(it) }
+                            if (zonenfarbe == null) drawLine(ruhefarbe, Offset(0f, ly), Offset(size.width, ly), 1.5.dp.toPx(), pathEffect = gestrichelt)
+                            else drawLine(zonenfarbe, Offset(0f, ly), Offset(size.width, ly), 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = gepunktet)
                         }
                         // Der Puls; Luecken ueber einer Viertelstunde zwischen zwei Messungen brechen die Linie (Tagesbandrechnung.pulslinie).
                         linie.forEach { stueck ->
@@ -328,9 +372,12 @@ internal fun Tagesband(
                         Modifier.mitteBei(x(jetzt).dp, 0.dp).background(Farben.karte()).padding(horizontal = 4.dp),
                         fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = farben.primary, maxLines = 1, softWrap = false,
                     )
+                    // Auf dem Grund der Zukunft, in der er steht: die Bezugslinien laufen hinter ihm durch,
+                    // und ein Punkt zwischen "68" und "bpm" lase sich sonst wie ein Trenner.
                     if (jetztPuls != null) Text(
                         zahlMitEinheit(Formate.zahl(jetztPuls.second.toLong()), "bpm", 18, 12),
-                        Modifier.offset((x(jetzt) + 8f).dp, (yPuls(jetztPuls.second) - 30.dp).coerceAtLeast(RASTER_OBEN)),
+                        Modifier.offset((x(jetzt) + 8f - 2f).dp, (yPuls(jetztPuls.second) - 30.dp).coerceAtLeast(RASTER_OBEN))
+                            .background(zukunft.compositeOver(Farben.karte())).padding(horizontal = 2.dp),
                         maxLines = 1, softWrap = false,
                     )
                 }

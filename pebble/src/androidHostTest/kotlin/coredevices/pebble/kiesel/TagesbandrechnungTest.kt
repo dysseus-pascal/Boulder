@@ -264,4 +264,77 @@ class TagesbandrechnungTest {
         )
         assertTrue(Tagesbandrechnung.pulslinie(emptyList()).isEmpty())
     }
+
+    // --- Die Bezugslinien und die Skala der Pulszeile ---
+
+    /** Die Zonen von Ruhepuls 55 und Maximalpuls 185, wie die Herzseite sie rechnet: 107, 133, 159. */
+    private val zonen = Gesundheitsrechnung.pulsZonen(55, 185)
+
+    private fun ruhe(bpm: Int) = Tagesbandrechnung.Bezugslinie(bpm, null)
+    private fun grenze(bpm: Int, zone: Int) = Tagesbandrechnung.Bezugslinie(bpm, zone)
+
+    @Test
+    fun ein_ruhiger_tag_reicht_bis_zur_ersten_grenze_ueber_seinem_hoechsten_wert() {
+        assertEquals(listOf(107, 133, 159), zonen)
+        // Hoechstens 104: oben die Grenze zu moderat (107) plus 5, unten Ruhepuls 55 minus 10.
+        val s = Tagesbandrechnung.pulsskala(55, zonen, listOf(52, 60, 104, 70))
+        assertEquals(Tagesbandrechnung.Pulsskala(45, 112, listOf(ruhe(55), grenze(107, 1))), s)
+    }
+
+    @Test
+    fun ein_bewegter_tag_zeigt_alle_grenzen_bis_ueber_seinen_hoechsten_wert() {
+        // Hoechstens 150: oben die Grenze zur Spitze (159) plus 5 - kraeftig und Spitze stehen im Bild.
+        assertEquals(
+            Tagesbandrechnung.Pulsskala(45, 164, listOf(ruhe(55), grenze(107, 1), grenze(133, 2), grenze(159, 3))),
+            Tagesbandrechnung.pulsskala(55, zonen, listOf(52, 150, 90)),
+        )
+        // UEBER heisst darueber: genau auf der Grenze 133 ist man schon in "kraeftig" (pulsZone), die naechste ist 159.
+        assertEquals(164, Tagesbandrechnung.pulsskala(55, zonen, listOf(60, 133)).hoch)
+        assertEquals(133 + 5, Tagesbandrechnung.pulsskala(55, zonen, listOf(60, 132)).hoch)
+        // Ueber der Spitzengrenze gibt es keine Grenze mehr: der hoechste Wert selbst, mit Luft.
+        assertEquals(Tagesbandrechnung.Pulsskala(45, 177, listOf(ruhe(55), grenze(107, 1), grenze(133, 2), grenze(159, 3))),
+            Tagesbandrechnung.pulsskala(55, zonen, listOf(60, 172)))
+    }
+
+    @Test
+    fun unten_zehn_unter_dem_ruhepuls_tiefer_nur_wenn_der_puls_darunter_liegt() {
+        assertEquals(45, Tagesbandrechnung.pulsskala(55, zonen, listOf(46, 80)).tief)
+        assertEquals(45, Tagesbandrechnung.pulsskala(55, zonen, listOf(45, 80)).tief)
+        assertEquals(41, Tagesbandrechnung.pulsskala(55, zonen, listOf(41, 80)).tief)
+    }
+
+    @Test
+    fun nur_linien_in_der_skala() {
+        // Ein Ruhepuls weit ueber dem Tag - eine fiebrige Nacht, 70 bpm: der Tag bleibt darunter. Die Ruhelinie
+        // steht, die Grenzen 133 und 159 liegen ueber der Skala (bis 112) und fehlen.
+        val s = Tagesbandrechnung.pulsskala(70, zonen, listOf(58, 66))
+        assertEquals(Tagesbandrechnung.Pulsskala(58, 112, listOf(ruhe(70), grenze(107, 1))), s)
+        assertTrue(s.linien.all { it.bpm in s.tief..s.hoch })
+    }
+
+    @Test
+    fun ohne_ruhepuls_keine_ruhelinie_und_unten_zehn_unter_dem_tiefsten_wert() {
+        val s = Tagesbandrechnung.pulsskala(null, zonen, listOf(58, 90))
+        assertEquals(Tagesbandrechnung.Pulsskala(48, 112, listOf(grenze(107, 1))), s)
+        // Eine 0 aus der Datenbank ist kein Ruhepuls.
+        assertEquals(s, Tagesbandrechnung.pulsskala(0, zonen, listOf(58, 90)))
+    }
+
+    @Test
+    fun ohne_puls_keine_linien() {
+        // Die Linien stehen HINTER dem Puls - ohne ihn misst keine etwas. Die Skala bleibt brauchbar (unten < oben).
+        val s = Tagesbandrechnung.pulsskala(55, zonen, emptyList())
+        assertTrue(s.linien.isEmpty())
+        assertTrue(s.tief < s.hoch, "$s")
+        val ohneAlles = Tagesbandrechnung.pulsskala(null, emptyList(), emptyList())
+        assertTrue(ohneAlles.linien.isEmpty() && ohneAlles.tief < ohneAlles.hoch, "$ohneAlles")
+    }
+
+    @Test
+    fun ohne_zonen_nur_der_ruhepuls() {
+        assertEquals(
+            Tagesbandrechnung.Pulsskala(45, 109, listOf(ruhe(55))),
+            Tagesbandrechnung.pulsskala(55, emptyList(), listOf(50, 104)),
+        )
+    }
 }

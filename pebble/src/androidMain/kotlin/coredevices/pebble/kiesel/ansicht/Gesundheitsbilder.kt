@@ -48,9 +48,9 @@ import java.time.ZonedDateTime
  * Satz, was es zeigt ([bildBeschreibung]).
  */
 
-/** Die Schrift der Achsen und Stunden aller Bilder: labelSmall in Grau. */
+/** Die Schrift der Achsen und Stunden aller Bilder: labelSmall in Grau - auch die Zahlen am Tagesband. */
 @Composable
-private fun achsStil(): TextStyle = MaterialTheme.typography.labelSmall.copy(color = Farben.neutral())
+internal fun achsStil(): TextStyle = MaterialTheme.typography.labelSmall.copy(color = Farben.neutral())
 
 /**
  * Die Nacht in vier Bahnen - wach oben, tief unten - wie das Hypnogramm in

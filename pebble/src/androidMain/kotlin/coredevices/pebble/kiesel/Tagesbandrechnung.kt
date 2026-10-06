@@ -141,6 +141,51 @@ internal object Tagesbandrechnung {
         return laeufe.map { lauf -> Gesundheitsrechnung.fuenfMinuten(lauf).map { it.sekunde to it.median } }
     }
 
+    /** So weit unter dem Ruhepuls beginnt die Pulszeile: die Ruhelinie klebt nicht am Boden. */
+    const val UNTER_RUHE = 10
+
+    /** So viel Luft bleibt ueber der obersten Linie oder dem Hoechstwert: nichts stoesst oben an. */
+    const val LUFT_OBEN = 5
+
+    /**
+     * Eine Bezugslinie hinter dem Puls: der Ruhepuls ([zone] = null) oder die
+     * Grenze zur Zone [zone] - 1 moderat, 2 kraeftig, 3 Spitze, die Stellen in
+     * Farben.pulszonen wie auf der Herzseite.
+     */
+    data class Bezugslinie(val bpm: Int, val zone: Int?)
+
+    /** Die Skala der Pulszeile von [tief] bis [hoch] bpm und die Linien darin, von unten nach oben. */
+    data class Pulsskala(val tief: Int, val hoch: Int, val linien: List<Bezugslinie>)
+
+    /**
+     * Die Skala der Pulszeile, damit der Puls einen Massstab hat:
+     * - Unten [UNTER_RUHE] unter dem Ruhepuls, tiefer nur, wenn der tiefste
+     *   Wert [werte] darunter liegt.
+     * - Oben die erste Zonengrenze UEBER dem hoechsten Wert, plus [LUFT_OBEN]:
+     *   ein ruhiger Tag behaelt so seine Hoehe und wird nicht gestaucht, und
+     *   man sieht, wie weit es bis zur naechsten Zone war. Ueber der
+     *   Spitzengrenze der hoechste Wert selbst.
+     * - Gezeichnet werden nur Linien in der Skala, und nur hinter einem Puls:
+     *   ohne [werte] steht keine Linie da, die etwas messen koennte.
+     * [ruhepuls]: der Ruhepuls der Nacht, die das Band zeigt - derselbe, den
+     * ihr Text nennt ("resting 55"). Ohne ihn keine Ruhelinie, und unten
+     * gilt der tiefste Wert. [zonen]: die Grenzen der Herzseite
+     * ([GesundheitsStand.pulsZonen], [Gesundheitsrechnung.pulsZonen]).
+     * [werte]: was die Pulslinie zeigt (die Mediane der Fuenf-Minuten-Fenster).
+     */
+    fun pulsskala(ruhepuls: Int?, zonen: List<Int>, werte: List<Int>): Pulsskala {
+        val ruhe = ruhepuls?.takeIf { it > 0 }
+        val tiefster = werte.minOrNull()
+        val hoechster = werte.maxOrNull()
+        val unten = (ruhe ?: tiefster ?: Trainingsanalyse.RUHEPULS_ERSATZ) - UNTER_RUHE
+        val tief = if (tiefster != null) minOf(unten, tiefster) else unten
+        val oberster = hoechster ?: ruhe ?: unten
+        val hoch = (zonen.firstOrNull { it > oberster } ?: oberster) + LUFT_OBEN
+        if (hoechster == null) return Pulsskala(tief, hoch, emptyList())
+        val linien = listOfNotNull(ruhe?.let { Bezugslinie(it, null) }) + zonen.mapIndexed { i, w -> Bezugslinie(w, i + 1) }
+        return Pulsskala(tief, hoch, linien.filter { it.bpm in tief..hoch }.sortedBy { it.bpm })
+    }
+
     /** Ein Praeparat, das heute noch geplant ist. */
     data class Geplant(val zeit: Instant, val name: String)
 

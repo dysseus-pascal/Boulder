@@ -253,6 +253,192 @@ class GesundheitBildTest {
         assertEquals(r.left + (12 + stunden * 40) * g.dichte, x, 2.0 * g.dichte)
     }
 
+    /** Dasselbe noch einmal gezeichnet, nach einer Geste: neues Bild, neue Semantik. */
+    private fun nochmal(g: Gezeichnet, name: String): Gezeichnet {
+        val bild = Bitmap.createBitmap(g.ansicht.width, g.ansicht.height, Bitmap.Config.ARGB_8888)
+        g.ansicht.draw(Canvas(bild))
+        File("build/$name.png").outputStream().use { bild.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val wurzel = (g.ansicht as ViewGroup).getChildAt(0) as ViewRootForTest
+        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, g.primaer, g.dichte, g.ansicht)
+    }
+
+    /** Ein Finger wischt waagrecht von [vonX] nach [nachX] auf Hoehe [y] (Pixel im Bild). */
+    private fun wische(g: Gezeichnet, vonX: Float, nachX: Float, y: Float) {
+        val t = SystemClock.uptimeMillis()
+        g.ansicht.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, vonX, y, 0))
+        val schritte = 24
+        for (i in 1..schritte) {
+            g.ansicht.dispatchTouchEvent(MotionEvent.obtain(t, t + i * 16L, MotionEvent.ACTION_MOVE, vonX + (nachX - vonX) * i / schritte, y, 0))
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(16))
+        }
+        g.ansicht.dispatchTouchEvent(MotionEvent.obtain(t, t + (schritte + 1) * 16L, MotionEvent.ACTION_UP, nachX, y, 0))
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+    }
+
+    /** Wie oft [farbe] in der Pixelzeile [y] zwischen [links] und [rechts] steht. */
+    private fun zaehle(g: Gezeichnet, farbe: Int, links: Int, rechts: Int, y: Int): Int = (links until rechts).count { g.bei(it, y) == farbe }
+
+    /** Die Pixelzeile zwischen [oben] und [unten], in der [farbe] am haeufigsten steht. */
+    private fun zeileMit(g: Gezeichnet, farbe: Int, links: Int, rechts: Int, oben: Int, unten: Int): Int =
+        (oben until unten).maxBy { zaehle(g, farbe, links, rechts, it) }
+
+    /** Die Laengen der Laeufe von [farbe] in der Pixelzeile [y], in dp - Striche oder Punkte. */
+    private fun laeufe(g: Gezeichnet, farbe: Int, links: Int, rechts: Int, y: Int): List<Float> {
+        val aus = mutableListOf<Float>()
+        var lauf = 0
+        for (x in links until rechts) {
+            if (g.bei(x, y) == farbe) lauf++ else { if (lauf > 0) aus += lauf / g.dichte; lauf = 0 }
+        }
+        return aus
+    }
+
+    /**
+     * DIE BEZUGSLINIEN HINTER DEM PULS, an einem ruhigen und einem bewegten
+     * Tag, so breit wie auf dem Telefon. Nachgesehen am Bild:
+     * - Die Skala: unten Ruhepuls 55 minus 10, oben die erste Zonengrenze
+     *   ueber dem hoechsten Wert plus Luft - ruhig (bis 104) die Grenze zu
+     *   moderat 107, bewegt (bis gut 150) die zur Spitze 159. Jede Linie
+     *   steht auf der Hoehe, die ihr Wert in dieser Skala hat.
+     * - Der Ruhepuls gestrichelt (Striche 4 dp), in gedaempftem Herzrot -
+     *   zwischen der Pulsfarbe und der Karte; die Grenzen gepunktet (2-dp-
+     *   Punkte) in ihrer Zonenfarbe. Grenzen ueber der Skala fehlen.
+     * - Die Zahlen stehen rechts NEBEN dem Band, je eine auf der Hoehe ihrer
+     *   Linie; das Band blendet an seinem rechten Rand weiter aus.
+     * - Beim Wischen bleiben die Zahlen, wo sie sind, waehrend das Band wandert.
+     * - Die Beschreibung fuer TalkBack nennt den Ruhepuls.
+     * - Die Linien stehen HINTER dem Puls: liegt er auf dem Ruhepuls, deckt er sie.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h600dp-xxhdpi")
+    fun bezugslinien_an_einem_ruhigen_und_einem_bewegten_tag() {
+        val b = Healthbeispiel
+        class Fall(val name: String, val puls: List<Pair<Long, Int>>, val hoch: Int, val grenzen: List<Int>, val fehlen: List<Int>)
+        val faelle = listOf(
+            Fall("tagesband-ruhig", b.bandPuls, 107 + 5, listOf(107), listOf(133, 159)),
+            Fall("tagesband-bewegt", b.bewegterPuls, 159 + 5, listOf(107, 133, 159), emptyList()),
+        )
+        assertEquals(listOf(107, 133, 159), b.pulsZonen)
+        assertEquals(55, b.nacht.ruhepuls)
+        var ruhefarbeGesehen = 0
+        for (f in faelle) {
+            var pulsfarbe = 0
+            var karte = 0
+            var zonenfarben = emptyList<Int>()
+            var grau = 0
+            val g = zeichne(f.name) {
+                pulsfarbe = Farben.puls.ton().toArgb()
+                karte = Farben.karte().toArgb()
+                grau = Farben.neutral().toArgb()
+                zonenfarben = Farben.pulszonen.map { it.ton().toArgb() }
+                Box(Modifier.padding(12.dp)) { Tagesband(b.stand.copy(bandPuls = f.puls), emptyList(), b.jetzt, imperial = false, b.wege) {} }
+            }
+            val band = band(g)
+            val r = band.boundsInRoot
+            val d = g.dichte
+            // Die Pulszeile reicht von 26 dp (oben) bis 96 dp (unten) unter dem Kopf des Bands.
+            fun y(bpm: Int): Float = r.top + (96 - 70f * (bpm - 45) / (f.hoch - 45)) * d
+            val links = (r.left + 30 * d).toInt()
+            val rechts = (r.right - 30 * d).toInt()
+            // Links vom Jetzt liegt die Karte bloss; rechts davon ist die Zukunft blass hinterlegt.
+            val vorJetzt = (jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt()) - 10 * d).toInt()
+            fun naheBei(bpm: Int) = (y(bpm) - 3 * d).toInt() to (y(bpm) + 3 * d).toInt()
+
+            // Die Ruhelinie: die haeufigste Farbe in ihrer Zeile vor dem Jetzt, weder Karte noch Puls,
+            // und GEDAEMPFT - in jedem Kanal zwischen der Karte und dem Herzrot.
+            val (o, u) = naheBei(55)
+            val ruhefarbe = (o until u).flatMap { yy -> (links until vorJetzt).map { g.bei(it, yy) } }
+                .filter { it != karte && it != pulsfarbe }.groupingBy { it }.eachCount().maxBy { it.value }.key
+            for (k in listOf(16, 8, 0)) {
+                val (a, z, w) = listOf(karte, ruhefarbe, pulsfarbe).map { (it shr k) and 0xFF }
+                assertTrue(w != a && z in minOf(a, w) + 1 until maxOf(a, w), "Kanal $k: Karte $a, Ruhelinie $z, Puls $w")
+            }
+            val ruheZeile = zeileMit(g, ruhefarbe, links, rechts, o, u)
+            assertEquals(y(55), ruheZeile.toFloat(), 1.5f * d, "${f.name}: Ruhelinie")
+            // Gestrichelt: Striche von 4 dp, keine Punkte.
+            val striche = laeufe(g, ruhefarbe, links, rechts, ruheZeile).filter { it > 1 }
+            assertTrue(striche.size > 10 && striche.sorted()[striche.size / 2] in 3f..5f, "${f.name}: Striche $striche")
+
+            // Die Grenzen: gepunktet in ihrer Zonenfarbe, auf ihrer Hoehe; die ueber der Skala fehlen.
+            f.grenzen.forEach { w ->
+                val farbe = zonenfarben[b.pulsZonen.indexOf(w) + 1]
+                val (go, gu) = naheBei(w)
+                val zeile = zeileMit(g, farbe, links, rechts, go, gu)
+                assertEquals(y(w), zeile.toFloat(), 1.5f * d, "${f.name}: Grenze $w")
+                val punkte = laeufe(g, farbe, links, rechts, zeile)
+                assertTrue(punkte.size > 10 && punkte.sorted()[punkte.size / 2] < 2.6f, "${f.name}: Punkte $w $punkte")
+            }
+            // Am bewegten Tag laeuft die Grenze 107 durch den Puls von jetzt ("68 bpm"): er steht auf dem
+            // Grund der Zukunft, kein Punkt der Linie zwischen seinen Ziffern.
+            if (f.grenzen.size == 3) {
+                val farbe = zonenfarben[1]
+                val zeile = zeileMit(g, farbe, links, vorJetzt, naheBei(107).first, naheBei(107).second)
+                val jx = vorJetzt + 10 * d
+                assertEquals(0, zaehle(g, farbe, (jx + 14 * d).toInt(), (jx + 50 * d).toInt(), zeile), "Linie durch \"68 bpm\"")
+            }
+            val pulszeile = (r.top + 20 * d).toInt() until (r.top + 100 * d).toInt()
+            f.fehlen.forEach { w ->
+                val farbe = zonenfarben[b.pulsZonen.indexOf(w) + 1]
+                assertEquals(0, pulszeile.sumOf { zaehle(g, farbe, r.left.toInt(), r.right.toInt(), it) }, "${f.name}: Grenze $w steht da")
+            }
+
+            // DAS AUSBLENDEN BLEIBT: in den letzten 8 dp des Bands kein voller Strich der Ruhelinie,
+            // davor schon - und die Zahlen stehen erst rechts davon.
+            assertEquals(0, zaehle(g, ruhefarbe, (r.right - 8 * d).toInt(), r.right.toInt(), ruheZeile), "${f.name}: Rand nicht ausgeblendet")
+            assertTrue(zaehle(g, ruhefarbe, (r.right - 60 * d).toInt(), (r.right - 20 * d).toInt(), ruheZeile) > 0)
+
+            // Die Zahlen: rechts neben dem Band, je eine Gruppe von Zeilen auf der Hoehe ihrer Linie.
+            val spalte = (r.right.toInt() + 1) until (r.right + 28 * d).toInt()
+            fun zahlzeilen(h: Gezeichnet) = (r.top.toInt() until r.bottom.toInt()).filter { yy -> spalte.any { h.bei(it, yy) != karte } }
+            val zeilen = zahlzeilen(g)
+            val gruppen = zeilen.fold(mutableListOf<MutableList<Int>>()) { acc, yy ->
+                if (acc.isEmpty() || yy - acc.last().last() > 1) acc += mutableListOf(yy) else acc.last() += yy
+                acc
+            }
+            val erwartet = listOf(55) + f.grenzen
+            assertEquals(erwartet.size, gruppen.size, "${f.name}: Zahlen in Zeilen ${gruppen.map { it.first() to it.last() }}")
+            gruppen.sortedByDescending { it.first() }.zip(erwartet).forEach { (gruppe, w) ->
+                assertEquals(y(w), gruppe.average().toFloat(), 2f * d, "${f.name}: Zahl $w")
+                // Klein wie die Achsen: Ziffern unter 10 dp hoch (labelSmall), nicht wie der Puls daneben.
+                assertTrue(gruppe.size < 10 * d, "${f.name}: Zahl $w ist ${gruppe.size / d} dp hoch")
+            }
+            // Grau wie die Achsen: die haeufigste Schriftfarbe der Spalte ist das Grau der Nebenschrift.
+            val schrift = zeilen.flatMap { yy -> spalte.map { g.bei(it, yy) } }.filter { it != karte }
+                .groupingBy { it }.eachCount().maxBy { it.value }.key
+            assertEquals(grau, schrift, "${f.name}: Farbe der Zahlen")
+
+            // Was TalkBack hoert, nennt den Ruhepuls der Linie.
+            val satz = band.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
+            assertTrue("resting 55" in satz, satz)
+
+            // BEIM WISCHEN: das Band wandert nach rechts (frueher am Tag), die Zahlen bleiben Pixel fuer Pixel.
+            wische(g, r.left + r.width * 0.2f, r.left + r.width * 0.8f, r.top + 60 * d)
+            val danach = nochmal(g, "${f.name}-gewischt")
+            val vorher = jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt())
+            val gruen = (r.left.toInt() until r.right.toInt()).filter { x -> danach.bei(x, (r.top + 60 * d).toInt()) == danach.primaer }
+            assertTrue(gruen.isEmpty() || gruen.average() > vorher + 100 * d, "${f.name}: das Band ist nicht gewandert")
+            for (yy in r.top.toInt() until r.bottom.toInt()) for (x in spalte) {
+                if (g.bei(x, yy) != danach.bei(x, yy)) throw AssertionError("${f.name}: Zahlenspalte veraendert bei $x, $yy")
+            }
+            assertEquals(zeilen, zahlzeilen(danach))
+            ruhefarbeGesehen = ruhefarbe
+        }
+
+        // HINTER DEM PULS: liegt der Puls genau auf dem Ruhepuls, deckt er die Ruhelinie - vor dem Jetzt
+        // ist kein Strich von ihr zu sehen, dahinter (keine Pulslinie mehr) schon.
+        val flach = b.bandPuls.map { it.first to 55 }
+        val g = zeichne("tagesband-flach") {
+            Box(Modifier.padding(12.dp)) { Tagesband(b.stand.copy(bandPuls = flach), emptyList(), b.jetzt, imperial = false, b.wege) {} }
+        }
+        val r = band(g).boundsInRoot
+        val d = g.dichte
+        val jx = jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt())
+        // Puls nur 55: unten 45, oben die Grenze 107 plus 5.
+        val zeile = (r.top + (96 - 70f * 10 / 67) * d).toInt()
+        val nahe = (zeile - 2 * d).toInt()..(zeile + 2 * d).toInt()
+        assertEquals(0, nahe.sumOf { zaehle(g, ruhefarbeGesehen, (r.left + 30 * d).toInt(), (jx - 10 * d).toInt(), it) }, "Ruhelinie vor dem Puls")
+        assertTrue(nahe.sumOf { zaehle(g, ruhefarbeGesehen, (jx + 10 * d).toInt(), (r.right - 20 * d).toInt(), it) } > 0, "keine Ruhelinie nach dem Jetzt")
+    }
+
     /**
      * Ein Finger auf [x], [y] (Pixel im Bild), [lange] Millisekunden gehalten.
      * Die Wartezeit des langen Drucks laeuft in Compose auf der echten Uhr,

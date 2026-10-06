@@ -60,15 +60,31 @@ internal object Healthbeispiel {
         62, 58, 55, 54, 53, 52, 53, 54, 52, 53, 55, 54, 56, 55, 57, 56, 58, 66, 72, 78, 74, 76, 72, 75, 73, 78, 104, 98, 80, 76, 74, 72, 68,
     )
 
-    val bandPuls: List<Pair<Long, Int>> = run {
+    /** Jede Minute ab 21:40 gestern bis eine Minute vor jetzt, zwischen den Werten je halbe Stunde gerade verbunden. */
+    private fun pulsAus(jeHalbeStunde: List<Int>): List<Pair<Long, Int>> {
         val start = um(21, 40, heute.minusDays(1)).epochSecond
-        (0 until (pulsJeHalbeStunde.size - 1) * 30).map { minute ->
+        return (0 until (jeHalbeStunde.size - 1) * 30).map { minute ->
             val i = minute / 30
-            val a = pulsJeHalbeStunde[i]
-            val b = pulsJeHalbeStunde[i + 1]
+            val a = jeHalbeStunde[i]
+            val b = jeHalbeStunde[i + 1]
             start + minute * 60L to (a + (b - a) * (minute % 30) / 30.0).roundToInt()
         }.filter { it.first < jetzt.epochSecond - 60 }
     }
+
+    /** Ein ruhiger Tag: der Spaziergang um 10:30 kommt bis 104, unter die Grenze zu moderat (107). */
+    val bandPuls: List<Pair<Long, Int>> = pulsAus(pulsJeHalbeStunde)
+
+    /**
+     * Ein bewegter Tag: derselbe, aber um 10:30 ein Lauf statt des Spaziergangs,
+     * bis gut 150 - ueber die Grenze zu kraeftig (133), unter die zur Spitze (159).
+     */
+    val bewegterPuls: List<Pair<Long, Int>> = pulsAus(pulsJeHalbeStunde.toMutableList().also { it[26] = 146; it[27] = 154; it[28] = 118 })
+
+    /**
+     * Die Zonen der Herzseite: Ruhepuls 55 (der Median der Naechte im Stand unten
+     * und der letzten) und Maximalpuls 185 - Grenzen 107, 133, 159.
+     */
+    val pulsZonen: List<Int> = Gesundheitsrechnung.pulsZonen(55, 185)
 
     /** Die Schritte je halbe Stunde ab 6:00 - die Hoehen des Entwurfs, 45 Schritte je Pixel. */
     val schrittBins: List<Pair<Long, Long>> = listOf(4, 16, 20, 10, 8, 6, 12, 6, 10, 34, 30, 8, 14, 6, 10, 4)
@@ -123,6 +139,7 @@ internal object Healthbeispiel {
         glasEintraege = listOf(Glaseintrag(um(9, 20), "g1", true, 250), Glaseintrag(um(12, 10), "g2", true, 250)),
         letzteDaten = jetzt.minusSeconds(120),
         bandPuls = bandPuls,
+        pulsZonen = pulsZonen,
         schrittBins = schrittBins,
         wasserWoche = wasserWoche,
     )

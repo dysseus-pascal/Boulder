@@ -42,11 +42,9 @@
     <string name="ks_h_hrv_hoeher">HRV %1$d ms above your range.</string>
     <string name="ks_h_hrv_tiefer">HRV %1$d ms below your range.</string>
     <string name="ks_h_heute_bisher">TODAY SO FAR</string>
-    <string name="ks_h_synchron">· synced %1$s</string>
     <string name="ks_h_herz_n">Heart</string>
     <string name="ks_h_kein_puls_kurz">No heart rate in the last 24 hours</string>
     <string name="ks_h_kein_glas">No glass yet</string>
-    <string name="ks_h_praeparate_n">Supplements</string>
     <string name="ks_h_von_n">of %1$d</string>
     <string name="ks_h_p_offen_1">%1$s still open</string>
     <string name="ks_h_p_offen_2">%1$s and %2$s still open</string>
@@ -57,7 +55,6 @@
     <string name="ks_h_p_alle">All taken</string>
     <string name="ks_h_p_keine">Nothing due today</string>
     <string name="ks_h_praeparate_heute">Supplements today</string>
-    <string name="ks_h_koffein_keins">None active</string>
     <string name="ks_h_koffein_dazu">Add caffeine</string>
     <string name="ks_h_koffein_fehler">Couldn\'t save to Health Connect</string>
     <string name="ks_h_getraenk">%1$s · %2$d mg</string>
@@ -126,12 +123,9 @@
     <string name="ks_b_zurueck">%1$d days read, %2$d tracks added.</string>
     <!-- Health nach Konzept D2: der Tag als Zeitstrahl -->
     <string name="ks_d_wasser">Water</string>
-    <string name="ks_d_jetzt">NOW</string>
-    <string name="ks_d_bewegt">%1$s walked, %2$d min active</string>
     <string name="ks_d_glas">Glass of water</string>
     <string name="ks_d_aufgewacht">Woke up</string>
     <string name="ks_d_eingeschlafen">Fell asleep</string>
-    <string name="ks_d_ruhe_hrv">Resting HR %1$d, HRV %2$d ms</string>
     <string name="ks_d_schritte_woche">STEPS THIS WEEK</string>
     <string name="ks_d_herz">Heart &amp; Body</string>
     <string name="ks_d_tagespuls">Day average</string>
@@ -141,8 +135,6 @@
     <string name="ks_d_belastung">%1$d min load</string>
     <string name="ks_d_ruhe">Resting</string>
     <string name="ks_d_zuletzt">Last %1$s</string>
-    <string name="ks_d_nur_ruhe">Resting HR %1$d</string>
-    <string name="ks_d_nur_hrv">HRV %1$d ms</string>
     <string name="ks_d_keine_nacht">No night recorded</string>
     <string name="ks_d_spo2">Blood oxygen</string>
     <string name="ks_d_blutdruck_kurz">BP\u00A0%1$d/%2$d</string>
@@ -170,15 +162,11 @@
         <item quantity="other">, about %1$d days left.</item>
     </plurals>
     <string name="ks_f_akku_stunden">, about %1$d h left.</string>
-    <string name="ks_f_bettzeit">Bedtime, like last night</string>
     <string name="ks_f_bettzeit_vorgabe">Bedtime</string>
-    <string name="ks_f_koffein_dann">Caffeine then about %1$d mg</string>
-    <string name="ks_f_aufgewacht_durch">Woke up, slept through</string>
     <plurals name="ks_f_glaeser">
         <item quantity="one">%1$d glass · last %2$s</item>
         <item quantity="other">%1$d glasses · last %2$s</item>
     </plurals>
-    <string name="ks_f_koffein_aktiv">%1$d mg active</string>
     <!-- Health 0.51: das Tagesband, das Sport-Feld und die Zeile Stack -->
     <string name="ks_tb_ruhe">resting %1$d</string>
     <string name="ks_tb_hrv">HRV %1$d</string>

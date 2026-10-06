@@ -8,7 +8,6 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.Vergleich
-import coredevices.pebble.kiesel.hrvUrteil
 import coredevices.pebble.kiesel.tagespulsUrteil
 import java.time.LocalDate
 import kotlin.math.abs
@@ -67,19 +66,6 @@ internal fun tagespuls(s: GesundheitsStand): Tagespuls? {
     val vergleich = tagespulsTeil(urteil.abstand).wort()
     val last = urteil.heute.belastung.takeIf { it > 0 }?.let { stringResource(R.string.ks_d_belastung, it) }
     return Tagespuls(wach, listOfNotNull(vergleich, last))
-}
-
-/**
- * Das Urteil zur HRV fuer den Nachtblock - nur, wenn es eins gibt; erklaert
- * wird nichts. Das zum Ruhepuls steht schon im Satz darueber und hier nicht
- * noch einmal.
- */
-@Composable
-internal fun herzHinweis(s: GesundheitsStand): String? {
-    if (s.nacht == null) return null
-    // Die HRV nach ihrem Band, wie die HRV-Karte der Herzseite
-    val hrv = Gesundheitsrechnung.hrvUrteil(s.hrvTage.lastOrNull()) ?: return null
-    return urteilSatz(Herzurteil(0, null, null, 0), hrv)
 }
 
 /** Der Satz zu Ruhepuls und HRV, wenn wenigstens eins davon ein Urteil hat. */

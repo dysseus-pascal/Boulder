@@ -128,7 +128,7 @@ private val TEXT_OBEN = 182.dp
 private val AUSBLENDEN = 18.dp
 
 /** Beim Oeffnen steht das Jetzt bei drei Vierteln der sichtbaren Breite: der Morgen davor bleibt im Blick. */
-internal const val JETZT_ANTEIL = 0.75f
+private const val JETZT_ANTEIL = 0.75f
 
 /** Was ein Symbol des Bands traegt. */
 private sealed class Bandinhalt {
@@ -237,7 +237,8 @@ internal fun Tagesband(
                         if (nachtOeffnen != null) onClick { nachtOeffnen(); true }
                     },
             ) {
-                Box(Modifier.size(breite.dp, HOEHE)) {
+                // Mit grosser Schrift waechst die Hoehe um das, was die Werte unten mehr brauchen.
+                Box(Modifier.size(breite.dp, hoeheMitSchrift(HOEHE))) {
                     Canvas(Modifier.matchParentSize()) {
                         val unten = size.height
                         // Die Zukunft blass hinterlegt.

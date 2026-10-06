@@ -3,6 +3,9 @@ package coredevices.pebble.kiesel.ansicht
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import theme.greyScheme
 import java.io.File
 import kotlin.math.abs
@@ -48,7 +52,7 @@ import kotlin.test.assertTrue
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GesundheitBildTest {
 
-    private class Gezeichnet(val bild: Bitmap, val wurzel: SemanticsNode, val primaer: Int, val dichte: Float) {
+    private class Gezeichnet(val bild: Bitmap, val wurzel: SemanticsNode, val primaer: Int, val dichte: Float, val ansicht: View) {
         val breite = bild.width
         val pixel = IntArray(bild.width * bild.height).also { bild.getPixels(it, 0, bild.width, 0, 0, bild.width, bild.height) }
         fun bei(x: Int, y: Int) = pixel[y * breite + x]
@@ -73,7 +77,7 @@ class GesundheitBildTest {
         ansicht.draw(Canvas(bild))
         File("build/$name.png").outputStream().use { bild.compress(Bitmap.CompressFormat.PNG, 100, it) }
         val wurzel = (ansicht as ViewGroup).getChildAt(0) as ViewRootForTest
-        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, primaer, aktivitaet.resources.displayMetrics.density)
+        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, primaer, aktivitaet.resources.displayMetrics.density, ansicht)
     }
 
     /** Der Knoten des Bands: der mit der Beschreibung, die mit "TODAY SO FAR" beginnt. */
@@ -107,10 +111,10 @@ class GesundheitBildTest {
         }
         val band = band(g)
         val r = band.boundsInRoot
-        // DAS JETZT BEI DREI VIERTELN der sichtbaren Breite des Bands.
+        // DAS JETZT BEI DREI VIERTELN der sichtbaren Breite des Bands - die Zahl der Spezifikation, nicht die Konstante.
         val x = jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt())
         val anteil = (x - r.left) / r.width
-        assertTrue(abs(anteil - JETZT_ANTEIL) < 0.01, "Jetzt bei ${"%.3f".format(anteil)} der Breite")
+        assertTrue(abs(anteil - 0.75) < 0.01, "Jetzt bei ${"%.3f".format(anteil)} der Breite")
 
         // Was das Band TalkBack sagt: die Nacht mit ihren Werten und der Puls von jetzt.
         val satz = band.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
@@ -158,5 +162,85 @@ class GesundheitBildTest {
         val x = jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt())
         val stunden = java.time.Duration.between(b.nacht.einschlafen.minusSeconds(15 * 60), b.jetzt).seconds / 3600.0
         assertEquals(r.left + (12 + stunden * 40) * g.dichte, x, 2.0 * g.dichte)
+    }
+
+    /**
+     * Ein Finger auf [x], [y] (Pixel im Bild), [lange] Millisekunden gehalten.
+     * Die Wartezeit des langen Drucks laeuft in Compose auf der echten Uhr,
+     * nicht auf der des Loopers - darum wird wirklich gewartet.
+     */
+    private fun tippe(g: Gezeichnet, x: Float, y: Float, lange: Long = 50) {
+        val t = SystemClock.uptimeMillis()
+        g.ansicht.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0))
+        val ende = System.currentTimeMillis() + lange
+        while (System.currentTimeMillis() < ende) {
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(20))
+            Thread.sleep(20)
+        }
+        g.ansicht.dispatchTouchEvent(MotionEvent.obtain(t, t + lange, MotionEvent.ACTION_UP, x, y, 0))
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    /**
+     * DIE GESTEN DES BANDS, mit dem Finger auf dem gezeichneten Band: die
+     * Nacht oeffnet die Schlafansicht, Wasser Water, Kaffee und Praeparat
+     * Stack, ein Training sein Detail; der Mond tut nichts. Ein langer Druck
+     * auf den eigenen Espresso oeffnet das Blatt zum Aendern - ein Tipp nicht.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w1100dp-h400dp-xxhdpi")
+    fun ein_tipp_fuehrt_wohin_das_symbol_gehoert() {
+        val b = Healthbeispiel
+        val ziele = mutableListOf<String>()
+        val wege = Gesundheitswege(
+            nacht = { ziele += "nacht $it" }, trend = { ziele += "trend $it" }, herz = { ziele += "herz" }, akku = { ziele += "akku" },
+            koerper = { ziele += "koerper" }, sport = { ziele += "sport" }, training = { ziele += "training $it" },
+            wasser = { ziele += "wasser" }, stack = { ziele += "stack" },
+        )
+        val g = zeichne("tagesband-gesten") {
+            Box(Modifier.padding(12.dp)) { Tagesband(b.stand, b.sport.trainings, b.jetzt, imperial = false, wege) {} }
+        }
+        val r = band(g).boundsInRoot
+        val von = b.nacht.einschlafen.minusSeconds(15 * 60)
+        // Die Lage einer Uhrzeit im Band: 12 dp Rand, 40 dp je Stunde - die Masse des Entwurfs.
+        fun x(h: Int, m: Int, tag: java.time.LocalDate = b.heute) =
+            r.left + (12 + java.time.Duration.between(von, b.um(h, m, tag)).seconds / 3600f * 40) * g.dichte
+        // Die Symbole stehen 152 dp unter dem Kopf des Bands, 26 dp hoch: ihre Mitte bei 165 dp.
+        val symbol = r.top + 165 * g.dichte
+        fun ziel(h: Int, m: Int, y: Float = symbol): String? {
+            ziele.clear()
+            tippe(g, x(h, m), y)
+            return ziele.singleOrNull()
+        }
+        assertEquals("nacht ${b.nacht.beginnUtc}", ziel(2, 0, r.top + 150 * g.dichte))
+        assertEquals("stack", ziel(6, 44))
+        assertEquals("stack", ziel(8, 0))
+        assertEquals("wasser", ziel(9, 20))
+        assertEquals("training ${b.spaziergang.id}", ziel(10, 30))
+        assertEquals("wasser", ziel(12, 10))
+        assertEquals("stack", ziel(20, 0))
+        assertEquals(null, ziel(21, 46))
+        assertTrue(ShadowDialog.getLatestDialog()?.isShowing != true, "ein Tipp oeffnete ein Blatt")
+
+        // Lange auf den Espresso: das Blatt zum Aendern, mit seinem Namen - und kein Weg weg von Health.
+        ziele.clear()
+        tippe(g, x(6, 44), symbol, lange = 1_000)
+        assertTrue(ziele.isEmpty(), "$ziele")
+        val blatt = assertNotNull(ShadowDialog.getLatestDialog(), "kein Blatt nach langem Druck")
+        assertTrue(blatt.isShowing)
+        val blattWurzel = (blatt.window!!.decorView as ViewGroup).let { finde(it) }
+        val blattTexte = assertNotNull(blattWurzel, "kein Compose im Blatt").let { w ->
+            fun texte(n: SemanticsNode): List<String> = n.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } + n.children.flatMap { texte(it) }
+            texte(w.semanticsOwner.unmergedRootSemanticsNode)
+        }
+        // Der Kopf des Blatts in Versalien wie jeder Kopf (Baukasten), mit der Uhrzeit.
+        assertTrue(blattTexte.any { it.startsWith("ESPRESSO, SUGAR") } && "Delete" in blattTexte, "$blattTexte")
+    }
+
+    /** Die Compose-Wurzel in einem Fenster (das Blatt ist ein eigenes). */
+    private fun finde(v: View): ViewRootForTest? = when (v) {
+        is ViewRootForTest -> v
+        is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { finde(v.getChildAt(it)) }
+        else -> null
     }
 }

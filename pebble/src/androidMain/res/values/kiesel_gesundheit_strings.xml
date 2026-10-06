@@ -179,8 +179,6 @@
     <string name="ks_st_koffein_jetzt">caffeine now</string>
     <string name="ks_st_bett">at bedtime</string>
     <!-- Schlafansicht nach Konzept F -->
-    <string name="ks_n_phasen">STAGES</string>
-    <string name="ks_n_im_bett">%1$s in bed</string>
     <string name="ks_n_durch_die_nacht">THROUGH THE NIGHT</string>
     <string name="ks_n_koerper">BODY DURING SLEEP</string>
     <string name="ks_n_schnitt">avg %1$s</string>

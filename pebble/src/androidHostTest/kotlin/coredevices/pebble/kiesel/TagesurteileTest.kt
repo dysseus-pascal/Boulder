@@ -223,22 +223,8 @@ class TagesurteileTest {
     }
 
     @Test
-    fun phasenanteile_ergeben_hundert() {
-        // Tief 1:18, REM 2:20, leicht 4:42 wie im Entwurf - je Index wie Nacht.phasen.
-        assertEquals(listOf(0, 56, 16, 28, 0), g.phasenAnteile(intArrayOf(0, 282, 78, 140, 0)))
-        // Einzeln gerundet waeren es 33 + 33 + 33.
-        assertEquals(100, g.phasenAnteile(intArrayOf(0, 100, 100, 100, 0)).sum())
-        // Wach zaehlt zur Zeit im Bett, wie in der Phasenkarte.
-        assertEquals(listOf(3, 33, 32, 32, 0), g.phasenAnteile(intArrayOf(10, 100, 100, 100, 0)))
-        assertEquals(listOf(100, 0, 0, 0, 0), g.phasenAnteile(intArrayOf(10, 0, 0, 0, 0)))
-        assertEquals(listOf(0, 0, 0, 0, 0), g.phasenAnteile(IntArray(5)))
-        // Schlaf ohne Phase zaehlt zur Zeit im Bett, hat aber keine Zeile: die vier Zeilen ergeben 98, alle fuenf 100.
-        assertEquals(listOf(3, 32, 32, 31, 2), g.phasenAnteile(intArrayOf(10, 100, 100, 100, 7)))
-    }
-
-    @Test
     fun erholsam_ist_tief_und_rem_an_der_zeit_im_bett() {
-        // Wach und Schlaf ohne Phase zaehlen zum Nenner wie in der Phasenkarte: 90 von 200 Minuten.
+        // Wach und Schlaf ohne Phase zaehlen zum Nenner, denn sie sind Zeit im Bett: 90 von 200 Minuten.
         assertEquals(0.45, g.erholsamAnteil(intArrayOf(10, 100, 50, 40, 0))!!, 1e-9)
         assertEquals(0.45, g.erholsamAnteil(intArrayOf(0, 100, 50, 40, 10))!!, 1e-9)
         // Ohne erkannte Phase kein Anteil - auch nicht null.

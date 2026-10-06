@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -28,13 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
@@ -43,7 +39,6 @@ import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.naechteSchnitt
-import coredevices.pebble.kiesel.phasenAnteile
 import coredevices.pebble.kiesel.Schlafurteil
 import coredevices.pebble.kiesel.schlafurteil
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -56,15 +51,14 @@ import kotlin.math.roundToLong
 private class Nachtstand(val detail: Gesundheitsdaten.NachtDetail?)
 
 /**
- * Eine Nacht im Einzelnen, nach Konzept F: dieselben Daten wie im Zeitstrahl,
- * aber gross - die Dauer, die Phasen mit Anteil und Zeit, der Verlauf durch
- * die Nacht, der Koerper im Schlaf und die Woche davor. Geblaettert wird hier,
- * nicht ueber die Navigation - sonst stuende jede Nacht einzeln im
- * Zurueck-Stapel.
+ * Eine Nacht im Einzelnen, nach Konzept F: dieselben Daten wie im Tagesband,
+ * aber gross - die Dauer, der Verlauf durch die Nacht mit der Zeit jeder
+ * Phase darunter, der Koerper im Schlaf und die Woche davor. Geblaettert wird
+ * hier, nicht ueber die Navigation - sonst stuende jede Nacht einzeln im
+ * Zurueck-Stapel. Geladen wird hier, gezeigt in [NachtInhalt].
  */
 @Composable
 internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend: () -> Unit) {
-    val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     // Saveable: zurueck aus den Trends stand sonst wieder die Nacht vom Einstieg da, nicht die geblaetterte.
     var beginn by rememberSaveable { mutableLongStateOf(start) }
@@ -81,20 +75,31 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
         Leerseite(stringResource(R.string.ks_h_keine_nacht))
         return
     }
-    val n = d.nacht
-    val zone = ZoneId.systemDefault()
     // Der Tag des Aufwachens wie ueberall, mit Wochentag wie jeder Seitenkopf ("Wed, Sep 30" auf
     // Health, im Trainingskopf) - und wie die Saeulen der Naechte unten, die nach Wochentagen heissen.
-    val titel = Formate.datumMitWochentag(n.aufwachen.atZone(zone).toLocalDate())
+    val titel = Formate.datumMitWochentag(d.nacht.aufwachen.atZone(ZoneId.systemDefault()).toLocalDate())
     LaunchedEffect(titel) { setzeTitel(titel) }
+    NachtInhalt(d, { beginn = it }, oeffneTrend)
+}
+
+/**
+ * Die geladene Nacht [d], ohne eigenes Laden - so laesst sie sich mit
+ * Beispieldaten zeichnen. [blaettern] bekommt den Beginn der Nacht davor
+ * oder danach.
+ */
+@Composable
+internal fun NachtInhalt(d: Gesundheitsdaten.NachtDetail, blaettern: (Long) -> Unit, oeffneTrend: () -> Unit) {
+    val context = LocalContext.current
+    val n = d.nacht
+    val zone = ZoneId.systemDefault()
 
     Seite {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             // Die Pfeile aus Boulders Strichzeichen, nicht als Textglyphen "‹ ›" (Symbolregel im Baukasten).
-            Blaetterknopf(stringResource(R.string.ks_h_frueher), zurueck = true, onClick = d.vorige?.let { v -> { beginn = v } })
+            Blaetterknopf(stringResource(R.string.ks_h_frueher), zurueck = true, onClick = d.vorige?.let { v -> { blaettern(v) } })
             // Derselbe Link wie in jedem Kopf ("Trends ›"), kein eigener Knopf.
             Weiterlink(stringResource(R.string.ks_h_trends), oeffneTrend)
-            Blaetterknopf(stringResource(R.string.ks_h_spaeter), zurueck = false, onClick = d.naechste?.let { n -> { beginn = n } })
+            Blaetterknopf(stringResource(R.string.ks_h_spaeter), zurueck = false, onClick = d.naechste?.let { v -> { blaettern(v) } })
         }
 
         // DIE DAUER GROSS: wer die Nacht oeffnet, will zuerst wissen, wie lang sie war.
@@ -123,8 +128,6 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
             }
         }
 
-        if (n.mitPhasen) Phasenkarte(n.phasen)
-
         // Geladen wird eine halbe Stunde vor und nach dem Schlaf; gezeigt nur die
         // Nacht selbst - Punkte davor zeichnete die Kurve sonst in die Achsenspalte.
         val von = n.spanne.first
@@ -147,6 +150,15 @@ internal fun NachtAnsicht(start: Long, setzeTitel: (String) -> Unit, oeffneTrend
                         Spacer(Modifier.height(10.dp))
                         Unterzeile(name)
                         Tageskurve(spo2Punkte, von, bis, Farben.spo2.ton(), hoehe = 90.dp, trendFenster = 1800, beschreibung = kurvenSatz(name, spo2Punkte, "%"))
+                    }
+                    // Die Zeit jeder Phase unter den Bildern, abgesetzt durch eine Linie: wer die
+                    // Bahnen sieht, fragt als Naechstes, wie lang jede war. Ohne Phasen gibt es nur
+                    // die eine Bahn "leicht" - vier Zeilen voller Nullen sagten dann nichts.
+                    if (n.mitPhasen) {
+                        Spacer(Modifier.height(12.dp))
+                        Trenner(0.dp)
+                        Spacer(Modifier.height(12.dp))
+                        Phasenzeile(n.phasen)
                     }
                 }
             }
@@ -233,37 +245,24 @@ private fun kurvenSatz(name: String, punkte: List<Pair<Long, Int>>, einheit: Str
 }
 
 /**
- * Die Phasen gross: oben der Balken der Anteile, darunter je Phase Name,
- * Anteil und Dauer. Die Spalten haben eine Mindest-, keine feste Breite -
- * mit grosser Schrift wachsen sie, statt die Zahl abzuschneiden.
+ * Die Phasen als eine Zeile mit vier gleich breiten Spalten - Farbpunkt,
+ * Name, darunter die Dauer - in der Reihenfolge der Bahnen des Hypnogramms
+ * darueber, wach links wie wach oben: so liest man Spalte und Bahn gleich
+ * herum. Die Dauer wie ueberall ("15 min", "1:13 h"). Schlaf ohne Phase hat
+ * keine Spalte, wie er auch keine eigene Bahn hat. Mit grosser Schrift
+ * brechen Name und Dauer um, statt abgeschnitten zu werden.
  */
 @Composable
-private fun Phasenkarte(phasen: IntArray) {
-    val imBett = phasen.sum()
-    // In der Reihenfolge der Bahnen des Hypnogramms darunter, wach oben - Zeilen und Bahnen liest man gleich herum.
-    val reihe = PHASEN_VON_OBEN
-    val namen = reihe.map { (_, name) -> stringResource(name) }
-    // Die getestete Rechnung: alle fuenf Anteile ergeben 100, einzeln gerundet hatten drei gleich lange Phasen
-    // 99 %. Schlaf ohne Phase zaehlt zur Zeit im Bett, hat aber keine Zeile - mit ihm bleiben die Zeilen unter 100.
-    val prozent = Gesundheitsrechnung.phasenAnteile(phasen)
-    val anteile = reihe.map { (p, _) -> Formate.prozent(prozent[p]) }
-    Kasten {
-        Kopf(stringResource(R.string.ks_n_phasen), stringResource(R.string.ks_n_im_bett, Formate.dauer(imBett.toLong())))
-        Column(Modifier.padding(start = INNEN, end = INNEN, bottom = 8.dp)) {
-            Phasenbalken(
-                reihe.map { (p, _) -> phasen[p] to Farben.phasen[p] },
-                namen.zip(anteile).joinToString(", ") { (name, anteil) -> "$name $anteil" },
-            )
-            Spacer(Modifier.height(8.dp))
-            reihe.forEachIndexed { i, (p, _) ->
-                if (i > 0) Trenner(0.dp)
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).background(Farben.phasen[p], CircleShape))
-                    Text(namen[i], Modifier.weight(1f).padding(start = 12.dp), fontSize = 16.sp)
-                    Text(anteile[i], Modifier.widthIn(min = 48.dp), fontSize = 13.sp, color = Farben.neutral(), textAlign = TextAlign.End, maxLines = 1)
-                    // Die Dauer wie ueberall ("28 min", "3:22 h"): "0:28 h" gab es nur hier. Rechtsbuendig bleibt die Spalte ruhig.
-                    Text(zahlMitEinheit(Formate.dauerTeile(phasen[p].toLong()), 22, 13), Modifier.widthIn(min = 84.dp), textAlign = TextAlign.End, maxLines = 1)
+private fun Phasenzeile(phasen: IntArray) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PHASEN_VON_OBEN.forEach { (p, name) ->
+            // Eine Spalte ist fuer TalkBack ein Halt: "Awake, 15 min" statt Name und Zahl einzeln.
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(8.dp).background(Farben.phasen[p], CircleShape))
+                    Text(stringResource(name), fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Text(zahlMitEinheit(Formate.dauerTeile(phasen[p].toLong()), 18, 12), lineHeight = 24.sp)
             }
         }
     }
@@ -275,22 +274,5 @@ private fun Koerperwert(zahl: String, einheit: String?, name: String, unter: Str
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Kennzahl(zahl, einheit, name)
         if (unter != null) Unterzeile(unter)
-    }
-}
-
-/** Die Phasen als breiter Balken - Anteile, gross genug zum Lesen. [satz]: dieselben Anteile fuer TalkBack. */
-@Composable
-private fun Phasenbalken(teile: List<Pair<Int, Color>>, satz: String) {
-    val summe = teile.sumOf { it.first }.coerceAtLeast(1)
-    Canvas(Modifier.fillMaxWidth().height(20.dp).bildBeschreibung(satz)) {
-        val luecke = 2.dp.toPx()
-        val sichtbar = teile.filter { it.first > 0 }
-        val platz = size.width - luecke * (sichtbar.size - 1).coerceAtLeast(0)
-        var x = 0f
-        sichtbar.forEach { (wert, farbe) ->
-            val breite = platz * wert / summe
-            drawRoundRect(farbe, Offset(x, 0f), Size(breite, size.height), CornerRadius(5.dp.toPx()))
-            x += breite + luecke
-        }
     }
 }

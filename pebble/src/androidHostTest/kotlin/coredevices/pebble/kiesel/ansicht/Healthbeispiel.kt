@@ -6,6 +6,7 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Glaseintrag
 import coredevices.pebble.kiesel.Kieselsport
+import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Sport
 import coredevices.pebble.kiesel.SupCycle
 import coredevices.pebble.kiesel.Tageseintrag
@@ -42,12 +43,16 @@ internal object Healthbeispiel {
         Triple(326, 27, 2), Triple(353, 10, 0), Triple(363, 131, 1),
     )
 
-    private val einschlafen = um(21, 46, heute.minusDays(1))
+    /** Die Nacht des Entwurfs ab 21:46 am [abend], 494 Minuten bis 6:00, 7:59 h Schlaf, Ruhepuls 55, HRV 50. */
+    fun nachtAb(abend: LocalDate): Nacht {
+        val einschlafen = um(21, 46, abend)
+        return Gesundheitsrechnung.nacht(
+            NachtEntity(einschlafen.epochSecond, 7200, 0, 494, 479, 55, 50),
+            lauf.map { (von, dauer, phase) -> NachtAbschnittEntity(einschlafen.epochSecond, von, von + dauer, phase) },
+        )
+    }
 
-    val nacht = Gesundheitsrechnung.nacht(
-        NachtEntity(einschlafen.epochSecond, 7200, 0, 494, 479, 55, 50),
-        lauf.map { (von, dauer, phase) -> NachtAbschnittEntity(einschlafen.epochSecond, von, von + dauer, phase) },
-    )
+    val nacht = nachtAb(heute.minusDays(1))
 
     /** Der Puls je halbe Stunde ab 21:40 bis jetzt, wie im Entwurf; dazwischen jede Minute gerade verbunden. */
     private val pulsJeHalbeStunde = listOf(

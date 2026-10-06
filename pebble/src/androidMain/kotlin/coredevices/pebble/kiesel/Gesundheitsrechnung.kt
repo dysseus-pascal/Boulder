@@ -225,7 +225,7 @@ internal object Gesundheitsrechnung {
     /**
      * Ob die Uhr in dieser Nacht Phasen erkannt hat - leicht, tief oder REM,
      * je Index wie [phasenMinuten]. Wach allein oder Schlaf ohne Phase ist
-     * keine: dann gibt es weder Phasenkarte noch Tiefschlaf im Trend.
+     * keine: dann gibt es weder Phasenzeile noch Tiefschlaf im Trend.
      */
     fun mitPhasen(phasen: IntArray): Boolean = phasen[1] + phasen[2] + phasen[3] > 0
 

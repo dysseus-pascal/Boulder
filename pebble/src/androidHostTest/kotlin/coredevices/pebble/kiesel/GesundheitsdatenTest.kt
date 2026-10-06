@@ -310,6 +310,45 @@ class GesundheitsdatenTest {
     }
 
     /**
+     * DER RUHEPULS DER ZONEN STEHT IM STAND: aus ihm zieht das Tagesband
+     * seine Ruhelinie, wenn heute keine Nacht da ist (Tagesbandrechnung.ruhepuls) -
+     * aus derselben Rechnung wie seine Grenzen. Der Median der frueheren
+     * Naechte, mit der von heute dazu; ohne gemessenen keiner, die Zonen
+     * stehen dann auf dem Ersatz (60).
+     */
+    @Test
+    fun derRuhepulsDerZonenStehtImStandAuchOhneNachtVonHeute() = runBlocking {
+        val heute = LocalDate.of(2026, 10, 6)
+        val jetzt = heute.atTime(13, 0).atZone(zone).toInstant()
+        /** Eine Nacht ab 22:30 vor [tage] Tagen, aufgewacht am Tag danach. */
+        fun nacht(tage: Long, ruhepuls: Int) =
+            NachtEntity(heute.minusDays(tage).atTime(22, 30).atZone(zone).toEpochSecond(), 7200, 0, 450, 450, ruhepuls, 40)
+        // Bis vorgestern Abend getragen, heute Nacht nicht. Die Nacht ohne Ruhepuls (0) zaehlt nicht mit.
+        val frueher = listOf(nacht(5, 52), nacht(4, 58), nacht(3, 0), nacht(2, 54))
+
+        val ohne = Gesundheitsdaten.lade(Quelle(1, jetzt, zone, null, frueher), voll = true, jetzt, zone)
+        assertNull(ohne.nacht)
+        assertEquals(54, ohne.ruhepulsZonen)
+        // Die Zonen aus genau diesem Ruhepuls und dem Maximalpuls 185 der Quelle: 54 + 0.4/0.6/0.8 * 131.
+        assertEquals(listOf(106, 133, 159), ohne.pulsZonen)
+        assertEquals(54, Tagesbandrechnung.ruhepuls(ohne))
+
+        // Mit der Nacht von heute (Ruhepuls 60) rechnen die Zonen mit dem Median aller vier, 56 -
+        // die Linie im Band bleibt bei der Nacht, die ihr Text nennt.
+        val mit = Gesundheitsdaten.lade(Quelle(1, jetzt, zone, null, frueher + nacht(1, 60)), voll = true, jetzt, zone)
+        assertEquals(60, mit.nacht?.ruhepuls)
+        assertEquals(56, mit.ruhepulsZonen)
+        assertEquals(listOf(108, 133, 159), mit.pulsZonen)
+        assertEquals(60, Tagesbandrechnung.ruhepuls(mit))
+
+        // Keine Nacht mit Ruhepuls: kein Ruhepuls - die Zonen stehen auf dem Ersatz 60, keine Linie darauf.
+        val keiner = Gesundheitsdaten.lade(Quelle(1, jetzt, zone, null, listOf(nacht(3, 0))), voll = true, jetzt, zone)
+        assertNull(keiner.ruhepulsZonen)
+        assertEquals(listOf(110, 135, 160), keiner.pulsZonen)
+        assertNull(Tagesbandrechnung.ruhepuls(keiner))
+    }
+
+    /**
      * DIE BLUTDRUCKBAENDER SEHEN SO WEIT ZURUECK WIE DAS HRV-BAND: der
      * aelteste Tag der Woche braucht noch 30 Tage davor, also 37 Tage aus
      * derselben einen Abfrage. Die Karte selbst (letzte Sitzung) zaehlt
@@ -499,9 +538,13 @@ class GesundheitsdatenTest {
             // Was 0.51 fuer das Tagesband dazulas, kannte die alte Fassung nicht - eigens geprueft in dasBand...
             // Ebenso die Blutdruckwoche der Herzseite (0.51) - eigens geprueft in dieBlutdruckwoche...
             // und die Wasserwoche der Seite Water (0.51) - eigens geprueft in dieWasserwoche...
+            // Der Ruhepuls der Zonen (0.52) - eigens geprueft in derRuhepulsDerZonen...
             assertEquals(
                 alt.copy(nacht = null),
-                neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList(), blutdruckWoche = null, wasserWoche = emptyList()),
+                neu.copy(
+                    nacht = null, bandPuls = emptyList(), schrittBins = emptyList(), blutdruckWoche = null, wasserWoche = emptyList(),
+                    ruhepulsZonen = null,
+                ),
                 "$zeit, Apps $apps, Lauf $seed",
             )
             // Der Vergleich ist nicht leer: Puls, Tagesherz, Nacht, Akkunaechte, Eintraege von heute und gestern.

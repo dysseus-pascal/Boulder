@@ -312,6 +312,33 @@ class TagesbandrechnungTest {
         assertTrue(s.linien.all { it.bpm in s.tief..s.hoch })
     }
 
+    /**
+     * WELCHER RUHEPULS DIE LINIE ZIEHT: mit Nacht der ihre (ihr Text nennt
+     * ihn), auch wenn der Median der Zonen daneben liegt. Ohne Nacht - die Uhr
+     * nachts nicht getragen - oder ohne Ruhepuls in ihr der, mit dem die Zonen
+     * gerechnet sind; ohne beides keiner.
+     */
+    @Test
+    fun der_ruhepuls_der_linie_ist_der_der_nacht_ohne_sie_der_der_zonen() {
+        val n = nacht(um(22, 40, tag = gestern), um(6, 30))
+        assertEquals(55, n.ruhepuls)
+        // Mit Nacht ihre 55, nicht der Median 53 der Zonen.
+        assertEquals(55, Tagesbandrechnung.ruhepuls(stand(nacht = n).copy(ruhepulsZonen = 53)))
+        // Ohne Nacht der Ruhepuls der Zonen - die Linie steht, unten ist Ruhepuls - 10.
+        val ohneNacht = stand(nacht = null).copy(ruhepulsZonen = 53)
+        assertEquals(53, Tagesbandrechnung.ruhepuls(ohneNacht))
+        assertEquals(
+            Tagesbandrechnung.Pulsskala(43, 112, listOf(ruhe(53), grenze(107, 1))),
+            Tagesbandrechnung.pulsskala(Tagesbandrechnung.ruhepuls(ohneNacht), zonen, listOf(58, 90)),
+        )
+        // Eine Nacht ohne Ruhepuls zaehlt wie keine.
+        assertEquals(53, Tagesbandrechnung.ruhepuls(stand(nacht = n.copy(ruhepuls = null)).copy(ruhepulsZonen = 53)))
+        // Kennt Boulder keinen gemessenen (die Zonen stehen auf dem Ersatz), gibt es keinen.
+        assertEquals(null, Tagesbandrechnung.ruhepuls(stand(nacht = null)))
+        assertEquals(null, Tagesbandrechnung.ruhepuls(stand(nacht = n.copy(ruhepuls = null))))
+        assertEquals(null, Tagesbandrechnung.ruhepuls(stand(nacht = null).copy(ruhepulsZonen = 0)))
+    }
+
     @Test
     fun ohne_ruhepuls_keine_ruhelinie_und_unten_zehn_unter_dem_tiefsten_wert() {
         val s = Tagesbandrechnung.pulsskala(null, zonen, listOf(58, 90))

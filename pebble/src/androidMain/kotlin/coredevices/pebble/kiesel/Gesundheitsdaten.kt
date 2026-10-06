@@ -119,6 +119,13 @@ internal data class GesundheitsStand(
     val letzteDaten: Instant?,
     /** Die Grenzen moderat, kraeftig, Spitze in bpm (siehe [Gesundheitsrechnung.pulsZonen]). */
     val pulsZonen: List<Int> = emptyList(),
+    /**
+     * Der gemessene Ruhepuls, mit dem [pulsZonen] gerechnet sind: der Median
+     * der letzten Naechte samt der von heute ([Herzgrenzen.ruhepuls]). Null,
+     * wenn keine dieser Naechte einen hatte - dann stehen die Zonen auf dem
+     * Ersatz, und den zeigt Boulder nirgends als Ruhepuls.
+     */
+    val ruhepulsZonen: Int? = null,
     /** Die HRV der letzten sieben Naechte mit dem persoenlichen Band, aelteste zuerst. */
     val hrvTage: List<Gesundheitsrechnung.Bandtag> = emptyList(),
     /** Der Blutdruck der letzten sieben Tage, oben und unten je mit Band (Herzseite); ohne Messung null. */
@@ -518,7 +525,8 @@ internal object Gesundheitsdaten {
         else versuche(TAG, "Blutdruckwoche") { Gesundheitsrechnung.blutdruckwoche(blutdruckAlle, heute, zone) }
 
         // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
-        val ruhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls)) ?: Trainingsanalyse.RUHEPULS_ERSATZ
+        val gemessenRuhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls))
+        val ruhe = gemessenRuhe ?: Trainingsanalyse.RUHEPULS_ERSATZ
         // Eine Rechnung der Zonen fuer Kurve und Belastung, damit beide dieselbe Grenze ziehen
         val zonen = Gesundheitsrechnung.pulsZonen(ruhe, q.maxpuls(ruhe))
         val tagesherz = versuche(TAG, "Tagesherz") {
@@ -543,6 +551,7 @@ internal object Gesundheitsdaten {
             // Vorschau-Bibliothek (FakeLibPebble) oder von 1970 - beides keine letzten Daten.
             letzteDaten = versuche(TAG, "Letzte Daten") { q.letzterZeitstempel() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
+            ruhepulsZonen = gemessenRuhe,
             hrvTage = hrvTage,
             blutdruckWoche = blutdruckWoche,
             juengsteNacht = juengste,

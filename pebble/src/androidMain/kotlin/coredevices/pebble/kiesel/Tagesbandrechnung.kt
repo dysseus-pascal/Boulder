@@ -154,6 +154,18 @@ internal object Tagesbandrechnung {
      */
     data class Bezugslinie(val bpm: Int, val zone: Int?)
 
+    /**
+     * Der Ruhepuls der Ruhelinie. Mit Nacht der ihre: ihr Text darunter nennt
+     * ihn ("resting 55"), Linie und Text sagen so dieselbe Zahl. Ohne Nacht
+     * (die Uhr nachts nicht getragen) oder ohne Ruhepuls in ihr der, mit dem
+     * die Zonen gerechnet sind ([GesundheitsStand.ruhepulsZonen], der Median
+     * der letzten Naechte) - sonst fehlte gerade an einem solchen Tag der
+     * Massstab, und unten stuende der tiefste Wert statt Ruhepuls - 10. Null
+     * nur, wenn keine Nacht einen hatte: lieber keine Linie als eine auf dem
+     * Ersatzwert der Rechnung.
+     */
+    fun ruhepuls(s: GesundheitsStand): Int? = s.nacht?.ruhepuls?.takeIf { it > 0 } ?: s.ruhepulsZonen?.takeIf { it > 0 }
+
     /** Die Skala der Pulszeile von [tief] bis [hoch] bpm und die Linien darin, von unten nach oben. */
     data class Pulsskala(val tief: Int, val hoch: Int, val linien: List<Bezugslinie>)
 
@@ -167,9 +179,9 @@ internal object Tagesbandrechnung {
      *   Spitzengrenze der hoechste Wert selbst.
      * - Gezeichnet werden nur Linien in der Skala, und nur hinter einem Puls:
      *   ohne [werte] steht keine Linie da, die etwas messen koennte.
-     * [ruhepuls]: der Ruhepuls der Nacht, die das Band zeigt - derselbe, den
-     * ihr Text nennt ("resting 55"). Ohne ihn keine Ruhelinie, und unten
-     * gilt der tiefste Wert. [zonen]: die Grenzen der Herzseite
+     * [ruhepuls]: der des Bands ([ruhepuls]). Ohne ihn - Boulder kennt
+     * keinen gemessenen - keine Ruhelinie, und unten gilt der tiefste Wert.
+     * [zonen]: die Grenzen der Herzseite
      * ([GesundheitsStand.pulsZonen], [Gesundheitsrechnung.pulsZonen]).
      * [werte]: was die Pulslinie zeigt (die Mediane der Fuenf-Minuten-Fenster).
      */

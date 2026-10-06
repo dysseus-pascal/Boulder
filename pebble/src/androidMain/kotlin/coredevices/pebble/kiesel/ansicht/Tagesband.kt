@@ -205,16 +205,21 @@ internal fun Tagesband(
     }
 
     val linie = remember(s.bandPuls) { Tagesbandrechnung.pulslinie(s.bandPuls) }
-    // Die Skala aus dem, was die Linie zeigt, dem Ruhepuls der Nacht (ihr Text nennt ihn, und
-    // damit auch die Beschreibung fuer TalkBack) und den Zonen der Herzseite.
-    val skala = remember(linie, nacht?.ruhepuls, s.pulsZonen) {
-        Tagesbandrechnung.pulsskala(nacht?.ruhepuls, s.pulsZonen, linie.flatten().map { it.second })
+    // Die Skala aus dem, was die Linie zeigt, dem Ruhepuls des Bands (der der Nacht, ohne sie der
+    // der Zonen - Tagesbandrechnung.ruhepuls) und den Zonen der Herzseite.
+    val ruhepuls = Tagesbandrechnung.ruhepuls(s)
+    val skala = remember(linie, ruhepuls, s.pulsZonen) {
+        Tagesbandrechnung.pulsskala(ruhepuls, s.pulsZonen, linie.flatten().map { it.second })
     }
     fun yPuls(bpm: Int): Dp = PULS_UNTEN - (PULS_UNTEN - PULS_OBEN) * ((bpm - skala.tief).toFloat() / (skala.hoch - skala.tief))
     // Der letzte Puls nur, wenn er frisch ist - seit 0.35 zeigt "jetzt" keinen veralteten.
     val jetztPuls = s.puls.maxByOrNull { it.first }?.takeIf { Gesundheitsrechnung.pulsFrisch(it.first, jetzt.epochSecond) }
 
     val schlaftext = nacht?.let { schlaftext(it) }
+    // Die Beschreibung nennt den Ruhepuls der Linie. Mit Nacht steht er in ihrem Text; kommt er
+    // nicht von ihr (Tagesbandrechnung.ruhepuls), eigens - aber nur, wenn die Linie auch dasteht.
+    val ruhetext = ruhepuls?.takeIf { nacht?.ruhepuls == null && skala.linien.any { it.zone == null } }
+        ?.let { stringResource(R.string.ks_tb_ruhe, it) }
     val farben = MaterialTheme.colorScheme
     val raster = Farben.raster().aufKarte(0.5f)
     val zukunft = Farben.zukunft()
@@ -240,6 +245,7 @@ internal fun Tagesband(
         titel,
         stringResource(R.string.ks_h_zeitraum, Formate.uhrzeit(context, von), Formate.uhrzeit(context, fenster.bis)),
         schlaftext,
+        ruhetext,
         jetztText + (jetztPuls?.let { " ${it.second} bpm" } ?: ""),
     ).joinToString(", ")
     val nachtOeffnen: (() -> Unit)? = nacht?.let { n -> { wege.nacht(n.beginnUtc) } } ?: s.juengsteNacht?.let { b -> { wege.nacht(b) } }

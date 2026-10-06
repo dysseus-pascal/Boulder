@@ -140,6 +140,8 @@ internal object Healthbeispiel {
         letzteDaten = jetzt.minusSeconds(120),
         bandPuls = bandPuls,
         pulsZonen = pulsZonen,
+        // Der Median der Naechte oben (54, 56, 55, 55, 54, 56) und der letzten (55), mit dem die Zonen gerechnet sind.
+        ruhepulsZonen = 55,
         schrittBins = schrittBins,
         wasserWoche = wasserWoche,
     )

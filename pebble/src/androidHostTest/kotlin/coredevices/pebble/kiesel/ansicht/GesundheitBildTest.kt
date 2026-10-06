@@ -51,8 +51,10 @@ import kotlin.test.assertTrue
  *
  * Die Bilder liegen danach unter build/health-start.png (die Seite, wie sie
  * oeffnet), build/tagesband-ganz.png (das ganze Band, ungeschnitten),
- * build/tagesband-luecke.png (die Pulslinie ueber einer Luecke) und
- * build/health-ohne-koffein*.png (Stack ohne Koffein).
+ * build/tagesband-luecke.png (die Pulslinie ueber einer Luecke),
+ * build/health-ohne-koffein*.png (Stack ohne Koffein),
+ * build/tagesband-ruhig.png und -bewegt.png (die Bezugslinien hinter dem Puls)
+ * und build/tagesband-ohne-nacht.png und -ohne-ruhepuls.png (ein Tag ohne Nacht).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -406,9 +408,11 @@ class GesundheitBildTest {
                 .groupingBy { it }.eachCount().maxBy { it.value }.key
             assertEquals(grau, schrift, "${f.name}: Farbe der Zahlen")
 
-            // Was TalkBack hoert, nennt den Ruhepuls der Linie.
+            // Was TalkBack hoert, nennt den Ruhepuls der Linie - einmal, im Text der Nacht, obwohl
+            // daneben auch die Zonen einen haben.
             val satz = band.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
             assertTrue("resting 55" in satz, satz)
+            assertEquals(1, Regex("resting").findAll(satz).count(), satz)
 
             // BEIM WISCHEN: das Band wandert nach rechts (frueher am Tag), die Zahlen bleiben Pixel fuer Pixel.
             wische(g, r.left + r.width * 0.2f, r.left + r.width * 0.8f, r.top + 60 * d)
@@ -437,6 +441,85 @@ class GesundheitBildTest {
         val nahe = (zeile - 2 * d).toInt()..(zeile + 2 * d).toInt()
         assertEquals(0, nahe.sumOf { zaehle(g, ruhefarbeGesehen, (r.left + 30 * d).toInt(), (jx - 10 * d).toInt(), it) }, "Ruhelinie vor dem Puls")
         assertTrue(nahe.sumOf { zaehle(g, ruhefarbeGesehen, (jx + 10 * d).toInt(), (r.right - 20 * d).toInt(), it) } > 0, "keine Ruhelinie nach dem Jetzt")
+    }
+
+    /**
+     * OHNE NACHT VON HEUTE (Uhr nachts nicht getragen) zieht der Ruhepuls der
+     * Zonen die Linie - derselbe, mit dem die Grenzen gerechnet sind. Am
+     * ruhigen Tag des Beispiels, ab 22:00 gestern wie ein Band ohne Nacht:
+     * - Mit ihm (55): die Ruhelinie gestrichelt auf ihrer Hoehe, unten 45
+     *   (Ruhepuls - 10), Zahlen 55 und 107 rechts; TalkBack nennt "resting 55",
+     *   ohne Schlaftext.
+     * - Kennt Boulder keinen (die Zonen auf dem Ersatz): keine Ruhelinie,
+     *   unten der tiefste Wert 52 - 10, nur die Zahl 107, kein "resting".
+     * - Ohne Puls steht keine Linie da, und TalkBack nennt keinen Ruhepuls.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h600dp-xxhdpi")
+    fun ohne_nacht_zieht_der_ruhepuls_der_zonen_die_linie() {
+        val b = Healthbeispiel
+        val ohneNacht = b.stand.copy(nacht = null, bandPuls = b.bandPuls.filter { it.first >= b.um(22, 0, b.heute.minusDays(1)).epochSecond })
+        assertEquals(55, ohneNacht.ruhepulsZonen)
+        assertEquals(52, ohneNacht.bandPuls.minOf { it.second })
+        assertEquals(104, ohneNacht.bandPuls.maxOf { it.second })
+        // Die Farbe der Ruhelinie, am ersten Bild abgelesen wie in bezugslinien_an_einem_ruhigen...
+        var ruhefarbe = 0
+        for ((name, ruhe) in listOf("tagesband-ohne-nacht" to 55, "tagesband-ohne-ruhepuls" to null)) {
+            var karte = 0
+            var pulsfarbe = 0
+            val g = zeichne(name) {
+                pulsfarbe = Farben.puls.ton().toArgb()
+                karte = Farben.karte().toArgb()
+                Box(Modifier.padding(12.dp)) {
+                    Tagesband(ohneNacht.copy(ruhepulsZonen = ruhe), emptyList(), b.jetzt, imperial = false, b.wege) {}
+                }
+            }
+            val band = band(g)
+            val r = band.boundsInRoot
+            val d = g.dichte
+            val tief = if (ruhe != null) 45 else 42
+            fun y(bpm: Int): Float = r.top + (96 - 70f * (bpm - tief) / (112 - tief)) * d
+            val links = (r.left + 30 * d).toInt()
+            val rechts = (r.right - 30 * d).toInt()
+            val satz = band.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
+            assertTrue(" h" !in satz, "Schlaftext ohne Nacht: $satz")
+            // Die Zahlen rechts neben dem Band, je eine Gruppe von Zeilen auf der Hoehe ihrer Linie.
+            val spalte = (r.right.toInt() + 1) until (r.right + 28 * d).toInt()
+            val gruppen = (r.top.toInt() until r.bottom.toInt()).filter { yy -> spalte.any { g.bei(it, yy) != karte } }
+                .fold(mutableListOf<MutableList<Int>>()) { acc, yy ->
+                    if (acc.isEmpty() || yy - acc.last().last() > 1) acc += mutableListOf(yy) else acc.last() += yy
+                    acc
+                }
+            val erwartet = listOfNotNull(ruhe, 107)
+            assertEquals(erwartet.size, gruppen.size, "$name: Zahlen in Zeilen ${gruppen.map { it.first() to it.last() }}")
+            gruppen.sortedByDescending { it.first() }.zip(erwartet).forEach { (gruppe, w) ->
+                assertEquals(y(w), gruppe.average().toFloat(), 2f * d, "$name: Zahl $w")
+            }
+            if (ruhe != null) {
+                val vorJetzt = (jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt()) - 10 * d).toInt()
+                ruhefarbe = ((y(55) - 3 * d).toInt() until (y(55) + 3 * d).toInt())
+                    .flatMap { yy -> (links until vorJetzt).map { g.bei(it, yy) } }
+                    .filter { it != karte && it != pulsfarbe }.groupingBy { it }.eachCount().maxBy { it.value }.key
+            }
+            // Die Zeile mit den meisten Pixeln der Ruhefarbe in der Pulszeile.
+            val pulszeile = (r.top + 20 * d).toInt() until (r.top + 100 * d).toInt()
+            val meiste = pulszeile.maxBy { zaehle(g, ruhefarbe, links, rechts, it) }
+            if (ruhe != null) {
+                assertEquals(y(55), meiste.toFloat(), 1.5f * d, "$name: Ruhelinie")
+                val striche = laeufe(g, ruhefarbe, links, rechts, meiste).filter { it > 1 }
+                assertTrue(striche.size > 10 && striche.sorted()[striche.size / 2] in 3f..5f, "$name: Striche $striche")
+                assertTrue("resting 55" in satz, satz)
+            } else {
+                assertTrue(laeufe(g, ruhefarbe, links, rechts, meiste).count { it > 1 } < 3, "$name: Ruhelinie ohne Ruhepuls")
+                assertTrue("resting" !in satz, satz)
+            }
+        }
+        // Ohne Puls keine Linie - und kein "resting" fuer eine Linie, die nicht dasteht.
+        val ohnePuls = zeichne("tagesband-ohne-nacht-ohne-puls") {
+            Box(Modifier.padding(12.dp)) { Tagesband(ohneNacht.copy(bandPuls = emptyList()), emptyList(), b.jetzt, imperial = false, b.wege) {} }
+        }
+        val satz = band(ohnePuls).config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
+        assertTrue("resting" !in satz, satz)
     }
 
     /**

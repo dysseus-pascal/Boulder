@@ -50,10 +50,15 @@ internal fun gesundheitswege(nav: NavBarNav) = Gesundheitswege(
     wasser = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("ernaehrung")) },
 )
 
+/**
+ * Der Titel der Herzseite: derselbe Name wie ihre Zeile auf Health ("Heart &
+ * Body") - wer die Zeile antippt, soll oben dasselbe Wort finden.
+ */
+internal val HERZ_TITEL = R.string.ks_d_herz
+
 @Composable
 actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
-    // "Heart", nicht "Heart today": die Seite zeigt auch die Nacht und 24 Stunden Puls.
-    val titel = androidString(R.string.ks_h_herz_n)
+    val titel = androidString(HERZ_TITEL)
     LaunchedEffect(Unit) {
         topBarParams.title(titel)
         topBarParams.searchAvailable(null)

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -28,22 +29,23 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Fenster
+import coredevices.pebble.kiesel.Blutdrucklage
 import coredevices.pebble.kiesel.Vergleich
-import coredevices.pebble.kiesel.hrvUrteil
+import coredevices.pebble.kiesel.bandurteil
+import coredevices.pebble.kiesel.blutdrucklage
 import coredevices.pebble.kiesel.pulsFrisch
 import coredevices.pebble.kiesel.ruhepulsUrteil
-import java.time.Duration
 import java.time.Instant
 import kotlin.math.roundToInt
 
 private const val SPO2_WARNUNG = 90
 
 /**
- * "Heart": oben der Tagespuls wie in der Herzzeile, dann der Puls der letzten
- * 24 Stunden und der Blutdruck der Manschette, dazu Ruhepuls und SpO2 der
- * letzten Nacht, die HRV an ihrem Band und was Boulder ueber die frueheren
- * Naechte weiss. Das Pulsband stand frueher auf der Uebersicht; hier hat es
- * Platz und verdraengt nichts.
+ * "Heart & Body": oben der Puls der letzten 24 Stunden, dann HRV und
+ * Blutdruck je als Woche an ihrem persoenlichen Band, Ruhepuls und SpO2 der
+ * letzten Nacht, was Boulder ueber die frueheren Naechte weiss, und am Ende
+ * der Weg zu den Trends. Hier wird geladen; was zu sehen ist, zeichnet
+ * [HerzInhalt] aus dem fertigen Stand.
  */
 @Composable
 internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
@@ -54,25 +56,35 @@ internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
         Ladekreis()
         return
     }
+    HerzInhalt(s, Instant.now(), oeffneNacht, oeffneTrend)
+}
+
+/**
+ * Die Seite aus einem fertigen Stand - ohne Laden, damit ein Bildtest sie mit
+ * Beispieldaten zeichnen kann. [jetzt]: das Ende der 24 Stunden Puls und der
+ * Bezug von "Today" beim Blutdruck.
+ */
+@Composable
+internal fun HerzInhalt(s: GesundheitsStand, jetzt: Instant, oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
     // Vor der Liste gerechnet: ein leeres Item bekaeme seinen Abstand trotzdem, und ohne Manschette ist es meist leer.
     val blutdruck = remember(s.blutdruck) { Gesundheitsrechnung.blutdruckstand(s.blutdruck) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
-        item { PulsKarte(s) }
+        item { PulsKarte(s, jetzt.epochSecond) }
         item { HrvKarte(s) }
-        // Nach der HRV: die beiden Verlaeufe ueber Tage stehen beisammen, der Puls des Tages bleibt oben.
-        if (blutdruck != null) item { BlutdruckKarte(blutdruck) }
+        // Nach der HRV: die beiden Wochen am Band stehen beisammen, der Puls des Tages bleibt oben.
+        if (blutdruck != null) item { BlutdruckKarte(blutdruck, s.blutdruckWoche, jetzt) }
         item { NachtwerteKarte(s, oeffneNacht) }
         item { GewohntKarte(s, oeffneTrend) }
+        item { Trendzeile(oeffneTrend) }
         item { Spacer(Modifier.height(12.dp)) }
     }
 }
 
 /** Der Puls des Tages - internal fuer PulsKarteBildTest, der die ganze Karte zeichnet. */
 @Composable
-internal fun PulsKarte(s: GesundheitsStand) {
+internal fun PulsKarte(s: GesundheitsStand, jetzt: Long = Instant.now().epochSecond) {
     val context = LocalContext.current
-    val jetzt = Instant.now().epochSecond
     val letzter = s.puls.maxByOrNull { it.first }
     if (letzter == null) {
         Kasten { Leerzeile(stringResource(R.string.ks_h_kein_puls_kurz)) }
@@ -119,10 +131,14 @@ internal fun PulsKarte(s: GesundheitsStand) {
     }
 }
 
+/** Das Urteil am Band als kurzes Wort rechts im Kopf, in der Farbe der Punkte: gruen im Band, bernstein daneben. */
+private class Kopfurteil(val text: String, val farbe: Color)
+
 /**
  * Die HRV der letzten sieben Naechte mit dem persoenlichen Band - was als
  * gewohnt gilt, sieht man so auf einen Blick, statt es aus einem Schnitt
- * herauszulesen.
+ * herauszulesen. Im Kopf der Wert der letzten Nacht, der Schnitt der Woche
+ * und das Urteil; keine Legende - die Farben stehen im Urteil daneben.
  */
 @Composable
 private fun HrvKarte(s: GesundheitsStand) {
@@ -131,66 +147,74 @@ private fun HrvKarte(s: GesundheitsStand) {
     val imBand = Farben.imBand.ton()
     val ausserBand = Farben.ausserBand.ton()
     val letzte = tage.last()
-    val band = letzte.band
     val titel = stringResource(R.string.ks_h_hrv_woche)
     val zusatz = stringResource(R.string.ks_h_hrv_woche_zusatz)
-    Abschnitt(titel, zusatz) {
-        // Das Urteil aus hrvUrteil - derselbe Massstab wie der Hinweis im Nachtblock der Gesundheitsseite.
-        val urteil = Gesundheitsrechnung.hrvUrteil(letzte)
-        val satz = when {
-            letzte.wert == null -> stringResource(R.string.ks_h_hrv_keine)
-            urteil == null || band == null -> stringResource(R.string.ks_h_letzte_nacht)
-            else -> stringResource(
-                when (urteil.urteil) {
-                    Vergleich.TIEFER -> R.string.ks_h_hrv_unter_band
-                    Vergleich.HOEHER -> R.string.ks_h_hrv_ueber_band
-                    Vergleich.WIE_IMMER -> R.string.ks_h_hrv_im_band
-                },
-                band.first, band.second,
-            )
+    // Das Urteil aus bandurteil - dieselbe Regel, die die Punkte im Bild faerbt.
+    val urteil = Gesundheitsrechnung.bandurteil(letzte)?.let { u ->
+        when (u.urteil) {
+            Vergleich.WIE_IMMER -> Kopfurteil(stringResource(R.string.ks_h_im_band), imBand)
+            Vergleich.TIEFER -> Kopfurteil(stringResource(R.string.ks_h_unter_band), ausserBand)
+            Vergleich.HOEHER -> Kopfurteil(stringResource(R.string.ks_h_ueber_band), ausserBand)
         }
-        Hauptwert(letzte.wert?.let { Formate.zahl(it.toLong()) } ?: Formate.FEHLT, letzte.wert?.let { "ms" }, satz)
+    }
+    val schnitt = Gesundheitsrechnung.wochenschnitt(tage)?.let {
+        stringResource(R.string.ks_h_naechte_schnitt, Fenster.WOCHE_TAGE, Formate.zahl(it.toLong()))
+    }
+    val nacht = stringResource(if (letzte.wert == null) R.string.ks_h_hrv_keine else R.string.ks_h_letzte_nacht)
+    Abschnitt(titel, zusatz, urteil = urteil?.text, urteilFarbe = urteil?.farbe) {
+        Hauptwert(letzte.wert?.let { Formate.zahl(it.toLong()) } ?: Formate.FEHLT, letzte.wert?.let { "ms" }, listOfNotNull(nacht, schnitt).joinToString(" · "))
         // Fuer TalkBack jede Nacht mit ihrem Wert - das Bild selbst ist stumm.
         val nachSatz = "$titel, $zusatz: " + tage.joinToString(", ") { t ->
             Formate.wochentagLang(t.tag.dayOfWeek) + " " + (t.wert?.let { Formate.Angabe(Formate.zahl(it.toLong()), "ms").text } ?: Formate.FEHLT)
         }
         // Zwei Buchstaben wie jede Reihe von sieben Tagen (Schritte, Naechte), nicht "M T W".
-        HrvWoche(tage, imBand, ausserBand, beschreibung = nachSatz) { Formate.wochentagKurz(it.dayOfWeek) }
-        if (tage.any { it.band != null }) {
-            Punktlegende(
-                listOfNotNull(
-                    // Deckend gemischt statt Alpha: das Quadrat steht auf der Karte wie das Band im Bild.
-                    Legendeneintrag(stringResource(R.string.ks_h_hrv_band), imBand.aufKarte(0.3f), eckig = true),
-                    Legendeneintrag(stringResource(R.string.ks_h_hrv_drin), imBand),
-                    // Daneben nur, wenn es in der Woche vorkommt - sonst erklaerte die Legende eine Farbe, die fehlt.
-                    Legendeneintrag(stringResource(R.string.ks_h_hrv_draussen), ausserBand).takeIf { tage.any { it.imBand == false } },
-                ),
-            )
-        }
+        Bandwoche(listOf(tage), imBand, ausserBand, hoehe = WOCHENBILD, beschreibung = nachSatz) { Formate.wochentagKurz(it.dayOfWeek) }
     }
 }
 
+/** So hoch stehen die Wochen von HRV und Blutdruck, wie im Entwurf "Erlebnis-Herz". */
+private val WOCHENBILD = 190.dp
+
 /**
- * Der Blutdruck der Manschette: die letzte Sitzung gross, ab drei Sitzungen
- * der Schnitt daneben, darunter jede Sitzung der letzten [Fenster.BLUTDRUCK_TAGE]
- * Tage. Ohne Messung fehlt die Karte - die Uhr misst keinen Blutdruck.
+ * Der Blutdruck der Manschette wie die HRV: die letzte Sitzung gross mit
+ * ihrer Zeit, ab drei Sitzungen der Woche ihr Schnitt, darunter die sieben
+ * Tage - oben und unten je an ihrem Band, gruen darin, bernstein daneben,
+ * ohne genug fruehere Tage neutral. Ohne Messung in [Fenster.BLUTDRUCK_TAGE]
+ * Tagen fehlt die Karte - die Uhr misst keinen Blutdruck.
  */
 @Composable
-private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand) {
+private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand, woche: Gesundheitsrechnung.Blutdruckwoche?, jetzt: Instant) {
     val context = LocalContext.current
-    val jetzt = Instant.now()
+    val imBand = Farben.imBand.ton()
+    val ausserBand = Farben.ausserBand.ton()
     val titel = stringResource(R.string.ks_h_blutdruck_k)
-    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.BLUTDRUCK_TAGE.toInt())
+    val zusatz = stringResource(R.string.ks_kp_tage_zusatz, Fenster.WOCHE_TAGE)
     val wert = Formate.zahl(b.letzte.oben.toLong()) + "/" + Formate.zahl(b.letzte.unten.toLong())
-    val schnitt = b.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
-    Abschnitt(titel, zusatz) {
+    // Der Schnitt der sieben Tage, die Titel und Bild zeigen.
+    val schnitt = woche?.schnitt?.let { (oben, unten) -> stringResource(R.string.ks_d_blutdruck_schnitt, oben, unten) }
+    // Das Urteil gilt dem juengsten Tag mit Messung in der Woche - dem Tag des grossen Werts, wenn er in der Woche liegt.
+    val tag = woche?.oben?.indexOfLast { it.wert != null }?.takeIf { it >= 0 }
+    val urteil = tag?.let { Gesundheitsrechnung.blutdrucklage(woche.oben[it], woche.unten[it]) }?.let { lage ->
+        when (lage) {
+            Blutdrucklage.IM_BAND -> Kopfurteil(stringResource(R.string.ks_h_im_band), imBand)
+            Blutdrucklage.DARUEBER -> Kopfurteil(stringResource(R.string.ks_h_ueber_band), ausserBand)
+            Blutdrucklage.DARUNTER -> Kopfurteil(stringResource(R.string.ks_h_unter_band), ausserBand)
+            Blutdrucklage.DANEBEN -> Kopfurteil(stringResource(R.string.ks_h_neben_band), ausserBand)
+        }
+    }
+    Abschnitt(titel, zusatz, urteil = urteil?.text, urteilFarbe = urteil?.farbe) {
         // Am Zeilenanfang gross: "Today, 8:14 AM", "Yesterday, 8:14 AM", sonst das Datum - die eine Form aus Formate.
-        Hauptwert(wert, "mmHg", listOfNotNull(Formate.zeitpunkt(context, b.letzte.zeit), schnitt).joinToString(" · "))
-        Blutdruckbild(
-            b.sitzungen, jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt, Farben.blutdruck.ton(),
-            beschreibung = listOfNotNull("$titel, $zusatz", Formate.Angabe(wert, "mmHg").text, schnitt).joinToString(", "),
-            tagText = { Formate.datumKurz(it) },
-        )
+        Hauptwert(wert, "mmHg", listOfNotNull(Formate.zeitpunkt(context, b.letzte.zeit, jetzt), schnitt).joinToString(" · "))
+        if (woche != null) {
+            val nachSatz = "$titel, $zusatz: " + woche.oben.zip(woche.unten).joinToString(", ") { (o, u) ->
+                Formate.wochentagLang(o.tag.dayOfWeek) + " " +
+                    (if (o.wert != null && u.wert != null) Formate.Angabe("${Formate.zahl(o.wert.toLong())}/${Formate.zahl(u.wert.toLong())}", "mmHg").text else Formate.FEHLT)
+            }
+            // Zwei Reihen in einem Bild: oben und unten teilen Achse und Tage, wie im Entwurf.
+            Bandwoche(listOf(woche.oben, woche.unten), imBand, ausserBand, hoehe = WOCHENBILD, rasterSchritt = 10, beschreibung = nachSatz) {
+                Formate.wochentagKurz(it.dayOfWeek)
+            }
+        }
     }
 }
 
@@ -212,7 +236,8 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
                 stringResource(R.string.ks_h_letzte_nacht_k),
                 stringResource(R.string.ks_h_zeitraum, Formate.uhrzeit(context, n.einschlafen), Formate.uhrzeit(context, n.aufwachen)),
                 stringResource(R.string.ks_h_nachtansicht),
-            ) { oeffneNacht(n.beginnUtc) }
+                onLink = { oeffneNacht(n.beginnUtc) },
+            )
             Zeile(
                 stringResource(R.string.ks_h_ruhepuls_n),
                 if (n.ruhepuls != null) null else stringResource(R.string.ks_h_nicht_gemessen),
@@ -261,6 +286,20 @@ private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
                 Unterzeile(stringResource(R.string.ks_h_gewohnt_text, ruhe.frueher, Formate.menge(schnitt.roundToInt().toLong(), "bpm").text))
             }
         }
+    }
+}
+
+/**
+ * Die letzte Zeile der Seite: der Weg zu den Herztrends und ihrem "What
+ * makes a difference" - im Stil der Zeilen auf Health, mit Zeichen und Chevron.
+ */
+@Composable
+private fun Trendzeile(oeffneTrend: () -> Unit) {
+    Kasten {
+        Zeile(
+            stringResource(R.string.ks_h_trends), stringResource(R.string.ks_h_was_zaehlt),
+            zeichen = { Tonkreis(Zeichen.trend, Farben.aktion, 0.18f) }, onClick = oeffneTrend,
+        )
     }
 }
 

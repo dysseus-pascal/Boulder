@@ -201,15 +201,92 @@ class GesundheitsrechnungHerzTest {
         assertEquals(am(LocalDate.of(2026, 10, 1), 20), Gesundheitsrechnung.blutdruckFuerHerzzeile(beide, jetzt, zone))
     }
 
+    // --- Die Blutdruckwoche der Herzseite (0.51) ---
+
+    private val bdZone = ZoneOffset.UTC
+    private val bdHeute = LocalDate.of(2026, 10, 2)
+    private fun am(tag: LocalDate, h: Int, m: Int, oben: Int, unten: Int) = Blutdruck(tag.atTime(h, m).toInstant(bdZone), oben, unten)
+
+    /**
+     * EIN WERT JE TAG, AUS SEINEN SITZUNGEN: drei Messungen am Morgen sind
+     * eine Sitzung (122/82), dazu eine am Abend (130/90) - der Tag ist
+     * 126/86, der Schnitt der beiden Sitzungen. Ueber die vier Messungen
+     * gemittelt waere er 124/84, der Morgen zaehlte dreifach.
+     */
     @Test
-    fun blutdruckachse_mit_luft_auf_zehner_gerundet() {
-        assertNull(Gesundheitsrechnung.blutdruckachse(emptyList()))
-        assertEquals(70 to 130, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 120, 80))))
-        // 76 - 5 = 71 nach unten auf 70, 135 + 5 = 140 bleibt, 136 + 5 = 141 geht auf 150.
-        assertEquals(70 to 140, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 135, 88))))
-        assertEquals(70 to 150, Gesundheitsrechnung.blutdruckachse(listOf(messung(0, 118, 76), messung(86_400, 136, 88))))
-        // Mit Zehnerschritten waeren das acht Linien; das Raster nimmt Zwanziger.
-        assertEquals(listOf(80, 100, 120, 140), Statistik.rasterInnen(70, 140, 10))
+    fun blutdruckwoche_ein_wert_je_tag_aus_seinen_sitzungen() {
+        val messungen = listOf(
+            am(bdHeute, 7, 0, 120, 80), am(bdHeute, 7, 2, 124, 82), am(bdHeute, 7, 4, 122, 84),
+            am(bdHeute, 20, 0, 130, 90),
+            am(bdHeute.minusDays(2), 8, 0, 118, 76),
+        )
+        val w = Gesundheitsrechnung.blutdruckwoche(messungen, bdHeute, bdZone)
+        assertEquals((6 downTo 0).map { bdHeute.minusDays(it.toLong()) }, w.oben.map { it.tag })
+        assertEquals(w.oben.map { it.tag }, w.unten.map { it.tag })
+        assertEquals(126, w.oben.last().wert)
+        assertEquals(86, w.unten.last().wert)
+        assertEquals(118 to 76, w.oben[4].wert to w.unten[4].wert)
+        // Ein Tag ohne Messung hat keinen Wert, und ohne fruehere Tage gibt es kein Band (neutral).
+        assertNull(w.oben[5].wert)
+        assertTrue(w.oben.all { it.band == null } && w.unten.all { it.band == null })
+        assertTrue(w.oben.all { it.imBand == null })
+    }
+
+    /**
+     * DIE BAENDER GETRENNT FUER OBEN UND UNTEN, nach der Regel des HRV-Bands:
+     * 30 Tage vor dem ersten Tag der Woche oben abwechselnd 116 und 129
+     * (Schnitt 122,5, Streuung 6,6), unten 74 und 83 (78,5, Streuung 4,6) -
+     * das gibt 116-129 und 74-83. Ein gemeinsames Band aus beiden Reihen
+     * laege irgendwo dazwischen und passte zu keiner.
+     */
+    @Test
+    fun blutdruckbaender_getrennt_fuer_oben_und_unten_wie_beim_hrv() {
+        val vorher = (7..46).map { k -> bdHeute.minusDays(k.toLong()).let { if (k % 2 == 0) am(it, 8, 0, 116, 74) else am(it, 8, 0, 129, 83) } }
+        // Die Woche: Mittwoch bis Montag im Band, heute oben drin und unten darueber.
+        val woche = (6 downTo 1).map { am(bdHeute.minusDays(it.toLong()), 8, 0, 122, 78) } + am(bdHeute, 8, 0, 124, 86)
+        val w = Gesundheitsrechnung.blutdruckwoche(vorher + woche, bdHeute, bdZone)
+        assertEquals(116 to 129, w.oben.first().band)
+        assertEquals(74 to 83, w.unten.first().band)
+        assertEquals(true, w.oben.last().imBand)
+        assertEquals(false, w.unten.last().imBand)
+        assertTrue(w.oben.dropLast(1).all { it.imBand == true } && w.unten.dropLast(1).all { it.imBand == true })
+    }
+
+    /** Unter sieben frueheren Tagen mit Messung kein Band - wie bei der HRV; ab sieben eines. */
+    @Test
+    fun blutdruckband_erst_ab_sieben_frueheren_tagen() {
+        fun mit(tage: Int) = Gesundheitsrechnung.blutdruckwoche(
+            (1..tage).map { am(bdHeute.minusDays(6L + it), 8, 0, 120, 80) } + am(bdHeute.minusDays(6), 8, 0, 121, 81), bdHeute, bdZone,
+        )
+        assertNull(mit(6).oben.first().band)
+        assertNull(mit(6).unten.first().band)
+        // Sieben gleiche Tage: das Band ist mindestens 3 breit nach jeder Seite.
+        assertEquals(117 to 123, mit(7).oben.first().band)
+        assertEquals(77 to 83, mit(7).unten.first().band)
+    }
+
+    /**
+     * DER SCHNITT IM KOPF IST DER DER WOCHE, die die Karte zeigt: drei
+     * Sitzungen der letzten sieben Tage (120/80, 124/82, 128/84) geben
+     * 124/82; eine hohe Sitzung vor zehn Tagen zaehlt nicht mit. Unter drei
+     * Sitzungen kein Schnitt.
+     */
+    @Test
+    fun blutdruckwoche_schnitt_aus_den_sitzungen_der_woche() {
+        val alt = am(bdHeute.minusDays(10), 8, 0, 160, 100)
+        val drei = listOf(am(bdHeute.minusDays(6), 8, 0, 120, 80), am(bdHeute.minusDays(3), 8, 0, 124, 82), am(bdHeute, 8, 0, 128, 84))
+        assertEquals(124 to 82, Gesundheitsrechnung.blutdruckwoche(drei + alt, bdHeute, bdZone).schnitt)
+        assertNull(Gesundheitsrechnung.blutdruckwoche(drei.drop(1) + alt, bdHeute, bdZone).schnitt)
+    }
+
+    /** Der Schnitt der HRV-Woche ueber die Naechte mit Wert, ab drei: 41..55 wie im Entwurf geben 49. */
+    @Test
+    fun wochenschnitt_ueber_die_naechte_mit_wert_ab_drei() {
+        fun woche(vararg w: Int?) = w.mapIndexed { i, x -> Gesundheitsrechnung.Bandtag(bdHeute.minusDays(6L - i), x, null) }
+        assertEquals(49, Gesundheitsrechnung.wochenschnitt(woche(48, 53, 46, 55, 52, 41, 50)))
+        // Fehlende Naechte zaehlen nicht als 0: (40 + 50 + 61) / 3 = 50,3.
+        assertEquals(50, Gesundheitsrechnung.wochenschnitt(woche(null, null, null, null, 40, 50, 61)))
+        assertNull(Gesundheitsrechnung.wochenschnitt(woche(null, null, null, null, null, 50, 52)))
     }
 
     @Test
@@ -238,7 +315,7 @@ class GesundheitsrechnungHerzTest {
         val heute = LocalDate.of(2026, 10, 2)
         // 30 Naechte vor der Woche abwechselnd 40 und 50 ms: Schnitt 45, Abweichung gut 5.
         val werte = (1..40).associate { heute.minusDays(it.toLong()) to if (it % 2 == 0) 40 else 50 } + (heute to 70)
-        val woche = Gesundheitsrechnung.hrvWoche(werte, heute)
+        val woche = Gesundheitsrechnung.bandwoche(werte, heute)
         assertEquals(7, woche.size)
         assertEquals(heute, woche.last().tag)
         assertEquals(40 to 50, woche.last().band)
@@ -250,12 +327,12 @@ class GesundheitsrechnungHerzTest {
     fun hrvOhneBandBeiZuWenigNaechten() {
         val heute = LocalDate.of(2026, 10, 2)
         val werte = (0..5).associate { heute.minusDays(it.toLong()) to 45 }
-        val woche = Gesundheitsrechnung.hrvWoche(werte, heute)
+        val woche = Gesundheitsrechnung.bandwoche(werte, heute)
         assertNull(woche.last().band)
         assertNull(woche.last().imBand)
         // Ein ganz gleichmaessiges Band ist mindestens 3 ms breit nach jeder Seite.
         val gleich = (1..10).associate { heute.minusDays(it.toLong()) to 45 }
-        assertEquals(42 to 48, Gesundheitsrechnung.hrvWoche(gleich, heute).last().band)
+        assertEquals(42 to 48, Gesundheitsrechnung.bandwoche(gleich, heute).last().band)
     }
 
     @Test

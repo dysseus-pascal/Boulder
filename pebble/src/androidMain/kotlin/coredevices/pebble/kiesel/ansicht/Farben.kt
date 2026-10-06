@@ -151,10 +151,10 @@ internal object Farben {
 
     // --- Herzseite (Google Health, Nutzerentscheid 0.38.0) -------------------------
 
-    /** HRV im persoenlichen Band - Punkte und Band. */
+    /** Im persoenlichen Band (HRV, Blutdruck oben und unten) - Punkte, Band und das Urteil "In your range". */
     val imBand = Farbe(c(0xFF5BD47A), hell = c(0xFF2E7D32), dunkel = c(0xFF5BD47A))
 
-    /** HRV neben dem Band. */
+    /** Neben dem Band (HRV, Blutdruck) - Punkte und Urteil. */
     val ausserBand = Farbe(c(0xFFF6BF26), hell = c(0xFFB26A00), dunkel = c(0xFFF6BF26))
 
     /** So deckend liegt das Band hinter den Punkten - blass genug, dass die Linie darueber steht. */

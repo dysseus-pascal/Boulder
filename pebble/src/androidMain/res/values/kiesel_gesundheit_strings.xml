@@ -42,7 +42,6 @@
     <string name="ks_h_hrv_hoeher">HRV %1$d ms above your range.</string>
     <string name="ks_h_hrv_tiefer">HRV %1$d ms below your range.</string>
     <string name="ks_h_heute_bisher">TODAY SO FAR</string>
-    <string name="ks_h_herz_n">Heart</string>
     <string name="ks_h_kein_puls_kurz">No heart rate in the last 24 hours</string>
     <string name="ks_h_kein_glas">No glass yet</string>
     <string name="ks_h_von_n">of %1$d</string>
@@ -72,13 +71,14 @@
     <string name="ks_h_hrv_woche">HRV</string>
     <string name="ks_h_hrv_woche_zusatz">last 7 nights</string>
     <string name="ks_h_blutdruck_k">BLOOD PRESSURE</string>
-    <string name="ks_h_hrv_im_band">Last night, in your range of %1$d–%2$d ms</string>
-    <string name="ks_h_hrv_unter_band">Last night, below your range of %1$d–%2$d ms</string>
-    <string name="ks_h_hrv_ueber_band">Last night, above your range of %1$d–%2$d ms</string>
     <string name="ks_h_hrv_keine">Not measured last night</string>
-    <string name="ks_h_hrv_band">Personal range</string>
-    <string name="ks_h_hrv_drin">In range</string>
-    <string name="ks_h_hrv_draussen">Out of range</string>
+    <!-- Heart & Body (0.51): das Urteil rechts im Kopf von HRV und Blutdruck, der Schnitt der Woche, die Zeile Trends. -->
+    <string name="ks_h_im_band">In your range</string>
+    <string name="ks_h_unter_band">Below your range</string>
+    <string name="ks_h_ueber_band">Above your range</string>
+    <string name="ks_h_neben_band">Out of your range</string>
+    <string name="ks_h_naechte_schnitt">%1$d-night avg %2$s</string>
+    <string name="ks_h_was_zaehlt">What makes a difference</string>
     <string name="ks_h_ruhepuls_n">Resting heart</string>
     <string name="ks_h_spo2_n">Blood oxygen</string>
     <string name="ks_h_spo2_keins">Lowest %1$s</string>

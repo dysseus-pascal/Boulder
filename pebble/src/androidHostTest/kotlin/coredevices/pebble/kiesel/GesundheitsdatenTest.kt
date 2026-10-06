@@ -27,6 +27,7 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -130,8 +131,12 @@ class GesundheitsdatenTest {
             ).filter { !it.zeit.isBefore(von) && it.zeit.isBefore(bis) }
         }
 
+        /** Ab wann zuletzt Blutdruck gefragt wurde - "gefragt" bleibt beim blossen Namen, den der Widget-Test sucht. */
+        var blutdruckVon: Instant? = null
+
         override suspend fun blutdruck(von: Instant, bis: Instant): List<Blutdruck> {
             gefragt += "blutdruck"
+            blutdruckVon = von
             // Jeden Tag eine Messung, juengste zuerst - die Seite ordnet selbst.
             return (0..40).map { Blutdruck(Instant.ofEpochSecond(zeitHeute - it * 86_400L - 3 * 3600), 115 + it % 11, 75 + it % 7) }
                 .filter { !it.zeit.isBefore(von) && it.zeit.isBefore(bis) }
@@ -256,6 +261,34 @@ class GesundheitsdatenTest {
     }
 
     /**
+     * DIE BLUTDRUCKBAENDER SEHEN SO WEIT ZURUECK WIE DAS HRV-BAND: der
+     * aelteste Tag der Woche braucht noch 30 Tage davor, also 37 Tage aus
+     * derselben einen Abfrage. Die Karte selbst (letzte Sitzung) zaehlt
+     * weiter 30 Tage. Die Quelle hat 41 Tage, jeden Tag eine Messung.
+     */
+    @Test
+    fun dieBlutdruckwocheSiehtSoWeitZurueckWieIhrBand() = runBlocking {
+        for (zeit in listOf(LocalDateTime.of(2026, 10, 3, 13, 5), LocalDateTime.of(2026, 10, 4, 0, 10))) {
+            val jetzt = zeit.atZone(zone).toInstant()
+            val heute = jetzt.atZone(zone).toLocalDate()
+            val q = Quelle(5, jetzt, zone, null)
+            val s = Gesundheitsdaten.lade(q, voll = true, jetzt, zone)
+            assertEquals(1, q.gefragt.count { it == "blutdruck" }, "$zeit")
+            val ersterTag = heute.minusDays(Fenster.WOCHE_TAGE - 1L)
+            val von = assertNotNull(q.blutdruckVon)
+            assertTrue(!von.isAfter(ersterTag.minusDays(30).atStartOfDay(zone).toInstant()), "$zeit: Blutdruck erst ab $von")
+            // Dieselbe Woche wie aus allen 41 Tagen der Quelle: es fehlt keiner, den ein Band braucht.
+            val alle = q.blutdruck(Instant.EPOCH, jetzt)
+            val woche = assertNotNull(s.blutdruckWoche, "$zeit")
+            assertEquals(Gesundheitsrechnung.blutdruckwoche(alle, heute, zone), woche, "$zeit")
+            assertTrue(woche.oben.all { it.band != null } && woche.unten.all { it.band != null }, "$zeit")
+            // Die Karte und die Herzzeile: weiter genau die letzten 30 Tage.
+            val grenze = jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE))
+            assertEquals(alle.filter { !it.zeit.isBefore(grenze) }.sortedBy { it.zeit }, s.blutdruck, "$zeit")
+        }
+    }
+
+    /**
      * Gesundheitsdaten.lies aus Boulder 0.46.0, WOERTLICH BIS AUF DIE ZUGRIFFE:
      * Datenbank, Akte und Einstellungen kommen aus derselben Quelle wie bei
      * [Gesundheitsdaten.lade], "jetzt" ist fest, und das Tagesherz rechnet die
@@ -328,7 +361,7 @@ class GesundheitsdatenTest {
         val langeNaechte = Gesundheitsrechnung.jeTag(naechteAb(vonHrv), zone)
         val hrvTage = versuche(log, "HRV-Woche") {
             val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
-            Gesundheitsrechnung.hrvWoche(jeTag, heute)
+            Gesundheitsrechnung.bandwoche(jeTag, heute)
         }.orEmpty()
         val juengste = if (nacht != null) null else langeNaechte.lastOrNull()?.beginnUtc
             ?: versuche(log, "Juengste Nacht") { q.naechte(0, jetzt.epochSecond) }.orEmpty().maxOfOrNull { it.beginnUtc }
@@ -380,7 +413,12 @@ class GesundheitsdatenTest {
             // Die Nacht eigens: ihre Phasen sind ein IntArray, das data class nur als Objekt vergleicht.
             assertEquals(vergleichbar(alt.nacht), vergleichbar(neu.nacht), "$zeit, Apps $apps, Lauf $seed")
             // Was 0.51 fuer das Tagesband dazulas, kannte die alte Fassung nicht - eigens geprueft in dasBand...
-            assertEquals(alt.copy(nacht = null), neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList()), "$zeit, Apps $apps, Lauf $seed")
+            // Ebenso die Blutdruckwoche der Herzseite (0.51) - eigens geprueft in dieBlutdruckwoche...
+            assertEquals(
+                alt.copy(nacht = null),
+                neu.copy(nacht = null, bandPuls = emptyList(), schrittBins = emptyList(), blutdruckWoche = null),
+                "$zeit, Apps $apps, Lauf $seed",
+            )
             // Der Vergleich ist nicht leer: Puls, Tagesherz, Nacht, Akkunaechte, Eintraege von heute und gestern.
             listOf(neu.puls, neu.tagesherz, listOfNotNull(neu.nacht), neu.akkuNaechte, neu.eintraege, neu.gestern, neu.hrvTage)
                 .forEachIndexed { k, teil -> if (teil.isNotEmpty()) gefuellt[k]++ }

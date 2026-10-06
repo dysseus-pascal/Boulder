@@ -25,11 +25,17 @@ internal object Fenster {
      */
     const val LERNNAECHTE = 3
 
-    /** So viele Naechte vor einem Tag bilden sein HRV-Band. */
+    /**
+     * So viele Naechte vor einem Tag bilden sein HRV-Band. Dieselbe Zahl Tage
+     * gilt fuer die Blutdruckbaender - eine Regel fuer beide Karten.
+     */
     const val HRV_NAECHTE = 30
 
-    /** Mit weniger Naechten gibt es kein HRV-Band - es waere Zufall. */
+    /** Mit weniger Naechten (beim Blutdruck: Tagen mit Messung) gibt es kein Band - es waere Zufall. */
     const val HRV_LERNNAECHTE = 7
+
+    /** Ab so vielen Werten steht ein Schnitt neben dem letzten Wert (HRV der Woche, Blutdruck). */
+    const val SCHNITT_WERTE = 3
 
     /** So weit zurueck vergleicht die Herzzeile den Puls von heute mit den Tagen davor. */
     const val TAGESHERZ_TAGE = 14L

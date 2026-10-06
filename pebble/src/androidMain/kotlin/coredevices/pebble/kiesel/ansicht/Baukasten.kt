@@ -169,10 +169,18 @@ internal fun Kasten(onClick: (() -> Unit)? = null, inhalt: @Composable ColumnSco
  * stand er mal im String und mal im Code, kamen "· ·" oder gar keiner heraus.
  * Ein mitgegebenes "·" am Anfang wird darum uebergangen. Ein langer Kopf
  * ("TYPICAL WEEK · CAFFEINE · LAST 90 DAYS") BRICHT UM, statt abzuschneiden -
- * mit grosser Schrift fehlte sonst der Zeitraum.
+ * mit grosser Schrift fehlte sonst der Zeitraum. [urteil]: ein kurzes Urteil
+ * rechts, in [urteilFarbe] (HRV und Blutdruck: "In your range").
  */
 @Composable
-internal fun Kopf(titel: String, zusatz: String? = null, link: String? = null, onLink: (() -> Unit)? = null) {
+internal fun Kopf(
+    titel: String,
+    zusatz: String? = null,
+    link: String? = null,
+    onLink: (() -> Unit)? = null,
+    urteil: String? = null,
+    urteilFarbe: Color? = null,
+) {
     val farben = MaterialTheme.colorScheme
     val rest = zusatz?.trimStart('·', ' ', ' ')?.takeIf { it.isNotEmpty() }
     // Mindesthoehe statt fester: bei grosser Schrift waechst der Kopf, statt zu beschneiden.
@@ -186,6 +194,8 @@ internal fun Kopf(titel: String, zusatz: String? = null, link: String? = null, o
             },
             Modifier.weight(1f).padding(vertical = 6.dp), fontSize = 12.sp, lineHeight = 16.sp,
         )
+        // Das Urteil der Karte rechts im Kopf ("In your range"), eingerueckt wie der Text eines Links.
+        if (urteil != null) Text(urteil, Modifier.padding(horizontal = 6.dp), fontSize = 13.sp, lineHeight = 18.sp, color = urteilFarbe ?: farben.onSurfaceVariant)
         if (link != null && onLink != null) Weiterlink(link, onLink)
     }
 }
@@ -213,10 +223,12 @@ internal fun Abschnitt(
     zusatz: String? = null,
     link: String? = null,
     onLink: (() -> Unit)? = null,
+    urteil: String? = null,
+    urteilFarbe: Color? = null,
     inhalt: @Composable ColumnScope.() -> Unit,
 ) {
     Kasten {
-        Kopf(titel, zusatz, link, onLink)
+        Kopf(titel, zusatz, link, onLink, urteil, urteilFarbe)
         Column(
             Modifier.fillMaxWidth().padding(start = INNEN, end = INNEN, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp), content = inhalt,
@@ -560,6 +572,8 @@ internal object Zeichen {
     val ort = bild(2f, 0f, "M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z", kreis(12f, 9.8f, 2.3f))
     /** Ein Laeufer - das Sport-Feld auf Health und ein Training im Tagesband. */
     val laeufer = bild(2f, 0f, kreis(14f, 4.5f, 1.8f), "M7 11l3-3 4 1 2 3 3 1", "M12 9l-2 6 3 2-1 5", "M10 15l-3 6")
+    /** Eine steigende Linie mit Pfeil - die Zeile "Trends" der Herzseite. */
+    val trend = bild(2f, 0f, "M4 18l5-6 4 3 7-9", "M15 6h5v5")
     /** Eine Mondsichel - die Schlafenszeit im Tagesband. */
     val mond = bild(2f, 0f, "M19 15.5A8 8 0 0 1 8.5 5a8 8 0 1 0 10.5 10.5z")
     /** Eine Personenwaage mit Zeiger - die Zeile "Body". */

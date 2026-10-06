@@ -49,8 +49,15 @@ internal enum class Vergleich { WIE_IMMER, HOEHER, TIEFER }
  */
 internal data class Herzurteil(val frueher: Int, val schnitt: Double?, val urteil: Vergleich?, val abstand: Int)
 
-/** Die HRV der letzten Nacht gegen ihr persoenliches Band. [abstand] in ms bis zum Bandrand, 0 im Band. */
+/** Ein Wert gegen sein persoenliches Band (HRV, Blutdruck). [abstand] bis zum Bandrand, 0 im Band. */
 internal data class Bandurteil(val urteil: Vergleich, val abstand: Int)
+
+/**
+ * Wo ein Blutdrucktag zu seinen beiden Baendern liegt - die Karte hat EIN
+ * Urteil fuer oben und unten. [DANEBEN]: der eine Wert darueber, der andere
+ * darunter; das ist weder "above" noch "below".
+ */
+internal enum class Blutdrucklage { IM_BAND, DARUEBER, DARUNTER, DANEBEN }
 
 internal enum class Praeparatlage { ALLE, OFFEN, FAELLIG, KEINE }
 
@@ -131,7 +138,7 @@ internal fun Gesundheitsrechnung.ruhepulsUrteil(letzte: Int?, frueher: List<Int>
 /**
  * Wieviele der frueheren Naechte zaehlen und ihr Schnitt: hoechstens die
  * letzten [Fenster.VERGLEICHSNAECHTE], ohne die ungemessenen (0). Fuer die HRV nur
- * die Zahl auf "Your usual" - ihr Urteil faellt am Band, siehe [hrvUrteil].
+ * die Zahl auf "Your usual" - ihr Urteil faellt am Band, siehe [bandurteil].
  */
 internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, Double?> {
     val werte = frueher.filter { it > 0 }.takeLast(Fenster.VERGLEICHSNAECHTE)
@@ -139,24 +146,41 @@ internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, D
 }
 
 /**
- * Wie immer heisst: im Band der letzten Nacht ([Gesundheitsrechnung.hrvWoche],
- * der letzte Tag). Ein zweiter Massstab - zehn Prozent um den Schnitt von
- * sieben Naechten - widersprach der HRV-Karte: "in your range" darueber,
- * "below your usual" darunter. Ohne Wert oder Band kein Urteil.
+ * Wie immer heisst: im Band des Tages ([Gesundheitsrechnung.bandwoche]) -
+ * fuer die HRV das der letzten Nacht. Ein zweiter Massstab - zehn Prozent um
+ * den Schnitt von sieben Naechten - widersprach der HRV-Karte: "in your
+ * range" darueber, "below your usual" darunter. Ohne Wert oder Band kein Urteil.
  *
- * Der Abstand zaehlt bis zum Bandrand, nicht bis zur Mitte: der Satz sagt
- * "below your range", und auf 63 ms "as usual" folgt bei 64 ms "1 ms above"
- * statt eines Sprungs auf den Abstand zur Mitte. In ms, weil Band und Wert
- * auf der Karte in ms stehen - so laesst sich die Zahl dort nachrechnen.
+ * Der Abstand zaehlt bis zum Bandrand, nicht bis zur Mitte: auf 63 ms "as
+ * usual" folgt bei 64 ms "1 ms above" statt eines Sprungs auf den Abstand
+ * zur Mitte. In der Einheit des Werts, wie Band und Wert auf der Karte stehen.
  */
-internal fun Gesundheitsrechnung.hrvUrteil(tag: Gesundheitsrechnung.HrvTag?): Bandurteil? {
+internal fun Gesundheitsrechnung.bandurteil(tag: Gesundheitsrechnung.Bandtag?): Bandurteil? {
     val wert = tag?.wert ?: return null
     val (unten, oben) = tag.band ?: return null
-    // Was "im Band" heisst, entscheidet allein HrvTag.imBand - dieselbe Regel faerbt die Punkte im Bild.
+    // Was "im Band" heisst, entscheidet allein Bandtag.imBand - dieselbe Regel faerbt die Punkte im Bild.
     return when {
         tag.imBand == true -> Bandurteil(Vergleich.WIE_IMMER, 0)
         wert < unten -> Bandurteil(Vergleich.TIEFER, unten - wert)
         else -> Bandurteil(Vergleich.HOEHER, wert - oben)
+    }
+}
+
+/**
+ * Das Urteil der Blutdruckkarte: oben und unten je an ihrem Band
+ * ([bandurteil]). Im Band nur, wenn beide drin liegen - dieselbe Regel, die
+ * die beiden Punkte des Tages gruen faerbt. Ohne Wert oder Band (zu wenig
+ * fruehere Tage) kein Urteil.
+ */
+internal fun Gesundheitsrechnung.blutdrucklage(oben: Gesundheitsrechnung.Bandtag?, unten: Gesundheitsrechnung.Bandtag?): Blutdrucklage? {
+    val o = bandurteil(oben)?.urteil ?: return null
+    val u = bandurteil(unten)?.urteil ?: return null
+    val daneben = setOf(o, u) - Vergleich.WIE_IMMER
+    return when {
+        daneben.isEmpty() -> Blutdrucklage.IM_BAND
+        daneben.size == 2 -> Blutdrucklage.DANEBEN
+        daneben.single() == Vergleich.HOEHER -> Blutdrucklage.DARUEBER
+        else -> Blutdrucklage.DARUNTER
     }
 }
 

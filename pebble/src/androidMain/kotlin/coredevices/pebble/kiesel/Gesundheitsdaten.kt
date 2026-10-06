@@ -120,7 +120,9 @@ internal data class GesundheitsStand(
     /** Die Grenzen moderat, kraeftig, Spitze in bpm (siehe [Gesundheitsrechnung.pulsZonen]). */
     val pulsZonen: List<Int> = emptyList(),
     /** Die HRV der letzten sieben Naechte mit dem persoenlichen Band, aelteste zuerst. */
-    val hrvTage: List<Gesundheitsrechnung.HrvTag> = emptyList(),
+    val hrvTage: List<Gesundheitsrechnung.Bandtag> = emptyList(),
+    /** Der Blutdruck der letzten sieben Tage, oben und unten je mit Band (Herzseite); ohne Messung null. */
+    val blutdruckWoche: Gesundheitsrechnung.Blutdruckwoche? = null,
     /** Ohne [nacht]: der Beginn der juengsten Nacht ueberhaupt - der Weg zu ihr und zu den frueheren. */
     val juengsteNacht: Long? = null,
     /**
@@ -497,9 +499,16 @@ internal object Gesundheitsdaten {
         // ihr Anfang fehlte, und die Herzseite nannte einen anderen Tiefstwert als die Nachtansicht.
         val spo2Von = minOf(vor24, nacht?.spanne?.first ?: vor24)
         val spo2 = versuche(TAG, "SpO2") { q.spo2(spo2Von, jetzt.epochSecond) }.orEmpty()
-        val blutdruck = versuche(TAG, "Blutdruck lesen") {
-            q.blutdruck(jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE)), jetzt).orEmpty().sortedBy { it.zeit }
+        // Der Blutdruck einmal, so weit das Band des aeltesten Tages der Woche zurueckblickt -
+        // die Messungen der Karte (Fenster.BLUTDRUCK_TAGE) stecken darin.
+        val blutdruckVon = jetzt.minus(Duration.ofDays(Fenster.BLUTDRUCK_TAGE))
+        val vonBlutdruckband = Instant.ofEpochSecond(anfang(woche.first().minusDays(Fenster.HRV_NAECHTE.toLong())))
+        val blutdruckAlle = versuche(TAG, "Blutdruck lesen") {
+            q.blutdruck(minOf(blutdruckVon, vonBlutdruckband), jetzt).orEmpty().sortedBy { it.zeit }
         }.orEmpty()
+        val blutdruck = blutdruckAlle.filter { !it.zeit.isBefore(blutdruckVon) }
+        val blutdruckWoche = if (blutdruckAlle.isEmpty()) null
+        else versuche(TAG, "Blutdruckwoche") { Gesundheitsrechnung.blutdruckwoche(blutdruckAlle, heute, zone) }
 
         // Dieselben Grenzen wie bei den Trainings, siehe Herzgrenzen
         val ruhe = Herzgrenzen.ruhepuls(frueher.map { it.ruhepuls } + listOfNotNull(nacht?.ruhepuls)) ?: Trainingsanalyse.RUHEPULS_ERSATZ
@@ -514,7 +523,7 @@ internal object Gesundheitsdaten {
         val langeNaechte = Gesundheitsrechnung.jeTag(naechteAb(vonHrv), zone)
         val hrvTage = versuche(TAG, "HRV-Woche") {
             val jeTag = langeNaechte.associate { Gesundheitsrechnung.nachtTag(it.beginnUtc, it.aufwachen, zone) to it.hrv }
-            Gesundheitsrechnung.hrvWoche(jeTag, heute)
+            Gesundheitsrechnung.bandwoche(jeTag, heute)
         }.orEmpty()
         // Ohne Nacht von heute fuehrt nur dieser Weg zu den frueheren Naechten und
         // zu Sleep trends; nach Wochen ohne Uhr reichen die 37 Tage oben nicht.
@@ -531,6 +540,7 @@ internal object Gesundheitsdaten {
             letzteDaten = versuche(TAG, "Letzte Daten") { q.letzterZeitstempel() }?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) },
             pulsZonen = zonen,
             hrvTage = hrvTage,
+            blutdruckWoche = blutdruckWoche,
             juengsteNacht = juengste,
             akkuNaechte = naechteAb(vonAkku),
             bandPuls = bandPuls,

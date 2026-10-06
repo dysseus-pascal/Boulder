@@ -28,14 +28,12 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
-import coredevices.pebble.kiesel.Blutdruck
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Kurvenzug
 import coredevices.pebble.kiesel.Nacht
 import coredevices.pebble.kiesel.Pulsbin
 import coredevices.pebble.kiesel.Statistik
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -281,23 +279,31 @@ internal fun Pulsband(
 }
 
 /**
- * Die HRV der letzten sieben Naechte wie bei Google Health und Garmin: das
- * persoenliche Band als Flaeche, Tag fuer Tag so breit, wie es an dem Tag
- * galt, darueber die Naechte als verbundene Punkte - gruen im Band, in
- * [ausserhalb] daneben. Eine Nacht ohne Band (zu wenig fruehere Naechte)
- * steht neutral da, und die Linie zu ihr auch: gruen hiesse "in range", und
- * ohne Band ist ueber sie nichts gesagt.
+ * Eine Woche am persoenlichen Band wie bei Google Health und Garmin: das
+ * Band als Flaeche, Tag fuer Tag so breit, wie es an dem Tag galt, darueber
+ * die Tage als verbundene Punkte - gruen im Band, in [ausserhalb] daneben.
+ * Ein Tag ohne Band (zu wenig fruehere Werte) steht neutral da, und die
+ * Linie zu ihm auch: gruen hiesse "in range", und ohne Band ist ueber ihn
+ * nichts gesagt.
+ *
+ * [reihen]: je sieben Tage mit eigenem Band - eine fuer die HRV, zwei fuer
+ * den Blutdruck (oben und unten). DIESELBE ZEICHNUNG FUER BEIDE, damit
+ * dieselbe Farbe auf beiden Karten dasselbe heisst. [rasterSchritt]: der
+ * kleinste Abstand der Rasterlinien - die HRV will Fuenfer, der Blutdruck
+ * ueber 60 mmHg Spanne Zehner oder mehr.
  */
 @Composable
-internal fun HrvWoche(
-    tage: List<Gesundheitsrechnung.HrvTag>,
+internal fun Bandwoche(
+    reihen: List<List<Gesundheitsrechnung.Bandtag>>,
     farbe: Color,
     ausserhalb: Color,
     hoehe: Dp = 170.dp,
+    rasterSchritt: Int = 5,
     beschreibung: String? = null,
     tagText: (LocalDate) -> String,
 ) {
-    val werte = tage.mapNotNull { it.wert }
+    val tage = reihen.firstOrNull() ?: return
+    val werte = reihen.flatten().mapNotNull { it.wert }
     if (werte.isEmpty()) return
     val messer = rememberTextMeasurer()
     val stil = achsStil()
@@ -309,7 +315,7 @@ internal fun HrvWoche(
         val rechts = size.width - achsSpalte(messer, stil)
         val kopf = 6.dp.toPx()
         val boden = size.height - fussraum(messer, stil, luft = 2.dp)
-        val alle = werte + tage.mapNotNull { it.band }.flatMap { listOf(it.first, it.second) }
+        val alle = werte + reihen.flatten().mapNotNull { it.band }.flatMap { listOf(it.first, it.second) }
         val tief = ((alle.min() - 6).coerceAtLeast(0) / 5) * 5
         val hoch = maxOf(alle.max() + 6, tief + 20)
         val spalte = rechts / tage.size
@@ -317,102 +323,46 @@ internal fun HrvWoche(
         fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
 
         // Durchgezogen und blass: gestrichelt hiesse bei Boulder "Schnitt".
-        Statistik.rasterInnen(tief, hoch, 5).takeLast(4).forEach { w ->
+        Statistik.rasterInnen(tief, hoch, rasterSchritt).takeLast(4).forEach { w ->
             drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
             val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
-        // Das Band als Treppe: jede Spalte so hoch wie das Band ihres Tages,
-        // die erste und letzte bis an den Rand.
-        tage.forEachIndexed { i, t ->
-            val (u, o) = t.band ?: return@forEachIndexed
-            val links = if (i == 0) 0f else spalte * i
-            val breite = if (i == tage.lastIndex) rechts - links else spalte * (i + 1) - links
-            drawRect(flaeche, Offset(links, y(o)), Size(breite + 0.5f, y(u) - y(o)))
-        }
-        val punkte = tage.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) to t.imBand } }
-        for (i in 1 until punkte.size) {
-            val (von, vonImBand) = punkte[i - 1]
-            val (bis, bisImBand) = punkte[i]
-            drawLine(if (vonImBand == null || bisImBand == null) ohneUrteil else farbe, von, bis, 2.dp.toPx(), cap = StrokeCap.Round)
-        }
-        tage.forEachIndexed { i, t ->
-            val w = t.wert ?: return@forEachIndexed
-            val f = when (t.imBand) {
-                true -> farbe
-                false -> ausserhalb
-                null -> ohneUrteil
+        // Erst alle Baender, dann Linien und Punkte: beim Blutdruck laege sonst
+        // das obere Band ueber den Punkten des unteren, wo sie sich naehern.
+        reihen.forEach { reihe ->
+            // Das Band als Treppe: jede Spalte so hoch wie das Band ihres Tages,
+            // die erste und letzte bis an den Rand.
+            reihe.forEachIndexed { i, t ->
+                val (u, o) = t.band ?: return@forEachIndexed
+                val links = if (i == 0) 0f else spalte * i
+                val breite = if (i == reihe.lastIndex) rechts - links else spalte * (i + 1) - links
+                drawRect(flaeche, Offset(links, y(o)), Size(breite + 0.5f, y(u) - y(o)))
             }
-            val p = Offset(x(i), y(w))
-            val letzte = i == tage.lastIndex
-            drawCircle(f, 4.dp.toPx(), p)
-            // Die letzte Nacht mit einem Ring darum, wie der Auswahlpunkt der Vorlage.
-            if (letzte) drawCircle(f, 7.5.dp.toPx(), p, style = Stroke(2.dp.toPx()))
+        }
+        reihen.forEach { reihe ->
+            val punkte = reihe.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) to t.imBand } }
+            for (i in 1 until punkte.size) {
+                val (von, vonImBand) = punkte[i - 1]
+                val (bis, bisImBand) = punkte[i]
+                drawLine(if (vonImBand == null || bisImBand == null) ohneUrteil else farbe, von, bis, 2.dp.toPx(), cap = StrokeCap.Round)
+            }
+            reihe.forEachIndexed { i, t ->
+                val w = t.wert ?: return@forEachIndexed
+                val f = when (t.imBand) {
+                    true -> farbe
+                    false -> ausserhalb
+                    null -> ohneUrteil
+                }
+                val p = Offset(x(i), y(w))
+                drawCircle(f, 4.dp.toPx(), p)
+                // Der letzte Tag mit einem Ring darum, wie der Auswahlpunkt der Vorlage.
+                if (i == reihe.lastIndex) drawCircle(f, 7.5.dp.toPx(), p, style = Stroke(2.dp.toPx()))
+            }
         }
         tage.forEachIndexed { i, t ->
             val m = messer.measure(tagText(t.tag), stil)
             drawText(m, topLeft = Offset(x(i) - m.size.width / 2f, size.height - m.size.height))
-        }
-    }
-}
-
-/**
- * Die Blutdrucksitzungen zwischen [von] und [bis]: je Sitzung ein Strich von
- * diastolisch bis systolisch mit einem Punkt an jedem Ende - beide Werte
- * und ihr Abstand auf einen Blick. Die Zeit laeuft durch, nicht in
- * Tagesfaechern: morgens und abends gemessen stuenden sonst zwei Striche
- * aufeinander. Die letzte Sitzung kraeftig, die frueheren blasser; die
- * Zahlen rechts wie bei [HrvWoche], unter jedem Montag sein Datum.
- */
-@Composable
-internal fun Blutdruckbild(
-    sitzungen: List<Blutdruck>,
-    von: Instant,
-    bis: Instant,
-    farbe: Color,
-    hoehe: Dp = 150.dp,
-    beschreibung: String? = null,
-    tagText: (LocalDate) -> String,
-) {
-    val (tief, hoch) = Gesundheitsrechnung.blutdruckachse(sitzungen) ?: return
-    val messer = rememberTextMeasurer()
-    val stil = achsStil()
-    val raster = Farben.raster()
-    val zone = ZoneId.systemDefault()
-    // Blass als deckende Mischung mit der Karte: mit Alpha laege der Strich im Punkt doppelt und dunkelte ihn fleckig.
-    val blass = farbe.aufKarte(0.5f)
-    Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
-        val rechts = size.width - achsSpalte(messer, stil)
-        val kopf = 6.dp.toPx()
-        val boden = size.height - fussraum(messer, stil, luft = 2.dp)
-        // Ein Punkt Abstand zu beiden Seiten: eine Sitzung von eben laege sonst halb unter den Zahlen.
-        val rand = 6.dp.toPx()
-        val spanne = (bis.epochSecond - von.epochSecond).coerceAtLeast(1)
-        fun x(t: Instant) = rand + (rechts - 2 * rand) * (t.epochSecond - von.epochSecond).coerceIn(0, spanne) / spanne.toFloat()
-        fun y(w: Int) = kopf + (boden - kopf) * (1f - (w - tief).toFloat() / (hoch - tief))
-
-        Statistik.rasterInnen(tief, hoch, 10).forEach { w ->
-            drawLine(raster, Offset(0f, y(w)), Offset(rechts, y(w)), 1.dp.toPx())
-            val m = messer.measure(Formate.zahl(w.toLong()), stil)
-            drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
-        }
-        sitzungen.forEachIndexed { i, s ->
-            val f = if (i == sitzungen.lastIndex) farbe else blass
-            val oben = Offset(x(s.zeit), y(s.oben))
-            val unten = Offset(x(s.zeit), y(s.unten))
-            drawLine(f, oben, unten, 2.dp.toPx(), cap = StrokeCap.Round)
-            drawCircle(f, 3.dp.toPx(), oben)
-            drawCircle(f, 3.dp.toPx(), unten)
-        }
-        // Die Montage als Zeitachse, mittig unter ihrem Tag - wie im Tagesbild der Trends.
-        var tag = von.atZone(zone).toLocalDate()
-        while (!tag.isAfter(bis.atZone(zone).toLocalDate())) {
-            if (tag.dayOfWeek == DayOfWeek.MONDAY) {
-                val mitte = x(tag.atTime(12, 0).atZone(zone).toInstant())
-                val m = messer.measure(tagText(tag), stil)
-                drawText(m, topLeft = Offset((mitte - m.size.width / 2f).coerceIn(0f, maxOf(0f, rechts - m.size.width)), size.height - m.size.height))
-            }
-            tag = tag.plusDays(1)
         }
     }
 }

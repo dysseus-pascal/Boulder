@@ -21,6 +21,7 @@ class FachkonstantenTest {
         assertEquals(3, Fenster.LERNNAECHTE, "ab so vielen Naechten ein Ruhepuls-Urteil")
         assertEquals(30, Fenster.HRV_NAECHTE, "Naechte des HRV-Bands")
         assertEquals(7, Fenster.HRV_LERNNAECHTE, "ab so vielen Naechten ein HRV-Band")
+        assertEquals(3, Fenster.SCHNITT_WERTE, "ab so vielen Werten ein Schnitt (HRV-Woche, Blutdruck)")
         assertEquals(14L, Fenster.TAGESHERZ_TAGE, "Tage im Vergleich des Tagespulses")
         assertEquals(5, Fenster.TAGESHERZ_LERNTAGE, "ab so vielen Tagen ein Tagespuls-Urteil")
         assertEquals(30L, Fenster.BLUTDRUCK_TAGE)

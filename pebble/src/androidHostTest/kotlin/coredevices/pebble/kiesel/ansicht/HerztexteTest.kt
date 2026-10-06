@@ -5,7 +5,7 @@ import coredevices.pebble.kiesel.Bandurteil
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Herzurteil
 import coredevices.pebble.kiesel.Vergleich
-import coredevices.pebble.kiesel.hrvUrteil
+import coredevices.pebble.kiesel.bandurteil
 import coredevices.pebble.kiesel.ruhepulsUrteil
 import java.time.LocalDate
 import kotlin.test.Test
@@ -65,7 +65,7 @@ class HerztexteTest {
         assertEquals(Satzteil(R.string.ks_h_ruhe_hoeher, 6), ruheTeil(Gesundheitsrechnung.ruhepulsUrteil(61, listOf(55, 55, 55, 55))))
         // HRV 40 unter dem Band 45..60: 5 ms darunter.
         val tag = LocalDate.of(2026, 10, 3)
-        val hrv = Gesundheitsrechnung.hrvUrteil(Gesundheitsrechnung.HrvTag(tag, 40, 45 to 60))
+        val hrv = Gesundheitsrechnung.bandurteil(Gesundheitsrechnung.Bandtag(tag, 40, 45 to 60))
         assertEquals(Satzteil(R.string.ks_h_hrv_tiefer, 5), hrvTeil(hrv!!))
         // Der Tagespuls: heute 64 nach fuenf Tagen um 70 - sechs darunter, mit Betrag.
         val tage = (1..5).map { Gesundheitsrechnung.Tagesherz(tag.minusDays(it.toLong()), 70, 0, 100) } + Gesundheitsrechnung.Tagesherz(tag, 64, 0, 100)

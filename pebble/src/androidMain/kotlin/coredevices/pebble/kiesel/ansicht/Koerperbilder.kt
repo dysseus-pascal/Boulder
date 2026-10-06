@@ -25,7 +25,7 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Ein Koerperwert als blasse Tagespunkte mit dem gleitenden Median darueber, im Stil von
- * [HrvWoche]: die Punkte zeigen, was die Waage sagte, die Linie, wohin es geht.
+ * [Bandwoche]: die Punkte zeigen, was die Waage sagte, die Linie, wohin es geht.
  * Die Werte kommen schon in der Einheit der Anzeige. [beschreibung]: was
  * TalkBack statt des stummen Bildes sagt.
  */

@@ -272,7 +272,7 @@ internal object Gesundheitsrechnung {
         fun oben(s: List<Blutdruck>) = s.map { it.oben }.average()
         fun unten(s: List<Blutdruck>) = s.map { it.unten }.average()
         // Unter drei Sitzungen ist ein Schnitt nur die letzte mit anderem Namen.
-        val schnitt = sitzungen.takeIf { it.size >= 3 }?.let { l ->
+        val schnitt = sitzungen.takeIf { it.size >= Fenster.SCHNITT_WERTE }?.let { l ->
             l.map(::oben).average().roundToInt() to l.map(::unten).average().roundToInt()
         }
         // Die Sitzung traegt die Zeit ihrer ersten Messung: da begann das Messen.
@@ -284,15 +284,35 @@ internal object Gesundheitsrechnung {
         blutdruckstand(messungen)?.letzte?.takeIf { tageZurueck(it.zeit, jetzt, zone) < Fenster.BLUTDRUCK_ZEILE_TAGE }
 
     /**
-     * Die y-Achse des Blutdruckbilds in mmHg: fuenf mmHg Luft unter dem
-     * tiefsten und ueber dem hoechsten Wert, auf Zehner gerundet - so liegt
-     * kein Punkt am Rand, und die Zahlen der Achse bleiben rund.
+     * Die Blutdruckwoche der Herzseite: oben und unten je wie die HRV-Woche
+     * ([bandwoche]) - ein Wert je Tag, jeder Tag mit seinem Band. [schnitt]:
+     * der Schnitt der Sitzungen dieser sieben Tage wie in [blutdruckstand].
      */
-    fun blutdruckachse(sitzungen: List<Blutdruck>): Pair<Int, Int>? {
-        if (sitzungen.isEmpty()) return null
-        val tief = sitzungen.minOf { minOf(it.oben, it.unten) } - 5
-        val hoch = sitzungen.maxOf { maxOf(it.oben, it.unten) } + 5
-        return Math.floorDiv(tief, 10) * 10 to Math.floorDiv(hoch + 9, 10) * 10
+    data class Blutdruckwoche(val oben: List<Bandtag>, val unten: List<Bandtag>, val schnitt: Pair<Int, Int>?)
+
+    /**
+     * Die sieben Tage bis [heute] aus den [messungen] (mindestens
+     * [Fenster.HRV_NAECHTE] Tage vor der Woche, sonst fehlt den ersten Tagen
+     * ein Teil ihres Bands). Der Wert eines Tages ist der Schnitt seiner
+     * Sitzungen - eine Sitzung zaehlt einmal, wie oft die Manschette darin
+     * auch mass, und gehoert zum Tag ihrer ersten Messung.
+     *
+     * JE EIN BAND FUER OBEN UND UNTEN, nach der Regel der HRV: die beiden
+     * Werte liegen rund 40 mmHg auseinander und schwanken je fuer sich.
+     */
+    fun blutdruckwoche(messungen: List<Blutdruck>, heute: LocalDate, zone: ZoneId): Blutdruckwoche {
+        val sitzungen = blutdrucksitzungen(messungen)
+        val jeTag = sitzungen.groupBy { it.first().zeit.atZone(zone).toLocalDate() }
+        // Aus den ungerundeten Sitzungsmitteln, wie der Schnitt in blutdruckstand: gerundet wird einmal, am Ende.
+        fun tageswerte(wert: (Blutdruck) -> Int) =
+            jeTag.mapValues { (_, l) -> l.map { s -> s.map(wert).average() }.average().roundToInt() }
+        val ersterTag = heute.minusDays(Fenster.WOCHE_TAGE - 1L)
+        val woche = messungen.filter { !it.zeit.atZone(zone).toLocalDate().isBefore(ersterTag) }
+        return Blutdruckwoche(
+            bandwoche(tageswerte { it.oben }, heute),
+            bandwoche(tageswerte { it.unten }, heute),
+            blutdruckstand(woche)?.schnitt,
+        )
     }
 
     /** Wieviel Koffein zum Zeitpunkt [jetzt] noch wirkt - jede Dosis halbiert sich alle fuenf Stunden. */
@@ -436,29 +456,42 @@ internal object Gesundheitsrechnung {
     /** 0 leicht, 1 moderat, 2 kraeftig, 3 Spitze. */
     fun pulsZone(bpm: Int, grenzen: List<Int>): Int = grenzen.count { bpm >= it }
 
-    /** Eine Nacht der HRV-Woche: ihr Wert und das Band, das bis dahin als gewohnt galt. */
-    data class HrvTag(val tag: LocalDate, val wert: Int?, val band: Pair<Int, Int>?) {
+    /**
+     * Ein Tag einer Woche mit Band (HRV, Blutdruck oben, Blutdruck unten):
+     * sein Wert und das Band, das bis dahin als gewohnt galt.
+     */
+    data class Bandtag(val tag: LocalDate, val wert: Int?, val band: Pair<Int, Int>?) {
         val imBand: Boolean? get() = if (wert == null || band == null) null else wert in band.first..band.second
     }
 
     /**
-     * Die sieben Naechte bis [heute], jede mit ihrem persoenlichen Band: Schnitt
-     * plus/minus eine Standardabweichung der [Fenster.HRV_NAECHTE] Naechte davor. Das
+     * Die sieben Tage bis [heute], jeder mit seinem persoenlichen Band: Schnitt
+     * plus/minus eine Standardabweichung der [Fenster.HRV_NAECHTE] Tage davor. Das
      * Band jedes Tages aus SEINEN Vortagen, nicht eines fuer die ganze Woche:
-     * so wandert es mit, wie bei Google Health und Garmin, und die Nacht selbst
-     * zieht ihr Band nicht zu sich. Mindestens 3 ms breit nach jeder Seite,
-     * sonst laege bei sehr gleichmaessigen Naechten jede neue daneben.
+     * so wandert es mit, wie bei Google Health und Garmin, und der Tag selbst
+     * zieht sein Band nicht zu sich. Mindestens 3 breit nach jeder Seite,
+     * sonst laege bei sehr gleichmaessigen Werten jeder neue daneben.
+     * Gerechnet fuer die HRV (je Nacht) und den Blutdruck (je Tag, oben und
+     * unten getrennt) - DIESELBE REGEL, damit beide Karten dasselbe heissen.
      */
-    fun hrvWoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<HrvTag> = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
+    fun bandwoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<Bandtag> = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
         val vorher = werte.filter { (t, w) -> w > 0 && t < tag && !t.isBefore(tag.minusDays(Fenster.HRV_NAECHTE.toLong())) }.values.map { it.toDouble() }
         val band = vorher.takeIf { it.size >= Fenster.HRV_LERNNAECHTE }?.let { v ->
             val mittel = v.average()
-            // Die Streuung der Stichprobe: die Naechte stehen fuer alle, nicht nur fuer sich.
+            // Die Streuung der Stichprobe: die Tage stehen fuer alle, nicht nur fuer sich.
             val halb = maxOf(Statistik.streuung(v)!!, 3.0)
             (mittel - halb).roundToInt().coerceAtLeast(1) to (mittel + halb).roundToInt()
         }
-        HrvTag(tag, werte[tag]?.takeIf { it > 0 }, band)
+        Bandtag(tag, werte[tag]?.takeIf { it > 0 }, band)
     }
+
+    /**
+     * Der Schnitt der Woche ueber die Tage mit Wert ("7-night avg"), ab
+     * [Fenster.SCHNITT_WERTE] Werten - darunter waere er nur der letzte Wert
+     * mit anderem Namen, wie beim Blutdruck.
+     */
+    fun wochenschnitt(tage: List<Bandtag>): Int? =
+        tage.mapNotNull { it.wert }.takeIf { it.size >= Fenster.SCHNITT_WERTE }?.average()?.roundToInt()
 
     /**
      * Die Trendlinie durch eine Punktwolke: alle [schritt] Sekunden der Median

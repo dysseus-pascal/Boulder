@@ -143,22 +143,22 @@ class TagesurteileTest {
         assertEquals(Vergleich.TIEFER, g.ruhepulsUrteil(52, listOf(55, 55, 55)).urteil)
     }
 
-    private fun hrvTag(wert: Int?, band: Pair<Int, Int>?) = Gesundheitsrechnung.HrvTag(LocalDate.of(2026, 10, 2), wert, band)
+    private fun hrvTag(wert: Int?, band: Pair<Int, Int>?) = Gesundheitsrechnung.Bandtag(LocalDate.of(2026, 10, 2), wert, band)
 
     @Test
     fun hrv_wie_immer_im_band() {
-        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.hrvUrteil(hrvTag(51, 51 to 63)))
-        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.hrvUrteil(hrvTag(63, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.bandurteil(hrvTag(51, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.WIE_IMMER, 0), g.bandurteil(hrvTag(63, 51 to 63)))
         // Der Abstand zum Bandrand, nicht zur Mitte: knapp daneben heisst 1 ms daneben.
-        assertEquals(Bandurteil(Vergleich.HOEHER, 1), g.hrvUrteil(hrvTag(64, 51 to 63)))
-        assertEquals(Bandurteil(Vergleich.TIEFER, 3), g.hrvUrteil(hrvTag(48, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.HOEHER, 1), g.bandurteil(hrvTag(64, 51 to 63)))
+        assertEquals(Bandurteil(Vergleich.TIEFER, 3), g.bandurteil(hrvTag(48, 51 to 63)))
     }
 
     @Test
     fun hrv_ohne_band_oder_wert_kein_urteil() {
-        assertNull(g.hrvUrteil(hrvTag(55, null)))
-        assertNull(g.hrvUrteil(hrvTag(null, 51 to 63)))
-        assertNull(g.hrvUrteil(null))
+        assertNull(g.bandurteil(hrvTag(55, null)))
+        assertNull(g.bandurteil(hrvTag(null, 51 to 63)))
+        assertNull(g.bandurteil(null))
     }
 
     @Test
@@ -168,10 +168,35 @@ class TagesurteileTest {
         // nach der alten Regel hiess das im Satz "above your usual", in der Karte "in range".
         val heute = LocalDate.of(2026, 10, 2)
         val werte = (1..30).associate { heute.minusDays(it.toLong()) to if (it % 2 == 0) 40 else 56 } + (heute to 55)
-        val letzte = g.hrvWoche(werte, heute).last()
+        val letzte = g.bandwoche(werte, heute).last()
         assertEquals(40 to 56, letzte.band)
         assertEquals(true, letzte.imBand)
-        assertEquals(Vergleich.WIE_IMMER, g.hrvUrteil(letzte)!!.urteil)
+        assertEquals(Vergleich.WIE_IMMER, g.bandurteil(letzte)!!.urteil)
+    }
+
+    /**
+     * DAS URTEIL DER BLUTDRUCKKARTE: im Band nur, wenn oben UND unten drin
+     * liegen - wie die beiden Punkte des Tages. Liegt einer daneben, sagt es
+     * dessen Richtung; liegen beide auf verschiedenen Seiten, keine.
+     */
+    @Test
+    fun blutdruck_im_band_nur_wenn_beide_drin() {
+        val oben = 116 to 129
+        val unten = 74 to 83
+        assertEquals(Blutdrucklage.IM_BAND, g.blutdrucklage(hrvTag(122, oben), hrvTag(78, unten)))
+        assertEquals(Blutdrucklage.IM_BAND, g.blutdrucklage(hrvTag(129, oben), hrvTag(74, unten)))
+        assertEquals(Blutdrucklage.DARUEBER, g.blutdrucklage(hrvTag(131, oben), hrvTag(78, unten)))
+        assertEquals(Blutdrucklage.DARUEBER, g.blutdrucklage(hrvTag(122, oben), hrvTag(85, unten)))
+        assertEquals(Blutdrucklage.DARUEBER, g.blutdrucklage(hrvTag(131, oben), hrvTag(85, unten)))
+        assertEquals(Blutdrucklage.DARUNTER, g.blutdrucklage(hrvTag(110, oben), hrvTag(78, unten)))
+        assertEquals(Blutdrucklage.DANEBEN, g.blutdrucklage(hrvTag(131, oben), hrvTag(70, unten)))
+    }
+
+    @Test
+    fun blutdruck_ohne_band_oder_wert_kein_urteil() {
+        assertNull(g.blutdrucklage(hrvTag(122, null), hrvTag(78, null)))
+        assertNull(g.blutdrucklage(hrvTag(null, 116 to 129), hrvTag(null, 74 to 83)))
+        assertNull(g.blutdrucklage(null, null))
     }
 
     @Test

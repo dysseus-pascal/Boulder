@@ -40,7 +40,6 @@ internal data class Gesundheitswege(
     val trend: (String) -> Unit,
     val herz: () -> Unit,
     val akku: () -> Unit,
-    val koerper: () -> Unit,
     /** Die Sportseite - seit 0.51 eine Unterseite von Health statt eines Reiters. */
     val sport: () -> Unit,
     /** Das Detail eines Trainings aus dem Tagesband. */
@@ -104,20 +103,18 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege) {
     // Akte, nicht aus den Minutendaten; neu beim Aufbau und bei der Rueckkehr in die App.
     val sport = rememberStand(TrainingsDaten.zuletzt) { TrainingsDaten.uebersicht(context) }
     val imperial = einheitenImperial()
-    val koerper = koerperzeile(wege.koerper)
 
     if (seite == null) {
         Ladekreis()
         return
     }
-    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, wege, koerper) { neu++ }
+    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, wege) { neu++ }
 }
 
 /**
  * Was die Gesundheitsseite zeigt, aus einem fertigen Stand - ohne zu laden,
  * damit ein Test sie mit Beispieldaten zeichnen kann. [jetzt] statt der Uhr:
- * Satz, Band und Zeilen urteilen nach derselben Zeit. [koerper]: die Zeile
- * Body, die selbst liest (null ohne Waage).
+ * Satz, Band und Zeilen urteilen nach derselben Zeit.
  */
 @Composable
 internal fun GesundheitInhalt(
@@ -127,7 +124,6 @@ internal fun GesundheitInhalt(
     jetzt: Instant,
     imperial: Boolean,
     wege: Gesundheitswege,
-    koerper: (@Composable () -> Unit)?,
     geaendert: () -> Unit,
 ) {
     val zone = ZoneId.systemDefault()
@@ -143,7 +139,7 @@ internal fun GesundheitInhalt(
         item { Tagessatz(satz, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
         item { Tagesband(s, trainings, jetzt, imperial, wege, geaendert) }
         item { Sportfeld(sport, heute, imperial, wege.sport) }
-        item { Koerperliste(s, jetzt, wege, koerper) }
+        item { Koerperliste(s, jetzt, wege) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }
         item { Spacer(Modifier.height(12.dp)) }
     }

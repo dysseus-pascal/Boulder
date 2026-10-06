@@ -128,5 +128,5 @@ internal object Healthbeispiel {
     )
 
     /** Wohin die Seite fuehrt - im Bild nirgendwohin. */
-    val wege = Gesundheitswege({}, {}, {}, {}, {}, {}, {}, {}, {})
+    val wege = Gesundheitswege({}, {}, {}, {}, {}, {}, {}, {})
 }

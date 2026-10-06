@@ -117,7 +117,7 @@ class GesundheitBildTest {
     fun der_start_mit_dem_band_beim_oeffnen() {
         val b = Healthbeispiel
         val g = zeichne("health-start") {
-            GesundheitInhalt(b.stand, b.sport, 78, b.jetzt, imperial = false, b.wege, koerper = null) {}
+            GesundheitInhalt(b.stand, b.sport, 78, b.jetzt, imperial = false, b.wege) {}
         }
         val band = band(g)
         val r = band.boundsInRoot
@@ -137,6 +137,10 @@ class GesundheitBildTest {
             assertTrue(t in texte, "\"$t\" fehlt in $texte")
         }
         assertTrue("Supplements" !in texte && "Caffeine" !in texte, "alte Zeilen in $texte")
+        // KEINE ZEILE BODY MEHR (0.52): der Koerper steht als Karte auf Heart & Body. Die Zeile
+        // Heart & Body bleibt, wie sie war - ohne Gewicht oder Fett darin.
+        assertTrue("Body" !in texte, "Zeile Body in $texte")
+        assertTrue(texte.none { " kg" in it || "fat" in it }, "Koerperwerte auf Health: $texte")
         // Der Satz oben mit seinem Leerzeichen zwischen "sleep" und "and", wie im Entwurf.
         assertTrue(texte.any { "7:59 h of sleep and a resting heart rate as usual." in it }, "$texte")
         // Stack: 3 von 4 genommen, Magnesium kommt erst um 20:00 - noch nicht versaeumt; 63 mg um 6:44
@@ -177,7 +181,7 @@ class GesundheitBildTest {
         val ohneKoffein = b.stand.copy(koffein = emptyList(), eintraege = b.stand.eintraege.filter { it.praeparat })
         assertTrue(ohneKoffein.mitDrinktervall)
         val g = zeichne("health-ohne-koffein") {
-            GesundheitInhalt(ohneKoffein, b.sport, 78, b.jetzt, imperial = false, b.wege, koerper = null) {}
+            GesundheitInhalt(ohneKoffein, b.sport, 78, b.jetzt, imperial = false, b.wege) {}
         }
         assertEquals("Stack, Magnesium due, 3 of 4 supplements", g.beschreibungen.firstOrNull { it.startsWith("Stack") })
         assertTrue("caffeine now" !in g.texte && "at bedtime" !in g.texte, "${g.texte}")
@@ -185,7 +189,7 @@ class GesundheitBildTest {
 
         val nurDrinktervall = ohneKoffein.copy(mitSupCycle = false)
         val h = zeichne("health-ohne-koffein-ohne-supcycle") {
-            GesundheitInhalt(nurDrinktervall, b.sport, 78, b.jetzt, imperial = false, b.wege, koerper = null) {}
+            GesundheitInhalt(nurDrinktervall, b.sport, 78, b.jetzt, imperial = false, b.wege) {}
         }
         assertEquals("Stack", h.beschreibungen.firstOrNull { it.startsWith("Stack") })
         assertTrue(listOf("supplements", "caffeine now", "at bedtime").none { it in h.texte }, "${h.texte}")
@@ -279,7 +283,7 @@ class GesundheitBildTest {
         val ziele = mutableListOf<String>()
         val wege = Gesundheitswege(
             nacht = { ziele += "nacht $it" }, trend = { ziele += "trend $it" }, herz = { ziele += "herz" }, akku = { ziele += "akku" },
-            koerper = { ziele += "koerper" }, sport = { ziele += "sport" }, training = { ziele += "training $it" },
+            sport = { ziele += "sport" }, training = { ziele += "training $it" },
             wasser = { ziele += "wasser" }, stack = { ziele += "stack" },
         )
         val g = zeichne("tagesband-gesten") {

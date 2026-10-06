@@ -45,7 +45,6 @@ internal fun gesundheitswege(nav: NavBarNav) = Gesundheitswege(
     trend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute(it)) },
     herz = { nav.navigateTo(PebbleNavBarRoutes.HerzRoute) },
     akku = { nav.navigateTo(PebbleNavBarRoutes.AkkuRoute) },
-    koerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
     sport = { nav.navigateTo(PebbleNavBarRoutes.TrainingRoute) },
     training = { nav.navigateTo(PebbleNavBarRoutes.TrainingDetailRoute(it)) },
     wasser = { nav.navigateTo(PebbleNavBarRoutes.WasserRoute) },
@@ -72,6 +71,8 @@ actual fun HerzScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     HerzAnsicht(
         oeffneNacht = { nav.navigateTo(PebbleNavBarRoutes.NachtRoute(it)) },
         oeffneTrend = { nav.navigateTo(PebbleNavBarRoutes.TrendRoute("herz")) },
+        // Seit 0.52 der Weg zur Koerperseite ("Body >" in der Karte Body); bis dahin fuehrte die Zeile Body auf Health dorthin.
+        oeffneKoerper = { nav.navigateTo(PebbleNavBarRoutes.KoerperRoute) },
     )
 }
 

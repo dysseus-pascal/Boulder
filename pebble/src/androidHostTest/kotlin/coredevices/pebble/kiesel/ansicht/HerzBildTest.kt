@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.GesundheitsStand
+import coredevices.pebble.kiesel.Koerperzeile
 import coredevices.pebble.ui.HERZ_TITEL
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -55,21 +56,24 @@ import kotlin.test.assertTrue
  *
  * Nachgesehen wird am Bild und an dem, was TalkBack liest: Kopf von HRV und
  * Blutdruck (Wert, Schnitt der Woche, Urteil), keine Legende, beim
- * Blutdruck zwei Baender und die Punkte daneben bernstein, die Zeile Trends
- * am Ende - und ohne fruehere Werte alles neutral.
+ * Blutdruck zwei Baender, der Strich je Tag und die Punkte daneben
+ * bernstein, die Karte Body vor der Zeile Trends am Ende - und mit wenig
+ * Verlauf das Band schon da, die Punkte aber neutral (Band ab drei Werten,
+ * Urteil ab sieben).
  *
  * Die Bilder liegen danach unter build/herzseite.png,
- * build/herzseite-neutral.png und build/herzseite-blutdruck-ohne-woche.png.
+ * build/herzseite-hrv4-blutdruck1.png, build/herzseite-hrv8-blutdruck5.png,
+ * build/herzseite-ohne-waage.png und build/herzseite-blutdruck-ohne-woche.png.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w412dp-h1560dp-xxhdpi")
+@Config(sdk = [35], qualifiers = "w412dp-h1720dp-xxhdpi")
 class HerzBildTest {
 
     private val context get() = RuntimeEnvironment.getApplication()
 
     /** Die Farben, wie die Seite sie nimmt - gelesen, nicht nachgebaut. */
-    private class Farbsatz(val imBand: Int, val ausserBand: Int, val bandflaeche: Int, val neutral: Int)
+    private class Farbsatz(val imBand: Int, val ausserBand: Int, val bandflaeche: Int, val neutral: Int, val karte: Int)
 
     private class Gezeichnet(val bild: Bitmap, val wurzel: SemanticsNode, val farben: Farbsatz, val dichte: Float) {
         val breite = bild.width
@@ -114,7 +118,14 @@ class HerzBildTest {
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun zeichne(name: String, s: GesundheitsStand, oeffneTrend: () -> Unit = {}, oeffneNacht: (Long) -> Unit = {}): Gezeichnet {
+    private fun zeichne(
+        name: String,
+        s: GesundheitsStand,
+        koerper: Koerperzeile? = Herzbeispiel.koerper,
+        oeffneTrend: () -> Unit = {},
+        oeffneNacht: (Long) -> Unit = {},
+        oeffneKoerper: () -> Unit = {},
+    ): Gezeichnet {
         val aktivitaet = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         lateinit var farben: Farbsatz
         aktivitaet.setContent {
@@ -122,7 +133,7 @@ class HerzBildTest {
                 farben = Farbsatz(
                     Farben.imBand.ton().toArgb(), Farben.ausserBand.ton().toArgb(),
                     Farben.imBand.flaeche().copy(alpha = Farben.BAND_DECKUNG).compositeOver(Farben.karte()).toArgb(),
-                    Farben.neutral().toArgb(),
+                    Farben.neutral().toArgb(), Farben.karte().toArgb(),
                 )
                 Scaffold(
                     topBar = {
@@ -133,7 +144,7 @@ class HerzBildTest {
                     },
                     containerColor = MaterialTheme.colorScheme.background,
                 ) { innen ->
-                    Box(Modifier.padding(innen)) { HerzInhalt(s, Herzbeispiel.jetzt, oeffneNacht, oeffneTrend) }
+                    Box(Modifier.padding(innen)) { HerzInhalt(s, Herzbeispiel.jetzt, koerper, imperial = false, oeffneNacht, oeffneTrend, oeffneKoerper) }
                 }
             }
         }
@@ -160,7 +171,8 @@ class HerzBildTest {
     fun heart_and_body_wie_im_entwurf() {
         var trends = 0
         var naechte = 0
-        val g = zeichne("herzseite", Herzbeispiel.stand(), oeffneTrend = { trends++ }, oeffneNacht = { naechte++ })
+        var koerper = 0
+        val g = zeichne("herzseite", Herzbeispiel.stand(), oeffneTrend = { trends++ }, oeffneNacht = { naechte++ }, oeffneKoerper = { koerper++ })
 
         assertEquals("Heart & Body", context.getString(HERZ_TITEL))
         g.mitText("Heart & Body")
@@ -173,9 +185,25 @@ class HerzBildTest {
             hrvKopf, bdKopf,
             g.alle().first { g.text(it)?.startsWith("LAST NIGHT") == true },
             g.mitText("YOUR USUAL"),
+            g.mitText("BODY"),
             g.mitText("What makes a difference"),
         ).map { it.boundsInRoot.top }
         assertEquals(folge.sorted(), folge, "Reihenfolge")
+
+        // EIN WEG ZU DEN TRENDS: "Trends" steht nur noch in der letzten Zeile, nicht mehr als Link in YOUR USUAL.
+        assertEquals(1, g.texte.count { it == context.getString(R.string.ks_h_trends) }, "${g.texte}")
+        val gewohnt = g.mitText("YOUR USUAL")
+        val nebenGewohnt = g.alle().filter { g.text(it) != null && it.id != gewohnt.id && abs(it.boundsInRoot.center.y - gewohnt.boundsInRoot.center.y) < 6 * g.dichte }
+        assertTrue(nebenGewohnt.isEmpty(), "neben YOUR USUAL: ${nebenGewohnt.map { g.text(it) }}")
+
+        // DIE KARTE BODY vor den Trends: Gewicht gross, Fett und Veraenderung wie bis 0.51 die Zeile auf Health.
+        assertTrue("69.6 kg" in g.texte, "${g.texte}")
+        g.mitText("21.6% fat · −0.1 kg in 30 days")
+        // "Body >" fuehrt zur Koerperseite.
+        var link: SemanticsNode? = g.mitText(context.getString(R.string.ks_kp_titel))
+        while (link != null && link.config.getOrNull(SemanticsActions.OnClick) == null) link = link.parent
+        assertNotNull(link, "Body ist kein Link").config[SemanticsActions.OnClick].action!!.invoke()
+        assertEquals(1, koerper)
 
         // HRV: 50 ms gestern Nacht, Schnitt der Woche 49 (48 53 46 55 52 41 50), im Band.
         assertTrue("50 ms" in g.texte, "${g.texte}")
@@ -236,27 +264,156 @@ class HerzBildTest {
         val klick = assertNotNull(ziel, "Trends ist kein Ziel").config[SemanticsActions.OnClick]
         assertTrue(titel.boundsInRoot.left >= ziel.boundsInRoot.left && titel.boundsInRoot.right <= ziel.boundsInRoot.right)
         klick.action!!.invoke()
-        assertEquals(1 to 0, trends to naechte)
+        assertEquals(Triple(1, 0, 1), Triple(trends, naechte, koerper))
+
+        // DIE LINIE ZWISCHEN DEN PUNKTEN NEUTRAL wie im Entwurf: gruen sind nur die sechs Punkte im Band
+        // (48 53 46 55 52 und 50 mit seinem Ring), keine Linie dazwischen - jeder gruene Fleck ist rund und klein.
+        val gruen = g.flecken(hrv, g.farben.imBand, (10 * g.dichte * g.dichte).toInt())
+        assertEquals(7, gruen.size, "gruene Flecken: $gruen")
+        // GROSSE PUNKTE (6 dp Radius): die fuenf Punkte ohne Ring sind je ueber 85 dp² gross.
+        val punktflaeche = g.pixelIn(hrv) { it == g.farben.imBand }.size
+        assertTrue(punktflaeche > 6 * 85 * g.dichte * g.dichte, "Punkte zu klein: $punktflaeche px")
+    }
+
+    /** Ein Punkt im Bild: seine Mitte und ob er gruen, bernstein oder neutral ist. */
+    private class Punkt(val x: Double, val y: Double, val farbe: Int)
+
+    /**
+     * Die Punkte (und Ringe) im Rechteck: zusammenhaengende Flecken genau einer
+     * Punktfarbe ueber 40 dp² - groesser als jede Ziffer der Achse, die in
+     * derselben grauen Farbe steht.
+     */
+    private fun punkte(g: Gezeichnet, r: Rect): List<Punkt> = listOf(g.farben.imBand, g.farben.ausserBand, g.farben.neutral).flatMap { f ->
+        g.flecken(r, f, (40 * g.dichte * g.dichte).toInt()).map { (x, y) -> Punkt(x, y, f) }
+    }
+
+    /** Die Tagesmitten mit Punkt, von links: Punkte und Ringe desselben Tages zusammen. */
+    private fun tagesmitten(g: Gezeichnet, punkte: List<Punkt>): List<Double> =
+        punkte.map { it.x }.sorted().fold(listOf<Double>()) { l, x -> if (l.isNotEmpty() && x - l.last() < 3 * g.dichte) l else l + x }
+
+    /**
+     * Wie weit die Bandflaeche im Rechteck links und rechts reicht (Pixel).
+     * Gezaehlt werden Spalten mit mindestens 3 dp Flaeche: der weiche Rand
+     * eines gruenen Rings mischt sich mit der Karte vereinzelt zum Ton der
+     * Flaeche, ist aber keine.
+     */
+    private fun bandBreite(g: Gezeichnet, r: Rect): Pair<Int, Int> {
+        val xs = g.pixelIn(r) { naheFarbe(it, g.farben.bandflaeche) }.groupingBy { it.first }.eachCount()
+            .filter { it.value >= 3 * g.dichte }.keys
+        assertTrue(xs.isNotEmpty(), "keine Bandflaeche")
+        return xs.min() to xs.max()
+    }
+
+    /** Ob ein Pixel grau ist und sich von der Karte abhebt - die neutrale Linie, nicht Band, nicht Karte. */
+    private fun grauAufKarte(g: Gezeichnet, p: Int): Boolean {
+        val (r, gr, b) = listOf(16, 8, 0).map { p shr it and 0xFF }
+        val karte = g.farben.karte shr 8 and 0xFF
+        return abs(r - gr) <= 8 && abs(gr - b) <= 8 && abs(r - b) <= 8 && gr - karte > 30
     }
 
     /**
-     * OHNE GENUG FRUEHERE WERTE NEUTRAL, wie bei der HRV: nur die Woche
-     * selbst - kein Band, kein Urteil, keine gruenen oder bernsteinfarbenen
-     * Punkte, aber die Werte, die Zeit und die Schnitte stehen da.
+     * Der senkrechte Strich eines Blutdrucktags: der Anteil grauer Pixel in
+     * der Spalte [x] zwischen den beiden Punkten (ohne ihre Raender).
+     */
+    private fun strich(g: Gezeichnet, x: Double, oben: Double, unten: Double): Double {
+        val von = (oben + 12 * g.dichte).toInt()
+        val bis = (unten - 12 * g.dichte).toInt()
+        assertTrue(bis > von, "Punkte zu nah: $oben / $unten")
+        return (von until bis).count { y -> grauAufKarte(g, g.bei(x.toInt(), y)) } / (bis - von).toDouble()
+    }
+
+    /**
+     * WENIG VERLAUF wie auf dem Telefon am 6.10.: vier Naechte mit HRV, eine
+     * Blutdruckmessung. DAS HRV-BAND STEHT SCHON (ab drei Werten), aber kein
+     * Punkt ist gruen oder bernstein und der Kopf urteilt nicht - die 50 ms
+     * von heute liegen unter dem Band und bleiben neutral. Das Band ist eine
+     * Flaeche von der Mitte des vierten bis zur Mitte des siebten Tags, keine
+     * Treppe bis an die Raender. Beim Blutdruck verbindet ein senkrechter
+     * Strich oben und unten der einen Messung; ein Band hat er nicht.
      */
     @Test
-    fun ohne_fruehere_werte_steht_die_woche_neutral() {
-        val g = zeichne("herzseite-neutral", Herzbeispiel.stand(mitFrueheren = false))
-        assertTrue(urteile.none { it in g.texte }, "Urteil ohne Band: ${g.texte}")
-        g.mitText("Last night · 7-night avg 49")
-        assertTrue("122/78 mmHg" in g.texte && g.texte.any { it.endsWith(" · avg 125/80") }, "${g.texte}")
-        for (anfang in listOf("HRV, last 7 nights:", "BLOOD PRESSURE, last 7 days:")) {
-            val r = g.bild(anfang).boundsInRoot
-            assertTrue(g.pixelIn(r) { it == g.farben.imBand || it == g.farben.ausserBand }.isEmpty(), "$anfang: gruen oder bernstein ohne Band")
-            assertTrue(g.pixelIn(r) { naheFarbe(it, g.farben.bandflaeche) }.isEmpty(), "$anfang: Bandflaeche ohne Band")
-            // Die Punkte stehen trotzdem da - neutral.
-            assertTrue(g.flecken(r, g.farben.neutral, (10 * g.dichte * g.dichte).toInt()).isNotEmpty(), "$anfang: keine neutralen Punkte")
+    fun wenig_verlauf_band_ohne_urteil_und_strich_der_messung() {
+        val g = zeichne("herzseite-hrv4-blutdruck1", Herzbeispiel.stand(Herzbeispiel.hrvVier(), Herzbeispiel.blutdruckEinTag()))
+        assertTrue(urteile.none { it in g.texte }, "Urteil ohne gelerntes Band: ${g.texte}")
+        assertTrue("50 ms" in g.texte && "116/73 mmHg" in g.texte, "${g.texte}")
+
+        val hrv = g.bild("HRV, last 7 nights:").boundsInRoot
+        assertTrue(g.pixelIn(hrv) { it == g.farben.imBand || it == g.farben.ausserBand }.isEmpty(), "HRV: gruen oder bernstein ohne Urteil")
+        // Drei Tage mit Punkt: der erste, der dritte und heute; daraus der Abstand der Tage.
+        val mitten = tagesmitten(g, punkte(g, hrv))
+        assertEquals(3, mitten.size, "Tage mit Punkt: $mitten")
+        val tag = (mitten[2] - mitten[0]) / 6
+        assertEquals(mitten[0] + 2 * tag, mitten[1], 2.0 * g.dichte)
+        // Das Band von der Mitte des vierten Tags (drei Werte davor) bis zur Mitte von heute.
+        val (links, rechts) = bandBreite(g, hrv)
+        assertEquals(mitten[0] + 3 * tag, links.toDouble(), 2.0 * g.dichte, "Band beginnt nicht in der Mitte des vierten Tags")
+        assertEquals(mitten[2], rechts.toDouble(), 2.0 * g.dichte, "Band endet nicht in der Mitte von heute")
+
+        val bd = g.bild("BLOOD PRESSURE, last 7 days:").boundsInRoot
+        assertTrue(g.pixelIn(bd) { naheFarbe(it, g.farben.bandflaeche) }.isEmpty(), "Blutdruck: Band aus einer Messung")
+        assertTrue(g.pixelIn(bd) { it == g.farben.imBand || it == g.farben.ausserBand }.isEmpty(), "Blutdruck: gruen oder bernstein")
+        // Oben und unten heute, je mit Ring: ein Tag, zwei Hoehen.
+        val bdPunkte = punkte(g, bd).filter { it.farbe == g.farben.neutral }
+        assertEquals(1, tagesmitten(g, bdPunkte).size, "Blutdrucktage: ${bdPunkte.map { it.x }}")
+        val (oben, unten) = bdPunkte.minOf { it.y } to bdPunkte.maxOf { it.y }
+        assertTrue(strich(g, bdPunkte.first().x, oben, unten) > 0.9, "kein Strich zwischen 116 und 73")
+    }
+
+    /**
+     * ACHT NAECHTE UND FUENF BLUTDRUCKTAGE: die HRV hat ihr Band ab dem
+     * dritten Tag der Woche, und nur heute (sieben Werte davor) ein Urteil -
+     * gruen ist allein der Punkt von heute, "In your range" steht einmal.
+     * Beim Blutdruck zwei Baender ab Sonntag (drei Tage davor), kein Urteil,
+     * jeder der fuenf Tage mit seinem Strich.
+     */
+    @Test
+    fun acht_naechte_urteil_nur_heute_fuenf_blutdrucktage_mit_band() {
+        val g = zeichne("herzseite-hrv8-blutdruck5", Herzbeispiel.stand(Herzbeispiel.hrvAcht(), Herzbeispiel.blutdruckFuenfTage()))
+        val urteil = g.alle().filter { g.text(it) in urteile }
+        assertEquals(listOf(context.getString(R.string.ks_h_im_band)), urteil.map { g.text(it) }, "${g.texte}")
+        assertTrue(abs(urteil.single().boundsInRoot.center.y - g.mitText("HRV · last 7 nights").boundsInRoot.center.y) < 4 * g.dichte)
+        // Fuenf Sitzungen: der Schnitt steht im Kopf.
+        assertTrue(g.texte.any { it.startsWith("Today") && "avg" in it }, "${g.texte}")
+
+        val hrv = g.bild("HRV, last 7 nights:").boundsInRoot
+        val hrvPunkte = punkte(g, hrv)
+        val mitten = tagesmitten(g, hrvPunkte)
+        assertEquals(7, mitten.size, "HRV-Tage: $mitten")
+        val tag = (mitten[6] - mitten[0]) / 6
+        // Gruen nur heute (Punkt und Ring), bernstein nirgends, die sechs Tage davor neutral.
+        val gruen = hrvPunkte.filter { it.farbe == g.farben.imBand }
+        assertTrue(gruen.isNotEmpty() && gruen.all { abs(it.x - mitten[6]) < 2 * g.dichte }, "gruen: ${gruen.map { it.x }} / heute ${mitten[6]}")
+        assertTrue(hrvPunkte.none { it.farbe == g.farben.ausserBand })
+        assertEquals(6, tagesmitten(g, hrvPunkte.filter { it.farbe == g.farben.neutral }).size)
+        val (links, rechts) = bandBreite(g, hrv)
+        assertEquals(mitten[0] + 2 * tag, links.toDouble(), 2.0 * g.dichte, "HRV-Band beginnt nicht am dritten Tag")
+        assertEquals(mitten[6], rechts.toDouble(), 2.0 * g.dichte)
+
+        val bd = g.bild("BLOOD PRESSURE, last 7 days:").boundsInRoot
+        val bdPunkte = punkte(g, bd)
+        assertTrue(bdPunkte.all { it.farbe == g.farben.neutral }, "Blutdruck ohne Urteil, aber farbig")
+        val bdTage = tagesmitten(g, bdPunkte)
+        assertEquals(5, bdTage.size, "Blutdrucktage: $bdTage")
+        // Die Baender oben und unten ab Sonntag, dem fuenften Tag der Woche.
+        val bdTag = (bdTage.last() - bdTage.first()) / 6
+        val (bdLinks, bdRechts) = bandBreite(g, bd)
+        assertEquals(bdTage.first() + 4 * bdTag, bdLinks.toDouble(), 2.0 * g.dichte, "Blutdruckband beginnt nicht am Sonntag")
+        assertEquals(bdTage.last(), bdRechts.toDouble(), 2.0 * g.dichte)
+        val hoehen = g.pixelIn(bd) { naheFarbe(it, g.farben.bandflaeche) }.map { it.second }.distinct().sorted()
+        assertEquals(1, hoehen.zipWithNext().count { (a, b) -> b - a > 10 * g.dichte }, "Blutdruckband nicht in zwei Hoehen")
+        // Jeder Tag mit seinem senkrechten Strich zwischen oben und unten.
+        for (x in bdTage) {
+            val amTag = bdPunkte.filter { abs(it.x - x) < 3 * g.dichte }
+            assertTrue(strich(g, x, amTag.minOf { it.y }, amTag.maxOf { it.y }) > 0.9, "kein Strich am Tag bei x=$x")
         }
+    }
+
+    /** OHNE WAAGE KEINE KARTE BODY - wie bis 0.51 die Zeile auf Health. Die Trends bleiben die letzte Zeile. */
+    @Test
+    fun ohne_waage_keine_karte_body() {
+        val g = zeichne("herzseite-ohne-waage", Herzbeispiel.stand(), koerper = null)
+        assertTrue("BODY" !in g.texte && "Body" !in g.texte, "${g.texte}")
+        g.mitText("What makes a difference")
     }
 
     /**

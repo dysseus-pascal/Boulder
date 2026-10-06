@@ -149,7 +149,9 @@ internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, D
  * Wie immer heisst: im Band des Tages ([Gesundheitsrechnung.bandwoche]) -
  * fuer die HRV das der letzten Nacht. Ein zweiter Massstab - zehn Prozent um
  * den Schnitt von sieben Naechten - widersprach der HRV-Karte: "in your
- * range" darueber, "below your usual" darunter. Ohne Wert oder Band kein Urteil.
+ * range" darueber, "below your usual" darunter. Ohne Wert oder Band kein Urteil,
+ * und ebenso, solange das Band noch nicht urteilt ([Gesundheitsrechnung.Bandtag.urteilt]):
+ * seit 0.52 steht es schon ab drei Werten im Bild, das Urteil kommt erst ab sieben.
  *
  * Der Abstand zaehlt bis zum Bandrand, nicht bis zur Mitte: auf 63 ms "as
  * usual" folgt bei 64 ms "1 ms above" statt eines Sprungs auf den Abstand
@@ -158,6 +160,8 @@ internal fun Gesundheitsrechnung.naechteSchnitt(frueher: List<Int>): Pair<Int, D
 internal fun Gesundheitsrechnung.bandurteil(tag: Gesundheitsrechnung.Bandtag?): Bandurteil? {
     val wert = tag?.wert ?: return null
     val (unten, oben) = tag.band ?: return null
+    // Ein Band aus drei bis sechs Werten steht nur im Bild; "below your range" hiesse hier Zufall.
+    if (!tag.urteilt) return null
     // Was "im Band" heisst, entscheidet allein Bandtag.imBand - dieselbe Regel faerbt die Punkte im Bild.
     return when {
         tag.imBand == true -> Bandurteil(Vergleich.WIE_IMMER, 0)

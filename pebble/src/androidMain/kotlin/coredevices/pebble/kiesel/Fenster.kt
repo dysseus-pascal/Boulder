@@ -31,7 +31,21 @@ internal object Fenster {
      */
     const val HRV_NAECHTE = 30
 
-    /** Mit weniger Naechten (beim Blutdruck: Tagen mit Messung) gibt es kein Band - es waere Zufall. */
+    /**
+     * Ab so vielen Werten in den [HRV_NAECHTE] Tagen vor einem Tag steht sein
+     * Band im Bild (HRV und Blutdruck). Seit 0.52 nicht mehr erst ab
+     * [HRV_LERNNAECHTE]: wer wenig Verlauf hat, sah sonst wochenlang nur lose
+     * Punkte - wie Fitbit und Garmin zeigt Boulder das Band frueh, urteilt
+     * aber erst spaeter.
+     */
+    const val BAND_WERTE = 3
+
+    /**
+     * Erst ab so vielen Naechten (beim Blutdruck: Tagen mit Messung) urteilt
+     * das Band - gruene und bernsteinfarbene Punkte, "In your range" im Kopf.
+     * Darunter steht das Band schon da ([BAND_WERTE]), die Punkte aber
+     * neutral: aus drei Werten waere ein Urteil Zufall.
+     */
     const val HRV_LERNNAECHTE = 7
 
     /** Ab so vielen Werten steht ein Schnitt neben dem letzten Wert (HRV der Woche, Blutdruck). */

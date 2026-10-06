@@ -143,7 +143,28 @@ class TagesurteileTest {
         assertEquals(Vergleich.TIEFER, g.ruhepulsUrteil(52, listOf(55, 55, 55)).urteil)
     }
 
-    private fun hrvTag(wert: Int?, band: Pair<Int, Int>?) = Gesundheitsrechnung.Bandtag(LocalDate.of(2026, 10, 2), wert, band)
+    /** Ein Tag am Band; [frueher]: aus so vielen frueheren Werten stammt es - ohne Angabe ein Monat, ein gelerntes Band. */
+    private fun hrvTag(wert: Int?, band: Pair<Int, Int>?, frueher: Int = 30) = Gesundheitsrechnung.Bandtag(LocalDate.of(2026, 10, 2), wert, band, frueher)
+
+    /**
+     * DAS BAND STEHT AB DREI WERTEN, DAS URTEIL KOMMT ERST AB SIEBEN (0.52):
+     * mit drei bis sechs frueheren Naechten gibt es kein "below your range",
+     * auch wenn der Wert weit daneben liegt - der Punkt bleibt neutral. Ab
+     * sieben urteilt dasselbe Band. Beim Blutdruck ebenso, je Reihe.
+     */
+    @Test
+    fun band_aus_wenigen_werten_urteilt_nicht() {
+        for (frueher in 3..6) {
+            assertNull(g.bandurteil(hrvTag(30, 51 to 63, frueher)), "$frueher fruehere")
+            assertNull(hrvTag(30, 51 to 63, frueher).imBand, "$frueher fruehere")
+            assertNull(g.blutdrucklage(hrvTag(150, 116 to 129, frueher), hrvTag(95, 74 to 83, frueher)), "$frueher fruehere")
+        }
+        assertEquals(Bandurteil(Vergleich.TIEFER, 21), g.bandurteil(hrvTag(30, 51 to 63, 7)))
+        assertEquals(false, hrvTag(30, 51 to 63, 7).imBand)
+        assertEquals(Blutdrucklage.DARUEBER, g.blutdrucklage(hrvTag(150, 116 to 129, 7), hrvTag(95, 74 to 83, 7)))
+        // Oben gelernt, unten noch nicht: kein Urteil fuer den Tag.
+        assertNull(g.blutdrucklage(hrvTag(150, 116 to 129, 7), hrvTag(95, 74 to 83, 6)))
+    }
 
     @Test
     fun hrv_wie_immer_im_band() {

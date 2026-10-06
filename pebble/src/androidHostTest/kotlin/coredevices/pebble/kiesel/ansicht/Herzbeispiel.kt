@@ -3,6 +3,10 @@ package coredevices.pebble.kiesel.ansicht
 import coredevices.pebble.kiesel.Blutdruck
 import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.Koerpermessung
+import coredevices.pebble.kiesel.Koerperrechnung
+import coredevices.pebble.kiesel.Koerperstand
+import coredevices.pebble.kiesel.Koerperzeile
 import java.time.Duration
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -70,13 +74,54 @@ internal object Herzbeispiel {
             (if (inDerWoche) obenWoche.indices.map { i -> Blutdruck(b.um(7, 10, tag(6 - i)), obenWoche[i], untenWoche[i]) } else emptyList())
 
     /**
+     * WENIG VERLAUF wie auf dem Telefon am 6.10. (We 64, Fr 55, Tu 50): vier
+     * Naechte mit HRV - eine neun Tage vor heute (58), dann drei in der Woche.
+     * Ab dem vierten Tag der Woche liegen drei Werte davor: das Band steht
+     * (54-64), urteilt aber nicht.
+     */
+    fun hrvVier(): Map<LocalDate, Int> = mapOf(tag(9) to 58, tag(6) to 64, tag(4) to 55, tag(0) to 50)
+
+    /**
+     * ACHT NAECHTE: eine zehn Tage vor heute (51), dann die Woche des
+     * Entwurfs. Das Band steht ab dem dritten Tag der Woche, ein Urteil hat
+     * nur heute - die einzige Nacht mit sieben Werten davor.
+     */
+    fun hrvAcht(): Map<LocalDate, Int> = mapOf(tag(10) to 51) + hrvWoche.mapIndexed { i, w -> tag(6 - i) to w }
+
+    /** Eine Messung, heute 7:11, 116/73 - wie auf dem Telefon am 2.10. */
+    fun blutdruckEinTag(): List<Blutdruck> = listOf(Blutdruck(b.um(7, 11, heute), 116, 73))
+
+    /**
+     * Fuenf Tage mit Messung in der Woche, keine davor: am Mittwoch,
+     * Donnerstag, Samstag, Sonntag und heute (die Werte des Entwurfs). Das
+     * Band steht ab Sonntag (drei Tage davor), geurteilt wird nie.
+     */
+    fun blutdruckFuenfTage(): List<Blutdruck> = listOf(0, 1, 3, 4, 6).map { i -> Blutdruck(b.um(7, 10, tag(6 - i)), obenWoche[i], untenWoche[i]) }
+
+    /**
+     * Die Waage wie auf dem Telefon am 6.10.: heute 69.6 kg und 21.6 % Fett,
+     * vor 30 Tagen 69.7 kg - "21.6% fat · −0.1 kg in 30 days". Gerechnet von
+     * der App ([Koerperrechnung.zeile]), wie fuer die Karte Body.
+     */
+    val koerper: Koerperzeile = Koerperrechnung.zeile(
+        Koerperstand(
+            gewicht = listOf(Koerpermessung(b.um(6, 50, tag(30)), 69.7), Koerpermessung(b.um(6, 50, tag(15)), 69.9), Koerpermessung(b.um(6, 50), 69.6)),
+            fett = listOf(Koerpermessung(b.um(6, 50, tag(30)), 21.8), Koerpermessung(b.um(6, 50), 21.6)),
+        ),
+        heute, b.zone,
+    )!!
+
+    /**
      * Der Stand der Herzseite, wie [coredevices.pebble.kiesel.Gesundheitsdaten.lade]
-     * ihn baute. [mitFrueheren] = false: nur die Woche selbst - zu wenig fruehere
-     * Werte fuer ein Band, die Woche steht neutral da. [blutdruckInDerWoche] =
+     * ihn baute. [mitFrueheren] = false: nur die Woche selbst - das Band steht
+     * erst ab dem vierten Tag und urteilt nie. [blutdruckInDerWoche] =
      * false: zuletzt vor sieben Tagen gemessen, in der Woche nicht.
      */
-    fun stand(mitFrueheren: Boolean = true, blutdruckInDerWoche: Boolean = true): GesundheitsStand {
-        val alle = blutdruckAlle(mitFrueheren, blutdruckInDerWoche)
+    fun stand(mitFrueheren: Boolean = true, blutdruckInDerWoche: Boolean = true): GesundheitsStand =
+        stand(hrvWerte(mitFrueheren), blutdruckAlle(mitFrueheren, blutdruckInDerWoche))
+
+    /** Der Stand mit diesen HRV-Naechten und Blutdruckmessungen; der Rest wie im Entwurf. */
+    fun stand(hrv: Map<LocalDate, Int>, alle: List<Blutdruck>): GesundheitsStand {
         return GesundheitsStand(
             schritte = 0, aktivMinuten = 0, meter = 0.0, wocheSchritte = emptyList(),
             nacht = b.nacht,
@@ -89,8 +134,9 @@ internal object Herzbeispiel {
             blutdruck = alle.filter { !it.zeit.isBefore(jetzt.minus(Duration.ofDays(30))) },
             letzteDaten = jetzt.minusSeconds(120),
             pulsZonen = listOf(107, 133, 166),
-            hrvTage = Gesundheitsrechnung.bandwoche(hrvWerte(mitFrueheren), heute),
-            blutdruckWoche = Gesundheitsrechnung.blutdruckwoche(alle, heute, b.zone),
+            hrvTage = Gesundheitsrechnung.bandwoche(hrv, heute),
+            // Wie lade: ohne jede Messung keine Woche.
+            blutdruckWoche = if (alle.isEmpty()) null else Gesundheitsrechnung.blutdruckwoche(alle, heute, b.zone),
         )
     }
 }

@@ -252,17 +252,29 @@ class GesundheitsrechnungHerzTest {
         assertTrue(w.oben.dropLast(1).all { it.imBand == true } && w.unten.dropLast(1).all { it.imBand == true })
     }
 
-    /** Unter sieben frueheren Tagen mit Messung kein Band - wie bei der HRV; ab sieben eines. */
+    /**
+     * WIE BEI DER HRV (0.52): unter drei frueheren Tagen mit Messung kein
+     * Band, ab drei eines - aber ohne Urteil, der Tag steht neutral, auch
+     * weit daneben (150/95). Ab sieben urteilt dasselbe Band.
+     */
     @Test
-    fun blutdruckband_erst_ab_sieben_frueheren_tagen() {
+    fun blutdruckband_ab_drei_frueheren_tagen_urteil_ab_sieben() {
         fun mit(tage: Int) = Gesundheitsrechnung.blutdruckwoche(
-            (1..tage).map { am(bdHeute.minusDays(6L + it), 8, 0, 120, 80) } + am(bdHeute.minusDays(6), 8, 0, 121, 81), bdHeute, bdZone,
+            (1..tage).map { am(bdHeute.minusDays(6L + it), 8, 0, 120, 80) } + am(bdHeute.minusDays(6), 8, 0, 150, 95), bdHeute, bdZone,
         )
-        assertNull(mit(6).oben.first().band)
-        assertNull(mit(6).unten.first().band)
-        // Sieben gleiche Tage: das Band ist mindestens 3 breit nach jeder Seite.
+        assertNull(mit(2).oben.first().band)
+        assertNull(mit(2).unten.first().band)
+        // Drei gleiche Tage: das Band ist mindestens 3 breit nach jeder Seite - und urteilt noch nicht.
+        assertEquals(117 to 123, mit(3).oben.first().band)
+        assertEquals(77 to 83, mit(3).unten.first().band)
+        for (tage in 3..6) {
+            assertNull(mit(tage).oben.first().imBand, "$tage Tage")
+            assertNull(Gesundheitsrechnung.blutdrucklage(mit(tage).oben.first(), mit(tage).unten.first()), "$tage Tage")
+        }
         assertEquals(117 to 123, mit(7).oben.first().band)
-        assertEquals(77 to 83, mit(7).unten.first().band)
+        assertEquals(false, mit(7).oben.first().imBand)
+        assertEquals(false, mit(7).unten.first().imBand)
+        assertEquals(Blutdrucklage.DARUEBER, Gesundheitsrechnung.blutdrucklage(mit(7).oben.first(), mit(7).unten.first()))
     }
 
     /**
@@ -282,7 +294,7 @@ class GesundheitsrechnungHerzTest {
     /** Der Schnitt der HRV-Woche ueber die Naechte mit Wert, ab drei: 41..55 wie im Entwurf geben 49. */
     @Test
     fun wochenschnitt_ueber_die_naechte_mit_wert_ab_drei() {
-        fun woche(vararg w: Int?) = w.mapIndexed { i, x -> Gesundheitsrechnung.Bandtag(bdHeute.minusDays(6L - i), x, null) }
+        fun woche(vararg w: Int?) = w.mapIndexed { i, x -> Gesundheitsrechnung.Bandtag(bdHeute.minusDays(6L - i), x, null, frueher = 0) }
         assertEquals(49, Gesundheitsrechnung.wochenschnitt(woche(48, 53, 46, 55, 52, 41, 50)))
         // Fehlende Naechte zaehlen nicht als 0: (40 + 50 + 61) / 3 = 50,3.
         assertEquals(50, Gesundheitsrechnung.wochenschnitt(woche(null, null, null, null, 40, 50, 61)))
@@ -326,13 +338,68 @@ class GesundheitsrechnungHerzTest {
     @Test
     fun hrvOhneBandBeiZuWenigNaechten() {
         val heute = LocalDate.of(2026, 10, 2)
-        val werte = (0..5).associate { heute.minusDays(it.toLong()) to 45 }
+        // Heute und zwei Naechte davor: heute hat nur zwei fruehere Werte - kein Band.
+        val werte = (0..2).associate { heute.minusDays(it.toLong()) to 45 }
         val woche = Gesundheitsrechnung.bandwoche(werte, heute)
         assertNull(woche.last().band)
         assertNull(woche.last().imBand)
+        assertEquals(2, woche.last().frueher)
         // Ein ganz gleichmaessiges Band ist mindestens 3 ms breit nach jeder Seite.
         val gleich = (1..10).associate { heute.minusDays(it.toLong()) to 45 }
         assertEquals(42 to 48, Gesundheitsrechnung.bandwoche(gleich, heute).last().band)
+    }
+
+    /**
+     * DAS BAND AB DREI NAECHTEN, DAS URTEIL AB SIEBEN (0.52) - wie auf dem
+     * Telefon am 6.10.: nur wenige Naechte mit HRV. Die Rechnung bleibt
+     * Mittel plus/minus Streuung, mindestens 3: aus 50, 56, 62 wird 50-62.
+     * Vor der dritten Nacht kein Band; mit drei bis sechs ein Band, aber
+     * kein Urteil, auch fuer einen Wert weit darunter.
+     */
+    @Test
+    fun hrvBandAbDreiNaechtenUrteilAbSieben() {
+        val heute = LocalDate.of(2026, 10, 2)
+        // Die drei Naechte vor der Woche; in der Woche 30 ms (weit unter dem Band), dreimal 55, wieder 30.
+        val drei = mapOf(heute.minusDays(9) to 50, heute.minusDays(8) to 56, heute.minusDays(7) to 62)
+        val wochenwerte = listOf(30, 55, 55, 55, 30).mapIndexed { i, w -> heute.minusDays(6L - i) to w }.toMap()
+        val woche = Gesundheitsrechnung.bandwoche(drei + wochenwerte, heute)
+        // Am ersten Tag der Woche: die drei Naechte davor, 56 +- 6 - und 30 ms darunter ohne Urteil.
+        assertEquals(3, woche.first().frueher)
+        assertEquals(50 to 62, woche.first().band)
+        assertEquals(30, woche.first().wert)
+        assertNull(woche.first().imBand)
+        assertTrue(!woche.first().urteilt)
+        assertNull(Gesundheitsrechnung.bandurteil(woche.first()))
+        // Die ersten vier Tage der Woche (3 bis 6 fruehere Werte): Band, aber kein Urteil.
+        assertEquals(listOf(3, 4, 5, 6), woche.take(4).map { it.frueher })
+        assertTrue(woche.take(4).all { it.band != null && it.imBand == null }, "$woche")
+        // Ab sieben frueheren Werten urteilt das Band: der fuenfte Tag hat 3 + 4, und 30 ms liegen darunter.
+        assertEquals(7, woche[4].frueher)
+        assertEquals(30, woche[4].wert)
+        assertEquals(false, woche[4].imBand)
+        assertEquals(Vergleich.TIEFER, Gesundheitsrechnung.bandurteil(woche[4])?.urteil)
+        // Zwei Naechte genuegen nicht.
+        val zwei = Gesundheitsrechnung.bandwoche(drei.minus(heute.minusDays(9)), heute)
+        assertNull(zwei.first().band)
+    }
+
+    /**
+     * DIE FLAECHE IN STUECKEN OHNE UNTERBRUCH: Tage mit Band nacheinander
+     * sind ein Stueck (eine Flaeche durch ihre Mitten), ein Tag ohne Band
+     * trennt. Hier das Band an den Tagen 1, 2, 3 und 5, 6 der Woche.
+     */
+    @Test
+    fun bandstuecke_trennen_nur_an_tagen_ohne_band() {
+        val heute = LocalDate.of(2026, 10, 2)
+        fun tag(i: Int, band: Pair<Int, Int>?) = Gesundheitsrechnung.Bandtag(heute.minusDays(6L - i), 50, band, if (band == null) 0 else 3)
+        val woche = listOf(tag(0, null), tag(1, 40 to 50), tag(2, 41 to 51), tag(3, 42 to 52), tag(4, null), tag(5, 43 to 53), tag(6, 44 to 54))
+        assertEquals(
+            listOf(listOf(1 to (40 to 50), 2 to (41 to 51), 3 to (42 to 52)), listOf(5 to (43 to 53), 6 to (44 to 54))),
+            Gesundheitsrechnung.bandstuecke(woche),
+        )
+        // Die ganze Woche mit Band ist ein einziges Stueck - keine Treppe aus sieben.
+        assertEquals(1, Gesundheitsrechnung.bandstuecke(woche.map { it.copy(band = 40 to 50) }).size)
+        assertTrue(Gesundheitsrechnung.bandstuecke(woche.map { it.copy(band = null) }).isEmpty())
     }
 
     @Test

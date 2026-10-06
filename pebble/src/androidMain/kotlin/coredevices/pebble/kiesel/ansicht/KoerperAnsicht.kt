@@ -36,9 +36,10 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
     )
 
 /**
- * Die Zeile "Body" fuer die Liste der Gesundheitsseite, oder null: ohne
- * Gewicht und Fett der letzten 90 Tage gibt es keine.
- * Sie liest selbst - der GesundheitsStand bleibt so, wie das Widget ihn kennt.
+ * Die Werte der Karte "Body" auf Heart & Body ([KoerperKarte]), oder null:
+ * ohne Gewicht und Fett der letzten 90 Tage gibt es keine - wer sich nicht
+ * wiegt, saehe sonst immer eine leere Karte. Gelesen wird hier und nicht im
+ * GesundheitsStand: der bleibt so, wie das Widget ihn kennt.
  *
  * NICHT AM UHRSCHUB: Gewicht kommt von der Waage, nie von der Uhr. Frueher
  * las die Zeile mit jedem neuen Stand der Seite (jeder Schub, jeder Eintrag)
@@ -47,19 +48,24 @@ private fun veraenderungText(betrag: Double, einheit: String): String =
  * der Waage - liest immer.
  */
 @Composable
-internal fun koerperzeile(oeffne: () -> Unit): (@Composable () -> Unit)? {
+internal fun rememberKoerperzeile(): Koerperzeile? {
     val context = LocalContext.current
     val erster = remember { AtomicBoolean(true) }
     val stand = rememberStand(Koerperdaten.zuletzt) {
         Koerperdaten.lies(context, if (erster.getAndSet(false)) Koerperdaten.FRISCH_MS else 0)
     }
-    val imperial = einheitenImperial()
-    val z = remember(stand) { stand?.let { Koerperrechnung.zeile(it, LocalDate.now(), ZoneId.systemDefault()) } } ?: return null
-    return { KoerperZeile(z, imperial, oeffne) }
+    return remember(stand) { stand?.let { Koerperrechnung.zeile(it, LocalDate.now(), ZoneId.systemDefault()) } }
 }
 
+/**
+ * Die Karte "Body" auf Heart & Body: das letzte Gewicht gross, darunter Fett
+ * und Veraenderung in 30 Tagen - dieselben Werte und Formate wie bis 0.51 die
+ * eigene Zeile Body auf Health. Seit 0.52 gehoert der Koerper zu Heart & Body,
+ * dessen Zeile ihn schon im Namen traegt; "Body >" fuehrt weiter zur
+ * Koerperseite mit Verlauf und Zusammensetzung.
+ */
 @Composable
-private fun KoerperZeile(z: Koerperzeile, imperial: Boolean, oeffne: () -> Unit) {
+internal fun KoerperKarte(z: Koerperzeile, imperial: Boolean, oeffne: () -> Unit) {
     val context = LocalContext.current
     val wert = if (z.istGewicht) Formate.gewicht(z.wert.wert, imperial) else prozentEineStelle(z.wert.wert)
     val unter = listOfNotNull(
@@ -70,10 +76,10 @@ private fun KoerperZeile(z: Koerperzeile, imperial: Boolean, oeffne: () -> Unit)
             if (z.istGewicht) veraenderungText(Formate.gewichtIn(it, imperial), Formate.gewichtEinheit(imperial)) else veraenderungText(it, "%")
         },
     ).joinToString(" · ").ifEmpty { null }
-    Zeile(
-        stringResource(R.string.ks_kp_zeile), unter, wert.zahl, wert.einheit,
-        zeichen = { Tonkreis(Zeichen.waage, Farben.koerper) }, onClick = oeffne,
-    )
+    // Der Link nennt die Seite, zu der er fuehrt - ihr Titel ist "Body".
+    Abschnitt(stringResource(R.string.ks_kp_karte), link = stringResource(R.string.ks_kp_titel), onLink = oeffne) {
+        Hauptwert(wert.zahl, wert.einheit, unter)
+    }
 }
 
 /**

@@ -469,10 +469,19 @@ internal object Gesundheitsrechnung {
 
     /**
      * Ein Tag einer Woche mit Band (HRV, Blutdruck oben, Blutdruck unten):
-     * sein Wert und das Band, das bis dahin als gewohnt galt.
+     * sein Wert, das Band, das bis dahin als gewohnt galt, und aus wie vielen
+     * frueheren Werten es stammt ([frueher]).
      */
-    data class Bandtag(val tag: LocalDate, val wert: Int?, val band: Pair<Int, Int>?) {
-        val imBand: Boolean? get() = if (wert == null || band == null) null else wert in band.first..band.second
+    data class Bandtag(val tag: LocalDate, val wert: Int?, val band: Pair<Int, Int>?, val frueher: Int) {
+        /**
+         * Ob das Band schon urteilt: erst ab [Fenster.HRV_LERNNAECHTE]
+         * frueheren Werten. Davor steht es im Bild, sagt aber nichts ueber
+         * den Tag - aus drei Naechten waere "in range" Zufall.
+         */
+        val urteilt: Boolean get() = band != null && frueher >= Fenster.HRV_LERNNAECHTE
+
+        /** Im Band oder daneben - null ohne Wert und solange das Band nicht urteilt ([urteilt]). */
+        val imBand: Boolean? get() = if (wert == null || band == null || !urteilt) null else wert in band.first..band.second
     }
 
     /**
@@ -484,16 +493,42 @@ internal object Gesundheitsrechnung {
      * sonst laege bei sehr gleichmaessigen Werten jeder neue daneben.
      * Gerechnet fuer die HRV (je Nacht) und den Blutdruck (je Tag, oben und
      * unten getrennt) - DIESELBE REGEL, damit beide Karten dasselbe heissen.
+     *
+     * Das Band steht ab [Fenster.BAND_WERTE] frueheren Werten; geurteilt wird
+     * erst ab [Fenster.HRV_LERNNAECHTE] ([Bandtag.urteilt]).
      */
     fun bandwoche(werte: Map<LocalDate, Int>, heute: LocalDate): List<Bandtag> = (Fenster.WOCHE_TAGE - 1 downTo 0).map { heute.minusDays(it.toLong()) }.map { tag ->
         val vorher = werte.filter { (t, w) -> w > 0 && t < tag && !t.isBefore(tag.minusDays(Fenster.HRV_NAECHTE.toLong())) }.values.map { it.toDouble() }
-        val band = vorher.takeIf { it.size >= Fenster.HRV_LERNNAECHTE }?.let { v ->
+        val band = vorher.takeIf { it.size >= Fenster.BAND_WERTE }?.let { v ->
             val mittel = v.average()
             // Die Streuung der Stichprobe: die Tage stehen fuer alle, nicht nur fuer sich.
             val halb = maxOf(Statistik.streuung(v)!!, 3.0)
             (mittel - halb).roundToInt().coerceAtLeast(1) to (mittel + halb).roundToInt()
         }
-        Bandtag(tag, werte[tag]?.takeIf { it > 0 }, band)
+        Bandtag(tag, werte[tag]?.takeIf { it > 0 }, band, vorher.size)
+    }
+
+    /**
+     * Die Stuecke einer Woche, in denen das Band ohne Unterbruch steht - je
+     * Tag seine Stelle in der Woche und sein Band. Jedes Stueck zeichnet die
+     * Herzseite als EINE Flaeche durch die Tagesmitten; ein Tag ohne Band
+     * (zu wenig fruehere Werte) trennt zwei Stuecke, denn ueber ihn hinweg
+     * hiesse die Flaeche, man wisse dort, was gewohnt ist.
+     */
+    fun bandstuecke(tage: List<Bandtag>): List<List<Pair<Int, Pair<Int, Int>>>> {
+        val stuecke = mutableListOf<MutableList<Pair<Int, Pair<Int, Int>>>>()
+        var offen: MutableList<Pair<Int, Pair<Int, Int>>>? = null
+        tage.forEachIndexed { i, t ->
+            val b = t.band
+            if (b == null) {
+                offen = null
+            } else {
+                val stueck = offen ?: mutableListOf<Pair<Int, Pair<Int, Int>>>().also { stuecke += it }
+                stueck += i to b
+                offen = stueck
+            }
+        }
+        return stuecke
     }
 
     /**

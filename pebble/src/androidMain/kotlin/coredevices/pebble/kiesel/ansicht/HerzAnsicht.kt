@@ -29,6 +29,7 @@ import coredevices.pebble.kiesel.GesundheitsStand
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
 import coredevices.pebble.kiesel.Fenster
+import coredevices.pebble.kiesel.Koerperzeile
 import coredevices.pebble.kiesel.Blutdrucklage
 import coredevices.pebble.kiesel.Vergleich
 import coredevices.pebble.kiesel.bandurteil
@@ -43,29 +44,41 @@ private const val SPO2_WARNUNG = 90
 /**
  * "Heart & Body": oben der Puls der letzten 24 Stunden, dann HRV und
  * Blutdruck je als Woche an ihrem persoenlichen Band, Ruhepuls und SpO2 der
- * letzten Nacht, was Boulder ueber die frueheren Naechte weiss, und am Ende
- * der Weg zu den Trends. Hier wird geladen; was zu sehen ist, zeichnet
- * [HerzInhalt] aus dem fertigen Stand.
+ * letzten Nacht, was Boulder ueber die frueheren Naechte weiss, der Koerper
+ * von der Waage und am Ende der Weg zu den Trends. Hier wird geladen; was zu
+ * sehen ist, zeichnet [HerzInhalt] aus dem fertigen Stand.
  */
 @Composable
-internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
+internal fun HerzAnsicht(oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit, oeffneKoerper: () -> Unit) {
     // Derselbe Lader wie auf Health: von dort kommend steht die Seite gleich da und liest nicht noch einmal.
     val lies = rememberGesundheitslader()
     val s = rememberStand(Gesundheitsdaten.zuletzt, rememberUhrschub()) { lies() }
+    // Die Waage liest fuer sich (rememberKoerperzeile): sie haengt nicht am Schub der Uhr.
+    val koerper = rememberKoerperzeile()
+    val imperial = einheitenImperial()
     if (s == null) {
         Ladekreis()
         return
     }
-    HerzInhalt(s, Instant.now(), oeffneNacht, oeffneTrend)
+    HerzInhalt(s, Instant.now(), koerper, imperial, oeffneNacht, oeffneTrend, oeffneKoerper)
 }
 
 /**
  * Die Seite aus einem fertigen Stand - ohne Laden, damit ein Bildtest sie mit
  * Beispieldaten zeichnen kann. [jetzt]: das Ende der 24 Stunden Puls und der
- * Bezug von "Today" beim Blutdruck.
+ * Bezug von "Today" beim Blutdruck. [koerper]: die Werte der Waage fuer die
+ * Karte Body, null ohne Waage - dann fehlt die Karte.
  */
 @Composable
-internal fun HerzInhalt(s: GesundheitsStand, jetzt: Instant, oeffneNacht: (Long) -> Unit, oeffneTrend: () -> Unit) {
+internal fun HerzInhalt(
+    s: GesundheitsStand,
+    jetzt: Instant,
+    koerper: Koerperzeile?,
+    imperial: Boolean,
+    oeffneNacht: (Long) -> Unit,
+    oeffneTrend: () -> Unit,
+    oeffneKoerper: () -> Unit,
+) {
     // Vor der Liste gerechnet: ein leeres Item bekaeme seinen Abstand trotzdem, und ohne Manschette ist es meist leer.
     val blutdruck = remember(s.blutdruck) { Gesundheitsrechnung.blutdruckstand(s.blutdruck) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
@@ -75,7 +88,10 @@ internal fun HerzInhalt(s: GesundheitsStand, jetzt: Instant, oeffneNacht: (Long)
         // Nach der HRV: die beiden Wochen am Band stehen beisammen, der Puls des Tages bleibt oben.
         if (blutdruck != null) item { BlutdruckKarte(blutdruck, s.blutdruckWoche, jetzt) }
         item { NachtwerteKarte(s, oeffneNacht) }
-        item { GewohntKarte(s, oeffneTrend) }
+        item { GewohntKarte(s) }
+        // Der Koerper als letzte Karte vor den Trends: bis 0.51 eine eigene Zeile auf Health.
+        if (koerper != null) item { KoerperKarte(koerper, imperial, oeffneKoerper) }
+        // Der eine Weg zu den Trends - "Trends >" in YOUR USUAL fuehrte bis 0.51 ein zweites Mal dorthin.
         item { Trendzeile(oeffneTrend) }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -219,8 +235,11 @@ private fun BlutdruckKarte(b: Gesundheitsrechnung.Blutdruckstand, woche: Gesundh
                 Formate.wochentagLang(o.tag.dayOfWeek) + " " +
                     (if (o.wert != null && u.wert != null) Formate.Angabe("${Formate.zahl(o.wert.toLong())}/${Formate.zahl(u.wert.toLong())}", "mmHg").text else Formate.FEHLT)
             }
-            // Zwei Reihen in einem Bild: oben und unten teilen Achse und Tage, wie im Entwurf.
-            Bandwoche(listOf(gemessen.oben, gemessen.unten), imBand, ausserBand, hoehe = WOCHENBILD, rasterSchritt = 10, beschreibung = nachSatz) {
+            // Zwei Reihen in einem Bild: oben und unten teilen Achse und Tage, wie im Entwurf;
+            // der Tagesstrich verbindet die beiden Werte einer Messung wie bei Garmin.
+            Bandwoche(
+                listOf(gemessen.oben, gemessen.unten), imBand, ausserBand, hoehe = WOCHENBILD, rasterSchritt = 10, tagesstrich = true, beschreibung = nachSatz,
+            ) {
                 Formate.wochentagKurz(it.dayOfWeek)
             }
         }
@@ -276,12 +295,13 @@ private fun NachtwerteKarte(s: GesundheitsStand, oeffneNacht: (Long) -> Unit) {
  * dem es kommt - dieselbe Nachtzahl fuer beides. Die HRV hat ihr Band in der
  * HRV-Karte; hier stand sie ein drittes Mal, mit einem zweiten "usual" (dem
  * Schnitt von sieben Naechten) und einer Nachtzahl, die zum Ruhepuls gehoerte.
+ * Ohne Link: zu den Trends fuehrt die Zeile am Ende der Seite, wie auf Water und Stack.
  */
 @Composable
-private fun GewohntKarte(s: GesundheitsStand, oeffneTrend: () -> Unit) {
+private fun GewohntKarte(s: GesundheitsStand) {
     val ruhe = Gesundheitsrechnung.ruhepulsUrteil(s.nacht?.ruhepuls, s.ruhepulsWoche)
     Kasten {
-        Kopf(stringResource(R.string.ks_h_gewohnt), link = stringResource(R.string.ks_h_herztrend), onLink = oeffneTrend)
+        Kopf(stringResource(R.string.ks_h_gewohnt))
         Column(Modifier.padding(start = INNEN, end = INNEN, bottom = INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val schnitt = ruhe.schnitt
             if (ruhe.frueher < Fenster.LERNNAECHTE || schnitt == null) {

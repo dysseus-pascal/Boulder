@@ -279,18 +279,22 @@ internal fun Pulsband(
 }
 
 /**
- * Eine Woche am persoenlichen Band wie bei Google Health und Garmin: das
- * Band als Flaeche, Tag fuer Tag so breit, wie es an dem Tag galt, darueber
- * die Tage als verbundene Punkte - gruen im Band, in [ausserhalb] daneben.
- * Ein Tag ohne Band (zu wenig fruehere Werte) steht neutral da, und die
- * Linie zu ihm auch: gruen hiesse "in range", und ohne Band ist ueber ihn
- * nichts gesagt.
+ * Eine Woche am persoenlichen Band wie bei Fitbit und Garmin: das Band als
+ * EINE durchgehende Flaeche durch die Tagesmitten - an jeder Mitte so breit,
+ * wie es an dem Tag galt -, darueber die Tage als Punkte mit einer neutralen
+ * Linie dazwischen, wie im Entwurf "Erlebnis-Herz". Die Punkte gruen im
+ * Band, in [ausserhalb] daneben; solange das Band noch nicht urteilt
+ * ([Gesundheitsrechnung.Bandtag.urteilt]) oder fehlt, neutral - gruen hiesse
+ * "in range", und darueber ist dann nichts gesagt. Das Band selbst steht
+ * gleich da, ob es urteilt oder nicht.
  *
  * [reihen]: je sieben Tage mit eigenem Band - eine fuer die HRV, zwei fuer
  * den Blutdruck (oben und unten). DIESELBE ZEICHNUNG FUER BEIDE, damit
  * dieselbe Farbe auf beiden Karten dasselbe heisst. [rasterSchritt]: der
  * kleinste Abstand der Rasterlinien - die HRV will Fuenfer, der Blutdruck
- * ueber 60 mmHg Spanne Zehner oder mehr.
+ * ueber 60 mmHg Spanne Zehner oder mehr. [tagesstrich]: die ersten beiden
+ * Reihen gehoeren zu einer Messung (Blutdruck oben und unten) - ein
+ * senkrechter Strich verbindet sie je Tag, wie bei Garmin.
  */
 @Composable
 internal fun Bandwoche(
@@ -299,6 +303,7 @@ internal fun Bandwoche(
     ausserhalb: Color,
     hoehe: Dp = 170.dp,
     rasterSchritt: Int = 5,
+    tagesstrich: Boolean = false,
     beschreibung: String? = null,
     tagText: (LocalDate) -> String,
 ) {
@@ -311,6 +316,12 @@ internal fun Bandwoche(
     val flaeche = farbe.copy(alpha = Farben.BAND_DECKUNG)
     val raster = Farben.raster()
     val ohneUrteil = Farben.neutral()
+    // Die Linie und der Tagesstrich gedaempft und deckend wie im Entwurf (Schrift zu 50 %):
+    // sie tragen kein Urteil, das tun allein die Punkte. Deckend, damit sich Strich und
+    // Linie, wo sie sich kreuzen, nicht zu einem dunkleren Fleck addieren.
+    val linie = ohneUrteil.aufKarte(0.6f)
+    // Der Rand um jeden Punkt in der Farbe der Karte: so steht er frei vor Band und Linie.
+    val kartenrand = Farben.karte()
     Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(hoehe)).padding(top = 8.dp).bildBeschreibung(beschreibung)) {
         val rechts = size.width - achsSpalte(messer, stil)
         val kopf = 6.dp.toPx()
@@ -328,25 +339,44 @@ internal fun Bandwoche(
             val m = messer.measure(Formate.zahl(w.toLong()), stil)
             drawText(m, topLeft = Offset(size.width - m.size.width, y(w) - m.size.height / 2f))
         }
-        // Erst alle Baender, dann Linien und Punkte: beim Blutdruck laege sonst
+        // Erst alle Baender, dann Striche, Linien und Punkte: beim Blutdruck laege sonst
         // das obere Band ueber den Punkten des unteren, wo sie sich naehern.
         reihen.forEach { reihe ->
-            // Das Band als Treppe: jede Spalte so hoch wie das Band ihres Tages,
-            // die erste und letzte bis an den Rand.
-            reihe.forEachIndexed { i, t ->
-                val (u, o) = t.band ?: return@forEachIndexed
-                val links = if (i == 0) 0f else spalte * i
-                val breite = if (i == reihe.lastIndex) rechts - links else spalte * (i + 1) - links
-                drawRect(flaeche, Offset(links, y(o)), Size(breite + 0.5f, y(u) - y(o)))
+            // Jede Folge von Tagen mit Band ist EIN Pfad: oben durch die Mitten hin,
+            // unten zurueck. Einzelne Rechtecke je Tag gaben eine Treppe und, wo sie
+            // sich ueberlappten, dunklere Naehte in der durchscheinenden Flaeche.
+            Gesundheitsrechnung.bandstuecke(reihe).forEach { stueck ->
+                if (stueck.size == 1) {
+                    // Ein Tag allein haette durch seine Mitte keine Breite: dann ein Stueck
+                    // von einer halben Spalte um sie herum, sonst fehlte sein Band ganz.
+                    val (i, b) = stueck.single()
+                    drawRect(flaeche, Offset(x(i) - spalte / 4, y(b.second)), Size(spalte / 2, y(b.first) - y(b.second)))
+                    return@forEach
+                }
+                val pfad = Path().apply {
+                    moveTo(x(stueck[0].first), y(stueck[0].second.second))
+                    stueck.drop(1).forEach { (i, b) -> lineTo(x(i), y(b.second)) }
+                    stueck.asReversed().forEach { (i, b) -> lineTo(x(i), y(b.first)) }
+                    close()
+                }
+                drawPath(pfad, flaeche)
+            }
+        }
+        // Blutdruck: oben und unten eines Tages sind eine Messung - der Strich zeigt ihre
+        // Spanne, wie bei Garmin. Neutral und hinter den Punkten: er urteilt nicht.
+        if (tagesstrich && reihen.size >= 2) {
+            reihen[0].zip(reihen[1]).forEachIndexed { i, (oben, unten) ->
+                val o = oben.wert ?: return@forEachIndexed
+                val u = unten.wert ?: return@forEachIndexed
+                drawLine(linie, Offset(x(i), y(o)), Offset(x(i), y(u)), 4.dp.toPx(), cap = StrokeCap.Round)
             }
         }
         reihen.forEach { reihe ->
-            val punkte = reihe.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) to t.imBand } }
-            for (i in 1 until punkte.size) {
-                val (von, vonImBand) = punkte[i - 1]
-                val (bis, bisImBand) = punkte[i]
-                drawLine(if (vonImBand == null || bisImBand == null) ohneUrteil else farbe, von, bis, 2.dp.toPx(), cap = StrokeCap.Round)
-            }
+            // Von Tag zu Tag innerhalb der Reihe (oben mit oben, unten mit unten), ueber Tage ohne Wert hinweg.
+            val punkte = reihe.mapIndexedNotNull { i, t -> t.wert?.let { Offset(x(i), y(it)) } }
+            for (i in 1 until punkte.size) drawLine(linie, punkte[i - 1], punkte[i], 2.dp.toPx(), cap = StrokeCap.Round)
+        }
+        reihen.forEach { reihe ->
             reihe.forEachIndexed { i, t ->
                 val w = t.wert ?: return@forEachIndexed
                 val f = when (t.imBand) {
@@ -355,9 +385,12 @@ internal fun Bandwoche(
                     null -> ohneUrteil
                 }
                 val p = Offset(x(i), y(w))
-                drawCircle(f, 4.dp.toPx(), p)
-                // Der letzte Tag mit einem Ring darum, wie der Auswahlpunkt der Vorlage.
-                if (i == reihe.lastIndex) drawCircle(f, 7.5.dp.toPx(), p, style = Stroke(2.dp.toPx()))
+                // Der juengste Tag mit einem Ring darum, wie der Auswahlpunkt der Vorlage;
+                // sein Kartenrand reicht bis unter den Ring, damit nichts zwischen beiden durchscheint.
+                val juengster = i == reihe.lastIndex
+                drawCircle(kartenrand, (if (juengster) 11 else 8).dp.toPx(), p)
+                if (juengster) drawCircle(f, 9.5.dp.toPx(), p, style = Stroke(2.dp.toPx()))
+                drawCircle(f, 6.dp.toPx(), p)
             }
         }
         tage.forEachIndexed { i, t ->

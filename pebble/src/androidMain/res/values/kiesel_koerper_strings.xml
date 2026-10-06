@@ -2,7 +2,7 @@
 <!-- Boulder: Gewicht und Koerperzusammensetzung einer Waage aus Health Connect. -->
 <resources>
     <string name="ks_kp_titel">Body</string>
-    <string name="ks_kp_zeile">Body</string>
+    <string name="ks_kp_karte">Body</string>
     <string name="ks_kp_fett_anteil">%1$s%% fat</string>
     <string name="ks_kp_in_tagen">%1$s in %2$d days</string>
     <string name="ks_kp_gewicht_k">WEIGHT</string>

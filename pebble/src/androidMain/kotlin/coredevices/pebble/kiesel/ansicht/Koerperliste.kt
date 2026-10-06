@@ -27,16 +27,16 @@ import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
- * Heart & Body (mit Blutdruck), Koerper, Water und Stack als Zeilen. Das
- * Chevron fuehrt eine Ebene tiefer. Die Koerperzeile liest selbst und kommt
- * darum fertig herein ([koerper], siehe [koerperzeile]) - null ohne Waage.
+ * Heart & Body (mit Blutdruck), Water und Stack als Zeilen. Das Chevron
+ * fuehrt eine Ebene tiefer. KEINE ZEILE BODY mehr (seit 0.52): Gewicht und
+ * Fett stehen als Karte auf Heart & Body ([KoerperKarte]), deren Zeile den
+ * Koerper schon im Namen traegt - und unveraendert bleibt, ohne dessen Werte.
  */
 @Composable
 internal fun Koerperliste(
     s: GesundheitsStand,
     jetzt: Instant,
     wege: Gesundheitswege,
-    koerper: (@Composable () -> Unit)?,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -66,8 +66,6 @@ internal fun Koerperliste(
                 zeichen = { Tonkreis(Zeichen.herz, Farben.puls) }, onClick = wege.herz,
             )
         }
-        // Nur wer sich wiegt, bekommt die Zeile - ohne Waage waere sie immer leer.
-        koerper?.let { add(it) }
         if (s.mitDrinktervall) add {
             // Gezaehlt wie auf der Uhr: nur ihre Glaeser; die Liter umfassen alles Wasser des Tages.
             val letztes = s.glaeser.maxOrNull()

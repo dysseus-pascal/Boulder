@@ -13,8 +13,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ViewRootForTest
@@ -72,7 +74,11 @@ class GesundheitBildTest {
         aktivitaet.setContent {
             MaterialTheme(colorScheme = greyScheme) {
                 primaer = MaterialTheme.colorScheme.primary.toArgb()
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { inhalt() }
+                // Die Schriftfarbe, die in der App das Scaffold des Home-Bildschirms setzt
+                // (onBackground): ohne sie stand der Gruss schwarz auf Grau, ein Fehler nur des Bilds.
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { inhalt() }
+                }
             }
         }
         shadowOf(Looper.getMainLooper()).idle()

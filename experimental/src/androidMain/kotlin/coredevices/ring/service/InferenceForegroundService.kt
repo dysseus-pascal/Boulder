@@ -136,6 +136,11 @@ class InferenceForegroundService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onTimeout(startId: Int) {
+        logger.e { "Inference foreground service hit the shortService time limit with a session still active" }
+        stopSelf()
+    }
+
     override fun onDestroy() {
         _running.value = false
         super.onDestroy()

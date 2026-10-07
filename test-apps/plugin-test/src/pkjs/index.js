@@ -36,6 +36,8 @@ var NO_ACTION = 'none';
 // The catalogue's pseudo-category for tiles that are just a button: an action taking no
 // arguments, with no reading behind it. Capitalised, so it can't be a real plugin's category.
 var ACTION_CATEGORY = 'Actions';
+// Tiles the watch fills itself, with no plugin behind them.
+var WATCH_CATEGORY = 'Clock';
 
 // What fills each quadrant until the user says otherwise: a category/item/property, and
 // optionally the title it wears (a property name, or `custom` with the text) and what a tap
@@ -221,6 +223,15 @@ function catalogue() {
       });
     });
   });
+  entries.push({
+    value: '|' + WATCH_CATEGORY + '|date',
+    plugin: '',
+    pluginName: 'Watch',
+    category: WATCH_CATEGORY,
+    item: 'date',
+    properties: {},
+    multiple: false,
+  });
   return entries;
 }
 
@@ -246,6 +257,19 @@ function tileAction(entry) {
 function actionLabel(name) {
   var words = name.replace(/_/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function renderWatchTile(index, entry) {
+  instances[index] = [];
+  properties[index] = [];
+  shapes[index] = [];
+  current[index] = null;
+  activeProperties[index] = '';
+  activeShapes[index] = '';
+  activeActions[index] = [];
+  previews[index] = {};
+  var config = titles()[index] || {};
+  show(index, ['d', config.mode === 'custom' ? config.text || '' : ''].join('|'));
 }
 
 function renderActionTile(index, entry) {
@@ -504,6 +528,7 @@ function actionsFor(entry, property) {
 
 /** What a tap on this quadrant does: fire an action, cycle what it shows, or nothing. */
 function tapFor(entry, property) {
+  if (entry.category === WATCH_CATEGORY) return null;
   if (isActionTile(entry)) {
     var action = tileAction(entry);
     return action ? { action: action } : null;
@@ -646,6 +671,10 @@ function subscribeAll() {
     }
     if (isActionTile(entry)) {
       renderActionTile(index, entry);
+      return;
+    }
+    if (entry.category === WATCH_CATEGORY) {
+      renderWatchTile(index, entry);
       return;
     }
     var declared = sourceOf(entry) || { properties: {} };

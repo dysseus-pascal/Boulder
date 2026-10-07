@@ -48,7 +48,7 @@ Source for each is in this folder:
   alternative to the built-in weather plugin. Shows `navigator.geolocation` and drawing condition
   images in JS.
 - **`plugin-test`** ("Plugin Demo: Dashboard"): a watchapp with eight tiles, each set from its
-  settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions, or make a tile a button for any action that takes no arguments (e.g. "Back", the default, goes to the previous app).
+  settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions, or make a tile a button for any action that takes no arguments (e.g. "Back", the default, goes to the previous app). A tile can also show the date, from the watch's own clock.
 - **`stocks`**: share prices for tickers you pick on its settings page.
 - **`hue`**: Control Philips Hue lights on your local bridge (pair from its settings page).
 - **`notion`**, **`ticktick`**, **`todoist`**: examples of plugins that sign in with OAuth.

@@ -720,6 +720,7 @@ private class E2EPreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(false)
+    override val scanByPairedAddress: StateFlow<Boolean> = MutableStateFlow(true)
 
     override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -744,6 +745,7 @@ private class E2EPreferences : Preferences {
     override fun setLastBackupCount(count: Int?) {}
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
+    override fun setScanByPairedAddress(enabled: Boolean) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)

@@ -237,6 +237,7 @@ class ExperimentalDevices(
             append("Secondary profile: ${platform.isSecondaryProfile}\n")
             if (platform.isAndroid) {
                 append("PendingIntent scan enabled: ${preferences.usePendingIntentScan.value}\n")
+                append("Scan by paired address: ${preferences.scanByPairedAddress.value}\n")
             }
             append("LLM mode: ${preferences.llmMode.value}\n")
             append(runCatching { indexSettingsSummary.summary() }

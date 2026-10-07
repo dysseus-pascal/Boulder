@@ -180,6 +180,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
+    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", true))
+    override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
 
     override suspend fun setLlmMode(mode: LlmMode) {
         withContext(Dispatchers.IO) {
@@ -333,6 +335,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
         settings.putBoolean("use_pending_intent_scan_2", enabled)
         _usePendingIntentScan.value = enabled
+    }
+
+    override fun setScanByPairedAddress(enabled: Boolean) {
+        settings.putBoolean("scan_by_paired_address", enabled)
+        _scanByPairedAddress.value = enabled
     }
 
     private val _defaultCaptureType = MutableStateFlow(

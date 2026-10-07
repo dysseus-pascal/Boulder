@@ -162,12 +162,18 @@ private object PreferencesTestImpl: Preferences {
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean>
         get() = MutableStateFlow(false)
+    override val scanByPairedAddress: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
 
     override suspend fun setLlmMode(mode: LlmMode) {
         TODO("Not yet implemented")
     }
 
     override fun setUsePendingIntentScan(enabled: Boolean) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setScanByPairedAddress(enabled: Boolean) {
         TODO("Not yet implemented")
     }
 

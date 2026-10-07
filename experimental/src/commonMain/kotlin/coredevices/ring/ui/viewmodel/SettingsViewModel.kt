@@ -154,6 +154,14 @@ class SettingsViewModel(
 
     val pendingIntentScanEnabled = preferences.usePendingIntentScan
 
+    fun toggleScanByPairedAddress() {
+        viewModelScope.launch(Dispatchers.IO) {
+            preferences.setScanByPairedAddress(!preferences.scanByPairedAddress.value)
+        }
+    }
+
+    val scanByPairedAddress = preferences.scanByPairedAddress
+
     fun beginDiagnostics(): Job {
         _diagnosticsState.value = DiagnosticsState.Running
         return viewModelScope.launch {

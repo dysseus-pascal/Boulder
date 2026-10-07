@@ -167,6 +167,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
     val pendingIntentScanEnabled by viewModel.pendingIntentScanEnabled.collectAsState()
+    val scanByPairedAddress by viewModel.scanByPairedAddress.collectAsState()
     val diagnosticsState by viewModel.diagnosticsState.collectAsState()
     val platform = koinInject<Platform>()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
@@ -576,6 +577,28 @@ fun IndexSettings(coreNav: CoreNav) {
                         Switch(
                             checked = pendingIntentScanEnabled,
                             onCheckedChange = { togglePendingIntentScanEnabled() }
+                        )
+                    }
+                )
+            }
+            fun toggleScanByPairedAddress() {
+                viewModel.toggleScanByPairedAddress()
+                scope.launch { snackbarHostState.showSnackbar("Please force close the app to apply") }
+            }
+            item {
+                SettingsRow(
+                    title = "Scan by paired address",
+                    subtitle = if (platform.isAndroid) {
+                        "Improves latency and battery"
+                    } else {
+                        "Available on Android only"
+                    },
+                    enabled = platform.isAndroid,
+                    onClick = ::toggleScanByPairedAddress,
+                    trailing = {
+                        Switch(
+                            checked = scanByPairedAddress,
+                            onCheckedChange = { toggleScanByPairedAddress() }
                         )
                     }
                 )

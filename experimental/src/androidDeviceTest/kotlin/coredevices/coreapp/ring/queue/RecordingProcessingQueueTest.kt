@@ -108,6 +108,7 @@ class FakePreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(true)
+    override val scanByPairedAddress: StateFlow<Boolean> = MutableStateFlow(true)
 
     override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -134,6 +135,7 @@ class FakePreferences : Preferences {
     }
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
+    override fun setScanByPairedAddress(enabled: Boolean) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)

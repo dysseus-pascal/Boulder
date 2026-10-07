@@ -28,6 +28,7 @@ import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
 import io.rebble.libpebblecommon.connection.LibPebble
+import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
 import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
 import coredevices.ring.reminders.ReminderCompleter
@@ -284,6 +285,11 @@ object IOSDelegate : KoinComponent {
     ) {
         logger.d { "userNotificationCenterDidReceive" }
         val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
+
+        val permissionAnswer = handlePermissionNotificationResponse(get(), response.actionIdentifier, userInfo) {
+            bgTaskScope.launch(Dispatchers.Main) { completionHandler() }
+        }
+        if (permissionAnswer) return
 
         // Reminder notifications carry only the reminder id; the feed item to deep link to
         // isn't linked when the notification is scheduled, so resolve it now (at tap time).

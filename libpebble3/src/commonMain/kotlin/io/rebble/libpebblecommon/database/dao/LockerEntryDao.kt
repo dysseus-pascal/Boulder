@@ -81,6 +81,11 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     suspend fun getAll(): List<LockerEntry>
 
+    @Query("""
+        SELECT * FROM LockerEntryEntity WHERE deleted = 0 AND id IN (:ids)
+    """)
+    fun getEntriesFlow(ids: List<Uuid>): Flow<List<LockerEntry>>
+
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
         insertOrReplace(entry)

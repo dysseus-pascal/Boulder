@@ -32,6 +32,11 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.hasWatchappBuild
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.AppPermissionStatus
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.requestedPermissions
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.TimeoutCancellationException
@@ -81,19 +86,22 @@ class Locker(
     private val errorTracker: ErrorTracker,
     private val coroutineScope: LibPebbleCoroutineScope,
     private val settings: Settings,
+    private val permissions: AppPermissions,
 ) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
     private val timelineReminderDao = database.timelineReminderDao()
+    private val appPermissionDao = database.lockerAppPermissionDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
+        private const val PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS = "have_backfilled_declared_permissions"
     }
 
-    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean): Boolean =
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean>): Boolean =
         try {
-            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch)
+            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch, granted = granted)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -141,6 +149,8 @@ class Locker(
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
+
+    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>> = permissions.statuses(id)
 
     private suspend fun pbwFor(uuid: Uuid): PbwApp? {
         val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null
@@ -218,9 +228,46 @@ class Locker(
         return true
     }
 
-    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry) {
+    override suspend fun reviewSideload(pbwPath: Path): InstallReview? = try {
+        val pbwApp = PbwApp(pbwPath)
+        val info = pbwApp.info
+        reviewInstall(Uuid.parse(info.uuid), info.longName.ifBlank { info.shortName }, pbwApp.requestedPermissions())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "Couldn't read pbw to review its permissions" }
+        null
+    }
+
+    override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? {
+        val toReview = permissions.toReview(appUuid, requested)
+        return if (toReview.isEmpty()) null else InstallReview(appUuid, appName, toReview)
+    }
+
+    internal suspend fun recordDeclaredPermissions(appId: Uuid, pbwPath: Path) {
+        val entry = lockerEntryDao.getEntry(appId)
+        val pbw = PbwApp(pbwPath)
+        permissions.recordRequested(appId, pbw.info.requestedPermissions(pbw.hasPKJS, companionsOf = entry).all)
+    }
+
+    /** For apps installed before declarations were recorded, whose pbws won't be fetched again. */
+    private suspend fun backfillDeclaredPermissions() {
+        lockerEntryDao.getAll().filterNot { it.systemApp }.forEach { entry ->
+            val pbw = lockerPBWCache.cachedPBWFileForApp(entry.id, entry.version) ?: return@forEach
+            try {
+                recordDeclaredPermissions(entry.id, pbw)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "Couldn't record what ${entry.id} declares" }
+            }
+        }
+    }
+
+    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry, granted: Map<String, Boolean>) {
         val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
         lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
+        permissions.setDecisions(Uuid.parse(app.uuid), granted)
     }
 
     override suspend fun addAppsToLocker(apps: List<io.rebble.libpebblecommon.web.LockerEntry>) {
@@ -280,10 +327,10 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean): Boolean {
+    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean> = emptyMap()): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val type = when {
-            pbwApp.info.plugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin
+            pbwApp.info.loadablePlugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin
             pbwApp.info.watchapp.watchface -> AppType.Watchface
             else -> AppType.Watchapp
         }
@@ -309,6 +356,9 @@ class Locker(
             null
         }
         lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimitV2)
+        // After the insert: requests are only shown for installed apps.
+        permissions.recordRequested(lockerEntry.id, pbwApp.requestedPermissions().all)
+        permissions.setDecisions(lockerEntry.id, granted)
         performCacheCleanup()
         return try {
             withTimeout(40.seconds) {
@@ -333,6 +383,15 @@ class Locker(
                 !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
             settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
             insertSystemApps(force = needToInsertAllSystemApps)
+            // Only at startup, so that removing and reinstalling an app keeps its decisions.
+            appPermissionDao.deleteForRemovedApps()
+        }
+        if (!settings.getBoolean(PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS, false)) {
+            coroutineScope.launch {
+                config.flow.first { it.watchConfig.enablePlugins }
+                backfillDeclaredPermissions()
+                settings[PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS] = true
+            }
         }
         coroutineScope.launch {
             libPebble.watches.map { watches -> watches.filterIsInstance<ConnectedPebbleDevice>().firstOrNull() }
@@ -682,9 +741,20 @@ abstract class LockerPBWCache(private val context: AppContext) {
         } else {
             // Delete any other cached versions for this app
             deleteApp(appId)
-            handleCacheMiss(appId, version, locker) ?: error("Failed to find PBW file for app $appId")
+            val fetched = handleCacheMiss(appId, version, locker) ?: error("Failed to find PBW file for app $appId")
+            try {
+                locker.recordDeclaredPermissions(appId, fetched)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.w(e) { "Couldn't record what $appId declares" }
+            }
+            fetched
         }
     }
+
+    fun cachedPBWFileForApp(appId: Uuid, version: String): Path? =
+        pathForApp(appId, version).takeIf { SystemFileSystem.exists(it) }
 
     fun addPBWFileForApp(appId: Uuid, version: String, source: Source) {
         val targetPath = pathForApp(appId, version)

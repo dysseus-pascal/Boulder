@@ -6,19 +6,19 @@
     "displayName": "TickTick",
     "uuid": "b1740936-c2e8-4dd6-b4cf-a85058109ac0",
     "sdkVersion": "3",
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.ticktick.com"
+          ]
+        }
+      }
+    ],
     "plugin": {
       "description": "Creates reminders in TickTick and exposes the user's open TickTick lists so an agent can choose a destination.",
       "script": "plugin.js",
-      "usesPermissions": [
-        {
-          "name": "Internet",
-          "parameters": {
-            "domains": [
-              "api.ticktick.com"
-            ]
-          }
-        }
-      ],
       "sources": [
         {
           "category": "reminders",

@@ -56,6 +56,11 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.performPlatformSpecificInit
 import io.rebble.libpebblecommon.plugin.BundledAppInstaller
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.AppPermissionsApi
+import io.rebble.libpebblecommon.permissions.AppPermissionStatus
+import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.Plugin
@@ -97,7 +102,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -330,12 +335,19 @@ interface LockerApi {
     /**
      * @return true if the app was successfully synced and launched on all connected watches.
      */
-    /** [loadOnWatch] launches it once it has synced; leave it off for background installs. */
-    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true): Boolean
+    /**
+     * [loadOnWatch] launches it once it has synced; leave it off for background installs.
+     * [granted]: the answers to [reviewSideload].
+     */
+    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true, granted: Map<String, Boolean> = emptyMap()): Boolean
+    /** Null if there's nothing to ask, or the pbw can't be read. */
+    suspend fun reviewSideload(pbwPath: Path): InstallReview?
+    suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview?
     fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
     fun getAllLockerUuids(): Flow<List<Uuid>>
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
     fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
+    fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>>
     /**
      * The config page URL for an installed app, from its appinfo `configPage` — an http(s) URL as
      * given, or an HTML file bundled in the pbw returned as a data URL. Null when the app declares
@@ -345,7 +357,7 @@ interface LockerApi {
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
-    suspend fun addAppToLocker(app: LockerEntry)
+    suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean> = emptyMap())
     suspend fun addAppsToLocker(apps: List<LockerEntry>)
     fun restoreSystemAppOrder()
     val activeWatchface: StateFlow<LockerWrapper?>
@@ -445,13 +457,14 @@ class LibPebble3(
     private val vibePatternDao: VibePatternDao,
     private val watchPreferences: WatchPrefs,
     private val weatherManager: WeatherManager,
+    appPermissions: AppPermissions,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
-    HealthDataApi by health, Plugins by pluginRegistry {
+    HealthDataApi by health, Plugins by pluginRegistry, AppPermissionsApi by appPermissions {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

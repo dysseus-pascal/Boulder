@@ -6,19 +6,19 @@
     "displayName": "Todoist",
     "uuid": "0d520cba-326c-4a22-a269-d1ab1ae38977",
     "sdkVersion": "3",
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.todoist.com"
+          ]
+        }
+      }
+    ],
     "plugin": {
       "description": "Creates Todoist tasks as reminders and exposes active projects as reminder destinations.",
       "script": "plugin.js",
-      "usesPermissions": [
-        {
-          "name": "Internet",
-          "parameters": {
-            "domains": [
-              "api.todoist.com"
-            ]
-          }
-        }
-      ],
       "sources": [
         {
           "category": "reminders",

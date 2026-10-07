@@ -2,8 +2,9 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.http.quote
-import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
-import io.rebble.libpebblecommon.database.entity.LockerAppPermissionType
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -21,7 +22,7 @@ abstract class GeolocationInterface(
     private val jsRunner: JsRunner,
 ): LibPebbleKoinComponent {
     private val logger = Logger.withTag("GeolocationInterface")
-    private val permissionDao: LockerAppPermissionDao by inject()
+    private val permissions: AppPermissions by inject()
     private val systemGeolocation: SystemGeolocation by inject()
     private var requestIDs = (1..Int.MAX_VALUE).iterator()
     private var watchIDs = (1..Int.MAX_VALUE).iterator()
@@ -70,10 +71,8 @@ abstract class GeolocationInterface(
     }
 
     private suspend fun geolocationPermissionGranted(): Boolean =
-        permissionDao.getByAppUuidAndPermission(
-            Uuid.parse(jsRunner.appInfo.uuid),
-            LockerAppPermissionType.Location
-        )?.granted != false //TODO: deny by default?
+        permissions.request(Uuid.parse(jsRunner.appInfo.uuid), PluginPermissions.LOCATION, wait = true) ==
+            PermissionDecision.Granted
 
     open fun getRequestCallbackID() = getNextRequestID()
     open fun getWatchCallbackID() = getNextWatchID()

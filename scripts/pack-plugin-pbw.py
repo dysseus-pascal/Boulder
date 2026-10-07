@@ -17,10 +17,46 @@ The pbw is written to <project-dir>/build/<name>.pbw (name from package.json).
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import zipfile
+
+# The appinfo rules the pbw is built for; absent means a legacy app.
+MANIFEST_VERSION = 2
+
+# Must match PermissionKind. Built-in permission names belong to the phone app, so whether a
+# callerPermissions name is one is left to it.
+PERMISSION_KINDS = {"read", "write", "exfiltrating"}
+PERMISSION_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+# Every plugin's implicit permission (see PluginDefinedPermissions.kt).
+RESERVED_PERMISSION_NAMES = {"InvokeAction"}
+
+
+def permission_errors(plugin):
+    """What `resolvePermissions` would reject the plugin's definitions for at load."""
+    errors = []
+    for d in plugin.get("definesPermissions", []):
+        name = d.get("name", "")
+        if not PERMISSION_NAME.fullmatch(name):
+            errors.append(f"permission name '{name}' must be alphanumeric")
+        if name in RESERVED_PERMISSION_NAMES:
+            errors.append(f"permission name '{name}' is reserved")
+        if not str(d.get("label", "")).strip():
+            errors.append(f"permission '{name}' has no label")
+        if d.get("kind") not in PERMISSION_KINDS:
+            errors.append(f"permission '{name}' needs a kind: one of {', '.join(sorted(PERMISSION_KINDS))}")
+    return errors
+
+
+def check_plugin(appinfo):
+    plugin = appinfo.get("plugin")
+    if not isinstance(plugin, dict):
+        return
+    errors = permission_errors(plugin)
+    if errors:
+        sys.exit("bad plugin manifest:\n  " + "\n  ".join(errors))
 
 
 def files_named_by(appinfo):
@@ -54,6 +90,7 @@ def appinfo_from_package(pkg):
     pebble = pkg.get("pebble", {})
     display = pebble.get("displayName") or pkg.get("name", "")
     appinfo = dict(pebble)
+    appinfo["manifestVersion"] = MANIFEST_VERSION
     appinfo.setdefault("shortName", display)
     appinfo.setdefault("longName", display)
     appinfo.setdefault("companyName", pkg.get("author", ""))
@@ -73,6 +110,13 @@ def build_watchapp(project_dir, pbw):
     subprocess.run(["pebble", "build"], cwd=project_dir, check=True)
     with zipfile.ZipFile(pbw) as z:
         appinfo = json.loads(z.read("appinfo.json"))
+        entries = [(info, z.read(info)) for info in z.infolist() if info.filename != "appinfo.json"]
+    appinfo["manifestVersion"] = MANIFEST_VERSION
+    check_plugin(appinfo)
+    with zipfile.ZipFile(pbw, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("appinfo.json", json.dumps(appinfo, indent=2))
+        for info, data in entries:
+            z.writestr(info, data)
     add_named_files(pbw, project_dir, appinfo)
 
 
@@ -82,6 +126,7 @@ def create_plugin_only(project_dir, pbw, pkg):
         sys.exit("package.json pebble block needs a uuid")
     if not isinstance(appinfo.get("plugin"), dict):
         sys.exit("a plugin-only project needs a plugin in package.json's pebble block")
+    check_plugin(appinfo)
     os.makedirs(os.path.dirname(pbw), exist_ok=True)
     with zipfile.ZipFile(pbw, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("appinfo.json", json.dumps(appinfo, indent=2))

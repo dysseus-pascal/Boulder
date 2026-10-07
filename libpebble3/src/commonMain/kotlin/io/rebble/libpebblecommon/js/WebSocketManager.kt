@@ -11,7 +11,7 @@ import io.ktor.util.encodeBase64
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
-import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
+import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +34,7 @@ class WebSocketManager(
     private val eval: (String) -> Unit,
     private val client: HttpClient,
     private val appUuid: Uuid,
-    private val networkPolicy: PluginNetworkPolicy = PluginNetworkPolicy.unrestricted,
+    private val networkAccess: NetworkAccess,
 ) : JsEngineInterface, AutoCloseable {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, Instance>()
@@ -90,7 +90,7 @@ class WebSocketManager(
 
         private suspend fun run() {
             try {
-                val verdict = networkPolicy.check(url)
+                val verdict = networkAccess.check(url, wait = false)
                 if (verdict is PluginNetworkVerdict.Denied) {
                     logger.w { "$appUuid blocked: ${verdict.reason}" }
                     fail()

@@ -70,7 +70,8 @@ class BundledAppInstaller(
             if (installed) libPebble.removeApp(app.uuid)
             val ok = libPebble.sideloadApp(path, loadOnWatch = false)
             logger.i { "installed ${app.fileName}: $ok" }
-            if (ok) settings.putString(stampKey(app), stamp)
+            if (!ok) return@forEach
+            settings.putString(stampKey(app), stamp)
         }
     }
 

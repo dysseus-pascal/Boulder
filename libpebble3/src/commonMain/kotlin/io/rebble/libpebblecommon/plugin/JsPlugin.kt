@@ -13,6 +13,9 @@ import io.rebble.libpebblecommon.js.BASE64_JS
 import io.rebble.libpebblecommon.js.FETCH_JS
 import io.rebble.libpebblecommon.js.FETCH_REGISTRY
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
+import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.RunningApps
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -51,6 +54,8 @@ class JsPlugin(
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
     private val httpInterceptorManager: HttpInterceptorManager,
+    private val networkAccess: NetworkAccess,
+    private val runningApps: RunningApps,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
 ) : Plugin, ConfigMessageTarget {
@@ -84,6 +89,10 @@ class JsPlugin(
         val key = "$category/$item"
         val job = launch {
             while (true) {
+                if (retired) {
+                    close(IllegalStateException("$name was updated or removed; subscribe again"))
+                    break
+                }
                 val size = iconPixelSize
                     ?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }
                     .orEmpty()
@@ -96,7 +105,7 @@ class JsPlugin(
                         """$wanted$size}"""
                 )
                 raw?.let { parseEnvelope(it) }?.let { send(it) }
-                withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.seconds) {
+                withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
                 }
             }
@@ -135,16 +144,19 @@ class JsPlugin(
     }
 
     /** Cold-start a session, dispatch one request, tear the session down. */
-    private suspend fun request(requestJson: String): String? = sessionLock.withLock {
-        val session = newSession()
-        try {
-            session.start()
-            awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
-        } catch (e: Exception) {
-            logger.w(e) { "plugin session failed" }
-            null
-        } finally {
-            session.stop()
+    private suspend fun request(requestJson: String): String? = runningApps.whileRunning(pluginUuid) {
+        sessionLock.withLock {
+            if (retired) return@withLock null
+            val session = newSession()
+            try {
+                session.start()
+                awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
+            } catch (e: Exception) {
+                logger.w(e) { "plugin session failed" }
+                null
+            } finally {
+                session.stop()
+            }
         }
     }
 
@@ -160,9 +172,6 @@ class JsPlugin(
         }
     }
 
-    /** Derived once: the manifest is fixed for the life of the plugin. */
-    private val networkPolicy = PluginNetworkPolicy(manifest.usesPermissions)
-
     /** Wired only when the plugin declares an `oauth` connector and the host has an OAuth API. */
     private val oauth = oauthApi?.takeIf { manifest.oauth.isNotEmpty() }
 
@@ -176,7 +185,7 @@ class JsPlugin(
             httpInterceptorManager = httpInterceptorManager,
             appUuid = pluginUuid,
             client = httpClient,
-            networkPolicy = networkPolicy,
+            networkAccess = networkAccess,
             jsTarget = FETCH_REGISTRY,
         )
         val webSockets = WebSocketManager(
@@ -184,7 +193,7 @@ class JsPlugin(
             eval = { js -> evals.trySend(js) },
             client = httpClient,
             appUuid = pluginUuid,
-            networkPolicy = networkPolicy,
+            networkAccess = networkAccess,
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
@@ -246,17 +255,31 @@ class JsPlugin(
 
     override suspend fun closeConfigSession() = configLock.withLock { closeConfigSessionLocked() }
 
+    @Volatile private var retired = false
+
+    suspend fun retire() = configLock.withLock {
+        retired = true
+        closeConfigSessionLocked()
+    }
+
     private suspend fun closeConfigSessionLocked() {
-        configSession?.stop()
+        val session = configSession ?: return
         configSession = null
+        try {
+            session.stop()
+        } finally {
+            runningApps.stopped(pluginUuid)
+        }
     }
 
     /** Starting takes long enough that a page's first message can beat [openConfigSession]. */
     private suspend fun openConfigSessionLocked(): Session? {
+        if (retired) return null
         configSession?.let { return it }
         val session = newSession()
         return try {
             session.start()
+            runningApps.started(pluginUuid)
             session.also { configSession = it }
         } catch (e: Exception) {
             logger.w(e) { "config session failed to start" }

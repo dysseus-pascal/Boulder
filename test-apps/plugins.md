@@ -8,7 +8,7 @@ Plugins are nearly here (finally). A plugin is a small piece of JavaScript that 
 It has a generic API, designed to allow any type of data to be exposed, in multiple formats.
 
 This doc lives here while plugins are under active development, and will move once they're stable.
-Right now they're supported in the Pebble mobile app (v1.14.0), but are experimental and disabled by 
+Right now they're supported in the Pebble mobile app (v1.14.0), but are experimental and disabled by
 default.
 
 ## Why?
@@ -102,7 +102,7 @@ Examples now:
 ## Shapes
 
 A property isn't typed as "a number" or "a string". It offers one or more **shapes**: fixed types
-that a consuming app can be confident of being able to render. The plugin sends every shape it can, 
+that a consuming app can be confident of being able to render. The plugin sends every shape it can,
 and you pick one.
 
 | Shape          | For                                    | Payload                                      |
@@ -115,10 +115,9 @@ and you pick one.
 | `icon`         | a monochrome glyph                     | `{ pixels, palette, width, height }`         |
 | `image`        | a colour bitmap                        | `{ pixels, palette, width, height }`         |
 
-- Some shapes contain optional metadata fields (e.g. unit/min/max), so that e.g. an app can render
-  the data in context.
-- `icon` and `image` are 4-bpp palettised bitmaps (base64), and are only produced if you ask for
-  them with `iconPixelSize` (i.e. are never created/supplied if not explicitly requested).
+- Some shapes carry optional metadata (unit, min, max) so an app can render the data in context.
+- `icon` and `image` are 4-bpp palettised bitmaps (base64), only produced if you ask for them with
+  `iconPixelSize`.
 
 A missing property or shape means the plugin can't serve it right now. Check before drawing.
 
@@ -129,44 +128,90 @@ UV index, a light's brightness. A small text slot can take any `shortText`, what
 
 ## Permissions
 
-Plugins introduce a fine-grained permission system, which we plan to extend to PKJS and apps
-more generally in the future. Permissions go in two directions:
+Plugins introduce a fine-grained permission system, covering your plugin and your app's PKJS. This
+ships in v1.15 of the mobile app, and is only in place when plugins are enabled.
 
-- **`usesPermissions`** (in a plugin's manifest): what the plugin needs to do its job. Network
-  access is enforced: a plugin can only reach hosts it declares, and needs `LocalNetwork` to
-  reach devices on the LAN.
+### Declaring
 
-  ```jsonc
+Declare what your app and its plugin need once, in the `pebble` block of `package.json`:
+
+```jsonc
+"pebble": {
   "usesPermissions": [
+    "Location",
     "LocalNetwork",
     { "name": "Internet", "parameters": { "domains": ["api.example.com"] } }
   ]
-  ```
+}
+```
 
-- **caller permissions**: what an app must hold to use a source or action. A source with personal
-  data asks it of its readers: `calendar/event` needs `Calendar`, `notifications/notification` needs
-  `Notifications`, `weather/*` needs `Location`. An app declares what it needs in its
-  `package.json`:
+The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Notifications`, `Calendar`,
+`Contacts`, `Timeline`, `ReadWatchSettings`/`WriteWatchSettings`, `ReadMusic`/`ControlMusic`,
+`LegacyPebbleKit` and `Health`.
 
-  ```jsonc
-  "pebble": { "usesPermissions": ["Location"] }
-  ```
+- Each `Internet` domain is its own permission and covers its subdomains. `LocalNetwork` covers
+  devices on the LAN.
+- `LegacyPebbleKit` lets your watchapp talk to a companion app over PebbleKit Classic. A PebbleKit 2
+  companion doesn't need declaring: each package your appinfo lists is asked about on its own.
+- `Health` isn't enforced yet: health data is read on the watch, so enforcing it needs permissions
+  synced to the watch, which isn't built yet. Declare it anyway if you use health data.
 
-  Asking for a source you haven't declared the permission for fails with `PERMISSION_DENIED`.
+The [packaging script](#packaging-and-sideloading) marks the pbw as using permissions
+(`manifestVersion: 2` in its appinfo). Without that it's a legacy app, which keeps what apps had
+before permissions: internet access, and what its `capabilities` declare.
 
-Today, declarations are checked but the user is never asked. What we're planning before shipping plugins:
+Sources and actions guard themselves with **caller permissions**: what an app must hold to use
+them. `calendar/event` needs `Calendar`, `notifications/notification` needs `Notifications`,
+`weather/*` needs `Location`.
 
-- **Approval at install time**: for the permissions an app declares in `package.json`.
-- **Approval on request**: when an app asks for something it doesn't have yet. Some apps can't know
-  up front what they'll need. The dashboard demo, for example, can read from any plugin the user
-  points it at.
-- **Two types of permission: exfiltrating or not.**: Permissions that let data leave the phone
-  (`Internet`, `LocalNetwork`) are what make reading someone's data risky. We'll likely have a
-  (configurable) default where an app with no exfiltrating permissions can read any data without a
-  prompt, and an app with them needs approval.
-- **Domain-scoped `Internet`**: lets users trust what an app does with their data. An app holding
-  `Location` whose only network access is `api.openweathermap.org` can't send your location
-  anywhere else, because requests to any other domain are blocked.
+A plugin can also define its own permissions, to guard its sources and actions:
+
+```jsonc
+"plugin": {
+  "definesPermissions": [{ "name": "HomeControl", "label": "Control your lights", "kind": "write" }],
+  "actions": [{ "name": "set_on", "callerPermissions": ["HomeControl"], ... }]
+}
+```
+
+`kind` is `read`, `write` or `exfiltrating`, and decides when users are asked, as for a built-in
+permission. The name is scoped to your plugin, and users see your label with where it came from
+("Control your lights (via Hue)").
+
+Actions get one more check: if your plugin can send data off the phone, an app invoking its actions
+needs the user's permission for that too (`InvokeAction`), since the arguments go wherever your plugin
+can send them.
+
+To use another plugin, declare its permissions in your `usesPermissions` with its uuid, so users
+can approve them when installing your app (if that plugin is already installed):
+
+```jsonc
+"usesPermissions": [
+  { "name": "HomeControl", "plugin": "<Hue's uuid>" },
+  { "name": "InvokeAction", "plugin": "<Hue's uuid>" }
+]
+```
+
+### Approval
+
+Network access and companion apps let data leave the phone, so they're what make reading someone's
+data risky. Those, and permissions that change things (`Timeline`, `WriteWatchSettings`,
+`ControlMusic`), need the user's approval unless they've set apps to never ask. Reading is up to a
+setting; by default:
+
+- **An app that can send data off the phone** has the user approve each permission: the ones it
+  declares when it's installed, and anything else (an undeclared permission, or a new domain) when
+  it first uses it.
+- **Any other app** can read without asking, since the data can't go anywhere.
+
+While your app is running (or, for a plugin, while something reads from it), a request shows the
+user a notification and a card in the Pebble app. Until they answer, it fails with
+`PERMISSION_DENIED` (a blocked `fetch` rejects like a network error), possibly after waiting a few
+seconds. Try again later rather than treating it as permanent.
+
+Users can change any permission on the app's page, and choose in settings when apps have to ask.
+Declare what you need up front, and keep `Internet` to the domains you use: fewer prompts, and
+users can trust you. An app holding `Location` whose only network access is
+`api.openweathermap.org` can't send the user's location anywhere else.
 
 # Writing a watchface or app that uses plugins
 
@@ -183,7 +228,7 @@ Your app uses plugins from its PKJS (`pebble-js-app.js`).
    settings page for the user to pick what goes where, as the `plugin-test` dashboard does. Filter
    by the shapes your design can draw (see [Shapes](#shapes)).
 3. **Use what the user already prefers** *(not built yet)*. Users will pick their favourite readings
-   in the Pebble app: e.g. a user might select weather for home location first, then phone battery, 
+   in the Pebble app: e.g. a user might select weather for home location first, then phone battery,
    then the Google stock price. An API will expose that ordered list, so any face with widget slots
    can display those items with no configuration required.
 
@@ -251,7 +296,7 @@ Error codes: `PLUGIN_UNAVAILABLE`, `PERMISSION_DENIED`, `RATE_LIMITED`, `TIMEOUT
 # Writing a plugin
 
 A plugin ships in a `.pbw`: either alongside a watchapp/watchface, or on its own as a
-**plugin-only** pbw (no watch binary). It uses the pbw's uuid and name. The simplest example to 
+**plugin-only** pbw (no watch binary). It uses the pbw's uuid and name. The simplest example to
 copy is `stocks/`.
 
 **If your app fetches data from a service and displays it, consider splitting it into a plugin plus
@@ -269,12 +314,12 @@ Add a `plugin` block to the `pebble` section of `package.json`:
   "uuid": "2c4b7f10-9a3d-4e6b-8f21-5d0c7e9a1b34",
   "sdkVersion": "3",
   "configPage": "config.html",            // optional settings page (a file in the pbw, or a URL)
+  "usesPermissions": [
+    { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
+  ],
   "plugin": {
     "description": "Share prices for the tickers the user picked.",   // also read by index MCP
     "script": "plugin.js",
-    "usesPermissions": [
-      { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
-    ],
     "sources": [
       {
         "category": "finance",
@@ -343,8 +388,8 @@ Pebble.registerActionHandler(async (request, respond) => {
 
 What a plugin has to work with:
 
-- **`fetch`** for HTTP (only to hosts in `usesPermissions`). A blocked host rejects like a network
-  error. Plain-HTTP LAN devices are reachable with `LocalNetwork`.
+- **`fetch`** for HTTP, to hosts the user has allowed (see [Approval](#approval)). A blocked host
+  rejects like a network error. Plain-HTTP LAN devices are reachable with `LocalNetwork`.
 - **`WebSocket`** under the same rules: a blocked host fires `error` then `close`. Binary frames
   arrive as `ArrayBuffer`. Sockets are closed when the session ends, so one only lives for the
   request that opened it. These aren't intended for long-running connections.
@@ -357,7 +402,7 @@ What a plugin has to work with:
   `await Pebble.oauth.authorize("todoist")` for a token and
   `Pebble.oauth.refresh("todoist", broker_refresh)` to renew it. The connector has to be registered
   with the Pebble app store (see the `todoist/` example).
-- Unlike PKJS, APIs are locked-down to only what we explicitly provide (i.e. no using random Webview APIs)
+- Nothing else: unlike PKJS, a plugin has no WebView APIs.
 
 Return every property and shape you can; text shapes cost nothing once you have the data, and the
 app picks. Only produce `icon`/`image` when the request has `iconPixelSize`.
@@ -393,7 +438,7 @@ pushes the live readings back, so each option is labelled with what it currently
 
 ## Packaging and sideloading
 
-The standard `pebble build` doesn't put `plugin.js` or `config.html` in the pbw (or support 
+The standard `pebble build` doesn't put `plugin.js` or `config.html` in the pbw (or support
 plugin-only PBWs), so use [`scripts/pack-plugin-pbw.py`](../scripts/pack-plugin-pbw.py):
 
 ```sh
@@ -401,9 +446,11 @@ scripts/pack-plugin-pbw.py path/to/my-plugin
 ```
 
 It works out what to do from the project. If there's a watchapp (`src/c`), it runs `pebble build`,
-then adds the plugin files. Otherwise it builds a plugin-only pbw directly.
+then adds the plugin files. Otherwise it builds a plugin-only pbw directly. Either way it marks the
+pbw as using [permissions](#declaring).
 
-Sideloading plugins is supported in v1.14.0 of the mobile app.
+Sideloading plugins is supported from v1.14.0 of the mobile app - but the manifest format changed
+in v1.15.0 (along with several other parts of the API).
 
 # Future
 
@@ -411,7 +458,7 @@ We're planning:
 
 - Index integration (plugins as MCP tools).
 - Tooling support (the Pebble tool, CloudPebble).
-- User approval of permissions (see [Permissions](#permissions)).
+- Permission metadata in the app store, so users can review an app's permissions before adding it.
 - Choosing favourite readings in the app, and a preferred plugin when several serve the same thing
   (e.g. weather), plus an API to read those choices.
 - More extensive documentation.

@@ -59,6 +59,9 @@ data class LockerEntry(
     /** The pbw's appinfo `configPage` (an http(s) URL, or a filename in the pbw). Phone-only. */
     @ColumnInfo(defaultValue = "NULL")
     val configPage: String? = null,
+    /** Below 2 is a legacy app. */
+    @ColumnInfo(defaultValue = "1")
+    val manifestVersion: Int = 1,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), id).toBytes()
 

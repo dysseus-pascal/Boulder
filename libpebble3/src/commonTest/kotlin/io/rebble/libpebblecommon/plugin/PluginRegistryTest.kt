@@ -259,10 +259,6 @@ class PluginManifestTest {
             {
               "description": "lights",
               "script": "plugin.js",
-              "usesPermissions": [
-                "LocalNetwork",
-                {"name": "Internet", "parameters": {"domains": ["discovery.meethue.com"]}}
-              ],
               "sources": [
                 {
                   "category": "home",
@@ -300,18 +296,6 @@ class PluginManifestTest {
         assertEquals(30, manifest.sources[0].suggestedRefreshIntervalSec)
         assertTrue(manifest.sources[0].supportsMultiple)
         assertEquals(listOf("room", "light"), manifest.sources[0].items)
-        // What the plugin needs of the user, and what it needs of whoever reads it. A bare name
-        // and a name with arguments are both accepted.
-        assertEquals(
-            listOf(
-                PluginPermission("LocalNetwork"),
-                PluginPermission(
-                    "Internet",
-                    mapOf("domains" to listOf("discovery.meethue.com")),
-                ),
-            ),
-            manifest.usesPermissions,
-        )
         assertEquals(
             listOf(PluginPermission("HomeControl")),
             manifest.sources[0].callerPermissions,
@@ -331,7 +315,6 @@ class PluginManifestTest {
             """{"sources":[{"category":"finance",
                "items":["stock"],"properties":{"price":["shortText"]}}]}""",
         )
-        assertTrue(manifest.usesPermissions.isEmpty())
         assertTrue(manifest.sources[0].callerPermissions.isEmpty())
     }
 
@@ -398,6 +381,15 @@ class MusicPluginTest {
         assertEquals(listOf("on"), actions.first().requiredParams)
         assertTrue(actions.drop(1).all { it.requiredParams.isEmpty() })
         assertTrue(actions.drop(1).all { it.bindable })
+    }
+
+    @Test
+    fun readingNeedsReadMusicAndControllingNeedsControlMusic() {
+        val plugin = MusicPlugin(FakeMusicControl)
+        assertEquals(setOf(PluginPermissions.READ_MUSIC), requiredOfCaller(plugin.sources.single()))
+        plugin.actions.forEach {
+            assertEquals(setOf(PluginPermissions.CONTROL_MUSIC), requiredOfCaller(it))
+        }
     }
 }
 

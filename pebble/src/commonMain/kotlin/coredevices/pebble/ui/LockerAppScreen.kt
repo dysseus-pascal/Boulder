@@ -94,6 +94,7 @@ import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.TimeoutCancellationException
@@ -217,6 +218,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
+        var adding by remember { mutableStateOf(false) }
+        var storeReview by remember { mutableStateOf<InstallReview?>(null) }
 
         fun reloadFromStore(useCache: Boolean) {
             if (storeId != null && storeSource != null) {
@@ -470,14 +473,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             modifier = Modifier.padding(5.dp),
                         )
                     }
-                    // Only show for store, right now (until we figure out populating data or locker)
-                    if (storeEntry?.capabilities?.isNotEmpty() == true) {
-                        FlowRow(modifier = Modifier.padding(5.dp)) {
-                            storeEntry.capabilities.forEach { permission ->
-                                PermissionItem(permission, entry, topBarParams)
-                            }
-                        }
-                    }
                     if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
 //                    val hasUuidConflict = remember(viewModel.storeEntries) { // One store has multiple entries with same uuid
 //                        viewModel.storeEntries?.let {
@@ -489,30 +484,46 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             Modifier.padding(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val storeApp = entry.commonAppType
+                            fun addToWatch(granted: Map<String, Boolean>) {
+                                // Global scope because it could take a second to download/sync/load app
+                                GlobalScope.launch {
+                                    val watch = lastConnectedWatch as? ConnectedPebbleDevice
+                                    viewModel.addedToLocker = true
+                                    val addResult = nativeLockerAddUtil.addAppToLocker(
+                                        storeApp,
+                                        storeApp.storeSource,
+                                        granted,
+                                    )
+                                    if (!addResult) {
+                                        topBarParams.showSnackbar("Failed to add app")
+                                        return@launch
+                                    }
+                                    if (watch != null) {
+                                        libPebble.launchApp(
+                                            entry = entry,
+                                            snackbarDisplay = topBarParams,
+                                            connectedIdentifier = watch.identifier,
+                                        )
+                                    }
+                                }
+                            }
+                            storeReview?.let { review ->
+                                InstallReviewDialog(review) { granted ->
+                                    storeReview = null
+                                    if (granted != null) addToWatch(granted) else adding = false
+                                }
+                            }
                             PebbleElevatedButton(
                                 text = "Add To Watch",
                                 onClick = {
-                                    // Global scope because it could take a second to download/sync/load app
-                                    GlobalScope.launch {
-                                        val watch = lastConnectedWatch as? ConnectedPebbleDevice
-                                        viewModel.addedToLocker = true
-                                        val addResult = nativeLockerAddUtil.addAppToLocker(
-                                            entry.commonAppType,
-                                            entry.commonAppType.storeSource
-                                        )
-                                        if (!addResult) {
-                                            topBarParams.showSnackbar("Failed to add app")
-                                            return@launch
-                                        }
-                                        if (watch != null) {
-                                            libPebble.launchApp(
-                                                entry = entry,
-                                                snackbarDisplay = topBarParams,
-                                                connectedIdentifier = watch.identifier,
-                                            )
-                                        }
+                                    adding = true
+                                    scope.launch {
+                                        val review = nativeLockerAddUtil.review(storeApp)
+                                        if (review == null) addToWatch(emptyMap()) else storeReview = review
                                     }
                                 },
+                                enabled = !adding,
                                 icon = Icons.Default.Add,
                                 contentDescription = "Add To Watch",
                                 primaryColor = true,
@@ -637,6 +648,15 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     contentDescription = "Screenshot",
                                     modifier = Modifier.size(110.dp).clip(RoundedCornerShape(7.dp)),
                                 )
+                            }
+                        }
+                    }
+                    if (entry.commonAppType is CommonAppType.Locker) {
+                        AppPermissionsSection(entry.uuid)
+                    } else if (storeEntry?.capabilities?.isNotEmpty() == true) {
+                        FlowRow(modifier = Modifier.padding(5.dp)) {
+                            storeEntry.capabilities.forEach { permission ->
+                                PermissionItem(permission, topBarParams)
                             }
                         }
                     }
@@ -889,19 +909,15 @@ private fun PropertyRow(
 }
 
 @Composable
-fun PermissionItem(permission: AppCapability, entry: CommonApp, topBarParams: TopBarParams) {
-    if (entry.commonAppType is CommonAppType.Locker) {
-        // TODO
-    } else {
-        AssistChip(
-            onClick = {
-                topBarParams.showSnackbar(permission.description())
-            },
-            label = { Text(permission.name()) },
-            leadingIcon = { Icon(permission.icon(), null) },
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-    }
+fun PermissionItem(permission: AppCapability, topBarParams: TopBarParams) {
+    AssistChip(
+        onClick = {
+            topBarParams.showSnackbar(permission.description())
+        },
+        label = { Text(permission.name()) },
+        leadingIcon = { Icon(permission.icon(), null) },
+        modifier = Modifier.padding(horizontal = 6.dp)
+    )
 }
 
 fun AppCapability.icon(): ImageVector = when (this) {

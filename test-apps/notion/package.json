@@ -6,19 +6,19 @@
     "displayName": "Notion",
     "uuid": "c7ad904e-40d5-4cb5-8f13-1d1d3c6a7e21",
     "sdkVersion": "3",
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.notion.com"
+          ]
+        }
+      }
+    ],
     "plugin": {
       "description": "Creates child pages or safely appends plain text at the top or bottom of a selected Notion page.",
       "script": "plugin.js",
-      "usesPermissions": [
-        {
-          "name": "Internet",
-          "parameters": {
-            "domains": [
-              "api.notion.com"
-            ]
-          }
-        }
-      ],
       "sources": [
         {
           "category": "notes",

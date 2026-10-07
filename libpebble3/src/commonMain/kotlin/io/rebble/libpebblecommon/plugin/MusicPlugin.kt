@@ -45,6 +45,7 @@ class MusicPlugin(
                 PROPERTY_ARTWORK to listOf(SourceShapeNames.IMAGE),
             ),
             supportsMultiple = false,
+            callerPermissions = listOf(PluginPermission(PluginPermissions.READ_MUSIC)),
             suggestedRefreshIntervalSec = 5,
         ),
     )
@@ -55,18 +56,21 @@ class MusicPlugin(
             description = "Resume or pause playback.",
             parameters = schema("""{"on":{"type":"boolean"}}""", required = listOf("on")),
             targets = listOf("$CATEGORY/$ITEM_TRACK/$PROPERTY_PLAYING"),
+            callerPermissions = CONTROL,
         ),
         ActionDeclaration(
             name = ACTION_NEXT,
             description = "Skip to the next track.",
             parameters = schema("{}"),
             targets = listOf(TRACK),
+            callerPermissions = CONTROL,
         ),
         ActionDeclaration(
             name = ACTION_PREVIOUS,
             description = "Go back to the previous track.",
             parameters = schema("{}"),
             targets = listOf(TRACK),
+            callerPermissions = CONTROL,
         ),
     )
 
@@ -206,6 +210,7 @@ class MusicPlugin(
         private const val TRACK = "$CATEGORY/$ITEM_TRACK"
         private const val INSTANCE_ID = "track"
         private val REFRESHED = listOf(TRACK)
+        private val CONTROL = listOf(PluginPermission(PluginPermissions.CONTROL_MUSIC))
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
 

@@ -49,6 +49,7 @@ import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WatchPrefs
+import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.RealBluetoothStateProvider
@@ -129,6 +130,10 @@ import io.rebble.libpebblecommon.plugin.BundledAppInstaller
 import io.rebble.libpebblecommon.plugin.JsPluginFactory
 import io.rebble.libpebblecommon.plugin.CalendarPlugin
 import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.permissions.InstalledApps
+import io.rebble.libpebblecommon.permissions.LockerInstalledApps
 import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
@@ -376,7 +381,7 @@ fun initKoin(
                 single { get<Database>().weatherAppDao() }
                 single { get<Database>().appPrefsDao() }
                 singleOf(::LegacyBtClassicMigrator)
-                singleOf(::WatchManager) bind WatchConnector::class
+                singleOf(::WatchManager) binds arrayOf(WatchConnector::class, Watches::class)
                 single { bleScanner(get()) }
                 singleOf(::RealScanning) bind Scanning::class
                 single { libPebbleScope }
@@ -399,6 +404,7 @@ fun initKoin(
                         get(),
                         get(),
                         get(), // lockerPluginLoader
+                        get(),
                         get(),
                         get(),
                         get(),
@@ -464,7 +470,10 @@ fun initKoin(
                     ) + get<PlatformPlugins>().plugins
                 }
                 singleOf(::PluginRegistry)
-                single { JsPluginFactory(get(), get(), get(), get(), pluginOAuthApi) }
+                singleOf(::RunningApps)
+                singleOf(::LockerInstalledApps) bind InstalledApps::class
+                singleOf(::AppPermissions)
+                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
                 singleOf(::BundledAppInstaller)
                 singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)

@@ -4,6 +4,9 @@ import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.NetworkGate
+import io.rebble.libpebblecommon.permissions.RunningApps
 import kotlin.uuid.Uuid
 
 class JsPluginFactory(
@@ -11,6 +14,8 @@ class JsPluginFactory(
     private val scope: LibPebbleCoroutineScope,
     private val httpClient: HttpClient,
     private val httpInterceptorManager: HttpInterceptorManager,
+    private val permissions: AppPermissions,
+    private val runningApps: RunningApps,
     private val oauthApi: PluginOAuthApi? = null,
 ) {
     fun create(
@@ -27,6 +32,8 @@ class JsPluginFactory(
         scope = scope,
         httpClient = httpClient,
         httpInterceptorManager = httpInterceptorManager,
+        networkAccess = NetworkGate(permissions, name, pluginUuid),
+        runningApps = runningApps,
         oauthApi = oauthApi,
     )
 }

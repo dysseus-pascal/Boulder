@@ -2,7 +2,7 @@
 
 package coredevices.ring.ui.screens.home
 
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1040,4 +1040,4 @@ internal fun RingGlyph(size: Dp, color: Color) {
     }
 }
 
-// `relativeTime` lives in `coredevices.ring.ui.util` (single source of truth).
+// `relativeTime` lives in `coredevices.util` (single source of truth).

@@ -4,9 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.websocket.WebSockets
-import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
-import io.rebble.libpebblecommon.plugin.PluginPermission
-import io.rebble.libpebblecommon.plugin.PluginPermissions
+import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
@@ -26,8 +25,8 @@ private suspend fun TestScope.awaitSockets() = coroutineContext.job.children.toL
 
 class WebSocketManagerTest {
 
-    private val internet = PluginNetworkPolicy(listOf(PluginPermission(PluginPermissions.INTERNET)))
-    private val nothing = PluginNetworkPolicy(emptyList())
+    private val internet = NetworkAccess { _, _ -> PluginNetworkVerdict.Allowed }
+    private val nothing = NetworkAccess { _, _ -> PluginNetworkVerdict.Denied("not allowed") }
 
     @Test
     fun aBlockedHostIsNeverDialled() = runTest {

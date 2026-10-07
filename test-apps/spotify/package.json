@@ -7,6 +7,17 @@
     "uuid": "f7c51b03-6b8f-4ce8-9ce4-7a406dcf8ca7",
     "sdkVersion": "3",
     "configPage": "config.html",
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.spotify.com",
+            "accounts.spotify.com"
+          ]
+        }
+      }
+    ],
     "plugin": {
       "description": "Reads Spotify playback and controls Spotify Connect devices. Can resume or pause, skip, seek, change volume/shuffle/repeat, search Spotify, play tracks, albums, artists or playlists, queue a track, and transfer playback.",
       "script": "plugin.js",
@@ -465,17 +476,6 @@
           "destructive": false,
           "requiresConfirmation": false,
           "callerPermissions": []
-        }
-      ],
-      "usesPermissions": [
-        {
-          "name": "Internet",
-          "parameters": {
-            "domains": [
-              "api.spotify.com",
-              "accounts.spotify.com"
-            ]
-          }
         }
       ],
       "oauth": {

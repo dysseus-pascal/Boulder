@@ -44,6 +44,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.LockerAddResponse
 import io.rebble.libpebblecommon.web.LockerEntry
@@ -776,6 +777,10 @@ object HeaderImageSerializer : KSerializer<String?> {
 data class StoreApplication(
     val author: String,
     val capabilities: List<String>? = null,
+    @SerialName("uses_permissions")
+    val usesPermissions: List<PluginPermission> = emptyList(),
+    @SerialName("manifest_version")
+    val manifestVersion: Int = 1,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,

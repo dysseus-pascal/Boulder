@@ -7,18 +7,25 @@
     "uuid": "6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40",
     "sdkVersion": "3",
     "configPage": "config.html",
+    "usesPermissions": [
+      "LocalNetwork",
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "discovery.meethue.com"
+          ]
+        }
+      }
+    ],
     "plugin": {
       "description": "Philips Hue lights on the user's local bridge. Reads whether a light, a room or the whole home is on and how bright it is; turns them on and off and dims them.",
       "script": "plugin.js",
-      "usesPermissions": [
-        "LocalNetwork",
+      "definesPermissions": [
         {
-          "name": "Internet",
-          "parameters": {
-            "domains": [
-              "discovery.meethue.com"
-            ]
-          }
+          "name": "HomeControl",
+          "label": "Control your lights",
+          "kind": "write"
         }
       ],
       "sources": [
@@ -100,6 +107,9 @@
             "home/home_lights/on",
             "home/room_lights/on",
             "home/light/on"
+          ],
+          "callerPermissions": [
+            "HomeControl"
           ]
         },
         {
@@ -137,6 +147,9 @@
             "home/home_lights/brightness",
             "home/room_lights/brightness",
             "home/light/brightness"
+          ],
+          "callerPermissions": [
+            "HomeControl"
           ]
         }
       ]

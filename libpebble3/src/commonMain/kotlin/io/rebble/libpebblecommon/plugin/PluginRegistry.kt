@@ -32,9 +32,10 @@ class PluginRegistry(
         registered.update { it + (plugin.pluginUuid to plugin) }
     }
 
-    /** Drop a JS plugin whose pbw left the locker. Built-ins are never unregistered. */
-    fun unregisterPlugin(pluginUuid: Uuid) {
+    fun unregisterPlugin(pluginUuid: Uuid): Plugin? {
+        val plugin = registered.value[pluginUuid]
         registered.update { it - pluginUuid }
+        return plugin
     }
 
     /**

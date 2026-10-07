@@ -53,9 +53,10 @@ class HybridTranscriptionService(
         private val logger = Logger.withTag("HybridTranscriptionService")
         private val wisprSkipInterval = 1.seconds
 
-        private const val LOCAL_TIMEOUT_FACTOR = 4.0
+        private const val LOCAL_TIMEOUT_FACTOR = 3.5
         private const val BYTES_PER_SAMPLE = 2
-        private val minLocalTimeout = 8.seconds
+        private val localTimeoutBaseline = 10.seconds
+        private val minLocalTimeout = 10.seconds
         private val maxLocalTimeout = 45.seconds
         private val remoteFallbackReserve = 7.seconds
         private val connectionQueryTimeout = 1.seconds
@@ -70,8 +71,8 @@ class HybridTranscriptionService(
             }
 
         /**
-         * Budget for a local run: scales with clip length, capped by what is left of the caller's
-         * [remaining] budget after keeping [reserve] for a fallback leg.
+         * Budget for a local run: a fixed baseline plus a per-second allowance, capped by what is
+         * left of the caller's [remaining] budget after keeping [reserve] for a fallback leg.
          */
         internal fun localTimeout(
             audio: ByteArray,
@@ -80,7 +81,8 @@ class HybridTranscriptionService(
             reserve: Duration = Duration.ZERO,
         ): Duration {
             val seconds = audio.size / (sampleRate * BYTES_PER_SAMPLE).coerceAtLeast(1).toDouble()
-            val byClip = (seconds * LOCAL_TIMEOUT_FACTOR).seconds.coerceIn(minLocalTimeout, maxLocalTimeout)
+            val byClip = (localTimeoutBaseline + (seconds * LOCAL_TIMEOUT_FACTOR).seconds)
+                .coerceIn(minLocalTimeout, maxLocalTimeout)
             if (remaining == null) return byClip
             return minOf(byClip, (remaining - reserve).coerceAtLeast(Duration.ZERO))
         }

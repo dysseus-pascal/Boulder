@@ -69,6 +69,13 @@
         <service android:name="coredevices.ring.service.InferenceForegroundService"
             android:foregroundServiceType="shortService"
             android:exported="false"/>
+        <service android:name="coredevices.ring.service.RingCompanionDeviceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
         <activity android:name="coredevices.ring.service.InferenceActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"

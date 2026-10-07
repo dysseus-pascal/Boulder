@@ -10,6 +10,7 @@ import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.glance.VoiceWidgetReceiver
 import coredevices.ring.service.RingBackgroundDiagnostics
+import coredevices.ring.service.RingPresenceObserver
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import kotlinx.coroutines.GlobalScope
@@ -25,12 +26,14 @@ actual class RingDelegate(
     private val recordingsDao: FirestoreRecordingsDao,
     private val settings: Settings,
     private val firestoreKnownRingsSync: FirestoreKnownRingsSync,
+    private val ringPresenceObserver: RingPresenceObserver,
 ) {
     private val logger = Logger.withTag("RingDelegate")
     private val backgroundDiagnostics = RingBackgroundDiagnostics(context)
 
     actual fun appInit() {
         backgroundDiagnostics.start()
+        ringPresenceObserver.start()
     }
 
     actual fun requiredRuntimePermissions(): Set<Permission> = buildSet {

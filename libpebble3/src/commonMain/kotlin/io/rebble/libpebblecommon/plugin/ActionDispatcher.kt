@@ -41,7 +41,15 @@ class ActionDispatcher(
             }
             return
         }
-        scope.launch { respond(callId, run(request)) }
+        scope.launch {
+            val result = run(request)
+            // Args can carry user data, so only their names.
+            logger.i {
+                "${jsRunner.appInfo.shortName} (${jsRunner.appInfo.uuid}) invoked ${request.plugin}/${request.action}" +
+                    " with ${request.args?.keys.orEmpty()}: ${if (result.ok) "ok" else "${result.code} ${result.message}"}"
+            }
+            respond(callId, result)
+        }
     }
 
     private suspend fun run(request: InvokeRequest): ActionResult {

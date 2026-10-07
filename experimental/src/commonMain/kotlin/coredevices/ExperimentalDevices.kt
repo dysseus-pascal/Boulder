@@ -90,6 +90,7 @@ class ExperimentalDevices(
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
+        ringDelegate.appInit()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
                 (Permission.Bluetooth in old && Permission.Bluetooth !in new) || (Permission.Bluetooth !in old && Permission.Bluetooth in new)

@@ -43,6 +43,11 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
     } catch (e: Exception) {
         null
     }
+    val ignoringBatteryOptimisations = try {
+        powerManager?.isIgnoringBatteryOptimizations(context.packageName)
+    } catch (e: Exception) {
+        null
+    }
     return buildString {
         appendLine("Version: ${context.appVersionName} (${context.appVersionCode}) ${if (context.isDebuggableBuild) "debug" else "release"}")
         appendLine("Device Summary")
@@ -73,6 +78,7 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
             appendLine("Threshold: ${memoryInfo.threshold}")
         } ?: appendLine("Memory Info: <Failed>")
         appendLine("Low Power Mode: ${isLowPowerMode ?: "<Failed>"}")
+        appendLine("Ignoring Battery Optimisations: ${ignoringBatteryOptimisations ?: "<Failed>"}")
         appendLine()
 
         appendLine("Power stats (since unplugged):")

@@ -9,6 +9,7 @@ import coredevices.HackyPermissionRequesterProvider
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.glance.VoiceWidgetReceiver
+import coredevices.ring.service.RingBackgroundDiagnostics
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import kotlinx.coroutines.GlobalScope
@@ -26,6 +27,11 @@ actual class RingDelegate(
     private val firestoreKnownRingsSync: FirestoreKnownRingsSync,
 ) {
     private val logger = Logger.withTag("RingDelegate")
+    private val backgroundDiagnostics = RingBackgroundDiagnostics(context)
+
+    actual fun appInit() {
+        backgroundDiagnostics.start()
+    }
 
     actual fun requiredRuntimePermissions(): Set<Permission> = buildSet {
         addAll(setOf(

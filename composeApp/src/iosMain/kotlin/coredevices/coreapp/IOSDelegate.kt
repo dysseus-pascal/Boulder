@@ -36,6 +36,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
+import coredevices.util.sync.IosSyncScheduler
 import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -231,6 +232,8 @@ object IOSDelegate : KoinComponent {
                 task.setTaskCompletedWithSuccess(false)
             }
         }
+
+        get<IosSyncScheduler>().install()
 
         requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"

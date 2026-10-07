@@ -12,6 +12,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.StagedRecordingUpload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineDispatcher
@@ -241,4 +242,6 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteAllCachedMetadata() = TODO()
     override fun clearCacheDirectory() = TODO()
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
+    override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
+    override fun deleteStagedRecording(id: String) = TODO()
 }

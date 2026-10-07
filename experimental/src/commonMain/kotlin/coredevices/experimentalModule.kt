@@ -84,6 +84,7 @@ import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
 import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.RecordingUploadSyncHandler
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
@@ -91,6 +92,7 @@ import coredevices.util.CommonBuildKonfig
 import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
+import coredevices.util.sync.SyncHandler
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import kotlinx.coroutines.CoroutineScope
@@ -234,6 +236,7 @@ val experimentalModule = module {
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
+    singleOf(::RecordingUploadSyncHandler) bind SyncHandler::class
     singleOf(::BackupExporter)
     singleOf(::BackupImporter)
     singleOf(::BackupManager)

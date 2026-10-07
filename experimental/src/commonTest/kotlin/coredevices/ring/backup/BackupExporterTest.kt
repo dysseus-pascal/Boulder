@@ -4,6 +4,7 @@ import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.StagedRecordingUpload
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.Buffer
@@ -59,6 +60,8 @@ class BackupExporterTest {
         override suspend fun deleteAllCachedMetadata() = TODO()
         override fun clearCacheDirectory() = TODO()
         override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
+        override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
+        override fun deleteStagedRecording(id: String) = TODO()
     }
 
     private val audioA = FakeAudio(Random(1).nextBytes(200 * 1024), 16000)

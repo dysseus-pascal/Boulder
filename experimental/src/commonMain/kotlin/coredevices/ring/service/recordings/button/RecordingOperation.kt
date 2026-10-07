@@ -131,7 +131,7 @@ open class DefaultRecordingOperation(
             )
         }
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
-        // Fire-and-forget Firebase upload on the long-lived background scope. The local
+        // Stage the upload for the sync queue on the long-lived background scope. The local
         // cache file is already fully written by the time we get here, so the rest of the
         // operation (transcription / agent) doesn't depend on this completing, and a
         // failure should not block — or be cancelled by — the processing queue slot.
@@ -149,7 +149,6 @@ open class DefaultRecordingOperation(
                     fileId = fileId
                 ))
             } catch (e: Exception) {
-                //TODO: Better sync handling, e.g. retry later
                 logger.e(e) { "Error persisting recording $fileId" }
                 trace.markEvent("persist_recording_fail", TraceEventData.PersistRecordingStart(
                     recordingId = recordingId,

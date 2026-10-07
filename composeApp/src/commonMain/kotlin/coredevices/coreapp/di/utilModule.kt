@@ -20,6 +20,7 @@ import coredevices.coreapp.ui.screens.OnboardingViewModel
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.database.CoreDatabase
 import coredevices.database.UserConfigDao
+import coredevices.database.SyncTaskDao
 import coredevices.database.getCoreRoomDatabase
 import coredevices.firestore.UsersDao
 import coredevices.firestore.UsersDaoImpl
@@ -31,6 +32,8 @@ import coredevices.util.DoneInitialOnboarding
 import coredevices.util.SecondaryProfileWarning
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
+import coredevices.util.sync.SyncHandler
+import coredevices.util.sync.SyncManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
@@ -87,6 +90,8 @@ val utilModule = module {
     single { get<CoreDatabase>().heartsDao() }
     single { get<CoreDatabase>().memfaultChunkDao() }
     single { get<CoreDatabase>().analyticsHeartbeatDao() }
+    single { get<CoreDatabase>().syncTaskDao() }
+    single { SyncManager(store = get<SyncTaskDao>(), handlers = { getAll<SyncHandler>() }, scheduler = get()) }
     single { UserConfigDao { get() } }
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }

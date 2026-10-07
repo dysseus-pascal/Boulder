@@ -41,7 +41,12 @@ screen listing plugins and their settings pages.
 
 Source for each is in this folder:
 
-- **`weather-face`** ("Plugin Demo: Weather Face"): a watchface built entirely from the built-in weather plugin.
+- **`weather-face`** ("Plugin Demo: Weather Face"): a watchface built entirely from a weather
+  plugin: any installed one (the built-in one, `met-weather`, or yours), picked on its settings
+  page.
+- **`met-weather`**: weather for the phone's current location from MET Norway (api.met.no), an
+  alternative to the built-in weather plugin. Shows `navigator.geolocation` and drawing condition
+  images in JS.
 - **`plugin-test`** ("Plugin Demo: Dashboard"): a watchapp with eight tiles, each set from its
   settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions.
 - **`stocks`**: share prices for tickers you pick on its settings page.
@@ -393,6 +398,8 @@ What a plugin has to work with:
 - **`WebSocket`** under the same rules: a blocked host fires `error` then `close`. Binary frames
   arrive as `ArrayBuffer`. Sockets are closed when the session ends, so one only lives for the
   request that opened it. These aren't intended for long-running connections.
+- **`navigator.geolocation`** (`getCurrentPosition`, `watchPosition`, `clearWatch`), as in PKJS.
+  Needs `Location`; refused, it calls your error callback. Watches end with the session.
 - **`localStorage`** for state, shared with your app's PKJS. A plugin is started fresh for each
   request, so don't keep state in variables.
 - **`Pebble.refreshSources(["finance/stock"])`** when data changes outside a request (for example,

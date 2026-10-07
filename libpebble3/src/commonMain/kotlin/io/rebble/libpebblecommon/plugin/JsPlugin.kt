@@ -10,8 +10,10 @@ import io.rebble.libpebblecommon.js.JsEngineLocalStorage
 import io.rebble.libpebblecommon.js.WebSocketManager
 import io.rebble.libpebblecommon.js.XMLHTTPRequestManager
 import io.rebble.libpebblecommon.js.BASE64_JS
+import io.rebble.libpebblecommon.js.EngineGeolocation
 import io.rebble.libpebblecommon.js.FETCH_JS
 import io.rebble.libpebblecommon.js.FETCH_REGISTRY
+import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.RunningApps
@@ -205,9 +207,10 @@ class JsPlugin(
         val oauthBridge = oauth?.let {
             PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid.toString(), manifest.oauth.keys, it)
         }
-        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, oauthBridge)
+        val geolocation = EngineGeolocation(scope, { js -> evals.trySend(js) }, pluginUuid)
+        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge)
         val engine = JsEngine(appContext, scope, name, interfaces)
-        return Session(engine, xhr, webSockets, localStorage, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
+        return Session(engine, xhr, webSockets, localStorage, geolocation, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
     }
 
     private inner class Session(
@@ -215,6 +218,7 @@ class JsPlugin(
         private val xhr: XMLHTTPRequestManager,
         private val webSockets: WebSocketManager,
         private val localStorage: JsEngineLocalStorage,
+        private val geolocation: EngineGeolocation,
         private val oauthBridge: PluginOAuthJsBridge?,
         private val evals: Channel<String>,
         private val pump: Job,
@@ -225,6 +229,7 @@ class JsPlugin(
             engine.eval(BASE64_JS)
             engine.eval(FETCH_JS)
             engine.eval(WEBSOCKET_JS)
+            engine.eval(GEOLOCATION_JS)
             engine.eval(PLUGIN_HOST_JS)
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
             engine.eval(script())
@@ -235,6 +240,7 @@ class JsPlugin(
             pump.cancel()
             xhr.close()
             webSockets.close()
+            geolocation.close()
             oauthBridge?.close()
             engine.stop()
         }

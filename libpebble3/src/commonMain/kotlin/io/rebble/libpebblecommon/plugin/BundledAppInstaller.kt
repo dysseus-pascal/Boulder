@@ -94,6 +94,7 @@ class BundledAppInstaller(
         val BUNDLED_APPS = listOf(
             BundledApp("plugin-test.pbw", Uuid.parse("8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e")),
             BundledApp("weather-face.pbw", Uuid.parse("3f6d2a90-5c41-4b7e-9d38-6a1e0c4f27b5")),
+            BundledApp("met-weather.pbw", Uuid.parse("323dc117-55bd-455f-9ee4-4d0faba56ea1")),
             BundledApp("hue.pbw", Uuid.parse("6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40")),
             BundledApp("stocks.pbw", Uuid.parse("2c4b7f10-9a3d-4e6b-8f21-5d0c7e9a1b34")),
             BundledApp("notion.pbw", Uuid.parse("c7ad904e-40d5-4cb5-8f13-1d1d3c6a7e21")),

@@ -48,6 +48,7 @@ import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.firestoreSettings
 import dev.gitlive.firebase.firestore.persistentCacheSettings
+import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
@@ -118,7 +119,7 @@ val utilModule = module {
     }
     singleOf(::PlatformSpeechRecognizer)
     single {
-        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get())
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get(), getOrNull<PhoneNetworkMonitor>()?.connection)
     } binds arrayOf(TranscriptionService::class, LocalTranscriptionService::class)
     singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)

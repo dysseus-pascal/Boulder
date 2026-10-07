@@ -7,6 +7,9 @@ import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadManager
 import coredevices.util.models.inProgress
+import io.rebble.libpebblecommon.plugin.Connections
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -43,6 +47,7 @@ class HybridTranscriptionService(
     private val analytics: CoreAnalytics,
     private val platform: PlatformSpeechRecognizer,
     private val modelDownloads: ModelDownloadManager,
+    private val networkConnection: Flow<String?>? = null,
 ) : LocalTranscriptionService {
     companion object {
         private val logger = Logger.withTag("HybridTranscriptionService")
@@ -53,6 +58,16 @@ class HybridTranscriptionService(
         private val minLocalTimeout = 8.seconds
         private val maxLocalTimeout = 45.seconds
         private val remoteFallbackReserve = 7.seconds
+        private val connectionQueryTimeout = 1.seconds
+
+        /** Warm the local model when it is the preferred engine, or likely to be the fallback. */
+        internal fun shouldWarmUpLocalModel(mode: CactusSTTMode, connection: String?): Boolean =
+            when (mode) {
+                CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> true
+                CactusSTTMode.RemoteFirst, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback ->
+                    connection == Connections.NONE
+                else -> false
+            }
 
         /**
          * Budget for a local run: scales with clip length, capped by what is left of the caller's
@@ -75,6 +90,8 @@ class HybridTranscriptionService(
     // effect without restarting the app (not cached in a stateIn that nothing collects).
     private val sttConfig get() = coreConfigFlow.value.sttConfig
 
+    private val scope = CoroutineScope(Dispatchers.Default)
+
     private val lastErrorMutex = Mutex()
     private var lastWisprError = Instant.DISTANT_PAST
 
@@ -96,8 +113,16 @@ class HybridTranscriptionService(
     override val onInitialized: Channel<Boolean> get() = cactus.onInitialized
 
     override fun earlyInit() {
-        if (sttConfig.mode.usesLocalCactus()) {
+        val mode = sttConfig.mode
+        if (!mode.usesLocalCactus()) return
+        if (shouldWarmUpLocalModel(mode, connection = null)) {
             cactus.earlyInit()
+            return
+        }
+        val connection = networkConnection ?: return
+        scope.launch {
+            val current = withTimeoutOrNull(connectionQueryTimeout) { connection.first() }
+            if (shouldWarmUpLocalModel(mode, current)) cactus.earlyInit()
         }
     }
 

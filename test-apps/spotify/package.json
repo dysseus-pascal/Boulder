@@ -1,7 +1,7 @@
 {
   "name": "spotify",
   "author": "Pebble",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "pebble": {
     "displayName": "Spotify",
     "uuid": "f7c51b03-6b8f-4ce8-9ce4-7a406dcf8ca7",

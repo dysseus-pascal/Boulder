@@ -389,7 +389,8 @@ private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(
 ): List<StoreCategory> {
     return cache.readCategories(appType, this) ?: when (appType) {
         AppType.Watchface -> DEFAULT_CATEGORIES_FACES
-        AppType.Watchapp, AppType.Plugin -> DEFAULT_CATEGORIES_APPS
+        AppType.Watchapp -> DEFAULT_CATEGORIES_APPS
+        AppType.Plugin -> emptyList()
     }
 }
 
@@ -669,11 +670,12 @@ fun CommonAppType.canStartApp(): Boolean = when (this) {
 }
 
 /** The listing doesn't say whether the app has PKJS, so assume it does. */
-private fun StoreApplication.requestedPermissions() = RequestedPermissions(
+internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
     declared = declaredPermissions(usesPermissions, manifestVersion),
     hasPkjs = true,
     hasCompanionApp = companions.android != null || companions.ios != null,
     hasAndroidCompanion = companions.android != null,
+    pebbleKit2Packages = pebbleKit2Packages,
 )
 
 class NativeLockerAddUtil(
@@ -784,7 +786,7 @@ fun AppsFilterRow(
     showWatchfaceOrderSetting: Boolean,
 ) {
     val config by rememberLibPebble().config.collectAsState()
-    val tabTypes = if (config.watchConfig.enablePlugins) AppType.entries else AppType.storeTypes
+    val tabTypes = AppType.entries.filter { it != AppType.Plugin || config.watchConfig.enablePlugins }
     LaunchedEffect(tabTypes) {
         if (selectedType != null && selectedType.value !in tabTypes) {
             selectedType.value = AppType.Watchface

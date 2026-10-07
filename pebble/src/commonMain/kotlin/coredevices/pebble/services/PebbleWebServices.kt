@@ -478,8 +478,9 @@ data class AppStoreHomeResult(
 )
 
 fun AppType.storeString() = when (this) {
-    AppType.Watchapp, AppType.Plugin -> "apps"
+    AppType.Watchapp -> "apps"
     AppType.Watchface -> "faces"
+    AppType.Plugin -> "plugins"
 }
 
 fun Platform.storeString() = when (this) {
@@ -661,13 +662,13 @@ data class AppStoreHome(
 
 @Serializable
 data class StoreOnboarding(
-    val aplite: List<String>,
-    val basalt: List<String>,
-    val chalk: List<String>,
-    val diorite: List<String>,
-    val emery: List<String>,
-    val flint: List<String>,
-    val gabbro: List<String>,
+    val aplite: List<String> = emptyList(),
+    val basalt: List<String> = emptyList(),
+    val chalk: List<String> = emptyList(),
+    val diorite: List<String> = emptyList(),
+    val emery: List<String> = emptyList(),
+    val flint: List<String> = emptyList(),
+    val gabbro: List<String> = emptyList(),
 )
 
 @Serializable
@@ -773,6 +774,15 @@ object HeaderImageSerializer : KSerializer<String?> {
     }
 }
 
+/** What our appstore says about a pbw's plugin; other stores never send it. */
+@Serializable
+data class StorePlugin(
+    @SerialName("config_page")
+    val configPage: String? = null,
+    /** appinfo's `plugin` block, verbatim. */
+    val manifest: JsonObject? = null,
+)
+
 @Serializable
 data class StoreApplication(
     val author: String,
@@ -781,6 +791,9 @@ data class StoreApplication(
     val usesPermissions: List<PluginPermission> = emptyList(),
     @SerialName("manifest_version")
     val manifestVersion: Int = 1,
+    @SerialName("pebblekit2_packages")
+    val pebbleKit2Packages: List<String> = emptyList(),
+    val plugin: StorePlugin? = null,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,
@@ -949,7 +962,9 @@ fun StoreApplication.asLockerEntryPlatform(
 }
 
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
-    val app = this
+    // A plugin-only app has no binaries, so no hardware_platforms: build every platform from the
+    // fallbacks, which is also where the locker gets its description and images.
+    val app = if (type == AppType.Plugin.code && hardwarePlatforms.isNullOrEmpty()) copy(hardwarePlatforms = null) else this
     if (app.latestRelease == null) {
         logger.v { "no latest release for ${app.uuid}" }
         return null
@@ -988,6 +1003,9 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         companions = app.companions,
         category = app.category,
         userToken = timelineToken,
+        manifestVersion = app.manifestVersion,
+        pluginManifest = app.plugin?.manifest,
+        configPage = app.plugin?.configPage,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {

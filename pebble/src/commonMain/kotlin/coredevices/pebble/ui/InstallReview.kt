@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.rememberLibPebble
 import io.rebble.libpebblecommon.permissions.PluginDefinedPermission
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.permissionKind
 import coredevices.util.relativeTime
 import io.rebble.libpebblecommon.permissions.InstallReview
@@ -256,6 +257,36 @@ fun AppPermissionsSection(appUuid: Uuid) {
             }
         }
     }
+}
+
+/** What a store app asks for, before it's in the locker. */
+@Composable
+fun StorePermissionsSection(requested: RequestedPermissions) {
+    val config by rememberLibPebble().config.collectAsState()
+    val defined = rememberPluginPermissions()
+    val keys = requested.all
+    if (keys.isEmpty()) return
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+        if (requested.declared == null) {
+            val access = keys.map(::legacyAccessName).distinct().joinToString()
+            val text = if (config.watchConfig.askLegacyAppsForPermissions) {
+                "Built before permissions: asks before using $access"
+            } else {
+                "Built before permissions: has access to $access"
+            }
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            keys.forEach { PermissionRow(it, defined) {} }
+        }
+    }
+}
+
+private fun legacyAccessName(key: String) = when (permissionOf(key)) {
+    PluginPermissions.GLOBAL_INTERNET -> "the internet"
+    PluginPermissions.LOCATION -> "location"
+    PluginPermissions.TIMELINE -> "timeline pins"
+    else -> "phone apps"
 }
 
 @Composable

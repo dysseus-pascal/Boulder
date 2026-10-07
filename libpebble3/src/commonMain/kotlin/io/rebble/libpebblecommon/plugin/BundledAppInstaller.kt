@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
@@ -58,8 +59,18 @@ class BundledAppInstaller(
                 return@forEach
             }
             val stamp = "${pbw.size}:${pbw.contentHashCode()}"
-            val installed = libPebble.getLockerApp(app.uuid).firstOrNull() != null
-            if (installed && settings.getStringOrNull(stampKey(app)) == stamp) {
+            val existing = libPebble.getLockerApp(app.uuid).firstOrNull()
+            if (existing.isFromStore()) {
+                logger.d { "${app.fileName} is installed from a store; leaving it" }
+                return@forEach
+            }
+            val installed = existing != null
+            val stamped = settings.getStringOrNull(stampKey(app))
+            if (!installed && stamped != null) {
+                logger.d { "${app.fileName} was removed by the user; leaving it out" }
+                return@forEach
+            }
+            if (installed && stamped == stamp) {
                 logger.d { "${app.fileName} already installed and unchanged" }
                 return@forEach
             }
@@ -79,7 +90,13 @@ class BundledAppInstaller(
         BUNDLED_APPS.forEach { app ->
             // Never installed — the common case for everyone who leaves the setting alone.
             if (settings.getStringOrNull(stampKey(app)) == null) return@forEach
-            if (libPebble.getLockerApp(app.uuid).firstOrNull() == null) return@forEach
+            val existing = libPebble.getLockerApp(app.uuid).firstOrNull()
+            if (existing == null) {
+                // Removed by the user: forget that, so turning plugins back on reinstalls it.
+                settings.remove(stampKey(app))
+                return@forEach
+            }
+            if (existing.isFromStore()) return@forEach
             logger.i { "removing ${app.fileName}" }
             libPebble.removeApp(app.uuid)
             settings.remove(stampKey(app))
@@ -87,6 +104,8 @@ class BundledAppInstaller(
     }
 
     private fun stampKey(app: BundledApp) = "bundled_app_${app.uuid}"
+
+    private fun LockerWrapper?.isFromStore() = this is LockerWrapper.NormalApp && !sideloaded
 
     private data class BundledApp(val fileName: String, val uuid: Uuid)
 

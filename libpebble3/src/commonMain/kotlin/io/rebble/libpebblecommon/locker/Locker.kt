@@ -36,7 +36,9 @@ import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.requestedPermissions
+import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.TimeoutCancellationException
@@ -66,6 +68,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+import kotlinx.serialization.json.Json
 
 class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
 
@@ -597,6 +600,9 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
             capabilities?.let { addAll(it) }
             if (isTimelineEnabled == true) { add(AppCapability.Timeline.code) }
         },
+        pluginManifest = loadablePluginManifest(),
+        configPage = configPage,
+        manifestVersion = manifestVersion,
     )
 }
 
@@ -813,4 +819,16 @@ fun orderIndexForInsert(type: AppType) = when (type) {
     AppType.Watchface -> -1
     AppType.Watchapp -> SystemApps.entries.size
     AppType.Plugin -> 0
+}
+
+private val storePluginJson = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+
+/** As a pbw's `loadablePlugin`, re-encoded the same way; a manifest the app can't read is dropped. */
+private fun io.rebble.libpebblecommon.web.LockerEntry.loadablePluginManifest(): String? {
+    val raw = pluginManifest
+    if (raw == null || isLegacy(manifestVersion)) return null
+    val manifest = runCatching { storePluginJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
+        .onFailure { Logger.w(it) { "unreadable plugin manifest for $uuid" } }
+        .getOrNull() ?: return null
+    return storePluginJson.encodeToString(PluginManifest.serializer(), manifest)
 }

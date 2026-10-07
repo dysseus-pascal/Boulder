@@ -1,7 +1,7 @@
 {
   "name": "met-weather",
   "author": "Pebble",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "pebble": {
     "displayName": "MET Norway Weather",
     "uuid": "323dc117-55bd-455f-9ee4-4d0faba56ea1",

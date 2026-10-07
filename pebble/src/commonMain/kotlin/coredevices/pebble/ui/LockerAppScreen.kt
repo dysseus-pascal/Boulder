@@ -499,7 +499,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                         topBarParams.showSnackbar("Failed to add app")
                                         return@launch
                                     }
-                                    if (watch != null) {
+                                    // A plugin-only app runs on the phone: nothing to sync or open on the watch.
+                                    if (watch != null && entry.type != AppType.Plugin) {
                                         libPebble.launchApp(
                                             entry = entry,
                                             snackbarDisplay = topBarParams,
@@ -514,8 +515,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     if (granted != null) addToWatch(granted) else adding = false
                                 }
                             }
+                            val addText = if (entry.type == AppType.Plugin) "Add" else "Add To Watch"
                             PebbleElevatedButton(
-                                text = "Add To Watch",
+                                text = addText,
                                 onClick = {
                                     adding = true
                                     scope.launch {
@@ -525,7 +527,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 },
                                 enabled = !adding,
                                 icon = Icons.Default.Add,
-                                contentDescription = "Add To Watch",
+                                contentDescription = addText,
                                 primaryColor = true,
                                 modifier = Modifier.padding(end = 8.dp),
                             )
@@ -651,8 +653,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         }
                     }
+                    val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
+                    val storeApp = (entry.commonAppType as? CommonAppType.Store)?.storeApp
                     if (entry.commonAppType is CommonAppType.Locker) {
                         AppPermissionsSection(entry.uuid)
+                    } else if (pluginsEnabled && storeApp != null) {
+                        StorePermissionsSection(storeApp.requestedPermissions())
                     } else if (storeEntry?.capabilities?.isNotEmpty() == true) {
                         FlowRow(modifier = Modifier.padding(5.dp)) {
                             storeEntry.capabilities.forEach { permission ->

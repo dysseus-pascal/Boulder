@@ -16,9 +16,6 @@ enum class AppType(val code: String) {
 
     companion object {
         fun fromString(value: String): AppType? = entries.firstOrNull { it.code == value }
-
-        /** Types with an app store, so home feeds are preloaded per-type. Plugins have no store. */
-        val storeTypes = listOf(Watchface, Watchapp)
     }
 }
 

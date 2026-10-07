@@ -192,7 +192,7 @@ class LockerViewModel(
 
     fun refreshStore(platform: WatchType, useCache: Boolean): Deferred<Unit> {
         storeIsRefreshing = true
-        val finishedAll: List<Deferred<Unit>> = AppType.storeTypes.map {
+        val finishedAll: List<Deferred<Unit>> = AppType.entries.map {
             val finished = CompletableDeferred<Unit>()
             viewModelScope.launch {
                 try {
@@ -1175,7 +1175,9 @@ fun NativeWatchfaceMainContent(
                 modifier = imageModifier,
                 size = NATIVE_SCREENSHOT_HEIGHT,
             )
-            PermissionRequestBadge(entry.uuid, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            if (entry.commonAppType is CommonAppType.Locker) {
+                PermissionRequestBadge(entry.uuid, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1246,7 +1248,9 @@ fun NativeWatchfaceListItem(
                 modifier = Modifier.width(62.dp).clip(RoundedCornerShape(8.dp)),
                 size = 74.dp,
             )
-            PermissionRequestBadge(entry.uuid, Modifier.align(Alignment.TopEnd))
+            if (entry.commonAppType is CommonAppType.Locker) {
+                PermissionRequestBadge(entry.uuid, Modifier.align(Alignment.TopEnd))
+            }
         }
         Column(
             modifier = Modifier.padding(start = 12.dp)

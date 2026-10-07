@@ -33,11 +33,14 @@ var TITLE_READING_NAME = 'reading_name';
 var CYCLE_PROPERTY = 'cycle_property';
 var CYCLE_INSTANCE = 'cycle_instance';
 var NO_ACTION = 'none';
+// The catalogue's pseudo-category for tiles that are just a button: an action taking no
+// arguments, with no reading behind it. Capitalised, so it can't be a real plugin's category.
+var ACTION_CATEGORY = 'Actions';
 
 // What fills each quadrant until the user says otherwise: a category/item/property, and
 // optionally the title it wears (a property name, or `custom` with the text) and what a tap
 // does. Left out, the title is the thing's name and a tap invokes whichever action the plugin
-// binds to the reading.
+// binds to the reading. An entry with only an `action` is an action tile.
 var DEFAULTS = [
   { source: 'weather/location/temperature', action: CYCLE_INSTANCE },
   {
@@ -48,7 +51,7 @@ var DEFAULTS = [
   { source: 'music/track/artwork', title: { mode: 'title' }, action: 'set_playing' },
   { source: 'calendar/event/name', title: { mode: 'starts_at' } },
   { source: 'notifications/notification/app_icon', action: CYCLE_INSTANCE },
-  { source: 'home/room_lights/on' },
+  { action: 'launch_previous_app', title: { mode: 'custom', text: 'Back' } },
   { source: 'weather/location/temperature', title: { mode: 'reading_name' }, action: CYCLE_PROPERTY },
 ];
 
@@ -206,8 +209,62 @@ function catalogue() {
         });
       });
     });
+    plugin.actions.filter(takesNoArguments).forEach(function (action) {
+      entries.push({
+        value: plugin.uuid + '|' + ACTION_CATEGORY + '|' + action.name,
+        plugin: plugin.uuid,
+        pluginName: plugin.name,
+        category: ACTION_CATEGORY,
+        item: action.name,
+        properties: {},
+        multiple: false,
+      });
+    });
   });
   return entries;
+}
+
+function takesNoArguments(action) {
+  return !((action.parameters && action.parameters.required) || []).length;
+}
+
+function isActionTile(entry) {
+  return entry.category === ACTION_CATEGORY;
+}
+
+/** The action an action tile fires, if its plugin still has it. */
+function tileAction(entry) {
+  var plugin = Pebble.enumeratePlugins().filter(function (candidate) {
+    return candidate.uuid === entry.plugin;
+  })[0];
+  return plugin && plugin.actions.filter(function (action) {
+    return action.name === entry.item && takesNoArguments(action);
+  })[0];
+}
+
+/** `launch_previous_app` -> "Launch previous app". */
+function actionLabel(name) {
+  var words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function renderActionTile(index, entry) {
+  instances[index] = [];
+  properties[index] = [];
+  shapes[index] = [];
+  current[index] = null;
+  activeProperties[index] = '';
+  activeShapes[index] = '';
+  activeActions[index] = [];
+  previews[index] = {};
+  var action = tileAction(entry);
+  if (!action) {
+    show(index, text('', 'Not available'));
+    return;
+  }
+  var config = titles()[index] || {};
+  var title = config.mode === 'custom' && config.text ? config.text : sourceOf(entry).pluginName;
+  show(index, tag(text(title, actionLabel(action.name)), { action: action }));
 }
 
 // "<plugin>|<category>|<item>" from the catalogue, plus which instance to show — a weather
@@ -261,6 +318,12 @@ function chosen() {
 
   var entries = catalogue();
   return DEFAULTS.map(function (wanted) {
+    if (!wanted.source) {
+      var button = entries.filter(function (entry) {
+        return entry.category === ACTION_CATEGORY && entry.item === wanted.action;
+      })[0];
+      return button ? button.value : '';
+    }
     var parts = wanted.source.split('/');
     var match = entries.filter(function (entry) {
       return entry.category === parts[0] && entry.item === parts[1];
@@ -441,6 +504,10 @@ function actionsFor(entry, property) {
 
 /** What a tap on this quadrant does: fire an action, cycle what it shows, or nothing. */
 function tapFor(entry, property) {
+  if (isActionTile(entry)) {
+    var action = tileAction(entry);
+    return action ? { action: action } : null;
+  }
   if (entry.action === NO_ACTION) return null;
   if (entry.action === CYCLE_PROPERTY || entry.action === CYCLE_INSTANCE) {
     return { cycle: entry.action };
@@ -577,6 +644,10 @@ function subscribeAll() {
       show(index, text('', 'Not set'));
       return;
     }
+    if (isActionTile(entry)) {
+      renderActionTile(index, entry);
+      return;
+    }
     var declared = sourceOf(entry) || { properties: {} };
     properties[index] = Object.keys(declared.properties);
     activeProperties[index] = entry.property || defaultProperty(properties[index]);
@@ -683,6 +754,10 @@ Pebble.addEventListener('appmessage', function (e) {
     cycle(index, entry, tap.cycle);
     return;
   }
+  if (isActionTile(entry)) {
+    invoke(entry, tap.action, {});
+    return;
+  }
   var instance = instanceAt(instances[index], entry.instanceIndex);
   if (!instance) return;
   var action = tap.action;
@@ -691,6 +766,10 @@ Pebble.addEventListener('appmessage', function (e) {
   var args = actionArgs(action, entry, instance.id, live && live.properties,
                         activeProperties[index]);
   log('tap on quadrant ' + index + ': ' + action.name + ' ' + JSON.stringify(args));
+  invoke(entry, action, args);
+});
+
+function invoke(entry, action, args) {
   Pebble.invokeAction({
     plugin: entry.plugin,
     action: action.name,
@@ -698,7 +777,7 @@ Pebble.addEventListener('appmessage', function (e) {
   }).then(function (result) {
     log(action.name + (result.ok ? ' ok: ' + result.text : ' failed: ' + result.code));
   });
-});
+}
 
 Pebble.addEventListener('configmessage', function (e) {
   var message = e.data || {};

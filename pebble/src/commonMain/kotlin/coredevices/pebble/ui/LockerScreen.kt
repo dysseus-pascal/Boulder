@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.MusicNote
@@ -1084,6 +1085,7 @@ private fun NativePlugin.builtInIcon(): ImageVector = when (name) {
     "Weather" -> Icons.Filled.Cloud
     "Phone" -> Icons.Filled.Smartphone
     "Watch Settings" -> Icons.Filled.Watch
+    "Watch State" -> Icons.Filled.Apps
     "Notifications" -> Icons.Filled.Notifications
     else -> AppType.Plugin.icon()
 }

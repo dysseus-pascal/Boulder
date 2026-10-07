@@ -36,6 +36,7 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.WRITE_WATCH_SETTINGS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_MUSIC, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTROL_MUSIC, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.LAUNCH_APPS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.LEGACY_PEBBLEKIT, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.PEBBLEKIT_2, PermissionKind.Exfiltrating),
     )

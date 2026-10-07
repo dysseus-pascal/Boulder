@@ -67,6 +67,7 @@ object PluginPermissions {
     const val WRITE_WATCH_SETTINGS = "WriteWatchSettings"
     const val READ_MUSIC = "ReadMusic"
     const val CONTROL_MUSIC = "ControlMusic"
+    const val LAUNCH_APPS = "LaunchApps"
     const val LEGACY_PEBBLEKIT = "LegacyPebbleKit"
     const val PEBBLEKIT_2 = "PebbleKit2"
 

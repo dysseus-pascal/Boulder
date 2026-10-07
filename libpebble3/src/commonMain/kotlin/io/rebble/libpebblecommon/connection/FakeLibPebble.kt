@@ -668,6 +668,7 @@ class FakeConnectedDevice(
     override suspend fun stopApp(uuid: Uuid) {}
 
     override val runningApp: StateFlow<Uuid?> = MutableStateFlow(null)
+    override val previousApp: StateFlow<Uuid?> = MutableStateFlow(null)
     override val watchInfo: WatchInfo = WatchInfo(
         runningFwVersion = FirmwareVersion.from(
             runningFwVersion,

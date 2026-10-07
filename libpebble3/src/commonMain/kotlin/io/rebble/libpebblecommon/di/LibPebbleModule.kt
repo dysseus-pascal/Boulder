@@ -139,6 +139,7 @@ import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
 import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AppReorderService
@@ -462,11 +463,13 @@ fun initKoin(
                 singleOf(::PhoneStatePlugin)
                 singleOf(::CalendarPlugin)
                 singleOf(::WatchSettingsPlugin)
+                singleOf(::WatchStatePlugin)
                 single<Set<NativePlugin>> {
                     setOf(
                         get<PhoneStatePlugin>(),
                         get<CalendarPlugin>(),
                         get<WatchSettingsPlugin>(),
+                        get<WatchStatePlugin>(),
                     ) + get<PlatformPlugins>().plugins
                 }
                 singleOf(::PluginRegistry)

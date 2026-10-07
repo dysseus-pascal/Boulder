@@ -48,7 +48,7 @@ Source for each is in this folder:
   alternative to the built-in weather plugin. Shows `navigator.geolocation` and drawing condition
   images in JS.
 - **`plugin-test`** ("Plugin Demo: Dashboard"): a watchapp with eight tiles, each set from its
-  settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions.
+  settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions, or make a tile a button for any action that takes no arguments (e.g. "Back", the default, goes to the previous app).
 - **`stocks`**: share prices for tickers you pick on its settings page.
 - **`hue`**: Control Philips Hue lights on your local bridge (pair from its settings page).
 - **`notion`**, **`ticktick`**, **`todoist`**: examples of plugins that sign in with OAuth.
@@ -104,6 +104,10 @@ Examples now:
 | `home`          | `home_lights`, `room_lights`, `light`                             | Hue demo  |
 | `finance`       | `stock`                                                           | Stocks demo |
 
+The built-in Watch State plugin has no sources, only actions, both needing `LaunchApps`:
+`launch_app` (`{ uuid }`) opens an app or watchface in the user's locker, and
+`launch_previous_app` goes back to whatever ran before the current app.
+
 ## Shapes
 
 A property isn't typed as "a number" or "a string". It offers one or more **shapes**: fixed types
@@ -152,7 +156,7 @@ Declare what your app and its plugin need once, in the `pebble` block of `packag
 
 The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Notifications`, `Calendar`,
 `Contacts`, `Timeline`, `ReadWatchSettings`/`WriteWatchSettings`, `ReadMusic`/`ControlMusic`,
-`LegacyPebbleKit` and `Health`.
+`LaunchApps`, `LegacyPebbleKit` and `Health`.
 
 - Each `Internet` domain is its own permission and covers its subdomains. `LocalNetwork` covers
   devices on the LAN.
@@ -200,7 +204,7 @@ can approve them when installing your app (if that plugin is already installed):
 
 Network access and companion apps let data leave the phone, so they're what make reading someone's
 data risky. Those, and permissions that change things (`Timeline`, `WriteWatchSettings`,
-`ControlMusic`), need the user's approval unless they've set apps to never ask. Reading is up to a
+`ControlMusic`, `LaunchApps`), need the user's approval unless they've set apps to never ask. Reading is up to a
 setting; by default:
 
 - **An app that can send data off the phone** has the user approve each permission: the ones it

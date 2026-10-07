@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CloudUpload
@@ -146,6 +147,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.TIMELINE -> Icons.Filled.ViewTimeline
     PluginPermissions.READ_WATCH_SETTINGS, PluginPermissions.WRITE_WATCH_SETTINGS -> Icons.Filled.Watch
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
+    PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
     PluginPermissions.LEGACY_PEBBLEKIT -> Icons.Filled.Campaign
     PluginPermissions.PEBBLEKIT_2 -> Icons.Filled.SwapHoriz
     else -> if (permissionKind(key, defined) == PermissionKind.Exfiltrating) Icons.Filled.CloudUpload else Icons.Filled.Extension
@@ -165,6 +167,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.WRITE_WATCH_SETTINGS -> "Change your watch settings"
     PluginPermissions.READ_MUSIC -> "See what music is playing"
     PluginPermissions.CONTROL_MUSIC -> "Control music playback"
+    PluginPermissions.LAUNCH_APPS -> "Launch apps on your watch"
     PluginPermissions.LEGACY_PEBBLEKIT -> "Broadcast messages to every app on your phone (legacy PebbleKit)"
     PluginPermissions.PEBBLEKIT_2 -> "Exchange messages with ${packageOf(key)}"
     else -> defined[key]?.let { "${it.label} (via ${it.pluginName})" } ?: key

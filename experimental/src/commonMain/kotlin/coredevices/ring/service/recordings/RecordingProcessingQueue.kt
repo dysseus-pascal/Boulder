@@ -154,6 +154,7 @@ class RecordingProcessingQueue(
                                     status = it.status,
                                     transcription = it.transcription,
                                     transcribedUsingModel = it.transcribedUsingModel,
+                                    transcribedViaLocalFallback = it.transcribedViaLocalFallback,
                                     error = it.error,
                                     errorType = it.errorType,
                                     ringTransferInfo = it.ringTransferInfo,
@@ -351,6 +352,7 @@ class RecordingProcessingQueue(
                         status = entry.status,
                         transcription = entry.transcription,
                         transcribedUsingModel = entry.transcribedUsingModel,
+                        transcribedViaLocalFallback = entry.transcribedViaLocalFallback,
                         error = entry.error,
                         errorType = entry.errorType,
                         ringTransferInfo = entry.ringTransferInfo,
@@ -441,7 +443,8 @@ class RecordingProcessingQueue(
                         recordingEntryDao.updateRecordingEntryTranscription(
                             stagedEntry.id,
                             transcription = "Error: Login required for cloud processing",
-                            modelUsed = stagedEntry.transcribedUsingModel
+                            modelUsed = stagedEntry.transcribedUsingModel,
+                            localFallback = stagedEntry.transcribedViaLocalFallback,
                         )
                     }
                     // The insert path bumps the parent recording; do the same so

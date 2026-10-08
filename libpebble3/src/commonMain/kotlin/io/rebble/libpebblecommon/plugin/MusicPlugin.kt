@@ -27,6 +27,7 @@ class MusicPlugin(
 ) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_MUSIC_UUID
     override val name: String = "Music"
+    override val description: String = "What is playing on the phone, with play/pause and track skipping."
 
     private val logger = Logger.withTag("MusicPlugin")
 

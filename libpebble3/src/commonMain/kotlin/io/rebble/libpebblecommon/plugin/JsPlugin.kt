@@ -62,6 +62,7 @@ class JsPlugin(
     private val oauthApi: PluginOAuthApi? = null,
 ) : Plugin, ConfigMessageTarget {
 
+    override val description: String = manifest.description
     override val sources: List<SourceDeclaration> = manifest.sources
     override val actions: List<ActionDeclaration> = manifest.actions
 
@@ -178,6 +179,7 @@ class JsPlugin(
     private val oauth = oauthApi?.takeIf { manifest.oauth.isNotEmpty() }
 
     private fun newSession(): Session {
+        logger.d { "newSession(): $pluginUuid $name" }
         // XHR drives the JS side by evaluating statements that must land in order — readyState
         // before the response body before the events — so callbacks queue rather than race.
         val evals = Channel<String>(Channel.UNLIMITED)
@@ -224,6 +226,7 @@ class JsPlugin(
         private val pump: Job,
     ) {
         suspend fun start() {
+            logger.d { "Starting session for: $pluginUuid $name" }
             engine.start()
             engine.eval(localStorage.installJs)
             engine.eval(BASE64_JS)
@@ -236,6 +239,7 @@ class JsPlugin(
         }
 
         suspend fun stop() {
+            logger.d { "Stopping session for: $pluginUuid $name" }
             evals.close()
             pump.cancel()
             xhr.close()

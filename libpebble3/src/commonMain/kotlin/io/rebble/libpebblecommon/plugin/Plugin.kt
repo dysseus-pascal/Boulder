@@ -19,6 +19,9 @@ interface Plugin {
     /** Display name, shown to the user and to an LLM caller. */
     val name: String
 
+    /** Description of the plugin. */
+    val description: String
+
     val sources: List<SourceDeclaration>
 
     val actions: List<ActionDeclaration>

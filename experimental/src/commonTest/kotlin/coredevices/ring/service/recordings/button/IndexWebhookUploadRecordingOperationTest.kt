@@ -209,8 +209,6 @@ private object FakeLocalRecordingDao : LocalRecordingDao {
     override fun getAllRecordings() = TODO()
     override fun getAllRecordingsAfter(timestamp: Instant) = TODO()
     override fun getRecordingsCount() = TODO()
-    override fun getPaginatedFeedItems() = TODO()
-    override fun getFeedItemByIdFlow(recordingId: Long) = TODO()
     override suspend fun getMostRecentTimestamp(): LocalRecording? = TODO()
     override suspend fun getRecentRecordings(limit: Int): List<LocalRecording> = TODO()
     override suspend fun getAllFirestoreIds(): List<String> = TODO()

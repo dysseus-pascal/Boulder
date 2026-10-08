@@ -66,6 +66,7 @@ class WeatherPlugin(
 
     override val pluginUuid: Uuid = BUILT_IN_WEATHER_UUID
     override val name: String = "Weather"
+    override val description: String = "Current conditions and forecast for the user's saved weather locations."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

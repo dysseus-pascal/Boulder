@@ -12,6 +12,7 @@ private class PermissionsFakePlugin(
 ) : Plugin {
     override val pluginUuid: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000001")
     override val name = "Fake"
+    override val description = ""
     override val sources = listOf(
         SourceDeclaration(
             category = "calendar",

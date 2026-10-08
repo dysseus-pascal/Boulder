@@ -58,6 +58,9 @@
         <receiver android:name="coredevices.ring.reminders.ReminderReceiver"
                     android:exported="false">
         </receiver>
+        <receiver android:name="coredevices.ring.service.IndexNotificationActionReceiver"
+                    android:exported="false">
+        </receiver>
         <receiver android:name="coredevices.ring.reminders.ReminderBootReceiver"
                     android:exported="true">
             <intent-filter>

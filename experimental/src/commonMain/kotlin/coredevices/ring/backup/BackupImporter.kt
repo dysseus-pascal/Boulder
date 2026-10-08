@@ -147,6 +147,7 @@ class BackupImporter(
                         status = entry.status,
                         transcription = entry.transcription,
                         transcribedUsingModel = entry.transcribedUsingModel,
+                        transcribedViaLocalFallback = entry.transcribedViaLocalFallback,
                         error = entry.error,
                         ringTransferInfo = entry.ringTransferInfo,
                         userMessageId = entry.userMessageId,

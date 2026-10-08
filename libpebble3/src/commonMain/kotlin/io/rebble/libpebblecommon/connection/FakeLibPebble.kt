@@ -515,6 +515,15 @@ class FakeLibPebble : LibPebble {
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
 
+    override fun findSourcePlugin(
+        category: String,
+        item: String,
+        preferredPluginUuid: String?
+    ): Plugin? = null
+
+    override fun findPlugin(pluginUuid: String): Plugin? = null
+    override fun getAllPlugins(): List<Plugin> = emptyList()
+
     override suspend fun getLatestTimestamp(): Long? = 0
 
     override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> = emptyList()

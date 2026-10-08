@@ -44,6 +44,24 @@
           "supportsMultiple": false,
           "callerPermissions": [],
           "suggestedRefreshIntervalSec": 60
+        },
+        {
+          "category": "notes",
+          "items": [
+            "configured"
+          ],
+          "properties": {
+            "name": [
+              "shortText"
+            ],
+            "configured": [
+              "boolean",
+              "shortText"
+            ]
+          },
+          "supportsMultiple": false,
+          "callerPermissions": [],
+          "suggestedRefreshIntervalSec": 60
         }
       ],
       "actions": [

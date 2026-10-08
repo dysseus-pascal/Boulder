@@ -7,7 +7,7 @@
 var STORE_KEY = 'notion';
 var API_ROOT = 'https://api.notion.com/v1';
 var NOTION_VERSION = '2026-03-11';
-var DESTINATION_SOURCES = ['notes/destination'];
+var DESTINATION_SOURCES = ['notes/destination', 'notes/configured'];
 var RECENT_PAGE_LIMIT = 10;
 var SEARCH_PAGE_LIMIT = 20;
 var MAX_NOTE_CHARS = 100000;
@@ -636,13 +636,24 @@ function failureCouldHaveMutated(result) {
 }
 
 Pebble.registerSourceHandler(function (request, respond) {
-  if (request.category !== 'notes' || request.item !== 'destination') {
+  var isConfiguredSource = request.category === 'notes' && request.item === 'configured';
+  if (!isConfiguredSource && (request.category !== 'notes' || request.item !== 'destination')) {
     respond.error('PLUGIN_UNAVAILABLE', 'Unknown source ' + request.category + '/' + request.item + '.');
     return;
   }
   var current = state();
   var destination = current.destination;
   var configured = !!current.token && !!destination.pageId;
+  if (isConfiguredSource) {
+    respond.data({
+      validUntilMs: Date.now() + 60 * 1000,
+      instances: [{
+        instanceId: 'notion',
+        properties: { name: shortText('Notion'), configured: booleanReading(configured) },
+      }],
+    });
+    return;
+  }
   var properties = {
     name: shortText('Notion'),
     configured: booleanReading(configured),

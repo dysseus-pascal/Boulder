@@ -60,6 +60,7 @@ class WatchSettingsPlugin(
 ) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_WATCH_SETTINGS_UUID
     override val name: String = "Watch Settings"
+    override val description: String = "The watch's own settings, readable and changeable."
 
     override val sources: List<SourceDeclaration> = SettingKind.entries.map { kind ->
         SourceDeclaration(

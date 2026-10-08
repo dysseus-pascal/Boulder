@@ -147,7 +147,8 @@ class HybridTranscriptionService(
     private data class RoutedResult(
         val text: String?,
         val modeUsed: CactusSTTMode,
-        val modelUsed: String?
+        val modelUsed: String?,
+        val localFallback: Boolean = false,
     )
 
     private suspend fun remoteAvailable(): Boolean = wisprFlow.isAvailable() || kirinki.isAvailable()
@@ -353,7 +354,7 @@ class HybridTranscriptionService(
             CactusSTTMode.RemoteFirst -> {
                 suspend fun localFallback(remoteError: Exception): RoutedResult = try {
                     val text = local(cloudFallback = false)
-                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel, localFallback = true)
                 } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
                     throw remoteError
                 }
@@ -430,7 +431,7 @@ class HybridTranscriptionService(
         }
 
         try {
-            val (text, modeUsed, modelUsed) = route(
+            val (text, modeUsed, modelUsed, localFallback) = route(
                 audio = buffer.readByteArray(),
                 sampleRate = sampleRate,
                 language = language,
@@ -457,7 +458,8 @@ class HybridTranscriptionService(
             emit(TranscriptionSessionStatus.Transcription(
                 text?.ifBlank { null }
                     ?: throw TranscriptionException.NoSpeechDetected("Failed to understand audio", modelUsed = modelUsed),
-                modelUsed
+                modelUsed,
+                localFallback,
             ))
         } catch (e: TimeoutCancellationException) {
             logger.e(e) { "Uncaught timeout during transcription" }

@@ -39,6 +39,24 @@
           "supportsMultiple": true,
           "callerPermissions": [],
           "suggestedRefreshIntervalSec": 900
+        },
+        {
+          "category": "reminders",
+          "items": [
+            "configured"
+          ],
+          "properties": {
+            "name": [
+              "shortText"
+            ],
+            "configured": [
+              "boolean",
+              "shortText"
+            ]
+          },
+          "supportsMultiple": false,
+          "callerPermissions": [],
+          "suggestedRefreshIntervalSec": 60
         }
       ],
       "actions": [

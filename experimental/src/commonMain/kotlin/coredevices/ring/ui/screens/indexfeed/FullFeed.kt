@@ -81,10 +81,12 @@ import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
+import coredevices.ring.ui.components.feed.RecordingActionChip
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.FullFeedViewModel
+import coredevices.ring.ui.viewmodel.RecordingAction
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.absoluteValue
@@ -401,7 +403,7 @@ private fun ImessageRecordingRow(
     transcription: String,
     retryEntry: coredevices.indexai.data.entity.RecordingEntryEntity?,
     assistantReply: String?,
-    chips: List<FullFeedViewModel.Chip>,
+    chips: List<RecordingAction>,
     actionError: String?,
     timestampRevealState: RecordingTimestampRevealState,
     onOpenRecording: () -> Unit,
@@ -447,14 +449,17 @@ private fun ImessageRecordingRow(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     chips.forEach { chip ->
-                        ActionChip(chip = chip, onClick = { onOpenObject(chip.itemId) })
+                        RecordingActionChip(
+                            action = chip,
+                            onOpenObject = onOpenObject,
+                            onNothingToOpen = onOpenRecording,
+                        )
                     }
                 }
             }
         }
 
-        // 3. Failed action — the failure creates no item, so without this the
-        // assistant side of the row would be blank.
+        // 3. Failed action.
         if (!actionError.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
@@ -627,34 +632,6 @@ private fun formatBubbleTimestamp(timestamp: Instant): String {
     val minute = local.minute.toString().padStart(2, '0')
     val amPm = if (local.hour < 12) "AM" else "PM"
     return "$hour12:$minute $amPm"
-}
-
-@Composable
-private fun ActionChip(chip: FullFeedViewModel.Chip, onClick: () -> Unit) {
-    val colors = IndexTheme.colors
-    // Prototype: bg = redSurface, fg = onPrimaryContainer (light pink in dark
-    // mode, dark red in light), border = chipOutline (always #FFDAD4),
-    // icon = primary.
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(colors.redSurface)
-            .border(1.dp, colors.chipOutline, RoundedCornerShape(percent = 50))
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(chip.glyph, color = colors.primary, fontSize = 12.sp)
-        Spacer(Modifier.width(5.dp))
-        Text(
-            chip.label,
-            color = colors.onPrimaryContainer,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
 }
 
 /** Two concentric outlined circles + a small filled mic-pip dot at the top.

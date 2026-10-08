@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -529,6 +530,15 @@ internal fun PeekCard(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.6.sp,
             )
+            if (peek.processedOffline) {
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    Icons.Outlined.CloudOff,
+                    contentDescription = "Processed offline",
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(

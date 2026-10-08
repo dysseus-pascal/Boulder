@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ import coredevices.pebble.config.ConfigPageSessions
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -84,9 +86,15 @@ fun WatchappSettingsScreen(
     uuid: String,
     title: String,
 ) {
-    val url = remember(uuid) {
-        normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(uuid) ?: "")
+    val libPebble = koinInject<LibPebble>()
+    // Opened from outside the locker (a plugin picked as an Index destination), nothing is cached.
+    val resolvedUrl by produceState(initialValue = WatchappSettingsUrlCache.get(uuid), uuid) {
+        if (value == null) {
+            value = runCatching { Uuid.parse(uuid) }.getOrNull()
+                ?.let { libPebble.appConfigPageUrl(it) } ?: ""
+        }
     }
+    val url = resolvedUrl?.let(::normalizeWatchappSettingsUrl) ?: return
     DisposableEffect(uuid) {
         onDispose { WatchappSettingsUrlCache.remove(uuid) }
     }

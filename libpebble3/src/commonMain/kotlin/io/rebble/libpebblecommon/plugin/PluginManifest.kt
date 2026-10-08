@@ -100,11 +100,17 @@ data class ActionDeclaration(
 @Serializable
 data class ActionResult(
     val ok: Boolean,
-    /** Shown as a toast on the watch; returned verbatim to an LLM caller. */
+    /** Shown as a toast on the watch; returned verbatim to an LLM caller. Ignored if ok = false */
     val text: String? = null,
     /** `"<category>/<item>"` entries whose cached envelopes this action invalidated. */
     val refreshed: List<String> = emptyList(),
+    /**
+     * Used to programmatically determine the error type by the app & LLMs.
+     *
+     * Should be one of [PluginErrors].
+     */
     val code: String? = null,
+    /** Error message. Shown to user and LLM */
     val message: String? = null,
 ) {
     companion object {
@@ -113,6 +119,9 @@ data class ActionResult(
     }
 }
 
+/**
+ * Plugin error codes known to the app
+ */
 object PluginErrors {
     const val PLUGIN_UNAVAILABLE = "PLUGIN_UNAVAILABLE"
     const val PERMISSION_DENIED = "PERMISSION_DENIED"

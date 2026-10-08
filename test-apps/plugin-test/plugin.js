@@ -1,6 +1,8 @@
 // Demo plugin bundled in the dashboard test app. It serves one `demo/message` source whose text
 // the config page sets over the plugin config-message channel — enough to exercise pbw plugin
 // sideloading end to end (manifest in appinfo -> registry -> this script -> a served source).
+// Its `clear_message` action is destructive and requires confirmation, to exercise the agent's
+// allow/deny prompt.
 
 var STORE_KEY = 'demo_message';
 
@@ -26,4 +28,14 @@ Pebble.registerConfigHandler(function (message, respond) {
   } else {
     respond({ ok: false });
   }
+});
+
+Pebble.registerActionHandler(function (request, respond) {
+  if (request.action !== 'clear_message') {
+    respond.error('INVALID_REQUEST', 'Unsupported demo action.');
+    return;
+  }
+  localStorage.removeItem(STORE_KEY);
+  Pebble.refreshSources(['demo/message']);
+  respond.ok({ text: 'Demo message reset', refreshed: ['demo/message'] });
 });

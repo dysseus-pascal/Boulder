@@ -10,7 +10,7 @@ var EXPIRES_AT_KEY = 'todoist_expires_at';
 var PROJECT_REFRESH_MS = 15 * 60 * 1000;
 var MAX_PROJECT_PAGES = 10;
 var PROJECT_PAGE_SIZE = 200;
-var REMINDER_SOURCES = ['reminders/list'];
+var REMINDER_SOURCES = ['reminders/list', 'reminders/configured'];
 
 function accessToken() {
   return String(localStorage.getItem(TOKEN_KEY) || '').trim();
@@ -113,6 +113,24 @@ function longText(text) {
   return { longText: { text: String(text) } };
 }
 
+function booleanReading(value) {
+  return {
+    boolean: { value: !!value },
+    shortText: { text: value ? 'Connected' : 'Not connected' },
+  };
+}
+
+function respondConfigured(respond) {
+  var configured = accessToken().length > 0;
+  respond.data({
+    validUntilMs: Date.now() + 60 * 1000,
+    instances: [{
+      instanceId: 'todoist',
+      properties: { name: shortText('Todoist'), configured: booleanReading(configured) },
+    }],
+  });
+}
+
 function projectUrl(projectId) {
   return 'https://app.todoist.com/app/project/' + encodeURIComponent(projectId);
 }
@@ -174,6 +192,10 @@ async function loadProjects(tokenOverride, limitPages) {
 }
 
 Pebble.registerSourceHandler(async function (request, respond) {
+  if (request.category === 'reminders' && request.item === 'configured') {
+    respondConfigured(respond);
+    return;
+  }
   if (request.category !== 'reminders' || request.item !== 'list') {
     respond.error('INVALID_REQUEST', 'Unsupported Todoist source.');
     return;

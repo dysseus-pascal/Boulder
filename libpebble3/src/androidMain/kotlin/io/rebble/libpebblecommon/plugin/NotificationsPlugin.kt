@@ -39,6 +39,7 @@ class NotificationsPlugin(
 ) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_NOTIFICATIONS_UUID
     override val name: String = "Notifications"
+    override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

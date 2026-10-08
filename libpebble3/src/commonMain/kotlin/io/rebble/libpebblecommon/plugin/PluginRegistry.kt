@@ -38,15 +38,10 @@ class PluginRegistry(
         return plugin
     }
 
-    /**
-     * Find a plugin serving the given (category, item) tuple. If [preferredPluginUuid] is set
-     * and that plugin serves the tuple, prefer it; otherwise fall back to any plugin that does.
-     * Sources are fungible — actions are not, so action lookup uses [findPlugin] by uuid.
-     */
-    fun findSourcePlugin(
+    override fun findSourcePlugin(
         category: String,
         item: String,
-        preferredPluginUuid: String? = null,
+        preferredPluginUuid: String?,
     ): Plugin? {
         val all = plugins
         if (preferredPluginUuid != null) {
@@ -58,8 +53,8 @@ class PluginRegistry(
     }
 
     /** Exact lookup. Actions must never fall back to a different plugin. */
-    fun findPlugin(pluginUuid: String): Plugin? =
+    override fun findPlugin(pluginUuid: String): Plugin? =
         plugins.firstOrNull { it.pluginUuid.toString() == pluginUuid }
 
-    fun all(): List<Plugin> = plugins.toList()
+    override fun getAllPlugins(): List<Plugin> = plugins.toList()
 }

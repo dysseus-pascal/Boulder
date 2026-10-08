@@ -269,7 +269,7 @@ abstract class PrivatePKJSInterface(
 
     open fun enumeratePlugins(): String = Json.encodeToString(
         ListSerializer(PluginSummary.serializer()),
-        pluginRegistry.all().map { plugin ->
+        pluginRegistry.getAllPlugins().map { plugin ->
             PluginSummary(
                 uuid = plugin.pluginUuid.toString(),
                 name = plugin.name,

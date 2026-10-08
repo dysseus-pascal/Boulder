@@ -107,7 +107,31 @@ function tickTickTaskUrl(projectId, taskId) {
   return tickTickProjectUrl(projectId) + '/' + taskId;
 }
 
+var REMINDER_SOURCES = ['reminders/list', 'reminders/configured'];
+
+function booleanReading(value) {
+  return {
+    boolean: { value: !!value },
+    shortText: { text: value ? 'Connected' : 'Not connected' },
+  };
+}
+
+function respondConfigured(respond) {
+  var configured = accessToken().length > 0;
+  respond.data({
+    validUntilMs: Date.now() + 60 * 1000,
+    instances: [{
+      instanceId: 'ticktick',
+      properties: { name: shortText('TickTick'), configured: booleanReading(configured) },
+    }],
+  });
+}
+
 Pebble.registerSourceHandler(async function (request, respond) {
+  if (request.category === 'reminders' && request.item === 'configured') {
+    respondConfigured(respond);
+    return;
+  }
   if (request.category !== 'reminders' || request.item !== 'list') {
     respond.error('INVALID_REQUEST', 'Unsupported TickTick source.');
     return;
@@ -306,7 +330,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
           respond({ error: 'TickTick did not accept the new authorization.' });
           return;
         }
-        Pebble.refreshSources(['reminders/list']);
+        Pebble.refreshSources(REMINDER_SOURCES);
         respond({ configured: true });
       } catch (error) {
         respond({ error: error && error.message ? error.message : 'Could not connect TickTick.' });
@@ -314,7 +338,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
       return;
     case 'unlink':
       clearTokens();
-      Pebble.refreshSources(['reminders/list']);
+      Pebble.refreshSources(REMINDER_SOURCES);
       respond({ configured: false });
       return;
     default:

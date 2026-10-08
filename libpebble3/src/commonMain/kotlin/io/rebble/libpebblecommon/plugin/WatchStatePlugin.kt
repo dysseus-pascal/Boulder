@@ -17,6 +17,7 @@ class WatchStatePlugin(
 ) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_WATCH_STATE_UUID
     override val name: String = "Watch State"
+    override val description: String = "Launch apps and watchfaces on the watch."
 
     override val sources: List<SourceDeclaration> = emptyList()
 

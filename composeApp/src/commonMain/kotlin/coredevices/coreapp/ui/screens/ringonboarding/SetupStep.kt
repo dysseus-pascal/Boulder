@@ -56,8 +56,6 @@ import androidx.compose.ui.unit.sp
 import com.cactus.isCactusSupported
 import coredevices.pebble.ui.ModelDownloadPromptDialog
 import coredevices.pebble.ui.SnackbarDisplay
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.database.MusicControlMode
@@ -119,8 +117,6 @@ internal fun SetupStep(
     val musicPresetSelected = { mode: MusicControlMode ->
         musicRoutesFor(mode).all { (gesture, destination) -> gestureRoutes[gesture] == destination }
     }
-    val currentReminderProvider by preferences.reminderProvider.collectAsState()
-    val currentNoteProvider by preferences.noteProvider.collectAsState()
 
     // Speech mode wiring — replicates the same checks as the existing
     // OfflineSpeechRecognition setting (sign-in required for non-Local,

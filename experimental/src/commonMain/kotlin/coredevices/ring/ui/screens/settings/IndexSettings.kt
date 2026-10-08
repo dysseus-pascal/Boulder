@@ -29,12 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Troubleshoot
@@ -44,13 +39,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -92,14 +85,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
-import coredevices.ring.agent.LlmMode
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
-import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
-import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.supportsNotes
+import coredevices.ring.agent.integrations.providers.supportsReminders
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.Preferences
 import coredevices.ring.encryption.EncryptionSetupState
@@ -123,9 +114,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.granted
 import coredevices.util.isAndroid
-import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -160,8 +149,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
     val snackbarHostState = remember { SnackbarHostState() }
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
-    val llmMode by viewModel.llmMode.collectAsState()
-    val localLlmSupported by viewModel.localLlmSupported.collectAsState()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
@@ -170,6 +157,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val scanByPairedAddress by viewModel.scanByPairedAddress.collectAsState()
     val diagnosticsState by viewModel.diagnosticsState.collectAsState()
     val platform = koinInject<Platform>()
+    val providers = koinInject<IntegrationProviderRepository>()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
     val coreConfig by coreConfigHolder.config.collectAsState()
     val modelManager = koinInject<ModelManager>()
@@ -201,7 +189,6 @@ fun IndexSettings(coreNav: CoreNav) {
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
-    var showLlmModeSheet by remember { mutableStateOf(false) }
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
 
@@ -214,17 +201,6 @@ fun IndexSettings(coreNav: CoreNav) {
     if (showContactsDialog && platform.isAndroid) {
         SettingsBeeperContactsDialog(
             onDismissRequest = viewModel::closeContactsDialog
-        )
-    }
-    if (showLlmModeSheet) {
-        LlmModeSheet(
-            current = llmMode,
-            localSupported = localLlmSupported,
-            onSelect = {
-                viewModel.setLlmMode(it)
-                showLlmModeSheet = false
-            },
-            onDismiss = { showLlmModeSheet = false }
         )
     }
     if (showNoteShortcutDialog) {
@@ -283,7 +259,6 @@ fun IndexSettings(coreNav: CoreNav) {
                         pebble = false,
                         screenContext = mapOf(
                             "screen" to "Settings",
-                            "llmMode" to llmMode.name,
                             "username" to (accountUsername ?: "null")
                         )
                     )
@@ -385,20 +360,6 @@ fun IndexSettings(coreNav: CoreNav) {
             // --- Actions section ---
             item { IndexAgentActionsSection(coreNav, viewModel) }
             item {
-                SettingsRow(
-                    title = "Agent Model",
-                    subtitle = llmModeRowSubtitle(llmMode),
-                    onClick = { showLlmModeSheet = true },
-                ) {
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = colors.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            item {
                 SectionHeader(
                     modifier = Modifier.padding(top = 22.dp, bottom = 2.dp, start = 16.dp, end = 16.dp),
                     title = "Speech Recognition",
@@ -478,19 +439,8 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 SettingsRow(
-                    title = "MCP & Tool Settings",
-                    subtitle = "Sandbox groups, models, per-tool config",
-                    onClick = { coreNav.navigateTo(RingRoutes.McpSandboxGroups) },
-                )
-            }
-            item {
-                SettingsRow(
                     title = "Notification Shortcut",
-                    subtitle = when (val shortcut = noteShortcut) {
-                        is NoteShortcutType.SendToMe -> "Email me"
-                        is NoteShortcutType.SendToNoteProvider -> shortcut.provider.title
-                        is NoteShortcutType.SendToReminderProvider -> shortcut.provider.title
-                    },
+                    subtitle = providers.shortcutDestinationTitle(noteShortcut) ?: "Email me",
                     onClick = viewModel::showNoteShortcutDialog,
                 )
             }
@@ -671,115 +621,10 @@ internal fun SettingsRow(
     }
 }
 
-fun LlmMode.displayName(): String = when (this) {
-    LlmMode.RemoteOnly -> "Cloud LLM"
-    LlmMode.RemoteFirst -> "Cloud LLM (with Local fallback)"
-    LlmMode.LocalOnly -> "Local LLM"
-}
-
-internal fun LlmMode.modeDetail(): String = when (this) {
-    LlmMode.RemoteOnly -> "Best performance, requires connection"
-    LlmMode.RemoteFirst -> "Uses the Local LLM when the cloud can't be reached"
-    LlmMode.LocalOnly -> "Runs on this phone. Experimental, less accurate than Cloud LLM. Does not support all actions."
-}
-
-/** Offered most-cloud first; the enum's own order is persistence ids, not a sensible reading order. */
-internal val llmModeOptions = listOf(LlmMode.RemoteOnly, LlmMode.RemoteFirst, LlmMode.LocalOnly)
-
-/** The Local LLM cannot drive a sandbox group's model, so local modes need the default
- *  group left on Index Agent. */
-internal fun llmModeSelectable(mode: LlmMode, localSupported: Boolean): Boolean =
-    localSupported || !mode.usesLocalCactus()
-
-internal fun llmModeRowSubtitle(mode: LlmMode): String =
-    if (mode.usesLocalCactus()) "${mode.displayName()} · ${mode.modeDetail()}"
-    else mode.displayName()
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LlmModeSheet(
-    current: LlmMode,
-    localSupported: Boolean,
-    onSelect: (LlmMode) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = IndexTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
-        Column(modifier = Modifier.padding(bottom = 28.dp)) {
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
-                Text(
-                    "Agent Model",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.onSurface,
-                )
-                Text(
-                    "Select which large language model (LLM) to use",
-                    fontSize = 12.sp,
-                    color = colors.onSurfaceVariant,
-                )
-            }
-            llmModeOptions.forEach { mode ->
-                val selected = mode == current
-                val selectable = llmModeSelectable(mode, localSupported)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .selectedSheetRowBackground(selected)
-                        .clickable(enabled = selectable) { onSelect(mode) }
-                        .alpha(if (selectable) 1f else 0.38f)
-                        .padding(horizontal = 16.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Icon(
-                        when (mode) {
-                            LlmMode.RemoteOnly -> Icons.Default.Cloud
-                            LlmMode.RemoteFirst -> Icons.Default.CloudSync
-                            LlmMode.LocalOnly -> Icons.Default.Smartphone
-                        },
-                        contentDescription = null,
-                        tint = if (selected) colors.primary else colors.outline,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(mode.displayName(), fontSize = 15.sp, color = colors.onSurface)
-                        Text(
-                            mode.modeDetail(),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    if (selected) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = colors.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-            if (!localSupported) {
-                Text(
-                    "The Local LLM does not support MCP sandboxes. Set the default MCP " +
-                        "sandbox group's model to \"Index Agent\" to use it.",
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    color = colors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun NoteShortcutDialog(
-    availableNoteProviders: List<NoteProvider>,
-    availableReminderProviders: List<ReminderProvider>,
+    availableNoteProviders: List<IntegrationProvider>,
+    availableReminderProviders: List<IntegrationProvider>,
     currentShortcut: NoteShortcutType,
     onShortcutSelected: (NoteShortcutType) -> Unit,
     onDismissRequest: () -> Unit
@@ -787,12 +632,12 @@ fun NoteShortcutDialog(
     var targetShortcut by remember { mutableStateOf(currentShortcut) }
     val options = remember {
         buildList {
-            add(NoteShortcutType.SendToMe)
+            add(NoteShortcutType.SendToMe to "Email me")
             availableNoteProviders.forEach {
-                add(NoteShortcutType.SendToNoteProvider(it))
+                add(NoteShortcutType.SendToNoteProvider(it.id) to it.notesTitle)
             }
             availableReminderProviders.forEach {
-                add(NoteShortcutType.SendToReminderProvider(it))
+                add(NoteShortcutType.SendToReminderProvider(it.id) to it.remindersTitle)
             }
         }
     }
@@ -812,12 +657,7 @@ fun NoteShortcutDialog(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(options.size) { index ->
-                val option = options[index]
-                val label = when (option) {
-                    is NoteShortcutType.SendToMe -> "Email me"
-                    is NoteShortcutType.SendToNoteProvider -> option.provider.title
-                    is NoteShortcutType.SendToReminderProvider -> option.provider.title
-                }
+                val (option, label) = options[index]
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -1584,20 +1424,12 @@ fun EncryptionSetupDialog(viewModel: EncryptionViewModel = koinViewModel()) {
 
 @Composable
 fun AuthorizedIntegrations(preferences: Preferences) {
-    val gTasks = koinInject<GTasksIntegration>()
-    val notion = koinInject<NotionIntegration>()
-    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
-    val obsidian = koinInject<ObsidianIntegration>()
-    val obsidianAuth by flow { emit(obsidian.isAuthorized()) }.collectAsState(false)
-    val gTasksAuth by flow { emit(gTasks.isAuthorized()) }.collectAsState(false)
-    val notionAuth by flow { emit(notion.isAuthorized()) }.collectAsState(false)
-    val taskerAuth by flow {
-        emit(noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized())
-    }.collectAsState(false)
-    val currentReminderProvider by preferences.reminderProvider.collectAsState()
-    val currentNoteProvider by preferences.noteProvider.collectAsState()
-
-    val platform = koinInject<Platform>()
+    val providers = koinInject<IntegrationProviderRepository>()
+    val connected by produceState(emptyList<IntegrationProvider>()) {
+        value = providers.allProviders().filter { it.isAuthorized() }
+    }
+    val currentReminderProvider by providers.selectedReminderProvider.collectAsState()
+    val currentNoteProvider by providers.selectedNoteProvider.collectAsState()
 
     // Phone Calendar is an opt-in integration (Add integration → Phone Calendar). Its dot
     // reflects whether calendar permission is granted; tapping re-requests a missing permission.
@@ -1608,108 +1440,71 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val phoneCalendarEnabled by preferences.phoneCalendarEnabled.collectAsState()
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        IntegrationItem(
-            title = "Built-in",
-            hasReminder = true,
-            hasNotes = true,
-            selectedReminderProvider = currentReminderProvider == ReminderProvider.BuiltIn,
-            selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-            onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
-            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) },
-        )
-        if (phoneCalendarEnabled) {
-            var showPhoneCalendarConfig by remember { mutableStateOf(false) }
-            if (showPhoneCalendarConfig) {
-                PhoneCalendarConfigDialog(
+        connected.forEach { provider ->
+            var showConfigure by remember { mutableStateOf(false) }
+            if (showConfigure) {
+                val dismiss = { showConfigure = false }
+                when (provider) {
+                    BuiltInIntegrationProviders.Notion -> NotionPageDialog(onDismiss = dismiss)
+                    BuiltInIntegrationProviders.Obsidian -> ObsidianDialog(onDismiss = dismiss)
+                }
+            }
+            IntegrationItem(
+                title = provider.title,
+                hasReminder = provider.supportsReminders,
+                hasNotes = provider.supportsNotes,
+                selectedReminderProvider = currentReminderProvider == provider,
+                selectedNoteProvider = currentNoteProvider == provider,
+                onSelectReminderProvider = { providers.selectReminderProvider(provider) },
+                onSelectNoteProvider = { providers.selectNoteProvider(provider) },
+                onConfigure = { showConfigure = true }.takeIf { provider.isConfigurable },
+            )
+            if (provider == BuiltInIntegrationProviders.Index && phoneCalendarEnabled) {
+                PhoneCalendarItem(
                     preferences = preferences,
-                    onDismiss = { showPhoneCalendarConfig = false }
+                    calendarGranted = calendarGranted,
+                    onToggleCalendar = {
+                        if (!calendarGranted) {
+                            val ctx = uiContext ?: return@PhoneCalendarItem
+                            scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
+                        }
+                    },
                 )
             }
-            IntegrationItem(
-                title = PHONE_CALENDAR_TITLE,
-                hasReminder = false,
-                hasNotes = false,
-                selectedReminderProvider = false,
-                selectedNoteProvider = false,
-                onSelectReminderProvider = {},
-                onSelectNoteProvider = {},
-                onConfigure = { showPhoneCalendarConfig = true },
-                hasCalendar = true,
-                calendarGranted = calendarGranted,
-                onToggleCalendar = {
-                    if (!calendarGranted) {
-                        val ctx = uiContext ?: return@IntegrationItem
-                        scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
-                    }
-                },
-            )
-        }
-        if (platform.isIOS) {
-            IntegrationItem(
-                title = "iOS Reminders",
-                hasReminder = true,
-                hasNotes = false,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.IOSReminders,
-                selectedNoteProvider = false,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.IOSReminders) },
-                onSelectNoteProvider = {}
-            )
-        }
-        if (gTasksAuth) {
-            IntegrationItem(
-                title = GTasksIntegration.DEFINITION.title,
-                hasReminder = true,
-                hasNotes = false,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.GoogleTasks,
-                selectedNoteProvider = false,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.GoogleTasks) },
-                onSelectNoteProvider = {}
-            )
-        }
-        if (notionAuth) {
-            var showNotionPageDialog by remember { mutableStateOf(false) }
-            if (showNotionPageDialog) {
-                NotionPageDialog(onDismiss = { showNotionPageDialog = false })
-            }
-            IntegrationItem(
-                title = NotionIntegration.DEFINITION.title,
-                hasReminder = false,
-                hasNotes = true,
-                selectedReminderProvider = false,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Notion,
-                onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) },
-                onConfigure = { showNotionPageDialog = true }
-            )
-        }
-        if (obsidianAuth) {
-            var showObsidianConfig by remember { mutableStateOf(false) }
-            if (showObsidianConfig) {
-                ObsidianDialog(onDismiss = { showObsidianConfig = false })
-            }
-            IntegrationItem(
-                title = ObsidianIntegration.DEFINITION.title,
-                hasReminder = false,
-                hasNotes = true,
-                selectedReminderProvider = false,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Obsidian,
-                onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Obsidian) },
-                onConfigure = { showObsidianConfig = true },
-            )
-        }
-        if (platform.isAndroid && taskerAuth) {
-            IntegrationItem(
-                title = TASKER_DEFINITION.title,
-                hasReminder = true,
-                hasNotes = true,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.Tasker,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Tasker,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Tasker) },
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Tasker) }
-            )
         }
     }
+}
+
+/** Providers with their own settings dialog on this screen. */
+private val IntegrationProvider.isConfigurable: Boolean
+    get() = this == BuiltInIntegrationProviders.Notion || this == BuiltInIntegrationProviders.Obsidian
+
+@Composable
+private fun PhoneCalendarItem(
+    preferences: Preferences,
+    calendarGranted: Boolean,
+    onToggleCalendar: () -> Unit,
+) {
+    var showConfig by remember { mutableStateOf(false) }
+    if (showConfig) {
+        PhoneCalendarConfigDialog(
+            preferences = preferences,
+            onDismiss = { showConfig = false }
+        )
+    }
+    IntegrationItem(
+        title = PHONE_CALENDAR_TITLE,
+        hasReminder = false,
+        hasNotes = false,
+        selectedReminderProvider = false,
+        selectedNoteProvider = false,
+        onSelectReminderProvider = {},
+        onSelectNoteProvider = {},
+        onConfigure = { showConfig = true },
+        hasCalendar = true,
+        calendarGranted = calendarGranted,
+        onToggleCalendar = onToggleCalendar,
+    )
 }
 
 /** Manage dialog for the opt-in Phone Calendar integration: disconnecting hides the row and

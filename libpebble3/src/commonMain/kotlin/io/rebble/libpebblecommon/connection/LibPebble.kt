@@ -232,6 +232,21 @@ interface Plugins {
 
     /** The script behind [pluginUuid]'s settings page, or null if it has none. */
     fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
+
+    /**
+     * Find a plugin serving the given (category, item) tuple. If [preferredPluginUuid] is set
+     * and that plugin serves the tuple, prefer it; otherwise fall back to any plugin that does.
+     * Sources are fungible — actions are not, so action lookup uses [findPlugin] by uuid.
+     */
+    fun findSourcePlugin(
+        category: String,
+        item: String,
+        preferredPluginUuid: String? = null,
+    ): Plugin?
+
+    fun findPlugin(pluginUuid: String): Plugin?
+
+    fun getAllPlugins(): List<Plugin>
 }
 
 interface Timeline {

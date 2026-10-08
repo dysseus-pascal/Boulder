@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1014,7 +1015,7 @@ suspend fun CommonApp.showSettings(
                 }
                 WatchappSettingsUrlCache.put(uuid.toString(), url)
                 navBarNav.navigateTo(
-                    PebbleRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title)
+                    CommonRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title)
                 )
                 return
             }
@@ -1047,7 +1048,7 @@ suspend fun CommonApp.showSettings(
                 logger.d { "Got app settings URL" }
                 WatchappSettingsUrlCache.put(uuid.toString(), url)
                 navBarNav.navigateTo(
-                    PebbleRoutes.WatchappSettingsRoute(
+                    CommonRoutes.WatchappSettingsRoute(
                         uuid = uuid.toString(),
                         title = title,
                     )

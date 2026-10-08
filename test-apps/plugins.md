@@ -103,6 +103,14 @@ Examples now:
 | `watch`         | `switch_setting`, `number_setting`, `text_setting`, `app_setting` | built-in  |
 | `home`          | `home_lights`, `room_lights`, `light`                             | Hue demo  |
 | `finance`       | `stock`                                                           | Stocks demo |
+| `notes`         | `destination`, `configured`                                       | Notion demo |
+| `reminders`     | `list`, `configured`                                              | Todoist, TickTick demos |
+
+A plugin is offered as a notes / reminders destination for the Index agent when it declares a
+`create_note` / `create_reminder` action *and* serves `notes/configured` / `reminders/configured`:
+one instance whose `configured` property is a `boolean` that is true once the user has signed in and
+set everything the action needs. While it reads false the destination shows a Connect button that
+opens the plugin's settings page. An action without its `configured` source is not offered.
 
 The built-in Watch State plugin has no sources, only actions, both needing `LaunchApps`:
 `launch_app` (`{ uuid }`) opens an app or watchface in the user's locker, and

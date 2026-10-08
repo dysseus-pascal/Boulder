@@ -11,7 +11,6 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.RecordingBackgroundScope
@@ -50,7 +49,6 @@ interface TranscribingRecordingOperation : RecordingOperation {
 }
 
 open class DefaultRecordingOperation(
-    private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val chatAgent: Agent,
     private val recordingId: Long,
@@ -58,8 +56,6 @@ open class DefaultRecordingOperation(
     private val fileId: String,
     private val trace: RingTraceSession,
     private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
-    /** Sandbox group whose MCP servers are exposed to the agent; null = default group. */
-    private val sandboxGroupId: Long? = null,
 ) : TranscribingRecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -158,10 +154,7 @@ open class DefaultRecordingOperation(
             }
         }
         coroutineScope {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
-                this
-            )
+            val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = chatAgent.isCloud)
             val transcription = try {
                 trace.markEvent("transcription_start", TraceEventData.TranscriptionStart(
                     recordingId = recordingId,
@@ -255,7 +248,8 @@ open class DefaultRecordingOperation(
             recordingEntryDao.updateRecordingEntryTranscription(
                 entryId,
                 transcription.text,
-                transcription.modelUsed
+                transcription.modelUsed,
+                transcription.localFallback,
             )
             onTranscriptionPersisted?.invoke(transcription.text)
 

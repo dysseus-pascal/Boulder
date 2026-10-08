@@ -28,6 +28,7 @@ import kotlin.uuid.Uuid
 private class FakePlugin(
     override val pluginUuid: Uuid,
     override val name: String,
+    override val description: String = "",
     override val sources: List<SourceDeclaration> = emptyList(),
     override val actions: List<ActionDeclaration> = emptyList(),
 ) : NativePlugin {
@@ -72,7 +73,7 @@ class PluginRegistryTest {
 
     @Test
     fun findsSourcePluginByCategoryAndItem() {
-        val plugin = FakePlugin(UUID_A, "A", listOf(weatherSource()))
+        val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val registry = PluginRegistry(setOf(plugin), enabled())
 
         assertEquals(plugin, registry.findSourcePlugin("weather", "location"))
@@ -82,8 +83,8 @@ class PluginRegistryTest {
 
     @Test
     fun prefersRequestedPluginButFallsBack() {
-        val a = FakePlugin(UUID_A, "A", listOf(weatherSource()))
-        val b = FakePlugin(UUID_B, "B", listOf(weatherSource()))
+        val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
+        val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
         val registry = PluginRegistry(setOf(a, b), enabled())
 
         assertEquals(b, registry.findSourcePlugin("weather", "location", UUID_B.toString()))
@@ -96,7 +97,7 @@ class PluginRegistryTest {
 
     @Test
     fun actionLookupIsExactAndNeverFallsBack() {
-        val a = FakePlugin(UUID_A, "A", listOf(weatherSource()))
+        val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val registry = PluginRegistry(setOf(a), enabled())
 
         assertEquals(a, registry.findPlugin(UUID_A.toString()))
@@ -108,18 +109,18 @@ class PluginRegistryTest {
         val registry = PluginRegistry(emptySet(), enabled())
         assertNull(registry.findSourcePlugin("weather", "location"))
 
-        val plugin = FakePlugin(UUID_A, "A", listOf(weatherSource()))
+        val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         registry.registerPlugin(plugin)
         assertEquals(plugin, registry.findSourcePlugin("weather", "location"))
-        assertEquals(1, registry.all().size)
+        assertEquals(1, registry.getAllPlugins().size)
     }
 
     @Test
     fun nothingIsVisibleWhilePluginsAreDisabled() {
-        val plugin = FakePlugin(UUID_A, "A", listOf(weatherSource()))
+        val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val registry = PluginRegistry(setOf(plugin), enabled(false))
 
-        assertTrue(registry.all().isEmpty())
+        assertTrue(registry.getAllPlugins().isEmpty())
         assertNull(registry.findPlugin(UUID_A.toString()))
         assertNull(registry.findSourcePlugin("weather", "location"))
     }

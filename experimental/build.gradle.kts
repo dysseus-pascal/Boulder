@@ -249,6 +249,7 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.test.runner)
                 implementation(libs.kotlin.test)
+                implementation(libs.settings.test)
             }
         }
 

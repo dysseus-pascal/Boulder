@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import com.russhwolf.settings.MapSettings
+import com.russhwolf.settings.Settings
 import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.McpServerDefinition
 import coredevices.indexai.data.entity.MessageRole
@@ -25,6 +27,8 @@ import coredevices.util.Platform
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
+import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
+import coredevices.ring.data.entity.room.RecordingProcessingTaskType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
@@ -64,6 +68,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -77,6 +82,7 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 import kotlin.collections.emptyList
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -237,6 +243,7 @@ class RecordingProcessingQueueTest {
         single<NenyaClient> { fakeNenya }
         single<TranscriptionService> { fakeTranscription }
         single<Preferences> { FakePreferences() }
+        single<Settings> { MapSettings() }
         single<ServletRepository> { FakeServletRepository() }
         single<Platform> {
             object : Platform {
@@ -333,6 +340,7 @@ class RecordingProcessingQueueTest {
             scope = RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)),
             recordingPreprocessor = koin.get(),
             trace = koin.get(),
+            settings = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }
@@ -669,5 +677,30 @@ class RecordingProcessingQueueTest {
         val taskAfter = taskDao.getTaskById(1)!!
         assertEquals(TaskStatus.Success, taskAfter.status)
         assertEquals(attemptsBefore, taskAfter.attempts)
+    }
+
+    @Test
+    fun resumeAfterRestart_interruptedTaskMarkedFailed() = runBlocking {
+        taskDao.insertTask(
+            RecordingProcessingTaskEntity(
+                lastAttempt = Clock.System.now(),
+                attempts = 1,
+                type = RecordingProcessingTaskType.TextRecording,
+                buttonSequence = null,
+                transferId = null,
+                fileId = null,
+                transcription = "Crashed last time",
+            )
+        )
+        // As left behind by a previous run that died mid-attempt
+        GlobalContext.get().get<Settings>().putString("queue_RecordingProcessing_in_progress", "1")
+
+        queue.resumePendingTasks()
+        awaitTaskDone(taskId = 1)
+
+        val task = taskDao.getTaskById(1)!!
+        assertEquals(TaskStatus.Failed, task.status)
+        assertEquals(1, task.attempts)
+        assertFalse(GlobalContext.get().get<Settings>().hasKey("queue_RecordingProcessing_in_progress"))
     }
 }

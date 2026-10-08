@@ -1,6 +1,7 @@
 package coredevices.ring.service.recordings
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
@@ -71,11 +72,13 @@ class RecordingProcessingQueue(
     private val scope: RecordingBackgroundScope,
     private val recordingPreprocessor: RecordingPreprocessor,
     private val trace: RingTraceSession,
+    settings: Settings,
     rescheduleDelay: Duration = 1.minutes,
     maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
     repository = queueTaskRepository,
     scope = scope,
+    settings = settings,
     label = "RecordingProcessing",
     rescheduleDelay = rescheduleDelay,
     maxConcurrency = maxConcurrency,

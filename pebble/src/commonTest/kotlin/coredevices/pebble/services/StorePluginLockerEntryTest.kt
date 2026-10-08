@@ -3,6 +3,7 @@ package coredevices.pebble.services
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class StorePluginLockerEntryTest {
@@ -29,5 +30,14 @@ class StorePluginLockerEntryTest {
             .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!
         assertEquals(7, entry.hardwarePlatforms.size)
         assertTrue(entry.hardwarePlatforms.all { it.description == "Share prices." && it.images.list == "https://list" })
+    }
+
+    @Test
+    fun aPluginWithAConfigPageIsConfigurable() {
+        val withConfigPage = stocks.replace(""""title":"Stocks",""", """"plugin":{"config_page":"config.html"},"title":"Stocks",""")
+        fun configurable(app: String) = json.decodeFromString(StoreApplication.serializer(), app)
+            .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!.isConfigurable
+        assertFalse(configurable(stocks))
+        assertTrue(configurable(withConfigPage))
     }
 }

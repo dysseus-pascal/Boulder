@@ -981,7 +981,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         title = app.title,
         type = app.type,
         developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
-        isConfigurable = app.capabilities.orEmpty().contains("configurable"),
+        isConfigurable = app.capabilities.orEmpty().contains("configurable") || app.plugin?.configPage != null,
         isTimelineEnabled = app.capabilities.orEmpty().contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {

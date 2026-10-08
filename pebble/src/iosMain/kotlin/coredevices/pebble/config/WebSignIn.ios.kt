@@ -20,6 +20,7 @@ import platform.UIKit.UIModalPresentationFullScreen
 import platform.UIKit.UINavigationController
 import platform.UIKit.UIViewController
 import platform.UIKit.UIWindow
+import platform.UIKit.navigationItem
 import platform.WebKit.WKNavigation
 import platform.WebKit.WKNavigationDelegateProtocol
 import platform.WebKit.WKWebView

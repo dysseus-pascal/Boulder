@@ -88,6 +88,8 @@ interface AppPermissionsApi {
     fun activePermissionRequests(): Flow<List<LockerAppPermission>>
     val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>>
     suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>)
+    /** Hides [permissions] from the locker's request cards while leaving them undecided. */
+    suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>)
     fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>>
 }
 
@@ -189,7 +191,8 @@ class AppPermissions(
         dao.insertIfAbsent(listOf(LockerAppPermission(appUuid, permission, granted = false, requestedAtMs = now, decidedAtMs = now)))
     }
 
-    suspend fun setDecisions(appUuid: Uuid, decisions: Map<String, Boolean>) {
+    /** A null decision records that the user saw the permission without deciding. */
+    suspend fun setDecisions(appUuid: Uuid, decisions: Map<String, Boolean?>) {
         val now = clock.now().toEpochMilliseconds()
         val existing = dao.getByAppUuid(appUuid).associateBy { it.permission }
         dao.insertOrReplaceAll(
@@ -199,8 +202,9 @@ class AppPermissions(
                     permission = permission,
                     granted = granted,
                     requestedAtMs = existing[permission]?.requestedAtMs ?: now,
-                    decidedAtMs = now,
+                    decidedAtMs = granted?.let { now },
                     lastUsedAtMs = existing[permission]?.lastUsedAtMs,
+                    seenAtMs = now,
                 )
             }
         )
@@ -256,6 +260,9 @@ class AppPermissions(
 
     override suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>) =
         setDecisions(appUuid, decisions)
+
+    override suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>) =
+        dao.markSeen(appUuid, permissions.toList(), clock.now().toEpochMilliseconds())
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = installed.pluginPermissions()
 

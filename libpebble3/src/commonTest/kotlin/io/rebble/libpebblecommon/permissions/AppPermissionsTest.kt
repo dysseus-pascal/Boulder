@@ -350,6 +350,12 @@ private class FakePermissionDao : LockerAppPermissionDao {
         rows.value[appUuid to permission]?.let { insertOrReplace(it.copy(lastUsedAtMs = atMs)) }
     }
 
+    override suspend fun markSeen(appUuid: Uuid, permissions: List<String>, atMs: Long) {
+        permissions.forEach { permission ->
+            rows.value[appUuid to permission]?.takeIf { it.seenAtMs == null }?.let { insertOrReplace(it.copy(seenAtMs = atMs)) }
+        }
+    }
+
     override suspend fun deleteByAppUuid(appUuid: Uuid) {
         rows.value = rows.value.filterKeys { it.first != appUuid }
     }
@@ -491,6 +497,25 @@ class WaitingRequestsTest {
         assertEquals(listOf(CALENDAR), permissions().pendingPermissionRequests().first().map { it.permission })
         permissions().setDecisions(APP, mapOf(CALENDAR to false))
         assertEquals(emptyList(), permissions().pendingPermissionRequests().first())
+    }
+
+    @Test
+    fun aSeenRequestKeepsWaitingAndStaysUndecided() = runTest {
+        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk))
+        permissions.recordRequested(APP, listOf(CALENDAR))
+        permissions.markPermissionRequestsSeen(APP, listOf(CALENDAR))
+        assertEquals(listOf(CALENDAR), permissions.pendingPermissionRequests().first().map { it.permission })
+        assertEquals(NeedsApproval, permissions.check(subject(), CALENDAR))
+        assertEquals(PermissionStatus.Waiting, permissions.statuses(APP).first().single().status)
+    }
+
+    @Test
+    fun aNullDecisionRecordsASeenUndecidedRow() = runTest {
+        permissions(dao).setDecisions(APP, mapOf(CALENDAR to null))
+        val row = dao.row(CALENDAR)!!
+        assertEquals(null, row.granted)
+        assertEquals(null, row.decidedAtMs)
+        assertEquals(true, row.seenAtMs != null)
     }
 
     @Test

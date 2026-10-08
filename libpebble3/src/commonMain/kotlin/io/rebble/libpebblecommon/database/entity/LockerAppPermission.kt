@@ -16,4 +16,6 @@ data class LockerAppPermission(
     val requestedAtMs: Long,
     val decidedAtMs: Long? = null,
     val lastUsedAtMs: Long? = null,
+    /** The user has looked at this request without deciding: hides its locker card. */
+    val seenAtMs: Long? = null,
 )

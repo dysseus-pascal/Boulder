@@ -102,7 +102,7 @@ class Locker(
         private const val PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS = "have_backfilled_declared_permissions"
     }
 
-    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean>): Boolean =
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean?>): Boolean =
         try {
             sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch, granted = granted)
         } catch (e: CancellationException) {
@@ -267,7 +267,7 @@ class Locker(
         }
     }
 
-    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry, granted: Map<String, Boolean>) {
+    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry, granted: Map<String, Boolean?>) {
         val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
         lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
         permissions.setDecisions(Uuid.parse(app.uuid), granted)
@@ -330,7 +330,7 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean> = emptyMap()): Boolean {
+    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean?> = emptyMap()): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
         val type = when {
             pbwApp.info.loadablePlugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin

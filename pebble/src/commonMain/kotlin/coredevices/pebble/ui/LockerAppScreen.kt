@@ -487,7 +487,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val storeApp = entry.commonAppType
-                            fun addToWatch(granted: Map<String, Boolean>) {
+                            fun addToWatch(granted: Map<String, Boolean?>) {
                                 // Global scope because it could take a second to download/sync/load app
                                 GlobalScope.launch {
                                     val watch = lastConnectedWatch as? ConnectedPebbleDevice

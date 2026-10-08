@@ -23,6 +23,9 @@ interface LockerAppPermissionDao {
     @Query("UPDATE AppPermission SET lastUsedAtMs = :atMs WHERE appUuid = :appUuid AND permission = :permission")
     suspend fun markUsed(appUuid: Uuid, permission: String, atMs: Long)
 
+    @Query("UPDATE AppPermission SET seenAtMs = :atMs WHERE appUuid = :appUuid AND permission IN (:permissions) AND seenAtMs IS NULL")
+    suspend fun markSeen(appUuid: Uuid, permissions: List<String>, atMs: Long)
+
     @Query("DELETE FROM AppPermission WHERE appUuid = :appUuid")
     suspend fun deleteByAppUuid(appUuid: Uuid)
 

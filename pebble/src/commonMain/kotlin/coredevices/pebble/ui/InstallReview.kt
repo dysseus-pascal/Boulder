@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Contacts
@@ -29,6 +31,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,27 +67,30 @@ import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-/** [onAnswer] gets null if the install was cancelled. */
+/** [onAnswer] gets null if the install was cancelled, and a null decision for each permission left undecided. */
 @Composable
-fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?) -> Unit) {
+fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean?>?) -> Unit) {
     val defined = rememberPluginPermissions()
-    val granted = remember(review) {
-        mutableStateMapOf<String, Boolean>().apply { review.toReview.forEach { put(it, true) } }
-    }
+    val granted = remember(review) { mutableStateMapOf<String, Boolean>() }
     AlertDialog(
         onDismissRequest = { onAnswer(null) },
         title = { Text("Install ${review.appName}?") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("It will be able to:", style = MaterialTheme.typography.bodyMedium)
+                Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
                 review.toReview.forEach { key ->
                     PermissionRow(key, defined) {
-                        Switch(checked = granted[key] == true, onCheckedChange = { granted[key] = it })
+                        val decision = granted[key]
+                        if (decision == null) {
+                            UndecidedChoice { granted[key] = it }
+                        } else {
+                            Switch(checked = decision, onCheckedChange = { granted[key] = it })
+                        }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onAnswer(granted.toMap()) }) { Text("Install") } },
+        confirmButton = { TextButton(onClick = { onAnswer(review.toReview.associateWith { granted[it] }) }) { Text("Install") } },
         dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text("Cancel") } },
     )
 }
@@ -189,7 +195,9 @@ fun requestSummary(keys: List<String>, defined: Map<String, PluginDefinedPermiss
 fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
     val libPebble = rememberLibPebble()
     val defined = rememberPluginPermissions()
-    val active by remember { libPebble.activePermissionRequests() }.collectAsState(emptyList())
+    val active by remember {
+        libPebble.activePermissionRequests().map { requests -> requests.filter { it.seenAtMs == null } }
+    }.collectAsState(emptyList())
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.padding(horizontal = 12.dp)) {
         active.groupBy { it.appUuid }.forEach { (appUuid, requests) ->
@@ -229,13 +237,13 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val statuses by remember(appUuid) {
         libPebble.appPermissionStatuses(appUuid).map { all -> all.sortedBy { it.status != PermissionStatus.Waiting } }
     }.collectAsState(emptyList())
-    // Leaving the page denies anything still waiting.
+    // Leaving the page stops asking about anything still waiting.
     val current by rememberUpdatedState(statuses)
     DisposableEffect(appUuid) {
         onDispose {
             val unanswered = current.filter { it.status == PermissionStatus.Waiting }.map { it.permission }
             if (unanswered.isNotEmpty()) {
-                GlobalScope.launch { libPebble.setPermissionDecisions(appUuid, unanswered.associateWith { false }) }
+                GlobalScope.launch { libPebble.markPermissionRequestsSeen(appUuid, unanswered) }
             }
         }
     }
@@ -247,14 +255,29 @@ fun AppPermissionsSection(appUuid: Uuid) {
             val lastUsedAtMs = row.lastUsedAtMs
             val used = if (lastUsedAtMs == null) "Not used yet" else "Used ${relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs))}"
             val note = if (row.status == PermissionStatus.AllowedAutomatically) "Allowed automatically · $used" else used
-            PermissionRow(row.permission, defined, note) {
-                Switch(
-                    checked = row.status == PermissionStatus.Granted || row.status == PermissionStatus.AllowedAutomatically,
-                    onCheckedChange = { granted ->
-                        scope.launch { libPebble.setPermissionDecisions(appUuid, mapOf(row.permission to granted)) }
-                    },
-                )
+            val decide = { granted: Boolean ->
+                scope.launch { libPebble.setPermissionDecisions(appUuid, mapOf(row.permission to granted)) }
+                Unit
             }
+            PermissionRow(row.permission, defined, note) {
+                when (row.status) {
+                    PermissionStatus.Granted, PermissionStatus.Denied ->
+                        Switch(checked = row.status == PermissionStatus.Granted, onCheckedChange = decide)
+                    PermissionStatus.AllowedAutomatically, PermissionStatus.Waiting -> UndecidedChoice(decide)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UndecidedChoice(onDecide: (Boolean) -> Unit) {
+    Row {
+        OutlinedIconButton(onClick = { onDecide(false) }) {
+            Icon(Icons.Filled.Close, contentDescription = "Deny", tint = MaterialTheme.colorScheme.error)
+        }
+        OutlinedIconButton(onClick = { onDecide(true) }) {
+            Icon(Icons.Filled.Check, contentDescription = "Allow", tint = MaterialTheme.colorScheme.primary)
         }
     }
 }

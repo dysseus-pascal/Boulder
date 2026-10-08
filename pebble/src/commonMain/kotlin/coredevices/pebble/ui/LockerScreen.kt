@@ -267,7 +267,7 @@ fun LockerScreen(
         val appContext = koinInject<AppContext>()
         var sideloadReview by remember { mutableStateOf<PendingSideload?>(null) }
         // Outlives this screen: installing waits for the watch to sync.
-        fun install(path: Path, granted: Map<String, Boolean>) =
+        fun install(path: Path, granted: Map<String, Boolean?>) =
             GlobalScope.launch { libPebble.sideloadApp(path, granted = granted) }
         fun sideload(path: Path) {
             scope.launch {

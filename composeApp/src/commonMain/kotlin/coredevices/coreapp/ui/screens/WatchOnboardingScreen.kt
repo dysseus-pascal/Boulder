@@ -470,7 +470,7 @@ fun OnboardingAppCarousel(
                             icon = Icons.Default.RemoveCircle,
                         )
                     } else {
-                        fun add(granted: Map<String, Boolean>) {
+                        fun add(granted: Map<String, Boolean?>) {
                             added = true
                             GlobalScope.launch {
                                 val addResult = nativeLockerAddUtil.addAppToLocker(

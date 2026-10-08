@@ -354,7 +354,7 @@ interface LockerApi {
      * [loadOnWatch] launches it once it has synced; leave it off for background installs.
      * [granted]: the answers to [reviewSideload].
      */
-    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true, granted: Map<String, Boolean> = emptyMap()): Boolean
+    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true, granted: Map<String, Boolean?> = emptyMap()): Boolean
     /** Null if there's nothing to ask, or the pbw can't be read. */
     suspend fun reviewSideload(pbwPath: Path): InstallReview?
     suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview?
@@ -372,7 +372,7 @@ interface LockerApi {
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
-    suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean> = emptyMap())
+    suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
     suspend fun addAppsToLocker(apps: List<LockerEntry>)
     fun restoreSystemAppOrder()
     val activeWatchface: StateFlow<LockerWrapper?>

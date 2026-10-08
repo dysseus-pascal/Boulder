@@ -174,7 +174,7 @@ class FakeLibPebble : LibPebble {
     }
 
     // LockerApi interface
-    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean>): Boolean {
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean?>): Boolean {
         // No-op
         return true
     }
@@ -220,7 +220,7 @@ class FakeLibPebble : LibPebble {
 
     override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? = null
 
-    override suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean>) {
+    override suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?>) {
     }
 
     override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
@@ -506,6 +506,9 @@ class FakeLibPebble : LibPebble {
 
 
     override suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>) {
+    }
+
+    override suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>) {
     }
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = flowOf(emptyMap())

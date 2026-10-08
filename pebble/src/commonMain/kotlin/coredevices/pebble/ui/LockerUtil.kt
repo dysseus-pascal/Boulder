@@ -694,7 +694,7 @@ class NativeLockerAddUtil(
     suspend fun addAppToLocker(
         app: CommonAppType.Store,
         source: AppstoreSource,
-        granted: Map<String, Boolean>,
+        granted: Map<String, Boolean?>,
     ): Boolean {
         val storeApp = app.storeApp
         if (storeApp == null || storeApp.uuid == null) {

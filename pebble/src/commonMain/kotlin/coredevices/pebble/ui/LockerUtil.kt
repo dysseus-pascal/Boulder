@@ -58,6 +58,7 @@ import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.SettingsPageState
@@ -747,6 +748,16 @@ fun CommonApp.isSynced(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.sync
     is CommonAppType.Store -> false
     is CommonAppType.System -> true
+}
+
+/**
+ * Our store only publishes [AppCapability.WebSignIn] for our own apps, so it counts only for a pbw
+ * downloaded from our store. Debug builds also trust sideloaded copies, for developing them.
+ */
+fun LockerWrapper.mayUseWebSignIn(debugBuild: Boolean): Boolean {
+    if (AppCapability.WebSignIn !in properties.capabilities) return false
+    if (debugBuild) return true
+    return this is LockerWrapper.NormalApp && !sideloaded && properties.pbwUrl?.startsWith("$PEBBLE_FEED_URL/") == true
 }
 
 fun LockerWrapper.isSynced(): Boolean = when (this) {

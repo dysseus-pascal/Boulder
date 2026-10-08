@@ -13,7 +13,8 @@ import android.os.health.UidHealthStats
 import androidx.compose.ui.text.intl.Locale
 import coredevices.coreapp.appVersionCode
 import coredevices.coreapp.appVersionName
-import coredevices.coreapp.isDebuggableBuild
+import coredevices.util.isDebugBuild
+import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.datetime.TimeZone
 import org.koin.mp.KoinPlatform
 import kotlin.time.Duration.Companion.milliseconds
@@ -49,7 +50,7 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
         null
     }
     return buildString {
-        appendLine("Version: ${context.appVersionName} (${context.appVersionCode}) ${if (context.isDebuggableBuild) "debug" else "release"}")
+        appendLine("Version: ${context.appVersionName} (${context.appVersionCode}) ${if (AppContext(context).isDebugBuild()) "debug" else "release"}")
         appendLine("Device Summary")
         appendLine("Model: ${Build.MODEL}")
         appendLine("Brand: ${Build.BRAND}")

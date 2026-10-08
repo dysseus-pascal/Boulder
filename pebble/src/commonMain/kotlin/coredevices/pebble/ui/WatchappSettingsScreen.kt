@@ -39,13 +39,19 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.config.ConfigPageBridge
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.config.performWebSignIn
+import coredevices.pebble.config.webSignInSupported
+import coredevices.util.isDebugBuild
+import coredevices.util.rememberUiContext
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -137,6 +143,22 @@ fun WatchappSettingsScreen(
         // One bridge for the life of the screen: it is installed when the WebView is built,
         // before any page has loaded, and picks up scripts as they resolve.
         val bridge = remember { if (sessions.enabled) ConfigPageBridge(scope) else null }
+        val uiContext = rememberUiContext()
+        val appContext: AppContext = koinInject()
+        val debugBuild = remember { appContext.isDebugBuild() }
+        val webSignInApp by remember(webViewUuid) {
+            webViewUuid?.let { libPebble.getLockerApp(it) } ?: flowOf(null)
+        }.collectAsState(null)
+        LaunchedEffect(bridge, webSignInApp, uiContext, debugBuild) {
+            val ctx = uiContext
+            // Only offer web sign-in where the platform can isolate its cookie jar.
+            bridge?.webSignIn = if (ctx != null && webSignInSupported() &&
+                webSignInApp?.mayUseWebSignIn(debugBuild) == true) {
+                { request -> performWebSignIn(ctx, request) }
+            } else {
+                null
+            }
+        }
         DisposableEffect(session) {
             val open = session
             bridge?.scripts = open?.scripts.orEmpty()

@@ -530,6 +530,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
             storeId = appstoreData?.storeId,
             sourceLink = appstoreData?.sourceLink,
             capabilities = AppCapability.fromString(capabilities),
+            pbwUrl = appstoreData?.pbwLink,
         ),
         sideloaded = sideloaded,
         configurable = configurable,

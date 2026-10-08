@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HealthAndSafety
@@ -931,18 +932,21 @@ fun AppCapability.icon(): ImageVector = when (this) {
     AppCapability.Health -> Icons.Default.HealthAndSafety
     AppCapability.Location -> Icons.Default.LocationSearching
     AppCapability.Timeline -> Icons.Default.LocationOn
+    AppCapability.WebSignIn -> Icons.Default.AccountCircle
 }
 
 fun AppCapability.name(): String = when (this) {
     AppCapability.Health -> "Health"
     AppCapability.Location -> "Location"
     AppCapability.Timeline -> "Timeline"
+    AppCapability.WebSignIn -> "Web sign-in"
 }
 
 fun AppCapability.description(): String = when (this) {
     AppCapability.Health -> "Can access health data"
     AppCapability.Location -> "Can access location"
     AppCapability.Timeline -> "Can create timeline pins"
+    AppCapability.WebSignIn -> "Can ask you to sign in to web accounts"
 }
 
 suspend fun LibPebble.launchApp(

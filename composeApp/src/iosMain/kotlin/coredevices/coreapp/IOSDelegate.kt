@@ -27,6 +27,8 @@ import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.util.isDebugBuild
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
@@ -48,8 +50,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.experimental.ExperimentalNativeApi
-import kotlin.native.Platform
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -329,10 +329,9 @@ object IOSDelegate : KoinComponent {
         completionHandler()
     }
 
-    @OptIn(ExperimentalNativeApi::class)
     private fun setupCrashlytics() {
         // Debug builds never upload their dSYMs, so their crashes can't be symbolicated.
-        if (Platform.isDebugBinary) {
+        if (AppContext().isDebugBuild()) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
             return
         }
